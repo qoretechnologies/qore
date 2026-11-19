@@ -58,6 +58,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <optional>
 #include "qore/intern/QoreDeferredRelease.h"
 #include "qore/intern/QoreCompletionAnalysis.h"
 
@@ -67,6 +68,14 @@ extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::ve
 
 VNode::VNode(LocalVar* lv, const QoreProgramLocation* n_loc, int n_refs, bool n_top_level) :
         lvar(lv), refs(n_refs), loc(n_loc), block_start(false), top_level(n_top_level) {
+    // the options of the declaration: the variable can go out of scope after the statement that declares it, when its
+    // block is initialized, under other options (those of the commit; issue #6589)
+    if (lvar) {
+        if (QoreProgram* pgm = getProgram()) {
+            decl_opts = qore_program_private::getParseWarnOptions(pgm);
+            has_decl_opts = true;
+        }
+    }
     next = update_get_vstack(this);
     // the variable below this one in its frame, for the chains of the local variables that statements can refer to;
     // the chain of a function ends with its first variable, as the top-level variables, which have global scope, are
@@ -89,6 +98,11 @@ VNode::~VNode() {
     if (lvar && !refs && !lvar->isAssigned()) {
         const QoreTypeInfo* ti = lvar->parseGetTypeInfo();
         if (!QoreTypeInfo::parseAcceptsReturns(ti, NT_OBJECT)) {
+            // the warning is raised as the code that declares the variable enables it (issue #6589)
+            std::optional<ParseWarnHelper> pwh;
+            if (has_decl_opts) {
+                pwh.emplace(decl_opts);
+            }
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_UNREFERENCED_VARIABLE,
                 "UNREFERENCED-VARIABLE", "local variable '%s' was declared in this block but not referenced; to " \
                 "disable this warning, use '%%disable-warning unreferenced-variable' in your code", lvar->getName());

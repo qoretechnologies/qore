@@ -2108,7 +2108,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     if (closure_selfid) {
         cached_pre_inst->insert(closure_selfid);
     }
-    closure_ir->cached_pre_instantiated = cached_pre_inst;
+    closure_ir->setCachedPreInstantiated(cached_pre_inst);
 
     // Set cached IR on variant
     makeExprDeserializedClosureIRNameUnique(*closure_ir, closure_variant);

@@ -8,6 +8,7 @@ class T {
     public { string n; }
     constructor(string n) { self.n = n; }
     destructor() { printf("dtor %s\n", n); }
+    T makeArgument() { return new T("chain-argument"); }
 }
 # parameters of every kind assigned a new value: the object that the caller passed is destroyed at the assignment
 sub cls(T k) {
@@ -178,6 +179,12 @@ final class F {
 sub clr(*T p) {
     p = NOTHING;
     printf("after clear\n");
+}
+string sub clear_chain_argument(*T p) {
+    printf("chain clearing %s\n", p.n);
+    p = NOTHING;
+    print("chain after clear\n");
+    return "returned";
 }
 # a callee that the IR interpreter does not run inline: a reference argument, an on_exit block
 sub clr_ref(*T p, reference<int> r) {
@@ -1245,6 +1252,9 @@ for (int round = 0; round < 3; ++round) {
         D::stwo_read(new T("sra"), new T("srb"));
     }
     issue_calls();
+    # The argument is given to the parameter; the temporary receiver used to make it belongs to this statement.
+    printf("chain %s\n", clear_chain_argument(new T("chain-receiver").makeArgument()));
+    print("chain next statement\n");
     {
         int x;
         clr_ref(new T("cref"), \x);

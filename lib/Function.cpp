@@ -2196,6 +2196,11 @@ __attribute__((noinline, cold)) int CodeEvaluationHelper::findVariantNamed(const
         return -1;
     }
     assert(bound_args);
+    // the temporary argument list of the call, whose values compiled code evaluated, gives its references to the
+    // list of the bound arguments, whose values the parameters then take over, as they take over the arguments of a
+    // call with positional arguments: a temporary argument is released when the callee writes its parameter
+    // (issues #5958, #6486)
+    tmp.releaseTmpSourceValues(bound_args);
     tmp.assign(true, bound_args);
     return 0;
 }
@@ -7906,7 +7911,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
             }
         }
 
-        delete ir->cached_pre_instantiated;
+        // the set replaces the previous one (setCachedPreInstantiated())
         auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
         for (unsigned i = 0; i < signature.numParams(); ++i) {
             if (signature.lv[i]) {
@@ -7930,7 +7935,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
                 cached_pre_inst->insert(lv);
             }
         }
-        ir->cached_pre_instantiated = cached_pre_inst;
+        ir->setCachedPreInstantiated(cached_pre_inst);
     }
     // Publish only fully initialized IR, and publish it exactly once.  The release
     // store in the CAS is what orders every mutation above against the acquire load in
@@ -8685,7 +8690,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             cached_pre_inst->insert(lv);
         }
     }
-    func->cached_pre_instantiated = cached_pre_inst;
+    func->setCachedPreInstantiated(cached_pre_inst);
 
     // Build param_slot_ids: maps param index → slot_id for direct param passing.
     // Also build param_local_vars for type information access during direct param processing.
@@ -9755,9 +9760,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     const ExecutionTier entry_tier = current_tier.load(std::memory_order_acquire);
     ExecutionTier tier = entry_tier;
 
-    // Native JIT/AOT code has no Qore DebugProgram hooks.  Keep the native tier
-    // for programs that merely allow debugger attachment, and switch to AST/IR
-    // only once a debugger is actually attached.
+    // A call that starts while a debugger is attached runs on the AST interpreter, or, for code compiled ahead of time,
+    // runs its debug IR in the IR interpreter: they take the debugger's return, break and continue requests at every
+    // step event.  The IR and the native code lowered from the parse tree have the step events and breakpoints but no
+    // paths for the requests (QoreIRFunction::hasDebugFlowPaths()), and only run under a debugger in frames that were
+    // already running when it attached (see design/debug-flow-edges.md, #6201).  Without a debugger, the call keeps
+    // its tier.
     if (tier != TIER_AST && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         if (statements) {
             tier = TIER_AST;

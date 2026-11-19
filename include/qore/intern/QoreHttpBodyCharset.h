@@ -113,6 +113,24 @@ DLLLOCAL QoreHttpBodyCharset qore_get_http_body_charset(const char* content_type
 */
 DLLLOCAL QoreStringNode* qore_http_body_string(const QoreHttpBodyCharset& charset, const void* data, size_t len);
 
+//! Returns the text of an HTTP response body for a client (qore#6554)
+/** As qore_http_body_string(); a body that is not valid in its encoding is, if it is HTML or other text (or a body
+    without a \c Content-Type), given in ISO-8859-1 with its bytes unchanged, as the declared charset of a page is
+    often wrong and the HTML standard expects one to be sniffed; a body of a structured type (JSON, YAML, XML, form
+    data, server-sent events, CSS, JavaScript) that is not valid in its encoding raises \c INVALID-ENCODING, as the
+    data cannot be parsed
+
+    @return the text, or nullptr if an exception was raised
+*/
+DLLLOCAL QoreStringNode* qore_http_response_body_string(const char* content_type, const QoreHttpBodyCharset& charset,
+        const void* data, size_t len, ExceptionSink* xsink);
+
+//! Decodes an HTTP response body for a client: as qore_decode_http_body(), with qore_http_response_body_string()
+/** @return a string for text, a reference to the binary body otherwise, or nullptr if an exception was raised
+*/
+DLLLOCAL SimpleValueQoreNode* qore_decode_http_response_body(const char* content_type, const BinaryNode* body,
+        const QoreEncoding* assumed, ExceptionSink* xsink);
+
 //! Decodes an HTTP message body: returns a string for text, or a reference to the binary body otherwise
 /** @param content_type the \c Content-Type field value; may be nullptr
     @param body the body

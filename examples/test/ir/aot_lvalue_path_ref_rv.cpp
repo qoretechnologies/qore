@@ -70,6 +70,8 @@ static bool roundTrip(QoreProgram* pgm, LVUnaryOp op, bool ref_rv) {
     inst->ref_rv = ref_rv;
     inst->result = fn.createValue();
     block->instructions.push_back(std::move(inst));
+    // the instruction is in a function that can run (qore#6468)
+    block->instructions.push_back(std::make_unique<QoreIRReturnInstruction>());
     fn.blocks.push_back(std::move(block));
     QoreAOTBinaryWriter writer;
     writer.feature_flags = QORE_AOT_FEAT_LVPATH_PATTERN;
@@ -121,7 +123,7 @@ static bool earlierFormat(QoreProgram* pgm, LVUnaryOp op) {
     writer.writeU32(0); // handler-own slots
     writer.writeStringRef("entry");
     writer.writeU8(0); // block flags
-    writer.writeU16(1); // instructions
+    writer.writeU16(2); // instructions: the instruction and a return, so that the function can run (qore#6468)
     writer.writeU16(static_cast<uint16_t>(O::LValuePathUnary));
     writer.writeU8(LValuePathGroup);
     writer.writeU32(1); // result
@@ -134,6 +136,15 @@ static bool earlierFormat(QoreProgram* pgm, LVUnaryOp op) {
     writer.writeU8(0); // ternary op
     writer.writeU8(0); // no pattern
     writer.writeU8(0); // path steps
+    writer.writeU32(0); // source start/end line
+    writer.writeU32(0);
+    writer.writeStringRef("");
+    writer.writeU16(static_cast<uint16_t>(O::ReturnNothing));
+    writer.writeU8(static_cast<uint8_t>(QoreIRInstGroup::Return));
+    writer.writeU32(0); // no result
+    writer.writeU8(0); // operands
+    writer.writeU16(0xffff); // no exception target
+    writer.writeU8(0); // no value
     writer.writeU32(0); // source start/end line
     writer.writeU32(0);
     writer.writeStringRef("");

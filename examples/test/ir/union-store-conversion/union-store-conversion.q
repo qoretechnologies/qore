@@ -1,7 +1,7 @@
 %modern
 
 # the example of qore#6282: an int stored in a local of the type union<float, int> at the top level (in a try block) is
-# the float 1.0 as in a function
+# kept as in a function: the union has an int member (qore#6407)
 
 try {
     auto a = 1;

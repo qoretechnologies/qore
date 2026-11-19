@@ -33,6 +33,8 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         string not_modern;
         string rich;
         string user_program;
+        string warns_all;
+        string warns_none;
     }
 
     constructor() : QUnit::Test("QccParseDiagnosticsTest", "1.0", \ARGV) {
@@ -64,6 +66,10 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
             "    int n = p.getParseDiagnostics().size();\n    if (n != 1) {\n"
             "        throw \"DIAGNOSTICS-ACCUMULATED\", sprintf(\"%d diagnostics\", n);\n    }\n    return n;\n}\n"
             "const C = count();\n");
+        # commit-time warnings (UNREFERENCED-VARIABLE) of two files of a batch with their own warning directives
+        warns_all = writeFile("warns-all.q", "%modern\n%enable-all-warnings\nsub wa() {\n    int unused_a;\n}\n");
+        warns_none = writeFile("warns-none.q", "%modern\n%disable-warning unreferenced-variable\nsub wn() {\n"
+            "    int unused_n;\n}\n");
         addTestCase("a commit-time error of a single source", \singleCommitTest());
         addTestCase("a parse error of a single source", \singleParseTest());
         addTestCase("a commit-time error of a batch compile", \batchCommitTest());
@@ -78,6 +84,7 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         addTestCase("--diag-format=json for a compile that succeeds", \jsonSuccessTest());
         addTestCase("--diag-format=json gives the diagnostics of qore --diag-format=json", \jsonParityTest());
         addTestCase("--code-frames", \codeFramesTest());
+        addTestCase("the commit-time warnings of each file follow its own directives", \commitWarningsTest());
         addTestCase("a Program that the compiled code creates keeps the diagnostics of each parse",
             \userProgramTest());
         addTestCase("--diag-format=json does not change the output of --version", \jsonVersionTest());
@@ -274,6 +281,16 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         hash<auto> r = qcc(sprintf("--diag-format=json -c -o %s/user-program.qo %s", tmp.path, user_program));
         assertEq(0, r.status, r.err);
         assertEq((), parse_json(r.out), r.out);
+    }
+
+    #! issue #6589: qcc commits with the default warning mask; each file's directives apply to its warnings
+    commitWarningsTest() {
+        string out_dir = tmp.path + DirSep + "commit-warnings";
+        mkdir(out_dir);
+        hash<auto> r = qcc(sprintf("-c --output-dir %s %s %s", out_dir, warns_all, warns_none));
+        assertEq(0, r.status, r.err);
+        assertRegex("(^|\n)" + quote(warns_all) + ":4:[0-9]+: warning: UNREFERENCED-VARIABLE: ", r.err);
+        assertFalse(r.err =~ /unused_n/, r.err);
     }
 
     codeFramesTest() {

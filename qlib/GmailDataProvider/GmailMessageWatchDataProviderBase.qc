@@ -681,7 +681,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
     private static auto getHeaderValue(string val, hash<auto> f) {
         if (f.type == AbstractDataProviderTypeMap."date") {
             # a value that is not valid in its encoding (message data) cannot be parsed (qore#6553)
-            if (!(val =~ /^/)) {
+            if (!val.isEncodingValid()) {
                 return;
             }
             val =~ s/^[^,]+,\s*//;
@@ -719,7 +719,7 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         *string content_type = hdr."Content-Type";
         # a header that is not valid in its encoding (message data) cannot be processed: it is taken as missing
         # (qore#6553)
-        if (content_type.val() && !(content_type =~ /^/)) {
+        if (content_type.val() && !content_type.isEncodingValid()) {
             remove content_type;
         }
         *string encoding;

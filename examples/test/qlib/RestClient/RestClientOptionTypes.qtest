@@ -36,6 +36,7 @@ public class RestClientOptionTypesTest inherits QUnit::Test {
             ("CloseRestClient", "CloseRestClient::CloseRestClientBase"),
             ("CohereRestClient", "CohereRestClient::CohereRestClientBase"),
             ("ConstantContactRestClient", "ConstantContactRestClient::ConstantContactRestClientBase"),
+            ("ConvertApiRestClient", "ConvertApiRestClient::ConvertApiRestClientBase"),
             ("CustomerIoRestClient", "CustomerIoRestClient::CustomerIoRestClientBase"),
             ("DeelRestClient", "DeelRestClient::DeelRestClientBase"),
             ("DeepSeekRestClient", "DeepSeekRestClient::DeepSeekRestClientBase"),

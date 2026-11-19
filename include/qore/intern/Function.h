@@ -2228,7 +2228,8 @@ public:
     //! (no default args, not synchronized). Runtime readiness (has cached function)
     //! is checked separately by qore_rt_call_fast() which falls back if not ready.
     //! @param allow_type_parameters allow a separately validated concrete specialization
-    DLLLOCAL bool isStaticallyFastCallEligible(bool allow_type_parameters = false) const {
+    // inlined explicitly: on a hot path whose inlining depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool isStaticallyFastCallEligible(bool allow_type_parameters = false) const {
         if (isSynchronized() || reads_implicit_args) {
             return false;
         }
@@ -2667,6 +2668,20 @@ public:
                 return;
         ilist.push_back(INode(ancestor, access));
         noteAncestor(*ancestor);
+    }
+
+    //! gives an ancestor in the inheritance list the access of another path to its class if it is less restrictive
+    /** A class reached through several paths of the hierarchy has the access of the least restrictive one (qore#6498)
+    */
+    DLLLOCAL void lowerAncestorAccess(const QoreFunction* ancestor, ClassAccess access) {
+        for (INode& i : ilist) {
+            if (i.func == ancestor) {
+                if (access < i.access) {
+                    i.access = access;
+                }
+                return;
+            }
+        }
     }
 
     // resolves all types in signatures and return types in pending variants; called during the "parseInit" phase

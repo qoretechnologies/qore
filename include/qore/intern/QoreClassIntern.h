@@ -1566,6 +1566,31 @@ public:
     // issue #6393: copies the context entries of the given member, which shares the storage of this member
     DLLLOCAL void addContextMap(const QoreMemberInfo& mi);
 
+    //! merges the same declaration reached through another path of the hierarchy of the class (qore#6523)
+    /** A member declared in a class that the hierarchy reaches through several paths is one member of the object
+        with the least restrictive access of the paths: if it is accessible through one of them, its value is in the
+        standard object data for every class context; otherwise it is in the storage of the first path, for the
+        class contexts of every path
+
+        @param mi the member as it is in the base class of the other path
+        @param mi_access the access that the member has in this class through the other path; if this member is not
+        accessible, neither is \a mi
+    */
+    DLLLOCAL void mergeDeclarationPath(const QoreMemberInfo& mi, ClassAccess mi_access);
+
+    //! adds the class contexts that access this declaration of the member to \a ctx (qore#6523)
+    DLLLOCAL void getDeclarationContexts(std::set<const qore_class_private*>& ctx) const;
+
+    //! copies the context entries of the given member (qore#6523)
+    /** The entries of a declaration that this member has already (reached through another path of the hierarchy) get
+        the storage that this member gives it; the entries of this declaration are not copied if this member is
+        accessible (its value is in the standard object data)
+    */
+    DLLLOCAL void mergeContextMap(const QoreMemberInfo& mi);
+
+    //! removes the context entries of the class contexts of this declaration of an accessible member (qore#6523)
+    DLLLOCAL void dropDeclarationContexts();
+
     DLLLOCAL void addContextAccessForClass(const qore_class_private* class_ctx,
             const qore_class_private* member_class_ctx);
 
@@ -2673,6 +2698,13 @@ public:
     // classes is a builtin class or a class whose own sml is complete; then the base classes do not have to be walked
     // again to add the ancestors to a subclass or to search the hierarchy (issue #6106)
     bool sml_complete = false;
+    //! true if the hierarchy reaches each ancestor through one path only (no diamond); set with sml_complete
+    /** Then the lookups of the hierarchy search it with the recursion through BCNode, which visits each class once
+        here; otherwise (a diamond, or a hierarchy not known to be complete, such as that of a builtin class or of a
+        class that is still being initialized) they search it with a walk that visits each class once (qore#6522).
+        It does not change once set: the hierarchy of a class does not change after it has been initialized.
+    */
+    bool diamond_free = false;
 
     DLLLOCAL BCList(BCNode* n) {
         push_back(n);
@@ -2681,7 +2713,8 @@ public:
     DLLLOCAL BCList() {
     }
 
-    DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete) {
+    DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete),
+            diamond_free(old.diamond_free) {
         assert(old.valid);
         reserve(old.size());
         for (bclist_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i)
@@ -2798,15 +2831,7 @@ public:
         }
     }
 
-    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const {
-        for (auto& i : *this) {
-            const ConstantEntry* ce = (*i).findConstantEntry(name);
-            if (ce) {
-                return ce;
-            }
-        }
-        return nullptr;
-    }
+    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
 };
 
 // BCEANode
@@ -4376,6 +4401,11 @@ public:
     DLLLOCAL QoreValue parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo, bool& found,
             const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc = nullptr);
 
+    //! the search of parseFindConstantValueIntern() in the class itself: \a found is set only for an accessible
+    //! constant
+    DLLLOCAL QoreValue parseFindLocalAccessibleConstantValue(const char* cname, const QoreTypeInfo*& cTypeInfo,
+            bool& found, const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc);
+
     DLLLOCAL QoreVarInfo* parseFindLocalStaticVar(const char* vname) const {
         QoreVarInfo* vi = vars.find(vname);
 
@@ -4391,6 +4421,21 @@ public:
     }
 
     DLLLOCAL QoreVarInfo* parseFindStaticVarIntern(const char* vname, const QoreClass*& qc, ClassAccess& access, bool check, bool toplevel) const {
+        bool stop = false;
+        QoreVarInfo* vi = parseFindLocalStaticVarIntern(vname, qc, access, check, toplevel, stop);
+        if (vi || stop) {
+            return vi;
+        }
+
+        return scl ? scl->parseFindStaticVar(vname, qc, access, check, toplevel) : nullptr;
+    }
+
+    //! the search of parseFindStaticVarIntern() in the class itself
+    /** @param stop set to true if the class has the variable but it is not accessible: the search stops in this class
+        and its base classes are not searched
+    */
+    DLLLOCAL QoreVarInfo* parseFindLocalStaticVarIntern(const char* vname, const QoreClass*& qc, ClassAccess& access,
+            bool check, bool toplevel, bool& stop) const {
         QoreVarInfo* vi = vars.find(vname);
 
         if (vi) {
@@ -4404,6 +4449,7 @@ public:
                 // an internal member is accessible only in its own class, not in subclasses
                 if (check && (access > Public)
                     && ((access >= Internal && parse_get_class_priv() != this) || !parseCheckPrivateClassAccess())) {
+                    stop = true;
                     return nullptr;
                 }
 
@@ -4412,7 +4458,7 @@ public:
             }
         }
 
-        return scl ? scl->parseFindStaticVar(vname, qc, access, check, toplevel) : nullptr;
+        return nullptr;
     }
 
     //! adds a member

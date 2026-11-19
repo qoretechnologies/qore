@@ -33,6 +33,7 @@
 
 #define _QORE_STATEMENT_BLOCK_H
 
+#include "qore/intern/ParseWarnOptions.h"
 #include "qore/intern/QoreNativeParseInfo.h"
 #include "qore/intern/AbstractStatement.h"
 #include <qore/safe_dslist>
@@ -527,6 +528,11 @@ protected:
     const QoreProgramLocation* loc;
     bool block_start;
     bool top_level;
+    //! the parse options and warning mask in effect where the variable is declared, under which the warnings raised
+    //! when it goes out of scope are checked (issue #6589)
+    ParseWarnOptions decl_opts;
+    //! true if decl_opts is set (a variable declared in a Program's code)
+    bool has_decl_opts = false;
 };
 
 class CatchExceptionHelper {

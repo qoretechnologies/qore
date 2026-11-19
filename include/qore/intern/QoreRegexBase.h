@@ -55,31 +55,24 @@ constexpr size_t qore_pcre2_jit_stack_start_size = 32 * 1024;
  */
 constexpr size_t qore_pcre2_jit_stack_max_size = 1024 * 1024;
 
-//! Returns true for PCRE2 match return codes that terminate an iteration without an internal bug.
-/** Covers @ref PCRE2_ERROR_NOMATCH and the full range of UTF-8 subject-validation errors
-    (@ref PCRE2_ERROR_UTF8_ERR1 through @ref PCRE2_ERROR_UTF8_ERR21). When the subject string is
-    tagged as UTF-8 but contains invalid byte sequences, pcre2_match() can return any code in that
-    range (we have observed @c -22 from HTTP bodies masked via @c http_mask_data). All such codes
-    indicate "we cannot match past this byte", so the match loop stops cleanly instead of
-    asserting.
+//! Returns true for the PCRE2 match return code that means "no match": @ref PCRE2_ERROR_NOMATCH
+/** A subject that is not valid UTF-8 (@ref PCRE2_ERROR_UTF8_ERR1 through @ref PCRE2_ERROR_UTF8_ERR21) is not "no match":
+    a match cannot tell whether such a string matches, and a check that rejects a string that matches a pattern would
+    accept it, so every regular expression operation raises an exception for it (see qore_pcre2_check_match_error(),
+    qore#6553, qore#6554).
 
     Resource-limit codes (@ref PCRE2_ERROR_MATCHLIMIT, @ref PCRE2_ERROR_DEPTHLIMIT,
-    @ref PCRE2_ERROR_HEAPLIMIT) are deliberately \a not covered here; they mean the engine gave up
-    without deciding the match, so returning "no match" for them would be a silently wrong answer.
-    See qore_pcre2_check_match_error().
+    @ref PCRE2_ERROR_HEAPLIMIT) are not covered either; they mean the engine gave up without deciding the match.
  */
 static inline bool qore_pcre2_expected_match_error(int rc) {
-    // PCRE2_ERROR_UTF8_ERR1 = -3 (highest), PCRE2_ERROR_UTF8_ERR21 = -23 (lowest) — see pcre2.h
-    return rc == PCRE2_ERROR_NOMATCH
-        || (rc <= PCRE2_ERROR_UTF8_ERR1 && rc >= PCRE2_ERROR_UTF8_ERR21);
+    return rc == PCRE2_ERROR_NOMATCH;
 }
 
 //! Returns true for the PCRE2 match return codes that report a subject that is not valid UTF-8
 /** @ref PCRE2_ERROR_UTF8_ERR1 through @ref PCRE2_ERROR_UTF8_ERR21: the subject is tagged as UTF-8 but has invalid
-    byte sequences.  An operation that only tests for a match can take them as no match (see
-    qore_pcre2_expected_match_error()); one that gives a transformed copy of its subject must not, or it gives the
-    subject back unchanged, invalid bytes included, as if nothing in it had matched: see
-    qore_pcre2_raise_invalid_subject().
+    byte sequences.  No operation takes them as no match: a substitution would give the subject back unchanged, invalid
+    bytes included, as if nothing in it had matched, and a check that rejects a matching string would accept it; see
+    qore_pcre2_raise_invalid_subject() and qore_pcre2_check_match_error().
  */
 static inline bool qore_pcre2_invalid_utf_error(int rc) {
     // PCRE2_ERROR_UTF8_ERR1 = -3 (highest), PCRE2_ERROR_UTF8_ERR21 = -23 (lowest) — see pcre2.h
@@ -135,10 +128,12 @@ DLLLOCAL int64 q_get_regex_utf_check_bytes();
     @param rc the pcre2_match() return code
     @param xsink if not nullptr, the exception sink for the @c REGEX-ERROR exception
 
-    @return 0 if \a rc is an expected terminating condition (see qore_pcre2_expected_match_error()),
-    -1 if it is an error, in which case an exception has been raised if \a xsink is not nullptr
+    @return 0 if \a rc means no match (see qore_pcre2_expected_match_error()), -1 if it is an error, in which case an
+    exception has been raised if \a xsink is not nullptr: \c INVALID-ENCODING for a subject that is not valid UTF-8
+    (see qore_pcre2_invalid_utf_error()), \c REGEX-ERROR for the others
  */
-DLLLOCAL int qore_pcre2_check_match_error(int rc, ExceptionSink* xsink);
+DLLLOCAL int qore_pcre2_check_match_error(int rc, ExceptionSink* xsink, const char* subject = nullptr,
+        size_t len = 0);
 
 #define check_re_options(a) (a & ~(PCRE2_CASELESS|PCRE2_DOTALL|PCRE2_EXTENDED|PCRE2_MULTILINE|PCRE2_UTF|PCRE2_UCP|PCRE2_UNGREEDY|PCRE2_DOLLAR_ENDONLY|PCRE2_ANCHORED|PCRE2_DUPNAMES))
 

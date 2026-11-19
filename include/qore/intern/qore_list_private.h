@@ -241,8 +241,12 @@ struct qore_list_private {
     DLLLOCAL int checkValNativeImpl(ValueHolder& holder, const QoreTypeInfo* vtype, ExceptionSink* xsink) const {
         if (complexTypeInfo) {
             const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
-            if (QoreTypeInfo::hasType(vti)
-                    && !QoreTypeInfo::superSetOf(vti, vtype ? vtype : holder->getTypeInfo())) {
+            // the value's type is only needed for an element type; a value of the element type itself needs no
+            // conversion: tested inline, before the full comparison, which runs for every element assigned
+            // (qore#6628; superSetOf() itself is unchanged here, see qore#6575)
+            const QoreTypeInfo* src_ti;
+            if (QoreTypeInfo::hasType(vti) && vti != (src_ti = vtype ? vtype : holder->getTypeInfo())
+                    && !QoreTypeInfo::superSetOf(vti, src_ti)) {
                 QoreValue v(holder.release());
                 // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
                 // with a long-lived sink silently drops elements after an unrelated error
@@ -272,8 +276,12 @@ struct qore_list_private {
             LexicalSemanticPolicy policy) const {
         if (complexTypeInfo) {
             const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
-            if (QoreTypeInfo::hasType(vti)
-                    && !QoreTypeInfo::superSetOf(vti, vtype ? vtype : holder->getTypeInfo())) {
+            // the value's type is only needed for an element type; a value of the element type itself needs no
+            // conversion: tested inline, before the full comparison, which runs for every element assigned
+            // (qore#6628; superSetOf() itself is unchanged here, see qore#6575)
+            const QoreTypeInfo* src_ti;
+            if (QoreTypeInfo::hasType(vti) && vti != (src_ti = vtype ? vtype : holder->getTypeInfo())
+                    && !QoreTypeInfo::superSetOf(vti, src_ti)) {
                 QoreValue v(holder.release());
                 // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
                 // with a long-lived sink silently drops elements after an unrelated error
@@ -745,10 +753,7 @@ struct qore_list_private {
         @return -1 if an exception was raised, 0 if not
     */
     DLLLOCAL int checkAssignmentGap(size_t ind, ExceptionSink* xsink) const {
-        if (ind <= length || !complexTypeInfo) {
-            return 0;
-        }
-        return raiseAssignmentGapError(ind, xsink);
+        return ind <= length || !elementTypeRejectsNothing() ? 0 : raiseAssignmentGapError(ind, xsink);
     }
 
     //! raises RUNTIME-TYPE-ERROR for delete or remove of element \a ind of a list whose element type does not take
@@ -771,8 +776,8 @@ struct qore_list_private {
     }
 
 private:
-    //! raises the error of checkAssignmentGap() if the element type does not take NOTHING
-    DLLLOCAL int raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const;
+    //! raises the error of checkAssignmentGap() for a list whose element type does not take NOTHING
+    DLLLOCAL __attribute__((noinline, cold)) int raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const;
 
 
 public:

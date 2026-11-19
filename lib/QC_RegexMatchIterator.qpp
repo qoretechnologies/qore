@@ -145,7 +145,7 @@ bool RegexMatchIterator::next(ExceptionSink* xsink) {
         utf_validated ? PCRE2_NO_UTF_CHECK : 0, md);
     assert(rc);
     if (rc < 1) {
-        if (qore_pcre2_check_match_error(rc, xsink)) {
+        if (qore_pcre2_check_match_error(rc, xsink, subject->c_str(), subject_size)) {
             assert(*xsink);
         }
         m_valid = false;
@@ -378,6 +378,8 @@ RegexMatchIterator::copy() {
     @throw REGEX-ERROR PCRE2 could not determine whether the pattern matches
     @throw PROGRAM-INTERRUPTED iteration was cancelled
     @throw ITERATOR-THREAD-ERROR called from a thread other than the owning thread
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 bool RegexMatchIterator::next() {
     if (i->check(xsink)) {
@@ -396,6 +398,8 @@ bool RegexMatchIterator::next() {
     @throw REGEX-ERROR PCRE2 could not determine whether the pattern matches
     @throw PROGRAM-INTERRUPTED iteration was cancelled
     @throw ITERATOR-THREAD-ERROR called from a thread other than the owning thread
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 bool RegexMatchIterator::nextOffset(reference<int> offset, reference<int> length) [flags=NAMED_ARGS] {
     if (i->check(xsink)) {
@@ -424,6 +428,8 @@ bool RegexMatchIterator::nextOffset(reference<int> offset, reference<int> length
     @throw REGEX-ERROR PCRE2 could not determine whether the pattern matches
     @throw PROGRAM-INTERRUPTED iteration was cancelled
     @throw ITERATOR-THREAD-ERROR called from a thread other than the owning thread
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 bool RegexMatchIterator::nextCapture(reference<int> offset, reference<int> length,
         reference<*string> capture, int index = 0) [flags=NAMED_ARGS] {
