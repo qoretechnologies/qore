@@ -77,24 +77,29 @@ printf(\"%d\\n\", calls((ENV.N ?? \"10\").toInt()));
             "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, command), NOTHING,
             sprintf("N=%d QORE_IR_OPT_STATS=1 %s", n, ExecModeHarness::TraceEnv));
         *list<*string> m = (r.stderr =~ x/IR-OPT: pseudo-intrinsic-resolutions=([0-9]+)/);
-        return {"out": r.stdout, "resolutions": m ? m[0].toInt() : -1};
+        # the library reports the resolutions when there were any: the AST interpreter and a compiled program
+        # resolve none when they run
+        return {"out": r.stdout, "resolutions": m ? m[0].toInt() : 0, "reported": boolean(m)};
     }
 
     #! Checks the output against the AST interpreter's, and that the resolutions do not depend on the calls
-    private check(string label, string command) {
+    private check(string label, string command, bool reported = False) {
         foreach int n in ((10, 1000)) {
             hash<auto> r = run(command, n);
             hash<auto> ast = run(sprintf("%s --exec-mode=ast %s", qore_bin, script), n);
             assertEq(ast.out, r.out, sprintf("%s: the result of %d calls", label, n));
         }
-        int few = run(command, 10).resolutions;
-        int many = run(command, 1000).resolutions;
-        assertGe(0, few, label + ": the resolutions are reported");
-        assertEq(few, many, label + ": the resolutions with 10 and 1000 calls");
+        hash<auto> few = run(command, 10);
+        hash<auto> many = run(command, 1000);
+        if (reported) {
+            assertTrue(few.reported, label + ": the resolutions are reported");
+        }
+        assertEq(few.resolutions, many.resolutions, label + ": the resolutions with 10 and 1000 calls");
     }
 
     modeTest(string mode) {
-        check(mode, sprintf("%s --exec-mode=%s %s", qore_bin, mode, script));
+        # the IR modes resolve the intrinsics of the calls when they make their instructions
+        check(mode, sprintf("%s --exec-mode=%s %s", qore_bin, mode, script), mode != "ast");
     }
 
     aotTest(int opt) {
