@@ -589,7 +589,20 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        rebuilt from the image (debug IR, closure bodies without native code, handler and background helper IR)
 //!        locates an exception at the statement, as all other code does; a v9-v46 image has none, and its IR takes
 //!        the location of each instruction (qore#6646)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
+//! v48 (batch AL; the reader refuses v47 and older images):
+//!      - the block cleanups of a return statement that run handlers out of line past the inline cap have a ScopeExit
+//!        with flag bit 2 (hand_over_return), whose handlers hand the values of their returns to the frame's
+//!        handed-over return, and the return takes it with TakeHandedOverReturn (QoreIROpcode 441), or a return in a
+//!        handler that replaces it releases it with ReleaseHandedOverReturn (442); native code calls
+//!        qore_rt_exec_on_block_exit_return_hold(), qore_rt_take_handed_over_return() and
+//!        qore_rt_release_handed_over_return(); a ScopeExit outside return cleanups can produce a boolean that
+//!        branches to the handed-over return if a handler returned (#6137, #6552)
+//!      - debug IR can encode ReleasePlainLocalRead (opcode 443, Base group, one operand) to release a functional
+//!        operator's source after a plain local read (#5959); the maximum opcode in the AOT header is 443
+//! The shared format version for the changes in batch AL (see v48 above).
+constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
+//! Old compiled artifacts must be rebuilt for AL's handler and source-release semantics.
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AL_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -675,6 +688,11 @@ constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
 constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
 //! First format version whose debug IR has the paths of a debugger's flow requests (see v46 above).
 constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
+//! The format version of the format changes of batch AK (see v47 above)
+/** Each change of the batch adds its line to the v47 history above and, if it needs one, a feature version of its own
+    that a static_assert keeps equal to this one
+*/
+constexpr uint16_t QORE_AOT_BATCH_AK_VERSION = 47;
 //! First format version whose serialized IR instructions have their runtime locations (see v47 above)
 /** The locations of the statements of an IR function form a table of the function, whose entries are written where
     an instruction first has them; the IR of a handler, a closure or a background helper written in an instruction of
@@ -683,10 +701,17 @@ constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
     from the code (qore#6646)
 */
 constexpr uint16_t QORE_AOT_STATEMENT_LOCATIONS_VERSION = 47;
+static_assert(QORE_AOT_STATEMENT_LOCATIONS_VERSION == QORE_AOT_BATCH_AK_VERSION,
+    "the format changes of batch AK share one format version (v47)");
+//! First format version whose return statements can take the values that handlers run out of line past the inline
+//! cap handed over (see v48 above, #6137)
+constexpr uint16_t QORE_AOT_HANDED_OVER_RETURN_VERSION = 48;
+static_assert(QORE_AOT_HANDED_OVER_RETURN_VERSION == QORE_AOT_BATCH_AL_VERSION,
+    "the format changes of batch AL share one format version (v48)");
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_STATEMENT_LOCATIONS_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AL_VERSION;
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {

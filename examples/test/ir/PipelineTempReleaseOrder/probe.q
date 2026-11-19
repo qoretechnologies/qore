@@ -153,8 +153,18 @@ for (int i = 0; i < 2; ++i) {
     firstLocal();
 }
 
-auto top = (new P("top-plain"),);
-string topResult = string(first (map 1, top)) + ((top = NOTHING) ?? "") + marker("top-plain");
+auto topSource = (new P("top-plain"),);
+string topResult = string(first (map 1, topSource)) + ((topSource = NOTHING) ?? "") + marker("top-plain");
 auto topTarget = (new P("top-reference"),);
 auto topRef = \topTarget;
 topResult = string(first (map 1, topRef)) + ((topTarget = NOTHING) ?? "") + marker("top-reference");
+
+# A declaration used as the source also stores the newly constructed value in its local.
+string sub replaceSource(reference<P> p) {
+    p = new P("replacement");
+    return "";
+}
+sub firstDeclared() {
+    string s = string(first (map 1, P p("declared"))) + replaceSource(\p) + marker("declared");
+}
+firstDeclared();

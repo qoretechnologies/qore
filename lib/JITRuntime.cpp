@@ -15652,12 +15652,28 @@ QoreHandlerRunContext*& qore_handler_run_context() {
 }
 
 // documented in QoreHandlerRun.h
+uint64_t qore_handler_run_hand_over_count() {
+    QoreHandlerRunContext* ctx = qore_handler_run_context();
+    return ctx && ctx->hand_over_count ? *ctx->hand_over_count : 0;
+}
+
+// documented in QoreHandlerRun.h
 void qore_handler_return(QoreValue value, ExceptionSink* xsink) {
     QoreHandlerRunContext* ctx = qore_handler_run_context();
-    if (!ctx || !ctx->unwinding || !ctx->hand_over) {
+    if (!ctx || !(ctx->unwinding || ctx->returning) || !ctx->hand_over) {
         return;
     }
+    if (ctx->hand_over_count) {
+        ++*ctx->hand_over_count;
+    }
     ctx->hand_over(ctx->data, value, xsink);
+}
+
+//! Returns the count of the values handed over to the function that the handler that runs it hands its values to
+//! (qore_handler_run_hand_over_count()), which the native code of a ScopeExit with a result in a handler compiled as a
+//! function of its own compares before and after its handlers run (#6552)
+extern "C" DLLEXPORT int64_t qore_rt_handler_run_hand_over_count() {
+    return static_cast<int64_t>(qore_handler_run_hand_over_count());
 }
 
 //! Hands the value of a return statement of a handler run out of line to the function that it runs for (#6074)
@@ -15692,6 +15708,8 @@ struct QoreNativeHandlerHold {
     bool replaced = false;
     //! set to 1 when a value is handed over
     int8_t held = 0;
+    //! the count of the values handed over (QoreHandlerRunContext::hand_over_count, #6552)
+    uint64_t count = 0;
 
     static void handOver(void* data, QoreValue value, ExceptionSink* xsink) {
         QoreNativeHandlerHold& h = *static_cast<QoreNativeHandlerHold*>(data);
@@ -15711,7 +15729,8 @@ struct QoreNativeHandlerHold {
 };
 
 static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
-        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward = false);
+        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward = false,
+        bool returning = false);
 
 extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered) {
     qore_rt_exec_on_block_exit_intern(saved_count, xsink, inline_lowered, nullptr);
@@ -15735,9 +15754,55 @@ extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count,
     return h.held;
 }
 
+//! Runs the handlers registered since saved_count in the block cleanups of a return statement past the inline cap of
+//! the lowering (QoreIRScopeExitInstruction::hand_over_return, #6137)
+/** The values that their returns hand over (QoreIROpcode::HandlerReturn), also while an exception that one of them
+    raises is pending, replace the value in \a hold, releasing the value before, and the first releases the values of
+    the \a n_replace slots of \a replace, the value of the return, as qore_rt_exec_on_block_exit_hold() does; \a handed
+    is set to 1 when a value is handed over.  The return takes the value with qore_rt_take_handed_over_return().
+
+    @return 1 if a value was handed over in this call: the caller then clears the slots of the values of \a replace,
+    which were released
+*/
+extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_return_hold(int64_t saved_count, ExceptionSink* xsink,
+        uint64_t* hold, int8_t* handed, uint64_t* replace, int64_t n_replace) {
+    QoreNativeHandlerHold h{hold, replace, n_replace};
+    qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, &h, false, true);
+    if (h.held) {
+        *handed = 1;
+    }
+    return h.held;
+}
+
+//! Returns the value that handlers run out of line past the inline cap handed over to \a hold, if \a handed is set,
+//! clearing both, or a reference of its own to the value of the return otherwise (QoreIROpcode::TakeHandedOverReturn,
+//! #6137)
+/** \a value_bits is borrowed; the result is a reference of its own.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_take_handed_over_return(uint64_t* hold, int8_t* handed, uint64_t value_bits) {
+    if (*handed) {
+        *handed = 0;
+        uint64_t bits = *hold;
+        *hold = toBits(QoreValue());
+        return bits;
+    }
+    return toBits(fromBits(value_bits).refSelf());
+}
+
+//! Releases the value that handlers run out of line past the inline cap handed over to \a hold, if \a handed is set,
+//! clearing both (QoreIROpcode::ReleaseHandedOverReturn, #6137)
+extern "C" DLLEXPORT void qore_rt_release_handed_over_return(uint64_t* hold, int8_t* handed, ExceptionSink* xsink) {
+    if (*handed) {
+        *handed = 0;
+        uint64_t bits = *hold;
+        *hold = toBits(QoreValue());
+        fromBits(bits).discard(xsink);
+    }
+}
+
 // inlined in both entry points, so that qore_rt_exec_on_block_exit_impl() has no hold check (#5992)
 static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
-        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward) {
+        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward, bool returning) {
     size_t start = static_cast<size_t>(saved_count);
     if (jit_obe_handlers.size() <= start) {
         return 0;
@@ -15832,9 +15897,11 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                     run_ctx.forwardFrom(*outer);
                 } else {
                     run_ctx.unwinding = error || (xsink && xsink->isThreadExit());
+                    run_ctx.returning = returning;
                     if (hold) {
                         run_ctx.hand_over = QoreNativeHandlerHold::handOver;
                         run_ctx.data = hold;
+                        run_ctx.hand_over_count = &hold->count;
                     }
                 }
                 QoreHandlerRunGuard run_guard(run_ctx);

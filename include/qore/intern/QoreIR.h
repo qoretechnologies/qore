@@ -1136,7 +1136,33 @@ enum class QoreIROpcode : uint16_t {
     //! `PushTempMark` instructions.
     PushTempMarkPair = 440,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (441, 442, ...)
+    /** Gives the value of a return statement whose block cleanups ran handlers out of line past the inline cap with
+        the value that the last of their return statements handed over, if any (#6137)
+
+        operands[0] = the value of the return, or no operand for a return without a value; the result is a reference
+        of its own to the value that a handler handed over to the frame's handed-over return (see
+        QoreIRScopeExitInstruction::hand_over_return), which the instruction takes from it, if one did, or to the
+        operand otherwise (no value without an operand).  As in the AST interpreter, where a return statement in a
+        handler replaces the return value of the function (ReturnStatement::execImpl()).  The lowering releases the
+        operand after it, as the value that the handler's return replaced, and checks the result against the declared
+        return type.  See qore_rt_take_handed_over_return().
+    */
+    TakeHandedOverReturn = 441,
+
+    /** Releases the value that the handlers run out of line past the inline cap handed over to the frame's
+        handed-over return, if any (#6137)
+
+        No operands, no result.  Emitted where a return statement in a handler lowered inline replaces the value of a
+        return whose block cleanups have run such handlers, as that return replaces the value that they handed over.
+        The release can raise an exception (a destructor).  See qore_rt_release_handed_over_return().  With an
+        operand, the result of a ScopeExit past the cap, it releases nothing and only clears that result for the IR
+        interpreter, as the first instruction of the return that the result branches to (#6552).
+    */
+    ReleaseHandedOverReturn = 442,
+    //! Release an operator source loaded from a local unless the load read through a reference.
+    ReleasePlainLocalRead = 443,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (444, 445, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1145,8 +1171,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::PushTempMarkPair);
-static_assert(QORE_IR_MAX_OPCODE == 440, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ReleasePlainLocalRead);
+static_assert(QORE_IR_MAX_OPCODE == 443, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself
@@ -4136,6 +4162,22 @@ public:
     */
     bool trim = false;
     uint32_t keep_handlers = 0;  //!< the number of handlers of the scope that a trim keeps registered
+    //! true if the scope is left by the block cleanups of a return statement past the inline cap of handlers (#6137)
+    /** The handlers of the scope run out of line, as with inline_lowered false, and the values of their return
+        statements (QoreIROpcode::HandlerReturn, also of the handlers of their blocks) replace the frame's handed-over
+        return, releasing the value before, as the AST interpreter's handlers replace the return value of the function
+        (ReturnStatement::execImpl()); the return statement takes it with QoreIROpcode::TakeHandedOverReturn.  The
+        operands are the value of the return and the value that it took a reference of its own to, if any (none for a
+        return without a value), which the first hand-over of a run releases in their slots, as the AST interpreter
+        releases the value that a return replaces.  Without it, a handler's return replaces a value only while an
+        exception or a thread_exit unwinds the scope.
+
+        Outside the block cleanups of a return statement (at the end of a block, a break or a continue in the body of a
+        handler lowered inline), the instruction has a result: a bool that is true if a value was handed over in this
+        run, on which the lowering branches to the return of the value (QoreIRLowering::lowerHandedOverReturn(),
+        #6552), as the AST interpreter's handler's return ends the code around it as a return statement there would.
+    */
+    bool hand_over_return = false;
     //! the paths of a debugger's request that the last handler that the instruction ran ended with (#6201): the
     //! request becomes that of the block, as with the AST interpreter (StatementBlock::execIntern()); nullptr if the
     //! code has no step events

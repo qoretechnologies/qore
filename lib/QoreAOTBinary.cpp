@@ -4785,14 +4785,14 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         return false;
     }
 
-    // Keep the supported version range broad enough for installed qmods from
-    // earlier releases while rejecting artifacts newer than this runtime.
+    // Check the format before reading any section or running code from the artifact.
     if (header.version < QORE_AOT_BINARY_MIN_VERSION
             || header.version > QORE_AOT_BINARY_VERSION) {
         error = "unsupported binary format version " + std::to_string(header.version)
               + " (supported " + std::to_string(QORE_AOT_BINARY_MIN_VERSION) + "-"
               + std::to_string(QORE_AOT_BINARY_VERSION) + ")"
-              + "; please update your Qore installation";
+              + (header.version < QORE_AOT_BINARY_MIN_VERSION ? "; rebuild the artifact with this version of qcc"
+                  : "; please update your Qore installation");
         return false;
     }
 
