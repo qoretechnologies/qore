@@ -19,7 +19,10 @@
 # The module commands go to the cppapiuser test module, which records the commands it receives
 # (cpp_api_module_cmds()) and whether the Program they run in has a sandbox; cpp_api_program_has_sandbox() tells
 # whether the calling code's Program has one.  Each load runs in a process of its own, so that each loads the modules
-# afresh, and the results of the source and of the compiled modules must be the same.
+# afresh, and the results of the source and of the compiled modules must be the same, except that the sandboxed loader
+# cannot load the native code of a compiled module from outside the process-wide module path (issue #6776; see the
+# trust model of native code in the sandboxing documentation): only the compiled library module is loaded and replays
+# its commands, and the loads of the others are refused.
 #
 # qcc generates modules that are initialized with qore_aot_module_init_v3(); the older initialization entry points and
 # statically linked modules are not exercised here.  AOT module Programs run compiled code, so the execution modes
@@ -207,7 +210,7 @@ string sub own_cmd(string mod, string cmd) {
 
     constructor() : QUnit::Test("AotModuleCmdReplayTest", "1.0", \ARGV) {
         addTestCase("a sandboxed Program loads the source modules", \sourceTest());
-        addTestCase("a sandboxed Program loads the compiled modules, which get the sandbox of the source modules",
+        addTestCase("a sandboxed Program loads the compiled library module, and cannot load the others",
             \compiledTest());
         addTestCase("sandboxed code cannot issue a run-time module command to another Program", \crossTest());
         set_return_value(main());
@@ -263,6 +266,10 @@ string sub own_cmd(string mod, string cmd) {
     }
 
     #! loads the modules in \a sub_dir (and their dependency in \a dep_dir) in every way, in every execution mode
+    /** The sandboxed loader cannot load the native code of a compiled module from outside the process-wide module
+        path (issue #6776; see the trust model of native code in the sandboxing documentation): for the compiled
+        modules, those loads are refused
+    */
     private checkLoads(string sub_dir, string dep_dir, string ext) {
         string mdir = dir.path + "/" + sub_dir;
         string ddir = dir.path + "/" + dep_dir;
@@ -270,6 +277,23 @@ string sub own_cmd(string mod, string cmd) {
             # by name from the process-wide module path: library code
             assertEq(expect({"info": LibraryInfo, "commands": ("replay-probe",)}),
                 load(mode, mdir, ("ReplayProbe", "ReplayProbe")), mode + " by name from the module path");
+            if (ext == ".qmod") {
+                list<hash<auto>> refused = (
+                    {"label": "by path", "args": (mdir + "/ReplayProbe.qmod", "ReplayProbe"), "mod": "ReplayProbe"},
+                    {"label": "by name from the loader's path", "args": ("ReplayProbe", "ReplayProbe", mdir),
+                        "mod": "ReplayProbe"},
+                    {"label": "by path with a dependency from the module's path",
+                        "args": (mdir + "/ReplayOuter.qmod", "ReplayOuter"), "mod": "ReplayOuter"},
+                    {"label": "by path with a dependency from the process-wide module path", "dir": ddir,
+                        "args": (mdir + "/ReplayOuter.qmod", "ReplayOuter"), "mod": "ReplayOuter"},
+                );
+                foreach hash<auto> l in (refused) {
+                    assertRegex(sprintf("^\\{error: \"LOAD-MODULE-ERROR: cannot load binary module '%s/%s\\.qmod': "
+                        "code that a sandbox governs or whose functional domains are restricted can load native code "
+                        "only from the module path", mdir, l.mod), load(mode, l.dir, l.args), mode + " " + l.label);
+                }
+                continue;
+            }
             # by path
             assertEq(expect({"info": SandboxedInfo, "commands": ("replay-probe [sandboxed]",)}),
                 load(mode, NOTHING, (mdir + "/ReplayProbe" + ext, "ReplayProbe")), mode + " by path");
