@@ -588,10 +588,157 @@ bool QoreSandboxBudgetStack::hasBudgetFor(const QoreSandboxManager* sm) const {
     return false;
 }
 
+QoreSandboxIsolation::QoreSandboxIsolation(QoreSandboxManager* callers) : callers(callers) {
+    assert(callers);
+    callers->ref();
+}
+
+QoreSandboxIsolation::~QoreSandboxIsolation() {
+    callers->deref(nullptr);
+    for (QoreSandboxManager* sm : creators) {
+        sm->deref(nullptr);
+    }
+}
+
+void QoreSandboxIsolation::addCreator(QoreSandboxManager* sm) {
+    creators.push_back(sm);
+    sm->ref();
+}
+
+QoreSandboxIsolation* QoreSandboxIsolation::nested(const QoreSandboxIsolation& outer) {
+    QoreSandboxIsolation* rv = new QoreSandboxIsolation(outer.callers);
+    try {
+        rv->creators.reserve(outer.creators.size() + 2);
+        for (QoreSandboxManager* sm : outer.creators) {
+            rv->addCreator(sm);
+        }
+    } catch (...) {
+        rv->deref();
+        throw;
+    }
+    return rv;
+}
+
+const std::string* QoreSandboxIsolation::callerDomain() const {
+    if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(callers)) {
+        for (const QoreSandboxManager* sm : *members) {
+            if (const std::string* domain = sm->governingIsolationDomain()) {
+                return domain;
+            }
+        }
+        return nullptr;
+    }
+    return callers->governingIsolationDomain();
+}
+
+const std::string* QoreSandboxIsolation::refuses(const QoreSandboxManager* member) const {
+    const std::string* domain = member->governingIsolationDomain();
+    // a sandbox without a domain belongs to no tenant
+    if (!domain) {
+        return nullptr;
+    }
+    // the caller's domains: a caller without one isolates nothing
+    bool caller_has_domain = false;
+    auto same = [&] (const QoreSandboxManager* sm) -> bool {
+        if (sm == member) {
+            return true;
+        }
+        const std::string* d = sm->governingIsolationDomain();
+        if (!d) {
+            return false;
+        }
+        caller_has_domain = true;
+        return *d == *domain;
+    };
+    if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(callers)) {
+        for (const QoreSandboxManager* sm : *members) {
+            if (same(sm)) {
+                return nullptr;
+            }
+        }
+    } else if (same(callers)) {
+        return nullptr;
+    }
+    if (!caller_has_domain) {
+        return nullptr;
+    }
+    // the build's own code
+    for (const QoreSandboxManager* sm : creators) {
+        if (sm == member) {
+            return nullptr;
+        }
+        if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
+            for (const QoreSandboxManager* m : *members) {
+                if (m == member) {
+                    return nullptr;
+                }
+            }
+        }
+    }
+    return domain;
+}
+
+void QoreSandboxBudgetStack::refuseIsolation(int tid, const void* owner, const std::string& domain,
+        const std::string* caller_domain) {
+    assert(!refused_owner);
+    refused_owner = owner;
+    try {
+        refused_domain = domain;
+        refused_caller_domain = caller_domain ? *caller_domain : std::string();
+    } catch (std::bad_alloc&) {
+        // the exception is raised without the names
+        refused_domain.clear();
+        refused_caller_domain.clear();
+    }
+    // no code runs in the refused entry: the stack is closed, so the stack check at the entry of every function,
+    // method and closure (in each execution mode) fails, and so does the next cancellation point
+    refused_stack_closed = qore_sandbox_tighten_stack(1, refused_saved_stack_limit) != 0;
+    thread_list.requestSandboxLimit(tid);
+}
+
+void QoreSandboxBudgetStack::raiseIsolation(ExceptionSink* xsink, const char* operation) const {
+    assert(refused_owner);
+    if (refused_domain.empty()) {
+        xsink->raiseException("SANDBOX-ISOLATION-ERROR", "%s: code of another isolation domain cannot run in a "
+            "trusted build that sandboxed code of a different isolation domain called", operation);
+        return;
+    }
+    xsink->raiseException("SANDBOX-ISOLATION-ERROR", "%s: code of isolation domain '%s' cannot run in a trusted "
+        "build that sandboxed code of isolation domain '%s' called", operation, refused_domain.c_str(),
+        refused_caller_domain.c_str());
+}
+
+void QoreSandboxBudgetStack::setIsolation(QoreSandboxManager* callers, QoreSandboxManager* own,
+        QoreSandboxManager* creator) {
+    assert(!charge_floors.empty());
+    QoreSandboxIsolation* iso = nullptr;
+    if (callers) {
+        iso = new QoreSandboxIsolation(callers);
+    } else if (charge_floors.size() > 1 && charge_floors[charge_floors.size() - 2].iso) {
+        // a build that the outer build's own code entered: the outer caller's isolation holds
+        iso = QoreSandboxIsolation::nested(*charge_floors[charge_floors.size() - 2].iso);
+    } else {
+        return;
+    }
+    try {
+        if (own) {
+            iso->addCreator(own);
+        }
+        if (creator) {
+            iso->addCreator(creator);
+        }
+    } catch (...) {
+        iso->deref();
+        throw;
+    }
+    charge_floors.back().iso = iso;
+}
+
 void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* owner) {
     assert(sm);
-    // inside a call whose limit cannot be enforced, nothing more is recorded until it is left
-    if (lost_owner) {
+    // inside a call whose limit cannot be enforced, or whose entry was refused, nothing more is recorded until it is
+    // left
+    if (lost_owner || refused_owner) {
         return;
     }
     if (!charge_floors.empty()) {
@@ -631,6 +778,9 @@ void QoreSandboxBudgetStack::suspendCharge(const QoreSandboxManager* callers) {
 void QoreSandboxBudgetStack::resumeCharge() {
     assert(!charge_floors.empty());
     QoreSandboxCharge* saved = charge_floors.back().saved;
+    if (QoreSandboxIsolation* iso = charge_floors.back().iso) {
+        iso->deref();
+    }
     charge_floors.pop_back();
     qore_sb_set_charge(saved);
 }
@@ -697,6 +847,16 @@ void QoreSandboxBudgetStack::enterInBuild(int tid, QoreSandboxManager* sm, const
             if (!isBuildOwnSandbox(floor.frames, first[n])) {
                 build_own = false;
                 break;
+            }
+        }
+    }
+
+    // the code of another tenant never runs in a build that a tenant entered, nor in its continuations (qore#6536)
+    if (!build_own && floor.iso) {
+        for (size_t n = 0; n < count; ++n) {
+            if (const std::string* domain = floor.iso->refuses(first[n])) {
+                refuseIsolation(tid, owner, *domain, floor.iso->callerDomain());
+                return;
             }
         }
     }
@@ -903,18 +1063,22 @@ void QoreSandboxBudgetStack::startBudget(int tid, QoreSandboxManager* sm, int64 
 }
 
 void QoreSandboxBudgetStack::attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner,
-        bool in_build) {
-    if (lost_owner) {
+        bool in_build, QoreSandboxIsolation* iso) {
+    if (lost_owner || refused_owner) {
         return;
     }
     if (in_build) {
         // the code that a continuation of code in a trusted build runs is charged to the sandboxes that govern it,
-        // as in the build (see enterInBuild()); it has no caller: no sandbox code is the caller's there
+        // as in the build (see enterInBuild()); it has no caller: no sandbox code is the caller's there; the
+        // isolation of the build holds in it (qore#6536)
         try {
-            charge_floors.push_back({frames.size(), nullptr, nullptr, owner});
+            charge_floors.push_back({frames.size(), nullptr, nullptr, owner, iso});
         } catch (std::bad_alloc&) {
             lose(tid, owner, QSB_LIMIT_MEMORY, 0, 0, 0, 0);
             return;
+        }
+        if (iso) {
+            iso->ref();
         }
     }
     for (QoreSandboxCallBudget* budget : budgets) {
@@ -974,6 +1138,14 @@ void QoreSandboxBudgetStack::lose(int tid, const void* owner, unsigned kinds, in
 
 void QoreSandboxBudgetStack::leaveIntern(int tid, const void* owner) {
     bool limited = false;
+    if (refused_owner == owner) {
+        if (refused_stack_closed) {
+            qore_sandbox_restore_stack(refused_saved_stack_limit);
+            refused_stack_closed = false;
+        }
+        refused_owner = nullptr;
+        limited = true;
+    }
     if (lost_owner == owner) {
         // the lost call is left first: it was the last one entered
         if (lost_stack_closed) {
@@ -999,11 +1171,14 @@ void QoreSandboxBudgetStack::leaveIntern(int tid, const void* owner) {
     // the floor of a continuation in a trusted build (see attach())
     if (!charge_floors.empty() && charge_floors.back().owner == owner) {
         assert(charge_floors.back().frames == frames.size());
+        if (QoreSandboxIsolation* iso = charge_floors.back().iso) {
+            iso->deref();
+        }
         charge_floors.pop_back();
     }
     // the limit bit is cleared when the thread has left every expired call and is not over a memory limit any more;
     // it is checked again under the thread list lock, so a budget expiring meanwhile keeps it set
-    if ((limited || (thread_list.getCancelBits(tid) & QCR_SANDBOX_LIMIT)) && !lost_owner) {
+    if ((limited || (thread_list.getCancelBits(tid) & QCR_SANDBOX_LIMIT)) && !lost_owner && !refused_owner) {
         thread_list.clearSandboxLimit(tid, *this);
     }
 }

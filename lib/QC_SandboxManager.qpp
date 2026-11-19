@@ -192,6 +192,8 @@ SandboxManager sm();
 */
 SandboxManager::constructor() {
     QoreSandboxManager* nsm = new QoreSandboxManager();
+    // a sandbox that sandboxed code creates belongs to the tenant of that code (qore#6536)
+    nsm->inheritIsolationDomain();
     // code that is not trusted may change the managers that it creates (issue #5659)
     qore_sandbox_manager_record_creator(nsm);
     self->setPrivate(CID_SANDBOXMANAGER, nsm);
@@ -209,6 +211,8 @@ SandboxManager::destructor() {
 */
 SandboxManager::copy() {
     QoreSandboxManager* nsm = sm->copy();
+    // a copy that sandboxed code makes belongs to the tenant of that code (qore#6536)
+    nsm->inheritIsolationDomain();
     // code that is not trusted may change the managers that it creates (issue #5659)
     qore_sandbox_manager_record_creator(nsm);
     self->setPrivate(CID_SANDBOXMANAGER, nsm);
@@ -253,6 +257,57 @@ nothing SandboxManager::setMaxThreads(int max_threads) [flags=NAMED_ARGS] {
 */
 int SandboxManager::getMaxThreads() {
     return sm->getMaxThreads();
+}
+
+//! Sets the isolation domain (the tenant) of the sandbox
+/** Code of different isolation domains never runs for each other: a trusted build
+    (@ref Qore::SandboxManager::createTrustedBuildCall() "createTrustedBuildCall()") that sandboxed code of one domain
+    calls refuses to run code of a sandbox of another domain, on every path (its arguments, values that it reaches
+    through them, threads and other continuations that it starts, nested builds), with a \c SANDBOX-ISOLATION-ERROR
+    exception; see @ref sandbox_isolation_domains.
+
+    A sandbox that sandboxed code creates (or copies) belongs to the domain of the sandbox that governs that code.
+    A sandbox without a domain belongs to none: no code is refused for it, as for every sandbox of a host that does
+    not set domains.
+
+    @param domain the isolation domain; must not be empty
+
+    @par Example:
+    @code{.py}
+SandboxManager sm();
+sm.setIsolationDomain("tenant-a");
+pgm.setSandboxManager(sm);
+    @endcode
+
+    @throw SANDBOX-ACCESS-ERROR sandboxed code, or code whose functional domains are restricted, cannot set the
+    isolation domain
+    @throw SANDBOX-CONFIG-ERROR the domain is empty, the sandbox is a composite, its domain is already set to another
+    domain, or it already governs code (it was given to a %Program or is a part of a composite sandbox)
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setIsolationDomain(string domain) [flags=NAMED_ARGS] {
+    TempEncodingHelper str(domain, QCS_UTF8, xsink);
+    if (!str) {
+        return QoreValue();
+    }
+    sm->setIsolationDomain(str->c_str(), xsink);
+}
+
+//! Returns the isolation domain (the tenant) of the sandbox
+/** @return the isolation domain, or @ref nothing if the sandbox has none; for a composite sandbox, the domain of its
+    first member that has one
+
+    @see @ref Qore::SandboxManager::setIsolationDomain() "setIsolationDomain()"
+
+    @since %Qore 3.0
+*/
+*string SandboxManager::getIsolationDomain() [flags=CONSTANT] {
+    std::string domain = sm->getIsolationDomain();
+    if (domain.empty()) {
+        return QoreValue();
+    }
+    return new QoreStringNode(domain.c_str(), QCS_UTF8);
 }
 
 //! Sets the wall-clock time limit of each call into the sandbox
@@ -1190,12 +1245,18 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
       the code of that %Program calls the capability
     - objects and callbacks that the caller (or other sandboxed code) created keep their own provenance: what the
       build calls of them is governed by their sandbox
+    - the code of a sandbox of another isolation domain than the caller's (another tenant: see
+      @ref sandbox_isolation_domains) never runs in a build that a sandboxed caller entered: the build raises
+      \c SANDBOX-ISOLATION-ERROR before any of that code runs, also in the threads, pool tasks and asynchronous I/O that
+      it starts and in nested builds
 
     @param call a plain callback (not a bound callback or another capability) of code that no sandbox governs,
     created outside sandbox execution
 
     @return a capability for the fixed callback
 
+    @throw SANDBOX-ISOLATION-ERROR (raised by the capability) the build was to run code of another isolation domain
+    than its sandboxed caller's
     @throw SANDBOX-CAPABILITY-ERROR a sandbox governs the creating code, the creating code is sandboxed, or @p call has
     sandbox provenance, belongs to a sandboxed %Program, or is a bound callback or a capability
 

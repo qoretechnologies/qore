@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# SandboxManager isolation domains (qore#6536): the code of one tenant (isolation domain) never runs in a trusted build
+# (SandboxManager::createTrustedBuildCall()) that sandboxed code of another tenant called, on any path; the same
+# tenant's sandboxes, the build's own code, host code and builds that trusted code enters are unaffected, and so are
+# sandboxes without a domain
+
+%modern
+%no-child-restrictions
+%allow-debugger
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class SandboxIsolationDomainTest
+
+#! the code of a tenant
+const TenantSource = "%modern
+list<string> sub make(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += sprintf(\"entry %d\", i);
+    }
+    return l;
+}
+code sub mk_closure() {
+    return list<string> sub (int n) { return make(n); };
+}
+class Maker {
+    list<string> make(int n) {
+        return ::make(n);
+    }
+}
+object sub mk_object() {
+    return new Maker();
+}
+auto sub call(code c, *softlist<auto> args) {
+    return call_function_args(c, args);
+}
+code sub returning(code c) {
+    return code sub () { return c; };
+}
+*string sub new_manager_domain() {
+    Qore::SandboxManager m();
+    return m.getIsolationDomain();
+}
+string sub set_domain(Qore::SandboxManager m, string domain) {
+    try {
+        m.setIsolationDomain(domain);
+        return \"set\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+#! trusted code that a build runs: calls the code that the caller gives it
+auto sub build_call_args(code c, softlist<auto> args) {
+    return call_function_args(c, args);
+}
+
+#! trusted code that a build runs: calls a method of an object that the caller gives it
+auto sub build_call_method(object o, string method, softlist<auto> args) {
+    return call_object_method_args(o, method, args);
+}
+
+#! trusted code that a build runs: calls the first call reference of a list that the caller gives it
+auto sub build_call_first(list<auto> l, softlist<auto> args) {
+    return call_function_args(l[0], args);
+}
+
+#! trusted code that a build runs: calls the code that the caller's callback returns
+auto sub build_call_returned(code cb, softlist<auto> args) {
+    code c = cb();
+    return call_function_args(c, args);
+}
+
+#! trusted code that a build runs: calls the code in a thread that it starts and returns the result or the error
+auto sub build_thread_call(code c, softlist<auto> args) {
+    Queue q();
+    background sub () {
+        try {
+            q.push({"result": call_function_args(c, args)});
+        } catch (hash<ExceptionInfo> ex) {
+            q.push({"err": ex.err});
+        }
+    }();
+    hash<auto> h = q.get();
+    if (h.err) {
+        throw h.err, "in the thread of the build";
+    }
+    return h.result;
+}
+
+#! trusted code that a build runs: passes the code on to another build
+auto sub build_nested(code cap, code c, softlist<auto> args) {
+    return cap(c, args);
+}
+
+#! trusted code that a build runs: calls a function of a Program that the caller gives it
+auto sub build_call_pgm(Program p, string f, softlist<auto> args) {
+    return p.callFunctionArgs(f, args);
+}
+
+#! a trusted class whose objects get the sandbox of the code that creates them as provenance
+class Holder {
+    int run() {
+        return 1;
+    }
+}
+
+#! trusted code that sandboxed code calls: the object gets the caller's sandbox as provenance
+Holder sub new_holder() {
+    return new Holder();
+}
+
+class SandboxIsolationDomainTest inherits QUnit::Test {
+    private {
+        code BuildCallArgs;
+        code BuildCallMethod;
+        code BuildCallFirst;
+        code BuildCallReturned;
+        code BuildThreadCall;
+        code BuildNested;
+        code BuildCallPgm;
+
+        #! tenant A's interface, its second interface (same domain), tenant B's interface
+        Program a;
+        Program a2;
+        Program b;
+    }
+
+    constructor() : QUnit::Test("sandbox isolation domains", "1.0", \ARGV) {
+        addTestCase("the isolation domain of a sandbox", \domainApi());
+        addTestCase("the code of another tenant does not run in a build that a tenant called", \refused());
+        addTestCase("the same tenant's code, the build's own code and host code run", \allowed());
+        addTestCase("a build that trusted code enters may run any tenant's code", \trustedCaller());
+        addTestCase("sandboxes without a domain refuse nothing", \noDomain());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        BuildCallArgs = SandboxManager::createTrustedBuildCall(\build_call_args());
+        BuildCallMethod = SandboxManager::createTrustedBuildCall(\build_call_method());
+        BuildCallFirst = SandboxManager::createTrustedBuildCall(\build_call_first());
+        BuildCallReturned = SandboxManager::createTrustedBuildCall(\build_call_returned());
+        BuildThreadCall = SandboxManager::createTrustedBuildCall(\build_thread_call());
+        BuildNested = SandboxManager::createTrustedBuildCall(\build_nested());
+        BuildCallPgm = SandboxManager::createTrustedBuildCall(\build_call_pgm());
+
+        a = tenant("a", "tenant-a");
+        a2 = tenant("a", "tenant-a2");
+        b = tenant("b", "tenant-b");
+    }
+
+    #! creates the Program of a tenant's interface
+    private Program tenant(*string domain, string name) {
+        SandboxManager m();
+        m.setUncontrolledApiPolicy(True);
+        if (domain) {
+            m.setIsolationDomain(domain);
+        }
+        Program p(PO_MODERN);
+        p.setSandboxManager(m);
+        p.parse(TenantSource, name);
+        return p;
+    }
+
+    domainApi() {
+        SandboxManager m();
+        assertNothing(m.getIsolationDomain());
+        assertThrows("SANDBOX-CONFIG-ERROR", "must not be empty", \m.setIsolationDomain(), "");
+        m.setIsolationDomain("x");
+        assertEq("x", m.getIsolationDomain());
+        # the same domain again changes nothing; another is refused
+        m.setIsolationDomain("x");
+        assertThrows("SANDBOX-CONFIG-ERROR", "cannot be changed", \m.setIsolationDomain(), "y");
+        # a copy belongs to the same tenant
+        assertEq("x", m.copy().getIsolationDomain());
+
+        # the domain is set before the sandbox governs code
+        SandboxManager n();
+        Program p(PO_MODERN);
+        p.setSandboxManager(n);
+        assertThrows("SANDBOX-CONFIG-ERROR", "already governs code", \n.setIsolationDomain(), "x");
+
+        # sandboxed code cannot set a domain, also not of a sandbox that it created
+        assertEq("SANDBOX-ACCESS-ERROR", a.callFunction("set_domain", new SandboxManager(), "b"));
+        # a sandbox that sandboxed code creates belongs to the tenant of that code
+        assertEq("a", a.callFunction("new_manager_domain"));
+        assertEq("b", b.callFunction("new_manager_domain"));
+    }
+
+    refused() {
+        code b_ref = b.getCallReference("make");
+        code b_closure = b.callFunction("mk_closure");
+        object b_obj = b.callFunction("mk_object");
+        # an object of a trusted class with tenant B's sandbox as provenance
+        Holder b_holder = b.callFunction("call", \new_holder());
+        # tenant A's own code that returns tenant B's code
+        code a_returning = a.callFunction("returning", b_ref);
+
+        int frames = budgetFrames();
+        assertThrows("SANDBOX-ISOLATION-ERROR", "isolation domain 'b'.*isolation domain 'a'",
+            \a.callFunction(), ("call", BuildCallArgs, (b_ref, 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallArgs, (b_closure, 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallMethod, (b_obj, "make", 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallMethod, (b_holder, "run")));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallFirst, ((b_ref,), 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallReturned, (a_returning, 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildThreadCall, (b_ref, 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildNested, (BuildCallArgs, b_ref, 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallPgm, (b, "make", 10)));
+        # the refused entries left no frames
+        if (frames >= 0) {
+            assertEq(frames, budgetFrames());
+        }
+        # and the tenant can still call its own code through the build
+        assertEq(10, a.callFunction("call", BuildCallArgs, (a.getCallReference("make"), 10)).size());
+    }
+
+    allowed() {
+        # the same tenant's other interface (a TrustedSynchronousExecution-style build)
+        assertEq(10, a.callFunction("call", BuildCallArgs, (a2.getCallReference("make"), 10)).size());
+        assertEq(10, a.callFunction("call", BuildCallMethod, (a2.callFunction("mk_object"), "make", 10)).size());
+        assertEq(10, a.callFunction("call", BuildCallPgm, (a2, "make", 10)).size());
+        assertEq(10, a.callFunction("call", BuildThreadCall, (a2.getCallReference("make"), 10)).size());
+        # the caller's own code
+        assertEq(10, a.callFunction("call", BuildCallArgs, (a.callFunction("mk_closure"), 10)).size());
+        # host code
+        code host = list<string> sub (int n) { return map "x", xrange(n); };
+        assertEq(10, a.callFunction("call", BuildCallArgs, (host, 10)).size());
+    }
+
+    trustedCaller() {
+        # the host orchestrates across tenants
+        assertEq(10, BuildCallArgs(b.getCallReference("make"), 10).size());
+        assertEq(10, BuildThreadCall(b.getCallReference("make"), 10).size());
+        assertEq(10, BuildNested(BuildCallArgs, b.getCallReference("make"), 10).size());
+    }
+
+    noDomain() {
+        Program x = tenant(NOTHING, "no-domain-x");
+        Program y = tenant(NOTHING, "no-domain-y");
+        assertEq(10, x.callFunction("call", BuildCallArgs, (y.getCallReference("make"), 10)).size());
+        # a caller without a domain refuses no tenant's code either
+        assertEq(10, x.callFunction("call", BuildCallArgs, (b.getCallReference("make"), 10)).size());
+        # the code of a sandbox without a domain runs for a tenant
+        assertEq(10, a.callFunction("call", BuildCallArgs, (y.getCallReference("make"), 10)).size());
+    }
+
+    #! the number of call budget frames of the thread, or -1 in a release build
+    private int budgetFrames() {
+        try {
+            return call_function("dbg_sandbox_budget_frames");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                return -1;
+            }
+            rethrow;
+        }
+    }
+}

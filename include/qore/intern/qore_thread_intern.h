@@ -765,6 +765,10 @@ DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
     caller's call budget (see QoreSandboxBudgetStack::suspendCharge()), and the continuations of its work capture none
     of the caller's budgets
 */
+//! Raises \c SANDBOX-ISOLATION-ERROR and returns -1 if the thread entered the code of another tenant in a trusted build
+//! (see QoreSandboxBudgetStack::isIsolationRefused()), else returns 0 (qore#6536)
+DLLLOCAL int qore_sandbox_check_isolation(ExceptionSink* xsink, const char* operation);
+
 class QoreTrustedBuildChargeHelper {
 public:
     //! Starts it; established() is false if it could not be recorded for lack of memory
@@ -923,6 +927,9 @@ public:
     QoreSandboxBudgetList budgets;
     //! true if the context was captured in a trusted build (see QoreSandboxBudgetStack::attach())
     bool in_build = false;
+    //! the isolation of the trusted build in which the context was captured (referenced), or nullptr: it holds in the
+    //! continuation as well (qore#6536)
+    QoreSandboxIsolation* isolation = nullptr;
     //! The functional-domain restrictions of the code that created an object or call reference of library module code
     //! (sandbox provenance only; qore#6520)
     /** Recorded when restricted code, or library code that restricted code called, creates the object or call

@@ -2759,7 +2759,12 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
     if (td->stack_limit < pos) {
 #endif
         // a sandbox call can have tightened the limit (see qore_sandbox_tighten_stack()), or closed the stack
-        // because its limits cannot be enforced
+        // because its limits cannot be enforced, or because the code of another tenant was entered in a trusted
+        // build (qore#6536)
+        if (td->sandbox_budgets.isIsolationRefused()) {
+            td->sandbox_budgets.raiseIsolation(xsink, "call");
+            return -1;
+        }
         if (td->sandbox_budgets.isStackLost()) {
             td->sandbox_budgets.raiseLost(xsink, "call");
             return -1;
@@ -5412,6 +5417,13 @@ void ProgramThreadCountContextHelper::enterSwitched(ThreadData* td, ExceptionSin
     // (almost every Program has no manager, which is checked without the call that takes a reference to it)
     if (pp->hasSandboxManager()) {
         enterSandboxBudgets(td, pp);
+        // the code of another tenant does not run in a trusted build that a tenant called (qore#6536)
+        if (td->sandbox_budgets.isIsolationRefused()) {
+            td->sandbox_budgets.raiseIsolation(xsink, "entering a Program");
+            restoreContext();
+            restore = false;
+            return;
+        }
     }
     // sandboxed code never runs with cancellation deferred (a trusted destructor, a cleanup critical section or thread
     // teardown that calls it); a Program that sandboxed code created has no manager of its own, so the flag decides
@@ -6467,30 +6479,48 @@ QoreSandboxManager* qore_module_init_lift_manager_ref() {
     return mib.loader_manager;
 }
 
+int qore_sandbox_check_isolation(ExceptionSink* xsink, const char* operation) {
+    ThreadData* td = thread_data.get();
+    if (!td || !td->sandbox_budgets.isIsolationRefused()) {
+        return 0;
+    }
+    if (xsink) {
+        td->sandbox_budgets.raiseIsolation(xsink, operation);
+    }
+    return -1;
+}
+
 QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper(QoreProgram* creator, QoreSandboxManager* callers)
         : callers(callers) {
     ThreadData* td = thread_data.get();
     if (!td) {
         return;
     }
+    QoreSandboxManager* own_ptr = nullptr;
+    QoreSandboxManager* creator_ptr = nullptr;
+    if (creator) {
+        qore_program_private::get(*creator)->getSandboxManagerRefs(own_ptr, creator_ptr);
+    }
+    ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+    ReferenceHolder<QoreSandboxManager> creator_sm(creator_ptr, nullptr);
     try {
         td->sandbox_budgets.suspendCharge(callers);
     } catch (std::bad_alloc&) {
         return;
     }
-    started = true;
-    tid = td->tid;
-    if (!creator) {
+    // the code of other tenants does not run in the build (qore#6536); a build whose isolation cannot be recorded is
+    // not established, and the call fails
+    try {
+        td->sandbox_budgets.setIsolation(callers, *own, *creator_sm);
+    } catch (std::bad_alloc&) {
+        td->sandbox_budgets.resumeCharge();
         return;
     }
+    started = true;
+    tid = td->tid;
     // the creator's sandboxes, entered as ProgramThreadCountContextHelper enters them: a budget of the creator's
     // call below the floor (its own code called the capability) is charged again, else a budget is started; a budget
     // that cannot be recorded fails the build at its next cancellation point (see QoreSandboxBudgetStack::lose())
-    QoreSandboxManager* own_ptr;
-    QoreSandboxManager* creator_ptr;
-    qore_program_private::get(*creator)->getSandboxManagerRefs(own_ptr, creator_ptr);
-    ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
-    ReferenceHolder<QoreSandboxManager> creator_sm(creator_ptr, nullptr);
     if (own) {
         td->sandbox_budgets.enterBuildOwn(tid, *own, this);
     }
@@ -6708,6 +6738,10 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     if (capture_budgets && td) {
         td->sandbox_budgets.capture(budgets);
         in_build = td->sandbox_budgets.inBuild();
+        isolation = td->sandbox_budgets.currentIsolation();
+        if (isolation) {
+            isolation->ref();
+        }
     }
     // a continuation of work that the module cleanup runs is part of the cleanup (see qore_close_module_programs())
     module_cleanup_delegate = capture_budgets && qore_module_cleanup_delegation();
@@ -6763,6 +6797,10 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool modul
     // a continuation of code in a trusted build stays one, and keeps the restrictions of the code that created it
     in_build = src->in_build;
     origin_restrictions = src->origin_restrictions;
+    isolation = src->isolation;
+    if (isolation) {
+        isolation->ref();
+    }
     for (QoreSandboxCallBudget* budget : budgets) {
         budget->ref();
     }
@@ -6786,6 +6824,9 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool modul
 
 QoreSandboxContext::~QoreSandboxContext() {
     qore_sandbox_budgets_deref(budgets);
+    if (isolation) {
+        isolation->deref();
+    }
     if (manager) {
         manager->deref(nullptr);
     }
@@ -6948,7 +6989,7 @@ QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx
         td->sandbox_context_pgm_ctx = td->current_pgm_ctx;
         active = true;
         // the operation continues the call that started it, under the same budgets
-        td->sandbox_budgets.attach(td->tid, ctx.budgets, this, ctx.in_build);
+        td->sandbox_budgets.attach(td->tid, ctx.budgets, this, ctx.in_build, ctx.isolation);
     }
 }
 
@@ -6965,7 +7006,11 @@ int QoreInheritedSandbox::capture(ExceptionSink* xsink, std::unique_ptr<QoreInhe
     assert(xsink);
     std::unique_ptr<QoreInheritedSandbox> sbx(new QoreInheritedSandbox);
     if (!sbx->ctx.manager && !sbx->ctx.policy_manager) {
-        // no sandbox governs the starting code
+        // no sandbox governs the starting code; a thread that a trusted build entered by a tenant starts keeps the
+        // isolation of the build, so the code of other tenants does not run in it (qore#6536)
+        if (sbx->ctx.isolation) {
+            rv = std::move(sbx);
+        }
         return 0;
     }
     // the thread is counted against the limit of the manager that governs everything but policy checks; the
@@ -7001,11 +7046,15 @@ QoreInheritedSandboxHelper::QoreInheritedSandboxHelper(const QoreSandboxContext*
     if (td) {
         old_ctx = td->inherited_sandbox_context;
         old_start_ctx = td->thread_start_sandbox_context;
-        td->inherited_sandbox_context = ctx;
-        td->thread_start_sandbox_context = ctx;
+        // a context that only keeps the isolation of a trusted build (see QoreInheritedSandbox::capture()) governs
+        // nothing
+        if (ctx->manager || ctx->policy_manager) {
+            td->inherited_sandbox_context = ctx;
+            td->thread_start_sandbox_context = ctx;
+        }
         active = true;
         // the thread continues the call that started it, under the same budgets
-        td->sandbox_budgets.attach(td->tid, ctx->budgets, this, ctx->in_build);
+        td->sandbox_budgets.attach(td->tid, ctx->budgets, this, ctx->in_build, ctx->isolation);
     }
 }
 
@@ -7065,7 +7114,8 @@ QoreSandboxCaptureHelper::QoreSandboxCaptureHelper(const QoreSandboxCapture& cap
         td->inherited_sandbox_context = capture.isSandboxed() ? capture.ctx : nullptr;
         active = true;
         // the task continues the call that submitted it, under the same budgets
-        td->sandbox_budgets.attach(td->tid, capture.ctx->budgets, this, capture.ctx->in_build);
+        td->sandbox_budgets.attach(td->tid, capture.ctx->budgets, this, capture.ctx->in_build,
+            capture.ctx->isolation);
     }
 }
 
@@ -10397,7 +10447,7 @@ bool QoreThreadList::clearSandboxLimit(int tid, const QoreSandboxBudgetStack& bu
     assert(tid > 0 && tid < MAX_QORE_THREADS);
     AutoLocker al(lck);
     // only the thread itself flags a memory limit, so that needs no lock, but it is checked here as well
-    if (budgets.findExpired() || qore_sb_find_over_limit()) {
+    if (budgets.findExpired() || budgets.isIsolationRefused() || qore_sb_find_over_limit()) {
         return false;
     }
     entry[tid].clearCancelState(QCR_SANDBOX_LIMIT);
@@ -11149,6 +11199,13 @@ static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const
     unsigned bits = thread_list.getCancelBits(tid);
     // an expired sandbox call budget first: it cannot be cleared by the thread and ends the whole call
     if ((bits & QCR_SANDBOX_LIMIT) && td) {
+        // code of another tenant entered in a trusted build: it must not run (qore#6536)
+        if (td->sandbox_budgets.isIsolationRefused()) {
+            if (xsink) {
+                td->sandbox_budgets.raiseIsolation(xsink, operation);
+            }
+            return true;
+        }
         if (const QoreSandboxCallBudget* budget = td->sandbox_budgets.findExpired()) {
             if (xsink) {
                 td->sandbox_budgets.raise(budget, xsink, operation);

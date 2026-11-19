@@ -429,6 +429,29 @@ authenticate();
     hashes and lists are copy-on-write values.  A module that lets such code change a value exports a function or
     method that sets it.  See @ref module_public_variables.
 
+    @subsection sandbox_isolation_domains Isolation Domains (Tenants)
+
+    A host that runs the code of several tenants gives each tenant's sandboxes an isolation domain with
+    @ref Qore::SandboxManager::setIsolationDomain() "SandboxManager::setIsolationDomain()", before it gives them to a
+    %Program.  The domain cannot change afterwards, and only trusted code can set it.  A sandbox that sandboxed code
+    creates or copies belongs to the domain of the sandbox that governs that code.
+
+    The code of one domain never runs for another: a trusted build
+    (@ref Qore::SandboxManager::createTrustedBuildCall() "createTrustedBuildCall()") that sandboxed code of one domain
+    calls refuses to enter a sandbox of another domain with a \c SANDBOX-ISOLATION-ERROR exception, before any of its
+    code runs.  This holds on every path: code given in the build's arguments or reached through them, code returned
+    by the caller's callbacks, code that the build passes on to a nested build, and code that threads, pool tasks and
+    asynchronous I/O that the build starts run.  These may run in such a build:
+    - the caller's own code, and the code of other sandboxes of the caller's domain (a tenant's other interfaces);
+    - the build's own code (the sandboxes of the %Program that created the capability);
+    - code that no sandbox governs (the host's code), and the code of sandboxes without a domain.
+
+    A build that trusted code calls may run the code of any domain: the host can orchestrate across tenants.  A host
+    that sets no domains is not affected.
+
+    @note Isolation domains decide which code runs where; they do not by themselves keep a tenant from obtaining
+    another tenant's objects through state that the process shares (see @ref sandbox_module_state)
+
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
 
     A module is a capability: once it is loaded, its code runs with its own %Program's options, whatever the
@@ -1519,6 +1542,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
     |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
+    |\c SANDBOX-ISOLATION-ERROR|SandboxManager|Code of another @ref sandbox_isolation_domains "isolation domain" was to run in a trusted build that sandboxed code called
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality
 
