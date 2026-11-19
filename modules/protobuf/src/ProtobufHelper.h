@@ -35,6 +35,12 @@
 //! Helper class for converting between Qore hashes and protobuf messages
 class ProtobufHelper {
 public:
+    //! the maximum number of message levels nested in a message that is converted to or from a hash
+    /** a map entry is a message level, as in protobuf; the default recursion limit of protobuf's parsers, so a message
+        that can be parsed can be converted, and a message that is converted can be parsed
+    */
+    static constexpr int MaxNesting = 100;
+
     //! Convert a protobuf Message to a Qore hash
     DLLLOCAL static QoreHashNode* messageToHash(const google::protobuf::Message& msg,
         ExceptionSink* xsink);

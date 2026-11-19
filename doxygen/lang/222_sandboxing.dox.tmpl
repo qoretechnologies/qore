@@ -294,6 +294,38 @@ authenticate();
       governs the caller also governs the code that runs for it in the other %Program, and the objects and call
       references created for the caller keep the caller's sandbox as their provenance, also when trusted code uses
       them later (see @ref sandbox_provenance)
+    - <b>A %Program that sandboxed code creates keeps its sandbox</b>: a %Program that sandboxed code creates (with
+      @ref Qore::Program::constructor() "Program::constructor()", in a thread that it starts, or through library code
+      that it calls), or commits code in (@ref Qore::Program::parse() "Program::parse()" of a %Program that it was
+      given, or @ref Qore::Program::parsePending() "Program::parsePending()" whose code is committed later, by any
+      code), keeps the sandbox that governs that code, and its code is governed by it wherever it runs: also when
+      trusted code calls it without the Program object, such as a function that it imported into a %Program of the
+      host, or a function copied into an evaluation %Program
+      (@ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()"), and also on a thread
+      that a binary module enters the %Program with.  The sandbox's interrupts and call limits apply to that code as
+      well, together with the sandbox of the code that calls it.  This is the whole %Program's code: a %Program of the host that sandboxed code commits code in is governed
+      by that sandbox from then on, its earlier code included, so a host gives sandboxed code a %Program that it may
+      add code to only for the sandbox's own use.  A parse that is refused or rolled back, and an
+      @ref Qore::Expression "Expression" (which is governed through its object and cannot define code: an expression
+      that tries to is refused, and the code pending in the %Program is rolled back with it), add no code
+      and give the %Program no sandbox.  A manager that code a sandbox governs gives a %Program with
+      @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()" (also through trusted code that it calls)
+      adds to the sandbox of the code that calls the %Program, as the sandbox that a %Program keeps does, instead of
+      governing its code alone, so sandboxed code cannot loosen its own calls into a %Program by giving it a laxer
+      manager.  The policy that the %Program keeps is the one that governed the code that created it: a %Program
+      that trusted code creates in a system-policy capability
+      (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") for a sandboxed
+      caller keeps the caller's interrupts and limits but not its filesystem, network and uncontrolled-API policy, as
+      the capability's own code has.  @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()" adds a manager of the
+      %Program's own, which governs its code together with the sandbox that it keeps; it never removes that sandbox,
+      and @ref Qore::Program::getSandboxManager() "Program::getSandboxManager()" returns only the %Program's own
+      manager
+    - <b>Build shared state with a trusted build capability</b>: as a %Program that trusted code creates while it
+      runs for a sandboxed caller keeps that caller's sandbox, trusted infrastructure that builds shared state lazily
+      (a %Program that every caller then uses) for whichever caller needs it first creates it through a capability that
+      it made during trusted startup with
+      @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()": what that builds
+      keeps no sandbox of the caller, and is governed only by the manager that the host gives it
     - <b>Give tenant code only what the tenant may do</b>: a host must not give tenant or sandboxed code a
       @ref Qore::Program "Program" object with more freedom than the tenant itself has, such as the %Program of the
       host or of another tenant, or a %Program with fewer parse-option restrictions than the tenant's own.  To give
@@ -1460,11 +1492,15 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     of the sandboxes of several callers; for such a combination each predicate is true if any member's is.  The feature
     macro \c _QORE_HAS_SANDBOX_RESTRICTS_API is defined by the headers that declare them.
 
-    A module that refuses an operation that only an unrestricted caller may use refuses it if and only if
-    <tt>!trustsUncontrolledApis() && restricts()</tt> on the governing manager (resolved with
-    QoreSandboxManagerHelper::Policy): a sandbox that restricts nothing, or whose host trusts its code to use
-    uncontrolled APIs, does not make the caller untrusted.  Unlike the other predicates, a combination of sandboxes
-    trusts only if every member does (the AND over the members), because one member that does not trust is enough.
+    A module that refuses an operation that only an unrestricted caller may use (one that runs code or does I/O that
+    %Qore does not see, as an uncontrolled API does) refuses it unless <tt>trustsUncontrolledApis()</tt> is true on
+    the governing manager (resolved with QoreSandboxManagerHelper::Policy): only a sandbox whose host trusts its code
+    to use uncontrolled APIs lets the code use it.  What the sandbox restricts does not matter: a sandbox that allows
+    all I/O and sets no limit but does not trust its code still keeps that code from such operations, as
+    @ref Qore::SandboxManager::setUncontrolledApiPolicy() "setUncontrolledApiPolicy()" describes; the predicates above
+    are for a module that applies the sandbox's I/O policy or limits itself.  Unlike the other predicates, a
+    combination of sandboxes trusts only if every member does (the AND over the members), because one member that does
+    not trust is enough.
 
     The predicates are a snapshot of the current configuration: concurrent reconfiguration of a shared manager is not
     synchronized (as for the other readers of the manager), and the interrupt state (requestInterrupt()) is not a

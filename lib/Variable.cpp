@@ -65,6 +65,8 @@
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreHashKeyHelper.h"
+#include "qore/intern/QoreBufferNodePrivate.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 typedef std::set<int64, std::greater<int64>> ind_set_t;
 
@@ -1870,7 +1872,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             return -1;
         }
         QoreBufferNode* b = getValue().get<QoreBufferNode>();
-        if (!b->isUniqueForMutation()) {
+        if (!qore_buffer_node_private(b).isUniqueForMutation()) {
             ensureUnique();
             b = getValue().get<QoreBufferNode>();
         }
@@ -2742,7 +2744,7 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
 }
 
 void LValueHelper::setAndLock(QoreVarRWLock& rwl) {
-    rwl.wrlock();
+    qore_var_rwlock_ops(rwl).wrlock();
     vl.set(&rwl);
 }
 
@@ -2967,7 +2969,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                             "(index must evaluate to a non-negative integer)", (int64)original_idx);
                         return -1;
                     }
-                    if (!b->isUniqueForMutation()) {
+                    if (!qore_buffer_node_private(b).isUniqueForMutation()) {
                         ensureUnique();
                         b = getValue().get<QoreBufferNode>();
                     }
@@ -5266,6 +5268,18 @@ void LocalVarValue::TypeSubstitutionCache::set(const QoreTypeInfo* typeInfo, con
 
     this->resolvedTypeInfo = resolvedTypeInfo;
     this->resolvedRefTypeInfo = resolvedRefTypeInfo;
+}
+
+int LocalVar::checkThreadLocalDataOwner(ExceptionSink* xsink) const {
+    const ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    QoreProgram* pgm = getProgram();
+    // a variable can be created only in the thread-local data of the current Program
+    if (tlpd && tlpd->pgm == pgm) {
+        return 0;
+    }
+    xsink->raiseException("PROGRAM-THREAD-LOCAL-ERROR", "local variable '%s' is not available in the thread-local "
+        "data of Program " QLLD, name.c_str(), pgm ? static_cast<int64>(pgm->getProgramId()) : -1LL);
+    return -1;
 }
 
 //! Only generic storage needs to retain a runtime-selected declaration; ordinary storage has no extra state.

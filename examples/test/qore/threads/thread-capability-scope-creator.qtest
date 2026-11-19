@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - per-thread capability state of threads that sandboxed and trusted code start
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# Thread capability scopes and the code of Programs that sandboxed code created (qorus#867, D6/D7): such code is
+# governed by the sandbox that its Program keeps of the code that created it, wherever it runs, so it neither sees a
+# host's capabilities nor sets a scope, also when trusted code calls it without the Program object; and a Program
+# that inherits PO_IN_MODULE from a module that sandboxed code loaded is not trusted for the capabilities
+
+%modern
+%no-child-restrictions
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ThreadCapabilityScopeCreatorTest
+
+#! the host's start_thread capability
+int sub host_start_thread(code<nothing()> c) {
+    return background c();
+}
+
+#! a capability that takes no argument
+int sub host_count() {
+    return 1;
+}
+
+#! a capability with an optional argument
+int sub host_optional(*auto x) {
+    return exists x ? 3 : 2;
+}
+
+#! tries to set a scope; returns "SET" or the exception's code
+string sub try_set(*auto x) {
+    try {
+        ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+        return "SET";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+class ThreadCapabilityScopeCreatorTest inherits QUnit::Test {
+    private {
+        #! the sandboxed Program
+        Program sandboxed;
+    }
+
+    #! code parsed in the Programs that the tests create: probe() reports what the code sees and may do
+    const ProbeSource = "%modern
+hash<auto> sub probe(code set) {
+    return {
+        \"caps\": exists get_thread_capabilities(),
+        \"async\": call_async(set).get(60s),
+    };
+}
+sub export_to(Program h) {
+    h.importFunction(\"probe\", \"probe2\");
+}
+";
+
+    #! what the code of a sandboxed Program gets
+    const Governed = {
+        "caps": False,
+        "async": "THREAD-CAPABILITY-ERROR",
+    };
+
+    #! what trusted code gets
+    const Trusted = {
+        "caps": True,
+        "async": "SET",
+    };
+
+    constructor() : QUnit::Test("thread capability scopes and Programs that sandboxed code created", "1.0", \ARGV) {
+        addTestCase("a child's function called through its Program object", \childByObject());
+        addTestCase("a child's function imported into a trusted Program", \importedFunction());
+        addTestCase("a child's function copied into an evaluation Program", \evalProgram());
+        addTestCase("sandboxed code starts a thread for a host callable", \hostCallable());
+        addTestCase("a Program that a module that sandboxed code loaded creates", \moduleProgram());
+        addTestCase("trusted Programs", \trustedPrograms());
+        addTestCase("a capability called with no arguments", \guardWithoutArguments());
+        addTestCase("code of a Program that sandboxed code created is refused as capability code",
+            \sandboxedCodeRefused());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sandboxed = new Program(PO_MODERN);
+        sandboxed.setSandboxManager(sm);
+        sandboxed.parse("%modern
+%requires " + get_script_dir() + "ScopeProgramMaker.qm
+Program sub mk(string src) {
+    Program c(PO_MODERN);
+    c.parse(src, \"child\");
+    return c;
+}
+auto sub async_host(code c) {
+    return call_async(c).get(60s);
+}
+list<auto> sub map_host(code c) {
+    return parallel_map(c, (1,));
+}
+auto sub call_guard(code guard) {
+    return guard();
+}
+Program sub module_make(string src) {
+    return ScopeProgramMaker::make(src);
+}
+hash<auto> sub module_probe(string src, code set) {
+    Program p = ScopeProgramMaker::make(src);
+    return p.callFunction(\"probe\", set);
+}
+", "sandboxed");
+    }
+
+    childByObject() {
+        ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+        Program child = sandboxed.callFunction("mk", ProbeSource);
+        assertEq(Governed, child.callFunction("probe", \try_set()));
+    }
+
+    importedFunction() {
+        ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+        Program child = sandboxed.callFunction("mk", ProbeSource);
+        Program host(PO_MODERN);
+        child.callFunction("export_to", host);
+        assertEq(Governed, host.callFunction("probe2", \try_set()));
+        code ref = host.getCallReference("probe2");
+        assertEq(Governed, ref(\try_set()));
+    }
+
+    evalProgram() {
+        ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+        Program child = sandboxed.callFunction("mk", ProbeSource);
+        Program eval = ProgramControl::resolveProgramId(child.getProgramId()).createEvalProgram(PO_MODERN);
+        assertEq(Governed, eval.callFunction("probe", \try_set()));
+    }
+
+    hostCallable() {
+        # a host closure that sandboxed code starts in a thread runs only the closure's Program there, but the
+        # thread was started by sandboxed code
+        assertEq("THREAD-CAPABILITY-ERROR", sandboxed.callFunction("async_host", \try_set()));
+        assertEq(("THREAD-CAPABILITY-ERROR",), sandboxed.callFunction("map_host", \try_set()));
+    }
+
+    moduleProgram() {
+        ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+        # the module's Program and a Program that its code creates have PO_IN_MODULE, but sandboxed code loaded the
+        # module and gave the code
+        assertEq(Governed, sandboxed.callFunction("module_probe", ProbeSource, \try_set()));
+        # also when trusted code calls the Program's code later
+        Program p = sandboxed.callFunction("module_make", ProbeSource);
+        assertTrue((p.getParseOptions() & PO_IN_MODULE).toBool());
+        assertEq(Governed, p.callFunction("probe", \try_set()));
+    }
+
+    guardWithoutArguments() {
+        ThreadCapabilityScope scope({"count": \host_count(), "optional": \host_optional()});
+        code count = get_thread_capability("count");
+        code optional = get_thread_capability("optional");
+        assertEq(1, count());
+        assertEq(2, optional());
+        assertEq(3, optional(1));
+        # also when sandboxed code that holds a guard calls it
+        assertEq(1, sandboxed.callFunction("call_guard", count));
+        assertEq(2, sandboxed.callFunction("call_guard", optional));
+    }
+
+    sandboxedCodeRefused() {
+        # a function of a Program that sandboxed code created, reached through a trusted Program that imported it or
+        # through an evaluation Program copy, is still code that a sandbox governs
+        Program child = sandboxed.callFunction("mk", ProbeSource);
+        Program host(PO_MODERN);
+        child.callFunction("export_to", host);
+        Program eval = ProgramControl::resolveProgramId(child.getProgramId()).createEvalProgram(PO_MODERN);
+        hash<string, code> refs = {
+            "imported": host.getCallReference("probe2"),
+            "copied": eval.getCallReference("probe"),
+        };
+        foreach string k in (keys refs) {
+            assertThrows("THREAD-CAPABILITY-ERROR", "belongs to a sandboxed Program", sub () {
+                ThreadCapabilityScope scope({"start_thread": refs{k}});
+            }, NOTHING, k + " as capability code");
+            ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+            code start_thread = get_thread_capability("start_thread");
+            assertThrows("THREAD-CAPABILITY-ERROR", "belongs to a sandboxed Program", start_thread, refs{k},
+                k + " as the code given to a capability");
+        }
+    }
+
+    trustedPrograms() {
+        ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+        Program t(PO_MODERN);
+        t.parse(ProbeSource, "trusted");
+        assertEq(Trusted, t.callFunction("probe", \try_set()));
+        Program host(PO_MODERN);
+        t.callFunction("export_to", host);
+        assertEq(Trusted, host.callFunction("probe2", \try_set()));
+        # host code that no sandbox governs starts a thread itself
+        assertEq("SET", call_async(\try_set()).get(60s));
+    }
+}

@@ -197,6 +197,7 @@ fontconfig/
 
 # local crash-dump output
 /crash-dumps/core.*
+/crash-dumps/test-*
 /crash-dumps/backtrace-*.txt
 
 # local benchmark run output

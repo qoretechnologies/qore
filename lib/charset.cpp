@@ -33,6 +33,8 @@
 #include <qore/intern/qore_encoding_private.h>
 #include <qore/intern/qore_string_private.h>
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreUtf8.h"
+#include "qore/intern/QoreUtf16.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -368,6 +370,12 @@ QoreEncodingManager::QoreEncodingManager() {
         2, 4, UTF16LE_getLength, UTF16LE_getByteLen, UTF16LE_getCharPos, q_UTF16LE_get_char_len, UTF16LE_getUnicode,
         false);
     addAlias(QCS_UTF16LE, "UTF16LE");
+
+    // every Unicode character can be represented in the built-in Unicode encodings, as in the Unicode forms created
+    // on the fly (qore#6604)
+    for (const QoreEncoding* enc : {QCS_UTF8, QCS_UTF16, QCS_UTF16BE, QCS_UTF16LE}) {
+        qore_encoding_private::get(*const_cast<QoreEncoding*>(enc))->unicode_complete = true;
+    }
 
     QCS_ISO_8859_1 = addUnlocked(ISO88591_STR, "latin-1, Western European character set");
     addAlias(QCS_ISO_8859_1, "ISO88591");
@@ -855,80 +863,22 @@ const QoreEncoding* QoreEncodingManager::findCreate(const QoreString* str) {
     return findCreate(str->c_str());
 }
 
+// the UTF-8 encoding's character function: the one definition of a valid UTF-8 character (qore#6604)
 qore_offset_t q_UTF8_get_char_len(const char* p, size_t len) {
-    // see if a multi-byte char is starting
-    if ((*p & 0xc0) == 0xc0) {
-        //printd(5, "MULTIBYTE *p = %hhx\n", *p);
-        // check for a 3-byte sequence
-        if ((*p) & 0x20) {
-            // check for a 4-byte sequence
-            if ((*p) & 0x10) {
-                if (len >= 4) {
-                    if ((*(p+1)) & 0x80 && (*(p+2)) & 0x80 && (*(p+3)) & 0x80)
-                        return 4;
-                    // encoding error - invalid UTF-8 character
-                    return 0;
-                }
-                return -4;
-            } else { // should be 3-byte sequence
-                if (len >= 3) {
-                    if ((*(p+1)) & 0x80 && (*(p+2)) & 0x80)
-                        return 3;
-                    // encoding error - invalid UTF-8 character
-                    return 0;
-                }
-                return -3;
-            }
-        } else { // should be a 2-byte sequence - check next char for high bit
-            if (len >= 2) {
-                if ((*(p+1)) & 0x80)
-                   return 2;
-                // encoding error - invalid UTF-8 character
-                return 0;
-            }
-            return -2;
-        }
-    }
-    return 1;
+    return q_utf8_char_len(p, len);
 }
 
 static size_t UTF8_getLength(const char* p, const char* end, bool& invalid) {
-    constexpr size_t ascii_high_bit_mask = (~static_cast<size_t>(0) / 0xff) * 0x80;
-    size_t i = 0;
-    while (p < end) {
-        unsigned char c = static_cast<unsigned char>(*p);
-        if (c < 0x80) {
-            ++p;
-            ++i;
-            while (static_cast<size_t>(end - p) >= sizeof(size_t)) {
-                size_t word;
-                memcpy(&word, p, sizeof(word));
-                if (word & ascii_high_bit_mask) {
-                    break;
-                }
-                p += sizeof(size_t);
-                i += sizeof(size_t);
-            }
-            continue;
-        }
-
-        qore_offset_t l = q_UTF8_get_char_len(p, end - p);
-        if (l <= 0) {
-            invalid = true;
-            return i;
-        }
-        p += l;
-        ++i;
-    }
-
-    invalid = false;
-    return i;
+    size_t partial_count;
+    size_t count = q_utf8_count_chars(p, end, &partial_count);
+    invalid = count == Q_UTF8_INVALID_COUNT;
+    return invalid ? partial_count : count;
 }
 
 static size_t UTF8_getByteLen(const char* p, const char* end, size_t l, bool& invalid) {
     size_t b = 0;
     while ((p < end) && l) {
-        qore_offset_t bl = q_UTF8_get_char_len(p, end - p);
+        qore_offset_t bl = q_utf8_char_len(p, end - p);
         if (bl <= 0) {
             invalid = true;
             return b;
@@ -944,7 +894,7 @@ static size_t UTF8_getByteLen(const char* p, const char* end, size_t l, bool& in
 static size_t UTF8_getCharPos(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF8_get_char_len(p, end - p);
+        qore_offset_t l = q_utf8_char_len(p, end - p);
         if (l <= 0) {
             invalid = true;
             return i;
@@ -981,14 +931,9 @@ static unsigned UTF8_getUnicode(const char* p) {
     return p[0];
 }
 
+// the UTF-16LE encoding's character function: the one definition of a valid UTF-16 character (qore#6604)
 qore_offset_t q_UTF16LE_get_char_len(const char* p, size_t len) {
-    assert(len);
-    if (len == 1)
-        return -2;
-
-    unsigned char c = (unsigned char)p[1];
-    size_t l = c >= 0xd8 && c < 0xdc ? 4 : 2;
-    return len >= l ? l : -l;
+    return q_utf16_char_len<false>(p, len);
 }
 
 static unsigned UTF16LE_getUnicode(const char* p) {
@@ -1005,7 +950,7 @@ static unsigned UTF16LE_getUnicode(const char* p) {
 static size_t UTF16LE_getLength(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16LE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<false>(p, end - p);
         //printd(5, "UTF16_getLength() p: %p end: %p len: %p l: %zd\n", p, end, end - p, l);
         if (l <= 0) {
             invalid = true;
@@ -1022,7 +967,7 @@ static size_t UTF16LE_getLength(const char* p, const char* end, bool& invalid) {
 static size_t UTF16LE_getByteLen(const char* p, const char* end, size_t l, bool& invalid) {
     size_t b = 0;
     while ((p < end) && l) {
-        qore_offset_t bl = q_UTF16LE_get_char_len(p, end - p);
+        qore_offset_t bl = q_utf16_char_len<false>(p, end - p);
         if (bl <= 0) {
             invalid = true;
             return b;
@@ -1038,7 +983,7 @@ static size_t UTF16LE_getByteLen(const char* p, const char* end, size_t l, bool&
 static size_t UTF16LE_getCharPos(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16LE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<false>(p, end - p);
         if (l <= 0) {
             invalid = true;
             return i;
@@ -1051,12 +996,10 @@ static size_t UTF16LE_getCharPos(const char* p, const char* end, bool& invalid) 
     return i;
 }
 
+// the character function of UTF-16BE and of the generic UTF-16 encoding, which is big-endian: the one definition of
+// a valid UTF-16 character (qore#6604)
 qore_offset_t q_UTF16BE_get_char_len(const char* p, size_t len) {
-    assert(len);
-
-    unsigned char c = (unsigned char)*p;
-    size_t l = c >= 0xd8 && c < 0xdc ? 4 : 2;
-    return len >= l ? l : -l;
+    return q_utf16_char_len<true>(p, len);
 }
 
 static unsigned UTF16BE_getUnicode(const char* p) {
@@ -1073,7 +1016,7 @@ static unsigned UTF16BE_getUnicode(const char* p) {
 static size_t UTF16BE_getLength(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16BE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<true>(p, end - p);
         //printd(5, "UTF16_getLength() p: %p end: %p len: %p l: %zd\n", p, end, end - p, l);
         if (l <= 0) {
             invalid = true;
@@ -1090,7 +1033,7 @@ static size_t UTF16BE_getLength(const char* p, const char* end, bool& invalid) {
 static size_t UTF16BE_getByteLen(const char* p, const char* end, size_t l, bool& invalid) {
     size_t b = 0;
     while ((p < end) && l) {
-        qore_offset_t bl = q_UTF16BE_get_char_len(p, end - p);
+        qore_offset_t bl = q_utf16_char_len<true>(p, end - p);
         if (bl <= 0) {
             invalid = true;
             return b;
@@ -1106,7 +1049,7 @@ static size_t UTF16BE_getByteLen(const char* p, const char* end, size_t l, bool&
 static size_t UTF16BE_getCharPos(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16BE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<true>(p, end - p);
         if (l <= 0) {
             invalid = true;
             return i;
@@ -1288,13 +1231,19 @@ static qore_offset_t GB18030_get_char_len(const char* p, size_t len) {
     return (u[1] < 0x40 || u[1] == 0x7f || u[1] == 0xff) ? 0 : 2;
 }
 
-// Shift_JIS and its variants (CP932): two bytes with a first byte 0x81 - 0x9f or 0xe0 - 0xfc and a second byte
-// 0x40 - 0xfc; any other byte is a single-byte character (ex: JIS X 0201 kana 0xa1 - 0xdf)
+// JIS X 0201 Roman/control bytes and half-width kana use one byte. JIS X 0208 Appendix 1
+// uses the lead ranges 81-9f and e0-ef. Windows-31J and other extended forms go through fc.
+template <bool Extended>
 static qore_offset_t SJIS_get_char_len(const char* p, size_t len) {
     assert(len);
     const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
-    if (!((u[0] >= 0x81 && u[0] <= 0x9f) || (u[0] >= 0xe0 && u[0] <= 0xfc))) {
+    if (u[0] <= 0x7f || (u[0] >= 0xa1 && u[0] <= 0xdf)) {
         return 1;
+    }
+    constexpr unsigned last_lead = Extended ? 0xfc : 0xef;
+    if (!((u[0] >= 0x81 && u[0] <= 0x9f) || (u[0] >= 0xe0 && u[0] <= last_lead))) {
+        // The Windows family also has single-byte extensions outside JIS X 0201.
+        return Extended ? 1 : 0;
     }
     if (len < 2) {
         return -2;
@@ -1422,6 +1371,32 @@ private:
     ProbeConverter& operator=(const ProbeConverter&) = delete;
 };
 
+// returns true if iconv converts text in an encoding with the characters of the given Unicode form from the given
+// name to UTF-8 although the text has a code unit sequence that is not a character of the form: a value above
+// U+10FFFF or a surrogate in UTF-32 (glibc's "UCS-4" converts values up to 0x7fffffff), an unpaired surrogate in
+// UTF-16, or a surrogate in UCS-2; also if the conversion cannot be opened, so that the text is validated then
+static bool iconv_accepts_invalid_form(const char* source, UnicodeForm form, bool utf32, bool non_bmp) {
+    static const std::vector<unsigned> utf32_samples[] = {{0x110000}, {0xd800}, {0xdc00}};
+    static const std::vector<unsigned> utf16_samples[] = {{0xdc00, 0x41}, {0xd800, 0x41}};
+    static const std::vector<unsigned> ucs2_samples[] = {{0xd800}, {0xdc00}};
+    const std::vector<unsigned>* samples = utf32 ? utf32_samples : (non_bmp ? utf16_samples : ucs2_samples);
+    size_t num = utf32 ? 3 : 2;
+    for (size_t i = 0; i < num; ++i) {
+        // the byte order mark gives the byte order to an encoding that takes it from the text
+        std::string in = encode_unicode(form, 0xfeff) + encode_unicode(form, 0x61);
+        for (unsigned unit : samples[i]) {
+            in += encode_unicode(form, unit);
+        }
+        in += encode_unicode(form, 0x62);
+        ProbeConverter dec("UTF-8", source);
+        std::string out;
+        if (!dec.valid() || dec.convert(in, out)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // a character converted to the encoding being probed
 struct probe_char {
     // the Unicode code point
@@ -1472,7 +1447,7 @@ const multibyte_family multibyte_families[] = {
     // iconv implementations and variants (ex: CP932) map them differently, so it is handled the same way on every
     // platform; that the second bytes of its double-byte characters can be ASCII characters is handled by the
     // character boundary checks of all of these families
-    QORE_MULTIBYTE_FAMILY("SJIS", SJIS_get_char_len, 2, true),
+    QORE_MULTIBYTE_FAMILY("SJIS", SJIS_get_char_len<true>, 2, true),
 };
 #undef QORE_MULTIBYTE_FAMILY
 
@@ -1653,14 +1628,40 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
       not as found above; text in an encoding that is not ASCII-compatible is converted to UTF-8 by every function
       that parses or splits it.
 
+    A name with iconv conversion flags after "//" (ex: "UTF-16LE//") that iconv does not know is probed and converted
+    without the flags if iconv knows that name (musl rejects every name with flags, and GNU libiconv, as on macOS with
+    MacPorts, a name whose flags are empty), so that the encoding has the same
+    properties on every platform; see qore_encoding_private::iconvCodeWithoutFlags().
+
     If iconv does not know the encoding, the properties are not changed: no text can be converted to or from the
     encoding, so its strings are handled as single-byte, ASCII-compatible text, as before, rather than raising an
     error when the encoding is named (ex: in a string tagged with an encoding only for information).
 */
 void qore_encoding_private::probe() {
-    ProbeConverter to(code.c_str(), "UTF-8");
-    ProbeConverter from("UTF-8", code.c_str());
+    // a name with conversion flags that iconv does not accept is given to iconv without them (musl; GNU libiconv for
+    // empty flags)
+    iconv_code = iconvCodeWithoutFlags(code, [](const std::string& name) -> bool {
+        ProbeConverter to(name.c_str(), "UTF-8");
+        ProbeConverter from("UTF-8", name.c_str());
+        return to.valid() && from.valid();
+    });
+    // Select the named Shift_JIS forms directly. A probe of the platform converter can accept malformed
+    // pairs or identify the extended Windows repertoire as Shift_JIS.
+    const bool windows_sjis = code == "CP932" || code == "Windows-31J";
+    if (windows_sjis || code == "Shift_JIS" || code == "SHIFT-JIS" || code == "SHIFTJIS" || code == "SJIS"
+            || code == "MS_KANJI" || code == "CSSHIFTJIS") {
+        setCharFunctions(windows_sjis ? form_functions::get<SJIS_get_char_len<true>, nullptr>(1, 2)
+            : form_functions::get<SJIS_get_char_len<false>, nullptr>(1, 2));
+        needs_boundary_check = true;
+        ascii_compat = false;
+        return;
+    }
+    ProbeConverter to(getIconvCode(), "UTF-8");
+    bool no_encoder = !to.valid() && errno == EINVAL;
+    ProbeConverter from("UTF-8", getIconvCode());
     if (!to.valid() || !from.valid()) {
+        // Resource errors do not make an encoding an opaque tag.
+        opaque_single_byte = no_encoder && !from.valid() && errno == EINVAL;
         return;
     }
 
@@ -1711,8 +1712,8 @@ void qore_encoding_private::probe() {
 bool qore_encoding_private::probeAsciiIdentical() const {
     bool identical = false;
     if (ascii_compat && !stateful) {
-        ProbeConverter to(code.c_str(), "UTF-8");
-        ProbeConverter from("UTF-8", code.c_str());
+        ProbeConverter to(getIconvCode(), "UTF-8");
+        ProbeConverter from("UTF-8", getIconvCode());
         if (to.valid() && from.valid()) {
             identical = true;
             std::string in, out, back;
@@ -1862,7 +1863,7 @@ void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
         // each sample character is decoded on its own after the byte order mark, as ProbeConverter converts short
         // texts only, and with a new conversion each time: glibc keeps the byte order of the first byte order mark
         // that a conversion reads, even after it is reset
-        const std::string& enc_code = code;
+        const std::string enc_code = getIconvCode();
         auto decodes_with_bom = [&enc_code, &units, &units_utf8](UnicodeForm f) -> bool {
             for (size_t i = 0; i < units.size(); ++i) {
                 ProbeConverter dec("UTF-8", enc_code.c_str());
@@ -1941,6 +1942,9 @@ void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
             setCharFunctions(be ? form_functions::get<UCS2_get_char_len<UCS2BE_getUnicode>, UCS2BE_getUnicode>(2, 2)
                 : form_functions::get<UCS2_get_char_len<UCS2LE_getUnicode>, UCS2LE_getUnicode>(2, 2));
         }
+        // text that the character functions reject must not be converted: where iconv accepts it, text is
+        // validated with the character functions before it is converted (see IconvHelper)
+        iconv_accepts_invalid = iconv_accepts_invalid_form(getIconvSourceCode(), form, utf32, non_bmp);
         return;
     }
     set_multibyte();

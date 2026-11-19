@@ -1015,6 +1015,11 @@ public:
             // body on a worker thread, the variable must be found via the runtime closure environment —
             // instantiating a new CVV on the worker thread would create a separate copy invisible to the
             // declaring function's thread.
+            // only in the current Program's own thread-local data (qore#6185)
+            if (checkThreadLocalDataOwner(xsink)) {
+                needs_deref = false;
+                return QoreValue();
+            }
             const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
             val = thread_try_find_closure_var(name.c_str());
         }
@@ -1140,7 +1145,11 @@ public:
 
         ClosureVarValue* val = findClosureVarValue();
         if (!val && !thread_has_runtime_closure_env()) {
-            // Only lazily instantiate when NOT inside a closure body (see eval() comment)
+            // Only lazily instantiate when NOT inside a closure body (see eval() comment), and only in the current
+            // Program's own thread-local data (qore#6185)
+            if (checkThreadLocalDataOwner(lvh.vl.xsink)) {
+                return LocalVarLValueLookup::Error;
+            }
             const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
             val = thread_try_find_closure_var(name.c_str());
         }
@@ -1390,6 +1399,14 @@ public:
     DLLLOCAL const LocalVar* getParseScopePrev() const {
         return parse_scope_prev;
     }
+
+    //! Checks that the thread has local data, and that it is that of the current Program
+    /** If not, raises \c PROGRAM-THREAD-LOCAL-ERROR (qore#6185).  It is only called where the variable is not found,
+        so that a variable access costs nothing more.
+
+        @return 0 if the data is that of the current Program, -1 if an exception was raised
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkThreadLocalDataOwner(ExceptionSink* xsink) const;
 
 private:
     std::string name;

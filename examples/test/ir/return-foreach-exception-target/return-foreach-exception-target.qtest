@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the scripts run in child processes that set their own --exec-mode, or as AOT executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ReturnForeachExceptionTargetTest
+
+#! the code that a return lowers after it has left a foreach has the exception targets outside the loop (qore#6643)
+/** On the path of a return out of a foreach body, the instructions after the inline exit of the loop's scope and the
+    restoration of its implicit element kept the exception target of the loop's element, whose handler restores the
+    element again and closes the scope again: an exception raised there would restore an older element and close an
+    enclosing scope early.
+
+    Each script next to the test returns out of a foreach in another way; the IR that it is lowered to must have no
+    instruction whose handler restores an implicit element or exits a scope that the path before it in its block has
+    already restored or exited, and its output must be that of the AST interpreter (its .expected file) in every
+    execution mode, on the IR tier and as AOT executables.
+*/
+class ReturnForeachExceptionTargetTest inherits QUnit::Test {
+    public {
+        #! the scripts
+        const Scripts = ("ref-value-return", "ref-expression-return", "fused-in-ref-return", "handler-at-return");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("return foreach exception target", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        # the scripts' code is top-level code, which runs once: too few times for tiered execution to compile it, so
+        # native code is only required with JIT execution
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
+        foreach string script in (Scripts) {
+            addTestCase(script + ": exception targets of the IR", \irTest(), script);
+            addTestCase(script + ": execution modes", \modesTest(), script);
+            addTestCase(script + ": AOT executable -O0", \aotTest(), (script, "-O0"));
+            addTestCase(script + ": AOT executable -O3", \aotTest(), (script, "-O3"));
+        }
+        set_return_value(main());
+    }
+
+    #! checks the exception targets of the script's IR
+    private irTest(string script) {
+        string dump = ExecModeHarness::run_any(sprintf("%s %s -b --exec-mode=ir --ir-dump %s/%s.q", env, qore_bin, dir,
+            script));
+        assertRegex("^func ", dump, script + ": the IR is dumped");
+        assertEq((), checkIr(dump), script);
+    }
+
+    #! returns the output of the AST interpreter for the script
+    private string astOutput(string script) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s/%s.q", env, qore_bin, dir, script));
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest(string script) {
+        string exp = astOutput(script);
+        assertEq(ReadOnlyFile::readTextFile(sprintf("%s/%s.expected", dir, script)), exp,
+            script + ": the output of the AST interpreter");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/%s.q", env, qore_bin, mode, dir,
+                script)), script + ": " + mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s/%s.q", env, qore_bin, dir,
+            script)), script + ": " + ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string script, string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("return-foreach-exception-target-aot-");
+        string exe = tmp.path + "/" + script;
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s/%s.q", env, qcc_bin, opt, exe, dir, script));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(astOutput(script), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), script + ": AOT " + opt);
+    }
+
+    #! returns the instructions of an IR dump whose handler restores an implicit element or exits a scope again
+    /** In each block, the implicit elements that the path restores (pop.implicit.element) and the scopes that it exits
+        inline (scope.exit ... inline) are recorded; an instruction after them whose exception target leads, through
+        the branches and checks of the handler blocks, to the restoration of one of these elements or to an exit of one
+        of these scopes is returned.
+    */
+    static list<string> checkIr(string dump) {
+        hash<string, list<string>> blocks;
+        string fn = "";
+        *string cur;
+        foreach string line in (dump.split("\n")) {
+            if (line =~ /^func /) { fn = line; cur = NOTHING; continue; }
+            *string label = (line =~ x/^([A-Za-z0-9_.@]+):$/)[0];
+            if (label) { cur = fn + "/" + label; blocks{cur} = (); continue; }
+            if (cur && line =~ /^  /) { blocks{cur} += trim(line); }
+        }
+        code chain = hash<auto> sub (string key) {
+            hash<auto> rv = {"pops": {}, "exits": {}};
+            hash<string, bool> seen;
+            list<string> todo = (key,);
+            while (todo) {
+                string k = shift todo;
+                if (seen{k} || !blocks{k}) { continue; }
+                seen{k} = True;
+                string f = k.split("/")[0];
+                foreach string l in (blocks{k}) {
+                    if (*string v = (l =~ x/^pop\.implicit\.element (%[0-9]+)/)[0]) rv.pops{v} = True;
+                    else if (*string s = (l =~ x/^scope\.exit scope=([0-9]+)(?! trim)/)[0]) rv.exits{s} = True;
+                    if (*string b = (l =~ x/^br -> ([A-Za-z0-9_.@]+)/)[0]) push todo, f + "/" + b;
+                    if (*string e = (l =~ x/^check\.exception exception:([A-Za-z0-9_.@]+)/)[0]) push todo, f + "/" + e;
+                }
+            }
+            return rv;
+        };
+        list<string> bad = ();
+        foreach hash<auto> b in (blocks.pairIterator()) {
+            string f = b.key.split("/")[0];
+            hash<string, bool> popped;
+            hash<string, bool> exited;
+            foreach string l in (b.value) {
+                if (*string t = (l =~ x/ exception:([A-Za-z0-9_.@]+)$/)[0]) {
+                    if (popped || exited) {
+                        hash<auto> c = chain(f + "/" + t);
+                        list<string> again = (map "pop " + $1, keys c.pops, popped{$1})
+                            + (map "scope " + $1, keys c.exits, exited{$1});
+                        if (again) {
+                            push bad, sprintf("%s: %s: handler %s again: %s", b.key, l, t, again.join(", "));
+                        }
+                    }
+                }
+                if (*string v = (l =~ x/^pop\.implicit\.element (%[0-9]+)/)[0]) popped{v} = True;
+                else if (*string s = (l =~ x/^scope\.exit scope=([0-9]+) inline/)[0]) exited{s} = True;
+            }
+        }
+        return bad;
+    }
+}

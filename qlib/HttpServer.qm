@@ -256,6 +256,9 @@ log("started listener on %s", lh.desc);
       \c handler_info listener option), which raise
       \c REGEX-COMPILATION-ERROR for one that is not valid; before, it was compiled for each request, and one that is
       not valid failed every request with a 500 response (issue #6603)
+    - a compressed request body given to a handler as a string is decoded with the encoding of the request (its
+      \c Content-Type charset, or one declared in the body, such as a byte order mark or an XML declaration), as an
+      uncompressed body is (<a href="https://github.com/qoretechnologies/qore/issues/6618">issue 6618</a>)
     - the thread of a persistent HTTP/1.x connection (a handler that called
       @ref HttpServer::AbstractHttpRequestHandler::setPersistent() "setPersistent()") leaves the handler pool for the
       life of the connection, so it does not count against \c max_handler_threads and the other requests of the
@@ -5029,9 +5032,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # decode body if applicable; a decoded body that is too large raises HTTP-BODY-TOO-LARGE,
                     # which is answered with 413
                     if (body && hdr."content-encoding" && handler.decompress) {
-                        body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body,
-                            handler.decompress_to_string ? s.getEncoding() : NOTHING,
+                        # the decompressed octets are text in the charset of the request, decoded as an
+                        # uncompressed body is (qore#6618)
+                        body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
                             handler.getMaxDecodedBodySize(listener));
+                        if (handler.decompress_to_string) {
+                            body = decodeRequestText(hdr, body);
+                        }
                     }
 
                     hash<auto!> hrv = handler.handleRequest(listener, s, cx, hdr, body);

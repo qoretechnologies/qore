@@ -29,12 +29,12 @@ File source_file();
 source_file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
 source_file.write("%modern
 int sub consume(string value) {
-    return value.length();
+    return value.size();
 }
 
 final class Consumer {
     int consume(string value) {
-        return value.length();
+        return value.size();
     }
 }
 
