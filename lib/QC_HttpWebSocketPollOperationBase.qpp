@@ -626,6 +626,16 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
         return;
     }
 
+    // an RSV bit that no negotiated extension defines fails the connection (RFC 6455 section 5.2); it is checked here
+    // so that it holds for the echo fast path too, which hands no frame to the Qore code; a message with RSV1 set is
+    // otherwise taken as compressed, and its text is not checked here (qore#6604)
+    if (frame.rsv & ~extension_rsv_mask) {
+        QoreStringMaker desc("a data frame has RSV bits 0x%x set that no negotiated extension defines",
+            static_cast<unsigned>(frame.rsv & ~extension_rsv_mask));
+        failConnection(WSCC_ProtocolError, "Invalid RSV bits", desc.c_str(), xsink);
+        return;
+    }
+
     // a fragmented message is checked as its fragments arrive, not once it is complete (issue #5861)
     if (frame.opcode == WSOP_CONTINUATION || !frame.fin) {
         size_t total = (frame.opcode == WSOP_CONTINUATION ? fragment_bytes : 0)
@@ -1339,6 +1349,21 @@ nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason
 */
 nothing HttpWebSocketPollOperationBase::setMaxFrameSize(int max_frame_size) [flags=NAMED_ARGS] {
     priv->setMaxFrameSize(max_frame_size > 0 ? static_cast<size_t>(max_frame_size) : WS_DEFAULT_MAX_FRAME_SIZE);
+}
+
+//! Sets the RSV bits that the extensions negotiated for the connection define
+/** A data frame with an RSV bit set that is not in the mask fails the connection with close code 1002 (Protocol
+    Error), also in echo mode (see @ref setEchoMode()); without a call, no RSV bit may be set.  Call it before the
+    connection is started.
+
+    @param rsv_mask the RSV bits in the positions of the first byte of a frame (@ref WebSocketUtil::WS_RSV1
+    "WS_RSV1", @ref WebSocketUtil::WS_RSV2 "WS_RSV2" and @ref WebSocketUtil::WS_RSV3 "WS_RSV3"); other bits are
+    ignored
+
+    @since %Qore 3.0
+*/
+nothing HttpWebSocketPollOperationBase::setExtensionRsvMask(int rsv_mask) [flags=NAMED_ARGS] {
+    priv->setExtensionRsvMask(static_cast<uint8_t>((rsv_mask >> 4) & 0x07));
 }
 
 //! Gets the next received frame (non-blocking)

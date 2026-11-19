@@ -79,6 +79,11 @@ class BadFrameConnection inherits WebSocketConnection {
                 # compressed
                 send(binary(strmul("a", 2000)) + <ff>, WSOP_Text, True);
                 break;
+            case "text-long-hello":
+                # a valid message right after the compressed one that is not valid UTF-8
+                send(binary(strmul("a", 2000)) + <ff>, WSOP_Text, True);
+                send("hello");
+                break;
             case "reason":
                 send(WSCC_NormalClosure.encodeMsb(2) + <61ff62>, WSOP_Close, True);
                 break;
@@ -128,6 +133,8 @@ class WebSocketClientInvalidFramesTest inherits QUnit::Test {
             addTestCase(sprintf("HTTP/%s: text message that is not valid UTF-8", ver), \testText(), ver);
             addTestCase(sprintf("HTTP/%s: compressed text message that is not valid UTF-8", ver),
                 \testCompressedText(), ver);
+            addTestCase(sprintf("HTTP/%s: no message after a compressed text message that is not valid UTF-8", ver),
+                \testCompressedTextThenMessage(), ver);
             addTestCase(sprintf("HTTP/%s: close reason that is not valid UTF-8", ver), \testCloseReason(), ver);
             addTestCase(sprintf("HTTP/%s: close frame with a one-byte payload", ver), \testCloseOneByte(), ver);
             addTestCase(sprintf("HTTP/%s: invalid close codes", ver), \testInvalidCloseCodes(), ver);
@@ -240,6 +247,16 @@ class WebSocketClientInvalidFramesTest inherits QUnit::Test {
         hash<WsMsgInfo> msg = raw.get(HangGuard);
         assertTrue(msg.rsv1, "the message is compressed");
         assertLt(2001, binary(msg.msg).size(), "the raw callback gets the compressed payload");
+    }
+
+    #! the client gives no message to the callback once it failed the connection (RFC 6455 section 7.1.7)
+    testCompressedTextThenMessage(string ver) {
+        Queue events();
+        WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+        on_exit wsc.disconnect();
+        wsc.send("text-long-hello");
+        assertClosed(events, deflate, WSCC_InvalidData, "compressed text, then a message");
+        assertEq(0, events.size(), "the message after the failure is not given to the callback");
     }
 
     testCloseReason(string ver) {

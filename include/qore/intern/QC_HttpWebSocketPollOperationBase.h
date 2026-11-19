@@ -320,6 +320,11 @@ public:
         io_frame_handler = handler;
     }
 
+    //! Sets the RSV bits that the negotiated extensions define (bit 2 = RSV1, bit 1 = RSV2, bit 0 = RSV3)
+    DLLLOCAL void setExtensionRsvMask(uint8_t mask) {
+        extension_rsv_mask = mask & 0x07;
+    }
+
     //! Sets the maximum frame/message size in bytes
     DLLLOCAL void setMaxFrameSize(size_t size) {
         max_frame_size = size;
@@ -546,6 +551,10 @@ private:
 
     //! Optional I/O-thread frame handler — bypasses recv_queue entirely
     WsIoThreadFrameHandler* io_frame_handler = nullptr;
+
+    //! The RSV bits that the negotiated extensions define, as in WsFrame::rsv; a data frame with another RSV bit set
+    //! fails the connection with 1002 (RFC 6455 section 5.2)
+    uint8_t extension_rsv_mask = 0;
 
     //! Send timeout in milliseconds (0 = no timeout)
     int64 send_timeout_ms = 0;

@@ -77,6 +77,28 @@ public class WebSocketUtilTest inherits QUnit::Test {
             assertEq("adiós", h.msg);
             assertEq("UTF-8", h.msg.encoding());
         }
+        # the payload of a close frame is at most 125 bytes (RFC 6455 section 5.5): a longer reason is cut at the start
+        # of a character (qore#6604)
+        foreach list<auto> l in (
+                ("a", 200, strmul("a", 123)),
+                ("é", 100, strmul("é", 61)),
+                ("€", 50, strmul("€", 41)),
+                ("𝄞", 40, strmul("𝄞", 30)),
+                ("b", 123, strmul("b", 123)),
+            ) {
+            string reason = strmul(l[0], l[1]);
+            binary frame = ws_encode_message(WSCC_GoingAway.encodeMsb(2) + binary(reason), WSOP_Close, True);
+            hash<WsMsgInfo> fh = ws_parse_frame(frame);
+            assertEq(WSCC_GoingAway, fh.close, l[0]);
+            assertEq(l[2], fh.msg, sprintf("%s x %d", l[0], l[1]));
+            assertLe(125, binary(fh.msg).size() + 2, l[0]);
+            # a masked frame with a 7-bit length: 2 header bytes and 4 mask bytes
+            assertEq(binary(l[2]).size() + 2 + 6, frame.size(), l[0]);
+        }
+        # ws_encode_frame() with a string payload
+        assertEq(strmul("é", 61), ws_parse_frame(ws_encode_frame(binary_to_string(WSCC_GoingAway.encodeMsb(2),
+            "UTF-8") + strmul("é", 100), WSOP_Close, False)).msg);
+
         # a close frame without a payload has no status code
         hash<WsMsgInfo> h = ws_parse_frame(ws_encode_message(binary(), WSOP_Close));
         assertEq(WSCC_NoStatusRcvd, h.close);

@@ -3238,6 +3238,9 @@ handler.setCloseTimeout(2s);
             if (max_message_size > 0) {
                 ws_poll_op.setMaxFrameSize(max_message_size);
             }
+            # the RSV bits of the negotiated extensions; another RSV bit fails the connection in C++, also in echo
+            # mode (qore#6604)
+            ws_poll_op.setExtensionRsvMask(pending_extensions{cid}.rsv_mask ?? 0);
             wsc.setWsPollOp(ws_poll_op);
             # Give the poll op references for frame dispatch from worker thread
             call_object_method(ws_poll_op, "setConnection", wsc, self);

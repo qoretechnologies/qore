@@ -838,7 +838,8 @@ void WebSocketClientPollOperationPriv::requestClose(uint16_t code, const char* r
     // queued before it and starts the close handshake there; see applyCloseRequest()
     ReferenceHolder<QoreHashNode> request(new QoreHashNode(autoTypeInfo), xsink);
     request->setKeyValue("close_code", static_cast<int64>(code), xsink);
-    request->setKeyValue("close_reason", new QoreStringNode(reason ? reason : ""), xsink);
+    // the reason was converted to UTF-8 by the caller
+    request->setKeyValue("close_reason", new QoreStringNode(reason ? reason : "", QCS_UTF8), xsink);
     if (*xsink) {
         return;
     }

@@ -301,6 +301,17 @@ void WebSocketFrameDecoder::compact() {
 
 BinaryNode* WebSocketFrameEncoder::encode(WsOpcode opcode, const void* payload,
         size_t payload_len, bool fin, bool mask, uint8_t rsv) {
+    // the payload of a close frame is at most 125 bytes (RFC 6455 section 5.5): a longer reason is cut to the
+    // characters that fit, so that the reason stays UTF-8 (a converted reason can have more bytes than characters,
+    // qore#6604)
+    if (opcode == WSOP_CLOSE && payload_len > 125) {
+        const uint8_t* p = static_cast<const uint8_t*>(payload);
+        payload_len = 125;
+        // the byte at the cut is not the continuation of a character before it
+        while (payload_len > 2 && (p[payload_len] & 0xC0) == 0x80) {
+            --payload_len;
+        }
+    }
     SimpleRefHolder<BinaryNode> result(new BinaryNode());
 
     // Byte 0: FIN + RSV + Opcode

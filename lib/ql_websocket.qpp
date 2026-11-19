@@ -56,6 +56,9 @@ binary frame = ws_encode_frame("hello", WSOP_Text, True);
 
     @return the encoded WebSocket frame as binary data
 
+    @note the payload of a close frame (\c WSOP_Close) is cut to 125 bytes (RFC 6455 section 5.5): a longer reason
+    is cut at the start of a UTF-8 character, so that the reason has at most 123 bytes
+
     @since %Qore 3.0
 */
 binary ws_encode_frame(data message, int opcode, softbool masked, softbool fin = True, int rsv_bits = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {

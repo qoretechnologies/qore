@@ -694,17 +694,6 @@ public hashdecl WscAsyncIoResources {
     *WscConnection conn;
 }
 
-#! The lifecycle of one connection of a WebSocketClient
-/** A connection is torn down by exactly one thread: the one that takes it from its client with the client's lock
-    held (WebSocketClient::claimConnectionUnlocked()).  That thread alone releases the connection's resources and
-    reports the connection closed.  The delivery tasks of a connection deliver only its messages, and end once it is
-    taken.
-
-    Used by the private methods of @ref WebSocketClient::WebSocketClient "WebSocketClient", which subclasses can
-    override.
-
-    @since WebSocketClient 2.5
-*/
 #! Returns True if a received text message is valid UTF-8 (RFC 6455 section 8.1; qore#6604)
 /** The poll operations check a text message without the RSV1 bit when they receive it; this checks one that an
     extension can have changed (a message compressed with permessage-deflate) once it is transformed
@@ -1257,6 +1246,17 @@ public class WscStartTicket {
     }
 }
 
+#! The lifecycle of one connection of a WebSocketClient
+/** A connection is torn down by exactly one thread: the one that takes it from its client with the client's lock
+    held (WebSocketClient::claimConnectionUnlocked()).  That thread alone releases the connection's resources and
+    reports the connection closed.  The delivery tasks of a connection deliver only its messages, and end once it is
+    taken.
+
+    Used by the private methods of @ref WebSocketClient::WebSocketClient "WebSocketClient", which subclasses can
+    override.
+
+    @since WebSocketClient 2.5
+*/
 public class WscConnection {
     public {
         #! the sequence number of the connection in its client
@@ -7766,6 +7766,13 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
             @since WebSocketClient 2.4
         */
         Mutex drain_mutex();
+
+        #! True once the Qore code failed the connection (a text message that is not UTF-8, RSV bits that no extension
+        #! takes): the data frames that follow are discarded, as the C++ operation discards them after its own error
+        #! close (RFC 6455 section 7.1.7, qore#6604)
+        /** @since WebSocketClient 2.5
+        */
+        bool failed_for_error = False;
     }
 
     #! Creates the poll operation for an established WebSocket connection
@@ -8033,6 +8040,9 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
 
         # Data frames (text/binary) — apply extensions
         if (frame_type == "text" || frame_type == "binary") {
+            if (failed_for_error) {
+                return;
+            }
             # Build WsMsgInfo-compatible context for extension transforms
             int op = frame_type == "text" ? WSOP_Text : WSOP_Binary;
             hash<auto> ctx = {
@@ -8052,6 +8062,7 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
                     foreach AbstractWebSocketExtension ext in (active_extensions) {
                         if (!ext.validateRsvBits(rsv_bits, op)) {
                             logError("Extension %s rejected RSV bits", ext.getName());
+                            failed_for_error = True;
                             WebSocketClientPollOperationBase::sendClose(WSCC_ProtocolError);
                             return;
                         }
@@ -8094,6 +8105,7 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
             # transformed; the C++ operation checked any other one (qore#6604)
             if (op == WSOP_Text && (ctx.rsv1 || active_extensions) && !ws_client_text_valid(processed)) {
                 logError("a text message received is not valid UTF-8; closing the connection with 1007");
+                failed_for_error = True;
                 WebSocketClientPollOperationBase::sendClose(WSCC_InvalidData, "Invalid UTF-8 in a text message");
                 return;
             }
@@ -8288,6 +8300,13 @@ public class WebSocketClientHcioPollOp {
         /** @since WebSocketClient 2.5
         */
         Counter closed_counter(1);
+
+        #! True once the Qore code failed the connection (a text message that is not UTF-8, RSV bits that no extension
+        #! takes): the data frames that follow are discarded, as the C++ operation discards them after its own error
+        #! close (RFC 6455 section 7.1.7, qore#6604)
+        /** @since WebSocketClient 2.5
+        */
+        bool failed_for_error = False;
     }
 
     #! Creates the adapter and registers for async stream data delivery
@@ -8574,7 +8593,7 @@ public class WebSocketClientHcioPollOp {
             return;
         }
 
-        if (t != "text" && t != "binary") {
+        if ((t != "text" && t != "binary") || failed_for_error) {
             return;
         }
 
@@ -8600,6 +8619,7 @@ public class WebSocketClientHcioPollOp {
                 foreach AbstractWebSocketExtension ext in (active_extensions) {
                     if (!ext.validateRsvBits(rsv_bits, op)) {
                         logError("Extension %s rejected RSV bits", ext.getName());
+                        failed_for_error = True;
                         sendClose(WSCC_ProtocolError);
                         return;
                     }
@@ -8649,6 +8669,7 @@ public class WebSocketClientHcioPollOp {
         # transformed; the stream's frame state checked any other one (qore#6604)
         if (op == WSOP_Text && (rsv1 || active_extensions) && !ws_client_text_valid(processed)) {
             logError("a text message received is not valid UTF-8; closing the connection with 1007");
+            failed_for_error = True;
             sendClose(WSCC_InvalidData, "Invalid UTF-8 in a text message");
             return;
         }

@@ -104,6 +104,8 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
         addTestCase("HTTP/1.1 echo mode", \http1EchoTest());
         addTestCase("HTTP/1.1 UTF-8 corner cases", \http1Utf8CornerTest());
         addTestCase("HTTP/1.1 gotRawMessage()", \http1RawTest());
+        addTestCase("HTTP/1.1 RSV bits", \http1RsvTest());
+        addTestCase("HTTP/1.1 fragmented text", \http1FragmentTest());
         addTestCase("HTTP/1.1 close reason", \http1CloseReasonTest());
         addTestCase("HTTP/1.1 close frame with a one-byte payload", \http1CloseOneByteTest());
         addTestCase("HTTP/1.1 invalid close codes", \http1InvalidCloseCodeTest());
@@ -297,6 +299,93 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
         assertEq(0, plain.last.raw.size(), "gotRawMessage() does not get a message that is not valid UTF-8");
         assertEq("ok", plain.last.got.get(1s));
         assertEq(0, plain.last.got.size());
+    }
+
+    #! an RSV bit that no negotiated extension defines fails the connection with 1002, also in echo mode, where the
+    #! message is never given to the Qore code (it was echoed, so that text that is not UTF-8 was echoed unchecked)
+    http1RsvTest() {
+        foreach bool echo in ((True, False)) {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/plain");
+            if (echo) {
+                s.send(ws_encode_message("echo-on", WSOP_Text, True, True));
+                assertEq("ok", ws_read_message(s, 30s).msg);
+            }
+            s.send(ws_encode_message(<61ff62>, WSOP_Text, True, True, WS_RSV1));
+            assertClose(s, plain, WSCC_ProtocolError, "RSV bits", True);
+            assertEq(0, plain.last.got.size(), sprintf("echo: %y: the message is not given to the connection", echo));
+            if (echo) {
+                assertEq("echo-on", plain.last.raw.get(1s).msg);
+            }
+            assertEq(0, plain.last.raw.size(), sprintf("echo: %y: nor to gotRawMessage()", echo));
+        }
+        # a binary message in echo mode
+        {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/plain");
+            s.send(ws_encode_message("echo-on", WSOP_Text, True, True));
+            assertEq("ok", ws_read_message(s, 30s).msg);
+            s.send(ws_encode_message(<0102>, WSOP_Binary, True, True, WS_RSV3));
+            assertClose(s, plain, WSCC_ProtocolError, "RSV bits", True);
+        }
+        # permessage-deflate defines RSV1 only
+        {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/deflate", "permessage-deflate");
+            s.send(ws_encode_message("abc", WSOP_Text, True, True, WS_RSV2));
+            assertClose(s, deflate, WSCC_ProtocolError, "RSV bits", True);
+            assertEq(0, deflate.last.got.size());
+        }
+        # with permessage-deflate, a compressed message (RSV1) is taken
+        {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/deflate", "permessage-deflate");
+            s.send(ws_encode_message(deflate_raw("café"), WSOP_Text, True, True, WS_RSV1));
+            hash<WsMsgInfo> h = ws_read_message(s, 30s);
+            assertEq(WSOP_Text, h.op);
+            assertEq("café", deflate.last.got.get(30s));
+        }
+    }
+
+    #! a fragmented text message is checked once it is complete: a character may span fragments, and a control frame
+    #! may come between them
+    http1FragmentTest() {
+        foreach bool echo in ((False, True)) {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/plain");
+            string prefix = "ECHO:";
+            if (echo) {
+                s.send(ws_encode_message("echo-on", WSOP_Text, True, True));
+                assertEq("ok", ws_read_message(s, 30s).msg);
+                prefix = "";
+            }
+            string label = sprintf("echo: %y", echo);
+            # a character across two fragments
+            s.send(ws_encode_message(<61c3>, WSOP_Text, True, False));
+            s.send(ws_encode_message(<a962>, WSOP_Continuation, True, True));
+            assertEq(binary(prefix + "aéb"), binary(ws_read_message(s, 30s).msg), label);
+            # a four-byte character across three fragments, with a ping between them
+            s.send(ws_encode_message(<f09d>, WSOP_Text, True, False));
+            s.send(ws_encode_message(binary("p"), WSOP_Ping, True, True));
+            s.send(ws_encode_message(<84>, WSOP_Continuation, True, False));
+            s.send(ws_encode_message(<9e>, WSOP_Continuation, True, True));
+            # the pong and the answer to the message, in either order (the echo fast path sends the echo first)
+            hash<string, binary> frames;
+            for (int i = 0; i < 2; ++i) {
+                hash<WsMsgInfo> h = ws_read_message(s, 30s);
+                frames{h.op == WSOP_Pong ? "pong" : (h.op == WSOP_Text ? "text" : "other")} = binary(h.msg ?? "");
+            }
+            assertEq({"pong": binary("p"), "text": binary(prefix + "𝄞")}, frames, label);
+            s.send(ws_encode_message(binary(), WSOP_Close, True, True));
+            ws_read_message(s, 30s);
+            s.close();
+            assertEq(WSCC_NoStatusRcvd, plain.closed.get(30s).code, label);
+        }
     }
 
     http1CloseReasonTest() {
