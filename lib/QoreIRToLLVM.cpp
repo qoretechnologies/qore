@@ -7580,31 +7580,6 @@ void QoreIRToLLVM::updateImmediateDominator(llvm::BasicBlock* bb) {
     (void)getOrComputeImmediateDominator(bb);
 }
 
-// documented in QoreIRToLLVM.h
-llvm::BasicBlock* QoreIRToLLVM::beginListBoundsCheck(llvm::Value* index, llvm::Value* bound,
-        llvm::Function* llvm_func) {
-    llvm::BasicBlock* check = builder->GetInsertBlock();
-    llvm::BasicBlock* access = llvm::BasicBlock::Create(ctx, "list.access", llvm_func);
-    llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "list.access.cont", llvm_func);
-    // the values computed before the check stay usable after it (see dominates())
-    immediate_dominator[access] = check;
-    immediate_dominator[cont] = check;
-    llvm::Value* in_bounds = builder->CreateICmpULT(index, builder->CreateSExtOrTrunc(bound, i64_type));
-    llvm::MDBuilder md(ctx);
-    builder->CreateCondBr(in_bounds, access, cont, md.createBranchWeights(1 << 20, 1));
-    builder->SetInsertPoint(access);
-    return cont;
-}
-
-// documented in QoreIRToLLVM.h
-llvm::Value* QoreIRToLLVM::getDirectListReadBound(uint32_t list_id) {
-    auto i = typed_list_sizes.find(list_id);
-    if (i == typed_list_sizes.end() || !dominates(i->second.second, builder->GetInsertBlock())) {
-        return nullptr;
-    }
-    return i->second.first;
-}
-
 bool QoreIRToLLVM::dominates(llvm::BasicBlock* candidate, llvm::BasicBlock* target) {
     if (!candidate || !target) {
         return false;
@@ -15515,8 +15490,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_hash_string_extraction_overlap_reuses = 0;
     aot_hash_string_extraction_cross_block_reuses = 0;
     typed_list_data_ptrs.clear();
-    typed_list_caps.clear();
-    typed_list_sizes.clear();
     fixed_typed_list_outputs.clear();
     reserve_typed_list_outputs.clear();
     native_call_result_kinds.clear();
@@ -30914,7 +30887,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             trackResultForCleanup(result, inst->result.id, llvm_func);
             if (exact_typed_output) {
                 emitExceptionCheck(module, llvm_func, inst);
-                typed_list_caps[inst->result.id] = cap_int;
                 if (fixed_typed_output) {
                     fixed_typed_list_outputs.insert(inst->result.id);
                 } else if (inst->list_reserve_only) {
@@ -30968,7 +30940,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::PointerType::get(ctx, 0)), size_block);
                 data_phi->addIncoming(data, data_block);
                 typed_list_data_ptrs[inst->operands[0].id] = data_phi;
-                typed_list_sizes[inst->operands[0].id] = {result, merge_block};
             }
             // Result is native i64, not nanboxed
             return true;
@@ -30982,9 +30953,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
             llvm::Value* result;
             llvm::Value* boxed_source;
-            // the size of the list bounds the read (see beginListBoundsCheck()); without it, the runtime reads
-            llvm::Value* read_bound = getDirectListReadBound(inst->operands[0].id);
-            if (read_bound && qore_ir_use_typed_map_fusion(aot_mode,
+            if (qore_ir_use_typed_map_fusion(aot_mode,
                     "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_READS")) {
                 auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
                         llvm::FunctionType::get(ptr_type, {i64_type}, false));
@@ -30993,20 +30962,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     data_fn->addFnAttr(llvm::Attribute::WillReturn);
                     data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
                 }
-                llvm::BasicBlock* check_block = builder->GetInsertBlock();
-                llvm::BasicBlock* cont_block = beginListBoundsCheck(idx_int, read_bound, llvm_func);
                 auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
                 llvm::Value* data = data_it != typed_list_data_ptrs.end()
                     ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
                 llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
-                llvm::Value* loaded = builder->CreateLoad(i64_type, entry);
-                llvm::BasicBlock* load_block = builder->GetInsertBlock();
-                builder->CreateBr(cont_block);
-                builder->SetInsertPoint(cont_block);
-                llvm::PHINode* read = builder->CreatePHI(i64_type, 2, "list.read");
-                read->addIncoming(loaded, load_block);
-                read->addIncoming(llvm::ConstantInt::get(i64_type, VAL_NOTHING), check_block);
-                boxed_source = read;
+                boxed_source = builder->CreateLoad(i64_type, entry);
                 nanboxed_values.insert(inst->result.id);
                 result = ensureIntTypeInline(boxed_source, inst->result.id);
                 nanboxed_values.erase(inst->result.id);
@@ -31037,9 +30997,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
             llvm::Value* result;
             llvm::Value* boxed_source;
-            // the size of the list bounds the read (see beginListBoundsCheck()); without it, the runtime reads
-            llvm::Value* read_bound = getDirectListReadBound(inst->operands[0].id);
-            if (read_bound && qore_ir_use_typed_map_fusion(aot_mode,
+            if (qore_ir_use_typed_map_fusion(aot_mode,
                     "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_READS")) {
                 auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
                         llvm::FunctionType::get(ptr_type, {i64_type}, false));
@@ -31048,20 +31006,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     data_fn->addFnAttr(llvm::Attribute::WillReturn);
                     data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
                 }
-                llvm::BasicBlock* check_block = builder->GetInsertBlock();
-                llvm::BasicBlock* cont_block = beginListBoundsCheck(idx_int, read_bound, llvm_func);
                 auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
                 llvm::Value* data = data_it != typed_list_data_ptrs.end()
                     ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
                 llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
-                llvm::Value* loaded = builder->CreateLoad(i64_type, entry);
-                llvm::BasicBlock* load_block = builder->GetInsertBlock();
-                builder->CreateBr(cont_block);
-                builder->SetInsertPoint(cont_block);
-                llvm::PHINode* read = builder->CreatePHI(i64_type, 2, "list.read");
-                read->addIncoming(loaded, load_block);
-                read->addIncoming(llvm::ConstantInt::get(i64_type, VAL_NOTHING), check_block);
-                boxed_source = read;
+                boxed_source = builder->CreateLoad(i64_type, entry);
                 nanboxed_values.insert(inst->result.id);
                 result = ensureFloatTypeInline(
                     boxed_source, inst->result.id, module);
@@ -31122,9 +31071,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
             llvm::Value* result;
-            // the size of the list bounds the read (see beginListBoundsCheck()); without it, the runtime reads
-            llvm::Value* read_bound = getDirectListReadBound(inst->operands[0].id);
-            if (read_bound && qore_ir_use_typed_map_fusion(aot_mode,
+            if (qore_ir_use_typed_map_fusion(aot_mode,
                     "QORE_DISABLE_AOT_DIRECT_TYPED_BOXED_LIST_READS")) {
                 auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
                         llvm::FunctionType::get(ptr_type, {i64_type}, false));
@@ -31133,20 +31080,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     data_fn->addFnAttr(llvm::Attribute::WillReturn);
                     data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
                 }
-                llvm::BasicBlock* check_block = builder->GetInsertBlock();
-                llvm::BasicBlock* cont_block = beginListBoundsCheck(idx_int, read_bound, llvm_func);
                 auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
                 llvm::Value* data = data_it != typed_list_data_ptrs.end()
                     ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
                 llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
-                llvm::Value* loaded = builder->CreateLoad(i64_type, entry);
-                llvm::BasicBlock* load_block = builder->GetInsertBlock();
-                builder->CreateBr(cont_block);
-                builder->SetInsertPoint(cont_block);
-                llvm::PHINode* read = builder->CreatePHI(i64_type, 2, "list.read");
-                read->addIncoming(loaded, load_block);
-                read->addIncoming(llvm::ConstantInt::get(i64_type, VAL_NOTHING), check_block);
-                result = read;
+                result = builder->CreateLoad(i64_type, entry);
             } else {
                 auto helper = module.getOrInsertFunction("qore_rt_list_get_value_noref",
                         llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
@@ -31167,17 +31105,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
             llvm::Value* val_int = ensureIntTypeInline(val, inst->operands[2].id);
             auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
-            auto cap_it = typed_list_caps.find(inst->operands[0].id);
-            if (data_it != typed_list_data_ptrs.end() && cap_it != typed_list_caps.end()
+            if (data_it != typed_list_data_ptrs.end()
                     && qore_ir_use_typed_map_fusion(aot_mode,
                         "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES")) {
-                // the capacity of the list bounds the store (see beginListBoundsCheck())
-                llvm::BasicBlock* cont_block = beginListBoundsCheck(idx_int, cap_it->second, llvm_func);
                 llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
                     data_it->second, idx_int);
                 builder->CreateStore(boxInt(val_int), entry);
-                builder->CreateBr(cont_block);
-                builder->SetInsertPoint(cont_block);
                 return true;
             }
             auto helper = module.getOrInsertFunction("qore_rt_list_set_int",
@@ -31196,17 +31129,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
             llvm::Value* val_float = ensureFloatType(val, inst->operands[2].id, module);
             auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
-            auto cap_it = typed_list_caps.find(inst->operands[0].id);
-            if (data_it != typed_list_data_ptrs.end() && cap_it != typed_list_caps.end()
+            if (data_it != typed_list_data_ptrs.end()
                     && qore_ir_use_typed_map_fusion(aot_mode,
                         "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES")) {
-                // the capacity of the list bounds the store (see beginListBoundsCheck())
-                llvm::BasicBlock* cont_block = beginListBoundsCheck(idx_int, cap_it->second, llvm_func);
                 llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
                     data_it->second, idx_int);
                 builder->CreateStore(boxFloat(val_float), entry);
-                builder->CreateBr(cont_block);
-                builder->SetInsertPoint(cont_block);
                 return true;
             }
             auto helper = module.getOrInsertFunction("qore_rt_list_set_float",
@@ -31234,9 +31162,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool exact_float_element = QoreTypeInfo::parseReturnsPlain(inst->element_type, NT_FLOAT);
             bool exact_bool_element = QoreTypeInfo::parseReturns(
                 inst->element_type, NT_BOOLEAN) == QTI_IDENT;
-            // the capacity of the list bounds a direct store (see beginListBoundsCheck()); without it, the runtime stores
-            auto cap_it = typed_list_caps.find(inst->operands[0].id);
-            bool direct_store_bound = cap_it != typed_list_caps.end();
             auto get_output_data = [&]() -> llvm::Value* {
                 auto data_helper = module.getOrInsertFunction("qore_rt_list_get_mutable_data_unchecked",
                         llvm::FunctionType::get(ptr_type, {i64_type}, false));
@@ -31266,14 +31191,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(helper, {list_boxed, idx_int, val_ref});
             };
             auto emit_int_store = [&](llvm::Value* val_int) {
-                if (direct_store_bound && qore_ir_use_typed_map_fusion(aot_mode,
+                if (qore_ir_use_typed_map_fusion(aot_mode,
                         "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES")) {
-                    llvm::BasicBlock* cont_block = beginListBoundsCheck(idx_int, cap_it->second, llvm_func);
                     llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
                         get_output_data(), idx_int);
                     builder->CreateStore(boxInt(val_int), entry);
-                    builder->CreateBr(cont_block);
-                    builder->SetInsertPoint(cont_block);
                     return;
                 }
                 auto helper = module.getOrInsertFunction("qore_rt_list_set_int",
@@ -31281,14 +31203,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(helper, {list_boxed, idx_int, val_int});
             };
             auto emit_float_store = [&](llvm::Value* val_float) {
-                if (direct_store_bound && qore_ir_use_typed_map_fusion(aot_mode,
+                if (qore_ir_use_typed_map_fusion(aot_mode,
                         "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES")) {
-                    llvm::BasicBlock* cont_block = beginListBoundsCheck(idx_int, cap_it->second, llvm_func);
                     llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
                         get_output_data(), idx_int);
                     builder->CreateStore(boxFloat(val_float), entry);
-                    builder->CreateBr(cont_block);
-                    builder->SetInsertPoint(cont_block);
                     return;
                 }
                 auto helper = module.getOrInsertFunction("qore_rt_list_set_float",
@@ -31296,19 +31215,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(helper, {list_boxed, idx_int, val_float});
             };
             auto emit_direct_boxed_store = [&](llvm::Value* val_boxed) {
-                if (!direct_store_bound) {
-                    // a boxed bool holds no reference
-                    auto helper = module.getOrInsertFunction("qore_rt_list_set_value",
-                            llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
-                    builder->CreateCall(helper, {list_boxed, idx_int, val_boxed});
-                    return;
-                }
-                llvm::BasicBlock* cont_block = beginListBoundsCheck(idx_int, cap_it->second, llvm_func);
                 llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
                     get_output_data(), idx_int);
                 builder->CreateStore(val_boxed, entry);
-                builder->CreateBr(cont_block);
-                builder->SetInsertPoint(cont_block);
             };
             bool has_typed_output_data =
                 typed_list_data_ptrs.count(inst->operands[0].id);
@@ -38694,16 +38603,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && !q_env_is_set("QORE_DISABLE_AOT_TYPED_FOREACH_DATA_HOIST")
                 && data_it != typed_list_data_ptrs.end();
             llvm::Value* at_end = at_initial_end;
-            if (stable_snapshot) {
-                // the limit is an operand of the IR: the size of the list taken with the snapshot bounds the loop too
-                // (qore#6468)
-                if (llvm::Value* bound = getDirectListReadBound(next_inst->iterator.id)) {
-                    at_end = builder->CreateOr(at_end, builder->CreateICmpUGE(index_int,
-                        builder->CreateSExtOrTrunc(bound, i64_type)));
-                } else {
-                    stable_snapshot = false;
-                }
-            }
             if (!stable_snapshot) {
                 auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
                         llvm::FunctionType::get(i64_type, {i64_type}, false));

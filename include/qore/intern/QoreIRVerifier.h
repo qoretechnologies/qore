@@ -64,18 +64,20 @@ public:
         - the stacks that the frame and the thread keep are balanced: the same temp scopes, scopes, implicit
           arguments, implicit elements and contexts are open on every path into a point, and each pop is of the
           innermost entry open (an implicit argument is restored from the value of its push, a context destroyed
-          through the value of its creation); a landing pad unwinds the scopes to its depth.  The entries that an
-          exception leaves open are not known (IR read from a module has no temp scope ids, and the handler of the
-          element of a loop is also the handler of the instructions of a return out of it, qore#6643), so the
-          stacks are checked on the normal control flow, and on a path from an exception edge once it meets a
-          normal path (the scopes from a landing pad on)
+          through the value of its creation; an implicit element is a value that a pop restores, which also closes
+          the elements pushed after it, and is refused only when it is not open); a landing pad unwinds the scopes
+          to its depth.  The paths of the exceptions are followed with the stacks of their raise points through
+          the blocks that only exceptions reach, up to a block of the normal control flow, whose stacks they must
+          have (qore#6658): a handler that closes again a scope or an implicit element that its path has closed
+          (qore#6643) is refused.  The temp scopes are not followed on these paths: an exception drains them to
+          the temp scope of its handler, which IR read from a module does not give
         - the container that an instruction changes without a check of its type (ListAppend, ListSetInt,
           ListSetFloat, ListSetValue, ListSetLength, SetImplicitArgv: a list; HashSetKeyValue,
           HashSetKeyValueFold: a hash) is created by an instruction of the function that creates a container of
           that type, and a list whose entries native code reads through their address (ListGetInt, ListGetFloat,
-          ListGetValueNoRefUnchecked, a step of a typed foreach) is not changed by the function; the index of a
-          store to a list and of a direct read of native code is checked when it runs (qore_ir_list_store_index_ok(),
-          QoreIRToLLVM::beginListBoundsCheck())
+          ListGetValueNoRefUnchecked, a step of a typed foreach) is not changed by the function; the indexes
+          are not checked (the lowering bounds them, and a module whose IR could give others gives native code too,
+          which nothing verifies)
 
         Blocks that cannot run (that are not reached from the entry block by any edge) are not checked.  The cost is
         linear in the size of the function for the checks, plus the iterations of the dominator computation, which

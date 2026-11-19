@@ -9529,24 +9529,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_fixed_list_by_type_path(int64_t siz
     return qore_rt_create_fixed_list_typed(size, element_type, xsink);
 }
 
-//! Returns true if a store of IR to a list is at an index that the list can take: below its length or at its end
-/** The lowering stores to the list that a map or a select creates, at the index of the element (below the length of a
-    list created with its length) or at the next index (a list that reserves its size); IR read from a malformed AOT
-    module can give any index, which would write outside of the list (a negative index) or allocate without a bound:
-    such a store is not made (qore#6468)
-*/
-static inline bool qore_rt_list_store_index_ok(const qore_list_private* priv, int64_t index) {
-    return static_cast<uint64_t>(index) <= priv->length;
-}
-
 extern "C" DLLEXPORT void qore_rt_list_set_int(uint64_t list_bits, int64_t index, int64_t value) {
     QoreValue v = fromBits(list_bits);
     if (v.getType() == NT_LIST) {
         QoreListNode* l = v.get<QoreListNode>();
         qore_list_private* priv = qore_list_private::get(*l);
-        if (!qore_rt_list_store_index_ok(priv, index)) {
-            return;
-        }
         priv->getEntryReference(static_cast<size_t>(index)) = QoreValue(value);
         if (static_cast<size_t>(index) >= priv->length) {
             priv->length = static_cast<size_t>(index) + 1;
@@ -9559,9 +9546,6 @@ extern "C" DLLEXPORT void qore_rt_list_set_float(uint64_t list_bits, int64_t ind
     if (v.getType() == NT_LIST) {
         QoreListNode* l = v.get<QoreListNode>();
         qore_list_private* priv = qore_list_private::get(*l);
-        if (!qore_rt_list_store_index_ok(priv, index)) {
-            return;
-        }
         priv->getEntryReference(static_cast<size_t>(index)) = QoreValue(value);
         if (static_cast<size_t>(index) >= priv->length) {
             priv->length = static_cast<size_t>(index) + 1;
@@ -9575,11 +9559,6 @@ extern "C" DLLEXPORT void qore_rt_list_set_value(uint64_t list_bits, int64_t ind
         QoreListNode* l = v.get<QoreListNode>();
         QoreValue val = fromBits(value_bits);
         qore_list_private* priv = qore_list_private::get(*l);
-        if (!qore_rt_list_store_index_ok(priv, index)) {
-            // the reference that the store was given
-            val.discard(nullptr);
-            return;
-        }
         // Track element type for correct list<T> type info at runtime
         priv->setListTypeFromNewElementType(val.getFullTypeInfo());
         priv->getEntryReference(static_cast<size_t>(index)) = val;
@@ -9601,7 +9580,7 @@ extern "C" DLLEXPORT void qore_rt_list_set_value_checked(uint64_t list_bits, int
     }
     QoreListNode* list = list_value.get<QoreListNode>();
     qore_list_private* priv = qore_list_private::get(*list);
-    if (!qore_rt_list_store_index_ok(priv, index) || priv->checkVal(value, xsink)) {
+    if (priv->checkVal(value, xsink)) {
         return;
     }
     QoreValue stored = value.release();

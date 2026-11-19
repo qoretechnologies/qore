@@ -403,12 +403,6 @@ private:
 
     // Typed collection state proven or materialized while lowering the current function.
     std::unordered_map<uint32_t, llvm::Value*> typed_list_data_ptrs;
-    //! the capacity of each typed list that the function creates with its size (CreateSizedList), which bounds the
-    //! direct stores to its entries (qore#6468)
-    std::unordered_map<uint32_t, llvm::Value*> typed_list_caps;
-    //! the size of each list that the function reads directly, taken with its data pointer (ListSize), and the block
-    //! of the size, which bounds the direct reads of its entries that it dominates (qore#6468)
-    std::unordered_map<uint32_t, std::pair<llvm::Value*, llvm::BasicBlock*>> typed_list_sizes;
     std::unordered_set<uint32_t> fixed_typed_list_outputs;
     std::unordered_set<uint32_t> reserve_typed_list_outputs;
     std::unordered_map<uint32_t, BatchCalleeReturnKind> native_call_result_kinds;
@@ -2338,17 +2332,6 @@ private:
     // immediate_dominator map.  Walks up the idom chain from target
     // until candidate is found or the chain terminates.
     bool dominates(llvm::BasicBlock* candidate, llvm::BasicBlock* target);
-    //! Begins a direct access of native code to the entry of a list, which runs only if \a index is below \a bound
-    /** The direct accesses of a typed map or select to the entries of its lists take an index that the lowering
-        bounds; IR read from an AOT module can give any index, so the access is made only below the size of the list
-        that is read or the capacity of the list that is stored to (qore#6468).  Branches on the bound and leaves the
-        insert point in the block of the access; returns the block that follows, to which the caller branches after
-        the access (the block before the check dominates both).
-    */
-    llvm::BasicBlock* beginListBoundsCheck(llvm::Value* index, llvm::Value* bound, llvm::Function* llvm_func);
-    //! Returns the size of a list that native code reads directly, taken where its data pointer is, if it dominates the
-    //! current block; nullptr otherwise (the read then uses the runtime, which checks the index)
-    llvm::Value* getDirectListReadBound(uint32_t list_id);
 
     // Phase 2B — conservative predicate: is `bb` reachable from the
     // function entry along a single-predecessor-only chain?  Used by the
