@@ -3403,6 +3403,8 @@
       rounds or pads when it stores it (ex: <tt>1.005</tt> in a <tt>numeric(10,2)</tt> key): they inserted another row
       or failed with a primary key violation (<a href="https://github.com/qoretechnologies/qore/issues/6676">issue 6676</a>);
       see @ref sqlutilv3_11_0
+    - fixed the select-first upsert of @ref sqlutilintro "SqlUtil", which ignored the \c omit_update option: it compared
+      and updated the columns that the option omits (<a href="https://github.com/qoretechnologies/qore/issues/6683">issue 6683</a>)
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
