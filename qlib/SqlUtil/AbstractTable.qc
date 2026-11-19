@@ -450,9 +450,10 @@ public class AbstractTable inherits AbstractSqlUtilBase {
               values are compared as values of their types (a date with its time zone, a number by its value); an
               input value that the database stores in another form (ex: a date in another time zone, a float with an
               integer value for an integer column, a string with trailing spaces) is looked up in the database, which
-              compares it with the stored values.  A value that the column rounds (ex: a date with microseconds in a
-              column with whole seconds, or <tt>1.005</tt> in a column with two decimals) is not found, so the row
-              that it gave is deleted: give the values of the primary key as the column stores them.  This operation
+              compares it with the stored values; a value that the column rounds (ex: a date with microseconds in a
+              column with whole seconds, or <tt>1.005</tt> in a column with two decimals) is converted to the type of
+              the column for the comparison by the drivers whose database rounds such values (PostgreSQL, MySQL,
+              Oracle and SQL Server, not Sybase), so that it is found as it was stored.  This operation
               allows tables to be completely synchronized by removing rows in the target table not present in the
               source table. This operation is expensive for large data sets.  The table must have a primary key, and
               each input row must have a plain value (not \c NULL, an operator, a list or an object) of each column
@@ -5202,6 +5203,65 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         const DeleteOthersLookupMaxArgs = 2000;
     }
 
+    #! returns the SQL types that the "delete_others" upsert option converts the values of key columns to when it looks them up
+    /** @param pkl the columns of the primary key
+
+        @return the SQL type of each key column whose values the database rounds or converts when it stores them (a
+        numeric, date or time type), as the database declares it (ex: \c "numeric(10,2)",
+        \c "timestamp(0) without time zone"), or @ref nothing if the values are compared as they are bound
+
+        doDeleteOthersIntern() compares a bound input value converted to this type with the stored value, so that a
+        value that the column rounds (ex: \c 10:00:00.7 in a \c timestamp(0) column, \c 1.005 in a
+        \c numeric(10,2) column, \c 1.4 in an integer column) is found; the base class returns @ref nothing; a driver
+        whose database rounds values when it stores them returns the types from its catalog (issue #6635)
+    */
+    private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+    }
+
+    #! returns the SQL type that the "delete_others" upsert option converts a bound key value to for its lookup
+    /** @param type the type of the column given by getDeleteOthersKeyCastTypes()
+        @param val the value of the key that is bound
+
+        @return the type to convert the value to; the base class returns \a type; a driver whose database converts
+        values of different types differently when it stores them (ex: MySQL rounds a string but a cast to an integer
+        type truncates it) returns the type that converts the value as the database stores it (issue #6635)
+    */
+    private string getDeleteOthersKeyCastType(string type, auto val) {
+        return type;
+    }
+
+    #! returns the rows of the table with the given key values, each converted to the type of its column
+    /** @param pkl the columns of the primary key
+        @param casts the types to convert the values of key columns to (getDeleteOthersKeyCastTypes())
+        @param key_list the key values to look up; a row is returned if its key matches any of them
+
+        @return the key values of the rows found
+    */
+    private *list<hash<auto>> selectDeleteOthersKeys(list<string> pkl, hash<string, string> casts,
+            list<hash<auto>> key_list) {
+        list<string> conds = ();
+        list<auto> args = ();
+        foreach hash<auto> key in (key_list) {
+            list<string> cond = ();
+            foreach string col in (pkl) {
+                auto v = key{col};
+                string cn = getColumnSqlName(col);
+                if (!exists v || v === NULL) {
+                    cond += cn + " is null";
+                    continue;
+                }
+                cond += cn + " = " + (casts{col} ? "cast(%v as " + getDeleteOthersKeyCastType(casts{col}, v) + ")"
+                    : "%v");
+                args += v;
+            }
+            conds += "(" + cond.join(" and ") + ")";
+        }
+        string sql = sprintf("select %s from %s where %s",
+            (map getColumnSqlName($1) + " as " + getAliasSqlName($1), pkl).join(", "), getSqlName(),
+            conds.join(" or "));
+        return ds.vselectRows(sql, args);
+    }
+
     #! deletes the rows of the table that are not in the input of an upsert with the "delete_others" option
     /** @param pkh the primary key values of the input, by their exact key (getDeleteOthersKey())
         @param pkl the columns of the primary key
@@ -5211,8 +5271,9 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         in another form than the input gives it (ex: a date in another time zone, a float with an integer value for an
         integer column, a string with trailing spaces), so that the exact keys differ: if any row is not matched, the
         rows that the database finds for the keys of the input that matched no row are kept too (looked up in blocks
-        of where hashes with their values bound, which are combined with "or").  A value that the column rounds is not found.  The rows are
-        deleted after all are read (issue #6607).
+        of where hashes with their values bound, which are combined with "or").  A value of a column that rounds it
+        is compared after the database converts it to the column's type (getDeleteOthersKeyCastTypes()), so that it
+        is found as it was stored (issue #6635).  The rows are deleted after all are read (issue #6607).
     */
     private *hash<string, int> doDeleteOthersIntern(hash<string, hash<auto>> pkh, list<string> pkl,
             *hash<auto> opt) {
@@ -5238,8 +5299,14 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         # a list of where hashes is combined with "or"; a block binds at most DeleteOthersLookupMaxArgs values
         list<hash<auto>> lookup = pkh.values();
         int block_size = max(1, min(DeleteOthersLookupBlockSize, DeleteOthersLookupMaxArgs / pkl.size()));
+        # the types that the database converts the bound values to, as it converts them when it stores them, so that
+        # a value that the column rounds is found (issue #6635)
+        *hash<string, string> casts = lookup ? getDeleteOthersKeyCastTypes(pkl) : NOTHING;
         for (int start = 0; start < lookup.size(); start += block_size) {
-            *list<hash<auto>> found = selectRows({"columns": pkl, "where": lookup[start..(start + block_size - 1)]});
+            list<hash<auto>> block = lookup[start..(start + block_size - 1)];
+            *list<hash<auto>> found = casts
+                ? selectDeleteOthersKeys(pkl, casts, block)
+                : selectRows({"columns": pkl, "where": block});
             foreach hash<auto> frow in (found) {
                 kept{getDeleteOthersKey(frow, pkl)} = True;
             }

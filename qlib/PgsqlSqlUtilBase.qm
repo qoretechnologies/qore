@@ -5063,6 +5063,26 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "and not a.attisdropped order by a.attnum", schema, getRelationName());
     }
 
+    #! returns the types that the "delete_others" upsert option converts the values of numeric, date and time key columns to (issue #6635)
+    /** the types are given by the catalog as the columns are declared (ex: \c "timestamp(0) without time zone",
+        \c "numeric(10,2)"), so that a bound value is rounded as the column rounds it when it stores it
+    */
+    private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+        *hash<auto> qh = ds.select("select a.attname, format_type(a.atttypid, a.atttypmod) as type "
+            "from pg_catalog.pg_attribute a join pg_catalog.pg_class c on (c.oid = a.attrelid) "
+            "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) "
+            "join pg_catalog.pg_type t on (t.oid = a.atttypid) "
+            "where n.nspname = %v and c.relname = %v and a.attnum > 0 and not a.attisdropped "
+            "and t.typcategory in ('N', 'D', 'T')", schema, getRelationName());
+        hash<string, string> rv;
+        context (qh) {
+            if (inlist(%attname, pkl)) {
+                rv{%attname} = %type;
+            }
+        }
+        return rv;
+    }
+
     private Columns describeImpl() {
         # get column descriptions; the relation join uses pg_class/pg_namespace (not
         # pg_statio_all_tables, which omits partitioned parent tables - relkind 'p' - because
