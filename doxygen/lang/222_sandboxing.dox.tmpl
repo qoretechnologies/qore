@@ -943,6 +943,17 @@ socket) and connects to the checked addresses only
     A sandbox that restricts neither network nor filesystem access (for example one that is used only to interrupt
     code) does not check database connections.
 
+    @subsection sandbox_net_cached_data Data Cached from a Network Destination
+    Code that is shared by several sandboxes, such as a library module, and that serves data it obtained from a network
+    destination to later callers (a cache of tokens that a metadata endpoint issued, for example) must serve it only to
+    a caller that could have fetched it itself: a caller whose sandbox denies the destination would otherwise receive
+    the data without a connection that the sandbox checks.  @ref Qore::SandboxManager::checkNetworkConnect()
+    "SandboxManager::checkNetworkConnect()" applies the policy that a TCP connection made at that point would be checked
+    against, and raises the exception that the connection would raise, without connecting; the cache calls it before it
+    serves a cached value.  Data that a secret or a credential file authorizes is instead cached under a key that covers
+    the secret or the content of the file, which the caller reads with its own policy.  The token caches of the
+    \c AzureAuth and \c GcpAuth modules follow these rules.
+
     @subsection sandbox_net_protocols Protocol Constants
 
     The following constants control network protocols:

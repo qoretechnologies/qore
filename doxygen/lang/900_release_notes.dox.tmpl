@@ -1466,6 +1466,12 @@
     change for such drivers); see @ref sandbox_datasource_connect_choosers
     (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>).
 
+    @par Checking a Network Destination Without Connecting
+    @ref Qore::SandboxManager::checkNetworkConnect() "SandboxManager::checkNetworkConnect()" raises what a TCP
+    connection made by the calling code would raise under its sandbox's network policy, without connecting, so that
+    shared code serves data cached from a destination only to callers that could reach it; see
+    @ref sandbox_net_cached_data (<a href="https://github.com/qoretechnologies/qore/issues/6745">issue 6745</a>).
+
     @par Asking Whether a Sandbox Restricts Anything
     @ref Qore::SandboxManager::restricts() "SandboxManager::restricts()", \c networkRestricts(), \c filesystemRestricts()
     and \c limitsRestrict() tell whether a sandbox manager restricts network access, filesystem access or resource
