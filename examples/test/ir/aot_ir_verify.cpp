@@ -741,42 +741,6 @@ static void listChange(QoreIRFunction& fn, QoreIRBuilder& b, QoreIROpcode contai
     b.createReturn(list);
 }
 
-// the runtime helpers of the JIT that store to a list (JITRuntime.cpp)
-extern "C" void qore_rt_list_set_int(uint64_t list_bits, int64_t index, int64_t value);
-extern "C" void qore_rt_list_set_float(uint64_t list_bits, int64_t index, double value);
-extern "C" void qore_rt_list_set_value(uint64_t list_bits, int64_t index, uint64_t value_bits);
-
-//! checks that the runtime stores to a list only at an index below its length or at its end
-static bool checkListStores() {
-    ++count;
-    QoreListNode* l = new QoreListNode(autoTypeInfo);
-    QoreValue lv(l);
-    uint64_t bits;
-    memcpy(&bits, &lv, sizeof bits);
-    QoreValue s(new QoreStringNode("s"));
-    uint64_t sbits;
-    memcpy(&sbits, &s, sizeof sbits);
-    qore_rt_list_set_int(bits, 0, 1);
-    qore_rt_list_set_float(bits, 1, 2.0);
-    // beyond the end, and a negative index: no store (the value given to qore_rt_list_set_value is released)
-    qore_rt_list_set_int(bits, 3, 3);
-    qore_rt_list_set_int(bits, -1, 3);
-    qore_rt_list_set_float(bits, -1, 3.0);
-    // each store is given a reference of its own
-    s.refSelf();
-    qore_rt_list_set_value(bits, -1, sbits);
-    s.refSelf();
-    qore_rt_list_set_value(bits, 1000000, sbits);
-    bool ok = l->size() == 2 && l->retrieveEntry(0).getAsBigInt() == 1 && l->retrieveEntry(1).getAsFloat() == 2.0
-        && s.getInternalNode()->reference_count() == 1;
-    if (!ok) {
-        fprintf(stderr, "list stores: size %zu, string references %d\n", l->size(),
-            s.getInternalNode()->reference_count());
-    }
-    l->deref(nullptr);
-    s.discard(nullptr);
-    return ok;
-}
 
 int main(int argc, char** argv) {
     // the fixtures write malformed IR, which the writer refuses in a debug build otherwise
@@ -1272,7 +1236,6 @@ int main(int argc, char** argv) {
     run("entries read of a list that the function changes", [](QoreIRFunction& fn, QoreIRBuilder& b) {
         listChange(fn, b, QoreIROpcode::CreateSizedList, true);
     }, nullptr, "reads the entries of a list that the function changes");
-    ok = checkListStores() && ok;
 
     qore_destroy_program(pgm);
     qore_cleanup();

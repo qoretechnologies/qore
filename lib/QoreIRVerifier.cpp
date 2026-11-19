@@ -387,12 +387,15 @@ enum QoreIRVerifyStack : uint8_t {
     QORE_IR_VERIFY_ELEMENTS,
     //! the contexts of the thread (Context), by the value that holds the context
     QORE_IR_VERIFY_CONTEXTS,
+    //! the catch blocks of the frame (CatchException), by the number of scopes open when the catch block began: an
+    //! exception that leaves scopes closes the catch blocks begun in them (qore_ir_close_catch_scopes(), qore#6658)
+    QORE_IR_VERIFY_CATCHES,
     QORE_IR_VERIFY_NUM_STACKS,
 };
 
 //! The names of the stacks, for the errors
 const char* const qore_ir_verify_stack_names[QORE_IR_VERIFY_NUM_STACKS] = {
-    "temp scopes", "scopes", "implicit arguments", "implicit elements", "contexts",
+    "temp scopes", "scopes", "implicit arguments", "implicit elements", "contexts", "catch blocks",
 };
 
 //! The effect of an instruction on a stack (see qore_ir_verify_stack_effect())
@@ -499,7 +502,19 @@ struct QoreIRVerifyState {
     std::vector<uint32_t> stacks[QORE_IR_VERIFY_NUM_STACKS];
     //! whether the entries of each stack are known: not on a path from an exception edge until it meets a path of
     //! the normal control flow (see QoreIRVerifyOwnership::verify())
-    bool known[QORE_IR_VERIFY_NUM_STACKS] = {true, true, true, true, true};
+    bool known[QORE_IR_VERIFY_NUM_STACKS] = {true, true, true, true, true, true};
+
+    //! closes the catch blocks begun in the scopes that an exception left, with \a scopes scopes left open (the
+    //! interpreter's LandingPad and ScopeExit, qore_ir_close_catch_scopes())
+    void closeCatches(size_t scopes) {
+        if (!known[QORE_IR_VERIFY_CATCHES]) {
+            return;
+        }
+        std::vector<uint32_t>& catches = stacks[QORE_IR_VERIFY_CATCHES];
+        while (!catches.empty() && catches.back() > scopes) {
+            catches.pop_back();
+        }
+    }
 
     uint8_t get(uint32_t id) const {
         auto i = std::lower_bound(released.begin(), released.end(), std::make_pair(id, uint8_t(0)));
@@ -783,6 +798,41 @@ bool QoreIRVerifyOwnership::applyStack(QoreIRVerifyState& s, const QoreIRInstruc
         }
         return true;
     }
+    // a catch block begins with its CatchException, which records the scopes open, and ends with a CatchCleanup, which
+    // closes the catch blocks begun since its try statement began (its catch-exit depth, qore#6733) or the innermost one
+    if (inst.opcode == QoreIROpcode::CatchException || inst.opcode == QoreIROpcode::CatchCleanup) {
+        if (!s.known[QORE_IR_VERIFY_CATCHES]) {
+            return true;
+        }
+        std::vector<uint32_t>& catches = s.stacks[QORE_IR_VERIFY_CATCHES];
+        if (inst.opcode == QoreIROpcode::CatchException) {
+            if (!s.known[QORE_IR_VERIFY_SCOPES]) {
+                // the scopes are not known on this path, so the catch blocks are not either
+                catches.clear();
+                s.known[QORE_IR_VERIFY_CATCHES] = false;
+                return true;
+            }
+            catches.push_back(static_cast<uint32_t>(s.stacks[QORE_IR_VERIFY_SCOPES].size()));
+            return true;
+        }
+        auto depth = g.func.catch_exit_depths.find(&inst);
+        if (depth != g.func.catch_exit_depths.end()) {
+            if (depth->second > catches.size()) {
+                error = "malformed IR: a CatchCleanup closes the catch blocks down to " + std::to_string(depth->second)
+                    + ", but fewer are open on a path to it" + where(b, pos);
+                return false;
+            }
+            catches.resize(depth->second);
+            return true;
+        }
+        if (catches.empty()) {
+            error = "malformed IR: a CatchCleanup closes a catch block, but none is open on a path to it"
+                + where(b, pos);
+            return false;
+        }
+        catches.pop_back();
+        return true;
+    }
     QoreIRVerifyStackEffect e = qore_ir_verify_stack_effect(inst);
     if (e.stack == QORE_IR_VERIFY_NUM_STACKS) {
         return true;
@@ -851,7 +901,13 @@ bool QoreIRVerifyOwnership::apply(QoreIRVerifyState& s, const QoreIRInstruction&
         }
         if (inst.opcode == QoreIROpcode::DiscardTemps || inst.opcode == QoreIROpcode::DiscardTempsKeep
                 || inst.opcode == QoreIROpcode::ScopeExit) {
-            return applyStack(s, inst, b, pos);
+            if (!applyStack(s, inst, b, pos)) {
+                return false;
+            }
+            // the exception that the handlers of the scope raise closes the catch blocks begun in it
+            if (inst.opcode == QoreIROpcode::ScopeExit && s.known[QORE_IR_VERIFY_SCOPES]) {
+                s.closeCatches(s.stacks[QORE_IR_VERIFY_SCOPES].size());
+            }
         }
         return true;
     }
@@ -1014,6 +1070,7 @@ bool QoreIRVerifyOwnership::verify() {
                     return false;
                 }
                 scopes.resize(depth);
+                es.closeCatches(depth);
             }
             uint32_t to = g.block_entry[to_block];
             bool changed;
@@ -1203,6 +1260,7 @@ bool QoreIRVerifyOwnership::verifyExceptionPaths(const std::vector<QoreIRVerifyS
                 if (scopes.size() > lp->scope_depth) {
                     scopes.resize(lp->scope_depth);
                 }
+                s.closeCatches(lp->scope_depth);
             }
             break;
         }
