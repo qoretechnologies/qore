@@ -80,6 +80,9 @@ public class TogetherSchema {
     private {
         static list<OpenApi3Schema> schemas = ();
         static list<RestSchemaActionSet> action_sets = ();
+    }
+
+    private:internal {
         static Mutex lock();
     }
 

@@ -51,9 +51,12 @@ public class StabilityAiApi {
     }
 
     private {
-        static Mutex mutex();
         static *OpenApi3::OpenApi3Schema schema;
         static *RestSchemaActionSet actions;
+    }
+
+    private:internal {
+        static Mutex mutex();
     }
 
     #! Returns the offline contract shared by typed actions and direct callers

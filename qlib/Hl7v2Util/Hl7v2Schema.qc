@@ -420,6 +420,9 @@ public namespace Hl7v2Util {
     public class Hl7v2SchemaRegistry {
         private {
             static hash<string, Hl7v2Schema> schema_cache = {};
+        }
+
+        private:internal {
             static Mutex schema_mutex();
         }
 

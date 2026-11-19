@@ -589,6 +589,9 @@ public class MediaProviderRegistry {
     private {
         static hash<string, AbstractImageGeneratorFactory> image_cache = {};
         static hash<string, AbstractVideoGeneratorFactory> video_cache = {};
+    }
+
+    private:internal {
         static Mutex registry_lock();
     }
 

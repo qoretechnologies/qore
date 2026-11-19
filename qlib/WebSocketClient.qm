@@ -981,8 +981,11 @@ public class WscActionWaitCount {
     }
 
     #! Returns a new key for the calls of a client (see WscActionCall)
+    /** The key has a random part, so that the code of one client, which can be sandboxed, cannot name the key of
+        another client to remove the states of its calls (see WscActionCall::removeClient(); qore#6750)
+    */
     static synchronized string getKey() {
-        return sprintf("wsc-action-call:%d", ++next_key);
+        return sprintf("wsc-action-call:%d:%s", ++next_key, get_random_bytes(16).toHex());
     }
 
     #! Returns the Queue to wait on if more than \a limit calls are counted, otherwise no value
@@ -1617,9 +1620,6 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! HTTP constructor options
         hash<auto> http_opts;
 
-        #! Connection sequence
-        static Sequence seq();
-
         #! Event disposition code: continue processing event loop
         const WSEDC_CONTINUE = 1;
 
@@ -1776,6 +1776,11 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
             @since WebSocketClient 2.5
         */
         *Queue<hash<SocketPollStateInfo>> async_state_queue;
+    }
+
+    private:internal {
+        #! Connection sequence
+        static Sequence seq();
     }
 
     #! Creates the WebSocket client object from the arguments

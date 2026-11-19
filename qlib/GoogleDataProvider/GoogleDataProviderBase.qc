@@ -53,7 +53,9 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         #! schema cache; API -> request path ->
         #   {request_type -> type, response_type -> type, http_method -> string, path -> string}
         static hash<string, hash<auto>> request_map = {};
+    }
 
+    private:internal {
         #! schema cache lock
         static Mutex m();
     }

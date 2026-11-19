@@ -41,14 +41,16 @@ public class DeepSeekDataProvider inherits DeepSeekDataProviderCommon {
         #! Dynamic child data providers
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
 
-        #! Serializes registration and snapshots of extension providers
-        static RWLock childLock();
-
         #! Default child data providers
         const DefaultChildMap = {
             "chat-completion":
                 Class::forName("DeepSeekDataProvider::DeepSeekChatCompletionDataProvider"),
         };
+    }
+
+    private:internal {
+        #! Serializes registration and snapshots of extension providers
+        static RWLock childLock();
     }
 
     #! Creates the object from a RestClientIo client
