@@ -85,6 +85,19 @@ bool q_ws_close_code_valid(uint16_t code) {
     return code >= 1000 && code <= 1014 && code != 1004 && code != WSCC_NoStatusRcvd && code != WSCC_AbnormalClosure;
 }
 
+const char* q_ws_rsv_position_error(unsigned opcode, uint8_t rsv) {
+    if (!rsv) {
+        return nullptr;
+    }
+    if (opcode >= WSOP_CLOSE) {
+        return "a control frame has RSV bits set (RFC 6455 section 5.2, RFC 7692 section 6.1)";
+    }
+    if (opcode == WSOP_CONTINUATION && (rsv & 4)) {
+        return "a continuation frame has RSV1 set (RFC 7692 section 6.1)";
+    }
+    return nullptr;
+}
+
 uint16_t q_ws_parse_close_payload(const void* data, size_t len, uint16_t& code, std::string& reason,
         const char*& error) {
     reason.clear();
