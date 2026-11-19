@@ -1451,6 +1451,35 @@ private:
         return QoreValue(HandedOverMarker);
     }
 
+    //! the integer of the marker entry that the slot of the result of a ScopeExit follows in held_returns (#6552)
+    static constexpr int64 HandedOverResultMarker = 0x655265526552ll;
+
+public:
+    //! Keeps the slot of the result of a ScopeExit whose handlers handed a value over, which the return that the result
+    //! branches to clears (see qore_ir_scope_exit_handed_over(), #6552)
+    /** Kept in the held returns after a marker entry, as the handed-over return (see findHandedOverReturn()): the
+        frame has no member more; an integer entry is no node, which the release of the held returns discards without
+        a reference to release
+    */
+    DLLLOCAL __attribute__((noinline, cold)) void holdHandedOverResult(uint32_t slot) {
+        held_returns.push_back(QoreValue(HandedOverResultMarker));
+        held_returns.push_back(QoreValue(static_cast<int64>(slot)));
+    }
+
+    //! Returns the slot that holdHandedOverResult() keeps and removes it, or UINT32_MAX (#6552)
+    DLLLOCAL __attribute__((noinline, cold)) uint32_t takeHandedOverResult() {
+        uint64_t marker = toBits(QoreValue(HandedOverResultMarker));
+        for (size_t i = 0, e = held_returns.size(); i + 1 < e; ++i) {
+            if (toBits(held_returns[i]) == marker) {
+                uint32_t slot = static_cast<uint32_t>(held_returns[i + 1].getAsBigInt());
+                held_returns.erase(held_returns.begin() + i, held_returns.begin() + (i + 2));
+                return slot;
+            }
+        }
+        return UINT32_MAX;
+    }
+
+private:
     //! Returns the index of the handed-over return in held_returns, or NoHandedOver
     DLLLOCAL size_t findHandedOverReturn() const {
         uint64_t marker = toBits(handedOverMarker());
@@ -1470,16 +1499,6 @@ private:
         return rv;
     }
 
-
-public:
-    //! the count of the values handed over to the frame by the handlers that it runs (see
-    //! QoreHandlerRunContext::hand_over_count, #6552)
-    uint64_t handed_over_count = 0;
-    //! the slot of the result of a ScopeExit that the frame ran whose handlers handed a value over, which the return
-    //! that it branches to clears (see qore_ir_scope_exit_handed_over()), or UINT32_MAX
-    uint32_t handed_over_result_slot = UINT32_MAX;
-
-private:
     //! Releases the references that holdReturn() keeps to \a v, if any (see releaseHeldReturn())
     /** A value can be held more than once: each slot of a return that holds it (the Return's, a RefSelf's, a
         DiscardTempsKeep's) is held with a reference of its own.
@@ -8501,6 +8520,8 @@ struct IRHandlerHandOver {
     //! QoreIRScopeExitInstruction::hand_over_return, #6137), or nullptr
     const std::vector<QoreIRValue>* return_values = nullptr;
     bool replaced = false;
+    //! the count of the values handed over in the run (QoreHandlerRunContext::hand_over_count, #6552)
+    uint64_t count = 0;
 
     //! Releases the value of the return slot \a id if it holds a reference of its own to it: a borrowed value has none
     void releaseReturnSlot(uint32_t id, ExceptionSink* xsink) {
@@ -8591,12 +8612,9 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over_return(void* data, Qo
 static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_handed_over_return_op(IRCallFrame& frame,
         IRValueSlots& values, IRCleanupSlots& cleanup, const QoreIRInstruction* inst, ExceptionSink* xsink) {
     // the result of the ScopeExit whose handlers handed the value over, which branched here (#6552)
-    uint32_t& result_slot = frame.locals_slot_cache.handed_over_result_slot;
-    if (result_slot != UINT32_MAX) [[unlikely]] {
-        if (result_slot < values.size()) {
-            values[result_slot] = QoreValue();
-        }
-        result_slot = UINT32_MAX;
+    uint32_t result_slot = frame.locals_slot_cache.takeHandedOverResult();
+    if (result_slot != UINT32_MAX && result_slot < values.size()) {
+        values[result_slot] = QoreValue();
     }
     if (inst->opcode == QoreIROpcode::ReleaseHandedOverReturn) {
         frame.locals_slot_cache.releaseHandedOverReturn(xsink);
@@ -8617,8 +8635,11 @@ static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_handed_over_retur
 static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_scope_exit_handed_over(IRCallFrame& frame,
         uint32_t id) {
     if (id < frame.values.size()) {
-        frame.values[id] = QoreValue(true);
-        frame.locals_slot_cache.handed_over_result_slot = id;
+        // once: a later handler of the same run that hands a value over finds it set
+        if (!frame.values[id].getAsBool()) {
+            frame.values[id] = QoreValue(true);
+            frame.locals_slot_cache.holdHandedOverResult(id);
+        }
     }
 }
 
@@ -8684,7 +8705,7 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
         if (parent_frame) {
             run_ctx.hand_over = returning ? qore_ir_handler_hand_over_return : qore_ir_handler_hand_over;
             run_ctx.data = &hand_over;
-            run_ctx.hand_over_count = &parent_frame->locals_slot_cache.handed_over_count;
+            run_ctx.hand_over_count = &hand_over.count;
         }
     }
     // the frame that execute() pushes for the handler
