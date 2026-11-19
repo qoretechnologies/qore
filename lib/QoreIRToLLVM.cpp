@@ -14798,6 +14798,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     if (ret->has_value) {
                         returned.push_back(ret->value.id);
                     }
+                } else if (aot_mode && inst->opcode == QoreIROpcode::CallAOTHelper && inst->result.isValid()) {
+                    // the result of an outlined helper's call on an exception is the value of an interrupted return
+                    // (or of a handler's return) that the helper hands over (see outline_held_return), even where
+                    // the call has no return of its own (qore#6650)
+                    returned.push_back(inst->result.id);
                 }
             }
         }
@@ -15696,14 +15701,18 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         if (has_on_block_exit_handlers) {
             getOrCreateLocalReloadEpoch(llvm_func);
         }
-        // see handler_return_hold (#5992): only a function with a handler that can return a value has it
-        // an outlined helper with in-region returns of a value hands the value of an interrupted return over to
-        // its coordinator (see outline_held_return)
-        if (aot_mode && !func.aot_symbol_owner.empty() && !return_value_ids.empty()) {
-            bool signaled = false;
+        // an outlined helper with in-region returns of a value or with handlers that can return a value hands the
+        // value of an interrupted return, or the value of a handler's return that replaced it, over to its
+        // coordinator (see outline_held_return)
+        if (aot_mode && !func.aot_symbol_owner.empty()) {
+            bool signaled = has_on_block_exit_handlers && qore_ir_handlers_return_value(func);
             for (const auto& block : func.blocks) {
                 for (const auto& binst : block->instructions) {
+                    if (signaled) {
+                        break;
+                    }
                     if (binst && binst->opcode == QoreIROpcode::Return
+                            && static_cast<const QoreIRReturnInstruction*>(binst.get())->has_value
                             && static_cast<const QoreIRReturnInstruction*>(binst.get())->outline_signal) {
                         signaled = true;
                         break;
@@ -15719,6 +15728,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 held_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), outline_held_return);
             }
         }
+        // see handler_return_hold (#5992): only a function with a handler that can return a value has it
         if (has_on_block_exit_handlers && qore_ir_handlers_return_value(func)) {
             llvm::IRBuilder<> hold_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
             handler_return_hold = hold_builder.CreateAlloca(i64_type, nullptr, "handler_return_hold");

@@ -829,10 +829,11 @@ private:
     */
     llvm::Value* handler_return_hold = nullptr;
     //! the value of an interrupted return that an outlined function-body helper hands over to its coordinator
-    /** Created at the entry of a helper with in-region returns of a value: an exit of the helper on an exception does
-        not release the value of an interrupted return (holding_return_values) but returns it, and the coordinator's
-        call holds it as the value of its own return until after its locals, as the function that the helper was
-        outlined from does (qore#6650)
+    /** Created at the entry of a helper with in-region returns of a value or with handlers that can return a value:
+        an exit of the helper on an exception does not release the value of an interrupted return or of a handler's
+        return (holding_return_values, handler_return_hold) but returns it, and the coordinator's call holds it as the
+        value of its own return until after its locals, as the function that the helper was outlined from does
+        (qore#6650)
     */
     llvm::AllocaInst* outline_held_return = nullptr;
     //! true while an exit of an outlined helper on an exception that returns outline_held_return is emitted
