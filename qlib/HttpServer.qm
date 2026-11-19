@@ -273,6 +273,11 @@ log("started listener on %s", lh.desc);
     - the error response for an exception of a request handler (400, 413 or 500) gives the error and its description
       only, without the location of the exception in the server's code, unless debugging is enabled
       (@ref HttpServer::HttpServer::setDebug() "HttpServer::setDebug()"; issue #6780)
+    - the errors that the server logs give the whole exception with its call stack when debugging is enabled and the
+      location, error and description of the exception otherwise; the errors of a message body that cannot be
+      logged, of a queued persistent handler and of a request processed after its persistent session ended did the
+      opposite, an error clearing the context data of a request lost the text of its message, and an error
+      preprocessing or authenticating a request lost the description of the exception (issues #6793 and #6809)
     - a request whose target (the path or the query, which must be and decode to valid UTF-8 text) or whose method or
       HTTP version is not valid text, whose HTTP/1.x header names have a byte above 0x7f, or whose body (with a
       \c Content-Length, buffered over HTTP/2 or HTTP/3, chunked, or compressed) is not valid text in its encoding, is
@@ -4862,9 +4867,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             clearContextInfo();
         } catch (hash<ExceptionInfo> ex) {
             # log the error
-            string desc = "error clearing request context data: " + !debug
+            string desc = "error clearing request context data: " + (!debug
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
-                : get_exception_string(ex);
+                : get_exception_string(ex));
             desc += sprintf(": received from %s", cx."peer-info".address_desc);
             listener.logError("%s", desc);
         }
@@ -5013,7 +5018,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     string desc = sprintf("Handler %y preprocessing error from %s: ", cx.handler_name,
                         cx."peer-info".address_desc) + (
                             !debug
-                                ? sprintf("%s: %s: %s", cx.handler_name, get_ex_pos(ex), ex.err, ex.desc)
+                                ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                                 : get_exception_string(ex)
                         );
                     listener.logError("%s", desc);
@@ -5031,7 +5036,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
                             cx."peer-info".address_desc) + (
                                 !debug
-                                    ? sprintf("%s: %s: %s", cx.handler_name, get_ex_pos(ex), ex.err, ex.desc)
+                                    ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                                     : get_exception_string(ex)
                             );
                         listener.logError("%s", desc);
@@ -6945,7 +6950,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "INVALID-ENCODING") {
                         lstr += sprintf("error logging msg body: %s: %s", ex.err, ex.desc);
-                        string etxt = serv.getDebug()
+                        string etxt = !serv.getDebug()
                             ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                             : get_exception_string(ex);
                         string str = sprintf("%s: received from %s via %s", etxt, info.address_desc,
@@ -8934,7 +8939,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
-            string etxt = serv.getDebug()
+            string etxt = !serv.getDebug()
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                 : get_exception_string(ex);
             logError("cid %d: queued persistent handler error: %s", cx.id, etxt);
@@ -9102,7 +9107,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     cleanupMultiplexedBodyStream(s, conn_info.header_info);
                 }
             } catch (hash<ExceptionInfo> ex) {
-                string etxt = serv.getDebug()
+                string etxt = !serv.getDebug()
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                     : get_exception_string(ex);
                 logError("cid %d: error processing orphaned request: %s", cx.id,
