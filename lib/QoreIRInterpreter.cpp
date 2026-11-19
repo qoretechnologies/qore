@@ -4014,10 +4014,30 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
             const auto& insts = block->instructions;
             for (size_t i = 0; i < insts.size(); ++i) {
                 const QoreIRInstruction* load = insts[i].get();
+                if (load->opcode == QoreIROpcode::IteratorCreate) {
+                    // Recompute the pair even if a previous preparation saw a different instruction stream.
+                    auto* iter = static_cast<QoreIRIteratorCreateInstruction*>(insts[i].get());
+                    iter->interpreter_ends_source_borrow = false;
+                    if (i && i + 1 < insts.size() && insts[i - 1]->opcode == QoreIROpcode::LoadLocal
+                            && insts[i + 1]->opcode == QoreIROpcode::ReleasePlainLocalRead && !iter->iterator_func) {
+                        auto* local = static_cast<QoreIRLocalInstruction*>(insts[i - 1].get());
+                        const uint32_t rid = local->result.id;
+                        const auto& release = insts[i + 1]->operands;
+                        if (rid == iter->iterable.id && rid < func.interpreter_value_use_counts.size()
+                                && func.interpreter_value_use_counts[rid] == 2 && release.size() == 1
+                                && release.front().id == rid && local->local && func.ir_only_locals.count(local->local)) {
+                            local->interpreter_borrow = QoreIRLocalInstruction::Borrow::Iterator;
+                            iter->interpreter_ends_source_borrow = true;
+                        }
+                    }
+                }
                 if (load->opcode != QoreIROpcode::LoadLocal || !load->result.isValid()) {
                     continue;
                 }
                 const uint32_t rid = load->result.id;
+                auto* local = static_cast<QoreIRLocalInstruction*>(insts[i].get());
+                local->interpreter_borrow = local->borrowed_local_load
+                    ? QoreIRLocalInstruction::Borrow::Mutation : QoreIRLocalInstruction::Borrow::None;
                 // the base of a method call, or the operand of an operator that does not keep it, used once
                 if (rid >= bases.size() || (!bases[rid] && (rid >= func.interpreter_value_use_counts.size()
                         || func.interpreter_value_use_counts[rid] != 1))) {
@@ -13630,8 +13650,7 @@ dispatch_folded_step_host:
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 QoreValue out;
                 bool result_slot_owned = false;
-                bool weak_ref_load = false;
-                bool read_through_reference = false;
+                uint8_t local_flags = IRCallFrame::LocalOwned;
 
                 if (local_inst->is_closure) {
                     // Closure path: always read from runtime stack (closures can
@@ -13661,7 +13680,9 @@ dispatch_folded_step_host:
                         result_slot_owned = true;
                     } else if (!needs_deref && out.needsRef()) {
                         LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
-                        weak_ref_load = lvv && isWeakReferenceType(lvv->val.getType());
+                        if (lvv && isWeakReferenceType(lvv->val.getType())) {
+                            local_flags = 0;
+                        }
                     }
                 } else if (local_inst->auto_ref || (local_inst->slot_id < locals_ir_only.size()
                         && locals_ir_only[local_inst->slot_id])) {
@@ -13691,7 +13712,7 @@ dispatch_folded_step_host:
                             // for a weak local on the runtime stack: a reference taken here would let
                             // this frame run the target's destructor
                             out = locals_slot_cache.read(sid);
-                            weak_ref_load = true;
+                            local_flags = 0;
                             result_slot_owned = false;
                             goto load_local_done;
                         }
@@ -13702,7 +13723,7 @@ dispatch_folded_step_host:
                             // the lvalue is read as a read of the variable reads it, which does not create a missing
                             // hash key or list element (see qore_local_reference_eval())
                             bool ref_needs_deref = true;
-                            read_through_reference = true;
+                            local_flags = IRCallFrame::LocalOwned | IRCallFrame::ReadThroughReference;
                             out = qore_local_reference_eval(
                                 *reinterpret_cast<const ReferenceNode*>(cached_val.getInternalNode()),
                                 ref_needs_deref, xsink);
@@ -13722,7 +13743,7 @@ dispatch_folded_step_host:
                             goto load_local_done;
                         }
                         if (cache_has_value) {
-                            if (!local_inst->auto_ref || local_inst->borrowed_local_load
+                            if (!local_inst->auto_ref || local_inst->interpreter_borrow != QoreIRLocalInstruction::Borrow::None
                                     || (local_inst->auto_local_string_append && cached_node_type == NT_STRING)) {
                                 // The consumer borrows this local until it mutates the value or the iterator
                                 // takes its own reference (#6638); a load that pairs with a local string append
@@ -13806,7 +13827,7 @@ dispatch_folded_step_host:
                                         || raw_type == NT_WEAKREF_LIST) {
                                     is_weak_ref_local = true;
                                 } else if (raw_type == NT_REFERENCE) {
-                                    read_through_reference = true;
+                                    local_flags = IRCallFrame::LocalOwned | IRCallFrame::ReadThroughReference;
                                     reference_value = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                                 }
                             }
@@ -13837,13 +13858,19 @@ dispatch_folded_step_host:
                                 // Clear cache entirely for weak-ref locals so next
                                 // access re-evaluates via TLS (weak-ref target check)
                                 locals_slot_cache.set(sid, QoreValue());
+                            } else if (local_inst->interpreter_borrow == QoreIRLocalInstruction::Borrow::Iterator) {
+                                // On a cache miss, give eval's owned reference to the cache, or
+                                // acquire one if eval borrowed. The adjacent iterator borrows that cache entry.
+                                locals_slot_cache.set(sid, !needs_deref && val.needsRef() ? val.refSelf() : val);
+                                out = val;
+                                goto load_local_done;
                             } else {
                                 locals_slot_cache.set(sid, val.needsRef() ? val.refSelf() : val);
                             }
                         }
                         if (is_weak_ref_local && val.hasNode()) {
                             out = val;
-                            weak_ref_load = true;
+                            local_flags = 0;
                         } else {
                             out = val.needsRef() ? val.refSelf() : val;
                             result_slot_owned = out.needsRef();
@@ -13883,7 +13910,9 @@ dispatch_folded_step_host:
                             result_slot_owned = true;
                         } else if (!needs_deref && out.needsRef()) {
                             LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
-                            weak_ref_load = lvv && isWeakReferenceType(lvv->val.getType());
+                            if (lvv && isWeakReferenceType(lvv->val.getType())) {
+                                local_flags = 0;
+                            }
                         }
                     }
                 }
@@ -13900,7 +13929,7 @@ load_local_done:
                     // a borrowed value left in this slot from an earlier iteration.
                     clearSlotForOverwrite(local_inst->result.id);
                     setValueSlotDirect(values, local_inst->result.id, out);
-                    if (weak_ref_load && out.hasNode()) {
+                    if (!local_flags && out.hasNode()) {
                         // the receiver of a call keeps the object of a weak reference until the call returns, as the
                         // AST interpreter keeps the object of a method call (qore_object_private::startCall()), so
                         // that a method that removes the last strong reference to its object can still use it; the
@@ -13924,10 +13953,7 @@ load_local_done:
                 if (value_id >= local_owned_slots.size()) {
                     local_owned_slots.resize(value_id + 1, 0);
                 }
-                local_owned_slots[value_id] = weak_ref_load ? 0 : IRCallFrame::LocalOwned;
-                if (read_through_reference) {
-                    local_owned_slots[value_id] |= IRCallFrame::ReadThroughReference;
-                }
+                local_owned_slots[value_id] = local_flags;
                 if (result_slot_owned && out.needsRef()) {
                     cleanup.push_back(local_inst->result.id);
                 }
@@ -17479,6 +17505,12 @@ load_local_done:
                     iter = FunctionalOperatorInterface::getFunctionalIteratorForValue(value_type, iterable, true,
                         "foreach statement", xsink);
                 }
+                // The iterator now owns its source or construction failed. End the borrow on either path:
+                // iterable is a named operand, so the generic operand loop cannot retire its slot. Only a plain
+                // value borrows from the cache. A read through a reference keeps its normal statement cleanup.
+                if (iter_inst->interpreter_ends_source_borrow && releaseBorrowedTemp(iter_inst->iterable.id)) {
+                    ++ip;  // the adjacent ReleasePlainLocalRead has no owned source left to release
+                }
                 if (iter && xsink && !*xsink && !ir_pointer_fits(iter)) {
                     ir_pointer_raise(iter, xsink);
                 }
@@ -18124,28 +18156,29 @@ load_local_done:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::IteratorRelease:
-            case QoreIROpcode::ReleasePlainLocalRead:
-            case QoreIROpcode::ReleaseOwnedTemp: {
-                // a return or break leaves a foreach statement: its iterator, or the reference that the function owns
-                // to a temporary of an enclosing statement, is released on this path only, as the AST interpreter
-                // releases it when the statement ends; the slot is cleared, so the release at the end of the frame
-                // finds nothing (see design/temporary-lifetime.md)
+            case QoreIROpcode::IteratorRelease: {
                 uint32_t id = inst->operands.front().id;
-                if (inst->opcode == QoreIROpcode::ReleasePlainLocalRead && id < local_owned_slots.size()
-                        && (local_owned_slots[id] & IRCallFrame::ReadThroughReference)) {
+                FunctionalOperatorInterface* iter = ir_value_pointer<FunctionalOperatorInterface>(
+                    getIRValue(values, inst->operands.front()));
+                if (iter) {
+                    setValueSlotDirect(values, id, QoreValue(static_cast<int64_t>(0)));
+                    active_iterators.erase(iter);
+                    delete iter;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ReleasePlainLocalRead: {
+                uint32_t id = inst->operands.front().id;
+                if (id < local_owned_slots.size() && (local_owned_slots[id] & IRCallFrame::ReadThroughReference)) {
                     ++ip;
                     break;
                 }
-                if (inst->opcode == QoreIROpcode::IteratorRelease) {
-                    FunctionalOperatorInterface* iter = ir_value_pointer<FunctionalOperatorInterface>(
-                        getIRValue(values, inst->operands.front()));
-                    if (iter) {
-                        setValueSlotDirect(values, id, QoreValue(static_cast<int64_t>(0)));
-                        active_iterators.erase(iter);
-                        delete iter;
-                    }
-                } else if (id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
+                [[fallthrough]];
+            }
+            case QoreIROpcode::ReleaseOwnedTemp: {
+                uint32_t id = inst->operands.front().id;
+                if (id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
                         && (weak_load_temp_slots.empty() || !weak_load_temp_slots.count(id))
                         && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)
                         // a value that is the kept value (a second operand, see

@@ -1809,7 +1809,7 @@ private:
 
     // Lower a single instruction; returns false on unsupported opcode
     bool lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
-            llvm::Module& module, std::string& error);
+            llvm::Module& module, std::string& error, const QoreIRInstruction* next = nullptr);
 
     //! Lowers IteratorNextSelectors for the selector-segment loop of \a seg (qore#5711)
     /** Gives the value at the next index of the cursor, read from the list, or branches to the done target when the
@@ -1884,6 +1884,9 @@ private:
     */
     bool emitCallTargetCheckHelper(const QoreIRExprInstruction* check, uint64_t call_bits, int32_t slot,
         llvm::Value* target, llvm::Module& module, llvm::Function* llvm_func, std::string& error);
+
+    //! Moves the boxed value's reference out of its cleanup slot if still present, otherwise acquires one.
+    void takeOrRefCleanupSlot(llvm::Value* boxed, llvm::Value* slot, llvm::Module& module, llvm::Function* llvm_func);
 
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node
