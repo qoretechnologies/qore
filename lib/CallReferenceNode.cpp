@@ -536,9 +536,14 @@ QoreValue ParseObjectMethodReferenceNode::makeReference(QoreValue val, Exception
 
     const QoreClass* oc = o->getClass();
 
-    // the method of the declared class, resolved when parsing, for an object of that class; a static method of it is
-    // bound to that class, as a call through the object is (qore#5990)
-    if (m && (oc == m->getClass() || m->isStatic())) {
+    // the method of the declared class, resolved when parsing, for an object of that class, as for a call of the method
+    // (AbstractMethodCallNode::exec()), also when it is inherited past a method of the name that is not accessible
+    // here (qore#6680); a static method of it is bound to that class, as a call through the object is (qore#5990).
+    // The class of the object can be another QoreClass of the declared class, with the same class ID: the copy of a
+    // module's class imported into a Program, to which a compiled image resolves the declared class, while the object
+    // has the module's own class; native code calls the method resolved for the class in this case as well
+    // (qore_rt_same_class())
+    if (m && (oc == qc || oc == m->getClass() || m->isStatic() || oc->getID() == qc->getID())) {
         return new RunTimeResolvedMethodReferenceNode(loc, o, m);
     }
 
