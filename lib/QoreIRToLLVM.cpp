@@ -16103,6 +16103,16 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     }
                 }
             }
+            // a captured local is assigned with := in the function that captures it or in another closure, whose
+            // stores are not in this function: the parse records every weak assignment of a local
+            // (LocalVar::isWeakAssigned()), so that the receiver of a call read from it keeps the object of a weak
+            // reference until the call returns (qore#6645)
+            if (inst_ptr->opcode == QoreIROpcode::LoadClosure) {
+                const auto* local_inst = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
+                if (local_inst->local && local_inst->local->isWeakAssigned()) {
+                    weak_assigned_locals.insert(reinterpret_cast<const void*>(local_inst->local));
+                }
+            }
             // Count non-operand value uses (stored in dedicated members, not operands)
             switch (inst_ptr->opcode) {
                 case QoreIROpcode::Return: {
