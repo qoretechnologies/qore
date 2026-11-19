@@ -2843,7 +2843,9 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
                     throw "SCHEMA-DESCRIPTION-ERROR", sprintf("type_map %y value is not a string in the schema description hash; got type %y instead (%y)", th.key, th.value.type(), th.value);
 
                 *PgsqlType type = getType(th.key);
-                if (type) {
+                # a type is renamed only when the target does not exist; an existing target is aligned as described
+                # (issue #6729)
+                if (type && !getType(th.value)) {
                     l += AbstractDatabase::doCallback(opt, type.getRenameSql(th.value), AbstractDatabase::AC_Rename, "type", th.key, NOTHING, th.value);
                     type.name = th.value;
                     type_cache{th.value} = type;

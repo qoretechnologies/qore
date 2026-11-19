@@ -2419,6 +2419,10 @@
     - @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()" checks every byte of a multi-byte character and
       returns a \c UTF-16LE surrogate pair whole, where it checked only the first byte and returned half of the pair
       (see @ref encoding_errors; issue #6620)
+    - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" of @ref sqlutilintro "SqlUtil"
+      with a \c sequence_map, \c function_map or \c procedure_map entry whose target exists, which renamed the source
+      onto it
+      (<a href="https://github.com/qoretechnologies/qore/issues/6729">issue 6729</a>); see @ref sqlutilv3_11_0
     - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" of @ref sqlutilintro "SqlUtil"
       with a description of another table name, which raised \c LOCK-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>); see @ref sqlutilv3_11_0
