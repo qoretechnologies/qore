@@ -63,8 +63,7 @@ redeclared abstract, deleted:
   OBJECT-ALREADY-DELETED: cannot call RedeclaredImpl::b() on an object that has already been deleted
 mixed variants, int:
   arg mixed variants
-  RUNTIME-OVERLOAD-ERROR: no variant matching '::MixedMid::a(integer)' can be found; the following variants were tested:
-   ::MixedMid::a(string s)
+  MixedImpl::a(int) called
 mixed variants, string:
   MixedMid::a(string) called
 redeclared abstract in a default argument:
@@ -174,8 +173,7 @@ redeclared abstract, deleted:
   OBJECT-ALREADY-DELETED: cannot call RedeclaredImpl::b() on an object that has already been deleted
 mixed variants, int:
   arg mixed variants
-  RUNTIME-OVERLOAD-ERROR: no variant matching '::MixedMid::a(integer)' can be found; the following variants were tested:
-   ::MixedMid::a(string s)
+  MixedImpl::a(int) called
 mixed variants, string:
   MixedMid::a(string) called
 redeclared abstract in a default argument:
@@ -285,8 +283,7 @@ redeclared abstract, deleted:
   OBJECT-ALREADY-DELETED: cannot call RedeclaredImpl::b() on an object that has already been deleted
 mixed variants, int:
   arg mixed variants
-  RUNTIME-OVERLOAD-ERROR: no variant matching '::MixedMid::a(integer)' can be found; the following variants were tested:
-   ::MixedMid::a(string s)
+  MixedImpl::a(int) called
 mixed variants, string:
   MixedMid::a(string) called
 redeclared abstract in a default argument:

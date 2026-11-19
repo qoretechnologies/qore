@@ -3023,6 +3023,12 @@ pgm.setSandboxManager(sm);
 
     @note Once set, the sandbox manager restricts filesystem and network access for code
     running in this program.
+    @note A %Program that sandboxed code created, or committed code in, keeps the sandbox of that code (see
+    @ref sandbox_program_capability): the manager set here governs the %Program's code together with that sandbox,
+    so it can only add restrictions to it, and removing the manager does not remove that sandbox.  A manager that
+    code a sandbox governs sets (also trusted code that sandboxed code calls) adds to the sandbox of the code that calls
+    the %Program instead of governing its code alone, so sandboxed code cannot loosen its own calls into a %Program
+    by giving it a laxer manager
 
     @throw SANDBOX-ACCESS-ERROR the code of a sandboxed %Program, or of a %Program that restricts a functional domain,
     cannot replace the sandbox manager of a %Program that has one; it can only give one to a %Program that has none,
@@ -3035,15 +3041,20 @@ nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_ma
    // by replacing its manager with a laxer one; giving a manager to a Program that has none only adds restrictions
    // (issue #5659).  A composition of the old and new managers is not stored instead: the old manager would no
    // longer be the one that its owner's limits, interrupt requests and configuration changes act on
-   if (qore_calling_code_is_untrusted()) {
-       QoreSandboxManagerHelper current(p);
-       if (current && current.get() != *sandbox_manager) {
-           return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
-               "are restricted, cannot replace the sandbox manager of a Program");
-       }
+   // (the sandbox of the code that created the Program is not replaced either, see Program::getSandboxManager(), so
+   // giving the Program a manager of its own only adds restrictions to it); the check and the change are made under
+   // the Program's sandbox lock, so that concurrent setters cannot interleave
+   //
+   // a manager that code a sandbox governs sets (also trusted code that sandboxed code calls) adds to the sandbox of
+   // the Program's callers instead of governing the Program's code alone: a Program's own manager otherwise ends the
+   // lookup of the sandbox, so a laxer manager given to a Program that sandboxed code holds would govern that code's
+   // own calls into it (see qore_program_private::own_manager_additive)
+   // the Program takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
+   if (qore_program_private::get(*p)->setOwnSandboxManager(*sandbox_manager, qore_caller_is_sandboxed(),
+           qore_calling_code_is_untrusted())) {
+       return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
+           "are restricted, cannot replace the sandbox manager of a Program");
    }
-   // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
-   p->setSandboxManager(*sandbox_manager);
 }
 
 //! Returns the sandbox manager set on this %Program, if any
@@ -3058,14 +3069,14 @@ if (sm) {
     @endcode
 
     @note NOTHING does not mean that the code of the %Program is not sandboxed: a %Program that sandboxed code
-    creates has no manager of its own, but its code is governed by the sandbox of its callers, and, as the
-    %Program object keeps the sandbox that it was created in, by that sandbox when its code is called through the
-    object (Program::callFunction(), Program::getCallReference() and the like), also by trusted code
+    creates, or commits code in, has no manager of its own, but it keeps the sandbox of that code, which governs its
+    code wherever it runs, also when trusted code calls it (see @ref sandbox_program_capability); this method returns
+    only the manager set with setSandboxManager()
 
     @since Qore 3.0
  */
 *SandboxManager Program::getSandboxManager() [flags=CONSTANT] {
-   QoreSandboxManager* sm = qore_program_private::get(*p)->getSandboxManagerRef();
+   QoreSandboxManager* sm = qore_program_private::get(*p)->getOwnSandboxManagerRef();
    if (!sm) {
        return QoreValue();
    }
@@ -4231,6 +4242,8 @@ code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_AR
     if (*xsink) {
         return QoreValue();
     }
+    // the identifier is only resolved, which runs no code of the Program, so it is only made current, not entered
+    // (qore#6185)
     QoreProgramContextHelper pch(p);
     // the identifier is resolved in the Program, not as a method of the Program object, which is the stack object
     // of this method (issue #5863)

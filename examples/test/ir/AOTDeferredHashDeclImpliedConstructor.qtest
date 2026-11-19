@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../QoreBuildTree.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -314,9 +315,10 @@ int main(int argc, char** argv) {
     }
 
     #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
-    private static list<string> libqoreTargetFlags() {
+    private static list<string> libqoreTargetFlags(string lib_dir) {
         *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
-        return m ? (m[0],) : ();
+        # a sanitizer build of libqore needs the same sanitizer in what links with it (qore#6682)
+        return (m ? (m[0],) : ()) + QoreBuildTree::sanitizer_flags(lib_dir);
     }
 
     #! Returns the command's combined output
@@ -381,7 +383,7 @@ int main(int argc, char** argv) {
         string cxx = ENV.CXX ?? "g++";
         string out = run(sprintf("%s -std=c++17 -I%s -I%s %s %s/hdprov.qo %s/eng.qo -L%s -Wl,-rpath,%s -lqore "
             "-o %s %s", cxx, source_root + "/include", libqore_dir + "/include", host, qo_dir, qo_dir, libqore_dir,
-            libqore_dir, exe, libqoreTargetFlags().join(" ")));
+            libqore_dir, exe, libqoreTargetFlags(libqore_dir).join(" ")));
         if (!is_file(exe)) {
             if (out =~ /not found/) {
                 testSkip("no C++ compiler to build the host: " + out);

@@ -201,6 +201,7 @@ protected:
     DLLLOCAL QoreBreakpoint* getBreakpoint() const;
 
     friend class QoreBreakpoint;
+    friend class qore_breakpoint_ops;
     DLLLOCAL void assignBreakpoint(QoreBreakpoint *bkpt);
     DLLLOCAL void unassignBreakpoint(QoreBreakpoint *bkpt);
 };

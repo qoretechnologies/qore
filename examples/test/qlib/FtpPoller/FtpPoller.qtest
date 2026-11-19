@@ -12,6 +12,8 @@
 %requires DataProvider
 %requires FtpPollerUtil
 %requires FtpPoller
+# the interpreter that the test runner runs (examples/test/runner/test_interpreter_lookup)
+%requires ../../TestInterpreter.qm
 
 %exec-class FtpPollerTest
 
@@ -38,6 +40,36 @@ class MyFtpPoller inherits FtpPoller {
     #! Returns the error retry delay in effect (used to verify the "error_delay" option)
     int getErrorDelay() {
         return error_delay;
+    }
+}
+
+#! a poller that reports its polls and its destruction
+class LifetimeFtpPoller inherits FtpPoller {
+    private {
+        Queue events;
+        #! released when the poller is destroyed, which ends the sleep closure's wait
+        Counter release;
+    }
+
+    constructor(FtpClient ftp, hash<auto> opts, Queue events, Counter release) : FtpPoller(ftp, opts) {
+        self.events = events;
+        self.release = release;
+    }
+
+    destructor() {
+        events.push({"destructor": gettid()});
+        release.dec();
+    }
+
+    *bool fileEvent(list<hash<FtpPollerFileEventInfo>> l) {
+        events.push({"poll": gettid()});
+        return False;
+    }
+
+    singleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+    }
+
+    postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
     }
 }
 
@@ -74,13 +106,20 @@ class FtpPollerTest inherits QUnit::Test {
     constructor() : Test("FtpPollerTest", "1.0") {
         addTestCase("main test", \mainTest());
         addTestCase("error delay option test", \errorDelayOptionTest());
+        addTestCase("dropping the last reference to a started poller stops its thread", \lastReferenceTest());
         addTestCase("error logging test", \errorLoggingTest());
         addTestCase("data provider test", \dataProviderTest());
+        addTestCase("start_thread from the thread's capability", \capabilityTest());
+        addTestCase("start_thread from the thread's capability in a restricted Program", \restrictedCapabilityTest());
         addTestCase("regex mask test", \regexMaskTest());
         addTestCase("an observer refusal keeps the file and polling", \observerRefusalTest());
         addTestCase("a post-transfer error stops polling", \postTransferErrorStopsTest());
+        addTestCase("a deleted object in the post-transfer code stops a started poller, which can be started again",
+            \deletedObjectPostTransferTest());
         addTestCase("relative paths", \relativePathTest());
         addTestCase("a failed setup of a new connection is retried", \newConnectionSetupRetryTest());
+        addTestCase("a failed setup of a new connection is retried by a started poller",
+            \newConnectionSetupRetryStartedTest());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
@@ -136,6 +175,42 @@ class FtpPollerTest inherits QUnit::Test {
             assertTrue(file.name != NOTHING);
             assertTrue(file_paths.hasKey(file.filepath));
         }
+    }
+
+    #! the polling thread holds the poller only for each poll: dropping the owner's reference destroys the poller,
+    #! whose destructor stops the thread and waits for it (qorus#867)
+    private lastReferenceTest() {
+        int port = getPort();
+        FtpServer serv(port, m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+        TmpDir tmp_dir();
+        serv.setPwd(tmp_dir.path);
+        port = serv.getPort();
+        # a file, so that each poll reports its list
+        TmpFile f("ftp_lifetime_", NOTHING, tmp_dir.path);
+
+        Queue events();
+        # the polling thread sleeps in this closure, which refers to no poller, until the poller is destroyed: the
+        # reference is dropped while the thread holds none
+        Counter release(1);
+        code sleeper = sub (int secs) {
+            events.push({"sleeping": gettid()});
+            release.waitForZero();
+        };
+        int tid;
+        {
+            LifetimeFtpPoller poller(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {
+                "path": tmp_dir.path,
+                "poll_interval": 3600,
+                "sleep": sleeper,
+            }, events, release);
+            tid = poller.start();
+            assertEq({"poll": tid}, events.get(60s), "the polling thread polls");
+            assertEq({"sleeping": tid}, events.get(60s), "and sleeps");
+        }
+        # the sleep closure can run again after the subclass destructor has released it, before the poller stops
+        assertEq(({"destructor": gettid()},), (select (map events.get(), xrange(events.size())), $1.destructor),
+            "the poller was destroyed in the thread that dropped its last reference, which the thread had left");
     }
 
     # issue #3377: an empty "regex_mask" matches every file with both constructors
@@ -415,6 +490,15 @@ class FtpPollerTest inherits QUnit::Test {
     # issue #6456: a failed setup of a new FtpClient given with updateOptions() is retried after the error delay, and
     # the state of the previous connection (login directory, user, URL) is not kept for the new one
     private newConnectionSetupRetryTest() {
+        newConnectionSetupRetry(True);
+    }
+
+    # the same with the poller's own polling thread (start()), which polls as startInline() does
+    private newConnectionSetupRetryStartedTest() {
+        newConnectionSetupRetry(False);
+    }
+
+    private newConnectionSetupRetry(bool inline) {
         # PORT only supports IPv4, so we can't use "localhost", which may resolve to an IPv6 address
         FtpServer serv1(getPort(), m_options.verbose - 1, "127.0.0.1");
         on_exit serv1.shutdown();
@@ -440,20 +524,29 @@ class FtpPollerTest inherits QUnit::Test {
             "log_info": sub (string msg) { msgs.add(msg); },
         });
 
-        # runs the poller inline in another thread, which ends when polling stops
+        # runs the poller inline in another thread, which ends when polling stops, or in its own polling thread
         Counter done(1);
-        background sub () {
-            on_exit done.dec();
-            try {
-                poller.startInline();
-            } catch (hash<ExceptionInfo> ex) {
-                msgs.add(sprintf("polling stopped: %s: %s", ex.err, ex.desc));
-            }
-        }();
+        if (inline) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    poller.startInline();
+                } catch (hash<ExceptionInfo> ex) {
+                    msgs.add(sprintf("polling stopped: %s: %s", ex.err, ex.desc));
+                }
+            }();
+        } else {
+            done.dec();
+            poller.start();
+        }
         on_exit {
-            poller.stopNoWait();
-            # only a guard against a hang
-            done.waitForZero(30s);
+            if (inline) {
+                poller.stopNoWait();
+                # only a guard against a hang
+                done.waitForZero(30s);
+            } else {
+                poller.stop();
+            }
         }
 
         poller.waitFor("first.txt");
@@ -478,6 +571,32 @@ class FtpPollerTest inherits QUnit::Test {
         assertEq("user2", state.user);
         assertRegex("^ftp://user2@127\\.0\\.0\\.1:" + port2 + "$", state.url);
         assertEq(0, (select msgs.getAll(), $1 =~ /polling stopped|polling terminated/).size(), "polling went on");
+    }
+
+    # an error of another deleted object in the post-transfer code of a started poller stops polling as any error of that
+    # code does: the poller is stopped, and start() starts a new polling thread
+    private deletedObjectPostTransferTest() {
+        FtpServer serv(getPort(), m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+
+        TmpDir tmp_dir();
+        serv.setPwd(tmp_dir.path);
+        int port = serv.getPort();
+
+        TmpFile tf("ftp_deleted_post_", NOTHING, tmp_dir.path);
+
+        DeletedObjectPostFtpPoller poller(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {
+            "path": tmp_dir.path,
+            "poll_interval": 1,
+            "error_delay": 1,
+        });
+        int tid1 = poller.start();
+        on_exit poller.stop();
+        poller.waitStop();
+        assertEq((basename(tf.path),), poller.files);
+        int tid2 = poller.start();
+        assertNeq(tid1, tid2, "a new polling thread was started");
+        poller.waitStop();
     }
 
     # an error after a file was handled is fatal: polling stops, so the file is not handled more than once
@@ -514,6 +633,107 @@ class FtpPollerTest inherits QUnit::Test {
         assertEq(0, done.waitForZero(30s), "polling stopped after the post-transfer error");
         assertEq("POST-ERROR", stop_ex.err);
         assertEq((basename(tf.path),), poller.files);
+    }
+
+    #! without the option, a poller created in a host's capability scope starts its thread with the host's
+    #! start_thread (qorus#867)
+    private capabilityTest() {
+        int port = getPort();
+        FtpServer serv(port, m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+        TmpDir tmp_dir();
+        serv.setPwd(tmp_dir.path);
+        port = serv.getPort();
+
+        Queue started();
+        MyFtpPoller poller;
+        {
+            ThreadCapabilityScope scope({"start_thread": int sub (code<nothing()> c) {
+                started.push(True);
+                return background c();
+            }});
+            poller = new MyFtpPoller(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {
+                "path": tmp_dir.path,
+                "error_delay": 1,
+            });
+        }
+        # the capability is taken when the poller is created, so it is used after the scope
+        poller.start();
+        on_exit poller.stop();
+        assertEq(1, started.size(), "the polling thread was started with the host's start_thread");
+
+        # a poller created outside a scope does not use it
+        MyFtpPoller poller2(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {
+            "path": tmp_dir.path,
+            "error_delay": 1,
+        });
+        poller2.start();
+        on_exit poller2.stop();
+        assertEq(1, started.size(), "outside a scope the host's start_thread is not used");
+    }
+
+    #! a restricted Program that loads the module first: the module declares THREAD_CONTROL (qorus#867)
+    /** The module's requirement is set when it is first loaded, so the restricted Program must load it first: the
+        check runs in a child process whose main Program does not load the module
+    */
+    private restrictedCapabilityTest() {
+        int port = getPort();
+        FtpServer serv(port, m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+        port = serv.getPort();
+        TmpDir dir("FtpPollerRestricted-");
+        serv.setPwd(dir.path);
+        string script = dir.path + "/restricted.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(RestrictedScript);
+        f.close();
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string module_dir = get_script_dir() + "/../../../../qlib"
+            + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s %s %d 2>&1", module_dir, qore_bin, script,
+            dir.path, port));
+        # the result lines; the loader can warn of modules that the restricted Program loads from source
+        list<string> lines = select out.split("\n"), $1 =~ /^(no-)?scope: /;
+        # the module declares the THREAD_CONTROL domain, so a restricted Program that loads it first needs no option
+        assertEq("no-scope: created", lines[0], "without a scope, the poller is created without the option: " + out);
+        assertEq("scope: created", lines[1], "in a scope, the poller is created with the capability: " + out);
+    }
+
+    private {
+        #! a host whose restricted Program loads FtpPoller first and creates a poller in and out of a scope
+        const RestrictedScript = "%new-style
+%require-types
+%strict-args
+Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_THREAD_CONTROL);
+p.loadModule(\"FtpPoller\");
+p.parse(\"class RestrictedPoller inherits FtpPoller::FtpPoller {
+    constructor(FtpClient c, hash<auto> opts) : FtpPoller::FtpPoller(c, opts) {}
+    singleFileEvent(hash<FtpPoller::FtpPollerFileEventInfo> event) {}
+    postSingleFileEvent(hash<FtpPoller::FtpPollerFileEventInfo> event) {}
+}
+object sub make(string dir, int port) {
+    return new RestrictedPoller(new FtpClient(\\\"ftp://user:pass@127.0.0.1:\\\" + port), {\\\"path\\\": dir,
+        \\\"sleep\\\": sub (softint s) {}});
+}\", \"restricted\");
+string dir = ARGV[0];
+int port = ARGV[1].toInt();
+try {
+    p.callFunction(\"make\", dir, port);
+    printf(\"no-scope: created\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"no-scope: %s\\n\", ex.err);
+}
+{
+    ThreadCapabilityScope scope({\"start_thread\": int sub (code c) { return background c(); }});
+    try {
+        p.callFunction(\"make\", dir, port);
+        printf(\"scope: created\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"scope: %s: %s\\n\", ex.err, ex.desc);
+    }
+}
+";
     }
 
     private dataProviderTest() {
@@ -628,6 +848,28 @@ class FailingPostFtpPoller inherits FtpPoller {
 
     postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
         throw "POST-ERROR", sprintf("cannot dispose of %y", fih.name);
+    }
+}
+
+#! a poller whose post-transfer code uses an object that has been deleted
+class DeletedObjectPostFtpPoller inherits FtpPoller {
+    public {
+        list<string> files();
+    }
+
+    constructor(FtpClient ftp, hash<auto> opts) : FtpPoller(ftp, opts) {
+    }
+
+    singleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+        files += fih.name;
+    }
+
+    postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+        Mutex gone();
+        Mutex alias = gone;
+        delete gone;
+        # raises OBJECT-ALREADY-DELETED for the mutex, not for the poller
+        alias.lock();
     }
 }
 

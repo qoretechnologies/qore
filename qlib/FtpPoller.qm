@@ -33,7 +33,7 @@
 
 module FtpPoller {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "2.2";
     desc = "user module providing FTP polling functionality";
     author = "Alzhan Turlybekov <alzhan.turlybekov@qoretechnologies.com>";
@@ -171,8 +171,11 @@ poller.waitStop();
 
     The @ref FtpPoller::FtpPoller "FtpPoller" class includes support for running in sandboxed Program objects with the
     following parse options set:
-    - \c PO_NO_THREAD_CONTROL: in this case the \c "start_thread" option is required in
-      @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()"
+    - \c PO_NO_THREAD_CONTROL: the module declares the \c THREAD_CONTROL @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, it starts its polling thread for such a caller
+      (the thread runs under the caller's sandbox), and the \c "start_thread" option is not required in
+      @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
     - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
       in its module header, so when it is loaded from the module path, the \c "sleep" option is not required in
       @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()";
@@ -181,6 +184,14 @@ poller.waitStop();
     @section ftppollerrelnotes FtpPoller Module Release Notes
 
     @section ftppollerv2_2 Version 2.2
+    - a started poller whose last reference is dropped is destroyed, which stops its polling thread: the thread holds
+      the poller only for each poll; before, the thread kept the poller, and itself, alive
+    - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
+    - without the \c "start_thread" option, the \c start_thread capability of the thread that creates the poller is
+      used, as a host sets it for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - a failed setup of a new FTP connection given with
       @ref FtpPoller::FtpPoller::updateOptions() "FtpPoller::updateOptions()" is retried after the \c "error_delay"
       option's delay, and the login directory, user and URL of the previous connection are not kept for the new
@@ -219,6 +230,36 @@ public const AppName = "FTP";
 
 #! FTP file event constant
 public const EVENT_FTP_FILE = "ftp-file-event";
+
+#! The run flag of a poller, which its polling thread shares
+class FtpPollerRunState {
+    public {
+        bool run = False;
+    }
+}
+
+#! What the polling thread of a poller holds: the poller only by a weak reference, and the objects it waits on
+/** The thread takes a strong reference to the poller only for each poll, so that the poller's destructor runs when
+    its owner drops its last reference, and stops the thread
+*/
+class FtpPollerThreadRef {
+    public {
+        #! the poller (a weak reference)
+        auto poller;
+        FtpPollerRunState state;
+        WaitGroup sc;
+        Mutex sleep_m;
+        Condition sleep_cond;
+    }
+
+    constructor(FtpPoller p, FtpPollerRunState state, WaitGroup sc, Mutex sleep_m, Condition sleep_cond) {
+        poller := p;
+        self.state = state;
+        self.sc = sc;
+        self.sleep_m = sleep_m;
+        self.sleep_cond = sleep_cond;
+    }
+}
 
 #! FtpPoller client class implementation
 /** See the @ref constructor options for information on how to configure this object; note that either
@@ -342,8 +383,8 @@ public class FtpPoller {
         */
         *string move_remote_file;
 
-        #! run flag
-        bool runflag = False;
+        #! run flag, shared with the polling thread
+        FtpPollerRunState run_state();
 
         #! internal "get files" flag
         bool get_files;
@@ -445,10 +486,14 @@ public class FtpPoller {
         - \c reopts: regular expression match options (ex RE_Caseless for case-insensitive matches)
         - \c sleep: (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
-          set then @ref Qore::sleep() will be used)
-        - \c start_thread: (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
-          @ref closure "closure" or @ref call_reference "call reference" for starting threads; must return the integer
-          thread ID (if not set then @ref background will be used)
+          set then @ref Qore::sleep() will be used); the polling thread holds it while it sleeps, so a closure that
+          refers to the poller (one created in a method of a subclass, for example) keeps the poller alive after its
+          owner drops its last reference
+        - \c start_thread: a @ref closure "closure" or @ref call_reference "call reference" for
+          starting threads; must return the integer thread ID; if not set, the \c start_thread capability that a host
+          sets for the code that creates the object is used (@ref Qore::Thread::ThreadCapabilityScope
+          "ThreadCapabilityScope"), and otherwise @ref background; required with @ref Qore::PO_NO_THREAD_CONTROL only
+          when the module is loaded by its path, where its \c THREAD_CONTROL domain declaration does not apply
         - \c tempfile_template: (used when \c local_dir and \c atomic_transfer are set) the temporary filename prefix
           to use when transferring files to the local directory specified by \c local_dir; use \c "%s" as the
           placeholder for the target filename
@@ -466,6 +511,11 @@ public class FtpPoller {
     constructor(Qore::FtpClient n_ftp, hash<auto> nconf) {
         # create hash of keys with only valid options in argument hash
         hash<auto> conf += Defaults + nconf{AllKeys};
+        # without the option, the capability of the code that the host runs, if any (qorus#867); before the required
+        # keys are checked, as a Program that may not control threads requires it
+        if (!exists conf.start_thread) {
+            conf.start_thread = get_thread_capability("start_thread");
+        }
 
         foreach string k in (RequiredKeys) {
             if (!exists conf{k}) {
@@ -557,12 +607,16 @@ public class FtpPoller {
         - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value); an empty string
           matches every file
         - \c reopts: regular expression match options (ex RE_Caseless for case-insensitive matches)
-        - \c start_thread: (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
-          @ref closure "closure" or @ref call_reference "call reference" for starting threads; must return the integer
-          thread ID (if not set then @ref background will be used)
+        - \c start_thread: a @ref closure "closure" or @ref call_reference "call reference" for
+          starting threads; must return the integer thread ID; if not set, the \c start_thread capability that a host
+          sets for the code that creates the object is used (@ref Qore::Thread::ThreadCapabilityScope
+          "ThreadCapabilityScope"), and otherwise @ref background; required with @ref Qore::PO_NO_THREAD_CONTROL only
+          when the module is loaded by its path, where its \c THREAD_CONTROL domain declaration does not apply
         - \c sleep: (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
-          set then @ref Qore::sleep() will be used)
+          set then @ref Qore::sleep() will be used); the polling thread holds it while it sleeps, so a closure that
+          refers to the poller (one created in a method of a subclass, for example) keeps the poller alive after its
+          owner drops its last reference
         - \c tempfile_template: (used when \c local_dir and \c atomic_transfer are set) the temporary filename prefix
           to use when transferring files to the local directory specified by \c local_dir; use \c "%s" as the
           placeholder for the target filename
@@ -576,6 +630,11 @@ public class FtpPoller {
     constructor(hash<auto> nconf) {
         # create hash of keys with only valid options in argument hash
         hash<auto> conf += Defaults + nconf{AllKeys};
+        # without the option, the capability of the code that the host runs, if any (qorus#867); before the required
+        # keys are checked, as a Program that may not control threads requires it
+        if (!exists conf.start_thread) {
+            conf.start_thread = get_thread_capability("start_thread");
+        }
 
         foreach string k in (RequiredKeysWithHost) {
             if (!exists conf{k}) {
@@ -927,19 +986,29 @@ public class FtpPoller {
         m.lock();
         on_exit m.unlock();
 
-        if (runflag) {
+        if (run_state.run) {
             return tid;
         }
 
         sc.wait();
 
-        runflag = True;
+        run_state.run = True;
         sc.add();
+        # a thread that is not started leaves the poller stopped, so that stop() does not wait for it
+        on_error {
+            run_state.run = False;
+            sc.done();
+        }
 
+        # the thread holds the poller only by a weak reference between its polls, so that the poller's destructor
+        # runs, and stops it, when the owner drops its last reference
+        FtpPollerThreadRef ref(self, run_state, sc, sleep_m, sleep_cond);
 %ifdef PO_NO_THREAD_CONTROL
-        return tid = call_function(start_thread, \run());
+        return tid = call_function(start_thread, FtpPoller::threadBody(ref));
 %else
-        return tid = (start_thread ? call_function(start_thread, \run()) : background run());
+        return tid = (start_thread
+            ? call_function(start_thread, FtpPoller::threadBody(ref))
+            : FtpPoller::startThread(ref));
 %endif
     }
 
@@ -952,7 +1021,7 @@ public class FtpPoller {
 
         {
             AutoLock al(sleep_m);
-            runflag = False;
+            run_state.run = False;
             sleep_cond.broadcast();
         }
     }
@@ -974,7 +1043,7 @@ public class FtpPoller {
 
         {
             AutoLock al(sleep_m);
-            runflag = False;
+            run_state.run = False;
             sleep_cond.broadcast();
         }
 
@@ -1004,11 +1073,11 @@ public class FtpPoller {
             m.lock();
             on_exit m.unlock();
 
-            if (runflag) {
+            if (run_state.run) {
                 throw "FTPPOLLER-ERROR", sprintf("the polling thread is already running in TID %d", tid);
             }
 
-            runflag = True;
+            run_state.run = True;
             tid = gettid();
         }
         sc.add();
@@ -1166,9 +1235,9 @@ public class FtpPoller {
 %ifdef PO_NO_PROCESS_CONTROL
         # Sandbox mode: must use custom sleep function with polling
         date end = now_us() + seconds(secs);
-        while (runflag) {
+        while (run_state.run) {
             call_function(sleep, 1);
-            if (!runflag || (now_us() >= end)) {
+            if (!run_state.run || (now_us() >= end)) {
                 break;
             }
         }
@@ -1176,57 +1245,232 @@ public class FtpPoller {
         if (sleep) {
             # Custom sleep function: use polling with custom sleep
             date end = now_us() + seconds(secs);
-            while (runflag) {
+            while (run_state.run) {
                 call_function(sleep, 1);
-                if (!runflag || (now_us() >= end)) {
+                if (!run_state.run || (now_us() >= end)) {
                     break;
                 }
             }
         } else {
             # Default: condition-based sleep for instant wakeup on stop
             AutoLock al(sleep_m);
-            if (runflag) {
+            if (run_state.run) {
                 sleep_cond.wait(sleep_m, seconds(secs));
             }
         }
 %endif
     }
 
-    #! starts the polling operation
+    #! the code of the polling thread, which refers to no poller: a closure of a static method
+    private static code<nothing()> threadBody(FtpPollerThreadRef ref) {
+        return sub () {
+            FtpPoller::pollThread(ref);
+        };
+    }
+
+    #! starts the polling thread from a static method, so that the thread refers to no poller
+    private static int startThread(FtpPollerThreadRef ref) {
+        return background FtpPoller::pollThread(ref);
+    }
+
+    #! the polling thread: takes a strong reference to the poller for each poll and sleeps without it
+    /** A poller whose last reference is dropped while the thread sleeps is destroyed by the thread that drops it; its
+        destructor stops the thread and waits for it.  If the last reference is the thread's own, the destructor runs
+        in the thread when the poll ends, and only signals the loop to stop.  The base class's destructor stops the
+        thread, after the destructors of its subclasses: a poll that starts meanwhile runs on an object whose subclass
+        destructor has run, so a subclass that cannot poll then stops the poller in its own destructor.
+    */
+    private static pollThread(FtpPollerThreadRef ref) {
+        on_exit ref.sc.done();
+        # a thread that ends with an exception leaves the poller stopped, so that it can be started again
+        on_error ref.state.run = False;
+
+        while (ref.state.run) {
+            int interval;
+            *code<nothing(int)> sleep_code;
+            {
+                FtpPoller p = ref.poller;
+                # the poller has been destroyed: the thread ends; only this check tells it from an error of the
+                # poll's own code
+                try {
+                    p.getPollCount();
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "OBJECT-ALREADY-DELETED") {
+                        break;
+                    }
+                    rethrow;
+                }
+                try {
+                    interval = p.pollOnce();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the poller was deleted while it polled; an error of another deleted object (in the post-transfer
+                    # code) stops polling as any error of that code does
+                    if (ex.err == "OBJECT-ALREADY-DELETED") {
+                        bool deleted = False;
+                        try {
+                            p.getPollCount();
+                        } catch (hash<ExceptionInfo> ex1) {
+                            if (ex1.err != "OBJECT-ALREADY-DELETED") {
+                                rethrow;
+                            }
+                            deleted = True;
+                        }
+                        if (deleted) {
+                            break;
+                        }
+                    }
+                    rethrow;
+                }
+                sleep_code = p.sleep;
+            }
+            try {
+                FtpPoller::threadSleep(ref, interval, sleep_code);
+            } catch (hash<ExceptionInfo> ex) {
+                # an error of the sleep is handled as an error of the poll, as it was in the poll's try block: an FTP
+                # error waits for the error delay, an error in the post-transfer code stops polling
+                *int delay;
+                {
+                    FtpPoller p = ref.poller;
+                    try {
+                        delay = p.sleepError(ex);
+                    } catch (hash<ExceptionInfo> ex1) {
+                        # the poller has been destroyed
+                        if (ex1.err == "OBJECT-ALREADY-DELETED") {
+                            break;
+                        }
+                        rethrow;
+                    }
+                    sleep_code = p.sleep;
+                }
+                if (!exists delay) {
+                    rethrow;
+                }
+                FtpPoller::threadSleep(ref, delay, sleep_code);
+            }
+        }
+
+        try {
+            FtpPoller p = ref.poller;
+            p.logInfo("polling finished");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+        }
+    }
+
+    #! runs one poll of the polling thread; returns the number of seconds to sleep before the next one
+    /** An FTP error is logged and the next poll is made after the error delay; an error in the post-transfer code
+        stops polling
+    */
+    private int pollOnce() {
+        try {
+            # an error before the files are polled (ex: setting up a new FTP connection) is an FTP error
+            get_files = True;
+            in_event = False;
+            setupNewConnection();
+            runOnce();
+            return poll_interval;
+        } catch (hash<ExceptionInfo> ex) {
+            if (get_files) {
+                logError("FTP error in %y: %s: %s; waiting %ds for next try", path, ex.err, ex.desc, error_delay);
+                return error_delay;
+            }
+            if (in_event) {
+                # the event handler refused or failed to handle the file, which is left in place
+                in_event = False;
+                logError("event handler error in %y: %s: %s; the remote file is kept; waiting %ds for next try",
+                    path, ex.err, ex.desc, error_delay);
+                return error_delay;
+            }
+            # error thrown in "post transfer" code
+            logError("error in post transfer code; polling terminated: %s: %s", ex.err, ex.desc);
+            rethrow;
+        }
+    }
+
+    #! sets up the new FTP connection that updateOptions() gave, if any, for the polling thread and run()
+    /** The new client is kept until its setup succeeds, so that a failed setup is retried after the error delay like
+        any FTP error (issue #6456)
+    */
+    private setupNewConnection() {
+        *FtpClient nftp;
+        {
+            AutoLock al(new_ftp_m);
+            nftp = new_ftp;
+        }
+        if (!nftp) {
+            return;
+        }
+        try {
+            setup(nftp);
+        } catch (hash<ExceptionInfo> ex) {
+            # the retry logs in again
+            try {
+                nftp.disconnect();
+            } catch () {
+            }
+            rethrow;
+        }
+        # updateOptions() may have given another client meanwhile
+        AutoLock al(new_ftp_m);
+        if (new_ftp == nftp) {
+            remove new_ftp;
+        }
+    }
+
+    #! handles an error of the polling thread's sleep as run() handles an error of its poll
+    /** @return the error delay after an FTP error, or @ref nothing if polling stops (an error in the post-transfer
+        code, which the caller raises)
+    */
+    private *int sleepError(hash<ExceptionInfo> ex) {
+        if (get_files) {
+            logError("FTP error in %y: %s: %s; waiting %ds for next try", path, ex.err, ex.desc, error_delay);
+            return error_delay;
+        }
+        logError("error in post transfer code; polling terminated: %s: %s", ex.err, ex.desc);
+    }
+
+    #! sleeps for the given number of seconds in the polling thread, holding no reference to the poller
+    private static threadSleep(FtpPollerThreadRef ref, softint secs, *code<nothing(int)> sleep_code) {
+%ifdef PO_NO_PROCESS_CONTROL
+        date end = now_us() + seconds(secs);
+        while (ref.state.run) {
+            call_function(sleep_code, 1);
+            if (!ref.state.run || (now_us() >= end)) {
+                break;
+            }
+        }
+%else
+        if (sleep_code) {
+            date end = now_us() + seconds(secs);
+            while (ref.state.run) {
+                call_function(sleep_code, 1);
+                if (!ref.state.run || (now_us() >= end)) {
+                    break;
+                }
+            }
+        } else {
+            AutoLock al(ref.sleep_m);
+            if (ref.state.run) {
+                ref.sleep_cond.wait(ref.sleep_m, seconds(secs));
+            }
+        }
+%endif
+    }
+
+    #! runs the polling operation in the calling thread (startInline())
     private run() {
         on_exit {
             sc.done();
         }
 
-        while (runflag) {
+        while (run_state.run) {
             try {
                 # an error before the files are polled (ex: setting up a new FTP connection) is an FTP error
                 get_files = True;
                 in_event = False;
-                *FtpClient nftp;
-                {
-                    AutoLock al(new_ftp_m);
-                    nftp = new_ftp;
-                }
-                if (nftp) {
-                    # the new client is kept until its setup succeeds, so that a failed setup is retried after the
-                    # error delay like any FTP error (issue #6456)
-                    try {
-                        setup(nftp);
-                    } catch (hash<ExceptionInfo> ex) {
-                        # the retry logs in again
-                        try {
-                            nftp.disconnect();
-                        } catch () {
-                        }
-                        rethrow;
-                    }
-                    # updateOptions() may have given another client meanwhile
-                    AutoLock al(new_ftp_m);
-                    if (new_ftp == nftp) {
-                        remove new_ftp;
-                    }
-                }
+                setupNewConnection();
                 runOnce();
                 ftpSleep(poll_interval);
             } catch (hash<ExceptionInfo> ex) {

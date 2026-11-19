@@ -22,9 +22,14 @@
     so the object was leaked (issue #6441).  The script (ForeachReferenceElementRelease.qr) logs the destructions of
     objects read through references to a global variable, a list element, a hash key and a member, read in the loop,
     passed on through auto parameters to functions, methods, static methods and closures that keep the value and clear
-    the referenced variable, from functions and from top-level code; every execution mode, native code compiled before
-    the code that calls it runs, tiered execution on the IR tier and qcc executables at -O0 and -O3 (with and without
-    QORE_AOT_EH) must give the AST interpreter's output.
+    the referenced variable, from functions and from top-level code, and given to methods (called directly, by name,
+    through a call reference, with the value of another method call, an overridden method called through a variable
+    of the base class and directly, and methods of final classes), static methods and closures called through
+    a reference that write the referenced variable and their parameter, whose write destroys the object in every mode
+    (issue #6538); every execution mode, native code compiled before the code that calls it runs, tiered execution on
+    the IR tier and qcc executables at -O0 and -O3 (with and without QORE_AOT_EH) must give the AST interpreter's
+    output, also when two threads run the same function at the same time, one over a list that holds a reference and
+    one over a list that does not (ForeachReferenceElementReleaseThreads.qr).
 */
 class ForeachReferenceElementReleaseTest inherits QUnit::Test {
     private {
@@ -32,6 +37,7 @@ class ForeachReferenceElementReleaseTest inherits QUnit::Test {
         string libdir = ENV.QORE_LIBDIR ?? dirname(qore);
         string qcc = ENV.QCC ?? (is_file(libdir + "/qcc") ? libdir + "/qcc" : dirname(qore) + "/qcc");
         string script = get_script_dir() + "/ForeachReferenceElementRelease.qr";
+        string threads_script = get_script_dir() + "/ForeachReferenceElementReleaseThreads.qr";
         string env;
         *string expected;
 
@@ -44,7 +50,17 @@ class ForeachReferenceElementReleaseTest inherits QUnit::Test {
             ("dtor hkey", "after hkey"),
             ("dtor member", "after member"),
             ("dtor give", "after write give"),
-            ("dtor gmeth", "after gmeth"),
+            ("dtor gmeth", "after write gmeth"),
+            ("dtor gfirst", "after write gfirst"),
+            ("after write gname", "dtor gname"),
+            ("dtor gstatic", "after write gstatic"),
+            ("dtor gcref", "after write gcref"),
+            ("dtor gmref", "after write gmref"),
+            ("dtor gnest", "after write gnest"),
+            ("dtor gobase", "after write gobase"),
+            ("dtor goderived", "after write goderived"),
+            ("dtor gfinal", "after write gfinal"),
+            ("dtor kfinal", "after kfinal"),
             ("dtor kmeth", "after kmeth"),
             ("dtor kstatic", "after kstatic"),
             ("dtor kclosure", "after kclosure"),
@@ -58,6 +74,8 @@ class ForeachReferenceElementReleaseTest inherits QUnit::Test {
             \testAst());
         addTestCase("every execution mode releases a value read through a reference by a foreach variable",
             \testModes());
+        addTestCase("two threads running the same function with and without references release as in the AST "
+            "interpreter", \testThreads());
         addTestCase("compiled executables release a value read through a reference by a foreach variable",
             \testAot());
         set_return_value(main());
@@ -96,7 +114,7 @@ class ForeachReferenceElementReleaseTest inherits QUnit::Test {
             string cmd = sprintf("%s%s -b --enable-debug --exec-mode=%s %s", env, qore, ir_tier ? "tiered" : mode,
                 script);
             string actual = ir_tier ? ExecModeHarness::run_ir_tier(cmd) : ExecModeHarness::run(cmd);
-            list<string> diff = differences(exp, irMethodOrder(actual));
+            list<string> diff = differences(exp, actual);
             if (diff) {
                 wrong{mode} = diff;
             }
@@ -108,13 +126,55 @@ class ForeachReferenceElementReleaseTest inherits QUnit::Test {
             foreach string mode in (("jit", "tiered")) {
                 string actual = ExecModeHarness::run(sprintf("%s%s%s -b --enable-debug --exec-mode=%s %s", env,
                     control, qore, mode, script));
-                # only native code compiled before it runs never runs give_method() in the IR interpreter
-                bool native = mode == "jit" && control =~ /QORE_JIT_THRESHOLD=1 /;
-                list<string> diff = differences(exp, native ? actual : irMethodOrder(actual));
+                list<string> diff = differences(exp, actual);
                 if (diff) {
                     wrong{control + mode} = diff;
                 }
             }
+        }
+        assertEq({}, wrong);
+    }
+
+    #! two threads run the same function at the same time, one reading through references, the other not
+    /** The decision to give the value read to the call is made when the function is lowered, never by a run of it,
+        so that a thread whose list holds no reference runs the same code as one whose list does (issue #6538)
+    */
+    testThreads() {
+        string exp = ExecModeHarness::run(sprintf("%s%s -b --enable-debug --exec-mode=ast %s", env, qore,
+            threads_script));
+        assertEq(1200, exp.split("\n").size());
+        hash<string, list<string>> wrong();
+        foreach string mode in (ExecModeHarness::ExecModes + ExecModeHarness::IRTierName) {
+            bool ir_tier = mode == ExecModeHarness::IRTierName;
+            string cmd = sprintf("%s%s -b --enable-debug --exec-mode=%s %s", env, qore, ir_tier ? "tiered" : mode,
+                threads_script);
+            string actual = ir_tier ? ExecModeHarness::run_ir_tier(cmd) : ExecModeHarness::run(cmd);
+            list<string> diff = differences(exp, actual);
+            if (diff) {
+                wrong{mode} = diff[0..4];
+            }
+        }
+        foreach string control in (("QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ",
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=20 ")) {
+            foreach string mode in (("jit", "tiered")) {
+                string actual = ExecModeHarness::run(sprintf("%s%s%s -b --enable-debug --exec-mode=%s %s", env,
+                    control, qore, mode, threads_script));
+                list<string> diff = differences(exp, actual);
+                if (diff) {
+                    wrong{control + mode} = diff[0..4];
+                }
+            }
+        }
+        TmpDir tmp("qore-foreach-reference-element-release-threads-");
+        foreach string level in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "threads" + level;
+            string out = backquote(sprintf("%s%s %s -o %s %s 2>&1", env, qcc, level, exe, threads_script));
+            assertTrue(is_file(exe), "compiled the executable: " + out);
+            list<string> diff = differences(exp, ExecModeHarness::run_any(env + exe));
+            if (diff) {
+                wrong{level} = diff[0..4];
+            }
+            unlink(exe);
         }
         assertEq({}, wrong);
     }
@@ -137,16 +197,6 @@ class ForeachReferenceElementReleaseTest inherits QUnit::Test {
             }
         }
         assertEq({}, wrong);
-    }
-
-    #! returns the output of a run in which the IR interpreter can run give_method() with the AST interpreter's order
-    /** The IR interpreter does not give a method the value that the variable of a foreach loop reads through a
-        reference: the value is released at the end of the statement, after the method returns, not at the write of
-        the parameter as in the AST interpreter and native code (qoretechnologies/qore#6538); the order of these two
-        lines alone is accepted, and the object is destroyed either way
-    */
-    static string irMethodOrder(string actual) {
-        return replace(actual, "after write gmeth\ndtor gmeth\n", "dtor gmeth\nafter write gmeth\n");
     }
 
     #! returns the lines of the output that differ from the expected output, as "expected -> actual"

@@ -1,0 +1,93 @@
+round 0
+unqualified self call: Impl::v(int) 1
+qualified self call: Impl::v(int) 2
+concrete variant, self call: Base::v(string) x
+call through the object: Impl::v(int) 5
+concrete variant through the object: Base::v(string) z
+call through a typed variable: Impl::v(int) 6
+subclass override: E::v(int) 1
+subclass override through the object: E::v(int) 8
+implementing class first: Impl::v(int) 4
+final class: Impl::v(int) 9
+background self call: Impl::put(int) 7
+named arguments: Impl::n x: 3 y: 4
+named arguments through the object: Impl::n x: 5 y: 6
+call from the declaring class: Impl::v(int) 11
+call from the declaring class, subclass: E::v(int) 11
+background call from the declaring class: Impl::put(int) 12
+closure: Impl::v(int) 14
+call reference: Impl::v(int) 15
+private:internal concrete variant, abstract variant: Impl::w(int) 16
+private:internal concrete variant, through the object: Impl::w(int) 17
+private:internal concrete variant: Base::w(string) y
+variant resolved at run time, self call: Impl::v(int) 18
+concrete variant resolved at run time, self call: Base::v(string) a
+variant resolved at run time through the object: Impl::v(int) 19
+concrete variant resolved at run time through the object: Base::v(string) b
+declaring class's concrete variant through the object: CBase::u(int) 20
+implemented variant through the object: CImpl::u(string) c
+declaring class's concrete variant resolved at run time: CBase::u(int) 21
+declaring class's concrete variant, self call resolved at run time: CBase::u(int) 22
+implemented variant, self call resolved at run time: CImpl::u(string) d
+round 1
+unqualified self call: Impl::v(int) 1
+qualified self call: Impl::v(int) 2
+concrete variant, self call: Base::v(string) x
+call through the object: Impl::v(int) 5
+concrete variant through the object: Base::v(string) z
+call through a typed variable: Impl::v(int) 6
+subclass override: E::v(int) 1
+subclass override through the object: E::v(int) 8
+implementing class first: Impl::v(int) 4
+final class: Impl::v(int) 9
+background self call: Impl::put(int) 7
+named arguments: Impl::n x: 3 y: 4
+named arguments through the object: Impl::n x: 5 y: 6
+call from the declaring class: Impl::v(int) 11
+call from the declaring class, subclass: E::v(int) 11
+background call from the declaring class: Impl::put(int) 12
+closure: Impl::v(int) 14
+call reference: Impl::v(int) 15
+private:internal concrete variant, abstract variant: Impl::w(int) 16
+private:internal concrete variant, through the object: Impl::w(int) 17
+private:internal concrete variant: Base::w(string) y
+variant resolved at run time, self call: Impl::v(int) 18
+concrete variant resolved at run time, self call: Base::v(string) a
+variant resolved at run time through the object: Impl::v(int) 19
+concrete variant resolved at run time through the object: Base::v(string) b
+declaring class's concrete variant through the object: CBase::u(int) 20
+implemented variant through the object: CImpl::u(string) c
+declaring class's concrete variant resolved at run time: CBase::u(int) 21
+declaring class's concrete variant, self call resolved at run time: CBase::u(int) 22
+implemented variant, self call resolved at run time: CImpl::u(string) d
+round 2
+unqualified self call: Impl::v(int) 1
+qualified self call: Impl::v(int) 2
+concrete variant, self call: Base::v(string) x
+call through the object: Impl::v(int) 5
+concrete variant through the object: Base::v(string) z
+call through a typed variable: Impl::v(int) 6
+subclass override: E::v(int) 1
+subclass override through the object: E::v(int) 8
+implementing class first: Impl::v(int) 4
+final class: Impl::v(int) 9
+background self call: Impl::put(int) 7
+named arguments: Impl::n x: 3 y: 4
+named arguments through the object: Impl::n x: 5 y: 6
+call from the declaring class: Impl::v(int) 11
+call from the declaring class, subclass: E::v(int) 11
+background call from the declaring class: Impl::put(int) 12
+closure: Impl::v(int) 14
+call reference: Impl::v(int) 15
+private:internal concrete variant, abstract variant: Impl::w(int) 16
+private:internal concrete variant, through the object: Impl::w(int) 17
+private:internal concrete variant: Base::w(string) y
+variant resolved at run time, self call: Impl::v(int) 18
+concrete variant resolved at run time, self call: Base::v(string) a
+variant resolved at run time through the object: Impl::v(int) 19
+concrete variant resolved at run time through the object: Base::v(string) b
+declaring class's concrete variant through the object: CBase::u(int) 20
+implemented variant through the object: CImpl::u(string) c
+declaring class's concrete variant resolved at run time: CBase::u(int) 21
+declaring class's concrete variant, self call resolved at run time: CBase::u(int) 22
+implemented variant, self call resolved at run time: CImpl::u(string) d
