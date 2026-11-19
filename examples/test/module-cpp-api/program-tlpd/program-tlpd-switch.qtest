@@ -1,0 +1,236 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The tlpdprobe test module (examples/test/module-cpp-api/program-tlpd) is built into the build tree and never
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+
+# Code of a Program must run with the thread-local data of that Program (qore#6185, qore#6537): these tests check it
+# when a binary module switches the current Program, enters it, issues a module command to it, or is loaded into it
+# at run time, and that a switch alone creates no thread-local data in the Program and runs none of its thread
+# initialization code.
+#
+# Each case but the last runs a child script in a qore subprocess, in the execution mode of this test: a failed
+# assertion of the library aborts the process.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires tlpdprobe
+%requires QUnit
+
+%exec-class ProgramTlpdSwitchTest
+
+#! the result of a qore subprocess
+hashdecl ProgramTlpdRunResult {
+    #! the exit status
+    int rc;
+    #! the output on stdout
+    string out;
+    #! the output on stderr
+    string err;
+}
+
+class ProgramTlpdSwitchTest inherits QUnit::Test {
+    public {
+        #! the code of a Program with thread initialization code that counts its runs, and a function that returns
+        #! the count (see testMetadataSwitch())
+        const InitSource = "our int inits = 0;\ncode sub mkinit() { return sub () { ++inits; }; }\n"
+            "int sub get() { return inits; }\n";
+    }
+
+    private {
+        string qore_bin;
+        *string exec_mode;
+        #! the directory of the files of the subprocesses
+        TmpDir tmp("qore-program-tlpd-");
+    }
+
+    constructor() : Test("ProgramTlpdSwitchTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        exec_mode = ProgramTlpdSwitchTest::getExecMode();
+        addTestCase("a read in an entered Program", \testEnteredRead());
+        addTestCase("a write in an entered Program", \testEnteredWrite());
+        addTestCase("a read in a Program made current by a module", \testSwitchedRead());
+        addTestCase("a write in a Program made current by a module", \testSwitchedWrite());
+        addTestCase("a read in a Program made current by nested module calls", \testNestedRead());
+        addTestCase("a write in a Program made current by nested module calls", \testNestedWrite());
+        addTestCase("an entry into a Program deleted while a module has it current", \testDeleted());
+        addTestCase("a read from a module command issued to the Program", \testCommandRead());
+        addTestCase("a write from a module command issued to the Program", \testCommandWrite());
+        addTestCase("code of the Program run by a run-time load of a module into it", \testLoad());
+        addTestCase("a switch to a Program where the thread has no data creates none", \testMetadataSwitch());
+        set_return_value(main());
+    }
+
+    #! a switch of the current Program (for a metadata lookup) to a Program where the thread has no data yet creates
+    #! no data there and runs none of its thread initialization code (qore#6537)
+    /** A new thread switches to the Program with QoreProgramContextHelper and back (TlpdProbe::switchOnly()): the
+        Program's thread initialization code has not run then; the thread's first call into the Program runs it, once
+    */
+    testMetadataSwitch() {
+        Program p(PO_NEW_STYLE);
+        # this thread enters the Program before it has thread initialization code: its calls below run none
+        p.parse(InitSource, "metadata-switch");
+        p.run();
+        p.setThreadInit(p.callFunction("mkinit"));
+        Counter switched(1);
+        Counter checked(1);
+        Counter done(1);
+        auto first;
+        *hash<ExceptionInfo> err;
+        background sub () {
+            on_exit done.dec();
+            try {
+                {
+                    on_exit switched.dec();
+                    TlpdProbe::switchOnly(p);
+                }
+                # the count is read by the main thread between the switch and the first call
+                checked.waitForZero();
+                first = p.callFunction("get");
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+        }();
+        auto after_switch;
+        {
+            on_exit checked.dec();
+            switched.waitForZero();
+            after_switch = p.callFunction("get");
+        }
+        done.waitForZero();
+        assertEq(NOTHING, err, sprintf("%y", err));
+        assertEq(0, after_switch, "the switch ran no thread initialization code");
+        assertEq(1, first, "the first entry created the thread's data and ran the initialization code once");
+    }
+
+    #! a module loaded into a Program at run time runs code of the Program with the Program's own data (qore#6537)
+    /** The module's namespace initialization enters the Program and calls its function, which reads its variable
+        and writes "loaded"
+    */
+    testLoad() {
+        hash<ProgramTlpdRunResult> r = runScript("program-tlpd-load-child.q", "load");
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status");
+        assertEq("result: owner\nowner: \"loaded\"\n", r.out, "stdout");
+    }
+
+    #! a module command handler that enters the Program that the command is issued to reads the Program's variable
+    testCommandRead() {
+        hash<ProgramTlpdRunResult> r = run("command", "read");
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status");
+        assertEq("result: owner\n", r.out, "stdout");
+    }
+
+    #! a module command handler writes a variable of the Program that the command is issued to
+    testCommandWrite() {
+        hash<ProgramTlpdRunResult> r = run("command", "write");
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status");
+        assertEq("owner: \"written\"\n", r.out, "stdout");
+    }
+
+    #! the code of an entered Program reads its own variable
+    testEnteredRead() {
+        hash<ProgramTlpdRunResult> r = run("entered", "read");
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status");
+        assertEq("result: \"owner\"\n", r.out, "stdout");
+    }
+
+    #! the code of an entered Program writes its own variable, which the Program then reads
+    testEnteredWrite() {
+        hash<ProgramTlpdRunResult> r = run("entered", "write");
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status");
+        assertEq("owner: \"written\"\n", r.out, "stdout");
+    }
+
+    #! the code of a Program made current with QoreProgramContextHelper reads the Program's own variable
+    testSwitchedRead() {
+        hash<ProgramTlpdRunResult> r = run("switched", "read");
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status");
+        assertEq("result: \"owner\"\n", r.out, "stdout");
+    }
+
+    #! the code of a Program made current with QoreProgramContextHelper writes the Program's own variable
+    testSwitchedWrite() {
+        hash<ProgramTlpdRunResult> r = run("switched", "write");
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status");
+        assertEq("owner: \"written\"\n", r.out, "stdout");
+    }
+
+    #! the code of a Program made current with nested QoreProgramContextHelper objects reads its own variable
+    testNestedRead() {
+        hash<ProgramTlpdRunResult> r = run("nested", "read");
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status");
+        assertEq("result: \"owner\"\n", r.out, "stdout");
+    }
+
+    #! the code of a Program made current with nested QoreProgramContextHelper objects writes its own variable
+    testNestedWrite() {
+        hash<ProgramTlpdRunResult> r = run("nested", "write");
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status");
+        assertEq("owner: \"written\"\n", r.out, "stdout");
+    }
+
+    #! an entry into a Program that was deleted while a module had it current fails
+    testDeleted() {
+        hash<ProgramTlpdRunResult> r = run("deleted", "read");
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status");
+        assertEq("entered: False\nerror: PROGRAM-ERROR\n", r.out, "stdout");
+    }
+
+    #! runs the child program and returns its result
+    private hash<ProgramTlpdRunResult> run(string how, string access) {
+        return runScript("program-tlpd-child.q", sprintf("%s-%s", how, access), how + " " + access);
+    }
+
+    #! runs the given child script with the given arguments and returns its result
+    private hash<ProgramTlpdRunResult> runScript(string script, string label, string args = "") {
+        string err_file = tmp.path + DirSep + label + ".err";
+        on_exit if (is_file(err_file)) {
+            unlink(err_file);
+        }
+        # no core file for an expected abort
+        string cmd = sprintf("ulimit -c 0; %s -b %s%s %s 2>%s; echo \"rc=$?\"",
+            ProgramTlpdSwitchTest::shellQuote(qore_bin), exec_mode ? "--exec-mode=" + exec_mode + " " : "",
+            ProgramTlpdSwitchTest::shellQuote(get_script_dir() + script), args,
+            ProgramTlpdSwitchTest::shellQuote(err_file));
+        string out = backquote(cmd);
+        *list<*string> m = (out =~ x/^(.*)rc=([0-9]+)\n$/s);
+        assertTrue(exists m, "exit status: " + out);
+        return <ProgramTlpdRunResult>{
+            "rc": int(m[1]),
+            "out": m[0] ?? "",
+            "err": is_file(err_file) ? ReadOnlyFile::readTextFile(err_file) : "",
+        };
+    }
+
+    #! returns the execution mode given on the command line, if any
+    private static *string getExecMode() {
+        for (int i = 0; i < QORE_ARGV.size(); ++i) {
+            *string mode = (QORE_ARGV[i] =~ x/^--exec-mode=(.+)$/)[0];
+            if (mode) {
+                return mode;
+            }
+            if (QORE_ARGV[i] == "--exec-mode" && i + 1 < QORE_ARGV.size()) {
+                return QORE_ARGV[i + 1];
+            }
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

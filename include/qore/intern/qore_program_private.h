@@ -184,8 +184,15 @@ public:
     // declaration order counter for proper destruction order (issue #5168)
     uint64_t var_order_counter = 0;
 
-    DLLLOCAL ThreadLocalProgramData() : tz_set(false), inst(false), thread_init_pending(false), inst_count(0) {
-        printd(5, "ThreadLocalProgramData::ThreadLocalProgramData() this: %p\n", this);
+    //! the Program that this thread-local data belongs to
+    /** Code of a Program runs only with the thread-local data of that Program (qore#6185)
+    */
+    QoreProgram* const pgm;
+
+    DLLLOCAL ThreadLocalProgramData(QoreProgram* pgm) : tz_set(false), inst(false), thread_init_pending(false),
+            inst_count(0), pgm(pgm) {
+        assert(pgm);
+        printd(5, "ThreadLocalProgramData::ThreadLocalProgramData() this: %p pgm: %p\n", this, pgm);
     }
 
     DLLLOCAL ~ThreadLocalProgramData() {
@@ -4393,6 +4400,39 @@ public:
         pgm.priv->instantiateThreadVarData(tlpd);
     }
 
+    //! returns the thread's local data in the Program if the thread has any, or nullptr; never creates it
+    /** The caller must keep the data from being cleared while it uses the result: it holds the Program's thread count
+        or its parse lock (see findThreadVarDataIfEntered()).  Once the Program's thread data is being cleared, no data
+        is returned, also to the thread that clears it (qore#6537)
+    */
+    DLLLOCAL ThreadLocalProgramData* findThreadVarData(ThreadProgramData* td) {
+        AutoLocker al(tlock);
+        if (tclear) {
+            return nullptr;
+        }
+        pgm_data_map_t::iterator i = pgm_data_map.find(td);
+        return i == pgm_data_map.end() ? nullptr : i->second;
+    }
+
+    //! returns the thread's local data in the Program if the thread is in the Program, or nullptr; never creates it
+    /** The thread is in the Program if it holds the Program's thread count: its data cannot be cleared then.  A thread
+        that is not in the Program gets no data, so that the entry that runs code of the Program is a full entry
+        (qore#6537)
+
+        @param td the thread's Program data
+        @param tid the current thread's TID
+    */
+    DLLLOCAL ThreadLocalProgramData* findThreadVarDataIfEntered(ThreadProgramData* td, int tid) {
+        {
+            AutoLocker al(plock);
+            if (tidmap.find(tid) == tidmap.end()) {
+                return nullptr;
+            }
+        }
+        // the thread holds the Program's thread count, which only this thread can release
+        return findThreadVarData(td);
+    }
+
     DLLLOCAL bool setThreadVarData(ThreadProgramData* td, ThreadLocalProgramData*& new_tlpd, bool run) {
         SafeLocker sl(tlock);
         // wait for data to finished being cleared if applicable
@@ -4418,7 +4458,7 @@ public:
                 throw std::bad_alloc();
             }
 #endif
-            std::unique_ptr<ThreadLocalProgramData> tlpd(new ThreadLocalProgramData);
+            std::unique_ptr<ThreadLocalProgramData> tlpd(new ThreadLocalProgramData(pgm));
 
             printd(5, "qore_program_private::setThreadVarData() (first) this: %p pgm: %p td: %p run: %s inst: %s\n", this, pgm, td, run ? "true" : "false", tlpd->inst ? "true" : "false");
 
@@ -6044,6 +6084,17 @@ public:
     DLLLOCAL static bool setThreadVarData(QoreProgram* pgm, ThreadProgramData* td, ThreadLocalProgramData* &tlpd,
             bool run) {
         return pgm->priv->setThreadVarData(td, tlpd, run);
+    }
+
+    //! returns the thread's local data in the Program if the thread has any, or nullptr; never creates it
+    DLLLOCAL static ThreadLocalProgramData* findThreadVarData(QoreProgram* pgm, ThreadProgramData* td) {
+        return pgm->priv->findThreadVarData(td);
+    }
+
+    //! returns the thread's local data in the Program if the thread is in the Program, or nullptr; never creates it
+    DLLLOCAL static ThreadLocalProgramData* findThreadVarDataIfEntered(QoreProgram* pgm, ThreadProgramData* td,
+            int tid) {
+        return pgm->priv->findThreadVarDataIfEntered(td, tid);
     }
 
     //! removes the thread's data that setThreadVarData() just created, before any of the Program's code used it

@@ -2951,7 +2951,18 @@ private:
 class ProgramRuntimeParseContextHelper {
 protected:
     QoreProgram* old_pgm;
+    //! the thread's local data before the switch, which the destructor restores
+    ThreadLocalProgramData* old_tlpd;
     bool restore;
+
+    //! switches the thread to the Program locked for parsing: the current Program and its thread-local data
+    /** The thread's local data is switched with the current Program, as code of the Program can run under the parse
+        context: it uses the Program's own data (qore#6537).  The switch is to the thread's existing data in the
+        Program; if the thread has none there, the thread is left with no data, and it is not created here, nor is the
+        Program's thread initialization code run: a runtime entry under the parse context creates it, and a
+        parse-time entry needs none.  The destructor restores the data that the switch replaced.  It cannot fail
+    */
+    DLLLOCAL void switchTo(QoreProgram* pgm);
 
 public:
     DLLLOCAL ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm);
@@ -2992,6 +3003,8 @@ public:
 
 protected:
     QoreProgram* old_pgm;
+    //! the thread's local data before the switch, which the destructor restores
+    ThreadLocalProgramData* old_tlpd;
     //! receives the exceptions of clearing a Program deleted while this context ran its code
     ExceptionSink* xsink;
     bool restore;
