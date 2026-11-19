@@ -77,6 +77,7 @@ static unsigned UTF16BE_getUnicode(const char* p);
 
 static unsigned UTF32BE_getUnicode(const char* p);
 
+template <bool Euro>
 static qore_offset_t DBCS_get_char_len(const char* p, size_t len);
 template <mbcs_charlen_t CharLen>
 static size_t mb_getLength(const char* p, const char* end, bool& invalid);
@@ -533,10 +534,11 @@ QoreEncodingManager::QoreEncodingManager() {
     addAlias(QCS_WINDOWS_874, "CP874");
 
     {
-        // Windows 936 (GBK) has double-byte characters whose second byte can be an ASCII character
+        // Windows 936 (GBK) has double-byte characters whose second byte can be an ASCII character, and the euro sign
+        // 0x80
         QoreEncoding* qcs = new QoreEncoding("WINDOWS-936", "Windows 936: Simplified Chinese", 1, 2,
-            mb_getLength<DBCS_get_char_len>, mb_getByteLen<DBCS_get_char_len>, mb_getCharPos<DBCS_get_char_len>,
-            DBCS_get_char_len);
+            mb_getLength<DBCS_get_char_len<true>>, mb_getByteLen<DBCS_get_char_len<true>>,
+            mb_getCharPos<DBCS_get_char_len<true>>, DBCS_get_char_len<true>);
         qore_encoding_private::get(*qcs)->needs_boundary_check = true;
         emap[qcs->getCode()] = qcs;
         QCS_WINDOWS_936 = qcs;
@@ -1166,47 +1168,129 @@ static size_t mb_getCharPos(const char* p, const char* end, bool& invalid) {
 // variable-width multi-byte encodings that are compatible with ASCII (or Shift_JIS, which is not); the length of a
 // character is given by its first byte (in GB18030, by its first two bytes)
 
-// EUC encodings (EUC-JP, EUC-KR, EUC-CN / GB2312): two bytes 0xa1 - 0xfe, 0x8e and one byte (JIS X 0201 kana in
-// EUC-JP), or 0x8f and two bytes (JIS X 0212 in EUC-JP)
+// EUC encodings (EUC-JP, EUC-KR, EUC-CN / GB2312): ASCII, and code set 1 in two bytes 0xa1 - 0xfe; a byte that is
+// not a character of the encoding is invalid (issue #6665):
+// - SS2 and SS3 (the code sets 2 and 3 of EUC-JP): 0x8e and one byte 0xa1 - 0xdf (JIS X 0201 kana), and 0x8f and two
+//   bytes 0xa1 - 0xfe (JIS X 0212); an EUC encoding without them has no character starting with 0x8e or 0x8f
+// - C1: the C1 control characters 0x80 - 0x9f (other than SS2 and SS3 when they are used) are characters of the EUC
+//   encodings that the standards of EUC-JP (JIS X 0208:1997 Annex 1) and EUC-KR (KS X 2901) define with them; the
+//   others (EUC-CN, and the EUC encodings that Qore finds by probing) have no character 0x80 - 0xa0
+template <bool C1, bool SS>
 static qore_offset_t EUC_get_char_len(const char* p, size_t len) {
     assert(len);
     const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
     if (u[0] < 0x80) {
         return 1;
     }
-    size_t l;
-    if (u[0] == 0x8e) {
-        l = 2;
-    } else if (u[0] == 0x8f) {
-        l = 3;
-    } else if (u[0] >= 0xa1 && u[0] <= 0xfe) {
-        l = 2;
-    } else {
-        return 0;
+    if (u[0] >= 0xa1 && u[0] <= 0xfe) {
+        if (len < 2) {
+            return -2;
+        }
+        return (u[1] >= 0xa1 && u[1] <= 0xfe) ? 2 : 0;
     }
-    if (len < l) {
-        return -static_cast<qore_offset_t>(l);
+    if (SS && u[0] == 0x8e) {
+        if (len < 2) {
+            return -2;
+        }
+        return (u[1] >= 0xa1 && u[1] <= 0xdf) ? 2 : 0;
     }
-    for (size_t i = 1; i < l; ++i) {
-        if (u[i] < 0xa1 || u[i] > 0xfe) {
+    if (SS && u[0] == 0x8f) {
+        // the following bytes that are there are checked first: a sequence is incomplete only if they can be part of
+        // a character
+        if (len >= 2 && (u[1] < 0xa1 || u[1] > 0xfe)) {
             return 0;
         }
+        if (len < 3) {
+            return -3;
+        }
+        return (u[2] >= 0xa1 && u[2] <= 0xfe) ? 3 : 0;
     }
-    return l;
+    return (C1 && u[0] <= 0x9f) ? 1 : 0;
 }
 
-// double-byte encodings with a first byte 0x81 - 0xfe and a second byte 0x40 - 0xfe (GBK / CP936, Big5 / CP950,
-// UHC / CP949); 0x80 and 0xff are single bytes (ex: the euro sign 0x80 in CP936)
+// double-byte encodings with a first byte 0x81 - 0xfe and a second byte 0x40 - 0x7e or 0x80 - 0xfe (GBK / CP936,
+// and the double-byte encodings that Qore finds by probing); 0xff is not a character, and 0x80 is a character of its
+// own only in the encodings that have one there (Euro: the euro sign 0x80 in CP936 and GBK, issue #6665)
+template <bool Euro>
 static qore_offset_t DBCS_get_char_len(const char* p, size_t len) {
     assert(len);
     const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
-    if (u[0] < 0x81 || u[0] == 0xff) {
+    if (u[0] < 0x80) {
         return 1;
+    }
+    if (u[0] == 0x80) {
+        return Euro ? 1 : 0;
+    }
+    if (u[0] == 0xff) {
+        return 0;
     }
     if (len < 2) {
         return -2;
     }
     return (u[1] < 0x40 || u[1] == 0x7f || u[1] == 0xff) ? 0 : 2;
+}
+
+// Big5 and its forms: a first byte FirstLead - 0xfe (Big5: 0xa1 - 0xf9, CP950: 0x81 - 0xfe, Big5-HKSCS: 0x87 - 0xfe)
+// and a second byte 0x40 - 0x7e or 0xa1 - 0xfe; no byte 0x80 - 0xff is a character of its own (issue #6665)
+template <unsigned FirstLead, unsigned LastLead>
+static qore_offset_t Big5_get_char_len(const char* p, size_t len) {
+    assert(len);
+    const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
+    if (u[0] < 0x80) {
+        return 1;
+    }
+    if (u[0] < FirstLead || u[0] > LastLead) {
+        return 0;
+    }
+    if (len < 2) {
+        return -2;
+    }
+    return ((u[1] >= 0x40 && u[1] <= 0x7e) || (u[1] >= 0xa1 && u[1] <= 0xfe)) ? 2 : 0;
+}
+
+// UHC (CP949): a first byte 0x81 - 0xfe and a second byte 0x41 - 0x5a, 0x61 - 0x7a, or 0x81 - 0xfe; no byte
+// 0x80 - 0xff is a character of its own (issue #6665)
+static qore_offset_t UHC_get_char_len(const char* p, size_t len) {
+    assert(len);
+    const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
+    if (u[0] < 0x80) {
+        return 1;
+    }
+    if (u[0] == 0x80 || u[0] == 0xff) {
+        return 0;
+    }
+    if (len < 2) {
+        return -2;
+    }
+    unsigned t = u[1];
+    return ((t >= 0x41 && t <= 0x5a) || (t >= 0x61 && t <= 0x7a) || (t >= 0x81 && t <= 0xfe)) ? 2 : 0;
+}
+
+// Johab (KS X 1001 Annex 3, CP1361): Hangul with a first byte 0x84 - 0xd3 and a second byte 0x41 - 0x7e or
+// 0x81 - 0xfe, and the other characters with a first byte 0xd8 - 0xde or 0xe0 - 0xf9 and a second byte 0x31 - 0x7e or
+// 0x91 - 0xfe; no byte 0x80 - 0xff is a character of its own (issue #6665)
+static qore_offset_t JOHAB_get_char_len(const char* p, size_t len) {
+    assert(len);
+    const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
+    if (u[0] < 0x80) {
+        return 1;
+    }
+    unsigned t;
+    if (u[0] >= 0x84 && u[0] <= 0xd3) {
+        if (len < 2) {
+            return -2;
+        }
+        t = u[1];
+        return ((t >= 0x41 && t <= 0x7e) || (t >= 0x81 && t <= 0xfe)) ? 2 : 0;
+    }
+    if ((u[0] >= 0xd8 && u[0] <= 0xde) || (u[0] >= 0xe0 && u[0] <= 0xf9)) {
+        if (len < 2) {
+            return -2;
+        }
+        t = u[1];
+        return ((t >= 0x31 && t <= 0x7e) || (t >= 0x91 && t <= 0xfe)) ? 2 : 0;
+    }
+    return 0;
 }
 
 // GB18030: as GBK, and four bytes when the second byte is a digit: 0x81 - 0xfe, 0x30 - 0x39, 0x81 - 0xfe, 0x30 - 0x39
@@ -1233,6 +1317,8 @@ static qore_offset_t GB18030_get_char_len(const char* p, size_t len) {
 
 // JIS X 0201 Roman/control bytes and half-width kana use one byte. JIS X 0208 Appendix 1
 // uses the lead ranges 81-9f and e0-ef. Windows-31J and other extended forms go through fc.
+// The bytes 0x80, 0xa0, and those after the last lead byte are not characters of any form (they are undefined in
+// Microsoft's code page 932 as well), so they are invalid (issue #6665).
 template <bool Extended>
 static qore_offset_t SJIS_get_char_len(const char* p, size_t len) {
     assert(len);
@@ -1242,8 +1328,7 @@ static qore_offset_t SJIS_get_char_len(const char* p, size_t len) {
     }
     constexpr unsigned last_lead = Extended ? 0xfc : 0xef;
     if (!((u[0] >= 0x81 && u[0] <= 0x9f) || (u[0] >= 0xe0 && u[0] <= last_lead))) {
-        // The Windows family also has single-byte extensions outside JIS X 0201.
-        return Extended ? 1 : 0;
+        return 0;
     }
     if (len < 2) {
         return -2;
@@ -1440,8 +1525,12 @@ struct multibyte_family {
 // in the order they are checked: an encoding is decoded as the first family that gives the length of every sample
 // character; the families with fewer multi-byte first bytes come first
 const multibyte_family multibyte_families[] = {
-    QORE_MULTIBYTE_FAMILY("EUC", EUC_get_char_len, 3, false),
-    QORE_MULTIBYTE_FAMILY("DBCS", DBCS_get_char_len, 2, false),
+    QORE_MULTIBYTE_FAMILY("EUC", (EUC_get_char_len<false, false>), 2, false),
+    // with the code sets 2 and 3 of EUC-JP
+    QORE_MULTIBYTE_FAMILY("EUC-SS", (EUC_get_char_len<false, true>), 3, false),
+    QORE_MULTIBYTE_FAMILY("DBCS", DBCS_get_char_len<false>, 2, false),
+    // with the euro sign 0x80 (CP936)
+    QORE_MULTIBYTE_FAMILY("DBCS-Euro", DBCS_get_char_len<true>, 2, false),
     QORE_MULTIBYTE_FAMILY("GB18030", GB18030_get_char_len, 4, false),
     // Shift_JIS is not ASCII-compatible: its bytes 0x5c and 0x7e are the yen sign and overline of JIS X 0201, and
     // iconv implementations and variants (ex: CP932) map them differently, so it is handled the same way on every
@@ -1449,7 +1538,37 @@ const multibyte_family multibyte_families[] = {
     // character boundary checks of all of these families
     QORE_MULTIBYTE_FAMILY("SJIS", SJIS_get_char_len<true>, 2, true),
 };
+
+// the encodings whose definitions Qore knows get the characters of their definitions, once probing has found that
+// they are multi-byte encodings of the same structure (issue #6665)
+const struct {
+    const char* name;
+    multibyte_family family;
+} named_multibyte_families[] = {
+    {"EUC-JP", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"EUC-KR", QORE_MULTIBYTE_FAMILY("EUC-KR", (EUC_get_char_len<true, false>), 2, false)},
+    {"GBK", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<true>, 2, false)},
+    {"CP936", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<true>, 2, false)},
+    {"Big5", QORE_MULTIBYTE_FAMILY("Big5", (Big5_get_char_len<0xa1, 0xf9>), 2, false)},
+    {"CP950", QORE_MULTIBYTE_FAMILY("CP950", (Big5_get_char_len<0x81, 0xfe>), 2, false)},
+    {"Big5-HKSCS", QORE_MULTIBYTE_FAMILY("Big5-HKSCS", (Big5_get_char_len<0x87, 0xfe>), 2, false)},
+    {"BIG5HKSCS", QORE_MULTIBYTE_FAMILY("Big5-HKSCS", (Big5_get_char_len<0x87, 0xfe>), 2, false)},
+    {"CP949", QORE_MULTIBYTE_FAMILY("UHC", UHC_get_char_len, 2, false)},
+    {"UHC", QORE_MULTIBYTE_FAMILY("UHC", UHC_get_char_len, 2, false)},
+    {"JOHAB", QORE_MULTIBYTE_FAMILY("JOHAB", JOHAB_get_char_len, 2, false)},
+    {"CP1361", QORE_MULTIBYTE_FAMILY("JOHAB", JOHAB_get_char_len, 2, false)},
+};
 #undef QORE_MULTIBYTE_FAMILY
+
+// returns the family of the encoding of the given name, if Qore knows its definition
+const multibyte_family* get_named_multibyte_family(const std::string& code) {
+    for (const auto& i : named_multibyte_families) {
+        if (!strcasecmp(code.c_str(), i.name)) {
+            return &i.family;
+        }
+    }
+    return nullptr;
+}
 
 // sample characters for the multi-byte encodings: Japanese (kanji, hiragana, katakana, half-width katakana, JIS X 0212
 // in EUC-JP), Chinese (GB2312, GBK, Big5, and a character outside the Basic Multilingual Plane, four bytes in
@@ -1612,7 +1731,9 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
       encoding form, is checked with Japanese, Chinese, and Korean sample characters; if it has multi-byte characters
       and one of the families in multibyte_families gives the length of every sample character (EUC, double-byte
       encodings such as GBK, Big5, or CP949, GB18030, Shift_JIS), it gets the character functions of the family, and
-      searches only match at character boundaries, as the second byte of a character can be an ASCII character.
+      searches only match at character boundaries, as the second byte of a character can be an ASCII character; an
+      encoding whose definition Qore knows (EUC-JP, EUC-KR, GBK, Big5 and its forms, UHC, Johab) then gets the bytes
+      of its definition (see named_multibyte_families).
       Such an encoding stays ASCII-compatible, except for the Shift_JIS family (see multibyte_families).  Code points
       are decoded with iconv (QoreEncoding::getUnicode()).
     - Character width of encodings that are not ASCII-compatible: each character of a sample is converted alone and
@@ -1770,6 +1891,10 @@ void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
         const multibyte_family* f = get_multibyte_family(convert);
         if (!f) {
             return false;
+        }
+        // an encoding whose definition Qore knows gets the characters of its definition
+        if (const multibyte_family* named = get_named_multibyte_family(code)) {
+            f = named;
         }
         fcharlen = f->charlen;
         flength = f->length;
