@@ -106,11 +106,10 @@ MongoCollection MongoDatabase::getCollection(string name) {
     }
     mongoc_collection_t* coll = database->getCollection(utf8_name->c_str());
     if (!coll) {
-        // the name is added to the message with its encoding
-        QoreStringNodeHolder desc(new QoreStringNode("failed to get collection '"));
-        desc->concat(name, xsink);
-        desc->concat('\'');
-        xsink->raiseException("MONGODB-DATABASE-ERROR", desc.release());
+        // the message is UTF-8, as the name given to the driver is
+        QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+        desc->sprintf("failed to get collection '%s'", utf8_name->c_str());
+        xsink->raiseException("MONGODB-DATABASE-ERROR", desc);
         return QoreValue();
     }
     return new QoreObject(QC_MONGOCOLLECTION, getProgram(),

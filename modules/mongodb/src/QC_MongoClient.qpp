@@ -158,11 +158,10 @@ MongoDatabase MongoClient::getDatabase(string name) {
     }
     mongoc_database_t* db = client->getDatabase(utf8_name->c_str());
     if (!db) {
-        // the name is added to the message with its encoding
-        QoreStringNodeHolder desc(new QoreStringNode("failed to get database '"));
-        desc->concat(name, xsink);
-        desc->concat('\'');
-        xsink->raiseException("MONGODB-CLIENT-ERROR", desc.release());
+        // the message is UTF-8, as the name given to the driver is
+        QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+        desc->sprintf("failed to get database '%s'", utf8_name->c_str());
+        xsink->raiseException("MONGODB-CLIENT-ERROR", desc);
         return QoreValue();
     }
     return new QoreObject(QC_MONGODATABASE, getProgram(), new QoreMongoDatabase(db, client->refSelf()));

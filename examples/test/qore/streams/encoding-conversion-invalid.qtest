@@ -486,7 +486,7 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         # a stateful target: each substituted character is converted on its own, so the text is compared
         binary out = readAll(data, "UTF-8", "UTF-7", 4096, ENCODING_ERRORS_LATIN1);
         assertEq(text, binary_to_string(readAll(out, "UTF-7", "UTF-8", 4096), "UTF-8"), "UTF-7");
-        # all 128 bytes above 0x7f, each substituted, also in UTF-16LE code units
+        # all 128 bytes above 0x7f, each substituted
         binary high = binary();
         for (int i = 0x80; i < 0x100; ++i) {
             high += chr(i, "ISO-8859-1").toBinary();
