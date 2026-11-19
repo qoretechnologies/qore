@@ -13362,10 +13362,18 @@ dispatch_folded_step_host:
                     if (sid != UINT32_MAX && sid < locals_slot_cache.size()) {
                         // raw slot: the weak reference of a foreach variable is read below
                         QoreValue cached_val = locals_slot_cache.storage(sid);
-                        bool cache_has_value = !cached_val.isNothing()
-                            || (is_ir_only_local && sid < locals_instantiated.size()
-                                && locals_instantiated[sid]);
                         qore_type_t cached_node_type = qore_ir_value_node_type(cached_val);
+                        bool cache_has_value = true;
+                        if (cached_node_type == NT_NOTHING) {
+                            // Inline values have no node. An instantiated IR-only slot can also hold NOTHING.
+                            cache_has_value = !qore_value_is_nothing(cached_val)
+                                || (is_ir_only_local && sid < locals_instantiated.size()
+                                    && locals_instantiated[sid]);
+                            if (cache_has_value && is_ir_only_local && !cached_val.needsRef()) {
+                                out = cached_val;
+                                goto load_local_done;
+                            }
+                        }
                         if (cache_has_value && isWeakReferenceType(cached_node_type)) {
                             // the variable of a foreach loop that was assigned a weak reference
                             // (AssignmentMode::Element) reads as its target, which is borrowed, as
