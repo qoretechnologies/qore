@@ -429,6 +429,15 @@ authenticate();
     hashes and lists are copy-on-write values.  A module that lets such code change a value exports a function or
     method that sets it.  See @ref module_public_variables.
 
+    Reading is not restricted: a class that sandboxed code derives from a public class of a module can read the
+    class's static members that are visible to subclasses (\c private, which is \c private:hierarchy), and call the
+    methods of the objects that they hold.  State that a class keeps for all of its callers (caches of objects and
+    connections, the callbacks and loggers of the host, the state of other callers' operations) is therefore
+    \c private:internal, which no subclass can see; a subclass that needs to use such state calls a method that the
+    class provides for it.  In the standard modules, the static members that a subclass of a public class can still
+    read are listed, each with the reason why every caller may read it, and a check of the sources
+    (\c examples/test/runner/test_module_shared_statics.py) fails for any other.
+
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
 
     A module is a capability: once it is loaded, its code runs with its own %Program's options, whatever the

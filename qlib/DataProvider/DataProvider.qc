@@ -431,7 +431,7 @@ public class DataProvider {
         const string NoApp = "$NO_APP";
     }
 
-    private {
+    private:internal {
         #! data provider factory cache
         static hash<string, AbstractDataProviderFactory> factory_cache = {};
 

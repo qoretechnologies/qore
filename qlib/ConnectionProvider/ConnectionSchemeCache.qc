@@ -430,7 +430,7 @@ public class ConnectionSchemeCache {
         };
     }
 
-    private {
+    private:internal {
         #! Connection provider cache
         static hash<string, hash<ConnectionSchemeInfo>> cache = {
             "ftp": FtpConnection::ConnectionScheme,

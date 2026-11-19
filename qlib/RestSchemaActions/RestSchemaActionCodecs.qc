@@ -62,12 +62,6 @@ public class RestSchemaActionCodecs {
     }
 
     private {
-        #! The codec registry, keyed by codec name
-        static hash<string, hash<RestSchemaWireCodecInfo>> codecmap = DefaultCodecs;
-
-        #! Serializes access to @ref codecmap
-        static Mutex lck();
-
         #! The codecs provided by this module
         const DefaultCodecs = {
             Base64OrUrl: <RestSchemaWireCodecInfo>{
@@ -150,6 +144,14 @@ public class RestSchemaActionCodecs {
                 },
             },
         };
+    }
+
+    private:internal {
+        #! The codec registry, keyed by codec name
+        static hash<string, hash<RestSchemaWireCodecInfo>> codecmap = DefaultCodecs;
+
+        #! Serializes access to @ref codecmap
+        static Mutex lck();
     }
 
     #! Registers a codec, replacing any codec already registered under the same name
