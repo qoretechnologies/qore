@@ -229,8 +229,13 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making an HTTP call
     */
     private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
-        hash<auto> resp = request(scheme, location, opts, "GET");
-        string text = HttpIoSupport::getStringBody(resp, opts.encoding ?? HttpIoSupport::DefaultAssumedEncoding);
+        # the text is decoded without a check, which the encoding_errors option makes below; the rule of the HTTP
+        # clients for a response body would give text that is not valid in its encoding in ISO-8859-1 (qore#6604)
+        hash<auto> resp = request(scheme, location, opts, "GET", NOTHING, False);
+        string assumed = opts.encoding ?? HttpIoSupport::DefaultAssumedEncoding;
+        # the HttpClientIo module is loaded when the request is made
+        resp = call_static_method("HttpClientIo::HttpClientStreamHandle", "decodeResponseText", resp, assumed, "keep");
+        string text = HttpIoSupport::getStringBody(resp, assumed);
         return AbstractFileLocationHandler::checkTextEncoding(text, opts.encoding_errors,
             AbstractFileLocationHandler::getRequestedLocation(scheme, location));
     }
@@ -419,7 +424,9 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         *string enc = get_http_body_encoding(content_type, start, assumed);
         if (enc && start) {
             # a byte order mark is not part of the text: the decoded start of the body is shorter by its size
-            data decoded = decode_http_body(content_type, start, assumed);
+            # only the size of the byte order mark is taken from it: the start of the body can end inside a
+            # character, so its text is not checked here (the StreamReader checks the text that it reads)
+            data decoded = decode_http_body(content_type, start, assumed, "keep");
             int bom_len = start.size() - decoded.size();
             if (bom_len) {
                 start = start.substr(bom_len);

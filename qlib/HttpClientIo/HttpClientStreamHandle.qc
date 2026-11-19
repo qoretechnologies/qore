@@ -1257,8 +1257,14 @@ public class HttpClientStreamHandle {
         @param resp the response, whose body has no content encoding left to decompress; see
         @ref normalizeResponseBody()
         @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+        @param encoding_errors what text that is not valid in its encoding gives (see
+        @ref Qore::decode_http_body() "decode_http_body()"): by default (\c "latin1"), the rule of the HTTP clients
+        for a response body; \c "keep" gives it without a check, for a caller that checks it itself
 
         @return the response with the body decoded
+
+        @throw INVALID-ENCODING the body is text of a structured type that is not valid in its encoding (or any text
+        that is not, with \a encoding_errors \c "raise")
 
         @par Example:
         @code{.py}
@@ -1271,7 +1277,8 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
 
         @since HttpClientIo 1.0
     */
-    static hash<auto> decodeResponseText(hash<auto> resp, string assumed_encoding = "ISO-8859-1") {
+    static hash<auto> decodeResponseText(hash<auto> resp, string assumed_encoding = "ISO-8859-1",
+            string encoding_errors = "latin1") {
         if (resp.body.typeCode() == NT_BINARY && resp.body) {
             *string body_ct = getResponseContentType(resp);
             # a character encoding misused as a content encoding is the charset of the body, as with HTTPClient
@@ -1279,7 +1286,8 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
             if (charset && (!body_ct || body_ct !~ /;\s*charset\s*=/i)) {
                 body_ct = (body_ct ?? "text/plain") + "; charset=" + charset;
             }
-            resp.body = decode_http_body(body_ct, resp.body, assumed_encoding);
+            # by default the rule of the HTTP clients for a response body (qore#6604)
+            resp.body = decode_http_body(body_ct, resp.body, assumed_encoding, encoding_errors);
         }
         return resp;
     }

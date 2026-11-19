@@ -4333,19 +4333,23 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     */
     static string decodeRequestText(hash<auto> hdr, binary body, string assumed_encoding) {
         auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
-        data rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed_encoding);
+        data rv;
+        try {
+            rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed_encoding, "raise");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "INVALID-ENCODING") {
+                throw "HTTP-BODY-ENCODING-ERROR", sprintf("the request body of %d bytes has an invalid encoding: %s",
+                    body.size(), ex.desc);
+            }
+            rethrow;
+        }
         if (rv.typeCode() != NT_STRING) {
             # binary data has no encoding: it is never refused, and is given in ISO-8859-1 when its bytes are not
             # valid in the assumed encoding
             string str = body.toString(assumed_encoding);
             return str.isEncodingValid() ? str : body.toString("ISO-8859-1");
         }
-        string str = rv;
-        if (!str.isEncodingValid()) {
-            throw "HTTP-BODY-ENCODING-ERROR", sprintf("the request body of %d bytes has an invalid encoding: it is "
-                "not valid text in encoding %s", body.size(), str.encoding());
-        }
-        return str;
+        return rv;
     }
 
     #! Returns the maximum size in bytes of a decompressed request body for this handler
