@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the scripts run in child processes that set their own --exec-mode, or as AOT executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class SummaryRaiseLocationTest
+
+#! an exception raised by a summary that replaces a call in a qcc executable is located at its statement (qore#6673)
+/** A call that a qcc executable replaces with the summary of the callee ran the callee in an inline frame at the
+    location of the callee's body (its first return or first statement), so an exception that an operation of
+    another statement raised was located there.  The output of the script next to the test, which calls such callees
+    directly, must be that of the AST interpreter (its .expected file) in every execution mode, on the IR tier and as
+    AOT executables.
+*/
+class SummaryRaiseLocationTest inherits QUnit::Test {
+    public {
+        #! the scripts
+        const Scripts = ("summary-raise-location",);
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("summary raise location", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        # the script's code is top-level code, which runs once: too few times for tiered execution to compile it, so
+        # native code is only required with JIT execution
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
+        foreach string script in (Scripts) {
+            addTestCase(script + ": execution modes", \modesTest(), script);
+            addTestCase(script + ": AOT executable -O0", \aotTest(), (script, "-O0"));
+            addTestCase(script + ": AOT executable -O3", \aotTest(), (script, "-O3"));
+        }
+        set_return_value(main());
+    }
+
+    #! returns the output of the AST interpreter for the script
+    private string astOutput(string script) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s/%s.q", env, qore_bin, dir, script));
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest(string script) {
+        string exp = astOutput(script);
+        assertEq(ReadOnlyFile::readTextFile(sprintf("%s/%s.expected", dir, script)), exp,
+            script + ": the output of the AST interpreter");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/%s.q", env, qore_bin, mode, dir,
+                script)), script + ": " + mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s/%s.q", env, qore_bin, dir,
+            script)), script + ": " + ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string script, string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("summary-raise-location-aot-");
+        string exe = tmp.path + "/" + script;
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s/%s.q", env, qcc_bin, opt, exe, dir, script));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(astOutput(script), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), script + ": AOT " + opt);
+    }
+}
