@@ -3991,6 +3991,9 @@ public:
     DLLLOCAL int parseCheckMemberAccess(const QoreProgramLocation* loc, const char* mem,
             const QoreTypeInfo*& memberTypeInfo, int pflag) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
+        // the members of the base classes must be imported to check the access of a member reached through more than
+        // one of them (issue #6640): parseInit() can initialize the class partially without them
+        const_cast<qore_class_private*>(this)->initializeMembers();
 
         const qore_class_private* qc = nullptr;
         ClassAccess access;
@@ -4028,8 +4031,11 @@ public:
 
         memberTypeInfo = omi->getTypeInfo();
 
-        // only raise a parse error for illegal access to private members if there is not memberGate function
-        if ((access > Public) && !parseHasMemberGate() && !parseCheckPrivateClassAccess()) {
+        // only raise a parse error for illegal access to private members if there is not memberGate function; a member
+        // inherited through a class inherited with private:internal only in this class or a class that it inherits
+        // (issue #6640)
+        if ((access > Public) && !parseHasMemberGate()
+                && (!parseCheckPrivateClassAccess() || !parseCheckInheritedInternalMemberAccess(omi, qc, access))) {
             memberTypeInfo = nullptr;
             parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
             return -1;
@@ -4039,10 +4045,19 @@ public:
 
     DLLLOCAL int parseResolveInternalMemberAccess(const char* mem, const QoreTypeInfo*& memberTypeInfo) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
+        // the members of the base classes must be imported, so that a member that this class cannot access is found
+        // with its access in this class (issue #6667): parseInit() can initialize the class partially without them
+        const_cast<qore_class_private*>(this)->initializeMembers();
 
         const qore_class_private* qc = nullptr;
         ClassAccess access;
         const QoreMemberInfo* omi = parseFindMember(mem, qc, access);
+        // a member that the class cannot access, reached only through a base class inherited with private:internal
+        // by a base class (access Inaccessible in the merged member table), is not a candidate for a name in the
+        // class (issue #6667)
+        if (omi && access == Inaccessible) {
+            omi = nullptr;
+        }
         if (omi) {
             memberTypeInfo = omi->getTypeInfo();
         }
@@ -4170,6 +4185,52 @@ public:
         return info;
     }
 
+    //! returns true if the member found with runtimeGetMemberInfo() can be used in the class context (issue #6640)
+    /** this = the object's class; \a class_ctx as for runtimeGetMemberInfo(): set only if it has private access to
+        this class.  A member that is not public needs a class context; a member that this class inherits through a
+        class that it inherits with \c private:internal (access \c Internal, not declared here) needs the class
+        context of this class, or of a class that this class inherits and that is or inherits the class that declares
+        the member (whose own methods use it on the objects of this class): a subclass of this class, another base
+        class of it or another class with private access to it cannot use it
+    */
+    DLLLOCAL bool runtimeCheckMemberAccess(const QoreMemberInfo* info, const qore_class_private* class_ctx) const {
+        // the usual cases inline, so that the member access stays small enough to be inlined in its callers
+        if (info->access <= Public) {
+            return true;
+        }
+        if (!class_ctx) {
+            return false;
+        }
+        if (info->access != Internal || info->local() || class_ctx == this) {
+            return true;
+        }
+        return checkInheritedInternalMemberContext(class_ctx, info->getClass());
+    }
+
+    //! returns true if \a class_ctx can use a member declared in \a decl that this class inherits through a class
+    //! inherited with \c private:internal: it is this class, or a class that this class inherits and that is or
+    //! inherits \a decl (issue #6640); not inline, as it walks the class hierarchy
+    DLLLOCAL bool checkInheritedInternalMemberContext(const qore_class_private* class_ctx,
+            const qore_class_private* decl) const;
+
+    //! returns true if a member found with parseFindMember() can be used in the parse class context (issue #6640)
+    /** As runtimeCheckMemberAccess() for a member inherited through a class inherited with \c private:internal; the
+        other access rules are checked by the caller
+
+        @param info the member found
+        @param qc the class that declares the member, as returned by parseFindMember()
+        @param access the access of the member in this class, as returned by parseFindMember()
+    */
+    DLLLOCAL bool parseCheckInheritedInternalMemberAccess(const QoreMemberInfo* info, const qore_class_private* qc,
+            ClassAccess access) const {
+        // a private:internal member declared in this class is checked by the caller
+        if (access < Internal || (info->local() && qc == this)) {
+            return true;
+        }
+        const qore_class_private* class_ctx = parse_get_class_priv();
+        return class_ctx && checkInheritedInternalMemberContext(class_ctx, qc);
+    }
+
     //! returns the member that a call of the name made through the code that a member holds may use (qore#6487)
     /** this = the object's class; a call through a member (`o.x(...)` where `x` is a member that holds a closure or a
         call reference) applies the access rules of a read of the member, exactly: the class context is used only if
@@ -4189,7 +4250,7 @@ public:
             class_ctx = nullptr;
         }
         const QoreMemberInfo* info = runtimeGetMemberInfo(mem, class_ctx);
-        if (info && info->access > Public && !class_ctx) {
+        if (info && !runtimeCheckMemberAccess(info, class_ctx)) {
             return nullptr;
         }
         return info;

@@ -532,7 +532,8 @@ int qore_object_private::checkMemberAccess(const char* mem, const qore_class_pri
         return theclass->hasPublicMembersInHierarchy() ? QOA_PUB_ERROR : QOA_OK;
     }
     member_class_ctx = info->getClassContext(class_ctx);
-    return ((info->access > Public) && !class_ctx) ? QOA_PRIV_ERROR : QOA_OK;
+    // the member's access in the class context, also through a class inherited with private:internal (issue #6640)
+    return theclass_priv->runtimeCheckMemberAccess(info, class_ctx) ? QOA_OK : QOA_PRIV_ERROR;
 }
 
 // returns true if a lock error has occurred and the transaction should be aborted or restarted; the rsection lock is
@@ -1014,7 +1015,26 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
 
     // return all member data if called inside the class
     if (class_ctx) {
-        QoreHashNode* h = data->copy();
+        const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+        QoreHashNode* h;
+        // only a class with Internal, Inaccessible or contextual member entries can hide a member from a class context
+        if (class_ctx == theclass_priv
+                || (theclass_priv->members.isFrozen() && !theclass_priv->members.hasInternalEntries())) {
+            h = data->copy();
+        } else {
+            // the members that the class context can use on the object: not those that the object's class inherits
+            // through a class inherited with private:internal outside its line (issue #6640)
+            h = new QoreHashNode(autoTypeInfo);
+            ConstHashIterator hi(data);
+            while (hi.next()) {
+                const QoreMemberInfo* info = theclass_priv->runtimeGetMemberInfo(hi.getKey(), class_ctx);
+                if (info && !theclass_priv->runtimeCheckMemberAccess(info, class_ctx)) {
+                    continue;
+                }
+                // not possible for an exception to happen here
+                qore_hash_private::get(*h)->setKeyValueIntern(hi.getKey(), hi.getReferenced());
+            }
+        }
         const QoreHashNode* odata = getInternalData(class_ctx);
         if (odata)
             h->merge(odata, xsink);
