@@ -26,6 +26,10 @@
     checks the database name, if it is an absolute path, with qore_dbi_check_connect_path() for reading.
     <tt>select("restricted")</tt> returns qore_dbi_connect_restricted() for the connection.
 
+    <tt>select("address <address>")</tt> and <tt>select("address <host> <address>")</tt> check a numeric address
+    (IPv4 or IPv6) that a connection of the driver reached with qore_dbi_check_connect_address() (with the host name,
+    if given), and return \c True if it is allowed.
+
     The functions of the namespace \c DbiTargetProbe report how often the drivers were called:
     - <tt>opens()</tt>: the number of connections that the drivers opened
     - <tt>targetCalls()</tt>: the number of calls of the destination method of \c "dbitargetprobe"
@@ -55,6 +59,9 @@
 */
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
 #include <atomic>
 #include <cstring>
@@ -172,6 +179,40 @@ QoreValue probe_select(Datasource* ds, const QoreString* sql, const QoreListNode
 #ifdef QORE_HAS_DBI_CHECK_CONNECT_PATH
     if (!strcmp(str->c_str(), "restricted")) {
         return qore_dbi_connect_restricted(ds);
+    }
+#endif
+#ifdef QORE_HAS_DBI_CHECK_CONNECT_ADDRESS
+    if (!strncmp(str->c_str(), "address ", 8)) {
+        // "address <address>" or "address <host> <address>"
+        std::string rest(str->c_str() + 8);
+        std::string host, addr = rest;
+        size_t sp = rest.find(' ');
+        if (sp != std::string::npos) {
+            host = rest.substr(0, sp);
+            addr = rest.substr(sp + 1);
+        }
+        struct sockaddr_storage ss;
+        memset(&ss, 0, sizeof ss);
+        socklen_t len;
+        struct sockaddr_in* in4 = reinterpret_cast<struct sockaddr_in*>(&ss);
+        struct sockaddr_in6* in6 = reinterpret_cast<struct sockaddr_in6*>(&ss);
+        if (inet_pton(AF_INET, addr.c_str(), &in4->sin_addr) == 1) {
+            in4->sin_family = AF_INET;
+            in4->sin_port = htons(5432);
+            len = sizeof *in4;
+        } else if (inet_pton(AF_INET6, addr.c_str(), &in6->sin6_addr) == 1) {
+            in6->sin6_family = AF_INET6;
+            in6->sin6_port = htons(5432);
+            len = sizeof *in6;
+        } else {
+            xsink->raiseException("DBITARGETPROBE-ERROR", "invalid address '%s'", addr.c_str());
+            return QoreValue();
+        }
+        if (qore_dbi_check_connect_address(ds, host.empty() ? nullptr : host.c_str(),
+                reinterpret_cast<struct sockaddr*>(&ss), len, xsink)) {
+            return QoreValue();
+        }
+        return true;
     }
 #endif
     return QoreValue();

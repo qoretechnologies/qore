@@ -4606,6 +4606,39 @@ private:
                 return fail("scope enter/exit crosses region boundary");
             }
         }
+        // A closure created in the region that captures both a local of the region (instantiated in the helper)
+        // and a local that the coordinator shares with it cannot find the coordinator's local when it runs ("local
+        // variable ... is not instantiated in the current context"; found by compiling the test scripts with the
+        // outliner's thresholds forced low: qore#6560).  A closure capturing only one of the two kinds works.
+        for (size_t i = first; i <= last; ++i) {
+            for (const auto& inst_ptr : fn.blocks[i]->instructions) {
+                if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CreateClosure) {
+                    continue;
+                }
+                const auto* cci = static_cast<const QoreIRCreateClosureInstruction*>(inst_ptr.get());
+                const QoreClosureParseNode* closure = cci->closure_node
+                    ? cci->closure_node
+                    : qore_get_closure_parse_node(cci->expr.getInternalNode());
+                const LVarSet* vlist = closure ? closure->getVList() : nullptr;
+                if (!vlist) {
+                    continue;
+                }
+                bool captures_region_local = false;
+                bool captures_shared_local = false;
+                for (const LocalVar* lv : *vlist) {
+                    auto it = local_info.find(lv);
+                    if (it != local_info.end() && it->second.min_ref >= first && it->second.max_ref <= last
+                            && body_local_set.count(reinterpret_cast<const void*>(lv))) {
+                        captures_region_local = true;
+                    } else {
+                        captures_shared_local = true;
+                    }
+                }
+                if (captures_region_local && captures_shared_local) {
+                    return fail("closure captures locals of both the region and the coordinator");
+                }
+            }
+        }
         // Classify referenced locals.
         for (const LocalVar* lv : region_locals) {
             auto it = local_info.find(lv);
@@ -7198,8 +7231,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                         && call->pseudo_base_known_assigned_string
                         && call->operands.size() == 1
                         && (call->intrinsic == QoreIRIntrinsic::Size
-                            || call->intrinsic == QoreIRIntrinsic::StringStrlen
-                            || call->intrinsic == QoreIRIntrinsic::StringLength);
+                            || call->intrinsic == QoreIRIntrinsic::StringStrlen);
                     if (!context_free_string_size) {
                         return false;
                     }
@@ -7542,12 +7574,6 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
                 return false;
             }
             result.kind = AOTStringOpKind::Size;
-            break;
-        case QoreIRIntrinsic::StringLength:
-            if (operation->operands.size() != 1) {
-                return false;
-            }
-            result.kind = AOTStringOpKind::Length;
             break;
         case QoreIRIntrinsic::StringStartsWith:
         case QoreIRIntrinsic::StringEndsWith:
@@ -11050,8 +11076,6 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
                 if (intrinsic == QoreIRIntrinsic::Size
                         || intrinsic == QoreIRIntrinsic::StringStrlen) {
                     source_kind = AOTComposedIntSourceKind::StringSize;
-                } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-                    source_kind = AOTComposedIntSourceKind::StringLength;
                 } else {
                     return false;
                 }
@@ -12155,8 +12179,6 @@ static bool qore_aot_collect_int_expression_summaries(
                 if (intrinsic == QoreIRIntrinsic::Size
                         || intrinsic == QoreIRIntrinsic::StringStrlen) {
                     kind = AOTIntExpressionNodeKind::HashKeyStringSize;
-                } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-                    kind = AOTIntExpressionNodeKind::HashKeyStringLength;
                 } else {
                     return false;
                 }
@@ -12188,11 +12210,6 @@ static bool qore_aot_collect_int_expression_summaries(
                         return false;
                     }
                     source_kind = AOTIntExpressionNodeKind::StringSize;
-                } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-                    if (inst->operands.size() != 1) {
-                        return false;
-                    }
-                    source_kind = AOTIntExpressionNodeKind::StringLength;
                 } else {
                     auto arg = inst->operands.size() >= 2
                         ? boxed_values.find(inst->operands[1].id) : boxed_values.end();

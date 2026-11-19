@@ -1168,6 +1168,9 @@ private:
         //! when a break, a continue or a return releases the locals of an Lvars or CatchVar entry goes there, to the
         //! cleanups of the enclosing blocks and the handler that encloses them, as when the block ends (qore#6084)
         QoreIRBasicBlock* outer_exception_target = nullptr;
+        //! the size of the exception stack where the entry was pushed (its top is outer_exception_target): the code
+        //! that a non-local exit lowers after the entry's cleanup has the exception targets outside the entry (qore#6643)
+        size_t exception_depth = 0;
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         //! the runtime location of the cleanup: the location of the statement whose code the entry's block is, where
         //! the block was entered (QoreIRBuilder::getStatementLocation()); an exit that leaves the block from a

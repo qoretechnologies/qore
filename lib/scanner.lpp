@@ -52,6 +52,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include "parser.hpp"
 
@@ -412,7 +413,7 @@ static void scanner_process_path(QoreString& npath, char* ip) {
 
              if (tpath[0] == '.' && tpath[1] == '.') {
                 // substitue program path if available
-                const char* sp = getProgram()->parseGetScriptDir();
+                const char* sp = qore_program_ops(getProgram()).parseGetScriptDir();
                 if (sp) {
                    size_t l = strlen(sp);
                    if (tpath[0] != '/' && tpath[0] != '\\' && sp[l-1] != '/' && sp[l-1] != '\\')
@@ -488,7 +489,7 @@ static QoreString* get_include_file_name(char* file) {
     QoreString *rv;
 
     // check in current directory of script first
-    const char* sp = getProgram()->parseGetScriptDir();
+    const char* sp = qore_program_ops(getProgram()).parseGetScriptDir();
     if (sp) {
         rv = findFileInPath(file, sp);
         if (rv) {
@@ -500,7 +501,7 @@ static QoreString* get_include_file_name(char* file) {
     qore_program_private::setLoadDependentParse(getProgram());
     rv = findFileInEnvPath(file, "QORE_INCLUDE_DIR");
     if (!rv) {
-        const char* pp = getProgram()->parseGetIncludePath();
+        const char* pp = qore_program_ops(getProgram()).parseGetIncludePath();
         if (pp) {
             rv = findFileInPath(file, pp);
         }
@@ -540,7 +541,7 @@ static void set_include_path(const char* path) {
     scanner_process_path(npath, ip);
 
     //printd(5, "setting include path: '%s'\n", npath.c_str());
-    getProgram()->parseSetIncludePath(npath.c_str());
+    qore_program_ops(getProgram()).parseSetIncludePath(npath.c_str());
 }
 
 // the parse directives that access the filesystem record it in the functional domain of the Program (see
@@ -2216,7 +2217,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                        qore_program_private::get(*pgm)->collectModuleLoadErrors(*loc,
                                                           xsink);
                                                     }
-                                                    pgm->getParseExceptionSink()->assimilate(xsink);
+                                                    qore_program_ops(pgm).getParseExceptionSink()->assimilate(xsink);
                                                  }
                                               }
                                            }

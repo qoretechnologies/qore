@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include <qore/intern/QorePluginRegistry.h>
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreBinaryAndOperatorNode::op_str("& (binary and) operator expression");
 
@@ -93,7 +94,7 @@ int QoreBinaryAndOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
     if (!err) {
         QorePluginResolvedOperationInfo plugin_op;
-        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        ExceptionSink* parse_xsink = parse_context.pgm ? qore_program_ops(parse_context.pgm).getParseExceptionSink() : nullptr;
         int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, parse_context.typeInfo,
             "bit_and", QorePluginHelperAbi::BinaryValue, plugin_op, parse_xsink);
         if (plugin_rc < 0) {

@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StringBase64Test
+
+#! Tests the C++ API's base64 decoding methods that return a string
+/** The overloads of QoreString::parseBase64UrlToString() and QoreStringNode::parseBase64UrlToString() without an
+    encoding decoded with the base64 alphabet instead of the base64url one (issue #6621).
+*/
+class StringBase64Test inherits QUnit::Test {
+    public {
+        # bytes whose base64url text has '-' and '_' and no padding
+        const Data = <fbffbf3e>;
+        const UrlText = "-_-_Pg";
+        const Base64Text = "+/+/Pg==";
+    }
+
+    constructor() : QUnit::Test("StringBase64Test", "1.0", \ARGV) {
+        addTestCase("base64url methods", \testBase64Url());
+        addTestCase("base64 methods", \testBase64());
+        addTestCase("Qore functions", \testFunctions());
+        set_return_value(main());
+    }
+
+    testBase64Url() {
+        assertEq(UrlText, make_base64_url_string(Data));
+        foreach bool node in ((False, True)) {
+            string label = node ? "QoreStringNode" : "QoreString";
+            hash<auto> h = cpp_api_string_parse_base64(UrlText, True, node);
+            assertEq(Data, binary(h.str), label + ": the default encoding");
+            assertEq(get_default_encoding(), h.encoding, label + ": the default encoding");
+
+            h = cpp_api_string_parse_base64(UrlText, True, node, "ISO-8859-1");
+            assertEq(Data, binary(h.str), label + ": an encoding");
+            assertEq("ISO-8859-1", h.encoding, label + ": an encoding");
+
+            # the characters of the base64 alphabet that are not in the base64url one
+            assertThrows("BASE64-PARSE-ERROR", \cpp_api_string_parse_base64(), (Base64Text, True, node));
+            assertThrows("BASE64-PARSE-ERROR", \cpp_api_string_parse_base64(), (Base64Text, True, node,
+                "ISO-8859-1"));
+        }
+    }
+
+    testBase64() {
+        foreach bool node in ((False, True)) {
+            string label = node ? "QoreStringNode" : "QoreString";
+            hash<auto> h = cpp_api_string_parse_base64(Base64Text, False, node);
+            assertEq(Data, binary(h.str), label + ": the default encoding");
+            assertEq(get_default_encoding(), h.encoding, label + ": the default encoding");
+
+            h = cpp_api_string_parse_base64(Base64Text, False, node, "ISO-8859-1");
+            assertEq(Data, binary(h.str), label + ": an encoding");
+            assertEq("ISO-8859-1", h.encoding, label + ": an encoding");
+
+            # the characters of the base64url alphabet that are not in the base64 one
+            assertThrows("BASE64-PARSE-ERROR", \cpp_api_string_parse_base64(), (UrlText, False, node));
+        }
+    }
+
+    testFunctions() {
+        assertEq(Data, parse_base64_url_string(UrlText));
+        string str = parse_base64_url_string_to_string(UrlText);
+        assertEq(Data, binary(str));
+        assertEq(get_default_encoding(), str.encoding());
+        str = parse_base64_url_string_to_string(UrlText, "ISO-8859-1");
+        assertEq(Data, binary(str));
+        assertEq("ISO-8859-1", str.encoding());
+        assertThrows("BASE64-PARSE-ERROR", \parse_base64_url_string_to_string(), Base64Text);
+        assertThrows("BASE64-PARSE-ERROR", \parse_base64_string_to_string(), UrlText);
+    }
+}

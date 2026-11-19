@@ -48,6 +48,7 @@
 */
 class QoreThreadLock {
     friend class QoreCondition;
+    friend class qore_condition_ops;
 
 public:
     //! creates the lock

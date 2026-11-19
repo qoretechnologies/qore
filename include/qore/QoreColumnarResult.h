@@ -142,21 +142,6 @@ public:
     DLLEXPORT static QoreColumnarResult* fromRows(const QoreListNode* rows, const QoreHashNode* desc,
         ExceptionSink* xsink);
 
-    //! Creates a columnar result from a hash-of-lists given by a script (ColumnarResult::fromColumnHash())
-    /** As fromColumnHash(), except that a value in a column stored as a dense integer buffer must be an int, float,
-        number, numeric string (an optional sign and decimal digits, with optional surrounding whitespace, whose value
-        fits in an int64), NULL or NOTHING; any other value raises \c COLUMNAR-RESULT-ERROR.  A float or number is
-        converted as by QoreValue::getAsBigInt() (truncated toward zero).
-    */
-    DLLLOCAL static QoreColumnarResult* fromScriptColumnHash(const QoreHashNode* columns, const QoreHashNode* desc,
-        ExceptionSink* xsink);
-
-    //! Creates a columnar result from row hashes given by a script (ColumnarResult::fromRows())
-    /** Values are checked as by fromScriptColumnHash().
-    */
-    DLLLOCAL static QoreColumnarResult* fromScriptRows(const QoreListNode* rows, const QoreHashNode* desc,
-        ExceptionSink* xsink);
-
     //! Creates a columnar result from a serialized payload.
     /** @param sdata serialized payload produced by serialize()
         @param xsink exception sink for validation, allocation, and cancellation errors
@@ -284,10 +269,6 @@ public:
     //! Returns a referenced column container by name.
     DLLEXPORT QoreValue getColumnValue(const char* name, ExceptionSink* xsink) const;
 
-    //! Called once the result is the private data of the object: the object reports its column containers
-    /** @since %Qore 3.0 */
-    DLLLOCAL void attach(QoreObject& self) const;
-
     //! Reports the column containers that can be part of a cycle to the garbage collector
     /** The columns do not change once the result is the private data of an object, so no lock is needed.
 
@@ -299,22 +280,11 @@ protected:
     DLLEXPORT virtual ~QoreColumnarResult();
 
 private:
+    friend class qore_columnar_result_private;
+
     std::vector<Column> columns;
     size_t row_count = 0;
 
-    DLLLOCAL int setRowCount(size_t n_rows, ExceptionSink* xsink);
-
-    //! Adds a column; @a flags select the conversion and the check of the schema, which raises @a err
-    DLLLOCAL int addColumnIntern(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
-        int flags, const char* err, ExceptionSink* xsink);
-
-    //! Creates a columnar result from a hash-of-lists, checking script values if @a script_values is true
-    DLLLOCAL static QoreColumnarResult* fromColumnHashIntern(const QoreHashNode* columns, const QoreHashNode* desc,
-        bool script_values, ExceptionSink* xsink);
-
-    //! Creates a columnar result from row hashes, checking script values if @a script_values is true
-    DLLLOCAL static QoreColumnarResult* fromRowsIntern(const QoreListNode* rows, const QoreHashNode* desc,
-        bool script_values, ExceptionSink* xsink);
 };
 
 //! Creates a Qore SQL::ColumnarResult object taking ownership of @a result.

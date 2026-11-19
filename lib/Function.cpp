@@ -86,6 +86,7 @@
 
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 static bool qore_is_non_optional_soft_type(const QoreTypeInfo* ti) {
     return ti == softBigIntTypeInfo
@@ -1841,7 +1842,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     dbg_runtime_chosen_variant = qore_dbg_runtime_chosen_variant;
     qore_dbg_runtime_chosen_variant = false;
 #endif
-    sandbox_provenance.set(self);
+    QoreSandboxProvenanceHelper::set(self);
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
@@ -5370,7 +5371,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
                 if (rc == QTI_NOT_EQUAL) {
                     ok = false;
-                    if (ilist.size() == 1 && aqf->vlist.singular() && pgm->getParseExceptionSink()) {
+                    if (ilist.size() == 1 && aqf->vlist.singular() && qore_program_ops(pgm).getParseExceptionSink()) {
                         return doSingleVariantTypeException(loc, pi, *i, aqf->className(), getName(), sig, t, a,
                             receiver_type_info, &candidate_inst);
                     }
@@ -5476,7 +5477,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
     if (!variant && pvariant) {
         variant = pvariant;
-    } else if (!variant && !runtime_match && pmatch == -1 && pgm->getParseExceptionSink()) {
+    } else if (!variant && !runtime_match && pmatch == -1 && qore_program_ops(pgm).getParseExceptionSink()) {
         name_vec_t accessibleParamNames;
         if (named_callable_cnt) {
             last_class = 0;
@@ -5618,7 +5619,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 "CALL-WITH-TYPE-ERRORS", desc);
         }
 
-        if (pgm->getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
+        if (qore_program_ops(pgm).getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
                 best_binding.arg_types, receiver_type_info, &best_type_param_inst) && !err) {
             err = -1;
         }
@@ -5669,7 +5670,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
     };
     auto conflict_error = [&] (const AbstractQoreFunctionVariant* bind_variant,
             const AbstractQoreFunctionVariant* conflict) {
-        if (!pgm->getParseExceptionSink()) {
+        if (!qore_program_ops(pgm).getParseExceptionSink()) {
             return;
         }
         QoreStringNode* desc = new QoreStringNode("named call '");
@@ -6765,7 +6766,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     if (rc == QTI_NOT_EQUAL) {
                         ok = false;
                         // raise a detailed parse exception immediately if there is only one variant
-                        if (ilist.size() == 1 && aqf->vlist.singular() && pgm->getParseExceptionSink()) {
+                        if (ilist.size() == 1 && aqf->vlist.singular() && qore_program_ops(pgm).getParseExceptionSink()) {
                             return doSingleVariantTypeException(loc, pi, *i, aqf->className(), getName(), sig, t, a,
                                 receiver_type_info, &candidate_inst);
                         }
@@ -6915,7 +6916,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
             type_param_inst->clear();
         }
     }
-    if (!variant && !runtime_match && pmatch == -1 && pgm->getParseExceptionSink()) {
+    if (!variant && !runtime_match && pmatch == -1 && qore_program_ops(pgm).getParseExceptionSink()) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
         do_call_str(*desc, this, argTypeInfo, explicit_type_args, receiver_type_info);
         desc->concat("' can be found; ");
@@ -6979,7 +6980,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                 "CALL-WITH-TYPE-ERRORS", desc);
         }
 
-        if (pgm->getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
+        if (qore_program_ops(pgm).getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
                 argTypeInfo, receiver_type_info, &best_type_param_inst) && !err) {
             err = -1;
         }

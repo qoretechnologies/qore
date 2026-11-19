@@ -2324,7 +2324,8 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
         if (*req_path) {
             // the parse lookup reads the parse options of the current Program, which is not set on a thread that
             // loads a compiled program, and can be another Program; the options of the target Program apply
-            // (qore#6026)
+            // (qore#6026); a lookup, which runs no code of the Program, so the Program is only made current, not
+            // entered (qore#6185)
             QoreProgramContextHelper pch(pgm);
             qc = qore_root_ns_private::parseFindClass(*pp->RootNS, &loc_builtin, req_path);
         }
@@ -5968,6 +5969,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // run while the global AOT init lock is held, and taking a Program parse lock here can invert lock
                 // order with another loader thread that already holds the Program parse lock and is waiting for AOT
                 // init.
+                // The record is only read and the closure constructed: no code of the Program runs, so the Program is
+                // only made current, not entered (qore#6185).
                 QoreProgramContextHelper closure_pch(pgm);
 
                 // Read flags
@@ -6407,7 +6410,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::CONST_VALUE: {
                 std::string value_error;
-                // the Program resolves the hashdecls and types of typed container values (#5895)
+                // the Program resolves the hashdecls and types of typed container values (#5895); reading the value
+                // runs no code of the Program, so it is only made current, not entered (qore#6185)
                 QoreValue value;
                 {
                     QoreProgramContextHelper value_pch(pgm);
@@ -14638,10 +14642,10 @@ static int executeInitFunctions(
         return nullptr;
     };
 
-    // ProgramRuntimeParseContextHelper can set td->current_pgm without setting
-    // td->tlpd. Init functions that construct objects need td->tlpd for
-    // thread_instantiate_lvar() (for example SelfInstantiatorHelper in
-    // initMembers), so keep the bridge for nested parse-context callers.
+    // A thread can have td->current_pgm without td->tlpd (a binary module's initialization, before any entry; a
+    // switch of the current Program to one where the thread has no data yet, which does not create it: qore#6537).
+    // Init functions that construct objects need td->tlpd for
+    // thread_instantiate_lvar() (for example SelfInstantiatorHelper in initMembers), so keep the bridge.
     thread_ensure_local_program_data();
 
     // only the debug log reads it
