@@ -1566,6 +1566,31 @@ public:
     // issue #6393: copies the context entries of the given member, which shares the storage of this member
     DLLLOCAL void addContextMap(const QoreMemberInfo& mi);
 
+    //! merges the same declaration reached through another path of the hierarchy of the class (qore#6523)
+    /** A member declared in a class that the hierarchy reaches through several paths is one member of the object
+        with the least restrictive access of the paths: if it is accessible through one of them, its value is in the
+        standard object data for every class context; otherwise it is in the storage of the first path, for the
+        class contexts of every path
+
+        @param mi the member as it is in the base class of the other path
+        @param mi_access the access that the member has in this class through the other path; if this member is not
+        accessible, neither is \a mi
+    */
+    DLLLOCAL void mergeDeclarationPath(const QoreMemberInfo& mi, ClassAccess mi_access);
+
+    //! adds the class contexts that access this declaration of the member to \a ctx (qore#6523)
+    DLLLOCAL void getDeclarationContexts(std::set<const qore_class_private*>& ctx) const;
+
+    //! copies the context entries of the given member (qore#6523)
+    /** The entries of a declaration that this member has already (reached through another path of the hierarchy) get
+        the storage that this member gives it; the entries of this declaration are not copied if this member is
+        accessible (its value is in the standard object data)
+    */
+    DLLLOCAL void mergeContextMap(const QoreMemberInfo& mi);
+
+    //! removes the context entries of the class contexts of this declaration of an accessible member (qore#6523)
+    DLLLOCAL void dropDeclarationContexts();
+
     DLLLOCAL void addContextAccessForClass(const qore_class_private* class_ctx,
             const qore_class_private* member_class_ctx);
 
@@ -3032,6 +3057,9 @@ public:
     */
     qore_ns_private* ns = nullptr;
     BCList* scl = nullptr;          // base class list
+    //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
+    //! the class (issue #3286)
+    bool parse_abr = false;
     qc_ref_map_t qcrefs;            // QoreClass pointers associated with this private object (besides cls)
 
     mutable VRMutex gate;           // for synchronized static methods
@@ -3412,6 +3440,37 @@ public:
     // Find a constant entry by name
     DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
 
+    //! the declarations with a name visible in the class (issue #3286)
+    struct name_kinds_t {
+        const qore_class_private* member = nullptr;
+        const qore_class_private* constant = nullptr;
+        const qore_class_private* var = nullptr;
+
+        DLLLOCAL unsigned count() const {
+            return (member ? 1 : 0) + (constant ? 1 : 0) + (var ? 1 : 0);
+        }
+
+        DLLLOCAL bool operator==(const name_kinds_t& o) const {
+            return member == o.member && constant == o.constant && var == o.var;
+        }
+    };
+
+    //! returns the class with an accessible constant with the name in the hierarchy, without initializing it; \a top
+    //! is true when the lookup is made from the class itself
+    DLLLOCAL const qore_class_private* parseFindConstantOwnerNoInit(const char* cname, bool top) const;
+    DLLLOCAL const qore_class_private* parseFindConstantOwnerNoInit(const char* cname, bool top,
+            std::vector<const qore_class_private*>& seen) const;
+
+    //! returns the declarations with the name visible in the class
+    DLLLOCAL name_kinds_t parseGetNameKinds(const char* n) const;
+
+    //! adds the names of the constants, members and static variables of the hierarchy
+    DLLLOCAL void parseGetHierarchyNames(std::set<std::string>& names,
+            std::vector<const qore_class_private*>& seen) const;
+
+    //! raises the language-traps warning for names that are a constant and a member or static variable (issue #3286)
+    DLLLOCAL void parseCheckNameKindClashes(QoreProgram* pgm);
+
     // add a base class to this class
     DLLLOCAL void addBaseClass(QoreClass* qc, bool virt);
 
@@ -3585,6 +3644,15 @@ public:
 
     DLLLOCAL bool hasAbstract() const {
         return !ahm.empty();
+    }
+
+    //! returns true if the class has abstract variants of the given method that it does not implement
+    /** A call of such a method whose variant is not a concrete variant resolved at parse time is resolved at run time
+        by name on the class of the object, which can inherit the implementation of an abstract variant from another
+        parent class than this one (issue #6161)
+    */
+    DLLLOCAL bool hasUnimplementedAbstractVariants(const char* mname) const {
+        return ahm.find(mname) != ahm.end();
     }
 
     //! records a public member declaration in the class: the class then declares its members (see

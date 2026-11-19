@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes and in qcc executables
+# test-platform: macos - the lifetime of method call receivers in the JIT code and the native code of qcc executables
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class WeakContainerReceiverLifetimeTest
+
+#! The receiver of a method call read through a weak reference from a foreach variable or a hash member lives as in
+#! the AST in every mode
+/** A method called on an object read through a weak reference that is not a := local, and that removes the last
+    strong reference to its own object (qore#6594): the AST interpreter keeps the object of a foreach variable whose
+    element is a weak reference until the call returns, and the object of a weak reference read from a hash member,
+    a temporary of the statement, until the statement ends.  The IR interpreter, the JIT and qcc executables
+    destroyed it at the removal (the method's next member read raised OBJECT-ALREADY-DELETED) or when the call
+    returned.
+
+    The functions of containers.q make such calls through typed and untyped foreach variables (also over a list that
+    holds weak references and strong values, and over nodes that are not weak references), through a hash member, a
+    member of a nested hash and a member of a hashdecl, in and out of a try block, in a loop, in a statement that makes
+    other calls after the method, with a method that raises (with and without a handler in the function), with a
+    receiver whose destructor raises, with a method that keeps the object, and on an object that was deleted before
+    the call; also through a member of an object, of the current object (with and without self.), a global variable
+    and a static class variable, which are read as hash members are, a hash read with a key expression and a list
+    element.  Their destructors log the order of the releases.  The output is compared with the AST in the ir, jit
+    and tiered modes and in executables made by qcc at -O0 and -O3, with and without function outlining.
+*/
+class WeakContainerReceiverLifetimeTest inherits QUnit::Test {
+    public {
+        #! the execution modes compared with the AST
+        const Modes = ("ir", "jit", "tiered");
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+        #! the environment of a run in which every function is compiled at its first call
+        const CompileEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1";
+        #! the environment of qcc that outlines the regions of small functions, or none
+        const OutlineEnv = {
+            "outlined": "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=40 QORE_AOT_OUTLINE_FN_MIN_BLOCKS=5 "
+                "QORE_AOT_OUTLINE_FN_TARGET_INSTS=30",
+            "not outlined": "QORE_AOT_OUTLINE_FN=0",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+    }
+
+    constructor() : QUnit::Test("WeakContainerReceiverLifetimeTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("the receiver of a call through a weak reference from a container lives as in the AST",
+            \receiverTest());
+        set_return_value(main());
+    }
+
+    #! Returns the output of the script \a path in \a mode
+    private string runMode(string path, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s -b --enable-debug "
+            "--exec-mode=%s %s", lib_env, CompileEnv, qore_bin, mode, path));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    #! Compiles \a src with qcc to \a out with the options \a opts in the environment \a env; returns its output
+    private string compile(string src, string out, string opts, string env) {
+        int rc;
+        string output = backquote(sprintf("%s %s %s %s -o %s %s 2>&1", lib_env, env, qcc_bin, opts, out, src), \rc);
+        assertEq(0, rc, sprintf("qcc %s %s: exit status (output: %s)", opts, src, output.substr(-2000)));
+        return output;
+    }
+
+    #! Returns the output of the executable \a exe
+    private string runExe(string exe) {
+        int rc;
+        # -b must be the first argument of a compiled program
+        string out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+        assertEq(0, rc, sprintf("%s: exit status (output: %y)", exe, out));
+        return out;
+    }
+
+    receiverTest() {
+        TmpDir dir("qore-weak-container-receiver-lifetime-");
+        string src = join_paths(dir.path, "containers.q");
+        copy_file(get_script_dir() + "/containers.q", src);
+        string expected = runMode(src, "ast");
+        # the receiver read from a foreach variable is kept until the call returns: the method's member read after
+        # the removal works, and the destructor runs before the result is used
+        assertRegex("(?m)^foreachTyped: \\|m~a\\|pa\\|n\\|m~b\\|pb\\|n\\|e$", expected,
+            "the AST keeps the receiver of a foreach variable until the call returns");
+        # the receiver read from a hash member is a temporary of the statement, kept until the statement ends
+        assertRegex("(?m)^hashMember: \\|m\\|pa~a\\|e$", expected,
+            "the AST keeps the receiver of a hash member until the end of the statement");
+        assertRegex("(?m)^hashMemberStatement: \\|m\\|pa\\|pq\\|paq~a\\|e$", expected,
+            "the AST keeps the receiver of a hash member until the statement's other calls have run");
+        foreach string mode in (Modes) {
+            assertEq(expected, runMode(src, mode), mode);
+        }
+        foreach string opt in (OptLevels) {
+            foreach hash<auto> i in (OutlineEnv.pairIterator()) {
+                string exe = join_paths(dir.path, "containers" + opt + (i.key == "outlined" ? "-outlined" : ""));
+                string output = compile(src, exe, opt, i.value);
+                if (i.key == "outlined") {
+                    assertRegex("AOT-OUTLINE-FN: .* outlined [0-9]+ regions", output, "qcc " + opt + " outlines");
+                }
+                assertEq(expected, runExe(exe), sprintf("qcc %s %s", opt, i.key));
+            }
+        }
+    }
+}

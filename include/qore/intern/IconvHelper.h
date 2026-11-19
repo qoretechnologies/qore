@@ -33,6 +33,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_encoding_private.h"
+#include "qore/intern/QoreUtf8.h"
 
 #include <cassert>
 #include <cerrno>
@@ -52,7 +53,8 @@ public:
    DLLLOCAL IconvHelper(const QoreEncoding *to, const QoreEncoding *from, ExceptionSink *xsink,
          bool validate_utf8 = false) : to(to), from(from),
          validateUtf8(from == QCS_UTF8 && (validate_utf8 || !rejectsMalformedUtf8())),
-         validateForm(isUnicodeForm(from) && !rejectsInvalidUnicodeForms()),
+         validateForm(isUnicodeForm(from)
+            && (!rejectsInvalidUnicodeForms() || qore_encoding_private::get(*from)->iconv_accepts_invalid)),
          splitFinalDash(qore_encoding_private::get(*from)->utf7_final_dash_literal) {
       // conversions are opened without "//TRANSLIT": with it, glibc and GNU libiconv replace a character the target
       // cannot hold with an approximation and report it only in the count of non-reversible conversions, while
@@ -81,7 +83,8 @@ public:
        here, and the conversion stops at the first malformed sequence with \c EILSEQ, or at a sequence truncated by
        the end of the input with \c EINVAL, exactly as a strict iconv does.  Input in a Unicode encoding form (UTF-16,
        UTF-32, UCS-2, UCS-4) is validated the same way where the platform's iconv accepts values above U+10FFFF or
-       unpaired surrogates in it (see rejectsInvalidUnicodeForms()).
+       unpaired surrogates in it (see rejectsInvalidUnicodeForms()), or where the conversion of an encoding created on
+       the fly accepts them (qore_encoding_private::iconv_accepts_invalid, ex: glibc's \c "UCS-4").
 
        @param xsink if given, the validation is a cancellation point; when it is cancelled, the exception is raised
        here, and -1 is returned with \c errno set to \c ECANCELED
@@ -125,7 +128,8 @@ public:
 
    //! Returns the length of the longest prefix of the input that is made of complete, valid characters of a Unicode form
    /** A value above U+10FFFF, a surrogate code point in UTF-32 or UCS-2, and an unpaired surrogate in UTF-16 are
-       invalid; see the character functions of the encoding (QoreEncoding::getCharLen()).
+       invalid; the character functions of the encoding (QoreEncoding::getCharLen()) decode the input, so that each
+       form has one definition of a valid character: for UTF-16, q_utf16_char_len() (qore#6604).
 
        @param enc the encoding of the input; a Unicode encoding form (see isUnicodeForm())
        @param p the input
@@ -212,50 +216,18 @@ public:
             }
             next_check = i + CancelCheckBytes;
          }
-         unsigned char ch = s[i];
-         if (ch < 0x80) {
+         if (s[i] < 0x80) {
             ++i;
             continue;
          }
-         // the number of continuation bytes and the range of the first one
-         size_t n;
-         unsigned char lo = 0x80;
-         unsigned char hi = 0xbf;
-         if (ch >= 0xc2 && ch <= 0xdf) {
-            n = 1;
-         } else if (ch == 0xe0) {
-            n = 2;
-            lo = 0xa0;
-         } else if ((ch >= 0xe1 && ch <= 0xec) || ch == 0xee || ch == 0xef) {
-            n = 2;
-         } else if (ch == 0xed) {
-            n = 2;
-            hi = 0x9f;
-         } else if (ch == 0xf0) {
-            n = 3;
-            lo = 0x90;
-         } else if (ch >= 0xf1 && ch <= 0xf3) {
-            n = 3;
-         } else if (ch == 0xf4) {
-            n = 3;
-            hi = 0x8f;
-         } else {
-            incomplete = false;
+         // the one definition of a valid UTF-8 character (qore#6604)
+         long l = q_utf8_char_len(p + i, len - i);
+         if (l <= 0) {
+            // a negative length: every byte up to the end of the input fits the sequence
+            incomplete = l < 0;
             return i;
          }
-         for (size_t k = 1; k <= n; ++k) {
-            if (i + k >= len) {
-               // every byte up to the end of the input fits the sequence
-               incomplete = true;
-               return i;
-            }
-            unsigned char cb = s[i + k];
-            if (k == 1 ? (cb < lo || cb > hi) : (cb < 0x80 || cb > 0xbf)) {
-               incomplete = false;
-               return i;
-            }
-         }
-         i += n + 1;
+         i += l;
       }
       incomplete = false;
       return len;
@@ -637,7 +609,8 @@ private:
    const QoreEncoding *from;
    //! true if UTF-8 input is validated here because the platform's iconv accepts malformed UTF-8
    bool validateUtf8;
-   //! true if input in a Unicode encoding form is validated here; see rejectsInvalidUnicodeForms()
+   //! true if input in a Unicode encoding form is validated here; see rejectsInvalidUnicodeForms() and
+   //! qore_encoding_private::iconv_accepts_invalid
    bool validateForm;
    //! true if a "-" ending a UTF-7 base64 run at the end of the input is converted on its own; see iconvUtf7()
    bool splitFinalDash;

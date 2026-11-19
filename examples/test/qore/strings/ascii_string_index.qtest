@@ -84,6 +84,12 @@ class AsciiStringIndexTest inherits QUnit::Test {
                         n, bytes));
                 }
             }
+            foreach int n in (LoopLengths) {
+                # an ASCII string literal is scanned at most once, not at every evaluation (qore#6625)
+                *int bytes = counts{"literal " + n};
+                assertTrue(exists bytes, sprintf("%s: literal %d: %s", mode, n, out));
+                assertTrue(bytes <= 64, sprintf("%s: literal: %d characters: %d bytes scanned", mode, n, bytes));
+            }
             foreach int i in (ReadOffsets) {
                 assertEq(0, counts{"read " + i}, sprintf("%s: a read at offset %d of known ASCII text scans nothing",
                     mode, i));

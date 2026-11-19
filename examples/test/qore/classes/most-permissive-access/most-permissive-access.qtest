@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc-compiled executables
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class MostPermissiveAccessTest
+
+#! a class inherited through several paths with different access has the access of the least restrictive one
+#! (qore#6498, qore#6523)
+/** The scripts run in every execution mode, on the IR tier and as qcc-compiled executables:
+    - access.q: every lookup kind (method calls resolved at parse time and at run time, call_object_method(),
+      hasCallableMethod(), call references, static calls, members, instanceof, casts, parameter types, inherited
+      variants) through a class reached first through a private path and then through a public path, the reverse
+      order and a private:internal path first (hierarchies with a diamond: the walk of the lookups), and the same
+      lookups through a single public and a single private path (hierarchies without a diamond: the recursion),
+      which must give the same results as before; a call from outside the hierarchy (also through a call reference
+      made in another class) uses the first method through the public paths, a call from inside it the first method
+      through all its paths; inherited variants through private paths only stay private, and those of a method are
+      those of the hierarchy of its class
+    - members.q: a member of a class reached through a private:internal path and a public path, in both orders and
+      in the hierarchy of qore#6523 (whose parse aborted a debug build), through two private:internal paths, beside
+      a private:internal member of another class with the same name (also one that hides it on a private:internal
+      path, and one visible first on two private:internal paths), below a class inherited with private:internal
+      access, and through a private and a public path: every class context reads and writes the same value
+*/
+class MostPermissiveAccessTest inherits QUnit::Test {
+    public {
+        #! the output of access.q
+        const AccessExpected = (
+            "typed: {D1: [\"As\", \"A\", 1, \"A\", True, \"A\"], D2: [\"As\", \"A\", 1], D3: [\"As\", \"A\", 1], "
+                "P: [\"As\", \"A\", 1]}",
+            "D1: " + PublicResults,
+            "D2: " + PublicResults,
+            "D3: " + PublicResults,
+            "P: " + PublicResults,
+            "Q: {method: \"BASE-CLASS-IS-PRIVATE\", call_object_method: \"BASE-CLASS-IS-PRIVATE\", "
+                "hasCallableMethod: False, call_static_method: \"As\", call reference: \"ILLEGAL-CALL-REFERENCE\", "
+                "member: \"PRIVATE-MEMBER\", instanceof: False, cast: \"RUNTIME-CAST-ERROR\", "
+                "parameter: \"RUNTIME-OVERLOAD-ERROR\", inherited variant: \"RUNTIME-OVERLOAD-ERROR\"}",
+            "inside D1: [\"A\", \"A\", True, \"A\", True, \"A\"]",
+            "D8: \"RUNTIME-OVERLOAD-ERROR\" False",
+            "D9: \"RUNTIME-OVERLOAD-ERROR\" E1: \"RUNTIME-OVERLOAD-ERROR\"",
+            "R: \"RUNTIME-OVERLOAD-ERROR\" True",
+            "U: \"C2\" \"A\"",
+            "D7: \"C2\" \"C2\" \"A\"",
+        );
+
+        #! the results of the lookups through a public path
+        const PublicResults = "{method: \"A\", call_object_method: \"A\", hasCallableMethod: True, "
+            "call_static_method: \"As\", call reference: \"A\", member: 1, instanceof: True, cast: \"A\", "
+            "parameter: \"A\", inherited variant: \"A\"}";
+
+        #! the output of members.q
+        const MembersExpected = (
+            "C3: 10 [10, 10, 20, 20, 21, 21]",
+            "C3b: 10 [10, 10, 20, 20, 21, 21]",
+            "C6: 10 [10, 10, 20, 20, 21, 21]",
+            "C6 public write: 7 7",
+            "C6b: 10 [10, 10, 20, 20, 21, 21]",
+            "C5: [10, 10, 20, 20, 21, 21]",
+            "Z: 10 [100, 10, 10, 20, 10, 10, 20, 21, 21, 20, 22, 22]",
+            "W: [10, 10, 10, 20, 20, 20, 21, 21, 21]",
+            "W5: [10, 10, 10, 10, 10, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 22, 22, 22, 22, 22, 23, 23, 23, 23, 23]",
+            "D: 10 [10, 20]",
+            "L: 10 [50, 10, 50, 20]",
+            "M: [100, 10, 10, 20, 10, 10, 20, 21, 21, 20, 22, 22]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("MostPermissiveAccess", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+
+        addTestCase("lookups through a private and a public path", \accessTest());
+        addTestCase("a member through a private:internal and another path", \membersTest());
+        set_return_value(main());
+    }
+
+    accessTest() {
+        runScript("access", AccessExpected);
+    }
+
+    membersTest() {
+        runScript("members", MembersExpected);
+    }
+
+    #! runs the script in every execution mode, on the IR tier and as a qcc-compiled executable
+    private runScript(string name, list<string> expected) {
+        string file = get_script_dir() + DirSep + name + ".q";
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(name + " " + mode, expected, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env,
+                qore_bin, mode, file)));
+        }
+        checkOutput(name + " IR tier", expected, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s",
+            env, qore_bin, file)));
+
+        TmpDir tmp("qore-most-permissive-access-");
+        string exe = tmp.path + DirSep + name;
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, env, qcc_bin, exe, file));
+        assertTrue(is_file(exe), name + ": compiled the executable: " + out);
+        if (!is_file(exe)) {
+            return;
+        }
+        checkOutput(name + " executable", expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)));
+    }
+
+    private checkOutput(string label, list<string> expected, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(expected, lines, label + ": " + out);
+    }
+}

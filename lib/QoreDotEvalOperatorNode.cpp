@@ -508,6 +508,10 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     }
     assert(meth);
 
+    // a method that has concrete variants beside abstract variants that the class of the method does not implement
+    // (issue #6161)
+    bool mixed_abstract = !qore_method_private::get(*meth)->isAbstract()
+        && qore_class_private::get(*meth->getClass())->hasUnimplementedAbstractVariants(mname);
     if (!qore_method_private::get(*meth)->isAbstract()) {
         // save method for optimizing calls later
         m->parseSetClassAndMethod(qc, meth);
@@ -529,10 +533,17 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     if (m->parseArgs(parse_context, func, nullptr) && !err) {
         err = -1;
     }
+    // a call of a method with abstract variants that the class of the method does not implement is resolved at run
+    // time by name on the class of the object, as a call of an abstract method, unless it was resolved to a concrete
+    // variant at parse time: another parent class of the class of the object can implement the abstract variants
+    // (issue #6161)
+    if (mixed_abstract && !m->getVariant() && m->getMethod() == meth) {
+        m->parseClearClassAndMethod();
+    }
     // a call resolved at run time by parameter name keeps the method of the receiver's static type, also of an
     // abstract method, which it is resolved on when the object is of that class (otherwise on the method of the
     // class of the object; see AbstractMethodCallNode::execNamed())
-    if (m->getRuntimeArgNames() && !m->getMethod()) {
+    if (m->getRuntimeArgNames() && !m->getMethod() && !mixed_abstract) {
         m->parseSetClassAndMethod(qc, meth);
     }
     if (readonly_receiver

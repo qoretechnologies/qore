@@ -808,6 +808,13 @@ public:
         return method;
     }
 
+    //! clears the class and the method set by parseSetClassAndMethod(), so that the call is resolved at run time by
+    //! name on the class of the object
+    DLLLOCAL void parseClearClassAndMethod() {
+        qc = nullptr;
+        method = nullptr;
+    }
+
     //! the cache of the check of the call's target before its arguments (issue #5824)
     QoreCallTargetCheckCache check_cache;
 };

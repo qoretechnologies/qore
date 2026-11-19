@@ -121,6 +121,24 @@ sub in_loop() {
     }
 }
 
+string sub marker(string label) {
+    printf("mark %s\n", label);
+    return "";
+}
+
+# Use the same auto parameter for a plain list and a reference to a list. The map result owns neither source.
+sub firstSource(auto src, string label) {
+    string s = string(first (map 1, src)) + ((src = NOTHING) ?? "") + marker(label);
+    printf("first %s\n", s);
+}
+
+# A function-local list can live entirely in the IR frame.
+sub firstLocal() {
+    auto src = (new P("local"),);
+    string s = string(first (map 1, src)) + ((src = NOTHING) ?? "") + marker("local");
+    printf("first %s\n", s);
+}
+
 for (int i = 0; i < 2; ++i) {
     f_map_select();
     f_map_select_map();
@@ -129,4 +147,14 @@ for (int i = 0; i < 2; ++i) {
     f_condition();
     f_plain_map();
     in_loop();
+    firstSource((new P("plain"),), "plain");
+    auto target = (new P("reference"),);
+    firstSource(\target, "reference");
+    firstLocal();
 }
+
+auto top = (new P("top-plain"),);
+string topResult = string(first (map 1, top)) + ((top = NOTHING) ?? "") + marker("top-plain");
+auto topTarget = (new P("top-reference"),);
+auto topRef = \topTarget;
+topResult = string(first (map 1, topRef)) + ((topTarget = NOTHING) ?? "") + marker("top-reference");

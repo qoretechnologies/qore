@@ -36,6 +36,7 @@
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/QoreTypeSpec.h"
 #include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreSquareBracketsOperatorNode::op_str("[] operator expression");
 
@@ -123,7 +124,7 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
 
     if (!(parse_context.pflag & PF_FOR_ASSIGNMENT)) {
         QorePluginResolvedOperationInfo plugin_op;
-        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        ExceptionSink* parse_xsink = parse_context.pgm ? qore_program_ops(parse_context.pgm).getParseExceptionSink() : nullptr;
         int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, rti, "subscript",
             QorePluginHelperAbi::SubscriptValue, plugin_op, parse_xsink);
         if (plugin_rc < 0 && !err) {
@@ -158,7 +159,7 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
             bool accepts_list = QoreTypeInfo::parseAcceptsReturns(lti, NT_LIST);
             bool accepts_buffer = QoreTypeInfo::parseAcceptsReturns(lti, NT_BUFFER);
             if (!accepts_list && !accepts_buffer) {
-                if (getProgram()->getParseExceptionSink()) {
+                if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                     QoreStringNode* edesc = new QoreStringNode("cannot convert lvalue defined as ");
                     QoreTypeInfo::getThisType(lti, *edesc);
                     edesc->sprintf(" to a list or buffer using the '[]' operator in an assignment expression");

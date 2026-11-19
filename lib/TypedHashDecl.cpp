@@ -38,6 +38,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreTypeInfo.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 static thread_local const typed_hash_decl_private* parse_hashdecl_type_param_context = nullptr;
 
@@ -163,7 +164,7 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
     }
     // throw a type exception only if parse exceptions are enabled
     if (!QoreTypeInfo::parseAccepts(typeInfo, argTypeInfo)) {
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNode("initialization expression for ");
             desc->sprintf("hashdecl member '%s' returns ", name);
             QoreTypeInfo::getThisType(argTypeInfo, *desc);

@@ -33,6 +33,7 @@
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #include <cstdlib>
 
@@ -147,29 +148,29 @@ QoreValue qore_release_value_with_exception_intern(QoreValue rv, ExceptionSink* 
     return QoreValue();
 }
 
-void ExceptionSink::overrideLocation(const QoreProgramLocation& loc) {
+void qore_exception_sink_ops::overrideLocationImpl(ExceptionSink* b, const QoreProgramLocation& loc) {
     //printd(5, "ExceptionSink::overrideLocation() loc: %p: %s:%d\n", &loc, loc.getFileValue(), loc.start_line);
-    QoreException* w = priv->head;
+    QoreException* w = b->priv->head;
     while (w) {
         w->set(loc);
         w = w->next;
     }
 }
 
-void ExceptionSink::setLastLocation(const QoreProgramLocation& loc) {
-    if (priv->tail) {
-        priv->tail->set(loc);
+void qore_exception_sink_ops::setLastLocationImpl(ExceptionSink* b, const QoreProgramLocation& loc) {
+    if (b->priv->tail) {
+        b->priv->tail->set(loc);
     }
 }
 
-QoreException* ExceptionSink::catchException() {
-    QoreException* e = priv->head;
-    priv->head = priv->tail = nullptr;
-    priv->syncPending();
-    if (priv->count) {
-        assert(!priv->externally_managed);
-        inc_active_exceptions(-priv->count);
-        priv->count = 0;
+QoreException* qore_exception_sink_ops::catchExceptionImpl(ExceptionSink* b) {
+    QoreException* e = b->priv->head;
+    b->priv->head = b->priv->tail = nullptr;
+    b->priv->syncPending();
+    if (b->priv->count) {
+        assert(!b->priv->externally_managed);
+        inc_active_exceptions(-b->priv->count);
+        b->priv->count = 0;
     }
     // Reset the `rethrown` flag along with the exception itself.  Callers
     // (e.g. @ref StatementBlock::execIntern's on_error handling) use
@@ -179,17 +180,17 @@ QoreException* ExceptionSink::catchException() {
     // wipe an unrelated outer exception — e.g. a `try { rethrow; } catch {}`
     // nested inside an `on_error` body should not discard the original
     // exception that triggered the block.
-    priv->rethrown = false;
+    b->priv->rethrown = false;
     return e;
 }
 
-QoreException* ExceptionSink::getException() {
-    return priv->head;
+QoreException* qore_exception_sink_ops::getExceptionImpl(ExceptionSink* b) {
+    return b->priv->head;
 }
 
 void ExceptionSink::handleExceptions() {
     if (priv->head) {
-        defaultExceptionHandler(priv->head);
+        qore_exception_sink_ops(this).defaultExceptionHandler(priv->head);
         clear();
     } else {
         priv->thread_exit = false;
@@ -199,7 +200,7 @@ void ExceptionSink::handleExceptions() {
 
 void ExceptionSink::handleWarnings() {
     if (priv->head) {
-        defaultWarningHandler(priv->head);
+        qore_exception_sink_ops(this).defaultWarningHandler(priv->head);
         clear();
     }
 }
@@ -215,7 +216,7 @@ void ExceptionSink::markExternallyManaged() {
 }
 
 QoreHashNode* ExceptionSink::getExceptionInfo() {
-    QoreException* except = catchException();
+    QoreException* except = qore_exception_sink_ops(this).catchException();
     if (!except) {
         return nullptr;
     }
@@ -423,12 +424,12 @@ AbstractQoreNode* ExceptionSink::raiseExceptionArg(const char* err, QoreValue ar
     return nullptr;
 }
 
-void ExceptionSink::raiseException(QoreException* e) {
-    priv->insert(e);
+void qore_exception_sink_ops::raiseExceptionImpl(ExceptionSink* b, QoreException* e) {
+    b->priv->insert(e);
 }
 
-void ExceptionSink::raiseException(const QoreListNode* n) {
-    priv->insert(new QoreException(n));
+void qore_exception_sink_ops::raiseExceptionImpl(ExceptionSink* b, const QoreListNode* n) {
+    b->priv->insert(new QoreException(n));
 }
 
 void ExceptionSink::raiseException(const QoreProgramLocation& loc, const char* err, QoreValue arg, QoreValue desc) {
@@ -494,7 +495,7 @@ static void write_report(const QoreString& out) {
 }
 
 // static member function
-void ExceptionSink::defaultExceptionHandler(QoreException* e) {
+void qore_exception_sink_ops::defaultExceptionHandler(QoreException* e) {
     ExceptionSink xsink;
     // the report is written whole (write_report()), so that the output of other threads is not mixed into it
     QoreString out;
@@ -686,7 +687,7 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
 }
 
 // static
-void ExceptionSink::outputExceptionLocation(QoreString& out, const char* fns, int start_line, int end_line,
+void qore_exception_sink_ops::outputExceptionLocation(QoreString& out, const char* fns, int start_line, int end_line,
         const char* srcs, int offset, const char* langs, const char* types) {
     if (fns) {
         out.sprintf("%s:", fns);
@@ -740,7 +741,7 @@ void ExceptionSink::outputExceptionLocation(QoreString& out, const char* fns, in
 }
 
 // static member function
-void ExceptionSink::defaultWarningHandler(QoreException* e) {
+void qore_exception_sink_ops::defaultWarningHandler(QoreException* e) {
     ExceptionSink xsink;
     // the report is written whole (write_report()), as that of an exception
     QoreString out;

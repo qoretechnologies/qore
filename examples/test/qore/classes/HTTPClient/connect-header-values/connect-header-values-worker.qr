@@ -88,16 +88,20 @@ int h3_port = server.addListener(<HttpListenerOptionInfo>{
 }).port;
 server.waitForAsyncIo();
 
+# The requests have no I/O timeout: the server's code runs in this process, in the execution mode of the run, and with
+# native compilation on the first call of each function (as ExecModeHarness runs it), the server compiles the
+# functions that handle a request while the client waits for the response, which takes seconds and, on a loaded
+# machine, more than any fixed time; a response that never comes is caught by the test runner's time limit
 hash<string, string> results;
 results."h2-connect" = tryc(string sub () {
-    HTTPClient client({"url": sprintf("https://127.0.0.1:%d", h2_port), "http_version": "2", "timeout": 30s});
+    HTTPClient client({"url": sprintf("https://127.0.0.1:%d", h2_port), "http_version": "2", "timeout": -1});
     client.acceptAllCertificates(True);
     client.connect();
     hash<auto> resp = client.sendHttp2Connect("/rec", Headers + {"X-Client": "h2"}, "header-test");
     return string(resp.status_code);
 });
 results."h3-connect" = tryc(string sub () {
-    HTTPClient client({"url": sprintf("https://127.0.0.1:%d", h3_port), "http3_mode": "required", "timeout": 30s,
+    HTTPClient client({"url": sprintf("https://127.0.0.1:%d", h3_port), "http3_mode": "required", "timeout": -1,
         "ssl_verify_cert": False});
     hash<auto> resp = client.sendHttp3Connect("/rec", Headers + {"X-Client": "h3"}, "header-test");
     return string(resp.status_code);

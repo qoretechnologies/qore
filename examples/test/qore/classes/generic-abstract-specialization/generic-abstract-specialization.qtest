@@ -44,9 +44,11 @@ class GenericAbstractSpecializationTest inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
         dir = get_script_dir();
         foreach string script in (Scripts) {
-            addTestCase(script + ": execution modes", sub () { modesTest(script); });
-            addTestCase(script + ": AOT executable -O0", sub () { aotTest(script, "-O0"); });
-            addTestCase(script + ": AOT executable -O3", sub () { aotTest(script, "-O3"); });
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string script_value = script;
+            addTestCase(script + ": execution modes", sub () { modesTest(script_value); });
+            addTestCase(script + ": AOT executable -O0", sub () { aotTest(script_value, "-O0"); });
+            addTestCase(script + ": AOT executable -O3", sub () { aotTest(script_value, "-O3"); });
         }
         set_return_value(main());
     }

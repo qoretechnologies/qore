@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The path templates of a Swagger schema are checked and compiled when the schema is loaded, so that a template that
+# is not valid is an error of the schema and not of each request (qore#6603).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires Swagger
+
+%exec-class SwaggerPathTemplatesTest
+
+class SwaggerPathTemplatesTest inherits QUnit::Test {
+    constructor() : Test("Swagger path templates", "1.0") {
+        addTestCase("parameter extraction", \parametersTest());
+        addTestCase("templates that are not valid", \invalidTest());
+        addTestCase("deserialized schema", \deserializedTest());
+        addTestCase("parameter patterns", \patternTest());
+        addTestCase("Accept content types", \acceptTest());
+        set_return_value(main());
+    }
+
+    private static hash<auto> pathDef(list<string> params) {
+        return {"get": {
+            "parameters": (map ("name": $1, "in": "path", "required": True, "type": "string"), params) ?? (),
+            "responses": {"200": {"description": "ok"}},
+        }};
+    }
+
+    private static SwaggerSchema load(hash<string, hash<auto>> paths, *hash<auto> opts) {
+        return SwaggerLoader::fromString(make_json({
+            "swagger": "2.0",
+            "info": {"title": "templates", "version": "1"},
+            "paths": paths,
+        }), True, opts);
+    }
+
+    private SwaggerSchema validSchema() {
+        return SwaggerPathTemplatesTest::load({
+            "/items/{id}.json": SwaggerPathTemplatesTest::pathDef(("id",)),
+            "/a+b/{x}(y)/{z}": SwaggerPathTemplatesTest::pathDef(("x", "z")),
+        });
+    }
+
+    private checkSchema(SwaggerSchema s, string label) {
+        hash<auto> hdr;
+        assertEq({"id": "5"}, s.parseRequest("GET", "/items/5.json", NOTHING, \hdr).path_args, label);
+        # the characters of the template other than its parameters match themselves
+        assertEq({"x": "1", "z": "2"}, s.parseRequest("GET", "/a+b/1(y)/2", NOTHING, \hdr).path_args, label);
+        assertThrows("SCHEMA-VALIDATION-ERROR", \s.parseRequest(), ("GET", "/aab/1(y)/2", NOTHING, \hdr), label);
+        assertThrows("SCHEMA-VALIDATION-ERROR", \s.parseRequest(), ("GET", "/a+b/1y/2", NOTHING, \hdr), label);
+    }
+
+    parametersTest() {
+        checkSchema(validSchema(), "loaded");
+    }
+
+    invalidTest() {
+        hash<string, hash<auto>> paths = {
+            "/items/{id}.json": SwaggerPathTemplatesTest::pathDef(("id",)),
+            "/c/{a}/{b": SwaggerPathTemplatesTest::pathDef(("a",)),
+        };
+        # a template with a parameter and an unterminated one is an error when the schema is loaded; before, it
+        # failed each request to it
+        assertThrows("INVALID-PATH-COMPONENT", "Invalid path template \"/c/{a}/{b\"",
+            \SwaggerPathTemplatesTest::load(), (paths,));
+        # with LM_IGNORE_INVALID_PATHS, the path is left out and the others are served
+        SwaggerSchema s = SwaggerPathTemplatesTest::load(paths, {"parse_flags": LM_IGNORE_INVALID_PATHS});
+        assertEq(("items/{id}.json",), keys s.getPathOperationHash());
+        hash<auto> hdr;
+        assertEq({"id": "5"}, s.parseRequest("GET", "/items/5.json", NOTHING, \hdr).path_args);
+        assertThrows("SCHEMA-VALIDATION-ERROR", \s.parseRequest(), ("GET", "/c/1/x", NOTHING, \hdr));
+
+        # a path without a complete parameter has no pattern; it loads and is served as before
+        s = SwaggerPathTemplatesTest::load({
+            "/bad/{b": SwaggerPathTemplatesTest::pathDef(()),
+            "/x/{}": SwaggerPathTemplatesTest::pathDef(()),
+        });
+        assertEq({}, s.parseRequest("GET", "/bad/x", NOTHING, \hdr).path_args ?? {});
+        assertEq({}, s.parseRequest("GET", "/x/y", NOTHING, \hdr).path_args ?? {});
+    }
+
+    deserializedTest() {
+        # the compiled patterns are not serialized; a deserialized schema compiles them when they are used
+        SwaggerSchema s = Serializable::deserialize(validSchema().serialize());
+        checkSchema(s, "deserialized");
+    }
+
+    private static hash<auto> queryDef(string pattern) {
+        return {"get": {
+            "parameters": ({"name": "q", "in": "query", "required": True, "type": "string", "pattern": pattern},),
+            "responses": {"200": {"description": "ok"}},
+        }};
+    }
+
+    patternTest() {
+        # a pattern that is not valid is an error when the schema is loaded, not of each request
+        assertThrows("REGEX-COMPILATION-ERROR", \SwaggerPathTemplatesTest::load(),
+            ({"/a": SwaggerPathTemplatesTest::queryDef("(x")},));
+        SwaggerSchema s = SwaggerPathTemplatesTest::load({"/a": SwaggerPathTemplatesTest::queryDef("^[0-9]+$")});
+        hash<auto> hdr;
+        assertEq({"q": "12"}, s.parseRequest("GET", "/a?q=12", NOTHING, \hdr).query);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the parameter string pattern", \s.parseRequest(),
+            ("GET", "/a?q=x", NOTHING, \hdr));
+        # a deserialized schema compiles the pattern when it is used
+        s = Serializable::deserialize(s.serialize());
+        assertEq({"q": "12"}, s.parseRequest("GET", "/a?q=12", NOTHING, \hdr).query);
+        assertThrows("SCHEMA-VALIDATION-ERROR", \s.parseRequest(), ("GET", "/a?q=x", NOTHING, \hdr));
+    }
+
+    acceptTest() {
+        SwaggerSchema s = SwaggerPathTemplatesTest::load({"/a": {"get": {
+            "produces": ("application/json",),
+            "responses": {"200": {"description": "ok", "schema": {"type": "object"}}},
+        }}});
+        # a wildcard content type from the request matches
+        hash<HttpResponseInfo> rv = s.processResponse("GET", "/a", 200, {"x": 1}, NOTHING, ("application/*",));
+        assertEq(MimeTypeJson, rv.hdr."Content-Type");
+        # the other characters of the content type are not a pattern: one that would not compile is not acceptable
+        # (it raised REGEX-COMPILATION-ERROR), and "." is not any character
+        assertThrows("ACCEPT-ERROR", \s.processResponse(), ("GET", "/a", 200, {"x": 1}, NOTHING, ("a/(*",)));
+        assertThrows("ACCEPT-ERROR", \s.processResponse(), ("GET", "/a", 200, {"x": 1}, NOTHING,
+            ("application.json*",)));
+    }
+}

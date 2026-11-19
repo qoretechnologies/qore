@@ -163,19 +163,19 @@ int len = str.length();
     @endcode
 
     @note
-    - this operation has <i>O(n)</i> complexity if the string has a multi-byte @ref character_encoding "character encoding", otherwise it is <i>O(1)</i>; a UTF-8 string remembers the length of the ASCII text at its start, so for a UTF-8 string that only holds ASCII text it is <i>O(1)</i> after the first call, and for any other UTF-8 string it is linear in the number of bytes after the ASCII text at its start
+    - counting takes linear time when the encoding requires validation; a UTF-8 string caches its ASCII prefix,
+      so repeated counts of all-ASCII UTF-8 text take constant time
     - equivalent to @ref Qore::length(softstring)
-    - in a string that is not valid in its encoding, each byte that does not start a complete character counts as one
-      character, so the count is not less than the number of characters of its text (since %Qore 3.0; before, the
-      count stopped at the first such byte)
+
+    @throw INVALID-ENCODING the string is not valid in its declared encoding
 
     @see
     - <string>::strlen()
     - <string>::size()
     - <string>::width()
 */
-int <string>::length() [const;flags=CONSTANT] {
-    return str->length();
+int <string>::length() [const;flags=RET_VALUE_ONLY] {
+    return qore_string_private::characterCount(*str, xsink);
 }
 
 //! Returns the width of characters in the string; some unicode characters take up multiple spaces on output
@@ -799,6 +799,8 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
 
     @since %Qore 1.0.7
     @since %Qore 3.0 added the \a limit parameter
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 list<string> <string>::splitRegex(string separator_pattern, int options = 0, bool with_separator = False, int limit = -1) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*separator_pattern, options, xsink);
@@ -834,6 +836,8 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
 
     @since %Qore 1.0.7
     @since %Qore 3.0 added the \a limit parameter
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 list<string> <string>::splitRegex(string separator_pattern, bool with_separator = False, int limit = -1) [const;flags=RET_VALUE_ONLY] {
     QoreRegex qr(*separator_pattern, 0, xsink);
@@ -868,6 +872,8 @@ bool b = "hello".regex("^hel"); # returns True
     @see @ref qore_regex for more information about regular expression support in Qore
 
     @since %Qore 0.8.5
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 bool <string>::regex(string pattern, int options = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
@@ -935,6 +941,8 @@ int n = "abc 123 def 456".regexCount("\\d+"); # returns 2
     @since %Qore 3.0
 
     @see regex_count()
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
 */
 int <string>::regexCount(string pattern, int options = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
@@ -968,6 +976,8 @@ auto h = "2026-04-08".regexExtractNamed("(?<year>\\d{4})-(?<month>\\d{2})-(?<day
     @since %Qore 3.0
 
     @see regex_extract_named()
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
 */
 auto <string>::regexExtractNamed(string pattern, int options = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
@@ -1285,9 +1295,9 @@ bool <string>::isDataPrintableAscii() [const;flags=CONSTANT] {
 
 //! returns @ref True if the string is valid in its encoding
 /** A string that is not valid in its encoding (one in UTF-8 with byte sequences that are not well-formed UTF-8, or
-    one in another encoding that cannot be converted to UTF-8) cannot be processed reliably as text.  This method tests
-    a string without raising an exception, as code that receives text from outside the program does before it
-    processes it.
+    one in another encoding that cannot be converted to UTF-8) cannot be processed as text: a regular expression
+    match or substitution, for example, raises an \c INVALID-ENCODING exception for it.  This method tests a string
+    without raising an exception, as code that receives text from outside the program does before it processes it.
 
     A UTF-8 string is checked strictly (RFC 3629), as the regular expression engine checks it: overlong forms,
     surrogate code points, values above U+10FFFF and unexpected continuation bytes are not valid.  A string in another

@@ -3360,6 +3360,8 @@ top_level_command:
     | TRY_MODULE_ERROR {
         bool has_dollar = $1->var[0] == '$';
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
+        // a %try-module variable is a global variable
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a %try-module variable");
         if (!has_dollar) {
             if (!parse_check_parse_option(PO_ALLOW_BARE_REFS)) {
                 parse_error(*loc, "%%try-module variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is not set", $1->var);

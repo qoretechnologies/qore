@@ -666,6 +666,14 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             try {
                 call_object_method(wsc, "applyIncomingExtensions", \msg, ext_ctx);
             } catch (hash<ExceptionInfo> ex) {
+                # a text message that is not valid UTF-8 (qore#6554): RFC 6455 section 8.1
+                if (ex.err == "WEBSOCKET-INVALID-PAYLOAD") {
+                    if (handler) {
+                        handler.logError("WebSocket message rejected: %s", ex.desc);
+                    }
+                    sendClose(WSCC_InvalidData, "Invalid UTF-8 in a text message");
+                    return;
+                }
                 if (ex.err != "WEBSOCKET-MESSAGE-TOO-BIG") {
                     rethrow;
                 }
