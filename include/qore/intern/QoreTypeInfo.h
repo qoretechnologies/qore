@@ -1040,11 +1040,19 @@ public:
         return acceptsInputUncheckedDifferent(target, source);
     }
 
+    //! Returns true if \a target is code or *code and \a source a typed callable type whose values it accepts
+    //! (qore#6660)
+    /** Before the signature of a typed callable was part of its type, code and code<...> were the same type
+    */
+    DLLLOCAL static __attribute__((noinline)) bool codeAcceptsTypedCallablesUnchecked(const QoreTypeInfo* target,
+            const QoreTypeInfo* source);
+
     //! Compares two different types for acceptsInputUnchecked() (issue #5782)
     DLLLOCAL static __attribute__((noinline)) bool acceptsInputUncheckedDifferent(const QoreTypeInfo* target,
             const QoreTypeInfo* source) {
         if (!isInputIdentical(target, source)) {
-            return false;
+            // code accepts the values of a typed callable type unchecked (qore#6660)
+            return codeAcceptsTypedCallablesUnchecked(target, source);
         }
         if (!target) {
             return true;

@@ -3897,6 +3897,13 @@ bool QoreTypeInfo::complexCodeAcceptsCallable(const QoreValue& n) const {
     return !complex_code || static_cast<const QoreComplexCodeTypeInfo*>(this)->acceptsCallable(n);
 }
 
+bool QoreTypeInfo::codeAcceptsTypedCallablesUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+    if ((target != codeTypeInfo && target != codeOrNothingTypeInfo) || !source || !source->complex_code) {
+        return false;
+    }
+    return target == codeOrNothingTypeInfo || !static_cast<const QoreComplexCodeTypeInfo*>(source)->isOrNothing();
+}
+
 bool QoreTypeInfo::complexCodeTypesEqual(const QoreTypeInfo* a, const QoreTypeInfo* b) {
     assert(a->complex_code || b->complex_code);
     if (!a->complex_code || !b->complex_code) {
@@ -3923,22 +3930,28 @@ bool QoreTypeInfo::complexCodeTypesEqual(const QoreTypeInfo* a, const QoreTypeIn
 
 //! returns true if the typed callable type \a first is a superset of the type \a second, of which at least one is
 //! a typed callable type (qore#6660)
-/** A typed callable type is a superset of the typed callable types whose signatures it accepts, and of no other type;
-    the type \c code (and \c *code) is a superset of every typed callable type, which its specs give
+/** A typed callable type is a superset only of the typed callable types with the same signature (and of their
+    non-NOTHING types, for an or-nothing type): a type does not record which parameters of a callable have default
+    arguments, so the variance check of checkComplexCodeCompatibility() cannot tell whether every value of another
+    signature is accepted, and a superset decides that values are kept unchecked and is the common type of folded
+    values; the type \c code (and \c *code) is a superset of every typed callable type, which its specs give
 */
 static __attribute__((noinline)) bool qore_complex_code_super_set_of(const QoreTypeInfo* first,
         const QoreTypeInfo* second) {
-    if (!first->isComplexCode()) {
+    if (!first->isComplexCode() || !second->isComplexCode()) {
         return false;
     }
-    if (!second->isComplexCode()) {
+    const QoreComplexCodeTypeInfo* cf = static_cast<const QoreComplexCodeTypeInfo*>(first);
+    const QoreComplexCodeTypeInfo* cs = static_cast<const QoreComplexCodeTypeInfo*>(second);
+    if (!cf->isOrNothing() && cs->isOrNothing()) {
         return false;
     }
-    if (!static_cast<const QoreComplexCodeTypeInfo*>(first)->isOrNothing()
-            && static_cast<const QoreComplexCodeTypeInfo*>(second)->isOrNothing()) {
-        return false;
+    if (cf->isOrNothing() != cs->isOrNothing()) {
+        // compare the signatures of *code<sig> and code<sig>
+        return QoreTypeInfo::equal(qore_get_complex_code_type(cf->getReturnType(), cf->getParamTypes(),
+            cf->hasVarArgs(), false), second);
     }
-    return QoreTypeInfo::checkComplexCodeCompatibility(first, second);
+    return QoreTypeInfo::complexCodeTypesEqual(first, second);
 }
 
 bool QoreComplexCodeTypeInfo::isSignatureCompatible(const AbstractFunctionSignature* sig) const {
@@ -8691,6 +8704,14 @@ bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInf
         return true;
     }
 
+    // two typed callables of different signatures have the type code in common (qore#6660)
+    if (__builtin_expect(ctype->isComplexCode() && ntype->isComplexCode(), 0)) {
+        ctype = static_cast<const QoreComplexCodeTypeInfo*>(ctype)->isOrNothing()
+                || static_cast<const QoreComplexCodeTypeInfo*>(ntype)->isOrNothing()
+            ? codeOrNothingTypeInfo : codeTypeInfo;
+        return true;
+    }
+
     // try to find a common base type
     // if we're dealing with types that return multiple types, then they are not compatible
     if (ctype->return_vec.size() > 1 || ntype->return_vec.size() > 1) {
@@ -8752,6 +8773,29 @@ bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInf
     return false;
 }
 
+//! returns true if the container spec \a target keeps the values of the container spec \a source as they are: a
+//! list or hash of typed callables for a list or hash of code (qore#6660)
+/** Before the signature of a typed callable was part of its type, list<code> and list<code<...>> were the same type,
+    and a container of closures kept the type of its closures where a container of code was expected; called only
+    for specs that are not equal
+*/
+static __attribute__((noinline)) bool qore_spec_keeps_typed_callables(const QoreTypeSpec& target,
+        const QoreTypeSpec& source) {
+    q_typespec_t ts = target.getTypeSpec();
+    if (ts != source.getTypeSpec() || (ts != QTS_COMPLEXLIST && ts != QTS_COMPLEXHASH && ts != QTS_COMPLEXSOFTLIST)) {
+        return false;
+    }
+    const QoreTypeInfo* tv = target.getElementType();
+    if (tv != codeTypeInfo && tv != codeOrNothingTypeInfo) {
+        return false;
+    }
+    const QoreTypeInfo* sv = source.getElementType();
+    if (!sv || !sv->isComplexCode()) {
+        return false;
+    }
+    return tv == codeOrNothingTypeInfo || !static_cast<const QoreComplexCodeTypeInfo*>(sv)->isOrNothing();
+}
+
 bool QoreTypeInfo::superSetOf(const QoreTypeInfo* t) const {
     if (this == t) {
         return true;
@@ -8766,12 +8810,14 @@ bool QoreTypeInfo::superSetOf(const QoreTypeInfo* t) const {
     }
 
     for (unsigned i = 0; i < t->getAcceptVecSize(); ++i) {
-        if (t->getAcceptSpec(i).spec != getAcceptSpec(i).spec)
+        if (t->getAcceptSpec(i).spec != getAcceptSpec(i).spec
+                && !qore_spec_keeps_typed_callables(getAcceptSpec(i).spec, t->getAcceptSpec(i).spec))
             return false;
     }
 
     for (unsigned i = 0; i < t->return_vec.size(); ++i) {
-        if (t->return_vec[i].spec != return_vec[i].spec)
+        if (t->return_vec[i].spec != return_vec[i].spec
+                && !qore_spec_keeps_typed_callables(return_vec[i].spec, t->return_vec[i].spec))
             return false;
     }
 

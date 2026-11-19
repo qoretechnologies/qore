@@ -31,3 +31,4 @@ ok call ref: 2
 ok overloaded call ref: 4
 ok method ref: 8
 ok builtin ref: 3
+ok mixed signatures: 240
