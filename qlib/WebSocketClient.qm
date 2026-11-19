@@ -1052,7 +1052,9 @@ public class WscActionCall {
     private {
         *WscActionCallState state;
         string key;
+    }
 
+    private:internal {
         #! the state of each thread's outermost call, by client key and TID
         /** Kept here rather than in the thread data, so the module needs no access to the \c THREAD_CONTROL
             functional domain; accessed only in static synchronized methods

@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
+    The static members in which public classes of the standard modules keep state shared by all of their callers
+    (caches of objects and connections, the host's callbacks and loggers) are \c private:internal, so no subclass can
+    read them (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6748">issue
+    6748</a>).
+
     @par An Encoding That Is Not Predefined Has One Canonical Name
     The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
     \c "Shift_JIS") or the name in upper case (ex: \c "CP1047"), not the spelling with which the program first used

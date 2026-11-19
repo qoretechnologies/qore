@@ -59,7 +59,9 @@ public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvi
 
         #! The connection object, if applicable
         *ConvertApiRestClient::ConvertApiRestConnection conn;
+    }
 
+    private:internal {
         #! Converter list cache: API URL -> {"timestamp": date, "converters": list}
         static hash<string, hash<auto>> converter_cache = {};
 
