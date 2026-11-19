@@ -112,10 +112,12 @@ handler writes: 35 35
         string out = backquote(sprintf("QORE_IR_OPT_STATS=1 QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1",
             libqore_dir, qcc_bin, opt, exe, script));
         assertTrue(is_file(exe), "compiled the executable: " + out);
-        # Count actual scans in each collection. The inline and out-of-line copies at registration sites share
-        # one handler function for each source handler in these functions.
+        # Each collection scans at most one IR function per nesting level in the three deep fixtures.
+        # In handler_writes, qcc lowers the nested write to tens on debugger-return paths both before and after
+        # raise gets a local slot. The two parent slot maps require separate cached handler functions, so together
+        # with the outer handler and the sibling that writes units, there are up to four distinct bodies.
         hash<string, int> handler_count = {"nested_noreturn": 16, "nested_return": 16, "nested_throw": 12,
-            "handler_writes": 3};
+            "handler_writes": 4};
         foreach hash<auto> row in (handler_count.pairIterator()) {
             list<string> lines = select out.split("\n"), $1.equalPartial("IR-OPT-HANDLER-WRITES: " + row.key);
             assertTrue(lines.size() > 0, "write analysis ran for " + row.key);
