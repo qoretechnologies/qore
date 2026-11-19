@@ -4168,17 +4168,22 @@ public:
                 }
                 if (inst->exception_target) {
                     has_exception_paths = true;
+                    exception_targets.insert(inst->exception_target);
                 }
                 if (auto* thr = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst)) {
                     has_exception_paths |= thr->exception_target != nullptr;
+                    exception_targets.insert(thr->exception_target);
                 } else if (auto* inv = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
                     has_exception_paths |= inv->exception_target != nullptr;
+                    exception_targets.insert(inv->exception_target);
                 } else if (auto* inv_md =
                         qore_ir_inst_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
                     has_exception_paths |= inv_md->exception_target != nullptr;
+                    exception_targets.insert(inv_md->exception_target);
                 } else if (auto* inv_de =
                         qore_ir_inst_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
                     has_exception_paths |= inv_de->exception_target != nullptr;
+                    exception_targets.insert(inv_de->exception_target);
                 }
                 switch (inst->opcode) {
                     case QoreIROpcode::CreateClosure:
@@ -4416,6 +4421,8 @@ private:
     std::unordered_set<const QoreIRInstruction*> unknown_handler_locals;
     std::unordered_map<uint32_t, size_t> scope_enter_idx;
     std::vector<std::pair<uint32_t, size_t>> scope_exit_ids;
+    //! the blocks that an exception edge targets
+    std::unordered_set<const QoreIRBasicBlock*> exception_targets;
     //! catch_depth_in: no path into the block seen yet
     static constexpr int CatchDepthUnknown = -2;
     //! catch_depth_in: the paths into the block disagree
@@ -4667,6 +4674,12 @@ private:
                     return fail("exception-path block at region boundary");
                 }
             }
+        }
+        // nor may the first block be the target of an exception edge (an exception path's cleanup block, which the
+        // exception enters with no landing pad): the helper would be entered with the exception pending, and the
+        // coordinator's call block is no exception path (qore#6651)
+        if (exception_targets.count(fn.blocks[first].get())) {
+            return fail("exception-path block at region boundary");
         }
         std::unordered_set<const LocalVar*> region_locals;
         // the scopes of the on_exit, on_error and on_success handlers registered in the region
