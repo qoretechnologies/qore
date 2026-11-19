@@ -934,6 +934,9 @@ private:
     // discard.temps must not clear them while the local alloca still borrows
     // their owned reference.
     std::unordered_set<llvm::Value*> persistent_cleanup_allocas;
+    //! Constructor-result slots cleared by ReleaseOwnedTemp. A later statement cleanup on a path that
+    //! skipped the release still owns the object until that cleanup (#6657).
+    std::unordered_set<llvm::Value*> released_constructor_slots;
     //! The slots of the reads through references of the variables of foreach loops (see loadLocalCacheValue()),
     //! which hold a value only if element_read_held_flag is set: the end of a statement releases them behind one test
     //! of the flag (emitDiscardTemps())
