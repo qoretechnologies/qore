@@ -7809,7 +7809,7 @@ public:
             std::string& error) : lowering(lowering), loc(loc), error(error),
             uncaught_exceptions(std::uncaught_exceptions()) {
         lowering.functional_source_captures.push_back({sourceNode(source), QoreIRValue(), !isListSource(source),
-            QoreIRValue()});
+            QoreIRValue(), QoreIRValue(), {}});
     }
 
 
@@ -7867,6 +7867,51 @@ public:
             || QoreTypeInfo::getReturnComplexListOrNothing(ti);
     }
 };
+
+void QoreIRLowering::recordFoldAccumulator(const QoreIRPhiInstruction* accumulator, QoreIRValue initial) {
+    if (functional_source_captures.empty()) {
+        return;
+    }
+    FunctionalSourceCapture& capture = functional_source_captures.back();
+    capture.accumulator = QoreIRValue();
+    capture.accumulator_values.clear();
+    // the values of the back edges: not the Phi itself (a path that keeps the accumulator) or its initial value
+    std::vector<QoreIRValue> values;
+    for (const QoreIRPhiIncoming& inc : accumulator->incoming) {
+        if (!inc.value.isValid() || inc.value.id == accumulator->result.id || inc.value.id == initial.id
+                || std::any_of(values.begin(), values.end(),
+                    [&inc](const QoreIRValue& v) { return v.id == inc.value.id; })) {
+            continue;
+        }
+        values.push_back(inc.value);
+    }
+    // only a back-edge value that is a Phi (a conditional expression of the fold's arguments, the value of a fused
+    // pipeline's fold) or the value that the discarded temporaries of the fold's expression keep can leave the
+    // accumulator's Phi with a reference of its own: a call's value, an element or the result of an operator (foldl
+    // $1 + $2, l) is taken over by the Phi, and the Phi after the loop takes the accumulator over, so nothing is
+    // emitted for them
+    bool needed = false;
+    for (const auto& block : builder.getFunction()->blocks) {
+        for (const auto& inst : block->instructions) {
+            if ((inst->opcode != QoreIROpcode::Phi && inst->opcode != QoreIROpcode::DiscardTempsKeep)
+                    || !inst->result.isValid()) {
+                continue;
+            }
+            if (std::any_of(values.begin(), values.end(),
+                    [&inst](const QoreIRValue& v) { return v.id == inst->result.id; })) {
+                needed = true;
+                break;
+            }
+        }
+        if (needed) {
+            break;
+        }
+    }
+    if (needed) {
+        capture.accumulator = accumulator->result;
+        capture.accumulator_values = std::move(values);
+    }
+}
 
 bool QoreIRLowering::functionalSourceReleased() const {
     return !functional_source_captures.empty() && functional_source_captures.back().value.isValid();
@@ -18877,7 +18922,8 @@ QoreIRValue QoreIRLowering::lowerWithSourceRelease(const QoreValue& expr, const 
     // a value of a type that is never a node (int, float, bool) holds no reference to release with the source, so it
     // needs no reference of its own; a string or a date can be the source's own node, so only those types are skipped
     if (result.isValid() && error.empty()
-            && ((capture.node && capture.value.isValid()) || capture.intermediate.isValid())
+            && ((capture.node && capture.value.isValid()) || capture.intermediate.isValid()
+                || capture.accumulator.isValid())
             && (always_ref || capture.may_alias)
             && !qore_ir_type_is_immediate_scalar(builder.getFunction(), getExprTypeInfo(expr))) {
         QoreIRBasicBlock* block = builder.getBlock();
@@ -18888,6 +18934,22 @@ QoreIRValue QoreIRLowering::lowerWithSourceRelease(const QoreValue& expr, const 
             // takes it as its argument releases when it returns (f(foldl $1 + $2, l); qore#5801); a value that the
             // frame does not own (an element of the source) is left alone
             builder.createReleaseOwnedTemp(value, loc);
+            // the accumulator's Phi, which held a reference of its own to the value when the Phi after the loop
+            // could not take it over (foldl ($1 ?? $2), l; a fold over a fused pipeline): the new value is then its
+            // only owner, as the AST interpreter's fold gives its value alone (issue #6442).  The release runs once
+            // the loop has ended, so it is not a use that keeps a Phi from taking the accumulator over (see
+            // qore_ir_is_exception_only_release()); a slot that a Phi took over, or that holds no reference of its
+            // own, releases nothing
+            if (capture.accumulator.isValid() && capture.accumulator.id != value.id) {
+                builder.createReleaseOwnedTemp(capture.accumulator, loc)->exception_cleanup_release = true;
+                // the value of the fold's expression that the accumulator's Phi referenced again: it holds the
+                // accumulator's last value, or nothing if the Phi took it over or the loop did not run
+                for (const QoreIRValue& v : capture.accumulator_values) {
+                    if (v.id != value.id) {
+                        builder.createReleaseOwnedTemp(v, loc)->exception_cleanup_release = true;
+                    }
+                }
+            }
         }
     }
     return result;
@@ -22048,6 +22110,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     result_incoming.push_back({accum_val, header_block});  // Normal case after iterations
 
     auto* result_phi = builder.createPhi(result_incoming, foldl->loc);
+    recordFoldAccumulator(accum_phi, first_val);
     // the operator's iterator ends with the operator, as the AST interpreter's functional iterator does, when the
     // operator's source is released after the operator (a temporary or a plain read of a local, see
     // FunctionalSourceRelease): it held the source, whose objects are then destroyed before the rest of the statement
@@ -22311,6 +22374,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     result_incoming.push_back({accum_val, header_block});  // Normal case after iterations
 
     auto* result_phi = builder.createPhi(result_incoming, foldr->loc);
+    recordFoldAccumulator(accum_phi, first_val);
 
     return result_phi->result;
 }
@@ -25004,6 +25068,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
         builder.setBlock(fold_result_block);
         add_final(fold_accum_phi->result, loc);
+        if (root_foldl && !root_string_join) {
+            recordFoldAccumulator(fold_accum_phi, fold_initial_accum);
+        }
 
         builder.setBlock(fold_empty_block);
         if (root_method_join) {
