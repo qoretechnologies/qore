@@ -33,6 +33,8 @@
 #include "qore/intern/QoreIR.h"
 
 #include "qore/intern/QoreJITIncludes.h"
+#include <iostream> // TMP6468
+#include <qore/intern/QoreIRPrinter.h> // TMP6468
 #include <qore/QoreRegexInterface.h>
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreTypeInfo.h"
@@ -15841,6 +15843,7 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     if (verify_written) {
         std::string verify_error;
         if (!QoreIRVerifier::verifyModuleIR(func, verify_error)) {
+            if (getenv("QORE_6468_DUMP")) { std::cerr << "TMP6468 " << func.name << ": " << verify_error << "\n"; QoreIRPrinter::print(func, std::cerr); } // TMP6468
             qoreAOTSetExprSerializationError("the IR of function '" + func.name + "' fails the verification of IR "
                 "read from an AOT module: " + verify_error);
             return false;

@@ -335,6 +335,37 @@ int qore_ir_verify_released_operand(const QoreIRInstruction& inst, QoreIRVerifyR
     }
 }
 
+//! Returns the opcodes that may define the container that the instruction changes (its first operand), if the
+//! interpreter or the JIT take the value as a container of that type without a check of its type; nullptr otherwise
+/** The lowering creates the list that it appends to, stores to or sets the length of, the list that it sets as the
+    implicit arguments, and the hash that it sets keys of, with the instruction that creates it, in the same function
+    (QoreIRLowering: map, select, hash map and the implicit arguments of a fold or a call reference): the value is
+    the result of that instruction, never a phi or a value of another kind.
+*/
+const std::vector<QoreIROpcode>* qore_ir_verify_container_definers(QoreIROpcode opcode) {
+    static const std::vector<QoreIROpcode> lists = {QoreIROpcode::CreateEmptyList, QoreIROpcode::CreateSizedList,
+        QoreIROpcode::MakeList};
+    static const std::vector<QoreIROpcode> hashes = {QoreIROpcode::MakeHash};
+    switch (opcode) {
+        // QoreValue::get<QoreListNode>() without a check (the interpreter, qore_rt_list_append(),
+        // qore_rt_set_implicit_argv(), qore_rt_list_set_length_unchecked()), and the stores of the JIT to the entries
+        // of a typed list that it created
+        case QoreIROpcode::ListAppend:
+        case QoreIROpcode::SetImplicitArgv:
+        case QoreIROpcode::ListSetInt:
+        case QoreIROpcode::ListSetFloat:
+        case QoreIROpcode::ListSetValue:
+        case QoreIROpcode::ListSetLength:
+            return &lists;
+        // QoreValue::get<QoreHashNode>() without a check (the interpreter, qore_rt_hash_set_key_value())
+        case QoreIROpcode::HashSetKeyValue:
+        case QoreIROpcode::HashSetKeyValueFold:
+            return &hashes;
+        default:
+            return nullptr;
+    }
+}
+
 //! The stacks that verifyModuleIR() follows: their depths are the same on every path into a point of the function
 enum QoreIRVerifyStack : uint8_t {
     //! the temp scopes of the frame (PushTempMark), by temp scope id
@@ -1295,6 +1326,8 @@ bool QoreIRVerifier::verifyModuleIR(const QoreIRFunction& func, std::string& err
         uint32_t pos;
     };
     std::unordered_map<uint32_t, Def> defs;
+    // the containers that the function changes (see qore_ir_verify_container_definers())
+    std::unordered_set<uint32_t> changed_containers;
     for (uint32_t b = 0; b < num_blocks; ++b) {
         if (!reachable[b]) {
             continue;
@@ -1303,6 +1336,9 @@ bool QoreIRVerifier::verifyModuleIR(const QoreIRFunction& func, std::string& err
         for (size_t pos = 0; pos <= block_end[b]; ++pos) {
             if (insts[pos]->result.isValid()) {
                 defs[insts[pos]->result.id] = {b, static_cast<uint32_t>(pos)};
+            }
+            if (qore_ir_verify_container_definers(insts[pos]->opcode) && !insts[pos]->operands.empty()) {
+                changed_containers.insert(insts[pos]->operands[0].id);
             }
         }
     }
@@ -1455,6 +1491,45 @@ bool QoreIRVerifier::verifyModuleIR(const QoreIRFunction& func, std::string& err
             }
             if (!ok) {
                 return false;
+            }
+            // the container that the instruction changes is one that the function creates, of the type that the
+            // interpreter and the JIT take it as without a check
+            if (const std::vector<QoreIROpcode>* definers = qore_ir_verify_container_definers(inst.opcode)) {
+                auto it = inst.operands.empty() ? defs.end() : defs.find(inst.operands[0].id);
+                const QoreIRInstruction* def = it == defs.end() ? nullptr
+                    : func.blocks[it->second.block]->instructions[it->second.pos].get();
+                if (!def || std::find(definers->begin(), definers->end(), def->opcode) == definers->end()) {
+                    error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " changes a container that is not "
+                        "created by an instruction that creates its type" + where(b, pos);
+                    return false;
+                }
+            }
+            // the JIT reads the entries of the list of these instructions through the address of its entries, which
+            // it takes once (with the list's size, see QoreIRToLLVM::getDirectListReadBound()): the list is one that
+            // the function does not change, which could move its entries (the lowering reads the source of a map, a
+            // select or a foreach, and changes only the list that it creates for the result)
+            if (!changed_containers.empty()) {
+                QoreIRValue read_list;
+                switch (inst.opcode) {
+                    case QoreIROpcode::ListGetInt:
+                    case QoreIROpcode::ListGetFloat:
+                    case QoreIROpcode::ListGetValueNoRefUnchecked:
+                        read_list = inst.operands.empty() ? QoreIRValue() : inst.operands[0];
+                        break;
+                    case QoreIROpcode::TypedForeachNextInt:
+                    case QoreIROpcode::TypedForeachNextFloat:
+                    case QoreIROpcode::TypedForeachNextBool:
+                    case QoreIROpcode::TypedForeachNextString:
+                        read_list = static_cast<const QoreIRIteratorNextInstruction&>(inst).iterator;
+                        break;
+                    default:
+                        break;
+                }
+                if (read_list.isValid() && changed_containers.count(read_list.id)) {
+                    error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " reads the entries of a list that "
+                        "the function changes" + where(b, pos);
+                    return false;
+                }
             }
         }
     }

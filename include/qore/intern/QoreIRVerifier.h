@@ -69,6 +69,13 @@ public:
           element of a loop is also the handler of the instructions of a return out of it, qore#6643), so the
           stacks are checked on the normal control flow, and on a path from an exception edge once it meets a
           normal path (the scopes from a landing pad on)
+        - the container that an instruction changes without a check of its type (ListAppend, ListSetInt,
+          ListSetFloat, ListSetValue, ListSetLength, SetImplicitArgv: a list; HashSetKeyValue,
+          HashSetKeyValueFold: a hash) is created by an instruction of the function that creates a container of
+          that type, and a list whose entries native code reads through their address (ListGetInt, ListGetFloat,
+          ListGetValueNoRefUnchecked, a step of a typed foreach) is not changed by the function; the index of a
+          store to a list and of a direct read of native code is checked when it runs (qore_ir_list_store_index_ok(),
+          QoreIRToLLVM::beginListBoundsCheck())
 
         Blocks that cannot run (that are not reached from the entry block by any edge) are not checked.  The cost is
         linear in the size of the function for the checks, plus the iterations of the dominator computation, which

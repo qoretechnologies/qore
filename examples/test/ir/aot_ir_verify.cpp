@@ -675,6 +675,76 @@ static void releaseInLoop(QoreIRFunction& fn, QoreIRBuilder& b, bool before_loop
     b.createReturnNothing();
 }
 
+static const char* const NotCreated = "changes a container that is not created by an instruction that creates its type";
+
+//! a list that the function creates and appends to, then stores to and reads (\a container: the instruction that
+//! creates the container, \a read: the list is read with ListGetInt)
+static void listChange(QoreIRFunction& fn, QoreIRBuilder& b, QoreIROpcode container, bool read) {
+    QoreIRValue zero = b.createConstInt(0)->result;
+    QoreIRValue one = b.createConstInt(1)->result;
+    QoreIRValue list;
+    switch (container) {
+        case QoreIROpcode::CreateEmptyList:
+            list = b.createEmptyList()->result;
+            break;
+        case QoreIROpcode::CreateSizedList:
+            list = b.createSizedList(one)->result;
+            break;
+        default:
+            list = b.createConstString("not a list")->result;
+            break;
+    }
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* c = fn.createBlock("c");
+    b.createBranch(a);
+    b.setBlock(a);
+    b.createListAppend(list, one);
+    b.createListSetInt(list, zero, one);
+    b.createBranch(c);
+    b.setBlock(c);
+    if (read) {
+        b.createListGetInt(list, zero);
+    }
+    b.createReturn(list);
+}
+
+// the runtime helpers of the JIT that store to a list (JITRuntime.cpp)
+extern "C" void qore_rt_list_set_int(uint64_t list_bits, int64_t index, int64_t value);
+extern "C" void qore_rt_list_set_float(uint64_t list_bits, int64_t index, double value);
+extern "C" void qore_rt_list_set_value(uint64_t list_bits, int64_t index, uint64_t value_bits);
+
+//! checks that the runtime stores to a list only at an index below its length or at its end
+static bool checkListStores() {
+    ++count;
+    QoreListNode* l = new QoreListNode(autoTypeInfo);
+    QoreValue lv(l);
+    uint64_t bits;
+    memcpy(&bits, &lv, sizeof bits);
+    QoreValue s(new QoreStringNode("s"));
+    uint64_t sbits;
+    memcpy(&sbits, &s, sizeof sbits);
+    qore_rt_list_set_int(bits, 0, 1);
+    qore_rt_list_set_float(bits, 1, 2.0);
+    // beyond the end, and a negative index: no store (the value given to qore_rt_list_set_value is released)
+    qore_rt_list_set_int(bits, 3, 3);
+    qore_rt_list_set_int(bits, -1, 3);
+    qore_rt_list_set_float(bits, -1, 3.0);
+    // each store is given a reference of its own
+    s.refSelf();
+    qore_rt_list_set_value(bits, -1, sbits);
+    s.refSelf();
+    qore_rt_list_set_value(bits, 1000000, sbits);
+    bool ok = l->size() == 2 && l->retrieveEntry(0).getAsBigInt() == 1 && l->retrieveEntry(1).getAsFloat() == 2.0
+        && s.getInternalNode()->reference_count() == 1;
+    if (!ok) {
+        fprintf(stderr, "list stores: size %zu, string references %d\n", l->size(),
+            s.getInternalNode()->reference_count());
+    }
+    l->deref(nullptr);
+    s.discard(nullptr);
+    return ok;
+}
+
 int main(int argc, char** argv) {
     // the fixtures write malformed IR, which the writer refuses in a debug build otherwise
     setenv("QORE_AOT_TEST_NO_WRITE_VERIFY", "1", 1);
@@ -1121,6 +1191,51 @@ int main(int argc, char** argv) {
     run("contexts destroyed outermost first", [](QoreIRFunction& fn, QoreIRBuilder& b) {
         contexts(fn, b, true);
     }, nullptr, NotInnermost);
+
+    // the containers that the function changes are created by it, of their type, and are not read through the address
+    // of their entries
+    run("list created and changed", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        listChange(fn, b, QoreIROpcode::CreateEmptyList, false);
+    });
+    run("sized list created and changed", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        listChange(fn, b, QoreIROpcode::CreateSizedList, false);
+    });
+    run("list appended to that the function does not create", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        listChange(fn, b, QoreIROpcode::ConstString, false);
+    }, nullptr, NotCreated);
+    run("list stored to that the function does not create", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        listChange(fn, b, QoreIROpcode::CreateEmptyList, false);
+    }, [](QoreIRFunction& fn) {
+        find(fn, QoreIROpcode::ListSetInt)->operands[0] = find(fn, QoreIROpcode::ConstInt)->result;
+    }, NotCreated);
+    run("implicit arguments set from a value that is not a list", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        QoreIRValue v = b.createConstString("x")->result;
+        QoreIRValue saved = b.createSetImplicitArgv(v)->result;
+        b.createPopImplicitArg(saved);
+        QoreIRBasicBlock* a = fn.createBlock("a");
+        QoreIRBasicBlock* c = fn.createBlock("c");
+        b.createBranch(a);
+        b.setBlock(a);
+        b.createBranch(c);
+        b.setBlock(c);
+        b.createReturnNothing();
+    }, nullptr, NotCreated);
+    run("hash key set in a list", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        QoreIRValue key = b.createConstString("k")->result;
+        QoreIRValue list = b.createEmptyList()->result;
+        QoreIRBasicBlock* a = fn.createBlock("a");
+        QoreIRBasicBlock* c = fn.createBlock("c");
+        b.createBranch(a);
+        b.setBlock(a);
+        b.createHashSetKeyValue(list, key, key);
+        b.createBranch(c);
+        b.setBlock(c);
+        b.createReturn(list);
+    }, nullptr, NotCreated);
+    run("entries read of a list that the function changes", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        listChange(fn, b, QoreIROpcode::CreateSizedList, true);
+    }, nullptr, "reads the entries of a list that the function changes");
+    ok = checkListStores() && ok;
 
     qore_destroy_program(pgm);
     qore_cleanup();

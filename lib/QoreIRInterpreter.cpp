@@ -1861,6 +1861,17 @@ static QORE_IR_COLD_NOINLINE uint32_t qore_ir_exception_branch_temp_scope(const 
     return scope_id;
 }
 
+//! Returns true if a store of IR to a list (ListSetInt, ListSetFloat, ListSetValue) is at an index that the list can
+//! take: below its length or at its end
+/** The lowering stores to the list that a map or a select creates, at the index of the element (below the length of a
+    list created with its length) or at the next index (a list that reserves its size); IR read from a malformed AOT
+    module can give any index, which would write outside of the list (a negative index) or allocate without a bound:
+    such a store is not made (qore#6468)
+*/
+static QORE_INTERN_ALWAYS_INLINE bool qore_ir_list_store_index_ok(const qore_list_private* priv, int64_t index) {
+    return static_cast<uint64_t>(index) <= priv->length;
+}
+
 //! Removes the temp entry of a value that ReleaseOwnedTemp releases
 /** The marks of the temp scopes entered after the entry was pushed count it (cleanup_size): they are moved down with
     the entries after it, so that the release of each of those scopes still releases its own temps (#5992: the value
@@ -11908,6 +11919,11 @@ dispatch_folded_step_host:
                     QoreListNode* l = list_val.get<QoreListNode>();
                     int64_t index = idx_val.getAsBigInt();
                     qore_list_private* priv = qore_list_private::get(*l);
+                    // the lowering stores at the next index or below it (qore_ir_list_store_index_ok())
+                    if (!qore_ir_list_store_index_ok(priv, index)) {
+                        ++ip;
+                        break;
+                    }
                     priv->getEntryReference(static_cast<size_t>(index)) = QoreValue(val.getAsBigInt());
                     if (static_cast<size_t>(index) >= priv->length) {
                         priv->length = static_cast<size_t>(index) + 1;
@@ -11924,6 +11940,11 @@ dispatch_folded_step_host:
                     QoreListNode* l = list_val.get<QoreListNode>();
                     int64_t index = idx_val.getAsBigInt();
                     qore_list_private* priv = qore_list_private::get(*l);
+                    // the lowering stores at the next index or below it (qore_ir_list_store_index_ok())
+                    if (!qore_ir_list_store_index_ok(priv, index)) {
+                        ++ip;
+                        break;
+                    }
                     priv->getEntryReference(static_cast<size_t>(index)) = QoreValue(val.getAsFloat());
                     if (static_cast<size_t>(index) >= priv->length) {
                         priv->length = static_cast<size_t>(index) + 1;
@@ -11936,7 +11957,9 @@ dispatch_folded_step_host:
                 QoreValue list_val = getIRValue(values, inst->operands[0]);
                 QoreValue idx_val = getIRValue(values, inst->operands[1]);
                 QoreValue val = getIRValue(values, inst->operands[2]);
-                if (list_val.getType() == NT_LIST) {
+                if (list_val.getType() == NT_LIST
+                        && qore_ir_list_store_index_ok(qore_list_private::get(*list_val.get<QoreListNode>()),
+                            idx_val.getAsBigInt())) {
                     QoreListNode* l = list_val.get<QoreListNode>();
                     int64_t index = idx_val.getAsBigInt();
                     QoreIRValue value_operand = inst->operands[2];
