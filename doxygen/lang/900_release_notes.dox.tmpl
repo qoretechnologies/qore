@@ -117,6 +117,11 @@
     handlers of the standard modules refuse registrations, replacements and removals from sandboxed code, also when it
     has the \c PROCESS_CONTROL domain (see @ref sandbox_module_state;
     <a href="https://github.com/qoretechnologies/qore/issues/6747">issue 6747</a>).
+    @par Code That Is Not Trusted Loads Native Code Only From the Module Path
+    A binary module (also a module compiled with \c qcc) from outside the process-wide module path is not loaded for
+    sandboxed or restricted code that may not use uncontrolled APIs; a compiled module whose source is next to it is
+    loaded as source (see @ref sandbox_native_code; <a href="https://github.com/qoretechnologies/qore/issues/6776">issue
+    6776</a>).
 
     @par An Encoding That Is Not Predefined Has One Canonical Name
     The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
