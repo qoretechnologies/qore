@@ -5279,20 +5279,29 @@ public:
     DLLLOCAL const QoreMethod* parseResolveSelfMethodIntern(const QoreProgramLocation* loc, const char* nme,
             const qore_class_private* class_ctx);
 
+    //! Returns true if the class context is this class: this class itself or another copy of its declaration
+    /** A class imported into another Program is a copy of its class with the same class ID (sameDeclaration()); the
+        code of its methods runs with the class context of the class that it was parsed in, also for an object of the
+        copy, which is the context of the copy for its private:internal parent classes and members (qore#6671)
+    */
+    DLLLOCAL bool isClassContext(const qore_class_private* class_ctx) const {
+        return class_ctx == this || (class_ctx && class_ctx->classID == classID);
+    }
+
     // returns a non-static method if it exists in class hierarchy and has been committed to the class
     // class_ctx is only set if it is present and accessible, so we only need to check for internal access here
     DLLLOCAL const QoreMethod* runtimeFindCommittedStaticMethodIntern(const char* nme, ClassAccess& access,
             const qore_class_private* class_ctx) const {
         const QoreMethod* m = findLocalCommittedStaticMethod(nme);
         if (m &&
-            (class_ctx == this || doRuntimeMethodAccess(m, access, m->getAccess(), class_ctx))) {
+            (isClassContext(class_ctx) || doRuntimeMethodAccess(m, access, m->getAccess(), class_ctx))) {
             return m;
         }
         if (!scl) {
             return nullptr;
         }
         // access already checked in subclasses, do not need to check again
-        return scl->runtimeFindCommittedStaticMethod(nme, access, class_ctx, class_ctx == this);
+        return scl->runtimeFindCommittedStaticMethod(nme, access, class_ctx, isClassContext(class_ctx));
     }
 
     // returns a non-static method if it exists in class hierarchy and has been committed to the class
@@ -5303,14 +5312,14 @@ public:
         //printd(5, "qore_class_private::runtimeFindCommittedMethodIntern(%s) '%s' class_ctx: %p '%s' FIRST m: %p\n",
         //    nme, name.c_str(), class_ctx, class_ctx ? class_ctx.name.c_str() : "n/a", m);
         if (m &&
-            (class_ctx == this || doRuntimeMethodAccess(m, access, m->getAccess(), class_ctx))) {
+            (isClassContext(class_ctx) || doRuntimeMethodAccess(m, access, m->getAccess(), class_ctx))) {
             return m;
         }
         if (!scl) {
             return nullptr;
         }
         // access already checked in subclasses, do not need to check again
-        return scl->runtimeFindCommittedMethod(nme, access, class_ctx, class_ctx == this);
+        return scl->runtimeFindCommittedMethod(nme, access, class_ctx, isClassContext(class_ctx));
     }
 
     DLLLOCAL const QoreMethod* runtimeFindCommittedStaticMethod(const char* nme, ClassAccess& access,
