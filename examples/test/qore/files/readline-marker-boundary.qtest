@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - File reads of regular files through iconv: Shift_JIS, Big5, GBK, GB18030, EUC-JP
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+#! File::readLine() with a marker ends a line only where the marker starts at a character boundary (qore#6648)
+/** In a double-byte encoding whose trail bytes can have the value of an ASCII character (Shift_JIS, Big5, GBK), a
+    marker byte that is the trail byte of a character does not end the line inside that character, as with
+    StreamReader::readLine() and FileLineIterator.
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ReadLineMarkerBoundaryTest
+
+class ReadLineMarkerBoundaryTest inherits QUnit::Test {
+    public {
+        #! encodings, a character whose trail byte is an ASCII character, and that character as the marker
+        const Cases = (
+            ("Shift_JIS", "ソ", "\\"),
+            ("Big5", "功", "\\"),
+            ("Big5", "弋", "|"),
+            ("GBK", "丂", "@"),
+        );
+    }
+
+    private {
+        TmpDir tmp("readline-marker-boundary-");
+        int n = 0;
+    }
+
+    constructor() : Test("readLine() marker at a character boundary", "1.0", \ARGV) {
+        addTestCase("the trail bytes are the markers", \trailBytes());
+        addTestCase("File::readLine() with a marker", \fileReadLine());
+        addTestCase("File::readLine() with a marker of more than one character", \fileReadLineLongMarker());
+        addTestCase("the same lines as StreamReader::readLine() and FileLineIterator", \parity());
+        addTestCase("UTF-16 and ASCII-compatible encodings", \otherEncodings());
+        addTestCase("invalid sequences of encodings with characters of more than two bytes", \invalidSequences());
+        addTestCase("valid characters of more than two bytes", \longCharacters());
+        set_return_value(main());
+    }
+
+    #! writes the given bytes to a new file and returns its path
+    private string file(binary data) {
+        string path = tmp.path + DirSep + sprintf("f%d", ++n);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        return path;
+    }
+
+    #! returns the text in the given encoding as bytes
+    private static binary bytes(string text, string enc) {
+        return binary(convert_encoding(text, enc));
+    }
+
+    #! returns the lines read with File::readLine() with the given marker
+    private list<string> readLines(string path, string enc, string marker, bool incl = False) {
+        File f(enc);
+        f.open2(path);
+        list<string> rv = ();
+        while (exists (*string line = f.readLine(incl, marker))) {
+            push rv, line;
+        }
+        return rv;
+    }
+
+    #! the test is about characters whose second byte is the marker
+    trailBytes() {
+        foreach list<string> c in (Cases) {
+            binary b = bytes(c[1], c[0]);
+            assertEq(2, b.size(), c[0]);
+            assertEq(binary(c[2]), b.substr(1), c[0] + " " + c[1]);
+        }
+    }
+
+    fileReadLine() {
+        foreach list<string> c in (Cases) {
+            string enc = c[0];
+            string ch = c[1];
+            string marker = c[2];
+            # "a<ch>b<marker>c": the marker byte inside <ch> does not end the line
+            string text = "a" + ch + "b" + marker + "c";
+            string path = file(bytes(text, enc));
+            list<string> lines = readLines(path, enc, marker);
+            assertEq(("a" + ch + "b", "c"), lines, enc + " " + ch);
+            assertEq(enc, lines[0].encoding());
+            # with the marker
+            assertEq(("a" + ch + "b" + marker, "c"), readLines(path, enc, marker, True), enc + " " + ch);
+
+            # the character at the start and at the end of a line, and lines of the character alone
+            text = ch + marker + ch + ch + marker + marker + ch + "x" + ch + marker;
+            path = file(bytes(text, enc));
+            assertEq((ch, ch + ch, "", ch + "x" + ch), readLines(path, enc, marker), enc + " " + ch);
+
+            # a line with no marker
+            path = file(bytes(strmul(ch, 50), enc));
+            assertEq((strmul(ch, 50),), readLines(path, enc, marker), enc + " " + ch);
+        }
+    }
+
+    fileReadLineLongMarker() {
+        foreach list<string> c in (Cases) {
+            string enc = c[0];
+            string ch = c[1];
+            string marker = c[2];
+            # a marker of two characters whose bytes appear across a character boundary: <ch> followed by
+            # "<marker><marker>" has the bytes of the marker starting at the trail byte of <ch>
+            string m = marker + marker;
+            string text = "a" + ch + m + "b" + ch + marker + "c" + m + "d";
+            string path = file(bytes(text, enc));
+            assertEq(("a" + ch, "b" + ch + marker + "c", "d"), readLines(path, enc, m), enc + " " + ch);
+            # a marker of characters other than ASCII
+            m = ch + marker;
+            text = "x" + ch + ch + marker + "y" + ch + marker;
+            path = file(bytes(text, enc));
+            assertEq(("x" + ch, "y"), readLines(path, enc, m), enc + " " + ch);
+        }
+    }
+
+    parity() {
+        foreach list<string> c in (Cases) {
+            string enc = c[0];
+            string ch = c[1];
+            string marker = c[2];
+            string text = ch + "a" + marker + "b" + ch + ch + marker + ch + marker + "c" + ch;
+            string path = file(bytes(text, enc));
+            list<string> expected = (ch + "a", "b" + ch + ch, ch, "c" + ch);
+            assertEq(expected, readLines(path, enc, marker), enc + " " + ch + " File");
+
+            StreamReader sr(new FileInputStream(path), enc);
+            list<string> sl = ();
+            # the marker is removed (trim)
+            while (exists (*string line = sr.readLine(marker, True))) {
+                push sl, line;
+            }
+            assertEq(expected, sl, enc + " " + ch + " StreamReader");
+
+            list<string> il = ();
+            FileLineIterator i(path, enc, marker);
+            while (i.next()) {
+                push il, i.getValue();
+            }
+            assertEq(expected, il, enc + " " + ch + " FileLineIterator");
+        }
+    }
+
+    #! encodings with no trail bytes of ASCII values are not changed
+    otherEncodings() {
+        # the bytes of "\n" at an odd offset do not end the line: in UTF-16LE, U+0A00 U+0100 is 00 0a 00 01 (0a 00 at
+        # offset 3 after "a"); in UTF-16BE, U+0100 U+0A00 is 01 00 0a 00 (00 0a at offset 3 after "a")
+        foreach list<string> c in ((("UTF-16LE", "a\u0a00\u0100b"), ("UTF-16BE", "a\u0100\u0a00b"))) {
+            binary b = bytes(c[1] + "\nc", c[0]);
+            assertEq(binary(convert_encoding("\n", c[0])), b.substr(3, 2), c[0]);
+            assertEq((c[1], "c"), readLines(file(b), c[0], "\n"), c[0]);
+        }
+        foreach string enc in ("UTF-8", "ISO-8859-1", "EUC-KR") {
+            string t = enc == "EUC-KR" ? "a가b\nc" : (enc == "ISO-8859-1" ? "aéb\nc" : "a€b\nc");
+            string path = file(bytes(t, enc));
+            list<string> lines = readLines(path, enc, "\n");
+            assertEq((t.split("\n")[0], "c"), lines, enc);
+        }
+    }
+
+    #! an invalid sequence in an encoding with characters of more than two bytes does not hide a marker after it
+    /** A first byte followed by fewer bytes than its character has is incomplete only if the bytes after it can be
+        part of a character; otherwise it is an invalid byte, and the marker after it ends the line (the lines are
+        read with "keep", as they are not valid)
+    */
+    invalidSequences() {
+        foreach list<auto> c in ((("GB18030", <81300a410a42>), ("EUC-JP", <8f0a410a42>))) {
+            string path = file(c[1]);
+            File f(c[0]);
+            f.setEncodingErrors(ENCODING_ERRORS_KEEP);
+            f.open2(path);
+            list<binary> lines = ();
+            while (exists (*string line = f.readLine(True, "\n"))) {
+                push lines, binary(line);
+            }
+            list<binary> expected = c[0] == "GB18030" ? (<81300a>, <410a>, <42>) : (<8f0a>, <410a>, <42>);
+            assertEq(expected, lines, c[0] + " File");
+
+            StreamReader sr(new FileInputStream(path), c[0], ENCODING_ERRORS_KEEP);
+            list<binary> sl = ();
+            while (exists (*string line = sr.readLine("\n", False))) {
+                push sl, binary(line);
+            }
+            assertEq(expected, sl, c[0] + " StreamReader");
+        }
+    }
+
+    #! valid characters of more than two bytes, and valid first bytes followed by an invalid byte, before markers
+    longCharacters() {
+        # GB18030 four-byte characters (😀 is 94 39 fc 36, U+0080 81 30 81 30) and EUC-JP three-byte (é is 8f ab b1)
+        # and kana (ｱ is 8e b1) characters are whole characters
+        foreach list<auto> c in ((("GB18030", <9439fc36>, "😀"), ("GB18030", <81308130>, "\u0080"),
+                ("EUC-JP", <8fabb1>, "é"), ("EUC-JP", <8eb1>, "ｱ"))) {
+            assertEq(c[1], bytes(c[2], c[0]), c[0] + " " + c[2]);
+            string text = "a" + c[2] + "b\n" + c[2] + "\n" + c[2] + c[2];
+            list<string> expected = ("a" + c[2] + "b", c[2], c[2] + c[2]);
+            string path = file(bytes(text, c[0]));
+            assertEq(expected, readLines(path, c[0], "\n"), c[0] + " " + c[2] + " File");
+            StreamReader sr(new FileInputStream(path), c[0]);
+            list<string> sl = ();
+            while (exists (*string line = sr.readLine("\n", True))) {
+                push sl, line;
+            }
+            assertEq(expected, sl, c[0] + " " + c[2] + " StreamReader");
+        }
+        # the bytes after a valid start are checked as they are read: the line feed ends the line at offsets 2 and 3
+        foreach list<auto> c in ((("GB18030", <8130810a41>, (<8130810a>, <41>)),
+                ("EUC-JP", <8fa10a41>, (<8fa10a>, <41>)))) {
+            File f(c[0]);
+            f.setEncodingErrors(ENCODING_ERRORS_KEEP);
+            f.open2(file(c[1]));
+            list<binary> lines = ();
+            while (exists (*string line = f.readLine(True, "\n"))) {
+                push lines, binary(line);
+            }
+            assertEq(c[2], lines, c[0]);
+        }
+    }
+}
