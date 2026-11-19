@@ -171,6 +171,81 @@ static void cppapiuser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Ex
 static void cppapiuser_module_delete() {
 }
 
+// the class of the objects that the commands "pending-error" and "pending-const" create in the Program that the
+// command runs in, as module-python creates the objects of the Python classes of the Program (qore#6752): a builtin
+// class of that Program (its source Program), with a C++ destructor and a C++ method
+static const char* PENDING_PROBE_NS = "CppApiPendingProbe";
+static const char* PENDING_PROBE_CLASS = "PendingProbe";
+
+// the number of times the C++ destructor of the class has run, in any Program
+static std::atomic<int64> pending_probe_destroyed{0};
+
+static void pending_probe_destructor(QoreObject*, AbstractPrivateData* data, RuntimeConfig&, ExceptionSink* xsink) {
+    ++pending_probe_destroyed;
+    data->deref(xsink);
+}
+
+static void pending_probe_constructor(const QoreMethod& method, const void*, QoreObject* self,
+        const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
+    self->setPrivate(method.getClass()->getID(), new AbstractPrivateData);
+}
+
+static QoreValue pending_probe_value(const QoreMethod&, const void*, QoreObject*, AbstractPrivateData*,
+        const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
+    return QoreValue(1ll);
+}
+
+// returns the class in the current Program, created there on the first call
+static QoreClass* pending_probe_get_class() {
+    QoreProgram* pgm = getProgram();
+    assert(pgm);
+    QoreNamespace* ns = pgm->getRootNS()->findCreateNamespacePathAll(PENDING_PROBE_NS);
+    QoreClass* qc = ns->findLocalClass(PENDING_PROBE_CLASS);
+    if (qc) {
+        return qc;
+    }
+    std::string path = ns->getPath();
+    // the Program is the source Program of the class, as for the classes that module-python creates
+    qc = new QoreBuiltinClass(pgm, PENDING_PROBE_CLASS, path.c_str());
+    qc->addConstructor(nullptr, pending_probe_constructor);
+    qc->setDestructor(pending_probe_destructor);
+    qc->addMethod(nullptr, "value", pending_probe_value, Public, QCF_CONSTANT, QDOM_DEFAULT, bigIntTypeInfo);
+    ns->addSystemClass(qc);
+    return qc;
+}
+
+// returns a new object of the class in the current Program
+static QoreObject* pending_probe_new_object() {
+    QoreClass* qc = pending_probe_get_class();
+    QoreObject* obj = new QoreObject(qc, getProgram());
+    obj->setPrivate(qc->getID(), new AbstractPrivateData);
+    return obj;
+}
+
+int64 cppapiuser_pending_probe_destroyed() {
+    return pending_probe_destroyed.load();
+}
+
+// handles the commands "pending-error" (raises CPPAPIUSER-PENDING-ERROR with an object of the class as its argument)
+// and "pending-const <name>" (adds a constant with an object of the class to the class's namespace); returns false
+// for any other command
+static bool cppapiuser_pending_probe_cmd(const QoreString& cmd, ExceptionSink* xsink) {
+    if (cmd == "pending-error") {
+        xsink->raiseExceptionArg("CPPAPIUSER-PENDING-ERROR", QoreValue(pending_probe_new_object()),
+            "the command \"pending-error\" was issued");
+        return true;
+    }
+    static const char* const_prefix = "pending-const ";
+    if (!strncmp(cmd.c_str(), const_prefix, strlen(const_prefix))) {
+        const char* name = cmd.c_str() + strlen(const_prefix);
+        QoreClass* qc = pending_probe_get_class();
+        QoreNamespace* ns = getProgram()->getRootNS()->findCreateNamespacePathAll(PENDING_PROBE_NS);
+        ns->addConstant(name, pending_probe_new_object(), qc->getTypeInfo());
+        return true;
+    }
+    return false;
+}
+
 // the module commands received (%module-cmd(cppapiuser) and Program::issueModuleCmd()), for the tests of how they
 // reach the module (issue #5905)
 static std::mutex module_cmd_lock;
@@ -178,7 +253,7 @@ static std::vector<std::string> module_cmds;
 
 // records the command, with " [sandboxed]" appended when the Program that the command runs in has a sandbox manager
 // (the sandbox that a module such as python gives what the command creates, see QoreSandboxManagerHelper(pgm)); the
-// command "fail" raises an exception instead
+// command "fail" raises an exception instead, and the commands of cppapiuser_pending_probe_cmd() are not recorded
 static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
     assert(xsink);
     if (cmd == "fail") {
@@ -187,6 +262,9 @@ static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
     }
     // no C++ exception may leave the module's C callback
     try {
+        if (cppapiuser_pending_probe_cmd(cmd, xsink)) {
+            return;
+        }
         std::string rec(cmd.c_str());
         {
             QoreSandboxManagerHelper sm(getProgram());
