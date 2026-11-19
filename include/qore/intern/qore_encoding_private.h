@@ -56,9 +56,9 @@ struct qore_encoding_private {
     //! the name of the encoding that iconv knows; empty if it is the code of the encoding
     /** Set for an encoding created on the fly whose name has conversion flags after \c "//" (ex: \c "UTF-16LE//",
         \c "UTF-32//TRANSLIT") that the platform's iconv does not accept, when it accepts the name without them
-        (musl rejects every such name, and the iconv of macOS 14 and later, derived from FreeBSD's, takes them off
-        only in a target name; glibc and GNU libiconv take the flags off themselves): the encoding gets the
-        properties and the conversions of the encoding that its name gives on every platform; see
+        (musl rejects every such name, and GNU libiconv, which %Qore uses on macOS when it is built with MacPorts,
+        rejects a name whose flags are empty, ex: \c "UTF-16LE//"; glibc takes the flags off itself): the encoding gets
+        the properties and the conversions of the encoding that its name gives on every platform; see
         iconvCodeWithoutFlags() and probe()
     */
     std::string iconv_code;
@@ -79,7 +79,8 @@ struct qore_encoding_private {
     */
     std::string iconv_source_code;
 
-    //! true if every Unicode character can be represented in the encoding (UTF-8, UTF-16*, UTF-32*)
+    //! true if every Unicode character can be represented in the encoding (UTF-8, UTF-16*, UTF-32*, UCS-4*), for the
+    //! built-in encodings as for the ones created on the fly
     bool unicode_complete = false;
 
     //! the byte order mark in the byte order of an encoding created on the fly with the characters of a Unicode form
@@ -205,9 +206,10 @@ struct qore_encoding_private {
 
     //! returns the name without its iconv conversion flags if iconv knows only that, otherwise an empty string
     /** iconv takes the text of a name from \c "//" as conversion flags (ex: \c "//TRANSLIT"), which are not part of
-        the name of the encoding: glibc and GNU libiconv take them off, while musl does not know any name that has
-        them, and the iconv of macOS 14 and later takes them off only in a target name.  An encoding created on the fly from such a name gets the name without the flags for iconv where iconv
-        does not know the whole name, so that it is the same encoding on every platform.
+        the name of the encoding: glibc takes them off, while musl does not know any name that has them, and GNU
+        libiconv (as on macOS with MacPorts) does not know a name whose flags are empty (ex: \c "UTF-16LE//").  An
+        encoding created on the fly from such a name gets the name without the flags for iconv where iconv does not
+        know the whole name, so that it is the same encoding on every platform.
 
         @param code the name of the encoding
         @param knows returns true if iconv can convert text to and from the encoding with the given name

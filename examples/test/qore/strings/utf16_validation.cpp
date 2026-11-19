@@ -195,6 +195,26 @@ static void check_iconv_flags() {
         require(name == code || name + "//" == code, std::string("iconv name of ") + code + ": " + name);
         require(!ep->opaque_single_byte && ep->unicode_complete, std::string(code) + " is a Unicode form");
     }
+    // the encodings created on the fly have exactly the properties of the built-in ones (qore#6604)
+    struct Pair {
+        const QoreEncoding* builtin;
+        const char* code;
+    };
+    for (const Pair& pr : {Pair{QCS_UTF16LE, "UTF-16LE//"}, Pair{QCS_UTF16BE, "UTF-16BE//"},
+            Pair{QCS_UTF16, "UTF-16//"}}) {
+        const QoreEncoding* fly = QoreEncodingManager::findCreate(pr.code);
+        const qore_encoding_private* b = qore_encoding_private::get(*pr.builtin);
+        const qore_encoding_private* f = qore_encoding_private::get(*fly);
+        std::string label = std::string(pr.code) + " vs " + pr.builtin->getCode();
+        require(b->unicode_complete && f->unicode_complete, label + ": unicode_complete");
+        require(b->opaque_single_byte == f->opaque_single_byte, label + ": opaque_single_byte");
+        require(pr.builtin->isAsciiCompat() == fly->isAsciiCompat(), label + ": ASCII compatibility");
+        require(pr.builtin->isMultiByte() == fly->isMultiByte(), label + ": multi-byte");
+        require(b->getMinCharWidth() == f->getMinCharWidth(), label + ": minimum character width");
+        require(pr.builtin->getMaxCharWidth() == fly->getMaxCharWidth(), label + ": maximum character width");
+        require(b->fcharlen == f->fcharlen && b->get_unicode == f->get_unicode, label + ": character functions");
+    }
+    require(qore_encoding_private::get(*QCS_UTF8)->unicode_complete, "UTF-8: unicode_complete");
 }
 
 //! checks the first character with QoreEncoding::getCharLen() and the definition itself
