@@ -53,6 +53,16 @@ struct qore_encoding_private {
     mbcs_get_unicode_t get_unicode;
     bool ascii_compat;
 
+    //! the name of the encoding that iconv knows; empty if it is the code of the encoding
+    /** Set for an encoding created on the fly whose name has conversion flags after \c "//" (ex: \c "UTF-16LE//",
+        \c "UTF-32//TRANSLIT") that the platform's iconv does not accept, when it accepts the name without them
+        (musl rejects every such name, and GNU libiconv, which %Qore uses on macOS when it is built with MacPorts,
+        rejects a name whose flags are empty, ex: \c "UTF-16LE//"; glibc takes the flags off itself): the encoding gets
+        the properties and the conversions of the encoding that its name gives on every platform; see
+        iconvCodeWithoutFlags() and probe()
+    */
+    std::string iconv_code;
+
     //! the name passed to iconv to convert text to this encoding; empty if it is the code of the encoding
     /** Set for an encoding created on the fly whose iconv conversion writes a byte order mark at the start of the
         output (ex: \c "UTF-32"); the character functions of the encoding decode text in the byte order of the
@@ -69,7 +79,8 @@ struct qore_encoding_private {
     */
     std::string iconv_source_code;
 
-    //! true if every Unicode character can be represented in the encoding (UTF-8, UTF-16*, UTF-32*)
+    //! true if every Unicode character can be represented in the encoding (UTF-8, UTF-16*, UTF-32*, UCS-4*), for the
+    //! built-in encodings as for the ones created on the fly
     bool unicode_complete = false;
 
     //! the byte order mark in the byte order of an encoding created on the fly with the characters of a Unicode form
@@ -91,6 +102,17 @@ struct qore_encoding_private {
         boundary; see qore_char_boundary
     */
     bool needs_boundary_check = false;
+
+    //! true for an encoding created on the fly with the characters of a Unicode form whose iconv conversion accepts
+    //! code unit sequences that its character functions reject
+    /** (ex: glibc's \c "UCS-4", which converts values up to 0x7fffffff); text in it is validated with the character
+        functions before it is converted, as on a platform whose iconv accepts invalid UTF-16 or UTF-32 (see
+        IconvHelper::rejectsInvalidUnicodeForms()), so that the encoding is as strict as the built-in UTF-16 encodings
+    */
+    bool iconv_accepts_invalid = false;
+
+    //! A tag unknown to iconv has the historical single-byte character semantics.
+    bool opaque_single_byte = false;
 
     //! true if iconv decodes the "-" that ends a UTF-7 base64 run as a character at the end of its input
     /** (Apple's libiconv: "+AOk-" gives "é-"); see IconvHelper::iconvUtf7()
@@ -167,14 +189,42 @@ struct qore_encoding_private {
         return enc->priv->stateful;
     }
 
+    //! returns the name of the encoding that iconv knows; see \c iconv_code
+    DLLLOCAL const char* getIconvCode() const {
+        return iconv_code.empty() ? code.c_str() : iconv_code.c_str();
+    }
+
     //! returns the name to pass to iconv to convert text to this encoding
     DLLLOCAL const char* getIconvTargetCode() const {
-        return iconv_target_code.empty() ? code.c_str() : iconv_target_code.c_str();
+        return iconv_target_code.empty() ? getIconvCode() : iconv_target_code.c_str();
     }
 
     //! returns the name to pass to iconv to convert text from this encoding
     DLLLOCAL const char* getIconvSourceCode() const {
-        return iconv_source_code.empty() ? code.c_str() : iconv_source_code.c_str();
+        return iconv_source_code.empty() ? getIconvCode() : iconv_source_code.c_str();
+    }
+
+    //! returns the name without its iconv conversion flags if iconv knows only that, otherwise an empty string
+    /** iconv takes the text of a name from \c "//" as conversion flags (ex: \c "//TRANSLIT"), which are not part of
+        the name of the encoding: glibc takes them off, while musl does not know any name that has them, and GNU
+        libiconv (as on macOS with MacPorts) does not know a name whose flags are empty (ex: \c "UTF-16LE//").  An
+        encoding created on the fly from such a name gets the name without the flags for iconv where iconv does not
+        know the whole name, so that it is the same encoding on every platform.
+
+        @param code the name of the encoding
+        @param knows returns true if iconv can convert text to and from the encoding with the given name
+
+        @return the name without the flags if iconv does not know \a code and knows the name without the flags;
+        otherwise an empty string: the name is given to iconv as it is
+    */
+    template <typename Knows>
+    DLLLOCAL static std::string iconvCodeWithoutFlags(const std::string& code, Knows&& knows) {
+        size_t flags = code.find("//");
+        if (flags == std::string::npos || !flags || knows(code)) {
+            return std::string();
+        }
+        std::string name = code.substr(0, flags);
+        return knows(name) ? name : std::string();
     }
 
     //! converts UTF-8 text to the encoding when it is probed; returns false if the text cannot be represented in it

@@ -1998,6 +1998,14 @@ uint64_t qore_rt_load_local_weak_receiver_aot(QoreAOTContext* ctx, int32_t idx, 
 //! Releases the receiver kept by qore_rt_load_local_weak_receiver() when its call returns
 void qore_rt_end_weak_receiver_call(uint64_t* slot, int8_t* owned_flag, ExceptionSink* xsink);
 
+//! Reads the variable of a foreach loop that is the receiver of a method call from its cache
+/** As qore_rt_read_element_local(), except that the object of a weak reference is given a reference, stored in
+    \a slot, and \a owned_out set to 2, which qore_rt_end_weak_receiver_call() releases when the call returns
+    (qore#6594); a reference is read as qore_rt_read_element_local_held() reads it if \a current is not null
+*/
+uint64_t qore_rt_read_element_local_receiver(uint64_t val, uint64_t* slot, int8_t* owned_out, uint64_t* current,
+        uint64_t* previous, uint8_t* held, ExceptionSink* xsink);
+
 //! Loads a weak-assigned local through an AOT context slot, preserving the borrow
 /** @see qore_rt_load_local_weak()
 */

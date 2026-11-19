@@ -909,6 +909,8 @@ private:
     std::vector<SocketResolvedAddrInfo> addrs;
     //! the addresses that the hosts file gives a localhost name (RFC 6761), if it has the name
     std::vector<QoreHostsFileAddress> hosts_file_addrs;
+    //! true if the name looked up is a localhost name (RFC 6761 section 6.3; see keepHostsFileAddresses())
+    bool hosts_file_localhost = false;
     std::unordered_map<int, int> fd_events;
     int status = ARES_SUCCESS;
     //! the hints of the lookup

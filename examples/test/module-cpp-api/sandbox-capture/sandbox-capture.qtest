@@ -101,12 +101,56 @@ class SandboxCaptureApiTest inherits QUnit::Test {
         addTestCase("a copy keeps the captured sandbox", \testCopy());
         addTestCase("an unsandboxed capture has no policy", \testUnsandboxed());
         addTestCase("a capture made in a system-policy call has no policy", \testSystemPolicyCapture());
+        addTestCase("host code run for a capture of a sandbox cannot set thread capabilities",
+            \testCaptureCapabilityScope());
         set_return_value(main());
     }
 
     globalTearDown() {
         map sb_capture_free($1), handles;
         handles = ();
+    }
+
+    #! host code that a native bridge runs for a sandboxed submitter's operation (a captured sandbox applied) is
+    #! governed by the submitter's sandbox: it cannot set the capabilities of the thread (qorus#867), while it can on a
+    #! thread with no capture applied
+    testCaptureCapabilityScope() {
+        code set_scope = bool sub () {
+            ThreadCapabilityScope scope({"start_thread": int sub (code c) { return background c(); }});
+            return True;
+        };
+        int h = captureA();
+        assertThrows("THREAD-CAPABILITY-ERROR", "sandbox governs", \sb_capture_applied_call(), (h, set_scope));
+        assertEq(NOTHING, sb_capture_applied_call(h, *hash<auto> sub () { return get_thread_capabilities(); }),
+            "nor see the thread's capabilities");
+        assertTrue(set_scope(), "the same code sets a scope without the capture");
+        # an unsandboxed capture governs nothing
+        int u = sb_capture();
+        handles += u;
+        assertTrue(sb_capture_applied_call(u, set_scope), "an unsandboxed capture does not refuse it");
+
+        # in a thread that host code starts for tenant A (which inherits its sandbox; a method call, as a host's API
+        # starts it: a closure created while tenant A's code is on the stack would carry its sandbox), the host code
+        # sets a scope, but not while a capture of tenant A's sandbox is applied there
+        Queue q();
+        tenant_a.callFunction("call", sub () {
+            background inheritedThread(q, h, set_scope);
+        });
+        assertEq({"inherited": True, "captured": "THREAD-CAPABILITY-ERROR", "after": True}, q.get(60s),
+            "a capture applied in an inherited thread counts; the thread's inheritance does not");
+    }
+
+    #! the thread of testCaptureCapabilityScope() that inherits tenant A's sandbox
+    private inheritedThread(Queue q, int h, code set_scope) {
+        hash<auto!> r = {"inherited": set_scope()};
+        try {
+            sb_capture_applied_call(h, set_scope);
+            r.captured = "set";
+        } catch (hash<ExceptionInfo> ex) {
+            r.captured = ex.err;
+        }
+        r.after = set_scope();
+        q.push(r);
     }
 
     #! returns a capture made in tenant B's sandbox
