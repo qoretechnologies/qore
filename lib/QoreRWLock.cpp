@@ -34,6 +34,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_var_rwlock_priv.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreRWLock::QoreRWLock() : priv(new qore_var_rwlock_priv) {
 }
@@ -42,8 +43,8 @@ QoreRWLock::~QoreRWLock() {
     delete priv;
 }
 
-void QoreRWLock::reinitAfterFork() {
-    priv->reinitAfterFork();
+void qore_rwlock_ops::reinitAfterForkImpl(QoreRWLock* b) {
+    b->priv->reinitAfterFork();
 }
 
 int QoreRWLock::wrlock() {
@@ -81,13 +82,13 @@ QoreVarRWLock::~QoreVarRWLock() {
 }
 
 //! grabs the write lock
-void QoreVarRWLock::wrlock() {
-    priv->wrlock();
+void qore_var_rwlock_ops::wrlockImpl(QoreVarRWLock* b) {
+    b->priv->wrlock();
 }
 
 //! tries to grab the write lock; does not block if unsuccessful; returns 0 if successful
-int QoreVarRWLock::trywrlock() {
-    return priv->trywrlock();
+int qore_var_rwlock_ops::trywrlockImpl(QoreVarRWLock* b) {
+    return b->priv->trywrlock();
 }
 
 //! unlocks the lock (assumes the lock is locked)
@@ -96,11 +97,11 @@ void QoreVarRWLock::unlock() {
 }
 
 //! grabs the read lock
-void QoreVarRWLock::rdlock() {
-    priv->rdlock();
+void qore_var_rwlock_ops::rdlockImpl(QoreVarRWLock* b) {
+    b->priv->rdlock();
 }
 
 //! tries to grab the read lock; does not block if unsuccessful; returns 0 if successful
-int QoreVarRWLock::tryrdlock() {
-    return priv->tryrdlock();
+int qore_var_rwlock_ops::tryrdlockImpl(QoreVarRWLock* b) {
+    return b->priv->tryrdlock();
 }

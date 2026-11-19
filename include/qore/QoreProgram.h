@@ -180,6 +180,7 @@ DLLEXPORT void qore_call_program_cleanup_callback(QoreProgram* pgm);
     it in a sandboxed Program itself.  Use setSandboxManager() to restrict what the code of a Program may do.
 */
 class QoreProgram : public AbstractPrivateData {
+    friend class qore_program_ops;
     friend class qore_program_private_base;
     friend class qore_program_private;
     friend class qore_debug_program_private;
@@ -1007,31 +1008,11 @@ public:
     DLLLOCAL QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr,
             const QoreParseOptions* parent_po = nullptr);
 
-    DLLLOCAL LocalVar *createLocalVar(const char* name, const QoreTypeInfo *typeInfo);
+    
 
-    // returns 0 if a "requires" exception has already occurred
-    DLLLOCAL ExceptionSink* getParseExceptionSink();
-
-    DLLLOCAL void addFile(char* f);
-    DLLLOCAL QoreListNode* getVarList();
-    DLLLOCAL void parseSetIncludePath(const char* path);
-    DLLLOCAL const char* parseGetIncludePath() const;
-
-    /* for run-time module loading; the parse lock must be grabbed
-        before loading new modules - note this should only be assigned
-        to an AutoLock or SafeLocker object!
-    */
-    DLLLOCAL QoreThreadLock *getParseLock();
-    DLLLOCAL const LVList* getTopLevelLVList() const;
-
-    //! returns the script directory, if known (0 if not), does not grab the parse lock, only to be called while parsing
-    /** @return the script directory, if known (0 if not)
-    */
-    DLLLOCAL const char* parseGetScriptDir() const;
-
-    // can only be called while parsing from the same thread doing the parsing
-    DLLLOCAL bool parseExceptionRaised() const;
-
+    
+    
+    
     // TODO: implement !
     /** returns the value of the local variable given (do not include the "$" symbol), the caller owns the reference count returned
         The variable is related to current frame. This function can be executed only when program is stopped
@@ -1351,6 +1332,7 @@ typedef std::list<int> TidList_t;
  *  callback @ref QoreDebugProgram is triggered. The instance must be assigned to a @ref QoreProgram
  */
 class QoreBreakpoint : public AbstractPrivateData {
+    friend class qore_breakpoint_ops;
 private:
     //! the Program of the breakpoint, which references the breakpoint; written with the Program's breakpoint lock
     std::atomic<qore_program_private*> pgm;
@@ -1364,14 +1346,10 @@ private:
     static unsigned breakpointIdCounter;   // to generate breakpointId
     unsigned breakpointId;
 
-    DLLLOCAL void unassignAllStatements();
-    DLLLOCAL bool isStatementAssigned(const AbstractStatement *statement) const;
-
     //! returns the Program of the breakpoint
     DLLLOCAL qore_program_private* getPgm() const {
         return pgm.load(std::memory_order_acquire);
     }
-    DLLLOCAL bool checkPgm(ExceptionSink* xsink) const;
 
     friend class qore_program_private;
     friend class AbstractStatement;
@@ -1416,12 +1394,7 @@ public:
     //! returns the Program of the breakpoint, or nullptr if it is not assigned, without a reference
     DLLEXPORT QoreProgram* getProgram() const;
 
-    //! returns the Program of the breakpoint with a reference for the caller, or nullptr
-    /** nullptr is returned if the breakpoint is not assigned to a Program or if the last reference of its Program has
-        been released
-    */
-    DLLLOCAL QoreProgram* getReferencedProgram() const;
-    /** Assign breakpoint to a statement.
+        /** Assign breakpoint to a statement.
     */
     DLLEXPORT void assignStatement(AbstractStatement* statement, ExceptionSink* xsink);
     /** Unassign breakpoint from statement
@@ -1470,9 +1443,7 @@ public:
     */
     DLLEXPORT static QoreBreakpoint* resolveBreakpointId(unsigned breakpointId);
 
-    //! returns the breakpoint with the given ID with a reference for the caller, or nullptr
-    DLLLOCAL static QoreBreakpoint* getReferencedBreakpoint(unsigned breakpointId);
-
+    
     //! does nothing; Breakpoint objects are not cached
     /** @deprecated since %Qore 3.0: see getQoreObject()
     */

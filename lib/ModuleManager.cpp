@@ -65,6 +65,7 @@
 #include <glob.h>
 #else
 #include "qore/intern/qore_glob.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 #endif
 
 #include <algorithm>
@@ -180,7 +181,7 @@ void QoreModuleManager::forkChild(int tid) {
     for (auto& i : map) {
         i.second->reinitParseOptionMaskLockAfterFork();
     }
-    module_load_cond.reinitAfterFork();
+    qore_condition_ops(module_load_cond).reinitAfterFork();
     mutex.reinitAfterFork(qore_module_manager_mutex_attr());
 }
 
@@ -3385,7 +3386,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
             if (p) {
                 modulePath = raw_path;
-                q_normalize_path(modulePath, p->parseGetScriptDir());
+                q_normalize_path(modulePath, qore_program_ops(p).parseGetScriptDir());
                 raw_path = modulePath.c_str();
             }
         }
@@ -3494,7 +3495,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
             if (p) {
                 modulePath = raw_path;
-                q_normalize_path(modulePath, p->parseGetScriptDir());
+                q_normalize_path(modulePath, qore_program_ops(p).parseGetScriptDir());
                 raw_path = modulePath.c_str();
             }
         }
@@ -3514,7 +3515,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
         if (p) {
             modulePath = raw_path;
-            q_normalize_path(modulePath, p->parseGetScriptDir());
+            q_normalize_path(modulePath, qore_program_ops(p).parseGetScriptDir());
             raw_path = modulePath.c_str();
         }
 
@@ -4462,7 +4463,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     modulePath += feature;
     modulePath += ".qm";
 
-    const char* td = p ? p->parseGetScriptDir() : nullptr;
+    const char* td = p ? qore_program_ops(p).parseGetScriptDir() : nullptr;
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, parseOptions);
@@ -5653,8 +5654,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     UnlockedModuleProgramRelease<ReferenceHolder<QoreProgram>> pholder_release(pholder);
     assert(feature);
     printd(5, "QoreModuleManager::loadUserModuleFromPath() path: '%s' feature: '%s' tpgm: %p ('%s') path_pgm: %p "
-        "('%s')\n", path, feature, tpgm, tpgm && tpgm->parseGetScriptDir() ? tpgm->parseGetScriptDir() : "n/a",
-        path_pgm, path_pgm && path_pgm->parseGetScriptDir() ? path_pgm->parseGetScriptDir() : "n/a");
+        "('%s')\n", path, feature, tpgm, tpgm && qore_program_ops(tpgm).parseGetScriptDir() ? qore_program_ops(tpgm).parseGetScriptDir() : "n/a",
+        path_pgm, path_pgm && qore_program_ops(path_pgm).parseGetScriptDir() ? qore_program_ops(path_pgm).parseGetScriptDir() : "n/a");
 
     if (checkBlacklist(xsink, feature)) {
         return nullptr;
@@ -5710,7 +5711,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask, &mask_added, mpgm);
     mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
-    const char* td = p ? p->parseGetScriptDir() : nullptr;
+    const char* td = p ? qore_program_ops(p).parseGetScriptDir() : nullptr;
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
@@ -7236,7 +7237,7 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
     }
     QoreModuleCommandContext ctx(QoreModuleCommandContext::MC_PARSE, pgm, pgm, po, sandboxed);
     QoreModuleCommandScope scope(ctx);
-    mi->issueModuleCmd(loc, cmd, pgm->getParseExceptionSink());
+    mi->issueModuleCmd(loc, cmd, qore_program_ops(pgm).getParseExceptionSink());
     // a compiled program replays the command with the restrictions that were in force at the directive
     qore_program_private::get(*pgm)->addModuleParseCommand(mname, cmd, ctx.getParseOptions());
 }

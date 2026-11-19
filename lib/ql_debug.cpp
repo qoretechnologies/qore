@@ -107,6 +107,7 @@
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -433,7 +434,7 @@ static QoreValue f_dbg_cyclic_type_declarations(const QoreListNode* params, Runt
 }
 
 static QoreValue f_dbg_global_vars(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    return getProgram()->getVarList();
+    return qore_program_ops(getProgram()).getVarList();
 }
 
 // --- C++ unit tests for AsyncIoControllerPriv (debug builds only) ---

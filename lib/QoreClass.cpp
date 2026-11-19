@@ -45,6 +45,7 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -2875,7 +2876,7 @@ static QORE_INTERN_NOINLINE void qore_release_failed_construction(QoreObject* se
     } else {
         // Preserve partial-construction cleanup: release native private data without executing the destructors
         // of this class or its already-constructed base classes.
-        self->obliterate(xsink);
+        qore_object_ops(self).obliterate(xsink);
     }
 }
 
@@ -6006,7 +6007,7 @@ int qore_class_private::parseCheckClassHierarchyMembers(const char* mname, const
     }
     if (l_mi.access != b_mi.access || l_mi.parseHasTypeInfo() || b_mi.parseHasTypeInfo()) {
         // raise an exception only if parse exceptions are enabled
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             qore_program_private::makeParseException(getProgram(), *l_mi.loc, "PARSE-ERROR",
                 new QoreStringNodeMaker("class '%s' cannot be combined with class '%s' in the same hierarchy because "
                     "member '%s' is accessible from class '%s' from more than one declaration in the hierarchy",
@@ -7299,7 +7300,7 @@ void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, Exc
                 if (destructor) {
                     destructor->priv->evalSystemDestructor(self, rc, &de);
                 } else {
-                    self->defaultSystemDestructor(classID, &de);
+                    qore_object_ops(self).defaultSystemDestructor(classID, &de);
                 }
             }
         }
@@ -7315,7 +7316,7 @@ void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, Exc
                 if (destructor) {
                     destructor->priv->evalDestructor(self, rc, &de);
                 } else {
-                    self->defaultSystemDestructor(classID, &de);
+                    qore_object_ops(self).defaultSystemDestructor(classID, &de);
                 }
             }
         }
@@ -7344,7 +7345,7 @@ void qore_class_private::execBaseClassDestructor(QoreObject* self, RuntimeConfig
             if (destructor) {
                 destructor->priv->evalDestructor(self, rc, &de);
             } else {
-                self->defaultSystemDestructor(classID, &de);
+                qore_object_ops(self).defaultSystemDestructor(classID, &de);
             }
         }
     }
@@ -7367,7 +7368,7 @@ void qore_class_private::execBaseClassSystemDestructor(QoreObject* self, Runtime
             if (destructor) {
                 destructor->priv->evalSystemDestructor(self, rc, &de);
             } else {
-                self->defaultSystemDestructor(classID, &de);
+                qore_object_ops(self).defaultSystemDestructor(classID, &de);
             }
         }
     }
@@ -8758,7 +8759,7 @@ int qore_class_private::checkExistingVarMember(const char* dname, const QoreMemb
     // if the var was previously declared public
     if (mi->access != oaccess) {
         // raise an exception only if parse exceptions are enabled
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNode;
             desc->sprintf("class '%s' ", name.c_str());
             desc->concat("cannot declare ");
@@ -8773,7 +8774,7 @@ int qore_class_private::checkExistingVarMember(const char* dname, const QoreMemb
         }
         return -1;
     } else if ((mi && mi->parseHasTypeInfo()) || (omi && omi->parseHasTypeInfo())) {
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNode;
             desc->sprintf("%s %s ", privpub(mi->access), var ? "static variable" : "member");
             desc->sprintf("'%s' was already declared in ", dname);
@@ -10310,7 +10311,7 @@ int UserCopyVariant::parseInit(QoreFunction* f) {
         if (typeInfo) {
             if (QoreTypeInfo::parseReturns(typeInfo, &parent_class) == QTI_NOT_EQUAL) {
                 // raise parse exception if parse exceptions have not been suppressed
-                if (getProgram()->getParseExceptionSink()) {
+                if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                     QoreStringNode* desc = new QoreStringNode("the copy constructor will be passed ");
                     QoreTypeInfo::getThisType(parent_class.getTypeInfo(), *desc);
                     desc->concat(", but the object's parameter was defined expecting ");
@@ -10355,7 +10356,7 @@ void BuiltinCopyVariantBase::evalCopyImpl(LexicalSemanticPolicy policy, const Qo
         }
     }
 
-    old->evalCopyMethodWithPrivateData(thisclass, this, self, ceh.getRuntimeConfig(), xsink);
+    qore_object_ops(old).evalCopyMethodWithPrivateData(thisclass, this, self, ceh.getRuntimeConfig(), xsink);
 }
 
 template <bool Lexical>
@@ -11391,7 +11392,7 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
 
         // throw a type exception only if parse exceptions are enabled
         if (!QoreTypeInfo::parseAccepts(assignmentTypeInfo, argTypeInfo)) {
-            if (getProgram()->getParseExceptionSink()) {
+            if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* desc = new QoreStringNode("initialization expression for ");
                 desc->sprintf("%s member '%s' returns ", privpub(access), name);
                 QoreTypeInfo::getThisType(argTypeInfo, *desc);
@@ -11463,7 +11464,7 @@ int QoreVarInfo::parseInit(const char* name) {
 
         // throw a type exception only if parse exceptions are enabled
         if (!QoreTypeInfo::parseAccepts(assignmentTypeInfo, argTypeInfo)) {
-            if (getProgram()->getParseExceptionSink()) {
+            if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* desc = new QoreStringNode("initialization expression for ");
                 desc->sprintf("%s class static variable '%s' returns ", privpub(access), name);
                 QoreTypeInfo::getThisType(argTypeInfo, *desc);

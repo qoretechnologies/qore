@@ -85,6 +85,7 @@
 #include "qore/intern/QC_AbstractSmartLock.h"
 #include "qore/intern/QC_AbstractThreadResource.h"
 #include "qore/intern/QC_AbstractConnectionPool.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <string.h>
 
@@ -8071,7 +8072,7 @@ static int qore_exit_wait_finishing_threads() {
     }
 #endif
     // a condition wait on thread_counter, which wakes it when a thread leaves it
-    return thread_counter.waitForCountAtMost(qore_thread_counter_share, 10 * 1000) ? -1 : 0;
+    return qore_counter_ops(thread_counter).waitForCountAtMost(qore_thread_counter_share, 10 * 1000) ? -1 : 0;
 }
 
 void qore_exit_process(int rc) {
@@ -8258,7 +8259,7 @@ void qore_dbg_release_thread_finish_hold() {
 }
 
 bool qore_dbg_wait_thread_counter_at_most(int count, int timeout_ms) {
-    return !thread_counter.waitForCountAtMost(count, timeout_ms);
+    return !qore_counter_ops(thread_counter).waitForCountAtMost(count, timeout_ms);
 }
 #endif
 
@@ -8698,7 +8699,7 @@ public:
         idle = 0;
         head = tail = nullptr;
         counted_head = counted_tail = nullptr;
-        condition.reinitAfterFork();
+        qore_condition_ops(condition).reinitAfterFork();
         mutex.reinitAfterFork();
     }
 
@@ -8835,7 +8836,7 @@ private:
                     fprintf(stderr, "qore: cannot join completed native thread: %s\n", strerror(rc));
                     abort();
                 }
-                thread_counter.dec();
+                qore_counter_ops(thread_counter).dec();
                 lock.lock();
                 if (afterJoinLocked()) {
                     return;
@@ -8860,7 +8861,7 @@ private:
                 abort();
             }
             arg.reset();
-            tp_thread_counter.dec();
+            qore_counter_ops(tp_thread_counter).dec();
             lock.lock();
             if (afterJoinLocked()) {
                 return;
@@ -8885,7 +8886,7 @@ static void q_finish_counted_thread() {
     qore_thread_counter_share = 0;
     if (!external_thread_reaper.completeCounted()) {
         pthread_detach(pthread_self());
-        thread_counter.dec();
+        qore_counter_ops(thread_counter).dec();
     }
 }
 
@@ -9336,7 +9337,7 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
         tp->cleanup(xsink);
         tp->del();
 
-        thread_counter.dec();
+        qore_counter_ops(thread_counter).dec();
         deregister_thread(tid);
         xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc_thread, "could not create thread");
         return QoreValue();
@@ -9410,7 +9411,7 @@ QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar
         tp->cleanup(xsink);
         tp->del();
 
-        thread_counter.dec();
+        qore_counter_ops(thread_counter).dec();
         deregister_thread(tid);
         xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc_thread, "could not create thread");
         return QoreValue();
@@ -9455,7 +9456,7 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
     int rc = q_create_native_thread(q_run_thread, ta);
     if (rc) {
         delete ta;
-        thread_counter.dec();
+        qore_counter_ops(thread_counter).dec();
         deregister_thread(tid);
         xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create thread");
         return -1;
@@ -9534,9 +9535,9 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
     if ((rc = pthread_create(&ptid, local_attr.get_ptr(), q_run_thread, ta))) {
         delete ta;
         if (flags & QTF_EXTERNAL_LIFECYCLE) {
-            tp_thread_counter.dec();
+            qore_counter_ops(tp_thread_counter).dec();
         } else {
-            thread_counter.dec();
+            qore_counter_ops(thread_counter).dec();
         }
         deregister_thread(tid);
         xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create thread");
@@ -9578,9 +9579,9 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags) {
     if (rc) {
         delete ta;
         if (flags & QTF_EXTERNAL_LIFECYCLE) {
-            tp_thread_counter.dec();
+            qore_counter_ops(tp_thread_counter).dec();
         } else {
-            thread_counter.dec();
+            qore_counter_ops(thread_counter).dec();
         }
         deregister_thread(tid);
         xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create thread");
@@ -10700,8 +10701,8 @@ public:
     void forkChild() {
         started = stopping = false;
         head = tail = -1;
-        done.reinitAfterFork();
-        cond_ready.reinitAfterFork();
+        qore_condition_ops(done).reinitAfterFork();
+        qore_condition_ops(cond_ready).reinitAfterFork();
         lck.reinitAfterFork();
     }
 
@@ -10778,11 +10779,11 @@ void QoreThreadList::forkChild(int tid) {
     lck.reinitAfterFork();
     // the joiners of the parent do not exist in the child, and one of them may have held join_lck
     join_lck.reinitAfterFork();
-    join_cond.reinitAfterFork();
+    qore_condition_ops(join_cond).reinitAfterFork();
 #ifdef DEBUG
     // a thread of the parent may have held the lock of dbgNoteWait(), which every cancellable wait takes
     dbg_wait_lck.reinitAfterFork();
-    dbg_wait_cond.reinitAfterFork();
+    qore_condition_ops(dbg_wait_cond).reinitAfterFork();
 #endif
 }
 
@@ -10820,18 +10821,18 @@ public:
     }
 
     void prepare() noexcept override {
-        thread_counter.lockForFork();
-        tp_thread_counter.lockForFork();
+        qore_counter_ops(thread_counter).lockForFork();
+        qore_counter_ops(tp_thread_counter).lockForFork();
     }
 
     void parent() noexcept override {
-        tp_thread_counter.unlockForFork();
-        thread_counter.unlockForFork();
+        qore_counter_ops(tp_thread_counter).unlockForFork();
+        qore_counter_ops(thread_counter).unlockForFork();
     }
 
     void child() noexcept override {
-        tp_thread_counter.reinitAfterFork(qore_tp_thread_counter_share);
-        thread_counter.reinitAfterFork(qore_thread_counter_share);
+        qore_counter_ops(tp_thread_counter).reinitAfterFork(qore_tp_thread_counter_share);
+        qore_counter_ops(thread_counter).reinitAfterFork(qore_thread_counter_share);
     }
 };
 
