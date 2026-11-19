@@ -667,6 +667,14 @@ constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
 constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
 //! First format version whose debug IR has the paths of a debugger's flow requests (see v46 above).
 constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
+//! First format version whose IR functions record their catch-exit depths and catch-cleanup results (qore#6733)
+/** QoreIRFunction::catch_exit_depths and catch_cleanup_results (#5968, #6079) are written after the blocks of the
+    function as (block index, instruction index, value) entries, the index of an instruction being that of the
+    written IR (in which a PushTempMarkPair is two instructions); a module of an earlier format has none, and its IR
+    closes one catch block at each CatchCleanup, as before.  The version is that of the format bump of the batch that
+    carries the change: the tables are written and read only once QORE_AOT_BINARY_VERSION reaches it
+*/
+constexpr uint16_t QORE_AOT_CATCH_TABLES_VERSION = 48;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
@@ -5039,6 +5047,27 @@ typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t
 */
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
     const AOTExprWriteFunc& writeExpr);
+
+//! Writes the catch-exit depths and the catch-cleanup results of an IR function, after its blocks (see
+//! QORE_AOT_CATCH_TABLES_VERSION, qore#6733)
+/** Each table is a u32 count and (u16 block index, u16 instruction index, u32 value) entries sorted by position; the
+    index of an instruction is that of the written IR, in which a PushTempMarkPair is two instructions.
+
+    @return true on success, false (with the serialization error set) if an instruction is out of the format's range
+*/
+bool qore_aot_write_ir_catch_tables(QoreAOTBinaryWriter& writer, const QoreIRFunction& func);
+
+//! Reads the tables that qore_aot_write_ir_catch_tables() wrote into the IR function read (qore#6733)
+/** @param ptr the data pointer, advanced past the tables
+    @param end the end of the data
+    @param func the function read, whose blocks and instructions are complete
+    @param error receives the error message if an entry is malformed: an index beyond the blocks or the instructions
+    of a block, or an instruction given twice
+
+    @return true on success, false otherwise
+*/
+bool qore_aot_read_ir_catch_tables(const uint8_t*& ptr, const uint8_t* end, QoreIRFunction& func,
+    std::string& error);
 
 //! The handler functions written or read in the IR of a function (see QORE_AOT_SHARED_HANDLER_VERSION, #6087)
 /** A handler function shared by several handlers (QoreIROnBlockExitInstruction::handler_ir) is written in full once,
