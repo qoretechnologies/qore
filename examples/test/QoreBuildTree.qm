@@ -103,6 +103,34 @@ public namespace QoreBuildTree {
             qore_executable(), QoreBuildTree::candidates());
     }
 
+    #! Returns the sanitizer flags that a program linked with the libqore of a build tree is compiled and linked with
+    /** A program linked with a sanitizer build of libqore needs the same sanitizer: the sanitizer's runtime must be
+        part of the executable, and with ThreadSanitizer an executable without it crashes before \c main(), when a
+        static initializer of another library runs an instrumented inline function of libqore (qore#6587).  The flags
+        are those that the build records for the executables of AOT links (\c sanitize_flags in its
+        \c aot-link.conf, which also has the flag of \c ADDRESS_SANITIZER); a build without that file gives the
+        \c -fsanitize flags of the library's compiler flags (\c Qore::CFLAGS and those of the build type).
+
+        @param build the build tree (see build_dir())
+
+        @return the flags, such as <tt>-fsanitize=thread</tt>, or an empty list for a build without a sanitizer
+    */
+    public list<string> sub sanitizer_flags(string build) {
+        string conf = build + "/aot-link.conf";
+        if (is_readable(conf)) {
+            *string flags = (ReadOnlyFile::readTextFile(conf) =~ x/^sanitize_flags=(.*)$/m)[0];
+            return flags ? (map $1, trim(flags).split(" "), $1) : ();
+        }
+        list<string> flags = ();
+        foreach string flag in ((Qore::CFLAGS + " " + get_qore_library_info().BuildTypeCFLAGS)
+                =~ x/(-fsanitize=\S+)/g) {
+            if (!inlist(flag, flags)) {
+                flags += flag;
+            }
+        }
+        return flags;
+    }
+
     #! Returns True if the directory has libqore and the generated headers of a build
     public bool sub is_build_dir(string dir) {
         return (is_file(dir + "/libqore.so") || is_file(dir + "/libqore.dylib"))
