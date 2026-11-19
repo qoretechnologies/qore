@@ -1650,8 +1650,9 @@ public:
     /** Set by the IR builder from the statement being lowered (QoreIRBuilder::setStatementLocation()); an instruction
         that an analysis creates in place of another takes the location of the one it replaces.  The IR interpreter
         and native code store it when it changes, not when the line changes: a statement and the statement or block
-        that contains it can start on the same line.  It is not serialized: deserialized IR takes it from the
-        instruction's own location (qore_ir_set_deserialized_statement_locations()).
+        that contains it can start on the same line.  AOT images record it (QORE_AOT_STATEMENT_LOCATIONS_VERSION);
+        the IR of an image of an earlier format takes it from the instruction's own location
+        (qore_ir_set_deserialized_statement_locations()).
     */
     const QoreProgramLocation* stmt_loc = nullptr;
     QoreIRValue result{};

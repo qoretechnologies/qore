@@ -7224,6 +7224,78 @@ static const char* qore_aot_ir_missing_target(const QoreIRInstruction& inst) {
 
 //! Deserialize a single IR instruction from binary data
 /** @return the deserialized instruction, or nullptr on error */
+//! The statement location table of an IR function being read (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
+struct QoreAOTStmtLocReadTable {
+    //! the locations of the table, by index
+    std::vector<const QoreProgramLocation*> entries;
+    //! the runtime location of the instruction read last
+    const QoreProgramLocation* prev = nullptr;
+};
+
+//! Reads the runtime location of an IR instruction written by qore_aot_write_stmt_loc() (see QoreAOTStmtLocTag)
+/** @param inst the instruction, whose own location (QoreIRInstruction::loc) is taken for a new entry with the same
+    lines and file, so that no location is made for it
+    @return false if the location is malformed, with \a error set
+*/
+static bool qore_aot_read_stmt_loc(const QoreAOTBinaryReader& reader, const uint8_t*& ptr, QoreProgram* pgm,
+        QoreIRFunction* owner_func, QoreAOTStmtLocReadTable& table, QoreIRInstruction& inst, std::string& error) {
+    uint8_t tag = QoreAOTBinaryReader::readU8(ptr);
+    switch (static_cast<QoreAOTStmtLocTag>(tag)) {
+        case QoreAOTStmtLocTag::None:
+            table.prev = nullptr;
+            break;
+        case QoreAOTStmtLocTag::Previous:
+            if (!table.prev) {
+                error = "malformed IR: an instruction has the runtime location of an instruction before it that has "
+                    "none";
+                return false;
+            }
+            break;
+        case QoreAOTStmtLocTag::Entry: {
+            uint32_t index = QoreAOTBinaryReader::readU32(ptr);
+            if (index >= table.entries.size()) {
+                error = "malformed IR: runtime location " + std::to_string(index) + " is beyond the "
+                    + std::to_string(table.entries.size()) + " location(s) of the function";
+                return false;
+            }
+            table.prev = table.entries[index];
+            break;
+        }
+        case QoreAOTStmtLocTag::New: {
+            int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+            int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+            const char* file = reader.readStringRef(ptr);
+            if (start_line <= 0) {
+                error = "malformed IR: a runtime location has no line";
+                return false;
+            }
+            const QoreProgramLocation* loc = nullptr;
+            if (!owner_func) {
+                // no location without a function to own it, as for the instruction's own (deserializeIRInstruction())
+            } else if (inst.loc && inst.loc->start_line == start_line && inst.loc->end_line == end_line
+                    && !strcmp(inst.loc->getFile() ? inst.loc->getFile() : "", file ? file : "")) {
+                loc = inst.loc;
+            } else {
+                // the file is interned in the Program, as the instruction's own (see deserializeIRInstruction())
+                const char* interned_file = (file && pgm)
+                    ? qore_program_private::get(*pgm)->addRuntimeString(file)
+                    : (file ? file : "");
+                auto* new_loc = new QoreProgramLocation(interned_file, start_line, end_line);
+                owner_func->owned_locations.push_back(new_loc);
+                loc = new_loc;
+            }
+            table.entries.push_back(loc);
+            table.prev = loc;
+            break;
+        }
+        default:
+            error = "malformed IR: invalid runtime location tag " + std::to_string(tag);
+            return false;
+    }
+    inst.stmt_loc = table.prev;
+    return true;
+}
+
 static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end,
@@ -7237,7 +7309,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         std::string& error,
         LocalVar** parent_locals_arr,
         int num_parent_locals,
-        const std::vector<LocalVar*>* enclosing_body_locals) {
+        const std::vector<LocalVar*>* enclosing_body_locals,
+        QoreAOTStmtLocReadTable* stmt_locs) {
     auto need = [&ptr, end, &error](size_t bytes, const char* field) -> bool {
         if (end < ptr || static_cast<size_t>(end - ptr) < bytes) {
             error = "truncated instruction while reading ";
@@ -7392,6 +7465,11 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         auto* loc = new QoreProgramLocation(interned_file, start_line, end_line);
         owner_func->owned_locations.push_back(loc);
         inst->loc = loc;
+    }
+    // the runtime location (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646); an earlier image has none, and the
+    // function takes the instructions' own (qore_ir_set_deserialized_statement_locations())
+    if (stmt_locs && !qore_aot_read_stmt_loc(reader, ptr, pgm, owner_func, *stmt_locs, *inst, error)) {
+        return nullptr;
     }
 
     return inst;
@@ -7619,10 +7697,11 @@ static bool qore_aot_check_ir_value_ids(const QoreIRFunction& func, std::string&
     return true;
 }
 
-//! Sets the runtime locations of the instructions of deserialized IR (QoreIRInstruction::stmt_loc)
-/** The IR does not record the statements of its instructions: each instruction takes its own location, the location
-    of the instruction before it in its block where both have the same lines, so that the runtime location is stored
-    when the lines change (qore#6646)
+//! Sets the runtime locations of the instructions of IR deserialized from an image of a format before
+//! QORE_AOT_STATEMENT_LOCATIONS_VERSION (QoreIRInstruction::stmt_loc)
+/** The IR of such an image does not record the statements of its instructions: each instruction takes its own
+    location, the location of the instruction before it in its block where both have the same lines, so that the
+    runtime location is stored when the lines change (qore#6646)
 */
 static void qore_ir_set_deserialized_statement_locations(QoreIRFunction& func) {
     for (auto& block : func.blocks) {
@@ -8199,7 +8278,10 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         func->blocks.push_back(std::make_unique<QoreIRBasicBlock>(""));
     }
 
-    // 6. Read blocks and instructions
+    // 6. Read blocks and instructions, with the statement location table of the function
+    // (QORE_AOT_STATEMENT_LOCATIONS_VERSION): the IR functions read in its instructions have tables of their own
+    const bool has_stmt_locs = reader.getHeader().version >= QORE_AOT_STATEMENT_LOCATIONS_VERSION;
+    QoreAOTStmtLocReadTable stmt_locs;
     // the trace setting is copied (a concurrent change to the environment could free the string getenv() returns);
     // with QORE_DISABLE_AOT_IR_TRACE_CACHE, it is read again for each instruction
     const bool disable_trace_cache = q_env_is_set("QORE_DISABLE_AOT_IR_TRACE_CACHE");
@@ -8257,7 +8339,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             }
             auto inst = deserializeIRInstruction(reader, ptr, end, func->blocks, local_map,
                 func.get(), &slot_to_local, *effectiveReadExpr, pgm, local_owner_pgm, error,
-                parent_locals_arr, num_parent_locals, enclosing_body_locals);
+                parent_locals_arr, num_parent_locals, enclosing_body_locals,
+                has_stmt_locs ? &stmt_locs : nullptr);
             if (!inst) {
                 error = "failed to deserialize instruction " + std::to_string(j)
                     + " in block " + std::to_string(i)
@@ -8311,7 +8394,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         error = "AOT IR verification failed in '" + func->name + "': " + error;
         return nullptr;
     }
-    qore_ir_set_deserialized_statement_locations(*func);
+    if (!has_stmt_locs) {
+        qore_ir_set_deserialized_statement_locations(*func);
+    }
     return func;
 }
 

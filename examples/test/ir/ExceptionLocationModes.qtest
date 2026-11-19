@@ -29,6 +29,12 @@
     tiered and JIT execution compile the code after its first call), on the IR tier of tiered execution, and as qcc
     executables compiled with -O0 and -O3.
 
+    A second script runs the same kinds of probes in the IR that a qcc executable rebuilds from its image: the IR of
+    closures without native code (\c QORE_DISABLE_AOT_NATIVE_CLOSURES), with their nested on_exit handlers and
+    background helpers, and the debug IR that every function runs while a debugger is attached.  That IR took the
+    location of each instruction, an expression's, before the image recorded the statements of the instructions
+    (QORE_AOT_STATEMENT_LOCATIONS_VERSION).
+
     Not probed: the call stack location of the destructor of a function body's local at the end of the function
     (qore#6672), and an exception raised by a callee that a qcc executable replaces with the callee's summary, which
     the script avoids by calling the probes through call references (qore#6673).
@@ -484,6 +490,152 @@ class LastProbes {
 }
 ';
 
+        #! probes whose IR a qcc executable rebuilds from its image (see the description of the class); with the
+        #! argument "debug", the script runs them with a debugger attached
+        const AotIrScript = '%modern
+%allow-debugger
+
+class Dbg inherits DebugProgram {
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {}
+    onStep(ProgramControl pgm, int blockStatementId, *int statementId, *int breakpointId, reference flow,
+            reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int statementId, reference rs, reference rts) { rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onException(ProgramControl pgm, int statementId, hash<auto> ex, reference dismiss, reference rs,
+            reference rts) {
+        rs = DebugStep;
+    }
+    onExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+}
+
+sub f(auto v) {
+}
+
+class Probes {
+    # an exception raised by the condition of an if statement is located at the statement
+    static int pIfCond(int x) {
+        if (x > 0
+            && (x / (x - x))) {
+            return 1;
+        }
+        return x;
+    }
+
+    # the same in an on_exit handler nested in another, which run out of line
+    static int pNestedHandler(int x) {
+        {
+            on_exit {
+                {
+                    on_exit {
+                        if (x > 0
+                            && (x / (x - x))) {
+                            x = 1;
+                        }
+                    }
+                    on_error { x += 0; }
+                    x += 1;
+                }
+            }
+            on_error { x += 0; }
+            x += 1;
+        }
+        return x;
+    }
+}
+
+our code closure = int sub (int x) {
+    if (x > 0
+        && (x / (x - x))) {
+        return 1;
+    }
+    return x;
+};
+
+our code nested_closure = int sub (int x) {
+    {
+        on_exit {
+            {
+                on_exit {
+                    if (x > 0
+                        && (x / (x - x))) {
+                        x = 1;
+                    }
+                }
+                on_error { x += 0; }
+                x += 1;
+            }
+        }
+        on_error { x += 0; }
+        x += 1;
+    }
+    return x;
+};
+
+our code bg_closure = sub (int x) {
+    background f(x > 0
+        && (x / (x - x)));
+};
+
+sub show(string name, hash<ExceptionInfo> ex) {
+    printf("%s: %s %d-%d", name, ex.err, ex.line, ex.endline);
+    foreach hash<CallStackInfo> cs in (ex.callstack) {
+        printf(" <- %s:%d-%d", cs.function, cs.line, cs.endline);
+    }
+    printf("\n");
+}
+
+our hash<string, code> probes = {
+    "if condition": \Probes::pIfCond(),
+    "nested handler": \Probes::pNestedHandler(),
+    "closure": closure,
+    "nested handler in a closure": nested_closure,
+};
+
+sub run() {
+    for (int j = 0; j < 3; ++j) {
+        foreach hash<auto> i in (probes.pairIterator()) {
+            try {
+                i.value(j + 2);
+                printf("%s: no exception\n", i.key);
+            } catch (hash<ExceptionInfo> ex) {
+                show(i.key, ex);
+            }
+        }
+    }
+    bg_closure(2);
+}
+
+if (ARGV[0] == "debug") {
+    Dbg d();
+    ProgramControl pc = ProgramControl::getProgram();
+    Counter cnt(1);
+    background sub () {
+        on_exit cnt.dec();
+        d.addProgram(pc);
+        on_exit d.removeProgram(pc);
+        run();
+    }();
+    cnt.waitForZero();
+} else {
+    run();
+}
+';
+
+        #! results that the AST interpreter must give for AotIrScript
+        const AotIrPinned = (
+            "closure: DIVISION-BY-ZERO 60-63 <- <anonymous closure>:111-111 <- run:133-133",
+            "nested handler in a closure: DIVISION-BY-ZERO 72-75 <- <anonymous closure>:111-111 <- run:133-133",
+            "unhandled QORE System exception thrown in TID 2 in <background operator>() "
+                "(aot-ir-location.qr:88-89 (Qore new-thread code))",
+        );
+
         #! results that the AST interpreter must give, so that a wrong result of the AST interpreter fails the test
         const Pinned = (
             "if: ERR exception-location.qr:21-21 <- Probes::pIf:417-417",
@@ -516,6 +668,7 @@ class LastProbes {
             qcc_bin = "qcc";
         }
         addTestCase("exceptions are located alike in every execution mode", \testLocations());
+        addTestCase("exceptions are located alike in the IR of AOT images", \testAotIrLocations());
         set_return_value(main());
     }
 
@@ -563,6 +716,58 @@ class LastProbes {
                 exe)), tmp.path));
             if (diff) {
                 wrong{"qcc " + opt} = diff;
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    testAotIrLocations() {
+        TmpDir tmp("qore-exception-location-aot-ir-");
+        string path = tmp.path + DirSep + "aot-ir-location.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(AotIrScript);
+        f.close();
+
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        hash<string, list<string>> wrong();
+        list<string> exes = ();
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "aot-ir-location" + opt.lwr();
+            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
+            if (!is_file(exe)) {
+                wrong{"qcc " + opt} = ("compilation failed: " + out,);
+                continue;
+            }
+            exes += exe;
+        }
+        # without and with a debugger attached
+        foreach string arg in ("", "debug") {
+            string expected = normalize(ExecModeHarness::run(sprintf("%s %s -b --enable-debug --exec-mode=ast %s %s",
+                env, qore_bin, path, arg)), tmp.path);
+            if (!arg) {
+                hash<string, bool> lines = map {$1: True}, expected.split("\n");
+                assertEq((), (select AotIrPinned, !lines{$1}), "pinned AST results");
+            }
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                list<string> diff = differences(expected, normalize(ExecModeHarness::run(sprintf("%s %s -b "
+                    "--enable-debug --exec-mode=%s %s %s", env, qore_bin, mode, path, arg)), tmp.path));
+                if (diff) {
+                    wrong{mode + " " + arg} = diff;
+                }
+            }
+            foreach string exe in (exes) {
+                # with native closures and with the closures' IR from the image
+                foreach string closure_env in ("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1") {
+                    list<string> diff = differences(expected, normalize(ExecModeHarness::run_any(sprintf("%s %s %s "
+                        "%s", env, closure_env, exe, arg)), tmp.path));
+                    if (diff) {
+                        wrong{sprintf("%s %s %s", basename(exe), closure_env, arg)} = diff;
+                    }
+                }
             }
         }
         assertEq({}, wrong);

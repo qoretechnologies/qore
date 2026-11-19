@@ -15803,9 +15803,44 @@ const char* getLocalTypePath(const LocalVar* lv) {
 }
 
 //! Serialize a single IR instruction
+//! The statement location table of an IR function being written (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
+struct QoreAOTStmtLocWriteTable {
+    //! the index of each location written
+    std::unordered_map<const QoreProgramLocation*, uint32_t> index;
+    //! the runtime location of the instruction written last
+    const QoreProgramLocation* prev = nullptr;
+};
+
+//! Writes the runtime location of an IR instruction (QoreIRInstruction::stmt_loc; see QoreAOTStmtLocTag)
+static void qore_aot_write_stmt_loc(QoreAOTBinaryWriter& writer, QoreAOTStmtLocWriteTable& table,
+        const QoreProgramLocation* loc) {
+    // a location without a line is none, as an instruction's own location without one (see serializeIRInstruction())
+    if (!loc || loc->start_line <= 0) {
+        writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+        table.prev = nullptr;
+        return;
+    }
+    if (loc == table.prev) {
+        writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Previous));
+        return;
+    }
+    table.prev = loc;
+    auto i = table.index.find(loc);
+    if (i != table.index.end()) {
+        writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
+        writer.writeU32(i->second);
+        return;
+    }
+    table.index.emplace(loc, static_cast<uint32_t>(table.index.size()));
+    writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::New));
+    qore_aot_write_line(writer, loc->start_line);
+    qore_aot_write_line(writer, loc->end_line);
+    writer.writeSourcePath(loc->getFile() ? loc->getFile() : "");
+}
+
 static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInstruction* inst,
         const std::unordered_map<const QoreIRBasicBlock*, uint16_t>& block_idx,
-        const AOTExprWriteFunc& writeExpr) {
+        const AOTExprWriteFunc& writeExpr, QoreAOTStmtLocWriteTable& stmt_locs) {
     std::string classify_error;
     QoreIRInstGroup group = classifyInstruction(inst, &classify_error);
     if (!classify_error.empty()) {
@@ -15927,6 +15962,8 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
         qore_aot_write_line(writer, 0);
         writer.writeStringRef("");
     }
+    // the runtime location: the statement's (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646)
+    qore_aot_write_stmt_loc(writer, stmt_locs, inst->stmt_loc);
 
     return true;
 }
@@ -16201,7 +16238,9 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         block_idx[func.blocks[i].get()] = static_cast<uint16_t>(i);
     }
 
-    // 5. Serialize blocks
+    // 5. Serialize blocks, with the statement location table of the function (QORE_AOT_STATEMENT_LOCATIONS_VERSION):
+    // the IR functions written in its instructions have tables of their own
+    QoreAOTStmtLocWriteTable stmt_locs;
     for (auto& block : func.blocks) {
         writer.writeStringRef(block->name.c_str());
         // bit 0: is_loop_header; bits 1-3: loop_cancel; bit 4 (from format version QORE_AOT_DEBUG_FLOW_VERSION):
@@ -16223,9 +16262,12 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
                 // the outer mark has the location that the pair has, as the statement's mark had it
                 QoreIRInstruction mark(QoreIROpcode::PushTempMark);
                 mark.loc = inst_ptr->loc;
+                // both marks are code of the pair's statement
+                mark.stmt_loc = inst_ptr->stmt_loc;
                 QoreIRInstruction inner_mark(QoreIROpcode::PushTempMark);
-                if (!serializeIRInstruction(writer, &mark, block_idx, writeExpr)
-                        || !serializeIRInstruction(writer, &inner_mark, block_idx, writeExpr)) {
+                inner_mark.stmt_loc = inst_ptr->stmt_loc;
+                if (!serializeIRInstruction(writer, &mark, block_idx, writeExpr, stmt_locs)
+                        || !serializeIRInstruction(writer, &inner_mark, block_idx, writeExpr, stmt_locs)) {
                     return false;
                 }
                 continue;
@@ -16247,7 +16289,7 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
                         static_cast<uint8_t>(group));
                 }
             }
-            if (!serializeIRInstruction(writer, inst_ptr.get(), block_idx, writeExpr)) {
+            if (!serializeIRInstruction(writer, inst_ptr.get(), block_idx, writeExpr, stmt_locs)) {
                 return false;
             }
             if (QoreEnvironmentValue trace_holder("QORE_AOT_TRACE_IR_SERIALIZE");
