@@ -1634,6 +1634,7 @@ enum class QoreIRReleaseCheck : uint8_t {
                 //!< release itself (the container gets the handler) and emits nothing for it
     Native,     //!< a kept check of a call's or a Phi's value: native code releases the previous value at the start
                 //!< of the call's continuation or of the Phi's block, where it checks the sink
+    IndexedElement, //!< checks only the preceding indexed-map element release when that load owns its value
 };
 
 class QoreIRInstruction {

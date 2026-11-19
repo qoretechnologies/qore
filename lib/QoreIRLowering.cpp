@@ -21184,8 +21184,13 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // the load, so release it here, where its slot is defined on every path.
         if (!borrow_element && qore_ir_type_may_hold_object(elem_type)) {
             builder.createReleaseOwnedTemp(element_val, map->loc);
-            // A weak list entry may leave this as the last strong reference.
-            builder.createCheckException(map->loc)->exception_target = getCurrentExceptionTarget();
+            // A weak list entry may leave this as the last strong reference. When the result cannot run
+            // a destructor and no implicit context was popped, only the element release needs this check.
+            auto* check = builder.createCheckException(map->loc);
+            check->exception_target = getCurrentExceptionTarget();
+            if (need_result && !needs_context && !qore_ir_type_may_hold_object(expTypeInfo)) {
+                check->release_check = QoreIRReleaseCheck::IndexedElement;
+            }
         }
 
         // Increment index
