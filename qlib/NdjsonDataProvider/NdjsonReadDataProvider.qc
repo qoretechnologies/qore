@@ -39,6 +39,9 @@ public hashdecl NdjsonReadDataProviderOptions {
     bool skip_empty_lines = True;
 
     #! Skip invalid JSON lines instead of throwing an exception (default: False)
+    /** A line read from a stream that is not valid in its encoding is skipped as well: with \c encoding_errors
+        \c "raise", and with \c "keep" when the line cannot be processed
+    */
     bool skip_invalid_json = False;
 
     #! Maximum line length in bytes (default: 10 MB)
@@ -46,6 +49,11 @@ public hashdecl NdjsonReadDataProviderOptions {
 
     #! Encoding for the input data (default: UTF-8)
     string encoding = DefaultEncoding;
+
+    #! What a line read that is not valid in its encoding gives (default: \c "raise")
+    /** One of the @ref encoding_errors_constants; see @ref ndjsondataprovider_encoding_errors
+    */
+    string encoding_errors = ENCODING_ERRORS_RAISE;
 }
 
 #! Data provider for reading NDJSON data
@@ -103,8 +111,9 @@ public class NdjsonReadDataProvider inherits DataProvider::AbstractDataProvider 
                 "display_name": "Skip Invalid JSON",
                 "short_desc": "Skip invalid JSON lines instead of throwing",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "If `True`, lines that fail to parse as JSON are skipped; if `False` (default), "
-                    "an exception is thrown",
+                "desc": "If `True`, lines that fail to parse as JSON, and lines that are not valid in their "
+                    "encoding (with `encoding_errors` = `raise`, or with `keep` when the line cannot be processed), "
+                    "are skipped; if `False` (default), an exception is thrown",
                 "default_value": False,
             },
             "max_line_length": <DataProviderOptionInfo>{
@@ -121,6 +130,7 @@ public class NdjsonReadDataProvider inherits DataProvider::AbstractDataProvider 
                 "desc": "The character encoding to use when reading the input (default: UTF-8)",
                 "default_value": DefaultEncoding,
             },
+            "encoding_errors": EncodingErrorsOptionInfo,
         };
     }
 
@@ -177,6 +187,9 @@ public class NdjsonReadDataProvider inherits DataProvider::AbstractDataProvider 
         if (exists options.encoding) {
             typed_opts.encoding = options.encoding;
         }
+        if (exists options.encoding_errors) {
+            typed_opts.encoding_errors = options.encoding_errors;
+        }
         if (!exists typed_opts.path && !exists typed_opts.stream && !exists typed_opts.data) {
             throw "NDJSON-ERROR", "one of 'path', 'stream', or 'data' must be provided";
         }
@@ -223,6 +236,7 @@ public class NdjsonReadDataProvider inherits DataProvider::AbstractDataProvider 
             "skip_invalid_json": opts.skip_invalid_json,
             "max_line_length": opts.max_line_length,
             "encoding": opts.encoding,
+            "encoding_errors": opts.encoding_errors,
         };
     }
 

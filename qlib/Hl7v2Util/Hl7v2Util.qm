@@ -85,6 +85,10 @@ module Hl7v2Util {
                     "required": True,
                     "loc": "constructor",
                 }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                Hl7v2ReadDataProvider::ConstructorOptions{"encoding_errors",}, {
+                    "loc": "constructor",
+                }
             ),
             "output_type": Hl7v2ReadDataProvider::ResponseType,
         });
@@ -203,7 +207,10 @@ module Hl7v2Util {
       definition tables are available.
     - Generates schema artifacts from locally supplied HL7 v2 XML schema
       packages when the XML module is available.
-    - Exposes read and write data providers for pipeline integration.
+    - Exposes read and write data providers for pipeline integration; the read data provider reads a file in the
+      default character encoding and raises \c INVALID-ENCODING for text that is not valid in it, unless its
+      \c encoding_errors option is \c "latin1" (for a file in \c ISO-8859-1, which HL7 v2 data often is) or
+      \c "keep" (see @ref encoding_errors).
 
     @subsection hl7v2utilexamples Examples
 

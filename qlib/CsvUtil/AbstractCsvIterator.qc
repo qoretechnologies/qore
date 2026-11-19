@@ -34,6 +34,7 @@ public namespace CsvUtil {
         |!Option|!Data Type|!Description
         |\c "date_format"|@ref string_type "string"|the default date format for \c "date" fields (see @ref date_formatting "date formatting" for the value in this case)
         |\c "encoding"|@ref string_type "string"|the @ref character_encoding "character encoding" for the file (and for tagging string data read); if the value of this key is not a string then it will be ignored; a byte order mark at the start of UTF-8 or UTF-16 data is skipped (see @ref csvutil_bom)
+        |\c "encoding_errors"|@ref string_type "string"|what text read that is not valid in the \c "encoding" gives, one of the @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING, \c "latin1" reads the invalid line as \c ISO-8859-1 with its bytes, \c "keep" keeps it in the encoding without a check (a line that is not valid then raises \c INVALID-ENCODING when it is split into fields); applies to the data read from a file or a stream; the lines of a string (@ref CsvUtil::CsvDataIterator "CsvDataIterator") or of a line iterator given to @ref CsvUtil::CsvIterator "CsvIterator" are not checked by the iterator; see @ref encoding_errors (@since %CsvUtil 1.12)
         |\c "eol"|@ref string_type "string"|the end of line character(s) (default: auto-detect); if the value of this key is not a string then it will be ignored
         |\c "header_lines"|@ref int_type "int"|the number of headers lines in the file (if not present and \c "header_names" is @ref True "True", assumed to be \c 1)
         |\c "header_names"|\c bool|if @ref True "True" then the object will parse the header names from \
@@ -118,6 +119,7 @@ public namespace CsvUtil {
                 "date_format": C_OPT1|C_OPT2,
                 "date-format": C_OPT1|C_OPT2,
                 "encoding": C_OPT1|C_OPT2,
+                "encoding_errors": C_OPT1|C_OPT2,
                 "eol": C_OPT1|C_OPT2,
                 "extended_record": C_OPT2,
                 "fields": C_OPT1,

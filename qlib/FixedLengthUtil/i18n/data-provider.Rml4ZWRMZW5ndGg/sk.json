@@ -87,6 +87,42 @@
           "source": "Character encoding for the input file (and output data)",
           "message": "Kódovanie znakov pre vstupný súbor (a výstupné údaje)"
         },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Chyby kódovania"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Čo dáva text, ktorý nie je platný vo svojom kódovaní znakov"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as `ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+          "message": "Čo dáva vstupný text, ktorý nie je platný vo svojom kódovaní znakov: `raise` (predvolené) vyvolá chybu `INVALID-ENCODING`, `latin1` prečíta neplatný text (pri dátach čítaných po riadkoch celý riadok) ako `ISO-8859-1` a `keep` ho ponechá vo vstupnom kódovaní bez kontroly"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.display_name": {
+          "source": "Raise an Error",
+          "message": "Vyvolať chybu"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.desc": {
+          "source": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+          "message": "Vyvolať chybu `INVALID-ENCODING` pre neplatný text; predvolené"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.display_name": {
+          "source": "Read as Latin-1",
+          "message": "Čítať ako Latin-1"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.desc": {
+          "source": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its bytes",
+          "message": "Čítať neplatný text (pri dátach čítaných po riadkoch celý riadok) ako `ISO-8859-1` s jeho bajtmi"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.display_name": {
+          "source": "Keep Without a Check",
+          "message": "Ponechať bez kontroly"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.desc": {
+          "source": "Keep the text in the input encoding as read, without a check",
+          "message": "Ponechať text vo vstupnom kódovaní tak, ako bol prečítaný, bez kontroly"
+        },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
           "message": "Znaky konca riadka"

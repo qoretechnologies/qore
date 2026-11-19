@@ -37,7 +37,7 @@
 module FileDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
     domains = "PROCESS_CONTROL";
-    version = "2.1.2";
+    version = "2.2";
     desc = "User module providing a data provider API for the server filesystem";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -249,6 +249,12 @@ module FileDataProvider {
     - @ref FileDataProvider::FileTargetResponseDataType "FileTargetResponseDataType"
 
     @section filedataprovider_relnotes Release Notes
+
+    @subsection filedataprovider_v2_2 FileDataProvider v2.2
+    - the get request checks text in its encoding and takes the \c encoding_errors field: \c "raise" (the default)
+      raises \c INVALID-ENCODING, \c "latin1" returns text that is not valid as \c ISO-8859-1, \c "keep" returns it
+      without a check (see @ref encoding_errors)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
 
     @subsection filedataprovider_v2_1_2 FileDataProvider v2.1.2
     - now respects the root directory provided by a connection
