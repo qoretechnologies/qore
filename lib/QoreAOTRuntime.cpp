@@ -7235,10 +7235,14 @@ struct QoreAOTStmtLocReadTable {
 //! Reads the runtime location of an IR instruction written by qore_aot_write_stmt_loc() (see QoreAOTStmtLocTag)
 /** @param inst the instruction, whose own location (QoreIRInstruction::loc) is taken for a new entry with the same
     lines and file, so that no location is made for it
+    @param inst_file the file of the instruction's own location as read from the string pool of the image, which
+    gives a string once: a new entry in the same file has the same pointer, and takes the file of the instruction's
+    location, which is interned in the Program already, without comparing or interning the string again
     @return false if the location is malformed, with \a error set
 */
 static bool qore_aot_read_stmt_loc(const QoreAOTBinaryReader& reader, const uint8_t*& ptr, QoreProgram* pgm,
-        QoreIRFunction* owner_func, QoreAOTStmtLocReadTable& table, QoreIRInstruction& inst, std::string& error) {
+        QoreIRFunction* owner_func, QoreAOTStmtLocReadTable& table, QoreIRInstruction& inst, const char* inst_file,
+        std::string& error) {
     uint8_t tag = QoreAOTBinaryReader::readU8(ptr);
     switch (static_cast<QoreAOTStmtLocTag>(tag)) {
         case QoreAOTStmtLocTag::None:
@@ -7270,16 +7274,18 @@ static bool qore_aot_read_stmt_loc(const QoreAOTBinaryReader& reader, const uint
                 return false;
             }
             const QoreProgramLocation* loc = nullptr;
+            const bool inst_file_same = inst.loc && file == inst_file;
             if (!owner_func) {
                 // no location without a function to own it, as for the instruction's own (deserializeIRInstruction())
-            } else if (inst.loc && inst.loc->start_line == start_line && inst.loc->end_line == end_line
-                    && !strcmp(inst.loc->getFile() ? inst.loc->getFile() : "", file ? file : "")) {
+            } else if (inst_file_same && inst.loc->start_line == start_line && inst.loc->end_line == end_line) {
                 loc = inst.loc;
             } else {
                 // the file is interned in the Program, as the instruction's own (see deserializeIRInstruction())
-                const char* interned_file = (file && pgm)
-                    ? qore_program_private::get(*pgm)->addRuntimeString(file)
-                    : (file ? file : "");
+                const char* interned_file = inst_file_same
+                    ? inst.loc->getFile()
+                    : (file && pgm)
+                        ? qore_program_private::get(*pgm)->addRuntimeString(file)
+                        : (file ? file : "");
                 auto* new_loc = new QoreProgramLocation(interned_file, start_line, end_line);
                 owner_func->owned_locations.push_back(new_loc);
                 loc = new_loc;
@@ -7468,7 +7474,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     }
     // the runtime location (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646); an earlier image has none, and the
     // function takes the instructions' own (qore_ir_set_deserialized_statement_locations())
-    if (stmt_locs && !qore_aot_read_stmt_loc(reader, ptr, pgm, owner_func, *stmt_locs, *inst, error)) {
+    if (stmt_locs && !qore_aot_read_stmt_loc(reader, ptr, pgm, owner_func, *stmt_locs, *inst, loc_file, error)) {
         return nullptr;
     }
 
