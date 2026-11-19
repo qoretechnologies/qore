@@ -599,6 +599,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        branches to the handed-over return if a handler returned (#6137, #6552)
 //!      - debug IR can encode ReleasePlainLocalRead (opcode 443, Base group, one operand) to release a functional
 //!        operator's source after a plain local read (#5959); the maximum opcode in the AOT header is 443
+//!      - IR functions have their catch-exit depths and catch-cleanup results after their blocks, as (u16 block, u16
+//!        instruction, u32 value) entries, so that a module's debug IR closes its catch blocks as the IR it was made
+//!        from (qore#6733)
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! Old compiled artifacts must be rebuilt for AL's handler and source-release semantics.
@@ -711,8 +714,7 @@ static_assert(QORE_AOT_HANDED_OVER_RETURN_VERSION == QORE_AOT_BATCH_AL_VERSION,
 //! First format version whose IR functions record their catch-exit depths and catch-cleanup results (qore#6733)
 /** QoreIRFunction::catch_exit_depths and catch_cleanup_results (#5968, #6079) are written after the blocks of the
     function as (block index, instruction index, value) entries, the index of an instruction being that of the
-    written IR (in which a PushTempMarkPair is two instructions); a module of an earlier format has none, and its IR
-    closes one catch block at each CatchCleanup, as before.  A change of batch AL (see v48 above)
+    written IR (in which a PushTempMarkPair is two instructions); a change of batch AL (see v48 above)
 */
 constexpr uint16_t QORE_AOT_CATCH_TABLES_VERSION = 48;
 static_assert(QORE_AOT_CATCH_TABLES_VERSION == QORE_AOT_BATCH_AL_VERSION,
