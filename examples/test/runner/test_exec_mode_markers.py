@@ -322,7 +322,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
         #   without an execution mode
+        # - aot-standalone-format-floor (#6699, batch AM v49): its checks run qcc executables in child processes started
+        #   without an execution mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
                                  "examples/test/qore/misc/aot-dependency-domains/aot-dependency-domains.qtest",
