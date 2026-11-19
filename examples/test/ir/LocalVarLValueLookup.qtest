@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../QoreBuildTree.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -169,6 +170,8 @@ printf("%y\n", drop("present", "x", "i", "a"));
         string host = tmp.path + DirSep + "host";
         *list<*string> target = Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/;
         string flags = target ? target[0] : "-ldl";
+        # a sanitizer build of libqore needs the same sanitizer in the host (qore#6682)
+        flags += " " + QoreBuildTree::sanitizer_flags(libqore_dir).join(" ");
         rv = run(sprintf("%s -std=c++17 -I%s/include -I%s/include %s/examples/test/ir/"
             "aot_top_level_local_host.cpp %s -L%s -Wl,-rpath,%s -lqore %s -o %s", cxx, root, libqore_dir, root, obj,
             libqore_dir, libqore_dir, flags, host));

@@ -1,0 +1,200 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class UpsertSelectFirstOmitUpdateTest
+
+#! the select-first upsert neither compares nor updates the columns of the omit_update option (issue #6683)
+/** runs on SQLite, and on PostgreSQL, MySQL, Oracle and SQL Server when \c QORE_DB_CONNSTR_PGSQL,
+    \c QORE_DB_CONNSTR_MYSQL, \c QORE_DB_CONNSTR_ORACLE and \c QORE_DB_CONNSTR_FREETDS are set
+*/
+class UpsertSelectFirstOmitUpdateTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dbs;
+        hash<string, string> skips = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "mssql": "QORE_DB_CONNSTR_FREETDS is not set",
+        };
+    }
+
+    constructor() : Test("UpsertSelectFirstOmitUpdate", "1.0", \ARGV) {
+        addTestCase("SQLite", \sqliteTest());
+        addTestCase("PostgreSQL", sub () { check(getDs("pgsql"), "pgsql"); });
+        addTestCase("MySQL", sub () { check(getDs("mysql"), "mysql"); });
+        addTestCase("Oracle", sub () { check(getDs("oracle"), "oracle"); });
+        addTestCase("SQL Server", sub () { check(getDs("mssql"), "mssql"); });
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "UpsertSelectFirstOmitUpdate");
+            dbs.pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%else
+        skips.pgsql = "no pgsql module";
+%endif
+%ifndef NoMysql
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            connect("mysql", *string sub () { return MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL,
+                "UpsertSelectFirstOmitUpdate"); });
+        }
+%else
+        skips.mysql = "no mysql module";
+%endif
+%ifndef NoOracle
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            connect("oracle", *string sub () { return OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE,
+                "UpsertSelectFirstOmitUpdate"); });
+        }
+%else
+        skips.oracle = "no oracle module";
+%endif
+%ifndef NoFreetds
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            connect("mssql", *string sub () { return MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS,
+                "UpsertSelectFirstOmitUpdate"); });
+        }
+%else
+        skips.mssql = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        foreach string k in (keys dbs) {
+            dbs{k}.rollback();
+        }
+        remove dbs;
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            MysqlRunDatabase::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            OracleRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            MssqlRunDatabase::teardown();
+        }
+    }
+
+    private connect(string db, code get_connstr) {
+        try {
+            Datasource ds(get_connstr());
+            ds.open();
+            dbs{db} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skips{db} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        check(new Datasource("sqlite3:x@:memory:"), "sqlite");
+    }
+
+    private Datasource getDs(string db) {
+        if (!dbs{db}) {
+            testSkip(skips{db});
+        }
+        return dbs{db};
+    }
+
+    private check(Datasource ds, string db) {
+        on_exit ds.rollback();
+        ds.exec("create table usfo_t (k integer not null, v integer, keep varchar(10), primary key (k))");
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table usfo_t");
+            ds.commit();
+        }
+        AbstractTable t = new Table(ds, "usfo_t").getTable();
+        hash<auto> opt = {"omit_update": ("keep",)};
+        t.insert({"k": 1, "v": 1, "keep": "a"});
+        # only the omitted column differs: the row is unchanged, and the omitted column is kept
+        assertEq(AbstractTable::UR_Unchanged, t.upsert({"k": 1, "v": 1, "keep": "b"}, AbstractTable::UpsertSelectFirst,
+            opt), db + ": unchanged");
+        assertEq("a", t.selectRow({"where": {"k": 1}}).keep, db + ": the omitted column is kept");
+        # another column differs: it is updated, the omitted column is kept
+        assertEq(AbstractTable::UR_Updated, t.upsert({"k": 1, "v": 2, "keep": "c"}, AbstractTable::UpsertSelectFirst,
+            opt), db + ": updated");
+        hash<auto> row = t.selectRow({"where": {"k": 1}});
+        assertEq(2, row.v.toInt(), db + ": the value");
+        assertEq("a", row.keep, db + ": the omitted column is still kept");
+        # a new row is inserted with every column
+        assertEq(AbstractTable::UR_Inserted, t.upsert({"k": 2, "v": 1, "keep": "x"}, AbstractTable::UpsertSelectFirst,
+            opt), db + ": inserted");
+        assertEq("x", t.selectRow({"where": {"k": 2}}).keep, db + ": inserted with the omitted column");
+        # every non-key column omitted
+        assertEq(AbstractTable::UR_Unchanged, t.upsert({"k": 2, "v": 9, "keep": "y"}, AbstractTable::UpsertSelectFirst,
+            {"omit_update": ("v", "keep")}), db + ": all omitted");
+        assertEq(1, t.selectRow({"where": {"k": 2}}).v.toInt(), db + ": nothing updated");
+        # a key column or an unknown column in omit_update has no effect
+        assertEq(AbstractTable::UR_Updated, t.upsert({"k": 1, "v": 3, "keep": "d"}, AbstractTable::UpsertSelectFirst,
+            {"omit_update": ("k", "zzz", "keep")}), db + ": key and unknown columns omitted");
+        assertEq(3, t.selectRow({"where": {"k": 1}}).v.toInt(), db + ": updated with key/unknown omitted");
+        # a row with only its key: unchanged when it exists
+        assertEq(AbstractTable::UR_Unchanged, t.upsert({"k": 1}, AbstractTable::UpsertSelectFirst), db + ": key only");
+        # with the input of an iterator
+        *hash<string, int> rh = t.upsertFromIterator(({"k": 1, "v": 3, "keep": "e"}, {"k": 2, "v": 5, "keep": "f"},
+            {"k": 3, "v": 1, "keep": "g"}).iterator(), AbstractTable::UpsertSelectFirst, opt);
+        assertEq({"unchanged": 1, "updated": 1, "inserted": 1}, rh{"unchanged", "updated", "inserted"},
+            db + ": upsertFromIterator");
+        assertEq(("a", "x", "g"), (map $1.keep, t.selectRows({"orderby": "k"})), db + ": the omitted column is kept");
+
+        # a key that the database stores in another form (a numeric key with more decimals than the column): with no
+        # column to update, the existing row is unchanged and its key is not rewritten
+        ds.exec("create table usfo_n (k numeric(10,2) not null, v integer, primary key (k))");
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table usfo_n");
+            ds.commit();
+        }
+        AbstractTable tn = new Table(ds, "usfo_n").getTable();
+        tn.insert({"k": 1.01n, "v": 1});
+        if (db != "sqlite") {
+            assertEq(AbstractTable::UR_Unchanged, tn.upsert({"k": 1.005n, "v": 2}, AbstractTable::UpsertSelectFirst,
+                {"omit_update": ("v",)}), db + ": a rounded key with all columns omitted");
+            assertEq((1.01n, 1), (map ($1.k.toNumber(), $1.v.toInt()), tn.selectRows())[0], db + ": the row");
+        }
+    }
+}

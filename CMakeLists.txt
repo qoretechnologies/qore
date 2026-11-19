@@ -250,6 +250,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_AbstractThreadResource.qpp
     lib/QC_AutoGate.qpp
     lib/QC_AutoLock.qpp
+    lib/QC_ThreadCapabilityScope.qpp
     lib/QC_AutoReadLock.qpp
     lib/QC_AutoWriteLock.qpp
     lib/QC_Condition.qpp
@@ -2427,6 +2428,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_SSLPrivateKey.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HTTPClient.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoLock.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ThreadCapabilityScope.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoGate.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoReadLock.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoWriteLock.cpp\"
@@ -2992,6 +2994,11 @@ target_include_directories(qore-utf8-validation-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
 # the test calls iconv through IconvHelper, which is inline
 target_link_libraries(qore-utf8-validation-test PRIVATE libqore ${ICONV_LIBRARY})
+add_executable(qore-utf16-validation-test examples/test/qore/strings/utf16_validation.cpp)
+target_include_directories(qore-utf16-validation-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
+# the test calls the validation of IconvHelper, which is inline
+target_link_libraries(qore-utf16-validation-test PRIVATE libqore ${ICONV_LIBRARY})
 # the keep-alive interval policy of QUIC connections is header-only, so the test needs no library
 add_executable(qore-quic-keep-alive-test examples/test/qore/misc/quic_keep_alive.cpp)
 target_include_directories(qore-quic-keep-alive-test PRIVATE
@@ -3513,7 +3520,7 @@ install(FILES ${QCC_FORMAT_STAMP}
 #install(TARGETS qore qpp qr libqore
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreOptionalModuleStamp.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake cmake/QoreRemoveStaleModuleApiFiles.cmake
+install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreOptionalModuleStamp.cmake cmake/QoreQmodSourceCheck.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake cmake/QoreRemoveStaleModuleApiFiles.cmake
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order

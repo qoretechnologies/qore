@@ -446,6 +446,10 @@ class RecordingDatasource inherits Datasource {
     }
 
     auto select(string s, ...) {
+        # the types of the key columns that upserts read from the catalog (issue #6676) are not DML of the test
+        if (s =~ /from information_schema\.columns /) {
+            return {};
+        }
         sql += s;
         return {};
     }

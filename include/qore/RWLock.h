@@ -52,6 +52,7 @@ class VLock;
 typedef std::map<int, VLock*> vlock_map_t;
 
 class RWLock : public AbstractSmartLock {
+    friend class qore_rwlock_intern_ops;
 public:
     DLLEXPORT RWLock(bool p = false);
 
@@ -115,13 +116,7 @@ private:
         return tmap.find(mtid) != tmap.end();
     }
 
-    // 0 = last read lock in this thread released
-    DLLLOCAL int cleanup_read_lock_intern(tid_map_t::iterator i);
-    DLLLOCAL void mark_read_lock_intern(int mtid, VLock *nvl);
-    DLLLOCAL void release_read_lock_intern(tid_map_t::iterator i);
-    DLLLOCAL int grab_read_lock_intern(int mtid, VLock *nvl, int64 timeout_ms, ExceptionSink *xsink);
-    DLLLOCAL void set_initial_read_lock_intern(int mtid, VLock *nvl);
-
+    
     DLLLOCAL virtual int cleanupImpl();
     DLLLOCAL virtual void signalAllImpl();
     DLLLOCAL virtual void signalImpl();

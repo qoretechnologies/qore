@@ -713,7 +713,10 @@ public:
     DLLLOCAL int resolveTypes();
 
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
-        if (resolved) {
+        // a signature read from an AOT image has its parameter types and no parse types before it is resolved: its
+        // abstract signature is made from its types, so that the variants of a method are told apart when they are
+        // added to their class (issue #6161)
+        if (resolved || parseTypeList.size() < typeList.size()) {
             AbstractFunctionSignature::addAbstractParameterSignature(str);
             return;
         }
@@ -842,8 +845,17 @@ DLLLOCAL QoreCallMatch qore_match_default_call(const AbstractQoreFunctionVariant
 DLLLOCAL QoreCallMatch qore_match_lexical_user_call(const AbstractQoreFunctionVariant* variant,
     const UserSignature* signature, const QoreCallMatchInput& input);
 
-class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper {
+//! Evaluates a call
+/** The provenance of the receiver (QoreSandboxProvenanceHelper) is applied before the Program of the call is entered
+    (ProgramThreadCountContextHelper), so it is a base listed before that one: bases are destroyed in the reverse order,
+    so the entry, and the thread exit handler that it runs, are left before the provenance, and the budget frames of the
+    thread are left in the reverse order of their entry, also when a constructor exits with a C++ exception
+*/
+class CodeEvaluationHelper : public QoreStackLocation, private QoreSandboxProvenanceHelper,
+        public ProgramThreadCountContextHelper {
 public:
+    using ProgramThreadCountContextHelper::set;
+
     //! Result of the variant's argument-binding entry; the signature is already available in that entry.
     struct PreparedCall {
         const QoreTypeInfo* return_type = nullptr;
@@ -1148,7 +1160,6 @@ public:
     }
 
 protected:
-    QoreSandboxProvenanceHelper sandbox_provenance;
     qore_call_t ct;
     // Keep the flags together to avoid padding in every call frame.
     bool variant_needs_type_param_substitution = false;

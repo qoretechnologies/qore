@@ -38,14 +38,14 @@ final class HashStringFormatter {
     string overlapConsumers(hash<string, string> row) {
         return sprintf(\"%d:%d:%d\",
             self.formatFirst(row).size(),
-            self.wrappedFormat(row).length(),
+            self.wrappedFormat(row).strlen(),
             self.formatReversed(row).size());
     }
 
     int crossBlockConsumers(hash<string, string> row) {
         return self.format(row).size()
             ? self.formatFirst(row).size()
-                + self.formatReversed(row).length()
+                + self.formatReversed(row).strlen()
             : 0;
     }
 
@@ -60,7 +60,7 @@ final class HashStringFormatter {
     string consumers(hash<string, string> row) {
         return sprintf(\"%d:%d:%y:%y:%y:%d:%d:%s\",
             self.wrappedFormat(row).size(),
-            self.wrappedFormat(row).length(),
+            self.wrappedFormat(row).strlen(),
             self.wrappedFormat(row).startsWith(\"Dvo\"),
             self.wrappedFormat(row).endsWith(\"Smetana\"),
             self.wrappedFormat(row).contains(\":\"),

@@ -28,6 +28,9 @@ public class Worker {
         #! a capability created by a Program that was deleted afterwards
         static code deleted_program_cap;
 
+        #! a capability that is never called, for tests that it cannot be wrapped (sandbox-trusted-build.qtest)
+        static code live_cap;
+
         #! a Program that created a capability during the module's initialization, for the thread control test
         /** Its threads wait on a queue of the Program until they are cancelled or the exit hook releases them; its
             functions: \c start() starts one and waits until it runs, \c running() returns the number running
@@ -65,6 +68,7 @@ public class Worker {
             "governed_allowed": Worker::createGoverned(True),
         };
         deleted_program_cap = Worker::createInDeletedProgram();
+        live_cap = SandboxManager::createSystemThreadCall(sub () {});
         control = Worker::createControl();
     }
 

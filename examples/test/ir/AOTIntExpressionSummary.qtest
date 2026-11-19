@@ -72,6 +72,10 @@ float sub nested_hash_float_expr(
 
 int sub hash_string_measure(
         hash<string, string> row, int adjustment) {
+    return row.first.size() + row.second.size() + adjustment;
+}
+
+int sub hash_checked_length(hash<string, string> row, int adjustment) {
     return row.first.length() + row.second.size() + adjustment;
 }
 
@@ -136,17 +140,17 @@ int sub optional_string_measure_expr(*string value, int adjustment) {
 
 int sub string_starts_expr(string value, string pattern, int adjustment) {
     return value.startsWith(pattern)
-        ? value.length() + adjustment : value.size() - adjustment;
+        ? value.size() + adjustment : value.size() - adjustment;
 }
 
 int sub string_ends_expr(string value, string pattern, int adjustment) {
     return value.endsWith(pattern)
-        ? value.length() + adjustment : value.size() - adjustment;
+        ? value.size() + adjustment : value.size() - adjustment;
 }
 
 int sub string_contains_expr(string value, string pattern, int adjustment) {
     return value.contains(pattern)
-        ? value.length() + adjustment : value.size() - adjustment;
+        ? value.size() + adjustment : value.size() - adjustment;
 }
 
 int sub string_find_expr(string value, string pattern, int offset, int adjustment) {
@@ -163,7 +167,7 @@ int sub multiple_string_ops_expr(string value, string pattern, int adjustment) {
 
 int sub nested_string_expr(string value, string pattern, int adjustment) {
     return string_contains_expr(value, pattern, adjustment) * 3
-        + value.length() * 2 + adjustment;
+        + value.size() * 2 + adjustment;
 }
 
 int sub list_measure_expr(list<int> left, list<int> right, int adjustment) {
@@ -520,7 +524,7 @@ string sub consumerCode() {
             || ex.err == \"RUNTIME-TYPE-ERROR\";
     }
     printf(\"hash-string-measure:%d:%d:%d:%d:%d:%d\\n\",
-        hash_string_measure(hash_string_present, 2),
+        hash_checked_length(hash_string_present, 2),
         nested_hash_string_measure(hash_string_present, 2),
         hash_string_measure(hash_string_missing, 2),
         hash_string_measure(hash_string_removed, 3),
@@ -619,7 +623,9 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"37\"/)
         || !(provider_index =~ /\"qore_path\": \"hash_string_measure\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_hash_string_measure\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"kind\": 30[^\n]*\"key\": \"second\"/)
-        || !(provider_index =~ /\"kind\": 31[^\n]*\"key\": \"first\"/)
+        || !(provider_index =~ /\"kind\": 30[^\n]*\"key\": \"first\"/)
+        # A summary without an exception edge cannot count characters in an arbitrary string.
+        || !(provider_index =~ /\"qore_path\": \"hash_checked_length\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"divide_float_expr\(float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"negate_float_expr\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
@@ -627,9 +633,9 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"37\"/)
         || !(provider_index =~ /\"qore_path\": \"wide_float_expr\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"cfg_float_expr\(bool,bool,float\)\"[^\n]*\"float_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"kind\": 9/)
         || !(provider_index =~ /\"qore_path\": \"cfg_float_div\(bool,float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
-        || !(provider_index =~ /\"qore_path\": \"string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"nested_string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"optional_string_measure_expr\(\*string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"nested_string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"optional_string_measure_expr\(\*string,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"string_starts_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"string_ends_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"string_contains_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)

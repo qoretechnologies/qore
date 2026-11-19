@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# a script of ForeachReferenceElementRelease.qtest: two threads run the same function at the same time, one over a list
+# that holds a reference, which its foreach variable reads through, the other over a list of objects; each thread logs
+# the destructions of its objects and the writes of the method's parameter, and the logs are printed when both threads
+# have ended (issue #6538)
+%modern
+
+our list<string> g_log_a = ();
+our list<string> g_log_b = ();
+our *T g_a;
+
+sub log_line(string tag, string line) {
+    if (tag == "a") {
+        g_log_a += line;
+    } else {
+        g_log_b += line;
+    }
+}
+
+class T {
+    public { string tag; string n; }
+    constructor(string tag, string n) { self.tag = tag; self.n = n; }
+    destructor() { log_line(tag, "dtor " + n); }
+}
+
+class C {
+    # clears the referenced variable of thread a and writes the parameter
+    mw(auto a, string tag) {
+        if (tag == "a") {
+            g_a = NOTHING;
+        }
+        a = NOTHING;
+        log_line(tag, "after write");
+    }
+}
+
+# the function that both threads run
+sub give(list<auto> args, string tag) {
+    C c();
+    foreach auto r in (args) {
+        c.mw(r, tag);
+    }
+}
+
+const Rounds = 200;
+
+Counter start(2);
+Counter done(2);
+
+background sub () {
+    start.dec();
+    start.waitForZero();
+    for (int i = 0; i < Rounds; ++i) {
+        g_a = new T("a", "a" + i);
+        give((\g_a,), "a");
+        log_line("a", "after give " + i);
+    }
+    done.dec();
+}();
+
+background sub () {
+    start.dec();
+    start.waitForZero();
+    for (int i = 0; i < Rounds; ++i) {
+        give((new T("b", "b" + i),), "b");
+        log_line("b", "after give " + i);
+    }
+    done.dec();
+}();
+
+done.waitForZero();
+printf("%s\n", g_log_a.join("\n"));
+printf("%s\n", g_log_b.join("\n"));

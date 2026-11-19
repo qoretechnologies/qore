@@ -32,6 +32,7 @@
 #include <qore/QoreCondition.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreThreadList.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <cerrno>
 #include <cstring>
@@ -67,14 +68,14 @@ QoreCondition::QoreCondition() {
     qore_cond_init(c);
 }
 
-void QoreCondition::reinitAfterFork() {
+void qore_condition_ops::reinitAfterForkImpl(QoreCondition* b) {
     // the old state is not destroyed: pthread_cond_destroy() would wait for the waiters, which do not exist in the
     // child, and pthread_cond_signal() could wait for them too (glibc); it is reset to the static initializer first,
     // since an implementation may refuse to initialize a condition that is in use (as macOS does for read-write
     // locks)
     static const pthread_cond_t initial = PTHREAD_COND_INITIALIZER;
-    c = initial;
-    qore_cond_init(c);
+    b->c = initial;
+    qore_cond_init(b->c);
 }
 
 QoreCondition::~QoreCondition() {
@@ -203,7 +204,6 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, Excep
     return qore_cond_wait_cancellable(*this, m, timeout_ms, xsink, "condition wait");
 }
 
-int QoreCondition::waitWithInterrupt(QoreThreadLock& l, ExceptionSink* xsink, const char* operation,
-        int (*before_block)(void*), void* arg) {
-    return qore_cond_wait_cancellable(*this, &l.ptm_lock, -1, xsink, operation, before_block, arg);
+int qore_condition_ops::waitWithInterruptImpl(QoreCondition* b, QoreThreadLock& l, ExceptionSink* xsink, const char* operation, int (*before_block)(void*), void* arg) {
+    return qore_cond_wait_cancellable(*b, &l.ptm_lock, -1, xsink, operation, before_block, arg);
 }

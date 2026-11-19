@@ -1,0 +1,302 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class UpsertRoundedKeysTest
+
+#! an upsert finds the row of a key that the column rounds or pads when it stores it (issue #6676)
+/** a key value that the column rounds (a date with fractional seconds in a column with whole seconds, a number with
+    more decimals than the column, a float in an integer column) or pads (Oracle CHAR) was compared with the stored
+    value as it was bound, so that the upsert did not find the row that the same key had stored: it inserted another
+    row or failed with a primary key violation; runs on SQLite, and on PostgreSQL, MySQL, Oracle and SQL Server when
+    \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL, \c QORE_DB_CONNSTR_ORACLE and \c QORE_DB_CONNSTR_FREETDS are
+    set
+*/
+class UpsertRoundedKeysTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dbs;
+        hash<string, string> skips = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "mssql": "QORE_DB_CONNSTR_FREETDS is not set",
+        };
+
+        const Strategies = {
+            "auto": AbstractTable::UpsertAuto,
+            "update-first": AbstractTable::UpsertUpdateFirst,
+            "select-first": AbstractTable::UpsertSelectFirst,
+            "insert-first": AbstractTable::UpsertInsertFirst,
+            "insert-only": AbstractTable::UpsertInsertOnly,
+            "update-only": AbstractTable::UpsertUpdateOnly,
+        };
+    }
+
+    constructor() : Test("UpsertRoundedKeys", "1.0", \ARGV) {
+        addTestCase("SQLite", \sqliteTest());
+        addTestCase("PostgreSQL", \pgsqlTest());
+        addTestCase("MySQL", \mysqlTest());
+        addTestCase("Oracle", \oracleTest());
+        addTestCase("SQL Server", \mssqlTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "UpsertRoundedKeys");
+            dbs.pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%else
+        skips.pgsql = "no pgsql module";
+%endif
+%ifndef NoMysql
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            connect("mysql", *string sub () { return MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL,
+                "UpsertRoundedKeys"); });
+        }
+%else
+        skips.mysql = "no mysql module";
+%endif
+%ifndef NoOracle
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            connect("oracle", *string sub () { return OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE,
+                "UpsertRoundedKeys"); });
+        }
+%else
+        skips.oracle = "no oracle module";
+%endif
+%ifndef NoFreetds
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            connect("mssql", *string sub () { return MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS,
+                "UpsertRoundedKeys"); });
+        }
+%else
+        skips.mssql = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        foreach string k in (keys dbs) {
+            dbs{k}.rollback();
+        }
+        remove dbs;
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            MysqlRunDatabase::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            OracleRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            MssqlRunDatabase::teardown();
+        }
+    }
+
+    private connect(string db, code get_connstr) {
+        try {
+            Datasource ds(get_connstr());
+            ds.open();
+            dbs{db} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skips{db} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        # SQLite stores the values as they are given: the same key is the same value
+        check(ds, "sqlite", (
+            {"type": "timestamp", "key": 2026-01-01T10:00:00.7},
+            {"type": "numeric(10,2)", "key": 1.005n},
+        ));
+    }
+
+    pgsqlTest() {
+        check(getDs("pgsql"), "pgsql", (
+            {"type": "timestamp(0)", "key": 2026-01-01T10:00:00.7},
+            {"type": "numeric(10,2)", "key": 1.005n},
+            {"type": "integer", "key": 1.4},
+            {"type": "char(5)", "key": "a  "},
+        ));
+    }
+
+    mysqlTest() {
+        check(getDs("mysql"), "mysql", (
+            {"type": "datetime(0)", "key": 2026-01-01T10:00:00.7},
+            {"type": "decimal(10,2)", "key": 1.005n},
+            {"type": "int", "key": 1.4},
+            {"type": "int", "key": 1.5n},
+        ));
+    }
+
+    oracleTest() {
+        Datasource ds = getDs("oracle");
+        # a key longer than a CHAR can hold is not truncated by the conversion: it matches no row (the upsert of each
+        # strategy that would insert it fails, as a plain insert does)
+        {
+            on_exit ds.rollback();
+            ds.exec("create table urk_long (k char(2000) not null, v integer, primary key (k))");
+            ds.commit();
+            on_exit {
+                ds.rollback();
+                ds.exec("drop table urk_long");
+                ds.commit();
+            }
+            AbstractTable t = new Table(ds, "urk_long").getTable();
+            t.insert({"k": strmul("x", 2000), "v": 1});
+            ds.commit();
+            foreach hash<auto> st in (Strategies.pairIterator()) {
+                code upsert = t.getUpsertClosure({"k": "a", "v": 2}, st.value);
+                try {
+                    upsert({"k": strmul("x", 2001), "v": 2});
+                } catch (hash<ExceptionInfo> ex) {
+                    # the insert of the longer value fails (ORA-12899)
+                }
+                # the stored row was not matched: it was not updated (checked before the rollback)
+                assertEq(1, t.selectRow().v.toInt(), "oracle: a key longer than the column: " + st.key);
+                ds.rollback();
+            }
+        }
+        check(ds, "oracle", (
+            {"type": "timestamp(0)", "key": 2026-01-01T10:00:00.7},
+            {"type": "number(10,2)", "key": 1.005n},
+            {"type": "integer", "key": 1.4},
+            {"type": "char(5)", "key": "a"},
+        ));
+    }
+
+    mssqlTest() {
+        check(getDs("mssql"), "mssql", (
+            {"type": "datetime2(0)", "key": 2026-01-01T10:00:00.7},
+            {"type": "numeric(10,2)", "key": 1.005n},
+            {"type": "int", "key": 1.6},
+        ));
+    }
+
+    private Datasource getDs(string db) {
+        if (!dbs{db}) {
+            testSkip(skips{db});
+        }
+        return dbs{db};
+    }
+
+    #! for each key type and upsert strategy: the row stored for a key is found by an upsert of the same key
+    private check(Datasource ds, string db, list<hash<auto>> cases) {
+        on_exit ds.rollback();
+        int n = 0;
+        foreach hash<auto> c in (cases) {
+            foreach hash<auto> st in (Strategies.pairIterator()) {
+                ++n;
+                string name = sprintf("urk_%d", n);
+                string desc = sprintf("%s: %s %y: %s", db, c.type, c.key, st.key);
+                ds.exec(sprintf("create table %s (k %s not null, v integer, primary key (k))", name, c.type));
+                ds.commit();
+                on_exit {
+                    ds.rollback();
+                    ds.exec("drop table " + name);
+                    ds.commit();
+                }
+                AbstractTable t = new Table(ds, name).getTable();
+                # the row as the database stores the key
+                t.insert({"k": c.key, "v": 1});
+                int rc;
+                try {
+                    rc = t.upsert({"k": c.key, "v": 2}, st.value);
+                } catch (hash<ExceptionInfo> ex) {
+                    fail(sprintf("%s: %s: %s", desc, ex.err, ex.desc));
+                    continue;
+                }
+                assertEq(1, t.rowCount(), desc + ": no other row");
+                int v = t.selectRow().v.toInt();
+                if (st.key == "insert-only") {
+                    assertEq(AbstractTable::UR_Unchanged, rc, desc);
+                    assertEq(1, v, desc);
+                } else {
+                    assertEq(2, v, desc + ": the row is updated");
+                }
+
+                # a new key is inserted as a plain insert stores it (a MERGE must not insert the converted value)
+                if (st.key == "update-only") {
+                    continue;
+                }
+                ds.exec(sprintf("delete from %s", name));
+                t.upsert({"k": c.key, "v": 3}, st.value);
+                *hash<auto> stored = t.selectRow();
+                assertEq(3, stored.v.toInt(), desc + ": a new key is inserted");
+                ds.exec(sprintf("delete from %s", name));
+                t.insert({"k": c.key, "v": 3});
+                assertEq(t.selectRow().k, stored.k, desc + ": the new key is stored as a plain insert stores it");
+            }
+        }
+        # the key values of later rows of other value types than the first one (ex: MySQL: an int, then a number,
+        # which is bound as a string, for an integer column): each row is matched by its own value; SQLite stores the
+        # values as given ("integer primary key" is the rowid, which takes only integers), and the SQL Server driver
+        # cannot bind a number for an integer column: a float is used there
+        if (db == "sqlite") {
+            return;
+        }
+        auto key2 = db == "mssql" ? 1.6 : 1.6n;
+        string name = "urk_mixed";
+        ds.exec(sprintf("create table %s (k integer not null, v integer, primary key (k))", name));
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table " + name);
+            ds.commit();
+        }
+        AbstractTable t = new Table(ds, name).getTable();
+        t.insert({"k": 1, "v": 1});
+        foreach hash<auto> st in (Strategies.pairIterator()) {
+            if (st.key == "insert-only" || st.key == "update-only") {
+                continue;
+            }
+            t.upsertFromIterator(({"k": 1, "v": 5}, {"k": key2, "v": 9}).iterator(), st.value);
+            # 1.6 is stored as 2 (rounded) or 1 (truncated, SQL Server): its row is the one with that key
+            int k2 = db == "mssql" ? 1 : 2;
+            assertEq(9, t.selectRow({"where": {"k": k2}}).v.toInt(), sprintf("%s: mixed value types: %s", db,
+                st.key));
+            if (k2 == 2) {
+                assertEq(5, t.selectRow({"where": {"k": 1}}).v.toInt(), sprintf("%s: mixed: the int row: %s", db,
+                    st.key));
+            }
+            ds.exec(sprintf("delete from %s where k <> 1", name));
+        }
+    }
+}

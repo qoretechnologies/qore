@@ -203,10 +203,25 @@
     @ref Qore::Program::getDefine() "Program::getDefine()" returns it: it was a float (\c 12.0), and a number is decimal,
     also with a leading zero (see @ref define_values "%define"; issue #6530).
 
-    @par The Length of a String Not Valid in Its Encoding Counts Each Invalid Byte as One Character
+    @par Character Counts Validate the String Encoding
     @ref Qore::length(softstring) "length()", @ref Qore::zzz8stringzzz9::length() "<string>::length()" and the
-    @ref elements "elements operator" count each byte of a string that does not start a complete character as one
-    character, in every execution mode; before, the count stopped at the first such byte (issue #6597).
+    @ref elements "elements operator" now raise \c INVALID-ENCODING when a string is invalid in its declared
+    encoding (issue #6655).
+
+    @par UTF-8 Strings Are Valid Only as RFC 3629 Defines Them
+    A continuation byte on its own, an overlong form, a surrogate, a code point above U+10FFFF and the bytes
+    \c 0xf5 - \c 0xff are invalid in a \c UTF-8 string: the string functions and operators raise
+    \c INVALID-ENCODING for them where they were read as characters (see @ref utf8_validity; issue #6604).
+
+    @par UTF-16 Strings Are Valid Only With Paired Surrogates
+    An unpaired surrogate is invalid in a \c UTF-16 string: the string functions and operators raise
+    \c INVALID-ENCODING for it where they read it, or a high surrogate and the code unit after it, as a character
+    (see @ref utf16_validity; issue #6604).
+
+    @par trunc_str() Raises INVALID-ENCODING for a String Not Valid in Its Encoding Within the Length
+    @ref Qore::trunc_str() "trunc_str()" raises \c INVALID-ENCODING for an invalid character within the length, also
+    when the whole string is within it, where it returned the part before the character or the string unchecked
+    (issue #6604).
 
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
@@ -1086,6 +1101,12 @@
     %Program, from the new \c QoreModuleCommandContext (module API 2.3; see @ref qore_modules), also for
     \c %module-cmd and for commands that a compiled program replays when it is loaded.
 
+    @par Thread Capability Scopes
+    A host sets capabilities for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope",
+    which module code uses through a guard (@ref Qore::get_thread_capability() "get_thread_capability()") when its
+    caller gives no \c start_thread or \c call_wrapper option
+    (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>).
+
     @par Strict Parse Errors
     The @ref strict-parse-errors "%strict-parse-errors" parse option, implied by @ref modern "%modern", raises the
     errors that the parser can prove as parse errors, starting with a local variable that cannot have been assigned
@@ -1453,8 +1474,8 @@
     a sandbox manager is attached; see @ref sandbox_restricts.  The new
     @ref Qore::SandboxManager::trustsUncontrolledApis() "SandboxManager::trustsUncontrolledApis()" and the matching C++
     method tell whether the sandbox trusts its code to use uncontrolled APIs (for a combination of sandboxes, whether
-    every member does), so that a module refuses an operation for a sandboxed caller only if
-    <tt>!trustsUncontrolledApis() && restricts()</tt>.
+    every member does), so that a module refuses an operation that only an unrestricted caller may use unless the
+    sandbox trusts its caller.
 
     @par Asking Whether the Calling Code Is Restricted From a Domain
     @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()" and the C++ function
@@ -1689,6 +1710,8 @@
 
     - @ref discordwebsocketclientintro "DiscordWebSocketClient" module
       - see @ref discordwebsocketclientv1_2 for all changes
+      - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
 
     - @ref elasticsearchdataproviderintro "ElasticSearchDataProvider" module
       - the Bulk, Scroll and Aggregations APIs
@@ -1709,12 +1732,20 @@
       - see @ref filelocationhandler_v3_0 for all changes
 
     - @ref filepollerintro "FilePoller" module
+      - uses the \c start_thread capability of the code that a host runs
+        (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
+      - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
       - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the file for the
         next poll instead of stopping polling (see @ref filepollererrors;
         <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
       - see @ref file_poller_2_1 for all changes
 
     - @ref ftppollerintro "FtpPoller" module
+      - uses the \c start_thread capability of the code that a host runs
+        (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
+      - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
       - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the remote file
         and retries the poll after the \c "error_delay" option's delay instead of stopping polling (see
         @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
@@ -1911,6 +1942,10 @@
       - events are received with @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo"
         (HTTP/1.1, HTTP/2 and HTTP/3)
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - uses the \c start_thread capability of the code that a host runs
+        (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
+      - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
       - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
         terminal I/O instead of raising an exception
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -1974,6 +2009,10 @@
         permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - the close handshake follows RFC 6455
+      - uses the \c start_thread and \c call_wrapper capabilities of the code that a host runs
+        (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
+      - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
       - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
         terminal I/O instead of raising an exception
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -2330,6 +2369,21 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::trunc_str() "trunc_str()" returns a string with a NUL byte that is shorter than the length whole,
+      where it returned its bytes up to the NUL byte and memory after them (issue #6604)
+    - SqlUtil driver modules: the names of types, their attributes, functions, procedures, packages and materialized
+      views in the DDL of the PostgreSQL, Oracle, MySQL and SQL Server drivers are quoted as identifiers, as the names
+      of tables and columns are, and a PostgreSQL function argument list must be one list of types (issue #6579)
+    - an argument of the constructor of a @ref list_complex_type "typed list" that is not a valid element of the list
+      raises an error that names the argument and the element type, the same at parse time and at run time, instead
+      of naming the type of the argument as the value type of the list (issue #6172)
+    - a static method call reference to a method of a class that a Program imported
+      (@ref Qore::Program::importClass() "Program::importClass()") raises \c PROGRAM-ERROR when it is called after the
+      Program is deleted; the call could read memory that was released with the Program (issue #6622)
+    - a constant, static class variable or static method given as \c "Class::name" (also in a call reference) is
+      found in a class with that name that provides it, also when the name resolves first to another class with that
+      name that does not (such as a class of the Qore namespace; see @ref class_member_scope_resolution); the
+      reference raised a parse exception (issue #1527)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
@@ -2467,6 +2521,9 @@
     - the initializer of a \c private:internal member writes its own member when a class two or more levels below
       declares a member with the same name again (or inherits one from two base classes); it wrote the other member,
       and the methods of its class saw it unset (see @ref private_members; issue #6393)
+    - a class whose hierarchy has a @ref private_members "private:internal" member that hides a member of the same
+      name of another class parses whatever the order of its parent classes, instead of raising \c PARSE-ERROR when
+      the class with the accessible member is listed first (issue #6614)
     - the parse options that a parse gives only part of its code (a module header, a file with
       @ref push-parse-options "%push-parse-options", code parsed before a directive) are no longer visible to other
       threads, and changes to the Program's options made meanwhile are kept; @ref lock-options "%lock-options" in a
@@ -2561,6 +2618,8 @@
       to a parameter of type \c list or \c hash, removed or deleted from a container, or given to
       @ref Qore::auto_cast() "auto_cast()", @ref Qore::get_value_byte_size() "get_value_byte_size()" or
       @ref Qore::format_bounded() "format_bounded()" (issue #6117)
+    - a started @ref filepollerintro "FilePoller" or @ref ftppollerintro "FtpPoller" poller whose last reference is
+      dropped is now destroyed, which stops its polling thread; before, the thread kept the poller alive
     - a @ref background "background expression" nested in another one that calls methods of the object no longer
       crashes the AST interpreter: the calls are made on the object of the code that started the outer one (issue
       #5971)
@@ -2613,6 +2672,10 @@
     - a call through \c self of an @ref abstract "abstract method" that another parent class implements raised
       \c RUNTIME-OVERLOAD-ERROR instead of calling the implementation, except in programs compiled with qcc
       (<a href="https://github.com/qoretechnologies/qore/issues/3070">issue 3070</a>)
+    - a call of an @ref abstract "abstract method" variant that another parent class implements raised
+      \c RUNTIME-OVERLOAD-ERROR when the class that declares the variant also has a concrete variant of the method,
+      as did a call of that concrete variant whose variant is resolved at run time
+      (<a href="https://github.com/qoretechnologies/qore/issues/6161">issue 6161</a>)
     - a method call whose arguments deleted the object ran the method on the deleted object in the AST interpreter
       and raised \c OBJECT-ALREADY-DELETED without the class of the method in the compiled modes; it now raises
       \c OBJECT-ALREADY-DELETED naming the method (<tt>cannot call C::m()</tt>) in every mode
@@ -3559,9 +3622,28 @@
       <tt>top N</tt> and also bound the limit as an argument that the SQL does not use, and put \c top before
       \c distinct (<a href="https://github.com/qoretechnologies/qore/issues/6583">issue 6583</a>)
     - fixed the \c delete_others upsert option of @ref sqlutilintro "SqlUtil", which deleted a row that the upsert
-      wrote when the database stores its key in another form (ex: a date in another time zone), and deleted rows while
-      reading the table, which lost the connection on SQL Server
-      (<a href="https://github.com/qoretechnologies/qore/issues/6607">issue 6607</a>)
+      wrote when the database stores its key in another form or rounds it, and deleted rows while reading the table
+      (<a href="https://github.com/qoretechnologies/qore/issues/6607">issue 6607</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6635">issue 6635</a>); see @ref sqlutilv3_11_0
+    - fixed the \c delete_others upsert option of @ref sqlutilintro "SqlUtil", which deleted the row of an input key of
+      a \c CHAR(n) or \c NCHAR(n) primary key on Oracle, or of a \c char(n) key with trailing spaces on PostgreSQL
+      (<a href="https://github.com/qoretechnologies/qore/issues/6675">issue 6675</a>); see @ref sqlutilv3_11_0
+    - fixed the \c delete_others upsert option of @ref sqlutilintro "SqlUtil" on MySQL with a primary key column whose
+      name is not in lower case, which deleted no row but reported the rows not in the input as deleted, and a
+      select-first upsert on MySQL, which updated an unchanged row of a table with such a column
+      (<a href="https://github.com/qoretechnologies/qore/issues/6674">issue 6674</a>); see @ref sqlutilv3_11_0
+    - fixed the upsert methods of @ref sqlutilintro "SqlUtil", which did not find the row of a key that the column
+      rounds or pads when it stores it (ex: <tt>1.005</tt> in a <tt>numeric(10,2)</tt> key): they inserted another row
+      or failed with a primary key violation (<a href="https://github.com/qoretechnologies/qore/issues/6676">issue 6676</a>);
+      see @ref sqlutilv3_11_0
+    - fixed the select-first upsert of @ref sqlutilintro "SqlUtil", which ignored the \c omit_update option: it compared
+      and updated the columns that the option omits (<a href="https://github.com/qoretechnologies/qore/issues/6683">issue 6683</a>)
+    - fixed the \c delete_others upsert option of @ref sqlutilintro "SqlUtil" with rows of list values (bulk DML),
+      which deleted every row of the table, those of the input as well
+      (<a href="https://github.com/qoretechnologies/qore/issues/6687">issue 6687</a>); see @ref sqlutilv3_11_0
+    - fixed an upsert closure of @ref sqlutilintro "SqlUtil" kept across a call of
+      @ref SqlUtil::AbstractTable::clear() "AbstractTable::clear()", which raised \c OBJECT-ALREADY-DELETED
+      (<a href="https://github.com/qoretechnologies/qore/issues/6686">issue 6686</a>); see @ref sqlutilv3_11_0
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
@@ -3577,6 +3659,18 @@
     - a user module that a module loads at run time with @ref Qore::load_module() "load_module()" is deleted after
       that module when the process ends, together with the native modules it requires, so the cleanup no longer uses
       the declarations of a native module that was already deleted (issue #6501)
+    - in the C++ API, \c QoreString::parseBase64UrlToString() and \c QoreStringNode::parseBase64UrlToString()
+      without an encoding argument decode base64url instead of base64, as the overloads with one do (issue #6621)
+    - code of a @ref Qore::Program "Program" could be associated with the thread-local data of another Program in
+      some cases; the thread-local data is now kept consistent with the current Program, and a closure-bound variable
+      is never created in the thread-local data of another Program (\c PROGRAM-THREAD-LOCAL-ERROR).  The C++ API
+      documentation states that code that runs a Program's code must enter it with
+      \c QoreExternalProgramContextHelper
+      (<a href="https://github.com/qoretechnologies/qore/issues/6185">issue 6185</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6537">issue 6537</a>)
+    - the C++ API's \c QoreProgramContextHelper switches the thread-local data of the Program with the current
+      Program; it never creates the data or runs the Program's thread initialization code
+      (<a href="https://github.com/qoretechnologies/qore/issues/6537">issue 6537</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

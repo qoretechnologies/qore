@@ -43,6 +43,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/qore_stdio.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <atomic>
 #include <cerrno>
@@ -404,7 +405,7 @@ void qore_cleanup() {
     // interrupted, so this is the internal, non-interruptible wait.  The exit hooks, which can stop threads that
     // would otherwise run forever, run first, unless they have run already (see ~QoreProgramHelper())
     qore_run_exit_hooks(nullptr);
-    thread_counter.waitForZero();
+    qore_counter_ops(thread_counter).waitForZero();
 
     // set shutdown flag for external modules
     qore_shutdown.store(true, std::memory_order_relaxed);
@@ -449,7 +450,7 @@ void qore_cleanup() {
     // being stopped during module cleanup above and controller cleanup
     // Teardown cannot be interrupted while a native thread may still be using
     // module TLS callbacks. Use the internal, non-interruptible counter wait.
-    tp_thread_counter.waitForZero();
+    qore_counter_ops(tp_thread_counter).waitForZero();
     qore_stop_external_thread_reaper();
     // the sandbox watchdog wakes threads through the condition waker, so it is stopped first
     qore_sandbox_watchdog_stop();

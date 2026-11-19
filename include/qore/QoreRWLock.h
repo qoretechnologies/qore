@@ -61,6 +61,7 @@ class qore_var_rwlock_priv;
     the write lock (-1 if none), and \c priv->readers the number of threads holding the read lock
  */
 class QoreRWLock {
+    friend class qore_rwlock_ops;
 public:
     //! creates and initializes the lock
     DLLEXPORT QoreRWLock();
@@ -85,11 +86,7 @@ public:
     //! tries to grab the read lock; does not block if unsuccessful; returns 0 if successful
     DLLEXPORT int tryrdlock();
 
-    //! initializes the lock again, unlocked and without waiters, in a child process created with fork() (internal)
-    /** see QoreForkRWLock
-    */
-    DLLLOCAL void reinitAfterFork();
-
+    
 protected:
     //! the private implementation of the lock
     qore_var_rwlock_priv* priv;
@@ -365,6 +362,7 @@ public:
 class qore_var_rwlock_priv;
 
 class QoreVarRWLock {
+    friend class qore_var_rwlock_ops;
     friend class qore_var_rwlock_priv;
 public:
     DLLLOCAL QoreVarRWLock();
@@ -372,21 +370,13 @@ public:
     //! destroys the lock
     DLLLOCAL ~QoreVarRWLock();
 
-    //! grabs the write lock
-    DLLLOCAL void wrlock();
-
-    //! tries to grab the write lock; does not block if unsuccessful; returns 0 if successful
-    DLLLOCAL int trywrlock();
-
+    
+    
     //! unlocks the lock (assumes the lock is locked)
     DLLLOCAL void unlock();
 
-    //! grabs the read lock
-    DLLLOCAL void rdlock();
-
-    //! tries to grab the read lock; does not block if unsuccessful; returns 0 if successful
-    DLLLOCAL int tryrdlock();
-
+    
+    
 protected:
     qore_var_rwlock_priv* priv;
 

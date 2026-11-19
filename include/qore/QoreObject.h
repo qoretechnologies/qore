@@ -60,6 +60,7 @@ class ReferenceNode;
     @see QoreClass
 */
 class QoreObject : public AbstractQoreNode {
+    friend class qore_object_ops;
     friend class qore_object_private;
     friend class ObjectRSetHelper;
     friend class ObjectRSet;
@@ -682,12 +683,7 @@ public:
         return const_cast<QoreObject*>(this);
     }
 
-    DLLLOCAL int getStatus() const;
-
-    //! Internal canonical boolean conversion, with the same lifetime lock as the public value API.
-    DLLLOCAL bool getAsBoolDefault() const;
-
-    DLLLOCAL class KeyNode* getReferencedPrivateDataNode(qore_classid_t key);
+    
 
     //! retrieves the private data pointer and clears it from the object's private data store, used when executing destructors
     /**
@@ -696,54 +692,17 @@ public:
     */
     DLLLOCAL AbstractPrivateData* getAndClearPrivateData(qore_classid_t key, ExceptionSink* xsink);
 
-    //! called to evaluate a builtin method when private data is available
-    /**
-        @param method a constant reference to the QoreMethod object
-        @param meth the name of the method to evalute
-        @param args the arguments for the method
-        @param rc runtime configuration for the call
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-    */
-    DLLLOCAL QoreValue evalBuiltinMethodWithPrivateData(const QoreMethod& method,
-            const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc,
-            ExceptionSink* xsink);
-
-    //! called on the old object (this) to acquire private data, copy method called with pointer to "self" (new copy)
-    DLLLOCAL void evalCopyMethodWithPrivateData(const QoreClass &thisclass, const BuiltinCopyVariantBase* meth,
-            QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink);
-
-    //! concatenates info about private data to a string
-    /**
-        @param str the string to concatenate to
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-    */
-    DLLLOCAL void addPrivateDataToString(QoreString* str, ExceptionSink* xsink) const;
-
-    //! Destroys all members and dereferences all private data structures
-    /**
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-    */
-    DLLLOCAL void obliterate(ExceptionSink* xsink);
-
-    //! runs the destructor for system objects
-    /**
-        @param classID the ID of the class
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-    */
-    DLLLOCAL void defaultSystemDestructor(qore_classid_t classID, ExceptionSink* xsink);
-
-    // returns a new hash consisting of just the members of value_list
-    DLLLOCAL QoreHashNode* getSlice(const QoreListNode* value_list, ExceptionSink* xsink) const;
-
+    
+    
+    
+    
+    
+    
     //! creates the object with the initial data passed as "d", used by the copy constructor
     DLLLOCAL QoreObject(const QoreClass* oc, QoreProgram* p, QoreHashNode* d);
 
-    //! returns true if the class has a memberNotification method
-    DLLLOCAL bool hasMemberNotification() const;
-
-    //! executes the member notification on the object the given member
-    DLLLOCAL void execMemberNotification(const char* member, ExceptionSink* xsink);
-
+    
+    
 protected:
     //! runs the destructor if necessary and dereferences all members
     /** Note that other objects could be deleted as well if they
@@ -770,9 +729,7 @@ private:
     //! the private implementation of the class
     class qore_object_private* priv;
 
-    //! called at parse time
-    DLLLOCAL int parseInit(QoreValue& val, QoreParseContext& parse_context);
-
+    
     QoreObject(const QoreObject& old) = delete;
     QoreObject& operator=(const QoreObject&) = delete;
 };

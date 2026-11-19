@@ -47,6 +47,8 @@
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRoutes.h"
 #include "qore/intern/QoreThreadScratch.h"
+#include "qore/intern/QC_ThreadCapabilityScope.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <pthread.h>
 #include <thread>
@@ -557,6 +559,86 @@ hash<auto> th = get_all_thread_data();
 hash<auto> get_all_thread_data() [flags=RET_VALUE_ONLY,OWN_PROGRAM_STATE;dom=THREAD_CONTROL,THREAD_INFO] {
     ReferenceHolder<QoreHashNode> h(get_thread_data_ref(false), xsink);
     return h ? h->copy() : new QoreHashNode(autoTypeInfo);
+}
+
+//! Returns the guard of a capability of the current thread, or @ref nothing
+/** A host sets the capabilities of the code it runs with
+    @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope";
+    a module that starts threads or wraps callbacks for its caller looks them up when its caller does not give them
+    as options.
+
+    @param name the name of the capability, such as \c "start_thread" or \c "call_wrapper"
+
+    @return the guard of the capability: a call reference that calls the capability's code with the arguments given,
+    once each argument that is code has been checked: it must be code of a Program that may control threads and that
+    no sandbox governs (\c THREAD-CAPABILITY-ERROR otherwise); or @ref nothing if the current thread has no capability
+    of that name, or if the calling code may not see the thread's capabilities
+
+    @par Example:
+    @code{.py}
+*code<int(code<nothing()>)> start_thread = opts.hasKey("start_thread")
+    ? opts.start_thread
+    : get_thread_capability("start_thread");
+    @endcode
+
+    @note the capabilities are visible to the code of user modules whose %Program is not sandboxed, and to other code
+    only if it may control threads itself and no sandbox governs it; sandboxed code (also the code of a %Program that
+    sandboxed code created, wherever it runs), and code restricted with
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", sees none
+
+    @see
+    - @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
+    - get_thread_capabilities()
+
+    @since %Qore 3.0
+*/
+*code get_thread_capability(string name) [flags=RET_VALUE_ONLY] {
+    if (!thread_capabilities_visible()) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> h(thread_get_capabilities(), xsink);
+    if (!h) {
+        return QoreValue();
+    }
+    QoreHashKeyHelper key(*name, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the guard of the capability, never its code (design/thread-capability-scope.md)
+    QoreValue code = qore_hash_private::get(**h)->getKeyValueIntern(key.c_str());
+    return code ? thread_capability_make_guard(key.c_str(), code) : QoreValue();
+}
+
+//! Returns the capabilities of the current thread, or @ref nothing
+/** @return the capabilities of the current thread by name, or @ref nothing if it has none, or if the calling code may
+    not see them (see get_thread_capability())
+
+    @par Example:
+    @code{.py}
+*hash<auto> caps = get_thread_capabilities();
+    @endcode
+
+    @see
+    - @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
+    - get_thread_capability()
+
+    @since %Qore 3.0
+*/
+*hash<auto> get_thread_capabilities() [flags=RET_VALUE_ONLY] {
+    if (!thread_capabilities_visible()) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> h(thread_get_capabilities(), xsink);
+    if (!h) {
+        return QoreValue();
+    }
+    // the guards of the capabilities, never their code (design/thread-capability-scope.md)
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ConstHashIterator i(*h);
+    while (i.next()) {
+        rv->setKeyValue(i.getKey(), thread_capability_make_guard(i.getKey(), i.get()), xsink);
+    }
+    return rv.release();
 }
 
 //! Returns a hash of lists of @ref CallStackInfo hashes keyed by TID (thread ID)
@@ -1694,7 +1776,7 @@ static void parallel_wait_for_workers(ParallelExecState& state, ExceptionSink* x
         // waiting — if we got here due to thread cancellation, the flag is still set,
         // causing immediate return and a tight CPU loop.  The void overload uses plain
         // cond.wait(), blocking until workers call dec() and the count reaches zero.
-        state.counter.waitForZero();
+        qore_counter_ops(state.counter).waitForZero();
     }
 }
 

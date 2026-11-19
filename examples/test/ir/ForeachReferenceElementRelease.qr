@@ -2,7 +2,8 @@
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 # the script of ForeachReferenceElementRelease.qtest: the variable of a foreach loop given a reference by an element
-# of the list reads as the referenced lvalue, and the value read is released as in the AST interpreter (issue #6441)
+# of the list reads as the referenced lvalue, and the value read is released as in the AST interpreter (issues #6441,
+# #6538)
 %modern
 class T {
     public { string n; *T m; }
@@ -24,6 +25,9 @@ class C {
     m(auto a) { w_k(a); }
     mw(auto a, string tag) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", tag); }
     static s(auto a) { w_k(a); }
+    static sw(auto a, string tag) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", tag); }
+    # gives its argument on to another method, which writes its parameter
+    auto n(auto a) { return a; }
 }
 
 # the issue's case: a reference and a plain value passed on through auto parameters
@@ -67,6 +71,89 @@ sub give_method(list<auto> args, string tag) {
         c.mw(r, tag);
     }
 }
+# a method called by name, a static method, a closure called through a reference to it, a call reference to a method
+# and a method call whose argument is the value of another method call given the value read (issue #6538)
+sub give_method_name(list<auto> args, string tag) {
+    C c();
+    foreach auto r in (args) {
+        call_object_method(c, "mw", r, tag);
+    }
+}
+sub give_static(list<auto> args, string tag) {
+    foreach auto r in (args) {
+        C::sw(r, tag);
+    }
+}
+sub give_closure_ref(list<auto> args, string tag) {
+    code f = sub (auto a, string t) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", t); };
+    reference<code> fr = \f;
+    foreach auto r in (args) {
+        fr(r, tag);
+    }
+}
+sub give_call_ref(list<auto> args, string tag) {
+    C c();
+    code m = \c.mw();
+    foreach auto r in (args) {
+        m(r, tag);
+    }
+}
+sub give_nested(list<auto> args, string tag) {
+    C c();
+    C c2();
+    foreach auto r in (args) {
+        c.mw(c2.n(r), tag);
+    }
+}
+# an overridden method that takes its parameter over, called through a variable of the base class and directly, and
+# a method of a final class that takes it over (issue #6538)
+class B {
+    mw(auto a, string tag) { printf("after write %s\n", tag); }
+}
+class D inherits B {
+    mw(auto a, string tag) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", tag); }
+}
+final class F {
+    mw(auto a, string tag) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", tag); }
+}
+# a method of a final class that takes nothing over: the value read is kept by the callee
+final class FK {
+    m(auto a) { w_k(a); }
+}
+sub give_override_base(list<auto> args, string tag) {
+    B b = new D();
+    foreach auto r in (args) {
+        b.mw(r, tag);
+    }
+}
+sub give_override(list<auto> args, string tag) {
+    D d();
+    foreach auto r in (args) {
+        d.mw(r, tag);
+    }
+}
+sub give_final(list<auto> args, string tag) {
+    F f();
+    foreach auto r in (args) {
+        f.mw(r, tag);
+    }
+}
+sub keep_final(list<auto> args) {
+    FK f();
+    foreach auto r in (args) {
+        f.m(r);
+        g_keep = NOTHING;
+    }
+}
+
+# called first with no reference, before the process reads a value through one, then with one: its call gives the
+# value read once the process has read through a reference
+sub give_method_first(list<auto> args, string tag) {
+    C c();
+    foreach auto r in (args) {
+        c.mw(r, tag);
+    }
+}
 sub keep_method(list<auto> args) {
     C c();
     foreach auto r in (args) {
@@ -94,6 +181,9 @@ sub read_int(list<auto> args, string tag) {
         printf("%s %d\n", tag, i);
     }
 }
+
+# before any read through a reference
+give_method_first((1, 2), "first");
 
 for (int round = 0; round < 3; ++round) {
     printf("round %d\n", round);
@@ -134,9 +224,30 @@ for (int round = 0; round < 3; ++round) {
     give_method((\g_o,), "gmeth");
     printf("after gmeth\n");
 
+    foreach string tag in (("gfirst", "gname", "gstatic", "gcref", "gmref", "gnest", "gobase", "goderived",
+            "gfinal")) {
+        g_o = new T(tag);
+        switch (tag) {
+            case "gfirst": give_method_first((\g_o,), tag); break;
+            case "gname": give_method_name((\g_o,), tag); break;
+            case "gstatic": give_static((\g_o,), tag); break;
+            case "gcref": give_closure_ref((\g_o,), tag); break;
+            case "gmref": give_call_ref((\g_o,), tag); break;
+            case "gnest": give_nested((\g_o,), tag); break;
+            case "gobase": give_override_base((\g_o,), tag); break;
+            case "goderived": give_override((\g_o,), tag); break;
+            case "gfinal": give_final((\g_o,), tag); break;
+        }
+        printf("after %s\n", tag);
+    }
+
     g_o = new T("kmeth");
     keep_method((\g_o,));
     printf("after kmeth\n");
+
+    g_o = new T("kfinal");
+    keep_final((\g_o,));
+    printf("after kfinal\n");
 
     g_o = new T("kstatic");
     keep_static((\g_o,));

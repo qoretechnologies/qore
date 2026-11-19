@@ -33,6 +33,7 @@
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 static void tpt_start_thread(ExceptionSink* xsink, ThreadPoolThread* tpt) {
    tpt->worker(xsink);
@@ -98,7 +99,7 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         task = 0;
         // Task complete — decrement thread_counter that was incremented at submit time
         --qore_thread_counter_share;
-        thread_counter.dec();
+        qore_counter_ops(thread_counter).dec();
 
         if (stopflag) {
             break;
@@ -350,7 +351,7 @@ void ThreadPool::worker(ExceptionSink* xsink) {
         i->cancel(&cancel_xsink);
         i->del(&cancel_xsink);
         xsink->assimilate(cancel_xsink);
-        thread_counter.dec();
+        qore_counter_ops(thread_counter).dec();
     }
 
     // the last use of the pool by this thread
@@ -459,8 +460,16 @@ ThreadPool::constructor(int max_threads = 0, int min_idle_threads = 0, int max_i
     }
 
     // the workers count against the thread limit of the sandbox of the Program that creates the pool, if it has one
+    // (its own manager combined with the sandbox that it keeps of the code that created it)
+    QoreSandboxManager* pool_sm;
+    try {
+        pool_sm = qore_program_private::get(*getProgram())->getSandboxManagerRef();
+    } catch (std::bad_alloc&) {
+        xsink->outOfMemory();
+        return;
+    }
     ReferenceHolder<ThreadPool> tp(new ThreadPool(xsink, max_threads, min_idle_threads, max_idle_threads,
-        idle_release_timeout, qore_program_private::get(*getProgram())->getSandboxManagerRef()), xsink);
+        idle_release_timeout, pool_sm), xsink);
     if (*xsink)
         return;
 
