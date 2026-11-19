@@ -6808,7 +6808,7 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                     QoreIRBasicBlock* cont_block = createBlock("handler.return.past.cap.cont");
                     builder.createBranchIf(se_inst->result, return_block, cont_block, scope_loc);
                     builder.setBlock(return_block);
-                    if (!lowerHandedOverReturn(barrier_depth - 1, scope_loc, error)) {
+                    if (!lowerHandedOverReturn(barrier_depth - 1, se_inst->result, scope_loc, error)) {
                         return false;
                     }
                     builder.setBlock(cont_block);
@@ -6836,7 +6836,7 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                     builder.createBranchIf(se_inst->result, return_block, cont_block, scope_loc);
                     builder.setBlock(return_block);
                     // the scope that the ScopeExit left and the entries above it have been left
-                    if (!lowerHandedOverReturn(barrier_depth - 1, scope_loc, error)) {
+                    if (!lowerHandedOverReturn(barrier_depth - 1, se_inst->result, scope_loc, error)) {
                         return false;
                     }
                     builder.setBlock(cont_block);
@@ -6875,13 +6875,14 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
 }
 
 // documented in QoreIRLowering.h
-bool QoreIRLowering::lowerHandedOverReturn(size_t start_depth, const QoreProgramLocation* loc, std::string& error) {
+bool QoreIRLowering::lowerHandedOverReturn(size_t start_depth, QoreIRValue result, const QoreProgramLocation* loc,
+        std::string& error) {
+    // the result of the ScopeExit is cleared for the IR interpreter, whose slot keeps it otherwise (see
+    // qore_ir_scope_exit_handed_over())
+    builder.createReleaseHandedOverReturn(loc, result);
     if (handler_body) {
         // a handler compiled as a function of its own: the value went to the function that the handler runs for, and
-        // the handler returns as a return statement in it does after its HandlerReturn; the release finds no value
-        // handed over to the handler's own frame, and clears the result of the ScopeExit for the IR interpreter
-        // (see qore_ir_scope_exit_handed_over())
-        builder.createReleaseHandedOverReturn(loc);
+        // the handler returns as a return statement in it does after its HandlerReturn
         PendingReturnScope pending_return_restore(*this);
         pending_return_restore.set(QoreIRValue());
         if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES | CF_RETURN_WALK, SIZE_MAX,

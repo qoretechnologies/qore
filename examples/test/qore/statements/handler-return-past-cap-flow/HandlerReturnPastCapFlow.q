@@ -627,6 +627,54 @@ if (x == 17) return "h17";
     }
     throw "ERR";
 }
+# handlers nested 20 deep in a block return integers
+auto sub bv(int x) {
+    {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+if (x == 1) return 0x655265526552; if (x == 2) return 0x613761376137; if (x == 3) return 8;
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+    }
+    lg += "after-block";
+    return "body";
+}
 # a function for the threads, with a log of its own
 auto sub thr(int x) {
     list<string> l = ();
@@ -716,5 +764,6 @@ for (int t = 0; t < 2; ++t) {
 }
 thr_c.waitForZero();
 printf("thr: %y\n", thr_results);
+run("bv", \bv(), (0, 1, 2, 3));
 run("bord", \bord(), (0, 1));
 run("lp", \lp(), (0, 1));

@@ -1154,7 +1154,9 @@ enum class QoreIROpcode : uint16_t {
 
         No operands, no result.  Emitted where a return statement in a handler lowered inline replaces the value of a
         return whose block cleanups have run such handlers, as that return replaces the value that they handed over.
-        The release can raise an exception (a destructor).  See qore_rt_release_handed_over_return().
+        The release can raise an exception (a destructor).  See qore_rt_release_handed_over_return().  With an
+        operand, the result of a ScopeExit past the cap, it releases nothing and only clears that result for the IR
+        interpreter, as the first instruction of the return that the result branches to (#6552).
     */
     ReleaseHandedOverReturn = 442,
     //! Release an operator source loaded from a local unless the load read through a reference.
