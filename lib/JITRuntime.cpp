@@ -5298,6 +5298,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
                 return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, parse_method)));
             }
         }
+        // the method that a call of the method makes from here, also when the method found first is not accessible
+        // here, as in ParseObjectMethodReferenceNode::makeReferenceForClass() (qore#6704)
+        if (const QoreMethod* pm = qore_class_private::get(*obj_class)->runtimeFindPublicCommittedMethod(
+                method_name)) {
+            return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, pm)));
+        }
         if (method->isPrivate()) {
             xsink->raiseException("ILLEGAL-CALL-REFERENCE",
                 "cannot create a call reference to %s %s::%s() from outside the class",
