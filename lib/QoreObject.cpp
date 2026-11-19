@@ -522,8 +522,9 @@ QoreHashNode* qore_object_private::getCreateInternalData(const qore_class_privat
     return id;
 }
 
-int qore_object_private::checkMemberAccess(const char* mem, const qore_class_private* class_ctx,
-        const qore_class_private*& member_class_ctx) const {
+// inline in its callers, all in this file, which are the paths of a member access (issue #6760)
+QORE_INTERN_ALWAYS_INLINE int qore_object_private::checkMemberAccess(const char* mem,
+        const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx) const {
     assert(!member_class_ctx);
 
     const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
@@ -1017,9 +1018,10 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
     if (class_ctx) {
         const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
         QoreHashNode* h;
-        // only a class with Internal, Inaccessible or contextual member entries can hide a member from a class context
-        if (class_ctx == theclass_priv
-                || (theclass_priv->members.isFrozen() && !theclass_priv->members.hasInternalEntries())) {
+        // a class context other than the object's class sees only the members that it can use: not the private members
+        // of another class that it does not inherit (issue #6760), nor those that the object's class inherits through a
+        // class inherited with private:internal outside its line (issue #6640)
+        if (class_ctx == theclass_priv) {
             h = data->copy();
         } else {
             // the members that the class context can use on the object: not those that the object's class inherits
@@ -1415,10 +1417,27 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHash
 
     qore_hash_private* hp = qore_hash_private::get(*hash);
     if (class_ctx) {
-        if constexpr (Lexical) {
-            hp->merge(*qore_hash_private::get(*data), sdh, xsink, policy);
+        // all the members only in the object's class: another class context gets the members that it can use (issue
+        // #6760)
+        if (class_ctx == qore_class_private::get(*theclass)) {
+            if constexpr (Lexical) {
+                hp->merge(*qore_hash_private::get(*data), sdh, xsink, policy);
+            } else {
+                hp->merge(*qore_hash_private::get(*data), sdh, xsink);
+            }
         } else {
-            hp->merge(*qore_hash_private::get(*data), sdh, xsink);
+            const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+            ConstHashIterator hi(data);
+            while (hi.next()) {
+                if (!theclass_priv->runtimeCanUseMember(hi.getKey(), class_ctx)) {
+                    continue;
+                }
+                if constexpr (Lexical) {
+                    hp->setKeyValue(hi.getKey(), hi.getReferenced(), sdh, xsink, policy);
+                } else {
+                    hp->setKeyValue(hi.getKey(), hi.getReferenced(), sdh, xsink);
+                }
+            }
         }
         const QoreHashNode* odata = getInternalData(class_ctx);
         if (odata) {
