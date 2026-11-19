@@ -148,8 +148,13 @@ AMBIGUOUS-CALL-RESOLUTION: call to function 'f()' is ambiguous; matches: 'A::f()
     global variable with the name of a symbol of the same kind in the @ref Qore "Qore" namespace, which
     @ref unqualified_symbol_resolution "unqualified resolution" reaches instead (it is raised once, at the
     declaration, and not in a @ref user_modules "user module" nor with
-    @ref broken-namespace-resolution "%broken-namespace-resolution"). Each condition has a distinct structured
-    diagnostic ID and a targeted hint.
+    @ref broken-namespace-resolution "%broken-namespace-resolution"), or giving a class a constant and a member
+    or static variable with the same name in the class hierarchy: in a class, an unscoped name refers to a member
+    (with @ref allow-bare-refs "%allow-bare-refs"), then to a constant, then to a static variable, and a name with a
+    class scope refers to a constant before a static variable, so a static variable hidden this way may not be
+    reached by any name (diagnostic ID \c CLASS-CONSTANT-SHADOWS-MEMBER; it is raised in the class that declares one
+    of them or that inherits them from different parent classes). Each condition has a distinct
+    structured diagnostic ID and a targeted hint.
 
     This is a strict warning: it is not included in @ref enable-all-warnings "%enable-all-warnings". Enable
     it by name, with @ref strict-warnings "%strict-warnings", or with @ref Qore::WARN_LANGUAGE_TRAPS "WARN_LANGUAGE_TRAPS" through the

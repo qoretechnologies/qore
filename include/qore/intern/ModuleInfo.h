@@ -839,6 +839,10 @@ public:
     DLLLOCAL void getMissingModuleCandidateFiles(const char* name, QoreProgram* pgm,
             std::vector<std::string>& files);
 
+    //! findAvailableOptionalModule() with the locks of a module load, for qore_aot_check_optional_modules()
+    DLLLOCAL bool checkAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
+            std::string& available);
+
 private:
     //! Appends the candidate paths of a module: the existing files, or the paths that are not files
     DLLLOCAL void getModuleCandidatePaths(const char* name, QoreProgram* pgm, std::vector<std::string>& files,

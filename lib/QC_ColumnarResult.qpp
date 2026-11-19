@@ -9,6 +9,7 @@
 
 #include <qore/QoreColumnarResult.h>
 #include "qore/intern/QC_ColumnarResult.h"
+#include "qore/intern/QoreColumnarResultPrivate.h"
 #include "qore/intern/QC_Serializable.h"
 
 #include <cstring>
@@ -74,7 +75,7 @@ static void ColumnarResult_deserializer(QoreObject& self, const QoreHashNode* sd
     if (!*xsink) {
         QoreColumnarResult* r = result.release();
         self.setPrivate(CID_COLUMNARRESULT, r);
-        r->attach(self);
+        qore_columnar_result_private(r).attach(self);
     }
 }
 
@@ -210,7 +211,7 @@ ColumnarResult compact = ColumnarResult::fromColumnHash({
 */
 static ColumnarResult ColumnarResult::fromColumnHash(hash<auto> columns, *hash<auto> desc)
         [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return qore_columnar_result_to_object(QoreColumnarResult::fromScriptColumnHash(columns, desc, xsink), xsink);
+    return qore_columnar_result_to_object(qore_columnar_result_private::fromScriptColumnHash(columns, desc, xsink), xsink);
 }
 
 //! Creates a ColumnarResult from row hashes
@@ -233,7 +234,7 @@ static ColumnarResult ColumnarResult::fromColumnHash(hash<auto> columns, *hash<a
 */
 static ColumnarResult ColumnarResult::fromRows(list<hash<auto>> rows, *hash<auto> desc)
         [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return qore_columnar_result_to_object(QoreColumnarResult::fromScriptRows(rows, desc, xsink), xsink);
+    return qore_columnar_result_to_object(qore_columnar_result_private::fromScriptRows(rows, desc, xsink), xsink);
 }
 
 //! Returns the number of rows in the result

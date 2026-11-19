@@ -1366,10 +1366,8 @@ sub legacy() {
     |!Argument|!Processing
     |\a expression @ref list_type "list"|Returns the number of elements in the list
     |\a expression @ref hash_type "hash"|Returns the number of keys in the hash
-    |\a expression @ref string_type "string"|Returns the number of characters in the string (which may be different than the number of bytes for multi-byte character encodings such as \c UTF-8); in a string that is not valid in its encoding, each byte that does not start a complete character counts as one character
+    |\a expression @ref string_type "string"|Returns the number of characters in the string (which may be different than the number of bytes for multi-byte character encodings such as \c UTF-8); raises \c INVALID-ENCODING if the string is not valid in its encoding
     |\a expression @ref binary_type "binary"|Returns the number of bytes in the binary object
-
-    This operator does not throw any exceptions.
 
     @see @ref <value>::size()
 
@@ -2534,7 +2532,9 @@ if (x || y)
     destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.\n<br>
     A method called through a weak reference keeps its object until the call returns, as any method call does
     (see @ref running_call_receiver "object scope"): if the method releases the last strong reference to its own
-    object, the object is destroyed when the method returns.\n<br>
+    object, the object is destroyed when the method returns, or, for a weak reference read from a hash, a list, a
+    member of an object or of the current object, a global variable or a static class variable, at the end of the
+    statement, as any temporary value is.\n<br>
     When the rvalue is a variable (a local variable, a parameter, a global variable, a variable captured by a closure
     or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
     program or another variable, the variable first gets a copy of its own, so that the weak reference designates the

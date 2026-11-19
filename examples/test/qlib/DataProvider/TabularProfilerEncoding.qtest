@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes of its own binary with a default encoding of their own
+
+/*  The DataProvider module loads and profiles a sheet in a process whose default encoding is not UTF-8 (issue #6663):
+    the AOT module failed to initialize TabularProfiler::EmptyMarkerSet, whose keys "—", "–" and "…" ISO-8859-1 cannot
+    hold, and fell back to its source.  The helper loads the module from the module path that the test has, which
+    run_tests.sh starts with the AOT modules of the build.
+*/
+
+%modern
+
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class TabularProfilerEncodingTest
+
+class TabularProfilerEncodingTest inherits QUnit::Test {
+    private {
+        #! the markers and the type of each column that the helper prints
+        const Expected = (
+            "markers 0: null",
+            "markers 1: {n/a: 1, -: 1, N/A: 1}",
+            "markers 2: {TBD: 1}",
+            "markers 3: null",
+            "type 0: string",
+            "type 1: string",
+            "type 2: string",
+            "type 3: bool",
+        );
+    }
+
+    constructor() : Test("TabularProfilerEncodingTest", "1.0") {
+        foreach string charset in (("ISO-8859-1", "UTF-8")) {
+            addTestCase("profile with the default encoding " + charset, \profileTest(), charset);
+        }
+        set_return_value(main());
+    }
+
+    profileTest(string charset) {
+        string helper = get_script_dir() + "profiler-encoding" + DirSep + "profile-in-encoding.q";
+        int rc;
+        string output = backquote(sprintf("%s --charset=%s %s 2>&1", TestInterpreter::qore_interpreter(), charset,
+            helper), \rc);
+        if (m_options.verbose > 1) {
+            printf("%s", output);
+        }
+        assertEq(0, rc, output);
+        # an AOT module that cannot initialize falls back to its source with a warning
+        assertNRegex("BINARY-MODULE-SOURCE-FALLBACK.*DataProvider|ENCODING-CONVERSION-ERROR", output);
+        list<string> lines = select output.split("\n"), $1 =~ /^(module:|markers |type |default )/;
+        assertRegex("^module: (qmod|source)$", lines[0] ?? "", output);
+        assertEq(Expected, lines[1..8], charset);
+        assertEq("default " + charset, lines[9], "the helper's default encoding");
+    }
+}

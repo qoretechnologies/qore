@@ -391,6 +391,7 @@ public class SwaggerTest inherits QUnit::Test {
         addTestCase("Test real msgs", \testRealMessages());
         addTestCase("Test getTypeForReference/replaceTypeForReference", \testTypeForReference());
         addTestCase("Test typed array query parameters", \testArrayQueryParamElementTypes());
+        addTestCase("Test Accept media ranges", \testAcceptMediaRange());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -453,6 +454,28 @@ public class SwaggerTest inherits QUnit::Test {
                 hash<auto> h;
                 so.parseRequest("GET", "/preview?ids=1&ids=xyz", NOTHING, \h);
             });
+    }
+
+
+    #! qore#6603: a media range of the Accept header is matched as a media range (RFC 9110 section 12.5.1), never
+    #! as a regular expression
+    testAcceptMediaRange() {
+        hash<auto> soh = ValidSwaggerSchema + {"produces": (MimeTypeJson,), "paths": {"/test": {"get": {
+            "responses": {"200": {"description": "ok", "schema": {"type": "string"}}}}}}};
+        SwaggerSchema so("", soh);
+        # a subtype wildcard
+        hash<HttpResponseInfo> r = so.processResponse("get", "/test", 200, "OK", NOTHING, "application/*");
+        assertRegex("^application/", r.hdr."Content-Type", "application/*");
+        # a range that is no valid pattern does not match, and the next type is used
+        r = so.processResponse("get", "/test", 200, "OK", NOTHING, ("text/(a*", MimeTypeJson));
+        assertRegex("^" + MimeTypeJson, r.hdr."Content-Type", "the next type is used");
+        # a range matches whole types only: a partial type is not a prefix or substring match
+        assertThrows("ACCEPT-ERROR", \so.processResponse(), ("get", "/test", 200, "OK", NOTHING, "plication/*"),
+            "a partial type");
+        # "*" as the type is a wildcard only with "*" as the subtype
+        assertThrows("ACCEPT-ERROR", \so.processResponse(), ("get", "/test", 200, "OK", NOTHING, "*/json"),
+            "*/json");
+        assertThrows("ACCEPT-ERROR", \so.processResponse(), ("get", "/test", 200, "OK", NOTHING, ".*"), ".*");
     }
 
     testTypeForReference() {

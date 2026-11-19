@@ -43,6 +43,7 @@
 #include "qore/intern/QoreSQLStatement.h"
 #include "qore/intern/DbiForkRegistry.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <atomic>
 #include <set>
@@ -229,7 +230,7 @@ public:
     DLLLOCAL virtual void forkChild() noexcept {
         // the waiters are threads of the parent; the TID of a lock that one of them held is forgotten when the
         // datasource is next used (see forkCheckUnlocked())
-        cond.reinitAfterFork();
+        qore_condition_ops(cond).reinitAfterFork();
         ds_lock.reinitAfterFork();
 #ifdef DEBUG
         ds_lock_owner.store(nullptr, std::memory_order_relaxed);

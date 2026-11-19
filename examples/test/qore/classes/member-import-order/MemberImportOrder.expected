@@ -1,0 +1,63 @@
+round 0
+Z1 (C0, Y): m0 10 get0 10 get1 10 getx 100
+Z1 (C0, Y) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z1 (C0, Y) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z1 (C0, Y) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z1 (C0, Y) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+Z2 (Y, C0): m0 10 get0 10 get1 10 getx 100
+Z2 (Y, C0) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z2 (Y, C0) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z2 (Y, C0) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z2 (Y, C0) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+Z3 (C2, Y): m0 10 get0 10 get1 10 getx 100
+Z3 (C2, Y) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z3 (C2, Y) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z3 (C2, Y) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z3 (C2, Y) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+Z4 (Y, C2): m0 10 get0 10 get1 10 getx 100
+Z4 (Y, C2) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z4 (Y, C2) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z4 (Y, C2) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z4 (Y, C2) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+round 1
+Z1 (C0, Y): m0 10 get0 10 get1 10 getx 100
+Z1 (C0, Y) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z1 (C0, Y) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z1 (C0, Y) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z1 (C0, Y) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+Z2 (Y, C0): m0 10 get0 10 get1 10 getx 100
+Z2 (Y, C0) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z2 (Y, C0) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z2 (Y, C0) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z2 (Y, C0) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+Z3 (C2, Y): m0 10 get0 10 get1 10 getx 100
+Z3 (C2, Y) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z3 (C2, Y) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z3 (C2, Y) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z3 (C2, Y) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+Z4 (Y, C2): m0 10 get0 10 get1 10 getx 100
+Z4 (Y, C2) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z4 (Y, C2) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z4 (Y, C2) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z4 (Y, C2) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+round 2
+Z1 (C0, Y): m0 10 get0 10 get1 10 getx 100
+Z1 (C0, Y) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z1 (C0, Y) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z1 (C0, Y) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z1 (C0, Y) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+Z2 (Y, C0): m0 10 get0 10 get1 10 getx 100
+Z2 (Y, C0) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z2 (Y, C0) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z2 (Y, C0) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z2 (Y, C0) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+Z3 (C2, Y): m0 10 get0 10 get1 10 getx 100
+Z3 (C2, Y) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z3 (C2, Y) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z3 (C2, Y) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z3 (C2, Y) after m0 = 8: m0 8 get0 8 get1 8 getx 7
+Z4 (Y, C2): m0 10 get0 10 get1 10 getx 100
+Z4 (Y, C2) after set1(5): m0 5 get0 5 get1 5 getx 100
+Z4 (Y, C2) after set0(6): m0 6 get0 6 get1 6 getx 100
+Z4 (Y, C2) after setx(7): m0 6 get0 6 get1 6 getx 7
+Z4 (Y, C2) after m0 = 8: m0 8 get0 8 get1 8 getx 7
