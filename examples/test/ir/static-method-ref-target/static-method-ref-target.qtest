@@ -18,9 +18,11 @@
 #! A static method call reference calls the method that the parser resolved in every mode
 /** The references of refs.q name a class that inherits a static method of the same name from more than one parent
     class, from code that has different access to those classes: directly, as the initial value of a member and of a
-    static member, as a default argument value, and in the class itself.  The output, the class of the method that each
-    reference calls, is compared with the AST in the ir, jit and tiered modes, on the IR tier of the tiered mode, and in
-    executables made by qcc at -O0 and -O3, which record the method with the class that declares it (qore#6679).
+    static member, as a default argument value, and in the class itself; and object method references through an
+    object of the class, to a static and to a normal method.  Compiled code records both kinds with a class
+    reference after the method's name, in different forms (qore#6679, qore#6680).  The output, the class of the
+    method that each reference calls, is compared with the AST in the ir, jit and tiered modes, on the IR tier of
+    the tiered mode, and in executables made by qcc at -O0 and -O3.
 */
 class StaticMethodRefTargetTest inherits QUnit::Test {
     public {
@@ -66,6 +68,9 @@ class StaticMethodRefTargetTest inherits QUnit::Test {
         # a reference made outside the class calls the method of the public parent class
         assertRegex("(?m)^member: B$", expected, "the AST calls the method that the parser resolved");
         assertRegex("(?m)^default argument: B$", expected, "the AST calls the method that the parser resolved");
+        # object method references, to a static and to a normal method, which compiled code records in another form
+        assertRegex("(?m)^object static member: B$", expected, "the AST calls the method that the parser resolved");
+        assertRegex("(?m)^object normal member: B$", expected, "the AST calls the method that the parser resolved");
         foreach string mode in (Modes) {
             assertEq(expected, runMode(src, mode), mode);
         }
