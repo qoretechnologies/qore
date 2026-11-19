@@ -340,6 +340,11 @@ This generalizes the existing Phase 1.5 init-expression outliner
   (`outline_held_return`) instead of releasing it, and the coordinator
   holds the call's result as the value of its own return until after
   its locals, as the function releases it (qore#5941, qore#6650).
+- The locals that a helper can write (`written_shared_locals`) are
+  assigned anything by the coordinator's call of it in the analysis of
+  the locals' assignment (`qore_ir_analyze_local_assignment()`): the
+  coordinator no longer takes a local of a type without NOTHING for
+  assigned after a helper that removes it (qore#6653).
 - Outlining disabled (`QORE_AOT_OUTLINE_FN=0`) must produce behavior
   byte-identical to the outlined build (test matrix requirement).
 
