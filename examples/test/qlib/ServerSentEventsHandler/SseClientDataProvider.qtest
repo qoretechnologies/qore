@@ -68,6 +68,15 @@ class FakeSseHandler inherits AbstractHttpRequestHandler {
                 "body": "not found",
             };
         }
+        # the stream of the events test has no events after the third: a reconnect after it is refused, so that the
+        # client's reconnect loop raises no further events until it is stopped
+        if (hdr.path == "events" && hdr."last-event-id" == "3") {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeText},
+                "body": "no more events",
+            };
+        }
         if (hdr.path == "notsse") {
             return <HttpResponseInfo>{
                 "code": 200,
@@ -270,6 +279,14 @@ public class Main inherits QUnit::Test {
             "reconnect_delay": 1ms,
         });
         ServerSentEventClientDataProvider prov(client);
+        # the reconnect loop is stopped, and the requests it made are drained, also when an assertion fails, so that
+        # the later cases do not see them
+        on_exit {
+            prov.stopEvents();
+            while (handler.requests.size()) {
+                handler.requests.get();
+            }
+        }
         assertTrue(prov.getClient() == client);
         EventObserver observer();
         prov.registerObserver(observer);
@@ -301,6 +318,9 @@ public class Main inherits QUnit::Test {
         assertEq(3, evt.data.id);
         assertEq({"a": 3}, evt.data.data);
         assertEq(EVENT_SSE_CLOSED, observer.next().event_id);
+        # the next reconnect is refused: the loop retries without raising events
+        req = handler.requests.get(30s);
+        assertEq("3", req."last-event-id");
 
         # stopping events ends the reconnect loop
         prov.stopEvents();
@@ -310,10 +330,6 @@ public class Main inherits QUnit::Test {
         assertEq("3", client.getLastEventId());
         assertTrue(client.getConnectionInfo().num_connects >= 2);
         assertEq(-1, client.getConnectionInfo().cid);
-        # drain the requests made by the reconnect loop before it was stopped
-        while (handler.requests.size()) {
-            handler.requests.get();
-        }
     }
 
     #! Request options are sent

@@ -2846,6 +2846,11 @@ int64 qore_sandbox_dbg_cpu_used() {
     const QoreSandboxCallBudget* budget = td ? td->sandbox_budgets.findCPUBudget() : nullptr;
     return budget ? qore_sandbox_dbg_measure_cpu(budget) : -1;
 }
+
+int64 qore_sandbox_dbg_budget_frames() {
+    ThreadData* td = thread_data.get();
+    return td ? static_cast<int64>(td->sandbox_budgets.frameCount()) : 0;
+}
 #endif
 
 void qore_sandbox_restore_stack(size_t saved) {

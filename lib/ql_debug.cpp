@@ -27353,6 +27353,11 @@ static QoreValue f_dbg_make_program_flag_only(const QoreListNode* params, Runtim
 static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_sandbox_dbg_cpu_used();
 }
+
+//! Returns the number of call budget frames of the current thread
+static QoreValue f_dbg_sandbox_budget_frames(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_sandbox_dbg_budget_frames();
+}
 #endif
 
 //! functional domain for debug and unit-test hooks
@@ -27500,6 +27505,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_sandbox_budget_frames", f_dbg_sandbox_budget_frames, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_finish", f_dbg_hold_next_thread_finish, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");

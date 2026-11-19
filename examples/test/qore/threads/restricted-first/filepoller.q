@@ -33,21 +33,24 @@ list<string> sub run(string dir, int n) {
 }
 ";
 
-# a restricted Program that loads the module first, with a sandbox allowing max_threads threads
-Program sub restricted(int max_threads) {
+# a restricted Program that loads the module first, with a sandbox allowing max_threads threads; the sandbox may read
+# the polled directory, so that a poller's thread polls until it is stopped: a thread ended by an error of its poll
+# would give its slot back before the next poller is started
+Program sub restricted(int max_threads, string dir) {
     Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_THREAD_CONTROL);
     p.loadModule("FilePoller");
     p.parse(Source, "restricted");
     SandboxManager sm();
     sm.setMaxThreads(max_threads);
+    sm.addFilesystemAllowedPath(dir, QSEC_READ);
     p.setSandboxManager(sm);
     return p;
 }
 
 string dir = ARGV[0];
 # the Programs are kept until the end, so that the threads of their objects end first
-Program limited = restricted(1);
-Program free = restricted(5);
+Program limited = restricted(1, dir);
+Program free = restricted(5, dir);
 # with a sandbox thread limit of 1, the second thread that the module starts for the caller is refused
 printf("limited: %s\n", (foldl $1 + "," + $2, limited.callFunction("run", dir, 2)));
 printf("started: %s\n", (foldl $1 + "," + $2, free.callFunction("run", dir, 2)));

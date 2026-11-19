@@ -265,6 +265,11 @@ public:
     */
     DLLLOCAL void attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner, bool in_build = false);
 
+    //! Returns the number of frames of the thread (for tests)
+    DLLLOCAL size_t frameCount() const {
+        return frames.size();
+    }
+
     //! Returns true if the thread runs a trusted build (see suspendCharge())
     DLLLOCAL bool inBuild() const {
         return !charge_floors.empty();
@@ -417,6 +422,9 @@ DLLLOCAL int64 qore_sandbox_dbg_measure_cpu(const QoreSandboxCallBudget* budget)
 /** Defined in thread.cpp (debug builds, for tests)
 */
 DLLLOCAL int64 qore_sandbox_dbg_cpu_used();
+
+//! Returns the number of call budget frames of the current thread (debug builds, for tests)
+DLLLOCAL int64 qore_sandbox_dbg_budget_frames();
 #endif
 
 //! Tightens the current thread's stack limit to \a bytes from the current stack position if that is tighter

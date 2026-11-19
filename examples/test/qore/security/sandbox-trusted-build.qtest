@@ -103,6 +103,11 @@ auto sub build_in_program(Program x, int n) {
     return keeper();
 }
 
+#! trusted code that a build runs: calls a method of an object
+auto sub build_call_method(object o, string method, softlist<auto> args) {
+    return call_object_method_args(o, method, args);
+}
+
 #! trusted code that a build runs: calls a function of a Program
 auto sub build_call_pgm(Program p, string f, softint n) {
     return p.callFunction(f, n);
@@ -196,6 +201,8 @@ class SandboxTrustedBuildTest inherits QUnit::Test {
         code BuildCalling;
         #! a trusted build that calls a function of a Program
         code BuildCallPgm;
+        #! a trusted build that calls a method of an object
+        code BuildCallMethod;
         #! a trusted build that runs the code of a Program by itself
         code BuildInProgram;
         code BuildObjRead;
@@ -255,6 +262,8 @@ Program sub mk(string src) {
         addTestCase("the code of other sandboxes in a build, and nested builds", \nestedAndForeignCode());
         addTestCase("a thread that the caller's code starts in a build keeps its stack limit", \stackInBuildThread());
         addTestCase("the build's own code is charged to its creator only", \buildOwnAccounting());
+        addTestCase("a build that calls a method of an object of another sandbox leaves no frames",
+            \objectMethodFrames());
         addTestCase("the memory limit of the Program that created the capability governs the build",
             \creatorMemory());
         set_return_value(main());
@@ -273,6 +282,7 @@ Program sub mk(string src) {
         BuildThread = SandboxManager::createTrustedBuildCall(\build_thread());
         BuildCalling = SandboxManager::createTrustedBuildCall(\build_calling());
         BuildCallPgm = SandboxManager::createTrustedBuildCall(\build_call_pgm());
+        BuildCallMethod = SandboxManager::createTrustedBuildCall(\build_call_method());
         BuildInProgram = SandboxManager::createTrustedBuildCall(\build_in_program());
         BuildObjRead = SandboxManager::createTrustedBuildCall(\build_obj_read());
         BuildObjMk = SandboxManager::createTrustedBuildCall(\build_obj_mk());
@@ -1054,6 +1064,44 @@ code sub deep_thread() {
         # the sandbox's limit is named in the exception argument; the thread's own stack limit is not
         assertEq({"max_stack_size": Limit}, tenant.callFunction("call", c));
         assertEq({"max_stack_size": Limit}, tenant.callFunction("call", BuildCalling, c));
+    }
+
+    objectMethodFrames() {
+        # a build that calls a method of an object with the provenance of another sandboxed Program: the frames that
+        # the object's provenance and the entry of its Program push are all left, in order
+        Program q(PO_MODERN);
+        SandboxManager mq = newManager(64 * 1024 * 1024);
+        q.setSandboxManager(mq);
+        q.parse("%modern
+class Maker {
+    int make(int n) {
+        list<string> l = ();
+        for (int i = 0; i < n; ++i) {
+            l += sprintf(\"entry %d\", i);
+        }
+        return l.size();
+    }
+}
+object sub mk_object() {
+    return new Maker();
+}
+", "object-method-frames");
+        object maker = q.callFunction("mk_object");
+        int frames;
+        try {
+            frames = call_function("dbg_sandbox_budget_frames");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("dbg_sandbox_budget_frames() is only available in debug builds");
+            }
+            rethrow;
+        }
+        assertEq(100, BuildCallMethod(maker, "make", 100));
+        assertEq(frames, call_function("dbg_sandbox_budget_frames"));
+        # also when the method raises an exception
+        mq.setMemoryLimit(1024 * 1024);
+        assertThrows("SANDBOX-MEMORY-LIMIT", BuildCallMethod, (maker, "make", 200000));
+        assertEq(frames, call_function("dbg_sandbox_budget_frames"));
     }
 
     memoryAsync() {
