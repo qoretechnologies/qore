@@ -593,6 +593,8 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         @since ProviderIndexUtil 1.2
     */
     static bool setBuildMode(bool build) [dom=PROCESS_CONTROL] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("set the build mode of");
         m.lock();
         on_exit m.unlock();
         bool rv = build_mode;
@@ -1725,6 +1727,8 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @ref reloadIndex()
     */
     static addAppToCache(hash<auto> app) [dom=PROCESS_CONTROL] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("add an app to");
         if (!app.name) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add app info to cache: app name is missing (%y)", app);
         }
@@ -1753,6 +1757,8 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @ref reloadIndex()
     */
     static addActionToCache(hash<auto> action) [dom=PROCESS_CONTROL] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("add an action to");
         if (!checkMetadataContext()) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action %y of app %y to the cache while the data "
                 "provider index is initializing", action.action, action.app);
@@ -1794,6 +1800,8 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         info and actions added again with @ref addAppToCache() and @ref addActionToCache() are cached for it
     */
     static bool removeCachedApp(string app) [dom=PROCESS_CONTROL] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("remove an app from");
         while (True) {
             int gen = index_generation;
             # the app's actions are not restored: they are discarded
@@ -2689,10 +2697,27 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         };
     }
 
+    #! Refuses a change of the process-wide provider index or its configuration to sandboxed code
+    /** The index, its cache, its logger and its configuration are used by every caller of the module, so a change that
+        one sandboxed tenant made would change them for the others (qore#6747).
+
+        @param what what the change does, for the error
+
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+    */
+    private:internal static checkChange(string what) {
+        if (SandboxManager::isSandboxed()) {
+            throw "PROVIDER-INDEX-REGISTRATION-DENIED", sprintf("sandboxed code cannot %s the process-wide data "
+                "provider index", what);
+        }
+    }
+
     #! Sets or clears the global logger
     /** @param logger the global data provider logger
     */
     static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
+        # the logger is process-wide and receives the messages of every caller (qore#6747)
+        ProviderIndexUtil::checkChange("set the logger of");
         ProviderIndexUtil::logger = logger;
     }
 
@@ -4797,6 +4822,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         governs it
     */
     static setIndexFileOpenTestHook(*code hook) [dom=PROCESS_CONTROL] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("set the test hook of");
         if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
             throw "PERMISSION-DENIED", "cannot set an index test hook from a context with restricted process control";
         }
@@ -5020,6 +5047,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
     #! Sets the environment variable
     static setEnvironmentVariable(string dir) [dom=PROCESS_CONTROL,FILESYSTEM] {
+        # the index and its configuration are process-wide (qore#6747)
+        ProviderIndexUtil::checkChange("set the index directory of");
         setenv(ProviderIndexEnvVar, dir);
         ENV{ProviderIndexEnvVar} = dir;
     }

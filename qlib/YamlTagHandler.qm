@@ -175,9 +175,17 @@ public class YamlTagHandlerRegistry {
         hash<string, AbstractYamlTagHandler> handlers;
     }
 
+    private:internal {
+        #! True for the process-wide registry (globalTagRegistry()), which sandboxed code cannot change
+        bool shared;
+    }
+
     #! Creates an empty registry
-    constructor() {
+    /** @param shared @ref True for the process-wide registry, which sandboxed code cannot change (qore#6747)
+    */
+    constructor(*bool shared) {
         handlers = {};
+        self.shared = shared ?? False;
     }
 
     #! Registers a custom tag handler
@@ -187,6 +195,7 @@ public class YamlTagHandlerRegistry {
     */
     register(AbstractYamlTagHandler handler) {
         string prefix = handler.getTagPrefix();
+        checkChange(prefix);
         if (exists handlers{prefix}) {
             throw "YAML-TAG-ERROR", sprintf("handler for tag prefix '%s' already registered", prefix);
         }
@@ -199,10 +208,24 @@ public class YamlTagHandlerRegistry {
         @throw YAML-TAG-ERROR if no handler registered for this prefix
     */
     unregister(string tag_prefix) {
+        checkChange(tag_prefix, True);
         if (!exists handlers{tag_prefix}) {
             throw "YAML-TAG-ERROR", sprintf("no handler registered for tag prefix '%s'", tag_prefix);
         }
         remove handlers{tag_prefix};
+    }
+
+    #! Refuses a change of the process-wide registry to sandboxed code
+    /** A handler that one sandboxed tenant registered in the process-wide registry would parse the tags of every
+        caller's documents; one that it removed would be removed for every caller (qore#6747).
+
+        @throw YAML-TAG-REGISTRATION-DENIED the calling code is sandboxed
+    */
+    private:internal checkChange(string tag_prefix, *bool removal) {
+        if (shared && SandboxManager::isSandboxed()) {
+            throw "YAML-TAG-REGISTRATION-DENIED", sprintf("sandboxed code cannot %s the handler of tag prefix %y in "
+                "the process-wide YAML tag handler registry", removal ? "remove" : "register", tag_prefix);
+        }
     }
 
     #! Finds a handler for a given tag
@@ -256,7 +279,7 @@ class GlobalTagRegistryHolder {
     */
     static YamlTagHandlerRegistry get() {
         if (!exists instance) {
-            instance = new YamlTagHandlerRegistry();
+            instance = new YamlTagHandlerRegistry(True);
         }
         return instance;
     }

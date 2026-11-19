@@ -279,11 +279,15 @@ public class DbDataProviderBase inherits AbstractDataProvider {
 
     #! Sets the datasource lookup
     static setDatasourceLookup(code datasource_lookup) [dom=PROCESS_CONTROL] {
+        # the lookup is process-wide and gives every caller's datasources (qore#6747)
+        DataProvider::checkSharedRegistration("DbDataProvider configuration", "datasource lookup", "");
         DbDataProviderBase::datasource_lookup = datasource_lookup;
     }
 
     #! Sets the table lookup
     static setTableLookup(code table_lookup) [dom=PROCESS_CONTROL] {
+        # the lookup is process-wide and gives every caller's tables (qore#6747)
+        DataProvider::checkSharedRegistration("DbDataProvider configuration", "table lookup", "");
         DbDataProviderBase::table_lookup = table_lookup;
     }
 

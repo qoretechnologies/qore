@@ -1818,6 +1818,11 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       @ref DataProvider::AbstractDataProvider::valueNeedsResolution() "AbstractDataProvider::valueNeedsResolution()" and
       @ref DataProvider::AbstractDataProvider::resolveValue() "AbstractDataProvider::resolveValue()"
       (<a href="https://github.com/qoretechnologies/qore/issues/6748">issue 6748</a>)
+    - added @ref DataProvider::DataProvider::checkSharedRegistration() "DataProvider::checkSharedRegistration()" and
+      @ref DataProvider::DataProvider::mayRegisterShared() "DataProvider::mayRegisterShared()", with which the
+      standard modules refuse changes of their process-wide registries to sandboxed code; the process-wide type cache
+      (@ref DataProvider::DataProvider::getTypeCache() "DataProvider::getTypeCache()") refuses them too
+      (<a href="https://github.com/qoretechnologies/qore/issues/6747">issue 6747</a>)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

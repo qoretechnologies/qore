@@ -46,6 +46,11 @@ module BitbucketDataProvider {
     url = "https://qore.org";
     license = "MIT";
     init = sub () {
+        # the codecs that the app's actions name are registered here, in the module's initialization, which no sandbox
+        # governs: the process-wide codec registry refuses sandboxed callers, and the action set can be built first
+        # by a sandboxed caller (qore#6747)
+        BitbucketCodecs::register();
+
         # register the data provider factory
         DataProvider::registerFactory(new BitbucketDataProviderFactory());
 
