@@ -26,6 +26,15 @@ reference, and the thread runs the teardown when it leaves the Program's code (`
 `waitForAllThreadsToTerminateIntern()` discounts all of the calling thread's entries (`tidmap[tid]`), so a
 teardown that runs while the thread is still in the Program (nested in its code) does not wait for itself.
 
+A thread's Program context (`td->current_pgm`, `td->tlpd`, the Program of its `RuntimeConfig`) and its runtime
+location are valid only while the thread holds the Program's thread count.  A thread started with the `background`
+operator has its Program as its context from its registration and holds its count until `BGThreadParams::del()`;
+`op_background_thread()` calls `leave_background_thread_program()` before that, as
+`ProgramThreadCountContextHelper::restoreContext()` restores the outer Program context before it releases the count
+(the runtime location, which the scoped location helpers restore for a nested context, is reset with it), so the
+thread's teardown (`ThreadData::del()`, which runs the destructors of its thread-local data) runs in no Program of its
+own, as a thread started with `q_run_thread()` does, while the Program can be deleted (qore#6629).
+
 The debug build calls `qore_program_private_base::dbg_teardown_hook` after step 2 (it can wait) and in step 3
 after `ptid` is set (under `plock`; it must not wait).  `dbg_hold_program_teardown()`,
 `dbg_wait_program_teardown_held()` and `dbg_continue_program_teardown()` use it to enter a Program from another

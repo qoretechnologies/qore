@@ -42,4 +42,37 @@
 
     @note A maximum limit of 20 exceptions can be raised at any time; excess exceptions over this limit will be
     ignored.
+
+    @section exception_location The Location of an Exception
+
+    The location of an exception, the \c file, \c line and \c endline keys of its
+    @ref Qore::ExceptionInfo "ExceptionInfo" hash and the location that the report of an unhandled exception gives
+    (<tt>file:line</tt> or <tt>file:line-endline</tt>), is the location of the innermost statement that is running
+    when the exception is raised, from the first line of the statement to its last.  It is the same in every
+    @ref execution_modes "execution mode" and in a program compiled with \c qcc:
+
+    |!The exception is raised|!Its location
+    |by a statement, such as a @ref throw "throw statement" or an expression statement that calls a function that raises it|the lines of the statement; a statement over several lines has all of its lines, whichever line of it raises the exception
+    |in a function or method that a statement calls|the location of the statement in the function or method that raises it; the call is in the call stack (the \c callstack key), located at the call
+    |by the condition, list, update or switch expression of a compound statement (@ref if "if", @ref while "while", @ref do "do while", @ref for "for", @ref foreach "foreach", @ref switch "switch"), or by the assignment of the next element to the variable of a @ref foreach "foreach statement"|the lines of the whole compound statement, its blocks included
+    |by a statement in a block of a compound statement|the lines of that statement, not of the block or of the compound statement, also when the statement starts on the line of the compound statement or of the block
+    |when a block of a compound statement ends: by the destructor of a local variable of the block|the destructor's statement; the call of the destructor in the call stack is located at the lines of the compound statement
+    |when a block statement (a block in braces in a block) ends: by the destructor of a local variable of the block|the destructor's statement; the call of the destructor in the call stack is located at the lines of the block statement, from its first statement to its closing brace
+    |when a statement ends: by the destructor of a temporary value of the statement|the destructor's statement; the call of the destructor in the call stack is located at the statement
+
+    The columns of a call stack entry (the \c start_column and \c end_column keys of its
+    @ref Qore::CallStackInfo "CallStackInfo" hash) can differ between execution modes for the entry of a
+    @ref rethrow "rethrow" and for a frame without a call site, such as the call of a destructor: compiled code can give
+    the columns of the statement that contains the statement when both are on the same lines.
+
+    For example, in the following code the exception is located at line 3 in every execution mode, not at the lines of
+    the \c if statement (2-4) or of its block (3-4); an exception raised by the condition of the \c if statement
+    would be located at lines 2-4:
+    @code{.py}
+sub check(int x) {
+    if (x > 0) {
+        throw "ERR", "x is positive";
+    }
+}
+    @endcode
 */

@@ -1494,7 +1494,7 @@ extern "C" DLLEXPORT void qore_rt_throw_value(ExceptionSink* xsink, uint64_t val
     }
     QoreValue arg = fromBits(val);
     if (arg.getType() == NT_LIST) {
-        xsink->raiseException(arg.get<const QoreListNode>());
+        qore_exception_sink_ops(xsink).raiseException(arg.get<const QoreListNode>());
     } else {
         QoreValue owned_arg = arg.needsRef() ? arg.refSelf() : arg;
         xsink->raiseExceptionArg("THROW-ERROR", owned_arg, "throw");
@@ -1556,10 +1556,9 @@ extern "C" DLLEXPORT void qore_rt_dbg_step(const AbstractStatement* statement, v
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
     }
-    // the event runs in the statement's own location, as in the IR interpreter: native code updates the runtime
-    // location only when the line changes, so it is still that of the code before, which can be another statement
-    // on the same line or the statement that contains this one (#6248); the next line that native code reaches sets
-    // it again
+    // the event runs in the statement's own location, as in the IR interpreter (#6248): native code stores no
+    // location for the step instruction, so the location is still that of the code before; the step hook restores
+    // the code's location after the event (QoreIRToLLVM::emitDebugStepHook(), qore#6646)
     if (statement && statement->loc) {
         *get_runtime_location_cache().loc_ptr = statement->loc;
     }
@@ -1739,7 +1738,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_catch_exception(ExceptionSink* xsink) {
         catch_stack.push_back({nullptr, nullptr});
         return toBits(QoreValue());
     }
-    QoreException* caught = xsink->catchException();
+    QoreException* caught = qore_exception_sink_ops(xsink).catchException();
     QoreException* saved = catch_swap_exception(caught);
     catch_stack.push_back({caught, saved});
     QoreHashNode* info = caught->makeExceptionObject();
@@ -13234,7 +13233,12 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         val = fromBits(result_bits);
     }
 
-    // Restore thread-local runtime parse options/location saved above.
+    // Restore thread-local runtime parse options/location saved above.  The callers' code depends on it: native
+    // code and the IR interpreter store their runtime location only when their statement changes
+    // (QoreIRInstruction::stmt_loc, qore#6646), so the location must be the caller's again after the call.  It is
+    // restored only when the variant has a parse location, and not when an exception other than QoreJITException
+    // leaves exec_fn() (native code and the IR interpreter report errors through xsink); not RAII, as it is restored
+    // before the body locals are released
     if (swapped_runtime_ctx) {
         const AbstractStatement* dummy_stmt;
         const QoreProgramLocation* dummy_loc;
@@ -13953,7 +13957,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
                 // Missing return statement: check type and set location to method definition
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                 if (*xsink) {
-                    xsink->overrideLocation(*sig->getParseLocation());
+                    qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                     xsink->appendLastDescription(": block missing return statement");
                 }
             } else {
@@ -14274,7 +14278,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
-                xsink->overrideLocation(*sig->getParseLocation());
+                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                 xsink->appendLastDescription(": block missing return statement");
             }
         } else {
@@ -14556,7 +14560,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
             if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                 if (*xsink) {
-                    xsink->overrideLocation(*sig->getParseLocation());
+                    qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                     xsink->appendLastDescription(": block missing return statement");
                 }
             } else {
@@ -14835,7 +14839,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
-                xsink->overrideLocation(*sig->getParseLocation());
+                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                 xsink->appendLastDescription(": block missing return statement");
             }
         } else {
@@ -15297,7 +15301,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
             // Missing return statement: set location to method definition
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
-                xsink->overrideLocation(*sig->getParseLocation());
+                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                 xsink->appendLastDescription(": block missing return statement");
             }
         } else {
@@ -15533,12 +15537,28 @@ QoreHandlerRunContext*& qore_handler_run_context() {
 }
 
 // documented in QoreHandlerRun.h
+uint64_t qore_handler_run_hand_over_count() {
+    QoreHandlerRunContext* ctx = qore_handler_run_context();
+    return ctx && ctx->hand_over_count ? *ctx->hand_over_count : 0;
+}
+
+// documented in QoreHandlerRun.h
 void qore_handler_return(QoreValue value, ExceptionSink* xsink) {
     QoreHandlerRunContext* ctx = qore_handler_run_context();
-    if (!ctx || !ctx->unwinding || !ctx->hand_over) {
+    if (!ctx || !(ctx->unwinding || ctx->returning) || !ctx->hand_over) {
         return;
     }
+    if (ctx->hand_over_count) {
+        ++*ctx->hand_over_count;
+    }
     ctx->hand_over(ctx->data, value, xsink);
+}
+
+//! Returns the count of the values handed over to the function that the handler that runs it hands its values to
+//! (qore_handler_run_hand_over_count()), which the native code of a ScopeExit with a result in a handler compiled as a
+//! function of its own compares before and after its handlers run (#6552)
+extern "C" DLLEXPORT int64_t qore_rt_handler_run_hand_over_count() {
+    return static_cast<int64_t>(qore_handler_run_hand_over_count());
 }
 
 //! Hands the value of a return statement of a handler run out of line to the function that it runs for (#6074)
@@ -15573,6 +15593,8 @@ struct QoreNativeHandlerHold {
     bool replaced = false;
     //! set to 1 when a value is handed over
     int8_t held = 0;
+    //! the count of the values handed over (QoreHandlerRunContext::hand_over_count, #6552)
+    uint64_t count = 0;
 
     static void handOver(void* data, QoreValue value, ExceptionSink* xsink) {
         QoreNativeHandlerHold& h = *static_cast<QoreNativeHandlerHold*>(data);
@@ -15592,7 +15614,8 @@ struct QoreNativeHandlerHold {
 };
 
 static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
-        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward = false);
+        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward = false,
+        bool returning = false);
 
 extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered) {
     qore_rt_exec_on_block_exit_intern(saved_count, xsink, inline_lowered, nullptr);
@@ -15616,9 +15639,55 @@ extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count,
     return h.held;
 }
 
+//! Runs the handlers registered since saved_count in the block cleanups of a return statement past the inline cap of
+//! the lowering (QoreIRScopeExitInstruction::hand_over_return, #6137)
+/** The values that their returns hand over (QoreIROpcode::HandlerReturn), also while an exception that one of them
+    raises is pending, replace the value in \a hold, releasing the value before, and the first releases the values of
+    the \a n_replace slots of \a replace, the value of the return, as qore_rt_exec_on_block_exit_hold() does; \a handed
+    is set to 1 when a value is handed over.  The return takes the value with qore_rt_take_handed_over_return().
+
+    @return 1 if a value was handed over in this call: the caller then clears the slots of the values of \a replace,
+    which were released
+*/
+extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_return_hold(int64_t saved_count, ExceptionSink* xsink,
+        uint64_t* hold, int8_t* handed, uint64_t* replace, int64_t n_replace) {
+    QoreNativeHandlerHold h{hold, replace, n_replace};
+    qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, &h, false, true);
+    if (h.held) {
+        *handed = 1;
+    }
+    return h.held;
+}
+
+//! Returns the value that handlers run out of line past the inline cap handed over to \a hold, if \a handed is set,
+//! clearing both, or a reference of its own to the value of the return otherwise (QoreIROpcode::TakeHandedOverReturn,
+//! #6137)
+/** \a value_bits is borrowed; the result is a reference of its own.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_take_handed_over_return(uint64_t* hold, int8_t* handed, uint64_t value_bits) {
+    if (*handed) {
+        *handed = 0;
+        uint64_t bits = *hold;
+        *hold = toBits(QoreValue());
+        return bits;
+    }
+    return toBits(fromBits(value_bits).refSelf());
+}
+
+//! Releases the value that handlers run out of line past the inline cap handed over to \a hold, if \a handed is set,
+//! clearing both (QoreIROpcode::ReleaseHandedOverReturn, #6137)
+extern "C" DLLEXPORT void qore_rt_release_handed_over_return(uint64_t* hold, int8_t* handed, ExceptionSink* xsink) {
+    if (*handed) {
+        *handed = 0;
+        uint64_t bits = *hold;
+        *hold = toBits(QoreValue());
+        fromBits(bits).discard(xsink);
+    }
+}
+
 // inlined in both entry points, so that qore_rt_exec_on_block_exit_impl() has no hold check (#5992)
 static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
-        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward) {
+        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward, bool returning) {
     size_t start = static_cast<size_t>(saved_count);
     if (jit_obe_handlers.size() <= start) {
         return 0;
@@ -15630,6 +15699,8 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
         return 0;
     }
 
+    // the handlers' statements store their own locations: the caller continues in its own (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
 
@@ -15693,7 +15764,7 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                 std::unique_ptr<SingleArgvContextHelper> argv_helper;
                 std::unique_ptr<CatchExceptionHelper> ex_helper;
                 if (type == OBE_Error && xsink) {
-                    QoreException* except = xsink->getException();
+                    QoreException* except = qore_exception_sink_ops(xsink).getException();
                     if (except) {
                         ex_helper.reset(new CatchExceptionHelper(except));
                         argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
@@ -15711,9 +15782,11 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                     run_ctx.forwardFrom(*outer);
                 } else {
                     run_ctx.unwinding = error || (xsink && xsink->isThreadExit());
+                    run_ctx.returning = returning;
                     if (hold) {
                         run_ctx.hand_over = QoreNativeHandlerHold::handOver;
                         run_ctx.data = hold;
+                        run_ctx.hand_over_count = &hold->count;
                     }
                 }
                 QoreHandlerRunGuard run_guard(run_ctx);
@@ -19588,7 +19661,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                 if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                     if (*xsink) {
-                        xsink->overrideLocation(*sig->getParseLocation());
+                        qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                         xsink->appendLastDescription(": block missing return statement");
                     }
                 } else {
@@ -20254,6 +20327,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx
 #include "qore/intern/QoreRegexExtractOperatorNode.h"
 #include "qore/intern/QoreRegexNMatchOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand(int32_t opcode, uint64_t expr_bits, uint64_t operand_bits,
@@ -21538,7 +21612,7 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
-                xsink->overrideLocation(*sig->getParseLocation());
+                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                 xsink->appendLastDescription(": block missing return statement");
             }
         } else {
@@ -23196,7 +23270,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
             if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                 if (*xsink) {
-                    xsink->overrideLocation(*sig->getParseLocation());
+                    qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                     xsink->appendLastDescription(": block missing return statement");
                 }
             } else {

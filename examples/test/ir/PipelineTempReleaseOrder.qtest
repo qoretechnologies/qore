@@ -37,6 +37,11 @@ class PipelineTempReleaseOrderTest inherits QUnit::Test {
 
     astReference() {
         string out = getAst();
+        assertRegex("~top-old\ntop args 1 1\n", out);
+        assertRegex("~captured-old\ncaptured args 1 1\ncaptured captured-new\n~captured-new\n", out);
+        assertRegex("~condition-old\nconstructor args 1 1\n~condition-new\n"
+            + "~pipeline-old\nconstructor pipeline\n~pipeline-new\n~local-old\nlocal args 1 1\n~local-new\n"
+            + "held held-old held-new\n~held-old\n~held-new\n", out);
         foreach string c in ("map-select", "map-select-map", "foldl-select", "first", "condition", "plain-map") {
             assertRegex("\n~[a-z]+1\n~[a-z]+2\ntop " + c + ": caught ERR\n", "\n" + out, c);
             assertRegex("\n~[a-z]+1\n~[a-z]+2\nfunction " + c + ": caught ERR\n", "\n" + out, c);
@@ -45,6 +50,7 @@ class PipelineTempReleaseOrderTest inherits QUnit::Test {
         assertRegex("~plain\nmark plain\nfirst 1\nmark reference\n~reference\nfirst 1\n", out, "fused first source lifetime");
         assertRegex("~local\nmark local\nfirst 1\n", out, "IR-only source local");
         assertRegex("~top-plain\nmark top-plain\nmark top-reference\n~top-reference\n", out);
+        assertRegex("~declared\nmark declared\n~replacement\n", out);
         assertFalse(out =~ /none/, out);
     }
 
