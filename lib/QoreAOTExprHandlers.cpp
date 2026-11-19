@@ -3987,12 +3987,16 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
         }
     }
     if (resolved_qc && resolved_m) {
+        // the recorded variant gives the method that the parser bound, which a lookup by name without the class's
+        // context can miss (a private:internal method of the class beside a base class's static method of the same
+        // name: qore#6653), so it is found before the method is set
+        const AbstractQoreFunctionVariant* variant = qore_aot_find_method_variant(ctx.pgm, resolved_m,
+                method_name, variant_ref, is_pseudo != 0);
         mc->parseSetClassAndMethod(resolved_qc, resolved_m);
         if (is_pseudo) {
             mc->setPseudo(resolved_qc->getTypeInfo());
         }
-        if (const AbstractQoreFunctionVariant* variant = qore_aot_find_method_variant(ctx.pgm, resolved_m,
-                method_name, variant_ref, is_pseudo != 0)) {
+        if (variant) {
             mc->setVariant(variant);
         }
     }
