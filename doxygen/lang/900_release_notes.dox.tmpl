@@ -3648,6 +3648,10 @@
       driver but Oracle (<a href="https://github.com/qoretechnologies/qore/issues/6691">issue 6691</a>), and with the
       select-first strategy on Oracle (<a href="https://github.com/qoretechnologies/qore/issues/6688">issue 6688</a>);
       see @ref sqlutilv3_11_0
+    - fixed the upsert of a row with no column to update with @ref sqlutilintro "SqlUtil" (only key columns, or the
+      others omitted with \c omit_update), which gave an invalid update statement, or with an update-only upsert
+      inserted the row (SQL Server) or raised an error (Oracle)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6692">issue 6692</a>); see @ref sqlutilv3_11_0
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)

@@ -2820,6 +2820,12 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         map updc += $1, keys row, !cols.hasKey($1) && !suh.$1;
         # cannot use merge where only the join columns are present
         if (!updc) {
+            # nothing to update: an update-only upsert leaves a row unchanged and inserts no row (issue #6692)
+            if (upsert_strategy == UpsertUpdateOnly) {
+                return int sub (hash<auto> crow) {
+                    return UR_Unchanged;
+                };
+            }
             return getUpsertInsertOnly(cols, row, opt);
         }
 
