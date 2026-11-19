@@ -4639,6 +4639,21 @@ void q_raise_invalid_read_text(ExceptionSink* xsink, const char* cls, const char
     xsink->raiseException("INVALID-ENCODING", desc);
 }
 
+qore_offset_t q_get_invalid_text_offset(const QoreEncoding* enc, const char* p, size_t len) {
+    return q_text_invalid_offset(p, len, enc);
+}
+
+int q_check_text_encoding(const QoreEncoding* enc, const char* p, size_t len, const char* where, const char* what,
+        ExceptionSink* xsink) {
+    qore_offset_t offset = q_text_invalid_offset(p, len, enc);
+    if (offset < 0) {
+        return 0;
+    }
+    xsink->raiseException("INVALID-ENCODING", new QoreStringNodeMaker("%s: the %s is not valid %s: invalid byte "
+        "sequence at byte offset " QLLD, where, what, enc->getCode(), (int64)offset));
+    return -1;
+}
+
 const QoreEncoding* q_get_bom_byte_order(const QoreEncoding* enc, const char* p, size_t len) {
     if (enc == QCS_UTF16) {
         if (len < 2) {

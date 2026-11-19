@@ -314,6 +314,56 @@ static void check_conversion() {
     }
 }
 
+// the public check of the text of a parser or another input (q_get_invalid_text_offset(), q_check_text_encoding())
+static void check_public_api() {
+    struct Case {
+        const QoreEncoding* enc;
+        const char* bytes;
+        size_t len;
+        qore_offset_t offset;
+    };
+    const QoreEncoding* sjis = QEM.findCreate("Shift_JIS");
+    const Case cases[] = {
+        {QCS_UTF8, "", 0, -1},
+        {QCS_UTF8, "abc", 3, -1},
+        {QCS_UTF8, "a\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80", 10, -1},
+        {QCS_UTF8, "ab\xe9", 3, 2},
+        {QCS_UTF8, "a\xed\xa0\x80b", 5, 1},          // a surrogate
+        {QCS_UTF8, "abc\xc0\xafd", 6, 3},             // an overlong form
+        {QCS_UTF8, "\xf4\x90\x80\x80", 4, 0},          // above U+10FFFF
+        {QCS_UTF8, "ab\xe2\x82", 4, 2},               // cut off by the end of the text
+        {QCS_UTF8, "a\0b\xff", 4, 3},                 // a NUL byte is a character
+        {QCS_ISO_8859_1, "\xe9\xff\x80", 3, -1},       // a single-byte encoding has no invalid bytes
+        {QCS_USASCII, "ab\x80", 3, 2},
+        {sjis, "a\x83\x5c", 3, -1},
+        {sjis, "a\x83", 2, 1},
+        {QCS_UTF16LE, "a\0\0\xd8", 4, 2},             // a lone high surrogate
+    };
+    for (const Case& c : cases) {
+        std::string label = std::string(c.enc->getCode()) + " " + hex(reinterpret_cast<const unsigned char*>(c.bytes),
+            c.len);
+        require(q_get_invalid_text_offset(c.enc, c.bytes, c.len) == c.offset, "q_get_invalid_text_offset() of "
+            + label);
+        ExceptionSink xsink;
+        int rc = q_check_text_encoding(c.enc, c.bytes, c.len, "test()", "test text", &xsink);
+        if (c.offset < 0) {
+            require(!rc && !xsink, "q_check_text_encoding() of valid " + label + " raised an exception");
+            continue;
+        }
+        require(rc == -1 && xsink, "q_check_text_encoding() of " + label + " raised no exception");
+        QoreValue err = xsink.getExceptionErr();
+        QoreValue desc = xsink.getExceptionDesc();
+        require(err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "INVALID-ENCODING"),
+            "q_check_text_encoding() of " + label + " raised another exception");
+        std::string expected = std::string("test(): the test text is not valid ") + c.enc->getCode()
+            + ": invalid byte sequence at byte offset " + std::to_string(c.offset);
+        require(desc.getType() == NT_STRING && expected == desc.get<const QoreStringNode>()->c_str(),
+            "q_check_text_encoding() of " + label + ": description: "
+                + (desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "(none)"));
+        xsink.clear();
+    }
+}
+
 int main() {
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
     int status = 0;
@@ -322,6 +372,7 @@ int main() {
         check_ascii_runs();
         check_cancellation();
         check_conversion();
+        check_public_api();
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAIL: %s\n", error.what());
         status = 1;
