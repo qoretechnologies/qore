@@ -51,7 +51,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 442,
+static_assert(QORE_IR_MAX_OPCODE == 443,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -38422,6 +38422,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             return true;
         }
+        case QoreIROpcode::ReleasePlainLocalRead:
         case QoreIROpcode::ReleaseOwnedTemp: {
             // a return leaves a statement whose temporary the function owns, such as the list of a foreach
             // statement: the reference is released on this path, as the AST interpreter releases it when the
@@ -38447,14 +38448,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (ref_read_it != reference_read_slots.end() && ref_read_it->second) {
                 // a read through a reference keeps its reference in the slot of its read site, which is released if
                 // it still holds the value (see releaseConsumedCallArgs())
-                auto val_it = values.find(value_id);
-                if (val_it == values.end() || !val_it->second) {
-                    return true;
+                if (inst->opcode != QoreIROpcode::ReleasePlainLocalRead) {
+                    auto val_it = values.find(value_id);
+                    if (val_it == values.end() || !val_it->second) {
+                        return true;
+                    }
+                    auto release_fn = module.getOrInsertFunction("qore_rt_release_reference_read",
+                            llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
+                    builder->CreateCall(release_fn, {ref_read_it->second, boxValue(val_it->second, value_id),
+                        xsink_arg});
                 }
-                auto release_fn = module.getOrInsertFunction("qore_rt_release_reference_read",
-                        llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
-                builder->CreateCall(release_fn, {ref_read_it->second, boxValue(val_it->second, value_id),
-                    xsink_arg});
                 // the reference of its own that a read overwritten before its last use took (overwritten_local_reads)
                 auto alloca_it = invoke_alloca_map.find(value_id);
                 if (alloca_it != invoke_alloca_map.end() && alloca_it->second) {

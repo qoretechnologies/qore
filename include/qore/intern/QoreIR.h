@@ -1157,8 +1157,10 @@ enum class QoreIROpcode : uint16_t {
         The release can raise an exception (a destructor).  See qore_rt_release_handed_over_return().
     */
     ReleaseHandedOverReturn = 442,
+    //! Release an operator source loaded from a local unless the load read through a reference.
+    ReleasePlainLocalRead = 443,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (443, 444, ...)
+    // NOTE: When adding new opcodes, assign the next sequential ID (444, 445, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1167,8 +1169,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ReleaseHandedOverReturn);
-static_assert(QORE_IR_MAX_OPCODE == 442, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ReleasePlainLocalRead);
+static_assert(QORE_IR_MAX_OPCODE == 443, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself

@@ -88,7 +88,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 442,
+static_assert(QORE_IR_MAX_OPCODE == 443,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -1901,6 +1901,7 @@ struct IRCallFrame {
     // Used by UninstantiateLocal's container DGC scan to distinguish temporary expression
     // results from variable-held values — only temporaries are cleared at block exit.
     // indexed by value slot id; a set allocated a node for each slot in every call
+    enum LocalSlotFlag : uint8_t { LocalOwned = 1, ReadThroughReference = 2 };
     std::vector<uint8_t> local_owned_slots;
     //! a temp scope mark: the size of the cleanup vector when the scope was entered
     struct TempCleanupMark {
@@ -10360,7 +10361,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             local_owned_slots.resize(id + 1, 0);
         }
-        local_owned_slots[id] = owned ? 1 : 0;
+        if (owned) {
+            local_owned_slots[id] |= IRCallFrame::LocalOwned;
+        } else {
+            local_owned_slots[id] &= ~IRCallFrame::LocalOwned;
+        }
     };
     if (!ensureInterpreterAnalysis(func, xsink)) {
         return false;
@@ -13655,6 +13660,7 @@ dispatch_folded_step_host:
                 QoreValue out;
                 bool result_slot_owned = false;
                 bool weak_ref_load = false;
+                bool read_through_reference = false;
 
                 if (local_inst->is_closure) {
                     // Closure path: always read from runtime stack (closures can
@@ -13725,6 +13731,7 @@ dispatch_folded_step_host:
                             // the lvalue is read as a read of the variable reads it, which does not create a missing
                             // hash key or list element (see qore_local_reference_eval())
                             bool ref_needs_deref = true;
+                            read_through_reference = true;
                             out = qore_local_reference_eval(
                                 *reinterpret_cast<const ReferenceNode*>(cached_val.getInternalNode()),
                                 ref_needs_deref, xsink);
@@ -13828,6 +13835,7 @@ dispatch_folded_step_host:
                                         || raw_type == NT_WEAKREF_LIST) {
                                     is_weak_ref_local = true;
                                 } else if (raw_type == NT_REFERENCE) {
+                                    read_through_reference = true;
                                     reference_value = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                                 }
                             }
@@ -13941,8 +13949,13 @@ load_local_done:
                     }
                 }
                 // Mark as local-owned for DGC container scan
-                if (!weak_ref_load && local_inst->result.id >= 0) {
-                    markLocalOwnedSlot(local_inst->result.id, true);
+                uint32_t value_id = local_inst->result.id;
+                if (value_id >= local_owned_slots.size()) {
+                    local_owned_slots.resize(value_id + 1, 0);
+                }
+                local_owned_slots[value_id] = weak_ref_load ? 0 : IRCallFrame::LocalOwned;
+                if (read_through_reference) {
+                    local_owned_slots[value_id] |= IRCallFrame::ReadThroughReference;
                 }
                 if (result_slot_owned && out.needsRef()) {
                     cleanup.push_back(local_inst->result.id);
@@ -16804,7 +16817,7 @@ load_local_done:
                                                 traceIRRef(inst, "uninst.container-scan", vi, values[vi], "keep");
                                                 continue;
                                             }
-                                            if (vi < local_owned_slots.size() && local_owned_slots[vi]) {
+                                            if (vi < local_owned_slots.size() && (local_owned_slots[vi] & IRCallFrame::LocalOwned)) {
                                                 traceIRRef(inst, "uninst.container-scan", vi, values[vi],
                                                     "keep-local-owned");
                                                 continue;
@@ -18141,12 +18154,18 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::IteratorRelease:
+            case QoreIROpcode::ReleasePlainLocalRead:
             case QoreIROpcode::ReleaseOwnedTemp: {
                 // a return or break leaves a foreach statement: its iterator, or the reference that the function owns
                 // to a temporary of an enclosing statement, is released on this path only, as the AST interpreter
                 // releases it when the statement ends; the slot is cleared, so the release at the end of the frame
                 // finds nothing (see design/temporary-lifetime.md)
                 uint32_t id = inst->operands.front().id;
+                if (inst->opcode == QoreIROpcode::ReleasePlainLocalRead && id < local_owned_slots.size()
+                        && (local_owned_slots[id] & IRCallFrame::ReadThroughReference)) {
+                    ++ip;
+                    break;
+                }
                 if (inst->opcode == QoreIROpcode::IteratorRelease) {
                     FunctionalOperatorInterface* iter = ir_value_pointer<FunctionalOperatorInterface>(
                         getIRValue(values, inst->operands.front()));

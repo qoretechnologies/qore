@@ -7220,7 +7220,8 @@ static size_t qore_ir_eliminate_common_pure_calls(QoreIRFunction& func, size_t& 
                 }
             }
             if (inst->opcode == QoreIROpcode::DiscardTemps || inst->opcode == QoreIROpcode::DiscardTempsKeep
-                    || inst->opcode == QoreIROpcode::UnwindTemps || inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    || inst->opcode == QoreIROpcode::UnwindTemps || inst->opcode == QoreIROpcode::ReleaseOwnedTemp
+                    || inst->opcode == QoreIROpcode::ReleasePlainLocalRead) {
                 // an owned call result is released here, so a call before this point must not be
                 // reused after it
                 available.clear();
@@ -7584,7 +7585,8 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
             for (auto it = instructions.begin(); it != instructions.end();) {
                 (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
                 QoreIRInstruction& inst = **it;
-                if (inst.opcode == QoreIROpcode::ReleaseOwnedTemp && !inst.operands.empty()) {
+                if ((inst.opcode == QoreIROpcode::ReleaseOwnedTemp || inst.opcode == QoreIROpcode::ReleasePlainLocalRead)
+                        && !inst.operands.empty()) {
                     // the value that a ReleaseStageInput keeps (its second operand) is defined just before it, in the
                     // same block, so it cannot be removed while the release is kept; the instruction is not made a
                     // ReleaseOwnedTemp with one operand, whose exception that a destructor raises goes elsewhere
@@ -7944,7 +7946,8 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             }
 
             if (inst.opcode == QoreIROpcode::DiscardTemps || inst.opcode == QoreIROpcode::DiscardTempsKeep
-                    || inst.opcode == QoreIROpcode::UnwindTemps || inst.opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    || inst.opcode == QoreIROpcode::UnwindTemps || inst.opcode == QoreIROpcode::ReleaseOwnedTemp
+                    || inst.opcode == QoreIROpcode::ReleasePlainLocalRead) {
                 scoped_expressions.clear();
                 scoped_loads.clear();
             }
@@ -8143,6 +8146,9 @@ static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& i
         case QoreIROpcode::NeHard:
         case QoreIROpcode::ToBool:
             return true;
+        case QoreIROpcode::ReleaseOwnedTemp:
+            // A borrowed element has no cleanup reference to release.
+            return inst.operands.size() == 1 && inst.operands[0].id == value_id;
         case QoreIROpcode::ListAppend:
             return inst.operands.size() == 2 && inst.operands[1].id == value_id;
         case QoreIROpcode::ListSetValue:
@@ -12553,6 +12559,7 @@ private:
                 case QoreIROpcode::IteratorNext:
                 case QoreIROpcode::IteratorRelease:
                 case QoreIROpcode::ReleaseOwnedTemp:
+                case QoreIROpcode::ReleasePlainLocalRead:
                 case QoreIROpcode::CheckException:
                     rv = false;
                     break;
@@ -12592,6 +12599,7 @@ static bool qore_ir_release_check_transparent(const QoreIRInstruction* inst, con
         case QoreIROpcode::GtInt:
         case QoreIROpcode::GeInt:
         case QoreIROpcode::ListSize:
+        case QoreIROpcode::ReleasePlainLocalRead:
             return true;
         // the release of a fused pipeline's stage input (a second operand) checks the sink with its own handler
         case QoreIROpcode::ReleaseOwnedTemp:
@@ -14483,7 +14491,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             if (instruction->opcode == QoreIROpcode::DiscardTemps
                     || instruction->opcode == QoreIROpcode::DiscardTempsKeep
                     || instruction->opcode == QoreIROpcode::UnwindTemps
-                    || instruction->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    || instruction->opcode == QoreIROpcode::ReleaseOwnedTemp
+                    || instruction->opcode == QoreIROpcode::ReleasePlainLocalRead) {
                 discarded = true;
             }
         }

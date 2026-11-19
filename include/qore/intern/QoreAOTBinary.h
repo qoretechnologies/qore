@@ -595,6 +595,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        handler that replaces it releases it with ReleaseHandedOverReturn (442); native code calls
 //!        qore_rt_exec_on_block_exit_return_hold(), qore_rt_take_handed_over_return() and
 //!        qore_rt_release_handed_over_return(); the AOT runtime identity changes with the runtime entries (#6137)
+//!      - debug IR can encode ReleasePlainLocalRead (opcode 443, Base group, one operand) to release a functional
+//!        operator's source after a plain local read (#5959); the maximum opcode in the AOT header is 443
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;

@@ -545,6 +545,7 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::PushTempMarkPair, {G::Base}},
     {O::TakeHandedOverReturn, {G::Base}},
     {O::ReleaseHandedOverReturn, {G::Base}},
+    {O::ReleasePlainLocalRead, {G::Base}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {

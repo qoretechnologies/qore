@@ -352,12 +352,10 @@ interpreter releases it:
 
 - the operator's source read from a local is released after the operator, as a temporary source is
   (`FunctionalSourceRelease`): a plain read (`qore_ir_is_plain_local_read()`) holds a reference of the frame, while
-  the AST interpreter's operator borrows the variable's value; a read through a reference, one of a closure-bound or a
-  top-level local, and one of a local whose type admits a reference (an untyped local, which a caller's or the
-  function's reference can be stored in: `qore_ir_local_may_hold_reference()`) still live until the statement ends, so
-  the value of an operator over an untyped local is still released at the end of the statement in the compiled modes
-  (the lowering does not know yet whether the function creates a reference; this and the other remaining differences
-  are qore#5959); a local whose type holds no object (a scalar, or a list or hash of scalars) is not released early
+  the AST interpreter's operator borrows the variable's value; a read through a reference, or from a closure-bound or top-level
+  local, keeps its value until the statement ends. For a local that can hold a reference, the release distinguishes
+  a plain read from a read through a reference at that execution of the load (qore#5959);
+  a local whose type holds no object (a scalar, or a list or hash of scalars) is not released early
   either, as its release cannot be observed and would only cost instructions; a source of a list type, or of a list or
   NOTHING, gives a new container or NOTHING, never the source's value; any other source, and every fold, gives the
   operator's value a reference of its own (`RefSelf`) before the source is released, and the value's own slot then

@@ -446,6 +446,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::GePlugin: return "ge.plugin";
         case QoreIROpcode::HandlerReturn: return "handler.return";
         case QoreIROpcode::IteratorRelease: return "iterator.release";
+        case QoreIROpcode::ReleasePlainLocalRead: return "release.plain.local.read";
         case QoreIROpcode::ReleaseOwnedTemp: return "release.owned.temp";
         case QoreIROpcode::PushTempMark: return "push.temp.mark";
         case QoreIROpcode::PushTempMarkPair: return "push.temp.mark.pair";

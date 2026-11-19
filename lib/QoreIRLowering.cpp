@@ -7937,9 +7937,10 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
                     // the release of a value that holds no object cannot be observed: it costs only instructions
                     if (last->opcode == QoreIROpcode::LoadLocal && last->result.id == rv.id) {
                         const auto* load = static_cast<const QoreIRLocalInstruction*>(last);
-                        if (qore_ir_is_plain_local_read(*load) && !qore_ir_local_may_hold_reference(load->local)
+                        if (qore_ir_is_plain_local_read(*load)
                                 && !qore_ir_type_holds_only_immediates(load->local->getTypeInfo())) {
                             capture.value = rv;
+                            capture.may_read_reference = qore_ir_local_may_hold_reference(load->local);
                         }
                     }
                 }
@@ -7960,8 +7961,8 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     frame owns it as a temporary.  A plain read of a local variable holds a reference of the frame, while the AST
     interpreter's operator borrows the variable's value, so such a read is released after the operator too, as a call
     argument is (<tt>f(map $1, l) + (l = NOTHING)</tt> destroys the list's objects before the rest of the statement
-    runs; qore#5801); a read through a reference, one of a closure-bound or a top-level local, and one of a local whose
-    type admits a reference (an untyped local) live until the statement ends.
+    runs; qore#5801). A read through a reference or from a closure-bound or top-level local lives until the statement
+    ends. For a dynamically typed local the load records whether it read through a reference.
 
     The operator's value must not borrow from the source: a source that is known to be a list (or NOTHING) gives a new
     list or hash of the values that the operator's expressions gave, each with a reference of its own, or NOTHING, but
@@ -7982,6 +7983,7 @@ public:
     DLLLOCAL ~FunctionalSourceRelease() {
         QoreIRValue value = lowering.functional_source_captures.back().value;
         QoreIRValue intermediate = lowering.functional_source_captures.back().intermediate;
+        bool may_read_reference = lowering.functional_source_captures.back().may_read_reference;
         lowering.functional_source_captures.pop_back();
         // nothing is emitted while a C++ exception leaves the operator's lowering, which is abandoned
         if ((!value.isValid() && !intermediate.isValid()) || !error.empty()
@@ -7999,7 +8001,10 @@ public:
                 lowering.builder.createReleaseOwnedTemp(intermediate, loc);
             }
             if (value.isValid()) {
-                lowering.builder.createReleaseOwnedTemp(value, loc);
+                auto* release = lowering.builder.createReleaseOwnedTemp(value, loc);
+                if (may_read_reference) {
+                    release->opcode = QoreIROpcode::ReleasePlainLocalRead;
+                }
             }
         } catch (const std::bad_alloc&) {
         }
@@ -21111,6 +21116,14 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // statement in the order of the blocks, and a temporary of a block after the statement's DiscardTemps was
         // released only when the function returned (qore#5680)
         qore_ir_move_loop_exit_blocks(builder.getFunction(), body_block_count, {exit_block, final_block});
+
+        // The indexed load owns its element until the result has taken its copy. An empty list never executes
+        // the load, so release it here, where its slot is defined on every path.
+        if (qore_ir_type_may_hold_object(elem_type)) {
+            builder.createReleaseOwnedTemp(element_val, map->loc);
+            // A weak list entry may leave this as the last strong reference.
+            builder.createCheckException(map->loc)->exception_target = getCurrentExceptionTarget();
+        }
 
         // Increment index
         QoreIRValue one = builder.createConstInt(1, map->loc)->result;

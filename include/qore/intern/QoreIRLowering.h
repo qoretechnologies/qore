@@ -1083,6 +1083,8 @@ private:
         //! the list that the stages of a lazy pipeline gave a fold, which the fold iterates as its source (foldr $1,
         //! (select l, c)), released after the operator before the source (issue #6262)
         QoreIRValue intermediate;
+        //! A source read through a reference belongs to the statement.
+        bool may_read_reference = false;
     };
     //! The sources of the functional operators being lowered, innermost last
     std::vector<FunctionalSourceCapture> functional_source_captures;
