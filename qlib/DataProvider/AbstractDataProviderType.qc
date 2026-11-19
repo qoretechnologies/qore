@@ -472,6 +472,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         #! Validation constraints, if any
         *hash<DataTypeConstraintInfo> constraints;
 
+        #! The compiled pattern of the constraints (\c src: the pattern, \c re: its Regex), if any (qore#6603)
+        transient *hash<auto> pattern_cache;
+
         #! The identity of the schema the type was built from, if any; see getSchemaIdentity()
         *string schema_identity;
     }
@@ -544,10 +547,33 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         if (!constraints && !self.constraints) {
             return self;
         }
+        # a pattern is compiled here, so that one that is not valid is an error of the type and not of each value
+        # (qore#6603)
+        *hash<auto> pc;
+        if (constraints.pattern.val()) {
+            Regex re(constraints.pattern);
+            pc = {"src": constraints.pattern, "re": re};
+        }
         AbstractDataProviderType rv = self.copy();
         # an empty constraints hash means no constraints
         rv.constraints = constraints ?: NOTHING;
+        rv.pattern_cache = pc;
         return rv;
+    }
+
+    #! Returns the compiled regular expression of a pattern, compiled once for each pattern string (qore#6603)
+    /** The cache is not serialized; a deserialized object compiles the pattern on first use
+
+        @throw REGEX-COMPILATION-ERROR the pattern is not a valid regular expression
+    */
+    private:internal Regex getPatternRegex(string pattern) {
+        *hash<auto> pc = pattern_cache;
+        if (pc.src === pattern) {
+            return pc.re;
+        }
+        Regex re(pattern);
+        pattern_cache = {"src": pattern, "re": re};
+        return re;
     }
 
     #! Returns the error code for reporting an error raised when a part of a value, such as a field, was checked
@@ -645,7 +671,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                     throw "TYPE-VALUE-ERROR", sprintf("type %y accepts at most %d character%s; got %d",
                         getName(), constraints.max_length, constraints.max_length == 1 ? "" : "s", value.length());
                 }
-                if (constraints.pattern.val() && !regex(value, constraints.pattern)) {
+                if (constraints.pattern.val() && !getPatternRegex(constraints.pattern).match(value)) {
                     throw "TYPE-VALUE-ERROR", sprintf("value %y does not match the pattern %y of type %y", value,
                         constraints.pattern, getName());
                 }

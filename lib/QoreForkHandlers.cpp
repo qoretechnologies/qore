@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <algorithm>
 #include <cassert>
@@ -325,7 +326,7 @@ void QoreForkThreadLock::parent() noexcept {
 void QoreForkThreadLock::child() noexcept {
     // the waiters are gone with their threads
     for (QoreCondition* c : conds) {
-        c->reinitAfterFork();
+        qore_condition_ops(c).reinitAfterFork();
     }
     // a lock that this thread acquired in prepare() is released, so that the release is seen (by ThreadSanitizer,
     // which otherwise considers it held for the rest of the child's life, and reports a lock order inversion for any
@@ -356,7 +357,7 @@ void QoreForkRWLock::parent() noexcept {
 }
 
 void QoreForkRWLock::child() noexcept {
-    l.reinitAfterFork();
+    qore_rwlock_ops(l).reinitAfterFork();
 }
 
 void QoreForkStdMutex::prepare() noexcept {
@@ -394,13 +395,13 @@ void QoreForkStdMutex::child() noexcept {
 }
 
 void QoreForkCounter::prepare() noexcept {
-    c.lockForFork();
+    qore_counter_ops(c).lockForFork();
 }
 
 void QoreForkCounter::parent() noexcept {
-    c.unlockForFork();
+    qore_counter_ops(c).unlockForFork();
 }
 
 void QoreForkCounter::child() noexcept {
-    c.reinitAfterFork();
+    qore_counter_ops(c).reinitAfterFork();
 }

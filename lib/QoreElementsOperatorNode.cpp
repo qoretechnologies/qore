@@ -57,7 +57,7 @@ QoreValue QoreElementsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
         // return the number of characters in a string (not bytes)
         case NT_STRING: {
             QoreStringValueHelper str(*v);
-            return str->length();
+            return qore_string_private::characterCount(**str, xsink);
         }
         case NT_HASH: return v->get<const QoreHashNode>()->size();
         case NT_OBJECT: return v->get<const QoreObject>()->size(xsink);
@@ -100,13 +100,12 @@ int QoreElementsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
     // see the argument is a constant value, then eval immediately and substitute this node with the result
     if (!err && exp.isValue()) {
         SimpleRefHolder<QoreElementsOperatorNode> del(this);
-        ParseExceptionSink xsink;
-        ValueEvalOptimizedRefHolder v(this, *xsink);
-        assert(!**xsink);
+        ExceptionSink xsink;
+        ValueEvalOptimizedRefHolder v(this, &xsink);
         QoreValue result = v.takeReferencedValue();
         // only use parse-time folding if we got a valid result
         // (constants may not be fully resolved at parse time, resulting in NOTHING)
-        if (!result.isNothing()) {
+        if (!xsink && !result.isNothing()) {
             val = result;
             parse_context.typeInfo = val.getFullTypeInfo();
             parse_context.analysis.clear();
@@ -118,7 +117,8 @@ int QoreElementsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
             parse_context.analysis.known_type = parse_context.typeInfo;
             return 0;
         } else {
-            // constants not resolved - skip parse-time folding, let runtime handle it
+            // An unresolved constant or a domain error must be evaluated in its runtime handler.
+            xsink.clear();
             del.release();
         }
     }

@@ -35,6 +35,7 @@
 #define _QORE_VAR_RWLOCK_PRIV_H
 
 #include <atomic>
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 // forward reference
 //class QoreVarRWLock;
@@ -198,8 +199,8 @@ public:
         read_waiting = 0;
         write_waiting.store(0, std::memory_order_relaxed);
         write_claim.store(false, std::memory_order_relaxed);
-        write_cond.reinitAfterFork();
-        read_cond.reinitAfterFork();
+        qore_condition_ops(write_cond).reinitAfterFork();
+        qore_condition_ops(read_cond).reinitAfterFork();
         l.reinitAfterFork();
     }
 
@@ -270,12 +271,12 @@ class QoreAutoVarRWReadLocker {
 public:
     //! creates the object and grabs the read lock
     DLLLOCAL QoreAutoVarRWReadLocker(QoreVarRWLock &n_l) : l(&n_l) {
-        l->rdlock();
+        qore_var_rwlock_ops(l).rdlock();
     }
 
     //! creates the object and grabs the read lock
     DLLLOCAL QoreAutoVarRWReadLocker(QoreVarRWLock *n_l) : l(n_l) {
-        l->rdlock();
+        qore_var_rwlock_ops(l).rdlock();
     }
 
     //! destroys the object and releases the lock
@@ -297,12 +298,12 @@ class QoreAutoVarRWWriteLocker {
 public:
     //! creates the object and grabs the write lock
     DLLLOCAL QoreAutoVarRWWriteLocker(QoreVarRWLock &n_l) : l(&n_l) {
-        l->wrlock();
+        qore_var_rwlock_ops(l).wrlock();
     }
 
     //! creates the object and grabs the write lock
     DLLLOCAL QoreAutoVarRWWriteLocker(QoreVarRWLock *n_l) : l(n_l) {
-        l->wrlock();
+        qore_var_rwlock_ops(l).wrlock();
     }
 
     //! destroys the object and releases the lock
@@ -324,20 +325,20 @@ class QoreSafeVarRWReadLocker {
 public:
     //! creates the object and grabs the read lock
     DLLLOCAL QoreSafeVarRWReadLocker(QoreVarRWLock &n_l) : l(&n_l) {
-        l->rdlock();
+        qore_var_rwlock_ops(l).rdlock();
         locked = true;
     }
 
     //! creates the object and grabs the read lock
     DLLLOCAL QoreSafeVarRWReadLocker(QoreVarRWLock *n_l) : l(n_l) {
-        l->rdlock();
+        qore_var_rwlock_ops(l).rdlock();
         locked = true;
     }
 
     //! creates the object and grabs the read lock only if \a do_lock is true
     DLLLOCAL QoreSafeVarRWReadLocker(QoreVarRWLock& n_l, bool do_lock) : l(&n_l), locked(do_lock) {
         if (do_lock) {
-            l->rdlock();
+            qore_var_rwlock_ops(l).rdlock();
         }
     }
 
@@ -350,7 +351,7 @@ public:
     //! locks the object and updates the locked flag, assumes that the lock is not already held
     DLLLOCAL void lock() {
         assert(!locked);
-        l->rdlock();
+        qore_var_rwlock_ops(l).rdlock();
         locked = true;
     }
 
@@ -409,20 +410,20 @@ protected:
 public:
    //! creates the object and grabs the write lock
    DLLLOCAL QoreSafeVarRWWriteLocker(QoreVarRWLock &n_l) : l(&n_l) {
-      l->wrlock();
+      qore_var_rwlock_ops(l).wrlock();
       locked = true;
    }
 
    //! creates the object and grabs the write lock
    DLLLOCAL QoreSafeVarRWWriteLocker(QoreVarRWLock *n_l) : l(n_l) {
-      l->wrlock();
+      qore_var_rwlock_ops(l).wrlock();
       locked = true;
    }
 
    //! creates the object and grabs the write lock only if \a do_lock is true
    DLLLOCAL QoreSafeVarRWWriteLocker(QoreVarRWLock& n_l, bool do_lock) : l(&n_l), locked(do_lock) {
       if (do_lock) {
-         l->wrlock();
+         qore_var_rwlock_ops(l).wrlock();
       }
    }
 
@@ -435,7 +436,7 @@ public:
    //! locks the object and updates the locked flag, assumes that the lock is not already held
    DLLLOCAL void lock() {
       assert(!locked);
-      l->wrlock();
+      qore_var_rwlock_ops(l).wrlock();
       locked = true;
    }
 
@@ -466,10 +467,10 @@ protected:
    QoreVarRWLock* l;
 
 public:
-   DLLLOCAL QoreOptionalVarRWWriteLocker(QoreVarRWLock* n_l) : l(n_l->trywrlock() ? 0 : n_l) {
+   DLLLOCAL QoreOptionalVarRWWriteLocker(QoreVarRWLock* n_l) : l(qore_var_rwlock_ops(n_l).trywrlock() ? 0 : n_l) {
    }
 
-   DLLLOCAL QoreOptionalVarRWWriteLocker(QoreVarRWLock& n_l) : l(n_l.trywrlock() ? 0 : &n_l) {
+   DLLLOCAL QoreOptionalVarRWWriteLocker(QoreVarRWLock& n_l) : l(qore_var_rwlock_ops(n_l).trywrlock() ? 0 : &n_l) {
    }
 
    DLLLOCAL ~QoreOptionalVarRWWriteLocker() {
@@ -487,10 +488,10 @@ protected:
    QoreVarRWLock* l;
 
 public:
-   DLLLOCAL QoreOptionalVarRWReadLocker(QoreVarRWLock* n_l) : l(n_l->tryrdlock() ? 0 : n_l) {
+   DLLLOCAL QoreOptionalVarRWReadLocker(QoreVarRWLock* n_l) : l(qore_var_rwlock_ops(n_l).tryrdlock() ? 0 : n_l) {
    }
 
-   DLLLOCAL QoreOptionalVarRWReadLocker(QoreVarRWLock& n_l) : l(n_l.tryrdlock() ? 0 : &n_l) {
+   DLLLOCAL QoreOptionalVarRWReadLocker(QoreVarRWLock& n_l) : l(qore_var_rwlock_ops(n_l).tryrdlock() ? 0 : &n_l) {
    }
 
    DLLLOCAL ~QoreOptionalVarRWReadLocker() {

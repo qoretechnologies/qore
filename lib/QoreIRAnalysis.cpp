@@ -3326,8 +3326,8 @@ static bool qore_ir_is_assigned_boxed_hash(
     return qore_ir_is_boxed_hash_type(facts->type_info);
 }
 
-static bool qore_ir_is_hoistable_read_only_query(
-        const QoreIRFunction& func, const QoreIRInstruction& inst) {
+static bool qore_ir_is_read_only_query(const QoreIRFunction& func, const QoreIRInstruction& inst,
+        bool require_nothrow) {
     if (!inst.result.isValid() || inst.exception_target) {
         return false;
     }
@@ -3353,14 +3353,15 @@ static bool qore_ir_is_hoistable_read_only_query(
             || !direct.pseudo_base_known_assigned_string) {
         return false;
     }
-    // LICM can execute the query before a zero-trip loop, so admit only
-    // assigned operands and pseudo operations that cannot throw or mutate.
+    // LICM can execute the query before a zero-trip loop. Character length can raise
+    // INVALID-ENCODING even for an assigned operand; byte length cannot.
     switch (direct.intrinsic) {
+        case QoreIRIntrinsic::StringLength:
+            return !require_nothrow && inst.operands.size() == 1;
         case QoreIRIntrinsic::Size:
         case QoreIRIntrinsic::Empty:
         case QoreIRIntrinsic::Val:
         case QoreIRIntrinsic::StringStrlen:
-        case QoreIRIntrinsic::StringLength:
         case QoreIRIntrinsic::StringSizeP:
         case QoreIRIntrinsic::StringStrP:
         case QoreIRIntrinsic::StringIntP:
@@ -3381,12 +3382,17 @@ static bool qore_ir_is_hoistable_read_only_query(
     }
 }
 
+static bool qore_ir_is_hoistable_read_only_query(
+        const QoreIRFunction& func, const QoreIRInstruction& inst) {
+    return qore_ir_is_read_only_query(func, inst, true);
+}
+
 static bool qore_ir_preserves_read_only_pseudo_facts(
         const QoreIRFunction& func, const QoreIRInstruction& inst) {
     return !q_env_is_set(
             "QORE_DISABLE_IR_READ_ONLY_PSEUDO_FACT_PRESERVATION")
         && inst.opcode == QoreIROpcode::DotEvalMethodDirect
-        && qore_ir_is_hoistable_read_only_query(func, inst);
+        && qore_ir_is_read_only_query(func, inst, false);
 }
 
 struct QoreIRScalarUse {
@@ -3414,6 +3420,53 @@ static bool qore_ir_collect_scalar_uses(const QoreIRFunction& func, QoreIRScalar
         }
     }
     return true;
+}
+
+// documented in QoreIRAnalysis.h
+void qore_ir_mark_auto_string_appends(QoreIRFunction& func) {
+    QoreIRScalarUses uses;
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        const auto& instructions = block->instructions;
+        for (size_t i = 1; i < instructions.size(); ++i) {
+            if (qore_ir_analysis_cancelled(check_count, "IR auto string append analysis")) {
+                return;
+            }
+            auto& op = *instructions[i];
+            const QoreIRInstruction* store = nullptr;
+            if (op.opcode == QoreIROpcode::AddAssignAny && i + 1 < instructions.size()) {
+                store = instructions[i + 1].get();
+            } else if (op.opcode == QoreIROpcode::Invoke) {
+                const auto& invoke = static_cast<const QoreIRInvokeInstruction&>(op);
+                if (invoke.invoke_opcode == QoreIROpcode::AddAssignAny && invoke.normal_target
+                        && invoke.normal_target != invoke.exception_target
+                        && !invoke.normal_target->instructions.empty()) {
+                    store = invoke.normal_target->instructions.front().get();
+                }
+            }
+            if (!store || store->opcode != QoreIROpcode::StoreLocal
+                    || instructions[i - 1]->opcode != QoreIROpcode::LoadLocal
+                    || op.operands.size() != 2 || store->operands.size() != 1
+                    || store->operands[0].id != op.result.id) {
+                continue;
+            }
+            auto& load = static_cast<QoreIRLocalInstruction&>(*instructions[i - 1]);
+            const auto& write = static_cast<const QoreIRLocalInstruction&>(*store);
+            if (!load.local || load.local->getTypeInfo() != autoTypeInfo || load.local->closureUse()
+                    || load.local != write.local || write.mode != AssignmentMode::Normal
+                    || load.result.id != op.operands[0].id) {
+                continue;
+            }
+            // Count phi and other out-of-line operands, too. A borrowed load must end at this +=.
+            if (uses.empty() && !qore_ir_collect_scalar_uses(func, uses, check_count)) {
+                return;
+            }
+            if (uses[load.result.id].size() == 1) {
+                load.auto_local_string_append = true;
+                op.auto_local_string_append = true;
+            }
+        }
+    }
 }
 
 //! Returns true when a call cannot consume \a value, so passing it as an argument is a plain read.
@@ -6307,7 +6360,7 @@ static bool qore_ir_pure_fold_evaluate(const QoreIRCallDirectInstruction* call,
             }
             // copy by length: a ConstString is emitted with an explicit byte count and may hold
             // embedded NULs
-            constant.string_value.assign(str.c_str(), str.size());
+            constant.setStringValue(str.c_str(), str.size());
             return true;
         }
         default:
@@ -7584,14 +7637,21 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
     // lifetime across DiscardTemps. Only values proven inline may cross a
     // basic-block boundary; within a block, boxed candidates expire at a drain.
     std::unordered_set<uint32_t> inline_scalars;
-    for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
+    // the layout position of the block that defines each value: the native code generator lowers the blocks in
+    // layout order, so a use can only take a value defined in its own block or in one laid out before it, even if a
+    // block laid out later dominates it (ex: the latch of a foreach loop is laid out before the blocks of its body
+    // that run before it; when the loop's constants stay in the loop, as in a function that the AOT outliner
+    // considers, the latch's constant 1 matched one of the body: issue #6560)
+    std::unordered_map<uint32_t, size_t> value_block;
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        for (const auto& inst : func.blocks[block_id]->instructions) {
             if (qore_ir_analysis_cancelled(check_count, "IR scalar CSE lifetime analysis")) {
                 return {};
             }
             if (!inst->result.isValid()) {
                 continue;
             }
+            value_block[inst->result.id] = block_id;
             const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
             bool is_inline = facts && (facts->representation == QoreIRValueRepresentation::NativeBool
                 || (facts->representation == QoreIRValueRepresentation::NativeInt && facts->hasInlineIntRange()));
@@ -7824,6 +7884,26 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                 }
             }
         }
+        // true if \a value, defined in a block laid out after this one (see value_block), cannot replace the result
+        // of \a inst: a use of the result other than an incoming value of a phi (whose values are lowered after all
+        // blocks) in a block laid out before or at the block defining \a value would have no value
+        auto laid_out_later = [&value_block, &uses, block_id](const QoreIRValue& value,
+                const QoreIRInstruction& inst) {
+            auto it = value_block.find(value.id);
+            if (it == value_block.end() || it->second <= block_id) {
+                return false;
+            }
+            auto use_it = uses.find(inst.result.id);
+            if (use_it == uses.end()) {
+                return false;
+            }
+            for (const QoreIRScalarUse& use : use_it->second) {
+                if (use.block_id <= it->second && use.inst->opcode != QoreIROpcode::Phi) {
+                    return true;
+                }
+            }
+            return false;
+        };
         const auto& block = func.blocks[block_id];
         // the paths of the debugger's flow requests leave the block before an instruction
         QoreIRDebugFlowCursor flow_cursor;
@@ -7883,9 +7963,14 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                 LoadMap& candidates = inline_scalars.count(inst.result.id) ? available_loads : scoped_loads;
                 auto [load_it, inserted] = candidates.emplace(load.local, inst.result);
                 if (!inserted) {
-                    replacements.emplace(inst.result.id, load_it->second);
-                    eliminated.insert(&inst);
-                    forwarded_loads.insert(&inst);
+                    if (laid_out_later(load_it->second, inst)) {
+                        // this load provides the value from here on
+                        load_it->second = inst.result;
+                    } else {
+                        replacements.emplace(inst.result.id, load_it->second);
+                        eliminated.insert(&inst);
+                        forwarded_loads.insert(&inst);
+                    }
                 }
                 continue;
             }
@@ -7909,6 +7994,11 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             ExpressionMap& candidates = inline_scalars.count(inst.result.id) ? available : scoped_expressions;
             auto [available_it, inserted] = candidates.emplace(std::move(key), inst.result);
             if (inserted) {
+                continue;
+            }
+            if (laid_out_later(available_it->second, inst)) {
+                // this instruction provides the value from here on
+                available_it->second = inst.result;
                 continue;
             }
             replacements.emplace(inst.result.id, available_it->second);
@@ -13022,6 +13112,9 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
     // (qore#6072)
     func.defer_release_check_prune = false;
     qore_ir_prune_release_checks(func);
+    if (func.has_generic_add_assign) {
+        qore_ir_mark_auto_string_appends(func);
+    }
 }
 
 size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,
@@ -18401,11 +18494,6 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 return false;
             }
             kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::Size;
-        } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-            if (consumer->operands.size() != 1) {
-                return false;
-            }
-            kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::Length;
         } else if (intrinsic == QoreIRIntrinsic::StringStartsWith
                 || intrinsic == QoreIRIntrinsic::StringEndsWith
                 || intrinsic == QoreIRIntrinsic::StringContains) {
@@ -19743,13 +19831,6 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                 }
                 kind = QoreIRDotEvalMethodDirectInstruction::
                     AOTStringTransformConsumerKind::Size;
-            } else if (method_consumer->intrinsic
-                    == QoreIRIntrinsic::StringLength) {
-                if (method_consumer->operands.size() != 1) {
-                    continue;
-                }
-                kind = QoreIRDotEvalMethodDirectInstruction::
-                    AOTStringTransformConsumerKind::Length;
             } else if (method_consumer->intrinsic
                     == QoreIRIntrinsic::StringStartsWith
                     || method_consumer->intrinsic

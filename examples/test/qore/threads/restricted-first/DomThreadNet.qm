@@ -1,0 +1,69 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! A library module that declares the NETWORK and THREAD_CONTROL domains (qorus#867, the domain declaration rule)
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%new-style
+%require-types
+%strict-args
+
+/** @section domthreadnetintro Introduction
+    Starts a thread for its caller that uses the network, which its declared domains grant to its own code, and the
+    filesystem, which they do not.
+*/
+module DomThreadNet {
+    version = "1.0";
+    desc = "domain declaration test fixture: declares NETWORK and THREAD_CONTROL";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "NETWORK,THREAD_CONTROL";
+}
+
+public namespace DomThreadNet {
+    #! in a thread of the module, connects to \a port on the loopback address and reads the existence of \a path
+    /** @return the outcome of each, after the thread ends: the exception code, or \c "ok"
+    */
+    public hash<auto> sub probe(int port, string path) {
+        Queue q();
+        background sub () {
+            hash<auto> rv;
+            try {
+                Socket s();
+                s.connect("127.0.0.1:" + port, 5s);
+                s.close();
+                rv.net = "ok";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.net = ex.err;
+            }
+            try {
+                # by name, so that the call is checked when it is made, not when the module is parsed
+                call_function("is_file", path);
+                rv.fs = "ok";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.fs = ex.err;
+            }
+            q.push(rv);
+        }();
+        return q.get(30s);
+    }
+}

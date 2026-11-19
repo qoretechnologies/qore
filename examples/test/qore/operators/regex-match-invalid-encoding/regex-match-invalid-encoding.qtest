@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class RegexMatchInvalidEncodingTest
+
+#! every regular expression match fails closed on a subject that is not valid in its encoding (qore#6554)
+/** A match cannot tell whether such a string matches; a check that rejects a string that matches a pattern accepted
+    it as if it did not match.  Every match operation raises INVALID-ENCODING for it, as a substitution does.
+*/
+class RegexMatchInvalidEncodingTest inherits QUnit::Test {
+    constructor() : Test("regex match of invalid strings", "1.0", \ARGV) {
+        addTestCase("match operators", \matchOperators());
+        addTestCase("match functions", \matchFunctions());
+        addTestCase("Regex class", \regexClass());
+        addTestCase("iterators", \iterators());
+        addTestCase("invalid bytes after a match", \invalidAfterMatch());
+        addTestCase("other encodings", \otherEncodings());
+        addTestCase("valid strings are unaffected", \validStrings());
+        addTestCase("a rejecting check fails closed", \rejectingCheck());
+        set_return_value(main());
+    }
+
+    #! returns a string tagged as UTF-8 whose bytes are not valid UTF-8, with a quote after the invalid byte
+    private static string invalid() {
+        return binary_to_string(parse_hex_string("61ff27"), "UTF-8");
+    }
+
+    matchOperators() {
+        string s = invalid();
+        assertThrows("INVALID-ENCODING", sub () { bool b = (s =~ /'/); });
+        assertThrows("INVALID-ENCODING", sub () { bool b = (s !~ /'/); });
+        assertThrows("INVALID-ENCODING", sub () { bool b = (s =~ /^/); });
+        assertThrows("INVALID-ENCODING", sub () { *list<*string> l = (s =~ x/(')/); });
+    }
+
+    matchFunctions() {
+        string s = invalid();
+        assertThrows("INVALID-ENCODING", \regex(), (s, "'"));
+        assertThrows("INVALID-ENCODING", \regex_extract(), (s, "(')"));
+        assertThrows("INVALID-ENCODING", sub () { list<string> l = s.splitRegex("'"); });
+        assertThrows("INVALID-ENCODING", sub () { bool b = s.regex("'"); });
+        assertThrows("INVALID-ENCODING", sub () { int i = s.regexCount("'"); });
+        assertThrows("INVALID-ENCODING", sub () { auto v = s.regexExtractNamed("(?<q>')"); });
+    }
+
+    regexClass() {
+        string s = invalid();
+        Regex r("'", RE_Global);
+        assertThrows("INVALID-ENCODING", \r.match(), (s,));
+        assertThrows("INVALID-ENCODING", \r.count(), (s,));
+        assertThrows("INVALID-ENCODING", \(new Regex("(?<q>')")).extractNamedGroups(), (s,));
+    }
+
+    iterators() {
+        string s = invalid();
+        assertThrows("INVALID-ENCODING", sub () {
+            RegexMatchIterator i(new Regex("'", RE_Global), s);
+            while (i.next()) {
+            }
+        });
+        assertThrows("INVALID-ENCODING", sub () {
+            StringRegexSplitIterator i(s, "'");
+            while (i.next()) {
+            }
+        });
+    }
+
+    #! the whole subject is checked by the first match, also when the invalid bytes follow the match
+    invalidAfterMatch() {
+        string s = binary_to_string(parse_hex_string("27616161ff"), "UTF-8");
+        assertThrows("INVALID-ENCODING", sub () { bool b = (s =~ /'/); });
+        assertThrows("INVALID-ENCODING", sub () { *list<*string> l = (s =~ x/(')/g); });
+    }
+
+    #! a string in another encoding that is not valid in it cannot be converted to UTF-8 to be matched
+    otherEncodings() {
+        string sj = binary_to_string(parse_hex_string("8227ff"), "SHIFT_JIS");
+        assertThrows("ENCODING-CONVERSION-ERROR", sub () { bool b = (sj =~ /'/); });
+        # a valid string in another encoding is matched
+        string l1 = binary_to_string(parse_hex_string("e927"), "ISO-8859-1");
+        assertTrue(l1 =~ /é'/);
+    }
+
+    validStrings() {
+        assertTrue("a'b" =~ /'/);
+        assertFalse("ab" =~ /'/);
+        assertEq(("b",), "a'b" =~ x/'(.)/);
+        assertEq(("a", "b"), "a'b".splitRegex("'"));
+        assertTrue("" =~ /^$/);
+    }
+
+    #! a check of the kind "reject a string that contains a quote" no longer accepts a string it cannot match
+    rejectingCheck() {
+        code check = bool sub (string v) {
+            return v !~ /['";]/;
+        };
+        assertFalse(check("a'b"));
+        assertTrue(check("ab"));
+        assertThrows("INVALID-ENCODING", check, (invalid(),));
+    }
+}

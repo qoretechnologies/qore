@@ -103,6 +103,47 @@ another directory, and the qmod cache stores the list with the module (`qmod-bui
 exist would make the module out of date in every build, and the loader checks the modules of failed `%try-module`
 directives itself.
 
+### The contents of the dependencies
+
+make rebuilds a module when one of the files of its depfile is newer than the module, and the loader finds the
+module out of date when one of them has another content than when it was compiled (its fingerprint, see "When a
+source has changed").  A dependency replaced by a file with another content and an older modification time, as an
+install that keeps the time of the build does (`cp -p`, `cmake --install`, `copy-qore-modules`), made the loader
+refuse the module (`BINARY-MODULE-SOURCE-FALLBACK`) while the build did not rebuild it; so did a module of a failed
+`%try-module` directive whose file existed but could not be loaded (a version that is too old for the directive, a
+binary module that cannot be loaded) and that is replaced by one that can (`AOT-MODULE-STALE`; the paths of the
+previous section list only those where the module is not) (qore#6598).
+
+So `QORE_USER_MODULE_AOT_RULES()` gives each module a stamp (`<qmod>.sources.stamp`) that its `.qmod` depends on, and
+every build runs one check of all the modules of the project before they are compiled (the target
+`qore-qmod-source-check`, made once every module is declared, with `cmake_language(DEFER)`):
+`qcc --check-module-sources @<list>` in the environment of the compile.  For each module that exists, qcc makes the
+loader's checks (`qore_aot_check_module_sources()`, internal, for qcc only):
+
+- each file of the depfile is compared with its fingerprint: another size, or the same size and another content hash
+  when its modification time differs, makes the module out of date, as does a file that no longer exists; a file
+  without a fingerprint makes it out of date if it is newer than the module;
+  without a depfile, which Ninja removes once it has read it into its log, the files of the fingerprint file are
+  compared;
+- for a module whose `<qmod>.d.optional` is not empty (a failed `%try-module` directive): a candidate file of one of
+  those modules that the depfile does not list, and `QoreModuleManager::findAvailableOptionalModule()` with the module
+  path directories of the module's metadata.
+
+It rewrites the stamp of a module only when it finds it out of date, so that the build compiles it again; the stamp
+of a module that has none yet is made with a modification time older than any module.  A file that only got another
+modification time, as after a restore from the qmod cache or a checkout, has the content of its fingerprint, and
+rebuilds nothing.  Unlike the loader, the check fails closed: a module whose depfile or fingerprint file cannot be read
+or does not describe it, or one of whose dependencies cannot be read, fails the build, which names the module and the
+file.  It runs with CMake 3.19 or later, and with a qcc that reports it in its version (`Build checks:
+module-sources`); a build with another qcc (a test's stand-in, an older installation) does not check its modules.
+
+The Qore library is not a dependency of a module: the loader checks the AOT runtime identity that the module records
+against that of the library, and the modules of the Qore build depend on the identity header, which is rewritten only
+when the identity changes (qore#6221).  A library that is linked again with the same identity rebuilds no module, and
+a check of the modules of a build tree compares their identities and fingerprints, not their modification times with
+that of the library (`qore-qmod-cache.py verify --qcc`).
+
+
 The depfile of a script object (`.qo`) is unchanged: it lists the modules the script loads directly, and its include
 closure as before.  Without a dependency file, the main source of the module and the `.qm` and `.qc` files of its
 directory are the sources.
@@ -216,3 +257,8 @@ one loaded from its source, from its own AOT module or from an identical copy is
 module path of a child process as in `run_tests.sh`, is checked (a changed source is found, a touched one is not, and
 without the depfile the module is loaded); a module compiled without `--depfile` is not checked; and an out-of-date
 module whose source fails reports `AOT-MODULE-STALE` after the source error.
+`examples/test/ir/CMakeBuildHelpers.qc` (`testQmodSourcesChecked()`, with the Makefile and the Ninja generators): an
+installed binary module that a module requires, and the file of an optional module that is too old or cannot be
+loaded, each replaced by another content with an older modification time, rebuild the module, which then loads without
+a warning; files that only get other modification times rebuild nothing; a module whose fingerprints cannot be read
+fails the build, which names the module and the file (qore#6598).

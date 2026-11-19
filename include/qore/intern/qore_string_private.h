@@ -198,6 +198,20 @@ public:
         view_offset = 0;
     }
 
+    //! Sets the ASCII prefix cache of a new string that owns its storage and holds only ASCII text
+    /** For a string made from text known to be ASCII, such as a string literal, so that its first use does not scan
+        it (qore#6625); no other thread can read the string yet
+    */
+    DLLLOCAL void setOwnedAsciiText() {
+        assert(!view_parent);
+#ifndef NDEBUG
+        for (size_t i = 0; i < len; ++i) {
+            assert(static_cast<unsigned char>(buffer[i]) < 0x80);
+        }
+#endif
+        view_offset = len;
+    }
+
     //! Lowers the ASCII prefix cache of a string that owns its storage to at most the given byte offset
     /** For a mutation that keeps the bytes before \a offset
     */
@@ -346,7 +360,10 @@ public:
     }
 
     //! Raises the exception that QoreEncoding raises for text that is not valid in the encoding of the string
-    DLLLOCAL void raiseInvalidEncoding(ExceptionSink* xsink) const;
+    DLLLOCAL QORE_INTERN_COLD QORE_INTERN_NOINLINE void raiseInvalidEncoding(ExceptionSink* xsink) const;
+
+    //! Counts characters for language operations, raising INVALID-ENCODING for malformed text
+    DLLLOCAL static size_t characterCount(const QoreString& str, ExceptionSink* xsink);
 
     //! Returns the number of characters of a string in a multi-byte encoding, counting each byte that does not start
     //! a complete character as one character
@@ -1593,11 +1610,15 @@ public:
             const char* p = src;
             char* targ_end = targ.ownedBuffer() + len;
             const char* end = src + len;
+            // an encoding made of units of more than one byte (UTF-16) reverses a unit that does not start a
+            // character as a character of its own, so that the text after it is read in whole units, as length()
+            // counts it; a byte is reversed on its own where a whole unit does not remain (qore#6604)
+            const size_t unit = getEncoding()->getMinCharWidth();
             while (p < end) {
                 bool invalid;
-                int bl = getEncoding()->getByteLen(p, end, 1, invalid);
+                size_t bl = getEncoding()->getByteLen(p, end, 1, invalid);
                 if (invalid) {
-                    bl = 1;
+                    bl = unit > 1 && static_cast<size_t>(end - p) >= unit ? unit : 1;
                 }
                 targ_end -= bl;
                 if (targ_end < targ.ownedBuffer()) {
@@ -1856,6 +1877,24 @@ DLLLOCAL bool qore_string_get_as_bool(const char* str, size_t len);
     convert, is not valid).  O(n) in the size of the string; no exception is raised or cleared (qore#6554).
 */
 DLLLOCAL bool qore_string_encoding_valid(const QoreString& str);
+
+//! Returns a new string for an HTTP field value (a header or trailer value)
+/** The value is in the default encoding, or in ISO-8859-1 with its bytes unchanged if it is not valid in it: a field
+    value with bytes that are not valid UTF-8 is obs-text (RFC 9110 section 5.5), which is valid text in ISO-8859-1
+    (qore#6554)
+*/
+DLLLOCAL QoreStringNode* qore_http_field_value_string(const char* p, size_t len);
+
+//! Gives an HTTP field value made by concatenation in ISO-8859-1 if it is not valid in its encoding (qore#6554)
+DLLLOCAL void qore_http_field_value_check(QoreStringNode* str);
+
+//! Returns true if an HTTP request target (a path with an optional query) is text that the HTTP server accepts
+/** A target with a raw byte above 0x7f or a raw NUL is not accepted (the normal path decides, in the encoding of the
+    socket); otherwise the path and the query are decoded with the decoder of decode_url(), as \c HttpServer decodes
+    them, and each must decode to valid UTF-8; the decoded path must not have a NUL character (qore#6554).  No exception is left in an
+    exception sink; O(n), with no allocation for a target without \c "%" and bytes above 0x7f.
+*/
+DLLLOCAL bool qore_http_target_text_valid(const char* p, size_t len);
 
 
 //! a source for a QoreString operation: a copy if the source is part of the string's text, which the operation moves

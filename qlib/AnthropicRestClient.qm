@@ -1256,13 +1256,15 @@ bool rejects = AnthropicLlmProvider::rejectsForcedToolChoice("claude-sonnet-5-5"
             list<hash<QoreLlmUtils::ChatMessage>> messages,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        auto system_prompt = NOTHING;
+        # every system message, in order: Anthropic takes one system prompt, so they are sent together
+        list<auto> system_prompts = ();
         list<hash<auto>> api_messages = ();
         list<hash<auto>> pending_tool_results = ();
 
         foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
             if (msg.role == "system") {
-                system_prompt = msg.content_parts
+                # push, not +=: a message's text blocks are one prompt, not one per block
+                push system_prompts, msg.content_parts
                     ? contentPartsToAnthropicSystem(msg.content_parts)
                     : msg.content;
                 continue;
@@ -1341,6 +1343,7 @@ bool rejects = AnthropicLlmProvider::rejectsForcedToolChoice("claude-sonnet-5-5"
             "max_tokens": getRequestMaxOutputTokens(opts),
             "messages": api_messages,
         };
+        auto system_prompt = combineSystemPrompts(system_prompts);
         if (system_prompt.typeCode() != NT_NOTHING) {
             body.system = system_prompt;
         }
@@ -1603,6 +1606,36 @@ bool rejects = AnthropicLlmProvider::rejectsForcedToolChoice("claude-sonnet-5-5"
             rv.description = rv.description.val() ? (rv.description + " " + note) : note;
         }
         return rv;
+    }
+
+    #! Returns the system prompt of a request from each of its system messages, in order
+    /** A request can carry more than one system message (for example a policy, context retrieved for the turn and a
+        protocol).  Anthropic takes one system prompt, so they are sent together: replacing the prompt with each one
+        in turn kept only the last (qore#6588).
+
+        @param prompts each system message's prompt: its string content, or its text blocks
+            (@ref contentPartsToAnthropicSystem())
+
+        @return @ref NOTHING with no system message; a single system message's prompt as it is, so that its form is
+        unchanged; otherwise every prompt's text as text blocks in message order, each block keeping its
+        @c cache_control, with empty prompts left out
+    */
+    private static auto combineSystemPrompts(list<auto> prompts) {
+        if (!prompts) {
+            return NOTHING;
+        }
+        if (prompts.size() == 1) {
+            return prompts[0];
+        }
+        list<hash<auto>> blocks = ();
+        foreach auto prompt in (prompts) {
+            if (prompt.typeCode() == NT_LIST) {
+                blocks += prompt;
+            } else if (prompt.val()) {
+                blocks += {"type": "text", "text": prompt.toString()};
+            }
+        }
+        return blocks ? blocks : "";
     }
 
     private static auto contentPartsToAnthropicSystem(

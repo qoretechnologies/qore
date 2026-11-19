@@ -274,7 +274,7 @@ over HTTP/2.
 What the fast path does not do: authentication, `preprocessRequest`, handler logging, request-id or tracing hooks,
 per-request Program thread-local data.  These are the reason `public` must be explicit.  Observability replaces
 them: per route hit counters and per-reason fallback counters (no route, not HTTP/1.1, body, expect, upgrade,
-connection, pipelined, stale cell, no rule), exposed through `HttpServer::getFastRouteInfo()` so an operator can see
+connection, pipelined, stale cell, no rule, text that the normal path refuses with 400), exposed through `HttpServer::getFastRouteInfo()` so an operator can see
 how many requests bypassed the handler chain.
 
 ### Qore API (implemented in phase 1)

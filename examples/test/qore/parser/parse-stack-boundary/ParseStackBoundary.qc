@@ -5,6 +5,7 @@
 
 %requires ../../../TestBuildTools.qm
 %requires ../../../TestInterpreter.qm
+%requires ../../../QoreBuildTree.qm
 
 #! The cases of the ParseStackBoundary-<n>.qtest tests: each runs one part of them, so that each takes a short time,
 #! and together they run every case (see addPartCase()); parts 1, 3 and 4 parse code in a single Program, parts 2 and 5
@@ -117,6 +118,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         if (target) {
             push args, target[0];
         }
+        # a sanitizer build of libqore needs the same sanitizer in the fixture (qore#6682)
+        args += QoreBuildTree::sanitizer_flags(libdir);
         int status;
         string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
         assertEq(0, status, output);

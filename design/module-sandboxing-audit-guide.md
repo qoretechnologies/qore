@@ -447,10 +447,12 @@ missing or has another type), it must count the sandbox as restricting.
 `trustsUncontrolledApis()` is the fifth predicate: true if the sandbox's uncontrolled-API policy allows them, that is,
 the host that attached the sandbox trusts the code it governs (for a combination of managers, true only if every member
 trusts: the AND over the members, the opposite direction to the others, which are ORs). The rule for a module that
-refuses an operation that only an unrestricted caller may use is: refuse if and only if
-`!trustsUncontrolledApis() && restricts()` on the governing manager (the `QoreSandboxManagerHelper::Policy` manager).
-A sandbox that restricts nothing, or whose host trusts its code, does not make the caller untrusted. There is no
-unreadable state; a module that gets the policy another way and cannot read it counts the sandbox as not trusting.
+refuses an operation that only an unrestricted caller may use (one that runs code or does I/O that Qore does not see)
+is trust-only: refuse unless `trustsUncontrolledApis()` is true on the governing manager (the
+`QoreSandboxManagerHelper::Policy` manager), whatever the sandbox restricts. A sandbox that allows all I/O and sets no
+limit but does not trust its code still keeps that code from such operations, as `setUncontrolledApiPolicy()`
+documents; the `restricts()` predicates are for a module that applies the sandbox's I/O policy or limits itself. There
+is no unreadable state; a module that gets the policy another way and cannot read it counts the sandbox as not trusting.
 
 ### Key Principle: Sandbox Manager May Be Absent
 

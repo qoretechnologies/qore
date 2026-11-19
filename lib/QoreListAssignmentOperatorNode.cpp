@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreListAssignmentOperatorNode::op_str("list assignment operator expression");
 
@@ -126,7 +127,7 @@ int QoreListAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_cont
             //    QoreTypeInfo::getName(prototypeInfo), QoreTypeInfo::getName(argInfo), res);
             if (!res && !ri.hasError()) {
                 // raise an exception only if parse exceptions are not disabled
-                if (parse_context.pgm->getParseExceptionSink()) {
+                if (qore_program_ops(parse_context.pgm).getParseExceptionSink()) {
                     QoreStringNode* edesc = new QoreStringNode("lvalue for ListAssignment operator in position ");
                     edesc->sprintf("%d of list ListAssignment expects ", li.index() + 1);
                     QoreTypeInfo::getThisType(prototypeInfo, *edesc);

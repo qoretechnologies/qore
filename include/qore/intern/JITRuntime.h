@@ -120,6 +120,8 @@ uint64_t qore_rt_mul_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
 //! Add two QoreValues with compound-assignment dynamic dispatch
 uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+void qore_rt_drop_local_string_cache(uint64_t left, uint64_t* entry, uint64_t* current, uint64_t* previous);
 
 //! Subtract two QoreValues with compound-assignment dynamic dispatch
 uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
@@ -128,6 +130,7 @@ uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xs
 uint64_t qore_rt_mul_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
 uint64_t qore_rt_add_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
+uint64_t qore_rt_add_assign_local_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
 uint64_t qore_rt_sub_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
 uint64_t qore_rt_mul_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
@@ -222,6 +225,8 @@ uint64_t qore_rt_make_string(const char* str);
 
 //! Create a QoreStringNode from string bytes and return as NaN-boxed QoreValue.
 uint64_t qore_rt_make_string_len(const char* str, uint64_t len);
+//! As qore_rt_make_string_len() for ASCII text: the string has its ASCII prefix known (qore#6625)
+uint64_t qore_rt_make_ascii_string_len(const char* str, uint64_t len);
 
 //! Execute a backquote command and return stdout as a NaN-boxed string.
 uint64_t qore_rt_backquote(const char* cmd, ExceptionSink* xsink);
@@ -1975,6 +1980,14 @@ uint64_t qore_rt_load_local_weak_receiver_aot(QoreAOTContext* ctx, int32_t idx, 
 
 //! Releases the receiver kept by qore_rt_load_local_weak_receiver() when its call returns
 void qore_rt_end_weak_receiver_call(uint64_t* slot, int8_t* owned_flag, ExceptionSink* xsink);
+
+//! Reads the variable of a foreach loop that is the receiver of a method call from its cache
+/** As qore_rt_read_element_local(), except that the object of a weak reference is given a reference, stored in
+    \a slot, and \a owned_out set to 2, which qore_rt_end_weak_receiver_call() releases when the call returns
+    (qore#6594); a reference is read as qore_rt_read_element_local_held() reads it if \a current is not null
+*/
+uint64_t qore_rt_read_element_local_receiver(uint64_t val, uint64_t* slot, int8_t* owned_out, uint64_t* current,
+        uint64_t* previous, uint8_t* held, ExceptionSink* xsink);
 
 //! Loads a weak-assigned local through an AOT context slot, preserving the borrow
 /** @see qore_rt_load_local_weak()

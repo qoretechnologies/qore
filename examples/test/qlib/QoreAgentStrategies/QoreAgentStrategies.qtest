@@ -186,6 +186,10 @@ public class QoreAgentStrategiesTest inherits QUnit::Test {
         addTestCase("Parallel - error handling", \parallelErrorTest());
         addTestCase("Parallel - start_thread invoked when supplied",
             \parallelStartThreadTest());
+        addTestCase("Parallel - start_thread taken from the thread's capability",
+            \parallelStartThreadCapabilityTest());
+        addTestCase("Parallel - an explicit start_thread wins over the thread's capability",
+            \parallelStartThreadOptionWinsTest());
         addTestCase("Parallel - unknown option rejected",
             \parallelUnknownOptionTest());
         addTestCase("Parallel - sandbox parse stub passes under PO_NO_THREAD_CONTROL",
@@ -704,6 +708,52 @@ public class QoreAgentStrategiesTest inherits QUnit::Test {
             assertTrue(exists r.result);
         }
         assertEq(3, starter_calls);
+    }
+
+    #! Without the start_thread option, the dispatcher uses the start_thread capability of the code that a host runs
+    #! (qorus#867)
+    parallelStartThreadCapabilityTest() {
+        Counter started();
+        code<int(code<nothing()>)> starter = int sub (code<nothing()> body) {
+            started.inc();
+            return background body();
+        };
+        ParallelToolDispatcher dispatcher;
+        {
+            ThreadCapabilityScope scope({"start_thread": starter});
+            dispatcher = new ParallelToolDispatcher({"max_concurrent": 3});
+        }
+        # the capability is taken when the dispatcher is created, so it is used after the scope
+        list<hash<auto>> results = dispatcher.dispatchToolsParallel(
+            ({"name": "a"}, {"name": "b"}, {"name": "c"}),
+            auto sub (string name, hash<auto> args) { return {"ok": True, "name": name}; },
+        );
+        assertEq(3, results.size());
+        assertEq(3, started.getCount(), "the capability started the dispatcher's threads");
+    }
+
+    #! An explicit start_thread option is used instead of the thread's capability
+    parallelStartThreadOptionWinsTest() {
+        Counter capability_started();
+        Counter option_started();
+        ThreadCapabilityScope scope({"start_thread": int sub (code<nothing()> body) {
+            capability_started.inc();
+            return background body();
+        }});
+        ParallelToolDispatcher dispatcher({
+            "max_concurrent": 3,
+            "start_thread": int sub (code<nothing()> body) {
+                option_started.inc();
+                return background body();
+            },
+        });
+        list<hash<auto>> results = dispatcher.dispatchToolsParallel(
+            ({"name": "a"}, {"name": "b"}),
+            auto sub (string name, hash<auto> args) { return {"ok": True, "name": name}; },
+        );
+        assertEq(2, results.size());
+        assertEq(2, option_started.getCount(), "the option started the threads");
+        assertEq(0, capability_started.getCount(), "the capability was not used");
     }
 
     #! Unknown constructor options are rejected immediately

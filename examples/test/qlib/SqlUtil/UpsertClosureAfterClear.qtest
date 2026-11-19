@@ -1,0 +1,216 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class UpsertClosureAfterClearTest
+
+#! an upsert closure keeps working after the table's description is cleared (issue #6686)
+/** an upsert closure captured the primary key object of the table, which AbstractTable::clear() deletes, so that the
+    next call of the closure raised OBJECT-ALREADY-DELETED (a unique constraint or index was not deleted and is checked
+    as well); runs on SQLite, and on
+    PostgreSQL, MySQL, Oracle and SQL Server when \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL,
+    \c QORE_DB_CONNSTR_ORACLE and \c QORE_DB_CONNSTR_FREETDS are set
+*/
+class UpsertClosureAfterClearTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dbs;
+        hash<string, string> skips = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "mssql": "QORE_DB_CONNSTR_FREETDS is not set",
+        };
+
+        const Strategies = {
+            "update-first": AbstractTable::UpsertUpdateFirst,
+            "select-first": AbstractTable::UpsertSelectFirst,
+            "insert-first": AbstractTable::UpsertInsertFirst,
+            "insert-only": AbstractTable::UpsertInsertOnly,
+            "update-only": AbstractTable::UpsertUpdateOnly,
+        };
+    }
+
+    constructor() : Test("UpsertClosureAfterClear", "1.0", \ARGV) {
+        addTestCase("SQLite", \sqliteTest());
+        addTestCase("PostgreSQL", \pgsqlTest());
+        addTestCase("MySQL", \mysqlTest());
+        addTestCase("Oracle", \oracleTest());
+        addTestCase("SQL Server", \mssqlTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "UpsertClosureAfterClear");
+            dbs.pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%else
+        skips.pgsql = "no pgsql module";
+%endif
+%ifndef NoMysql
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            connect("mysql", *string sub () { return MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL,
+                "UpsertClosureAfterClear"); });
+        }
+%else
+        skips.mysql = "no mysql module";
+%endif
+%ifndef NoOracle
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            connect("oracle", *string sub () { return OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE,
+                "UpsertClosureAfterClear"); });
+        }
+%else
+        skips.oracle = "no oracle module";
+%endif
+%ifndef NoFreetds
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            connect("mssql", *string sub () { return MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS,
+                "UpsertClosureAfterClear"); });
+        }
+%else
+        skips.mssql = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        foreach string k in (keys dbs) {
+            dbs{k}.rollback();
+        }
+        remove dbs;
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            MysqlRunDatabase::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            OracleRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            MssqlRunDatabase::teardown();
+        }
+    }
+
+    private connect(string db, code get_connstr) {
+        try {
+            Datasource ds(get_connstr());
+            ds.open();
+            dbs{db} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skips{db} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        check(new Datasource("sqlite3:x@:memory:"), "sqlite");
+    }
+
+    pgsqlTest() {
+        check(getDs("pgsql"), "pgsql");
+    }
+
+    mysqlTest() {
+        check(getDs("mysql"), "mysql");
+    }
+
+    oracleTest() {
+        check(getDs("oracle"), "oracle");
+    }
+
+    mssqlTest() {
+        check(getDs("mssql"), "mssql");
+    }
+
+    private Datasource getDs(string db) {
+        if (!dbs{db}) {
+            testSkip(skips{db});
+        }
+        return dbs{db};
+    }
+
+    #! for a primary key and a unique constraint, and each upsert strategy: a closure made before clear() upserts the
+    #! rows after it, also a row whose key value has another type than the example row (for which a driver that
+    #! converts the key values by their type, as MySQL, makes a closure)
+    private check(Datasource ds, string db) {
+        on_exit ds.rollback();
+        foreach string key in (("primary key (k)", "constraint ucac_uk unique (k)")) {
+            string name = "ucac_t";
+            ds.exec(sprintf("create table %s (k integer not null, v integer, %s)", name, key));
+            ds.commit();
+            on_exit {
+                ds.rollback();
+                ds.exec("drop table " + name);
+                ds.commit();
+            }
+            AbstractTable t = new Table(ds, name).getTable();
+            foreach hash<auto> st in (Strategies.pairIterator()) {
+                string desc = sprintf("%s: %s: %s", db, key, st.key);
+                t.del();
+                t.insert({"k": 1, "v": 1});
+                code upsert = t.getUpsertClosure({"k": 1, "v": 1}, st.value);
+                t.clear();
+                int rc1;
+                int rc2;
+                try {
+                    rc1 = upsert({"k": 1, "v": 2});
+                    rc2 = upsert({"k": 2, "v": 3});
+                    t.clear();
+                    upsert({"k": 2.0n, "v": 4});
+                } catch (hash<ExceptionInfo> ex) {
+                    fail(sprintf("%s: %s: %s", desc, ex.err, ex.desc));
+                }
+                hash<auto> rows = map {$1.k.toString(): $1.v.toInt()}, t.selectRows({"orderby": "k"});
+                switch (st.key) {
+                    case "insert-only":
+                        assertEq(AbstractTable::UR_Unchanged, rc1, desc + ": existing row");
+                        assertEq(AbstractTable::UR_Inserted, rc2, desc + ": new row");
+                        assertEq({"1": 1, "2": 3}, rows, desc);
+                        break;
+                    case "update-only":
+                        assertEq({"1": 2}, rows, desc);
+                        break;
+                    default:
+                        assertEq({"1": 2, "2": 4}, rows, desc);
+                        break;
+                }
+                ds.rollback();
+            }
+        }
+    }
+}
