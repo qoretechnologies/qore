@@ -4785,14 +4785,14 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         return false;
     }
 
-    // Keep the supported version range broad enough for installed qmods from
-    // earlier releases while rejecting artifacts newer than this runtime.
+    // Check the format before reading any section or running code from the artifact.
     if (header.version < QORE_AOT_BINARY_MIN_VERSION
             || header.version > QORE_AOT_BINARY_VERSION) {
         error = "unsupported binary format version " + std::to_string(header.version)
               + " (supported " + std::to_string(QORE_AOT_BINARY_MIN_VERSION) + "-"
               + std::to_string(QORE_AOT_BINARY_VERSION) + ")"
-              + "; please update your Qore installation";
+              + (header.version < QORE_AOT_BINARY_MIN_VERSION ? "; rebuild the artifact with this version of qcc"
+                  : "; please update your Qore installation");
         return false;
     }
 
@@ -14617,7 +14617,8 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
     if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::OBJ_METHOD_REF_EXPR));
-        writer.writeStringRef(omr->getMethodName().c_str());
+        // with the method resolved when parsing (qore#6680)
+        writer.writeStringRef(qore_aot_object_method_ref_name(omr).c_str());
         return classifyAndWriteExpr(writer, omr->getExp(), parent_locals, parent_globals,
             const_reverse_map);
     }
@@ -16309,7 +16310,57 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         }
     }
 
+    // the catch-exit depths and the catch-cleanup results of the function, by the position of their instruction in the
+    // written IR (qore#6733)
+    if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_CATCH_TABLES_VERSION) {
+        if (!qore_aot_write_ir_catch_tables(writer, func)) {
+            return false;
+        }
+    }
+
     return true;
+}
+
+// documented in QoreAOTBinary.h
+bool qore_aot_write_ir_catch_tables(QoreAOTBinaryWriter& writer, const QoreIRFunction& func) {
+    // the written position of each instruction that a table refers to
+    std::unordered_map<const QoreIRInstruction*, std::pair<uint16_t, uint16_t>> pos;
+    for (size_t b = 0; b < func.blocks.size(); ++b) {
+        uint32_t written = 0;
+        for (const auto& inst : func.blocks[b]->instructions) {
+            if (func.catch_exit_depths.count(inst.get()) || func.catch_cleanup_results.count(inst.get())) {
+                if (written > UINT16_MAX) {
+                    qoreAOTSetExprSerializationError("the IR of function '" + func.name + "' has a catch cleanup "
+                        "beyond the instructions that a block can have in the AOT format");
+                    return false;
+                }
+                pos[inst.get()] = {static_cast<uint16_t>(b), static_cast<uint16_t>(written)};
+            }
+            written += inst->opcode == QoreIROpcode::PushTempMarkPair ? 2 : 1;
+        }
+    }
+    // sorted by position, so that the module does not depend on the order of the maps
+    auto writeTable = [&](const std::unordered_map<const QoreIRInstruction*, uint32_t>& table) -> bool {
+        std::vector<std::tuple<uint16_t, uint16_t, uint32_t>> entries;
+        entries.reserve(table.size());
+        for (const auto& i : table) {
+            auto p = pos.find(i.first);
+            // the entry of an instruction that a pass removed from the blocks, which never runs
+            if (p == pos.end()) {
+                continue;
+            }
+            entries.emplace_back(p->second.first, p->second.second, i.second);
+        }
+        std::sort(entries.begin(), entries.end());
+        writer.writeU32(static_cast<uint32_t>(entries.size()));
+        for (const auto& [block, inst, value] : entries) {
+            writer.writeU16(block);
+            writer.writeU16(inst);
+            writer.writeU32(value);
+        }
+        return true;
+    };
+    return writeTable(func.catch_exit_depths) && writeTable(func.catch_cleanup_results);
 }
 
 // ---- Namespace Deserialization (Phase 4) ----

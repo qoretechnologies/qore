@@ -103,6 +103,20 @@ class TempReleasePointsTest inherits QUnit::Test {
             "foldl over a pipeline with an operator");
         assertTrue(out =~ /\nfoldl pipeline single element:\n  dtor fps\n  mark fps\n/,
             "foldl over a pipeline with one element");
+        string expected = "";
+        foreach string name in ("field", "nested", "write", "single", "hash", "coalesce", "hashmap",
+                "foldmap", "ternmap", "ternmap", "ternfold", "ternfold", "automap", "autosel", "autofold") {
+            expected += "  dtor a\n";
+            if (name != "single") {
+                expected += "  dtor b\n";
+            }
+            expected += sprintf("  mark %s\n", name);
+        }
+        expected += "  dtor top\n  mark top\n  dtor value\n  mark param\n  mark param\n  dtor ref-param\n"
+            + "  mark local\n  dtor ref\n  dtor plain\n  mark local\n  dtor ref\n";
+        expected += "  dtor weak\n  mark ELEMENT-RELEASE\n  dtor next\n"
+            + "  dtor weak\n  dtor next\n  mark ELEMENT-RELEASE\n";
+        assertTrue(out.endsWith(expected), "functional source, result and reference-read lifetimes");
     }
 
     #! runs the script in every execution mode and on the IR tier

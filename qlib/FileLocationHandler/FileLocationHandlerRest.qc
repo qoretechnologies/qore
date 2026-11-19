@@ -208,14 +208,15 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
         if (!exists val) {
             return "";
         }
+        string desc = AbstractFileLocationHandler::getRequestedLocation(scheme, location);
         if (val.typeCode() == NT_STRING) {
-            return val;
+            return AbstractFileLocationHandler::checkTextEncoding(val, opts.encoding_errors, desc);
         }
         if (!val.strp()) {
-            throw "REST-DATA-ERROR", sprintf("%s://%s returned data of type %y; expecting \"string\"",
-                scheme, AbstractFileLocationHandler::removeUserInfo(location), val.fullType());
+            throw "REST-DATA-ERROR", sprintf("%s returned data of type %y; expecting \"string\"", desc,
+                val.fullType());
         }
-        return val.toString();
+        return AbstractFileLocationHandler::checkTextEncoding(val.toString(), opts.encoding_errors, desc);
     }
 
     #! Retrieves a binary file from the given location
@@ -236,8 +237,8 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
             return val;
         }
         if (!val.strp()) {
-            throw "REST-DATA-ERROR", sprintf("%s://%s returned data of type %y; expecting \"binary\" or \"string\"",
-                scheme, AbstractFileLocationHandler::removeUserInfo(location), val.fullType());
+            throw "REST-DATA-ERROR", sprintf("%s returned data of type %y; expecting \"binary\" or \"string\"",
+                AbstractFileLocationHandler::getRequestedLocation(scheme, location), val.fullType());
         }
         return val.toString().toBinary();
     }
@@ -330,7 +331,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making a REST call as well
     */
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
-        return new StreamReader(getBinaryStreamImpl(scheme, location, opts));
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), NOTHING, opts.encoding_errors);
     }
 
     #! Retrieves a binary file from the given location
@@ -410,7 +411,9 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
     /** @return supported read options
     */
     private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
-        return bound_client ? BoundLocationOpts : RestClientLocationOpts;
+        return (bound_client ? BoundLocationOpts : RestClientLocationOpts) + {
+            "encoding_errors": EncodingErrorsOption,
+        };
     }
 
     #! Gets supported write options
@@ -459,7 +462,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
         # the request path is everything after the authority, including any query
         *list<*string> parts = (url =~ x/^([a-z]+:\/\/[^\/?#]*)([^#]*)/);
         string path = HttpIoSupport::encodeRequestTarget(parts[1]);
-        hash<auto> client_opts = opts - ("method", "error_passthru") + {
+        hash<auto> client_opts = opts - ("method", "error_passthru", "encoding_errors") + {
             "url": parts[0],
             # the client follows redirects; the handler checks the response status itself
             "error_passthru": True,

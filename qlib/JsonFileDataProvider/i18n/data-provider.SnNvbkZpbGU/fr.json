@@ -83,6 +83,42 @@
           "source": "US-ASCII encoding",
           "message": "Encodage US-ASCII"
         },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Erreurs d'encodage"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Ce que donne un texte qui n'est pas valide dans son encodage de caractères"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as `ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+          "message": "Ce que donne un texte d'entrée qui n'est pas valide dans son encodage de caractères : `raise` (la valeur par défaut) lève une erreur `INVALID-ENCODING`, `latin1` lit le texte non valide (une ligne entière, pour les données lues par ligne) en `ISO-8859-1`, et `keep` le conserve dans l'encodage d'entrée sans vérification"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.display_name": {
+          "source": "Raise an Error",
+          "message": "Lever une erreur"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.desc": {
+          "source": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+          "message": "Lever une erreur `INVALID-ENCODING` pour un texte non valide ; la valeur par défaut"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.display_name": {
+          "source": "Read as Latin-1",
+          "message": "Lire en Latin-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.desc": {
+          "source": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its bytes",
+          "message": "Lire le texte non valide (une ligne entière, pour les données lues par ligne) en `ISO-8859-1`, avec ses octets"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.display_name": {
+          "source": "Keep Without a Check",
+          "message": "Conserver sans vérification"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.desc": {
+          "source": "Keep the text in the input encoding as read, without a check",
+          "message": "Conserver le texte dans l'encodage d'entrée tel qu'il a été lu, sans vérification"
+        },
         "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
           "source": "Read JSON Inline Data",
           "message": "Lire des données JSON en ligne"

@@ -21,6 +21,10 @@ extern const TypedHashDecl* hashdeclTokenizerModelInputBatch;
     Supports BPE (GPT-2, RoBERTa, Llama), WordPiece (BERT), and
     Unigram (T5, XLM-RoBERTa) tokenization models.
 
+    The tokenizer works in UTF-8: the text given to it (the text to encode, text pairs, pre-tokenized words, tokens,
+    added tokens and chat messages) is converted to UTF-8 whatever its encoding, and the strings that it returns
+    (decoded text, tokens and chat templates) are tagged UTF-8.  Offsets are byte offsets in the text in UTF-8.
+
     @par Example:
     @code{.py}
     %requires json
@@ -50,9 +54,12 @@ HFTokenizer::constructor(hash<auto> config) {
 }
 
 //! Encodes text to token IDs
-/** @param text the input text to tokenize
+/** @param text the input text to tokenize; it is converted to UTF-8
 
     @return a hash with input_ids, token_type_ids, attention_mask, tokens
+
+    @throw PRETOKENIZER-MATCH-ERROR a regular expression of a \c Split pre-tokenizer cannot be matched against the
+    text (ex: a string tagged UTF-8 that is not valid UTF-8)
 */
 hash<auto> HFTokenizer::encode(string text) {
     return tok->encode(text, nullptr, true, xsink);
@@ -102,8 +109,8 @@ string HFTokenizer::idToToken(int id) [flags=CONSTANT] {
     @param token the token string
     @return the token ID, or -1 if not found
 */
-int HFTokenizer::tokenToId(string token) [flags=CONSTANT] {
-    return tok->tokenToId(token);
+int HFTokenizer::tokenToId(string token) [flags=RET_VALUE_ONLY] {
+    return tok->tokenToId(token, xsink);
 }
 
 //! Returns the full vocabulary as a token-to-ID hash

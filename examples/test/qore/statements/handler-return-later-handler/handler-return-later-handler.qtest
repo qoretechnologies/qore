@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of returns in handlers, threads
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HandlerReturnLaterHandlerTest
+
+#! A handler's return is kept when a later handler of its block completes normally (#6677)
+/** A return in an on_exit, on_success or on_error handler returns from the function, also when the block ends
+    without a return or is left by a break or continue, after the remaining handlers of the block; a handler that
+    completes normally after it keeps the value and a later handler's return replaces it.  The AST interpreter took
+    the request of the last handler run, so a handler that completed normally after one that returned discarded the
+    return, and the function went on (as did closures, which the other execution modes run on the AST interpreter);
+    native code and the IR interpreter returned the value.  HandlerReturnLaterHandler.q gives the same output in
+    every execution mode and compiled with qcc, with the release order of the values and of the locals.  Its closures
+    run on the AST tier, so it is not run on the IR tier of tiered execution (ExecModeHarness::run_ir_tier()).
+*/
+class HandlerReturnLaterHandlerTest inherits QUnit::Test {
+    public {
+        #! the output of HandlerReturnLaterHandler.q
+        const Expected = "issue: [\"first\", \"second\", \"rv:handler\"]
+issue: [\"first\", \"second\", \"rv:handler\"]
+blk: [\"body\", \"first\", \"second\", \"~blk-b\", \"~blk-l\", \"rv:blk-h\", \"~blk-h\"]
+blk: [\"body\", \"first\", \"second\", \"~blk-b\", \"~blk-l\", \"rv:blk-h\", \"~blk-h\"]
+top: [\"body\", \"first\", \"second\", \"~top-l\", \"rv:top-h\", \"~top-h\"]
+top: [\"body\", \"first\", \"second\", \"~top-l\", \"rv:top-h\", \"~top-h\"]
+th1: [\"h1\", \"h2\", \"h3\", \"rv:th1\", \"~th1\"]
+th1: [\"h1\", \"h2\", \"h3\", \"rv:th1\", \"~th1\"]
+th2: [\"h1\", \"h2\", \"h3\", \"rv:th2\", \"~th2\"]
+th2: [\"h1\", \"h2\", \"h3\", \"rv:th2\", \"~th2\"]
+th3: [\"h1\", \"h2\", \"h3\", \"rv:th3\", \"~th3\"]
+th3: [\"h1\", \"h2\", \"h3\", \"rv:th3\", \"~th3\"]
+rr: [\"h1\", \"h2\", \"h3\", \"~rr-earlier\", \"h4\", \"rv:rr-later\", \"~rr-later\"]
+rr: [\"h1\", \"h2\", \"h3\", \"~rr-earlier\", \"h4\", \"rv:rr-later\", \"~rr-later\"]
+so: [\"success\", \"exit\", \"rv:so-s\", \"~so-s\"]
+so: [\"success\", \"exit\", \"rv:so-s\", \"~so-s\"]
+os: [\"exit\", \"success\", \"rv:os-x\", \"~os-x\"]
+os: [\"exit\", \"success\", \"rv:os-x\", \"~os-x\"]
+oe: [\"exit\", \"rv:oe-x\", \"~oe-x\"]
+oe: [\"exit\", \"rv:oe-x\", \"~oe-x\"]
+ox: [\"exit\", \"error\", \"~ox-b\", \"~ox-x\", \"catch:OX\", \"rv:ox-after\", \"~ox-after\"]
+ox: [\"exit\", \"error\", \"~ox-b\", \"~ox-x\", \"catch:OX\", \"rv:ox-after\", \"~ox-after\"]
+eo: [\"error\", \"exit\", \"~eo-e\", \"catch:EO\", \"rv:eo-after\", \"~eo-after\"]
+eo: [\"error\", \"exit\", \"~eo-e\", \"catch:EO\", \"rv:eo-after\", \"~eo-after\"]
+lt: [\"first\", \"throw\", \"~lt-x\", \"catch:LT\", \"rv:lt-after\", \"~lt-after\"]
+lt: [\"first\", \"throw\", \"~lt-x\", \"catch:LT\", \"rv:lt-after\", \"~lt-after\"]
+ltf: [\"first\", \"h2\", \"throw\", \"~ltf-x\", \"ex:LTF\"]
+ltf: [\"first\", \"h2\", \"throw\", \"~ltf-x\", \"ex:LTF\"]
+lte: [\"first\", \"throw\", \"error\", \"~lte-x\", \"catch:LTE\", \"rv:lte-after\", \"~lte-after\"]
+lte: [\"first\", \"throw\", \"error\", \"~lte-x\", \"catch:LTE\", \"rv:lte-after\", \"~lte-after\"]
+nb: [\"i1\", \"i2\", \"o1\", \"o2\", \"rv:nb-inner\", \"~nb-inner\"]
+nb: [\"i1\", \"i2\", \"o1\", \"o2\", \"rv:nb-inner\", \"~nb-inner\"]
+nr: [\"i1\", \"i2\", \"o1\", \"~nr-inner\", \"o2\", \"rv:nr-outer\", \"~nr-outer\"]
+nr: [\"i1\", \"i2\", \"o1\", \"~nr-inner\", \"o2\", \"rv:nr-outer\", \"~nr-outer\"]
+lc: [\"first0\", \"second0\", \"~lc-b0\", \"first1\", \"second1\", \"~lc-b1\", \"rv:lc-h\", \"~lc-h\"]
+lc: [\"first0\", \"second0\", \"~lc-b0\", \"first1\", \"second1\", \"~lc-b1\", \"rv:lc-h\", \"~lc-h\"]
+lb: [\"first0\", \"second0\", \"first1\", \"second1\", \"rv:lb-h\", \"~lb-h\"]
+lb: [\"first0\", \"second0\", \"first1\", \"second1\", \"rv:lb-h\", \"~lb-h\"]
+lw: [\"first0\", \"second0\", \"first1\", \"second1\", \"first2\", \"second2\", \"rv:lw-h\", \"~lw-h\"]
+lw: [\"first0\", \"second0\", \"first1\", \"second1\", \"first2\", \"second2\", \"rv:lw-h\", \"~lw-h\"]
+m: [\"first\", \"second\", \"rv:m-h\", \"~m-h\"]
+m: [\"first\", \"second\", \"rv:m-h\", \"~m-h\"]
+sm: [\"first\", \"second\", \"rv:sm-h\", \"~sm-h\"]
+sm: [\"first\", \"second\", \"rv:sm-h\", \"~sm-h\"]
+cl: [\"first\", \"second\", \"rv:cl-h\", \"~cl-h\"]
+cl: [\"first\", \"second\", \"rv:cl-h\", \"~cl-h\"]
+hc: [\"first\", \"first\", \"second\", \"second\", \"rv:cl-h\", \"~cl-h\"]
+hc: [\"first\", \"first\", \"second\", \"second\", \"rv:cl-h\", \"~cl-h\"]
+bg: [\"first\", \"second\", \"~bg-h\", \"after\", \"rv:done\"]
+bg: [\"first\", \"second\", \"~bg-h\", \"after\", \"rv:done\"]
+te: [\"first\", \"second\", \"~te-h\", \"rv:done\"]
+te: [\"first\", \"second\", \"~te-h\", \"rv:done\"]
+thx: [\"first\", \"second\", \"third\", \"~thx-h\", \"rv:done\"]
+thx: [\"first\", \"second\", \"third\", \"~thx-h\", \"rv:done\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("HandlerReturnLaterHandlerTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/HandlerReturnLaterHandler.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a handler's return and later handlers", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a handler's return and later handlers", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-handler-return-later-handler-");
+        string exe = tmp.path + DirSep + "handler-return-later-handler";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output", opt));
+    }
+}

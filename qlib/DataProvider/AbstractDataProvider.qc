@@ -259,6 +259,49 @@ public const OI_Requires = "requires";
 */
 public const OptionInteractionsKey = "interactions";
 
+#! The \c encoding_errors option of the data providers that read text
+/** Says what input text that is not valid in its @ref character_encoding "character encoding" gives; the value is
+    passed to the text reader (ex: @ref Qore::StreamReader "StreamReader" or
+    @ref Qore::InputStreamLineIterator "InputStreamLineIterator"), which checks it; one of the
+    @ref encoding_errors_constants:
+    - \c "raise" (the default): raises an \c INVALID-ENCODING exception
+    - \c "latin1": the text that is not valid (a whole line, for data read by line) is read as \c ISO-8859-1, with
+      its bytes
+    - \c "keep": the text is kept in the encoding of the input as read, without a check
+
+    The data providers that read text, such as the CSV, fixed-length, NDJSON, JSON file, EDIFACT and HL7 v2 read
+    data providers, declare it as a constructor option; see @ref encoding_errors
+
+    @since %DataProvider 3.12
+*/
+public const EncodingErrorsOptionInfo = <DataProviderOptionInfo>{
+    "display_name": "Encoding Errors",
+    "short_desc": "What text that is not valid in its character encoding gives",
+    "type": AbstractDataProviderTypeMap."string",
+    "desc": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an "
+        "`INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as "
+        "`ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+    "default_value": ENCODING_ERRORS_RAISE,
+    "allowed_values": (
+        <AllowedValueInfo>{
+            "value": ENCODING_ERRORS_RAISE,
+            "display_name": "Raise an Error",
+            "desc": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+        },
+        <AllowedValueInfo>{
+            "value": ENCODING_ERRORS_LATIN1,
+            "display_name": "Read as Latin-1",
+            "desc": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its "
+                "bytes",
+        },
+        <AllowedValueInfo>{
+            "value": ENCODING_ERRORS_KEEP,
+            "display_name": "Keep Without a Check",
+            "desc": "Keep the text in the input encoding as read, without a check",
+        },
+    ),
+};
+
 #! A machine-readable interaction of an option with another option of the same data provider or action
 /** Interactions are kept in the option's \c metadata under @ref OptionInteractionsKey, so they are carried
     unchanged into action options and the data provider index without changing the option hashdecls.  They

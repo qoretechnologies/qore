@@ -229,6 +229,10 @@ module CsvUtil {
 
 
     @section csvutil_v1_12 Version 1.12
+    - the readers take the \c "encoding_errors" option, which says what a line that is not valid in its encoding gives:
+      \c "raise" (the default) raises \c INVALID-ENCODING, \c "latin1" reads it as \c ISO-8859-1, \c "keep" keeps
+      it without a check (see @ref abstractcsviterator_options and @ref encoding_errors)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
     - the CSV writers quote fields by type: the \c "quote_types" option gives the types of the fields that are always
       quoted (ex: strings, but not numbers or dates), the \c "quote" attribute of a field description overrides it
       for the field, and the \c "quote_null" option writes a field without a value (@ref nothing or \c NULL) as an

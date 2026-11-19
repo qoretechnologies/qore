@@ -44,8 +44,10 @@
 //! Private data for the Qore::BufferedStreamReader class.
 class BufferedStreamReader : public StreamReader {
 public:
-   DLLLOCAL BufferedStreamReader(ExceptionSink* xsink, InputStream* is, const QoreEncoding* encoding, int64 bufsize = DefaultStreamBufferSize) :
-      StreamReader(xsink, is, encoding),
+   DLLLOCAL BufferedStreamReader(ExceptionSink* xsink, InputStream* is, const QoreEncoding* encoding,
+         int64 bufsize = DefaultStreamBufferSize,
+         qore_encoding_errors_t encoding_errors = qore_encoding_errors_t::RAISE) :
+      StreamReader(xsink, is, encoding, encoding_errors),
       bufCapacity((size_t)bufsize),
       bufCount(0),
       buf(0) {
@@ -83,15 +85,19 @@ private:
 
         if (bufCount) {
             read = QORE_MIN(limit, bufCount);
-            memmove(destPtr, buf, read);
+            memcpy(destPtr, data(), read);
             if (limit < bufCount) {
                 assert(limit == read);
                 shiftBuffer(limit);
+                noteConsumed(destPtr, limit);
                 return limit;
             }
             bufCount = 0;
-            if (!(limit - read))
+            bufPos = 0;
+            if (!(limit - read)) {
+                noteConsumed(destPtr, read);
                 return read;
+            }
         }
 
         // read in data directly into the target buffer until the amount left to read >= 1/2 the buffer capacity
@@ -100,12 +106,16 @@ private:
             if (to_read <= (bufCapacity / 2))
                 break;
             int64 rc = in->read(destPtr + read, to_read, xsink);
-            if (*xsink)
+            if (*xsink) {
+                // the bytes copied before the error are consumed
+                noteConsumed(destPtr, read);
                 return -1;
+            }
             if (!rc) {
                 if (require_all) {
                     xsink->raiseException("END-OF-STREAM-ERROR", "there is not enough data available in the stream; "
                                           QLLD " bytes were requested, and " QLLD " were read", (int64)limit, (int64)read);
+                    noteConsumed(destPtr, read);
                     return -1;
                 }
                 break;
@@ -122,23 +132,28 @@ private:
 
             assert(!bufCount);
             int64 rc = fillBuffer(bufCapacity, xsink);
-            if (*xsink)
+            if (*xsink) {
+                // the bytes copied before the error are consumed
+                noteConsumed(destPtr, read);
                 return -1;
+            }
             if (!rc) {
                 if (require_all) {
                     xsink->raiseException("END-OF-STREAM-ERROR", "there is not enough data available in the stream; " QLLD " bytes were requested, and " QLLD " were read", (int64)limit, (int64)read);
+                    noteConsumed(destPtr, read);
                     return -1;
                 }
                 break;
             }
             assert(rc > 0);
             size_t len = QORE_MIN((size_t)rc, to_read);
-            memcpy(destPtr + read, buf, len);
+            memcpy(destPtr + read, data(), len);
             shiftBuffer(len);
             read += len;
             assert(((limit - read) && !bufCount) || !(limit - read));
         }
 
+        noteConsumed(destPtr, read);
         return read;
     }
 
@@ -156,7 +171,7 @@ private:
             return -1;
          }
       }
-      p = reinterpret_cast<const unsigned char*>(buf);
+      p = reinterpret_cast<const unsigned char*>(data());
       len = QORE_MIN(bufCount, size);
       return 0;
    }
@@ -177,7 +192,7 @@ private:
          }
       }
       // the byte is returned as an unsigned value, so that 0xff is not taken for the end of the stream
-      return static_cast<unsigned char>(buf[0]);
+      return static_cast<unsigned char>(data()[0]);
    }
 
    //! Copies the next bytes of the stream to a buffer without reading them: they stay in the buffer
@@ -196,95 +211,68 @@ private:
          }
       }
       size_t rv = QORE_MIN(len, bufCount);
-      memcpy(dest, buf, rv);
+      memcpy(dest, data(), rv);
       return rv;
+   }
+
+   //! Gives bytes read back to the reader, so that they are the start of the next read
+   DLLLOCAL virtual void unreadData(const char* data, size_t len) override {
+      if (!len) {
+         return;
+      }
+      if (bufPos >= len) {
+         // there is room before the data
+         bufPos -= len;
+      } else {
+         // the bytes are put at the start of the buffer, which is made larger if necessary
+         size_t cap = QORE_MAX(bufCapacity, bufCount + len);
+         char* nbuf = new char[cap + 1];
+         memcpy(nbuf + len, buf + bufPos, bufCount);
+         delete [] buf;
+         buf = nbuf;
+         bufCapacity = cap;
+         bufPos = 0;
+      }
+      memcpy(buf + bufPos, data, len);
+      bufCount += len;
+      consumed -= len;
+   }
+
+   //! returns the start of the data in the buffer
+   DLLLOCAL char* data() const {
+      return buf + bufPos;
    }
 
    //! returns 0 = no data read (end of stream or error), > 0 = number of bytes read, increments bufCount
    DLLLOCAL int64 fillBuffer(size_t bytes, ExceptionSink* xsink) {
       assert(bytes);
       assert(bufCount + bytes <= bufCapacity);
-      int64 rc = in->read(buf + bufCount, bytes, xsink);
+      // the data is moved to the start of the buffer only when the bytes do not fit after it
+      if (bufPos + bufCount + bytes > bufCapacity) {
+         memmove(buf, buf + bufPos, bufCount);
+         bufPos = 0;
+      }
+      int64 rc = in->read(buf + bufPos + bufCount, bytes, xsink);
       if (*xsink)
          return 0;
       bufCount += rc;
       return rc;
    }
 
-   DLLLOCAL bool prepareEnoughData(size_t bytes, ExceptionSink* xsink) {
-      if (bytes > bufCapacity) {
-         xsink->raiseException("STREAM-BUFFER-ERROR", "a read of " QLLD " bytes was attempted on a BufferedStreamReader with a capacity of " QLLD " bytes", (int64)bytes, (int64)bufCapacity);
-         return false;
-      }
-      if (bufCount < bytes) {
-         while (true) {
-            int64 rc = fillBuffer(bytes - bufCount, xsink);
-            if (*xsink) {
-               return false;
-            }
-            if (rc == 0) {
-               xsink->raiseException("END-OF-STREAM-ERROR", "a read of " QLLD " bytes cannot be performed because there is not enough data available in the stream to satisfy the request", (int64)bytes);
-               return false;
-            }
-            if (bufCount >= bytes)
-               break;
-         }
-      }
-      return true;
-   }
-
+   //! removes the given number of bytes from the start of the data in the buffer
+   /** The bytes are not moved: the start of the data is advanced, so that a read of a few bytes (ex: a line read a
+       byte or a code unit at a time) does not move the rest of the buffer
+   */
    DLLLOCAL void shiftBuffer(size_t bytes) {
       assert(bytes <= bufCount && bytes > 0);
       bufCount -= bytes;
-      memmove(buf, buf+bytes, bufCount);
-   }
-
-   //! Try to find EOL in buffer and write it's size to eolLen parameter.
-   /** @param eol end-of-line string
-       @param eolLen size of eol in bytes
-       @param endOfStream whether this is end of the stream
-    */
-   DLLLOCAL const char* findEolInBuffer(const QoreStringNode* eol, size_t& eolLen, bool endOfStream, char& pmatch) const {
-      pmatch = '\0';
-      if (eol) {
-         const char* p = strstr(buf, eol->getBuffer());
-         eolLen = eol->strlen();
-         return p;
-      }
-      else {
-         const char* p = strpbrk(buf, "\n\r"); // Find first occurence of '\n' or '\r'.
-         if (p) { // Found end of line.
-            if (*p == '\n') {
-               eolLen = 1;
-            }
-            else { // *p == '\r'
-               if (*(p+1) == '\n') {
-                  eolLen = 2;
-               }
-               // '\r' is the last character in the buffer, '\n' could be next in the stream.
-               // Unless this is the end of the stream.
-               else if (static_cast<size_t>(p - buf + 1) == bufCount) {
-                  eolLen = 1;
-                  if (!endOfStream) {
-                     pmatch = *p;
-                     p = 0;
-                  }
-               }
-               else {
-                  eolLen = 1;
-               }
-            }
-         }
-         else {
-            eolLen = 0;
-         }
-         return p;
-      }
+      bufPos = bufCount ? bufPos + bytes : 0;
    }
 
 private:
    size_t bufCapacity; //! Total capacity of buf.
    size_t bufCount; //! Current size of data in buf.
+   size_t bufPos = 0; //! The offset of the data in buf.
    char* buf;
 };
 
