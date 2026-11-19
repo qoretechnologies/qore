@@ -1466,6 +1466,33 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     return static_cast<bool>(governing);
 }
 
+//! Returns the @ref sandbox_isolation_domains "isolation domain" (the tenant) of the code that calls the library
+/** Library code that keeps process-wide state for its callers (a registry, a cache) uses it to keep the entries of
+    each tenant apart: the domain of the sandbox that governs the calling code, also when that code calls the library
+    through other library code.
+
+    @return the isolation domain of the sandbox that governs the calling code, or @ref nothing if no sandbox governs
+    it or its sandbox has no domain
+
+    @par Example:
+    @code{.py}
+# a cache whose entries one tenant never sees from another
+*string domain = SandboxManager::getCallerIsolationDomain();
+string key = sprintf("%s:%s", domain ?? "", name);
+    @endcode
+
+    @see @ref Qore::SandboxManager::setIsolationDomain() "setIsolationDomain()"
+
+    @since %Qore 3.0
+*/
+static *string SandboxManager::getCallerIsolationDomain() [flags=RET_VALUE_ONLY] {
+    std::string domain = qore_caller_isolation_domain();
+    if (domain.empty()) {
+        return QoreValue();
+    }
+    return new QoreStringNode(domain.c_str(), QCS_UTF8);
+}
+
 //! Returns @ref True if the code that calls into the library is restricted from any of the given functional domains
 /** A module is a capability: its code runs with its own %Program's options, whatever the restrictions of the code
     that calls it.  Library code that performs an operation of a functional domain on behalf of its caller, such as

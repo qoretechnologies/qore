@@ -1262,6 +1262,11 @@ int QoreSandboxManager::setIsolationDomain(const char* domain, ExceptionSink* xs
     return 0;
 }
 
+std::string qore_caller_isolation_domain() {
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    return governing ? governing->getIsolationDomain() : std::string();
+}
+
 std::string QoreSandboxManager::getIsolationDomain() const {
     if (const auto* managers = QoreSandboxComposition::members(this)) {
         for (const QoreSandboxManager* member : *managers) {

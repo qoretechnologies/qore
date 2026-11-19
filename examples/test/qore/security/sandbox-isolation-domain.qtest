@@ -40,6 +40,9 @@ auto sub call(code c, *softlist<auto> args) {
 code sub returning(code c) {
     return code sub () { return c; };
 }
+*string sub caller_domain() {
+    return Qore::SandboxManager::getCallerIsolationDomain();
+}
 *string sub new_manager_domain() {
     Qore::SandboxManager m();
     return m.getIsolationDomain();
@@ -186,6 +189,11 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
 
         # sandboxed code cannot set a domain, also not of a sandbox that it created
         assertEq("SANDBOX-ACCESS-ERROR", a.callFunction("set_domain", new SandboxManager(), "b"));
+        # the domain of the calling code: the tenant's, also through trusted library code that it calls; none for the
+        # host
+        assertEq("a", a.callFunction("caller_domain"));
+        assertEq("b", b.callFunction("call", \SandboxManager::getCallerIsolationDomain()));
+        assertNothing(SandboxManager::getCallerIsolationDomain());
         # a sandbox that sandboxed code creates belongs to the tenant of that code
         assertEq("a", a.callFunction("new_manager_domain"));
         assertEq("b", b.callFunction("new_manager_domain"));

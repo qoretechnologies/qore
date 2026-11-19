@@ -1187,6 +1187,15 @@ DLLEXPORT bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::P
 */
 DLLEXPORT bool qore_caller_restricts_domain(int64 domain);
 
+//! Returns the isolation domain (the tenant) of the code that calls the library, or an empty string
+/** The domain of the sandbox that governs the calling code (see QoreSandboxManager::setIsolationDomain()), also when
+    that code calls the library through other library code; empty if no sandbox governs it or its sandbox has no
+    domain.  Library code that keeps process-wide state for its callers uses it to keep each tenant's entries apart.
+
+    @since %Qore 3.0
+*/
+DLLEXPORT std::string qore_caller_isolation_domain();
+
 //! defined if qore_caller_restricts_domain() is available
 #define QORE_HAVE_CALLER_RESTRICTS_DOMAIN 1
 
