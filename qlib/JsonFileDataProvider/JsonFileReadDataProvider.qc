@@ -34,7 +34,9 @@ public namespace JsonFileDataProvider {
     - An array of non-object values: each element is wrapped in \c {"value": element}
 
     The text read from a file or a stream is checked in its encoding: the \c encoding_errors option says what text
-    that is not valid gives (\c "raise", the default, raises \c INVALID-ENCODING; see @ref encoding_errors)
+    that is not valid gives (\c "raise", the default, raises \c INVALID-ENCODING; see @ref encoding_errors); text
+    kept with \c "keep" is parsed by @ref Qore::Json::parse_json() "parse_json()", which raises \c INVALID-ENCODING
+    for it
 
     @par Example
     @code{.py}

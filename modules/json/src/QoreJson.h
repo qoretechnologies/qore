@@ -63,7 +63,18 @@
 
     @since %Qore 3.0
 */
-DLLLOCAL QoreValue parse_json(const QoreString* str, ExceptionSink* xsink);
+//! parses JSON text
+/** The text must be valid in its encoding (qore#6604): text that is not raises \c INVALID-ENCODING with \a where and
+    \a what in its description; text in a multi-byte encoding other than UTF-8 is converted to UTF-8 first, as the
+    parser works on the bytes of the text, and its strings are UTF-8
+
+    @param str the JSON text
+    @param xsink for exceptions
+    @param where the function or method that parses the text, for an \c INVALID-ENCODING exception
+    @param what what the text is, for an \c INVALID-ENCODING exception
+*/
+DLLLOCAL QoreValue parse_json(const QoreString* str, ExceptionSink* xsink, const char* where = "parse_json()",
+        const char* what = "JSON text");
 
 //! serializes a %Qore value to a new JSON string
 /** @param data the value to serialize
