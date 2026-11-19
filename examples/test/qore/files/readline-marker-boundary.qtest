@@ -36,9 +36,24 @@ class ReadLineMarkerBoundaryTest inherits QUnit::Test {
     private {
         TmpDir tmp("readline-marker-boundary-");
         int n = 0;
+        #! the cases whose encoding the iconv of the platform can encode the text and the marker in
+        list<list<string>> cases = ();
+        #! why the other cases are skipped
+        list<string> lacking = ();
     }
 
     constructor() : Test("readLine() marker at a character boundary", "1.0", \ARGV) {
+        # File::readLine() and StreamReader::readLine() convert the marker to the encoding of the text, and the test
+        # writes its text in that encoding: the iconv of some platforms (musl's) can decode Big5 but not encode it
+        foreach list<string> c in (Cases) {
+            *string reason = iconvCannotEncode(c[1] + c[2], c[0]);
+            if (reason) {
+                lacking += reason;
+            } else {
+                cases += (c,);
+            }
+        }
+        addTestCase("the encodings of the platform's iconv", \iconvEncodings());
         addTestCase("the trail bytes are the markers", \trailBytes());
         addTestCase("File::readLine() with a marker", \fileReadLine());
         addTestCase("File::readLine() with a marker of more than one character", \fileReadLineLongMarker());
@@ -47,6 +62,25 @@ class ReadLineMarkerBoundaryTest inherits QUnit::Test {
         addTestCase("invalid sequences of encodings with characters of more than two bytes", \invalidSequences());
         addTestCase("valid characters of more than two bytes", \longCharacters());
         set_return_value(main());
+    }
+
+    #! returns why the iconv of the platform cannot encode the text in the encoding, or nothing if it can
+    static *string iconvCannotEncode(string text, string enc) {
+        try {
+            return convert_encoding(text, enc).empty() ? sprintf("%s: the text converts to nothing", enc) : NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s: %s: %s", enc, ex.err, ex.desc);
+        }
+    }
+
+    #! the cases run with the encodings that the iconv of the platform has; the others are skipped with the reason
+    iconvEncodings() {
+        foreach list<string> c in (cases) {
+            assertEq(c[1] + c[2], convert_encoding(convert_encoding(c[1] + c[2], c[0]), "UTF-8"), c[0]);
+        }
+        if (lacking) {
+            testSkip("the iconv of the platform cannot encode: " + lacking.join("; "));
+        }
     }
 
     #! writes the given bytes to a new file and returns its path
@@ -76,7 +110,7 @@ class ReadLineMarkerBoundaryTest inherits QUnit::Test {
 
     #! the test is about characters whose second byte is the marker
     trailBytes() {
-        foreach list<string> c in (Cases) {
+        foreach list<string> c in (cases) {
             binary b = bytes(c[1], c[0]);
             assertEq(2, b.size(), c[0]);
             assertEq(bytes(c[2], c[0]), b.substr(1), c[0] + " " + c[1]);
@@ -84,7 +118,7 @@ class ReadLineMarkerBoundaryTest inherits QUnit::Test {
     }
 
     fileReadLine() {
-        foreach list<string> c in (Cases) {
+        foreach list<string> c in (cases) {
             string enc = c[0];
             string ch = c[1];
             string marker = c[2];
@@ -109,7 +143,7 @@ class ReadLineMarkerBoundaryTest inherits QUnit::Test {
     }
 
     fileReadLineLongMarker() {
-        foreach list<string> c in (Cases) {
+        foreach list<string> c in (cases) {
             string enc = c[0];
             string ch = c[1];
             string marker = c[2];
@@ -128,7 +162,7 @@ class ReadLineMarkerBoundaryTest inherits QUnit::Test {
     }
 
     parity() {
-        foreach list<string> c in (Cases) {
+        foreach list<string> c in (cases) {
             string enc = c[0];
             string ch = c[1];
             string marker = c[2];
