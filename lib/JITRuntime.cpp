@@ -5279,6 +5279,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
             return toBits(QoreValue());
         }
     }
+    // the constructor, destructor and copy method of the object's class or of a base class, as in
+    // ParseObjectMethodReferenceNode::makeReferenceForClass() (qore#6783)
+    if (qore_class_private::checkReferenceable(*method, xsink)) {
+        return toBits(QoreValue());
+    }
 
     if (access > Public && !qore_class_private::runtimeCheckPrivateClassAccess(*obj_class)) {
         // for an object of the declared class, the method resolved for it when parsing, as for a call of the method
@@ -24545,6 +24550,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot_v2(const char* cl
     if (!method) {
         xsink->raiseException("BACKGROUND-ERROR", "cannot resolve method '%s' on class '%s'",
             method_name, method_cls->name.c_str());
+        return toBits(QoreValue());
+    }
+    // as for a call of the method (qore_class_private::getMethodForEval()), also when a base class declares it
+    // (qore#6783)
+    if (qore_class_private::isConstructorOrDestructor(*method)) {
+        xsink->raiseException("ILLEGAL-EXPLICIT-METHOD-CALL", "explicit calls to ::%s() methods are not allowed",
+            method->getName());
         return toBits(QoreValue());
     }
 

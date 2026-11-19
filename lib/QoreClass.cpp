@@ -7111,8 +7111,9 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
 
     //printd(5, "QoreClass::getMethodForEval() %s::%s() found method %p class %s\n", name.c_str(), nme, w, w->getClassName());
 
-    // check for illegal explicit call
-    if (w == constructor || w == destructor) {
+    // check for illegal explicit call: the constructor or destructor of the class that declares the method, which
+    // can be a base class of this class, as for a destructor that only a base class declares (qore#6783)
+    if (qore_class_private::isConstructorOrDestructor(*w)) {
         xsink->raiseException("ILLEGAL-EXPLICIT-METHOD-CALL", "explicit calls to ::%s() methods are not allowed", nme);
         return nullptr;
     }

@@ -1640,6 +1640,11 @@ static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* 
 }
 
 static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, ClassAccess access, const char* name, const qore_class_private* pcls, ExceptionSink* xsink) {
+    // the constructor, destructor and copy method run only when an object is created, deleted or copied, also when
+    // a base class declares them (qore#6783)
+    if (qore_class_private::checkReferenceable(*meth, xsink)) {
+        return QoreValue();
+    }
     if (!meth->isStatic() && !self) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "non-static method \"%s\" is not accessible without an object "
             "context", name);
