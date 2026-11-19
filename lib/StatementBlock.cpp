@@ -403,7 +403,13 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                         {
                             // the handler is a statement of its own
                             QoreStatementTempScope temps(&obe_xsink);
-                            nrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
+                            // a handler that completes normally keeps the return of a handler that ran before it
+                            // (#6677), whose value a return in a later handler replaces (#5992); otherwise the block
+                            // takes the request of the last handler run (a debugger's break or continue: #6201)
+                            int hrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
+                            if (hrc || nrc != RC_RETURN) {
+                                nrc = hrc;
+                            }
                         }
                         if (type == OBE_Error) {
                             if (qore_es_private::get(obe_xsink)->rethrown) {

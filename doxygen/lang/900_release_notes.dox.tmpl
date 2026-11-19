@@ -2434,6 +2434,10 @@
       found in a class with that name that provides it, also when the name resolves first to another class with that
       name that does not (such as a class of the Qore namespace; see @ref class_member_scope_resolution); the
       reference raised a parse exception (issue #1527)
+    - code that the AST interpreter runs (in any execution mode) returns the value of a return in an
+      @ref on_exit "on_exit", @ref on_success "on_success" or @ref on_error "on_error" handler when a handler of the
+      same block that runs after it completes normally, as compiled code does, instead of going on with the function
+      (see @ref on_exit_return; issue #6677)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
