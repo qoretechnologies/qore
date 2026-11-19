@@ -4245,11 +4245,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         the arrays of its UNNEST, which the arguments are in, whatever the order of the columns
     */
     private hash<auto> getInsertSqlAndArgs(hash<auto> row) {
-        # check if this is a bulk insert (any value is a list)
+        # check if this is a bulk insert (a list for a column that is not an array column, or a list of lists for an
+        # array column) (issue #6695); a row without a list is not
         bool is_bulk = False;
         foreach auto v in (row.iterator()) {
             if (v.typeCode() == NT_LIST) {
-                is_bulk = True;
+                is_bulk = isBulkInsertRow(row);
                 break;
             }
         }
@@ -4257,6 +4258,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         if (!is_bulk || !hasPgsqlArrayBind()) {
             # the default SQL for single-row inserts or drivers without native typed-array binds
             return AbstractTable::getInsertSqlAndArgs(row);
+        }
+        # unnest() expands all dimensions of an array: a row of list values with a value of an array column is
+        # inserted row by row with the default SQL (issue #6695)
+        if (hasArrayColumnValue(row)) {
+            checkBulkInsertRow(row);
+            return AbstractTable::getInsertSqlAndArgs(row) + {"row_by_row": True};
         }
 
         # ensure columns are loaded
@@ -4442,6 +4449,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             case UpsertUpdateOnly:
                 # fall back to default row-by-row closure
                 return AbstractTable::getBulkUpsertClosure(example_row, upsert_strategy, opt);
+        }
+
+        # unnest() expands all dimensions of an array: the rows of a column whose values are arrays are upserted row by
+        # row (issue #6695)
+        if (hasArrayColumnValue(example_row)) {
+            return AbstractTable::getBulkUpsertClosure(example_row, upsert_strategy, opt);
         }
 
         # check upsert options
@@ -4788,6 +4801,73 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return False;
     }
 
+    #! returns @ref True "True" if the column is an array column (issue #6695)
+    private bool isArrayColumn(Columns cols, string col) {
+        *AbstractColumn c = cols{col} ?? cols{col.lwr()};
+        return c && c.native_type == "ARRAY";
+    }
+
+    #! returns @ref True "True" if the row has a value of an array column (issue #6695)
+    private bool hasArrayColumnValue(hash<auto> row) {
+        Columns cols = describe();
+        foreach string k in (keys row) {
+            if (isArrayColumn(cols, k)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! returns @ref True "True" if an insert row is a row of list values (bulk DML)
+    /** a list for a column that is not an array column, or a list of lists for an array column (whose value in a row
+        is a list) makes a row of list values (issue #6695)
+    */
+    private bool isBulkInsertRow(hash<auto> row) {
+        # a row without a list is not a row of list values
+        bool has_list;
+        foreach auto v in (row.iterator()) {
+            if (v.typeCode() == NT_LIST) {
+                has_list = True;
+                break;
+            }
+        }
+        if (!has_list) {
+            return False;
+        }
+        *Columns cols;
+        foreach hash<auto> i in (row.pairIterator()) {
+            if (i.value.typeCode() != NT_LIST) {
+                continue;
+            }
+            if (!cols) {
+                cols = describe();
+            }
+            if (!isArrayColumn(cols, i.key) || (i.value && i.value[0].typeCode() == NT_LIST)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! raises INSERT-ERROR if the lists of a row of list values (bulk DML) inserted row by row have different lengths
+    /** (issue #6695)
+    */
+    private checkBulkInsertRow(hash<auto> row) {
+        *int size;
+        foreach hash<auto> i in (row.pairIterator()) {
+            if (i.value.typeCode() != NT_LIST) {
+                continue;
+            }
+            if (!exists size) {
+                size = i.value.size();
+            } else if (i.value.size() != size) {
+                throw "INSERT-ERROR", sprintf("%s: the lists of a row of list values (bulk DML) must have the same "
+                    "length; column %y has %d element%s, the first list %d: %y", getDesc(), i.key, i.value.size(),
+                    i.value.size() == 1 ? "" : "s", size, row);
+            }
+        }
+    }
+
     #! returns a list of the given number of the value (issue #6691)
     private static list<auto> getRepeatedList(auto v, int size) {
         list<auto> rv = ();
@@ -5116,18 +5196,25 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     #! returns the types that the "delete_others" upsert option converts the values of numeric, date and time key columns to (issue #6635)
     /** the types are given by the catalog as the columns are declared (ex: \c "timestamp(0) without time zone",
-        \c "numeric(10,2)"), so that a bound value is rounded as the column rounds it when it stores it
+        \c "numeric(10,2)"), so that a bound value is rounded as the column rounds it when it stores it; an array key
+        column is compared with the value converted to its array type (ex: \c "integer[]"), as the driver binds a
+        list of integers as \c bigint[] (issue #6695)
     */
     private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
         # a bpchar key is compared as a bpchar without its length, which ignores the padding of the stored value and of
         # the input and, unlike a cast to the column's length, never truncates it (issue #6675)
+        # an array of a character type is compared as an array of the type without its length, which a cast would
+        # truncate each element to (issue #6695)
         *hash<auto> qh = ds.select("select a.attname, case when t.typname = 'bpchar' then 'bpchar' "
+            "when t.typname = '_bpchar' then 'bpchar[]' "
+            "when t.typcategory = 'A' and et.typcategory = 'S' then format_type(a.atttypid, null) "
             "else format_type(a.atttypid, a.atttypmod) end as type "
             "from pg_catalog.pg_attribute a join pg_catalog.pg_class c on (c.oid = a.attrelid) "
             "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) "
             "join pg_catalog.pg_type t on (t.oid = a.atttypid) "
+            "left join pg_catalog.pg_type et on (et.oid = t.typelem) "
             "where n.nspname = %v and c.relname = %v and a.attnum > 0 and not a.attisdropped "
-            "and (t.typcategory in ('N', 'D', 'T') or t.typname = 'bpchar')", schema, getRelationName());
+            "and (t.typcategory in ('N', 'D', 'T', 'A') or t.typname = 'bpchar')", schema, getRelationName());
         hash<string, string> rv;
         context (qh) {
             if (inlist(%attname, pkl)) {
