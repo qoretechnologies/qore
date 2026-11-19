@@ -19,9 +19,14 @@
 
 class ReadLineMarkerBoundaryTest inherits QUnit::Test {
     public {
-        #! encodings, a character whose trail byte is an ASCII character, and that character as the marker
+        #! encodings, a character whose trail byte has the value of a single-byte character, and that character as
+        #! the marker
+        /** In Shift_JIS, the byte 0x5c is the yen sign (JIS X 0201), which iconv converts to and from it; the
+            backslash is no character of Shift_JIS in macOS's iconv, and glibc's converts it to 0x5c but reads 0x5c as
+            the yen sign
+        */
         const Cases = (
-            ("Shift_JIS", "ソ", "\\"),
+            ("Shift_JIS", "ソ", "¥"),
             ("Big5", "功", "\\"),
             ("Big5", "弋", "|"),
             ("GBK", "丂", "@"),
@@ -74,7 +79,7 @@ class ReadLineMarkerBoundaryTest inherits QUnit::Test {
         foreach list<string> c in (Cases) {
             binary b = bytes(c[1], c[0]);
             assertEq(2, b.size(), c[0]);
-            assertEq(binary(c[2]), b.substr(1), c[0] + " " + c[1]);
+            assertEq(bytes(c[2], c[0]), b.substr(1), c[0] + " " + c[1]);
         }
     }
 
