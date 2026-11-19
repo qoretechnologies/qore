@@ -40,6 +40,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QorePluginRegistry.h"
+#include "qore/intern/qore_encoding_private.h"
 #include <qore/QoreEnumDecl.h>
 
 #include <string>
@@ -2148,7 +2149,7 @@ QoreValue QoreSerializable::deserializeValueFromStream(ExceptionSink* xsink, Str
 
         case qore_stream_type::STRING:
         case qore_stream_type::UTF8_STRING:
-            return deserializeStringFromStream(reader, code, xsink);
+            return deserializeStringFromStream(reader, code, flags, xsink);
 
         case qore_stream_type::INT1:
         case qore_stream_type::INT2:
@@ -2256,6 +2257,18 @@ int64 QoreSerializable::readIntFromStream(ExceptionSink* xsink, StreamReader& re
     return value;
 }
 
+//! raises DESERIALIZATION-ERROR for a list or hash whose element count is larger than the data, replacing the
+//! END-OF-STREAM-ERROR of the element after the end of the data (#6502)
+static void raise_count_read_error(ExceptionSink* xsink, const char* what, const char* elem, int64 size, int64 done) {
+    QoreStringValueHelper err(xsink->getExceptionErr());
+    if (strcmp(err->c_str(), "END-OF-STREAM-ERROR")) {
+        return;
+    }
+    xsink->clear();
+    xsink->raiseException("DESERIALIZATION-ERROR", "stream data gives a %s of " QLLD " %s%s, but the data ends after "
+        QLLD " of them", what, size, elem, size == 1 ? "" : "s", done);
+}
+
 QoreHashNode* QoreSerializable::deserializeHashFromStream(ExceptionSink* xsink, StreamReader& reader,
         qore_stream_type code, int64 flags) {
     const TypedHashDecl* thd;
@@ -2294,6 +2307,7 @@ QoreHashNode* QoreSerializable::deserializeHashFromStream(ExceptionSink* xsink, 
         // read key type (must be string)
         code = static_cast<qore_stream_type>(reader.readi1(xsink));
         if (*xsink) {
+            raise_count_read_error(xsink, "hash", "key", size, i);
             return nullptr;
         }
         if (!code_is_string(code)) {
@@ -2302,7 +2316,7 @@ QoreHashNode* QoreSerializable::deserializeHashFromStream(ExceptionSink* xsink, 
             return nullptr;
         }
 
-        SimpleRefHolder<QoreStringNode> key(deserializeStringFromStream(reader, code, xsink));
+        SimpleRefHolder<QoreStringNode> key(deserializeStringFromStream(reader, code, flags, xsink));
         if (*xsink) {
             return nullptr;
         }
@@ -2332,24 +2346,47 @@ QoreHashNode* QoreSerializable::deserializeHashFromStream(ExceptionSink* xsink, 
     return thd ? typed_hash_decl_private::get(*thd)->newHash(*h, true, xsink) : h.release();
 }
 
+//! the most bytes of a string or binary value that are read from serialized data before the next bytes are read
+/** The size of a value in the data is not trusted: its memory grows with the bytes actually read (#6502)
+*/
+static constexpr int64 QORE_DESERIALIZE_CHUNK = 65536;
+
+//! raises DESERIALIZATION-ERROR for a value whose bytes could not be read, replacing an END-OF-STREAM-ERROR
+static void raise_value_read_error(ExceptionSink* xsink, const char* type, int64 size, int64 done) {
+    if (*xsink) {
+        QoreStringValueHelper err(xsink->getExceptionErr());
+        if (strcmp(err->c_str(), "END-OF-STREAM-ERROR")) {
+            return;
+        }
+        xsink->clear();
+    }
+    xsink->raiseException("DESERIALIZATION-ERROR", "stream data gives a %s of " QLLD " byte%s, but the data ends after "
+        QLLD " of them", type, size, size == 1 ? "" : "s", done);
+}
+
 int QoreSerializable::readStringFromStream(StreamReader& reader, QoreString& str, const char* type, ExceptionSink* xsink) {
     // read string size
     int64 size = readIntFromStream(xsink, reader, "string size");
     if (*xsink) {
         return -1;
     }
-    if (size) {
-        // read in string data
-        str.reserve(size);
-        if (reader.read(xsink, const_cast<char*>(str.c_str()), size) == -1) {
+    // read in string data in chunks: the memory grows with the data read, not with the size in the data
+    int64 done = 0;
+    while (done < size) {
+        int64 n = QORE_MIN(size - done, QORE_DESERIALIZE_CHUNK);
+        str.reserve(done + n);
+        if (reader.read(xsink, const_cast<char*>(str.c_str()) + done, n) == -1) {
+            raise_value_read_error(xsink, QoreStringMaker("%s string", type).c_str(), size, done);
             return -1;
         }
+        done += n;
     }
     str.terminate(size);
     return 0;
 }
 
-QoreStringNode* QoreSerializable::deserializeStringFromStream(StreamReader& reader, qore_stream_type code, ExceptionSink* xsink) {
+QoreStringNode* QoreSerializable::deserializeStringFromStream(StreamReader& reader, qore_stream_type code,
+        int64 flags, ExceptionSink* xsink) {
     SimpleRefHolder<QoreStringNode> str(new QoreStringNode);
 
     const QoreEncoding* enc;
@@ -2359,7 +2396,24 @@ QoreStringNode* QoreSerializable::deserializeStringFromStream(StreamReader& read
         if (readStringFromStream(reader, enc_str, "encoding", xsink)) {
             return nullptr;
         }
-        enc = QEM.findCreate(&enc_str);
+        // a name that selects neither a known encoding nor a standard character set would register a new
+        // encoding for the life of the process, so it is registered only with QDF_REGISTER_ENCODINGS (issue #6483)
+        enc = qore_find_untrusted_encoding(enc_str.c_str(), enc_str.size());
+        if (!enc) {
+            if (flags & QDF_REGISTER_ENCODINGS) {
+                enc = QEM.findCreate(&enc_str);
+            } else {
+                if (memchr(enc_str.c_str(), '\0', enc_str.size())) {
+                    xsink->raiseException("DESERIALIZATION-ERROR", "the character encoding name of a string in the "
+                        "serialized data has a NUL character");
+                } else {
+                    xsink->raiseException("DESERIALIZATION-ERROR", "the character encoding '%s' of a string in the "
+                        "serialized data is not known; use the Qore::QDF_REGISTER_ENCODINGS flag to register it, "
+                        "for trusted data only", enc_str.c_str());
+                }
+                return nullptr;
+            }
+        }
     } else {
         assert(code == qore_stream_type::UTF8_STRING);
         enc = QCS_UTF8;
@@ -2401,6 +2455,7 @@ QoreListNode* QoreSerializable::deserializeListFromStream(ExceptionSink* xsink, 
     for (int64 i = 0; i < size; ++i) {
         ValueHolder val(deserializeValueFromStream(xsink, reader, flags), xsink);
         if (*xsink) {
+            raise_count_read_error(xsink, "list", "element", size, i);
             return nullptr;
         }
         rv->push(val.release(), xsink);
@@ -2574,13 +2629,24 @@ BinaryNode* QoreSerializable::deserializeBinaryFromStream(StreamReader& reader, 
     }
 
     SimpleRefHolder<BinaryNode> rv(new BinaryNode);
-    if (size) {
-        rv->preallocate(size);
-
-        if (reader.read(xsink, const_cast<void*>(rv->getPtr()), rv->size()) == -1) {
-            assert(*xsink);
+    // read in the data in chunks: the memory grows with the data read, not with the size in the data
+    int64 done = 0;
+    int64 cap = 0;
+    while (done < size) {
+        int64 n = QORE_MIN(size - done, QORE_DESERIALIZE_CHUNK);
+        if (done + n > cap) {
+            cap = QORE_MIN(size, QORE_MAX(done + n, cap * 2));
+            if (rv->preallocate(cap)) {
+                xsink->raiseException("DESERIALIZATION-ERROR", "cannot allocate " QLLD " bytes for a binary object "
+                    "of " QLLD " bytes", cap, size);
+                return nullptr;
+            }
+        }
+        if (reader.read(xsink, static_cast<char*>(const_cast<void*>(rv->getPtr())) + done, n) == -1) {
+            raise_value_read_error(xsink, "binary object", size, done);
             return nullptr;
         }
+        done += n;
     }
     return rv.release();
 }

@@ -376,7 +376,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
 
         # Per-client counters (object references shared between closure and sender)
         list<Counter> msg_counters();
-        list<WebSocketClient> clients();
+        list<*WebSocketClient> clients();
 
         # Establish all connections sequentially to avoid TLS handshake races
         for (int c = 0; c < num_clients; ++c) {
@@ -922,7 +922,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
         # Establish connections sequentially to avoid TLS handshake races,
         # then send messages concurrently
         list<bool> signal_flags();
-        list<WebSocketClient> clients();
+        list<*WebSocketClient> clients();
         for (int s = 0; s < num_streams; ++s) {
             int stream_id = s;
             string stream_prefix = sprintf("stream-%d", stream_id);

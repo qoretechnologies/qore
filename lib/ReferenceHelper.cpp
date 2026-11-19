@@ -87,6 +87,10 @@ int QoreTypeSafeReferenceHelper::setObjKey(QoreObject* obj, const char* key, boo
 }
 
 int QoreTypeSafeReferenceHelper::moveToHashObjKey(const char* key, bool for_remove) {
+    if (for_remove) {
+        // the path information of the hash is recorded for removal (qore#6435)
+        priv->lvalue.startRemovalPath();
+    }
     QoreValue v = priv->getValue();
     if (v.getType() == NT_OBJECT) {
         return priv->doObjLValue(v.get<QoreObject>(), key, for_remove);

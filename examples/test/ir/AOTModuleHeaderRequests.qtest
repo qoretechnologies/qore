@@ -1,0 +1,254 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - AOT modules loaded with dlopen() and their dependencies loaded by the module loader
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTModuleHeaderRequestsTest
+
+#! The modules that an AOT module requests before its header are loaded with the restrictions that its source gives them
+/** A module that declares a functional domain in its header is relieved of the restriction of that domain for the code
+    after its header and the modules that this code requires; the modules that it requests before its header keep the
+    restrictions of the code that loads it.  Each module here declares the thread control domain and requests a module
+    whose code uses it, in one form of module request before or after its header, or in both; each is loaded by code
+    restricted from thread control, in a new process (a module is loaded once per process), in every execution mode
+    and from a qcc-compiled executable, with its dependency as a source module and as an AOT module, and its AOT module
+    must give the result of its source (qore#6386).
+
+    A module with a conditional directive before its header can request other modules before its header where it is
+    loaded than where it was compiled: its AOT module loads every module that it requests with the restrictions of the
+    loading code (fail-closed), also those that its source loads after its header.
+*/
+class AOTModuleHeaderRequestsTest inherits QUnit::Test {
+    public {
+        #! the module header, with the thread control domain
+        const Header = "module %s { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; url = \"https://qore.org\"; "
+            "license = \"MIT\"; domains = \"THREAD_CONTROL\"; }\n";
+
+        #! the requests before and after the header of each module, and the result of its source
+        /** "refused": the dependency inherits the restriction; "runs": the dependency is relieved
+        */
+        const Forms = {
+            "PlainBefore": ("%requires ThreadDep\n", "", "refused"),
+            "TryBefore": ("%try-module ThreadDep\n%endtry\n", "", "refused"),
+            "ReexportBefore": ("%requires(reexport) ThreadDep\n", "", "refused"),
+            "VersionBefore": ("%requires ThreadDep >= 1.0\n", "", "refused"),
+            "ReexportVersionBefore": ("%requires(reexport) ThreadDep >= 1.0\n", "", "refused"),
+            "TryReexportBefore": ("%try-reexport-module ThreadDep\n%endtry\n", "", "refused"),
+            "IncludeBefore": ("%include IncPlain.ql\n", "", "refused"),
+            "IncludeTryBefore": ("%include IncTry.ql\n", "", "refused"),
+            "ConditionalBefore": ("%ifndef NOT_DEFINED_6386\n%requires ThreadDep\n%endif\n", "", "refused"),
+            "NestedBefore": ("%requires MidDep\n", "", "refused"),
+            "TryAfter": ("", "%try-module ThreadDep\n%endtry\n", "runs"),
+            "ReexportAfter": ("", "%requires(reexport) ThreadDep\n", "runs"),
+            "PlainBeforeTryAfter": ("%requires ThreadDep\n", "%try-module ThreadDep\n%endtry\n", "refused"),
+            "PlainBeforeReexportAfter": ("%requires ThreadDep\n", "%requires(reexport) ThreadDep\n", "refused"),
+            "ReexportBeforeTryAfter": ("%requires(reexport) ThreadDep\n", "%try-module ThreadDep\n%endtry\n",
+                "refused"),
+            "ReexportBeforePlainAfter": ("%requires(reexport) ThreadDep\n", "%requires ThreadDep\n", "refused"),
+            "IncludeBeforeTryAfter": ("%include IncPlain.ql\n", "%try-module ThreadDep\n%endtry\n", "refused"),
+            "IncludeBeforeReexportAfter": ("%include IncPlain.ql\n", "%requires(reexport) ThreadDep\n", "refused"),
+            "VersionBeforeTryAfter": ("%requires ThreadDep >= 1.0\n", "%try-module ThreadDep\n%endtry\n", "refused"),
+        };
+
+        #! the modules written with CRLF line endings: the same requests as the module without the suffix
+        const CrlfForms = ("PlainBefore", "ReexportBeforeTryAfter");
+
+        #! the forms where the AOT module fails closed: its source runs, and the AOT module is refused
+        /** A conditional directive before the header with a request after it: what the module requests before its
+            header can depend on where it is loaded, so the AOT module loads every module that it requests with the
+            restrictions of the loading code.  A %try-module request before the header that fails where the module is
+            loaded, and succeeded where it was compiled, with a request after the header: the AOT module loads the
+            module with the restrictions, as the request before the header, which its source makes and survives.
+        */
+        const FailClosed = {
+            "ConditionalBeforeTryAfter": ("%ifdef NOT_DEFINED_6386\n%requires ThreadDep\n%endif\n",
+                "%try-module ThreadDep\n%endtry\n"),
+            "TryBeforeReexportAfter": ("%try-module ThreadDep\n%endtry\n", "%requires(reexport) ThreadDep\n"),
+            "TryBeforeTryAfter": ("%try-module ThreadDep\n%endtry\n", "%try-module ThreadDep\n%endtry\n"),
+        };
+
+        #! a module without declared domains that requires the dependency after its header
+        const MidDepSource = "%modern\n"
+            "module MidDep { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; url = \"https://qore.org\"; "
+            "license = \"MIT\"; }\n"
+            "%requires ThreadDep\n"
+            "public namespace MidDep { public int sub run() { return ThreadDep::run(); } }\n";
+
+        #! the %try-module forms before the header whose AOT dependency is refused with its own error
+        /** The source's %try-module (or %try-reexport-module) request fails, and the module then fails to resolve the
+            call of the module that it did not load (PARSE-EXCEPTION); the AOT module, compiled where the request
+            succeeded, has no such code: the load of its dependency is refused, with the dependency's error
+            (AOT-MODULE-RESTRICTED)
+        */
+        const TryAotDependencyRefused = ("TryBefore", "TryReexportBefore", "IncludeTryBefore");
+
+        #! the execution modes
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        TmpDir tmp("qore-aot-module-header-requests-");
+        string qore_bin;
+        string qcc_bin;
+        string libdir;
+        string driver;
+        string driver_exe;
+    }
+
+    constructor() : QUnit::Test("AOTModuleHeaderRequestsTest", "1.0", \ARGV) {
+        addTestCase("the modules requested before the header of an AOT module inherit the restrictions of its source",
+            \requestFormTest());
+        set_return_value(main());
+    }
+
+    #! the source of the dependency: it uses thread control if \a threads is True
+    static string depSource(bool threads) {
+        return "%modern\n"
+            "module ThreadDep { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; url = \"https://qore.org\"; "
+            "license = \"MIT\"; }\n"
+            "public namespace ThreadDep {\n"
+            + (threads
+                ? "    public int sub run() { Counter c(1); int rv; background sub () { rv = 42; c.dec(); }(); "
+                    "c.waitForZero(); return rv; }\n"
+                : "    public int sub run() { return 42; }\n")
+            + "}\n";
+    }
+
+    #! the source of a module with the requests given
+    static string moduleSource(string name, string before, string after) {
+        # a module that requires MidDep calls it, which calls the dependency
+        string target = before =~ /MidDep/ ? "MidDep" : "ThreadDep";
+        return "%modern\n" + before + sprintf(Header, name) + after
+            + sprintf("public namespace %s { public int sub run() { return %s::run(); } }\n", name, target);
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+
+    private static string quote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    #! runs a command and returns its output, failing on a non-zero exit status
+    private string run(string cmd) {
+        int rc;
+        string out = trim(backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1",
+            quote(libdir), quote(libdir), quote(libdir), cmd), \rc));
+        assertEq(0, rc, cmd + ": " + out);
+        return out;
+    }
+
+    #! returns the result of loading a module with the module path given, in the mode given, or with the executable
+    private string load(string mod, string path, *string mode) {
+        string cmd = mode
+            ? sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s", quote(path), quote(qore_bin), mode,
+                quote(driver), mod)
+            : sprintf("QORE_MODULE_DIR=%s %s %s", quote(path), quote(driver_exe), mod);
+        return run(cmd);
+    }
+
+    requestFormTest() {
+        qore_bin = TestInterpreter::qore_interpreter();
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("qcc is not available");
+        }
+        qcc_bin = qcc;
+        libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        string base = tmp.path;
+        # the version of the dependency that the AOT modules are compiled against
+        string clean_dir = base + "/clean";
+        string src_dir = base + "/src";
+        string dep_src_dir = base + "/dep-src";
+        string dep_aot_dir = base + "/dep-aot";
+        string aot_dir = base + "/aot";
+        map mkdir($1), (clean_dir, src_dir, dep_src_dir, dep_aot_dir, aot_dir);
+        writeFile(clean_dir + "/ThreadDep.qm", depSource(False));
+        writeFile(dep_src_dir + "/ThreadDep.qm", depSource(True));
+        run(sprintf("QORE_MODULE_DIR=%s %s -m -o %s %s", quote(dep_src_dir), quote(qcc_bin),
+            quote(dep_aot_dir + "/ThreadDep.qmod"), quote(dep_src_dir + "/ThreadDep.qm")));
+        map writeFile($1 + "/MidDep.qm", MidDepSource), (clean_dir, dep_src_dir, dep_aot_dir);
+        # the files that the modules include, beside them
+        map writeFile($1 + "/IncPlain.ql", "%requires ThreadDep\n"), (src_dir,);
+        map writeFile($1 + "/IncTry.ql", "%try-module ThreadDep\n%endtry\n"), (src_dir,);
+
+        hash<string, string> expected_result;
+        hash<string, list<string>> modules;
+        foreach hash<auto> i in (Forms.pairIterator()) {
+            modules{i.key} = (i.value[0], i.value[1]);
+            expected_result{i.key} = i.value[2];
+        }
+        foreach string name in (CrlfForms) {
+            modules{name + "Crlf"} = modules{name};
+            expected_result{name + "Crlf"} = expected_result{name};
+        }
+        foreach hash<auto> i in (FailClosed.pairIterator()) {
+            modules{i.key} = i.value;
+        }
+        foreach hash<auto> i in (modules.pairIterator()) {
+            string text = moduleSource(i.key, i.value[0], i.value[1]);
+            if (i.key =~ /Crlf$/) {
+                text = replace(text, "\n", "\r\n");
+            }
+            writeFile(src_dir + "/" + i.key + ".qm", text);
+            run(sprintf("QORE_MODULE_DIR=%s %s -m -o %s %s", quote(clean_dir), quote(qcc_bin),
+                quote(aot_dir + "/" + i.key + ".qmod"), quote(src_dir + "/" + i.key + ".qm")));
+        }
+
+        # the driver: restricted from thread control, it loads the module given and prints its value or the code of
+        # the error
+        driver = base + "/driver.q";
+        writeFile(driver, "%modern\n%no-thread-control\n"
+            "try {\n"
+            "    load_module(ARGV[0]);\n"
+            "    printf(\"value %d\\n\", call_function(ARGV[0] + \"::run\"));\n"
+            "} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"error %s\\n\", ex.err);\n"
+            "}\n");
+        driver_exe = base + "/driver";
+        run(sprintf("%s -o %s %s", quote(qcc_bin), quote(driver_exe), quote(driver)));
+
+        # every AOT result that differs from the expected one, reported together
+        list<string> mismatches = ();
+        foreach string mod in (keys modules) {
+            foreach string dep_dir in ((dep_src_dir, dep_aot_dir)) {
+                string label = sprintf("%s with its dependency from %s", mod, basename(dep_dir));
+                string expected = load(mod, src_dir + ":" + dep_dir, "ast");
+                bool fail_closed = exists FailClosed{mod};
+                if (dep_dir == dep_aot_dir && inlist(mod, TryAotDependencyRefused)) {
+                    assertEq("error PARSE-EXCEPTION", expected, label + ": source");
+                    expected = "error AOT-MODULE-RESTRICTED";
+                }
+                if (fail_closed) {
+                    # the source relieves the module that it requests after its header; the AOT module does not
+                    assertEq("value 42", expected, label + ": source");
+                } else if (expected_result{mod} == "refused") {
+                    assertRegex("^error ", expected, label + ": source");
+                } else {
+                    assertEq("value 42", expected, label + ": source");
+                }
+                foreach *string mode in (Modes + (NOTHING,)) {
+                    string actual = load(mod, aot_dir + ":" + dep_dir, mode);
+                    if (fail_closed ? actual !~ /^error / : actual != expected) {
+                        push mismatches, sprintf("%s: AOT module (%s): %y, expected %y", label,
+                            mode ?? "qcc executable", actual, expected);
+                    }
+                }
+            }
+        }
+        assertEq((), mismatches);
+    }
+}

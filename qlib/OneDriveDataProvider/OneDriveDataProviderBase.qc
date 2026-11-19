@@ -154,6 +154,136 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
         return "me/drive";
     }
 
+    #! Returns a drive item ID as it is written in a request path
+    /** A drive item is addressed by ID as <tt>/drives/{drive-id}/items/{item-id}</tt> (see
+        <a href="https://learn.microsoft.com/en-us/graph/api/driveitem-get?view=graph-rest-1.0">Get driveItem</a>);
+        an item ID is one segment of the path made of letters, digits, \c "!", \c "-", \c "_" and \c "." (a OneDrive
+        ID such as \c "0123456789AB!123", or a SharePoint and OneDrive for Business ID such as
+        \c "01BYE5RZ6QN3ZWBTUFOFD3GSPGOHDJD36K"); any other value is refused rather than written into the path,
+        where it could address another resource
+
+        @param id the item ID
+        @param what what the ID is, for the exception message
+
+        @return the item ID
+
+        @throw ONEDRIVE-ITEM-ERROR the value is not an item ID
+        @throw VALUE-ERROR the value's encoding is invalid, or it has a NUL character
+
+        @since %OneDriveDataProvider 1.0
+    */
+    static string getItemIdPathSegment(string id, string what = "item ID") {
+        OneDriveDataProviderBase::checkPathValue(id, what);
+        if (id !~ /^[A-Za-z0-9!_.-]+\z/ || id == "." || id == "..") {
+            throw "ONEDRIVE-ITEM-ERROR", sprintf("%y is not a drive item ID (%s): an item ID is made of letters, "
+                "digits, '!', '-', '_' and '.'", id, what);
+        }
+        return id;
+    }
+
+    #! Returns a drive item path as it is written after \c "root:" in a request path
+    /** A drive item is addressed by path as <tt>/drives/{drive-id}/root:/{item-path}</tt>, closed with \c ":"
+        when another segment follows (see
+        <a href="https://learn.microsoft.com/en-us/graph/onedrive-addressing-driveitems">Addressing a driveItem
+        </a>); the path is given decoded, with or without a leading \c "/", and each of its segments is
+        percent-encoded; an empty segment, \c "." and \c ".." are refused
+
+        @param path the item path, relative to the root of the drive
+        @param followed @ref True if another segment follows the path, so that it is closed with \c ":"
+
+        @return the path with a leading \c "/", each of its segments percent-encoded
+
+        @throw ONEDRIVE-ITEM-ERROR the value is not an item path
+        @throw VALUE-ERROR the value's encoding is invalid, or it has a NUL character
+
+        @par Example:
+        @code{.py}
+# "/Documents/My%20File.xlsx"
+string path = OneDriveDataProviderBase::getItemPathSegments("/Documents/My File.xlsx");
+        @endcode
+
+        @since %OneDriveDataProvider 1.0
+    */
+    static string getItemPathSegments(string path, bool followed = False) {
+        OneDriveDataProviderBase::checkPathValue(path, "item path");
+        string p = path;
+        if (p.val() && p[0] == "/") {
+            splice p, 0, 1;
+        }
+        list<string> segs = p.val() ? p.split("/") : ();
+        # split() drops a trailing empty segment, which is refused as an empty one in the path is
+        bool ok = segs.size() > 0 && p[p.length() - 1] != "/";
+        foreach string seg in (segs) {
+            if (seg == "" || seg == "." || seg == "..") {
+                ok = False;
+                break;
+            }
+        }
+        if (!ok) {
+            throw "ONEDRIVE-ITEM-ERROR", sprintf("%y is not a drive item path: a path is a list of names separated "
+                "by '/', none of them empty, '.' or '..'", path);
+        }
+        return "/" + (map encode_url($1, True), segs).join("/") + (followed ? ":" : "");
+    }
+
+    #! Returns a drive item name as it is written as one segment of a request path
+    /** @param name the item name; it has no \c "/" or \c "\\", and is not empty, \c "." or \c ".."
+
+        @return the name, percent-encoded
+
+        @throw ONEDRIVE-ITEM-ERROR the value is not an item name
+        @throw VALUE-ERROR the value's encoding is invalid, or it has a NUL character
+
+        @since %OneDriveDataProvider 1.0
+    */
+    static string getItemNameSegment(string name) {
+        OneDriveDataProviderBase::checkPathValue(name, "item name");
+        if (!name.val() || name == "." || name == ".." || name.find("/") >= 0 || name.find("\\") >= 0) {
+            throw "ONEDRIVE-ITEM-ERROR", sprintf("%y is not a drive item name: a name is not empty, '.' or '..', "
+                "and has no '/' or '\\'", name);
+        }
+        return encode_url(name, True);
+    }
+
+    #! Returns the OData string literal of a string: in single quotes, with each single quote doubled
+    /** @param str the string
+
+        @return the OData string literal, in UTF-8
+
+        @throw VALUE-ERROR the string's encoding is invalid, or it has a NUL character
+
+        @since %OneDriveDataProvider 1.0
+    */
+    static string getODataStringLiteral(string str) {
+        OneDriveDataProviderBase::checkPathValue(str, "string");
+        if (str.encoding() != "UTF-8") {
+            str = convert_encoding(str, "UTF-8");
+        }
+        # the string is valid in its encoding, so replace() processes all of it
+        return "'" + replace(str, "'", "''") + "'";
+    }
+
+    #! Checks that a value can be written in a request path
+    /** @param v the value
+        @param what what the value is, for the exception message
+
+        @throw VALUE-ERROR the value's encoding is invalid, or it has a NUL character
+    */
+    static private checkPathValue(string v, string what) {
+        try {
+            # a conversion to the same encoding would not check it
+            string check = convert_encoding(v, v.encoding() == "UTF-8" ? "UTF-16BE" : "UTF-8");
+            remove check;
+        } catch (hash<ExceptionInfo> ex) {
+            throw "VALUE-ERROR", sprintf("the %s given is not valid in its encoding (%s): %s: %s", what,
+                v.encoding(), ex.err, ex.desc);
+        }
+        # checked after the encoding, as a search in a string with an invalid encoding raises another error
+        if (v.find(chr(0)) >= 0) {
+            throw "VALUE-ERROR", sprintf("the %s given has a NUL character", what);
+        }
+    }
+
     #! Returns the reference data types supported by this provider
     *hash<string, bool> getSupportedReferenceData() {
         return {

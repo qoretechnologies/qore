@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode, as a module that a Program has loaded is not checked again for the next one
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%include QlibAllModulesLoad.qc
+
+%exec-class QlibAllModulesLoadPart1
+
+#! runs part 1 of 2 of the cases of QlibAllModulesLoadBase: the functional domains of Qorus interfaces (#5803)
+class QlibAllModulesLoadPart1 inherits QlibAllModulesLoadBase {
+    constructor() : QlibAllModulesLoadBase("QlibAllModulesLoadPart1", 1) {
+    }
+}

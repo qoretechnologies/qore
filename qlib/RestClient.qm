@@ -180,6 +180,9 @@ printf("%Y\n", ans.body);
     - a character set given as the \c Content-Encoding of a response selects only an encoding that %Qore knows or a
       standard character set (@ref Qore::get_known_encoding() "get_known_encoding()"), and is ignored otherwise
       (<a href="https://github.com/qoretechnologies/qore/issues/6460">issue 6460</a>)
+    - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): a debug print
+      of the OAuth2 token URI was removed
+      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - added the @ref RestClient::AbstractRestConnection "AbstractRestConnection" class, which provides all of
       @ref RestClient::RestConnection "RestConnection" (options, OAuth2, features, pings and polling) with
       @ref RestClient::AbstractRestConnection::get() "get()" returning an object of any class, for connections
@@ -3891,7 +3894,6 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                     uri = uri[1..];
                 }
                 uri = url + uri;
-                printf("URI: %y\n", uri);
             }
             login.oauth2_token_url = uri;
             if (oauth2_token_use_basic_auth) {

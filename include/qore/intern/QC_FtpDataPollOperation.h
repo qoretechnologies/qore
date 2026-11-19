@@ -171,6 +171,8 @@ protected:
 
 private:
     QoreSocketObject* data_sock;                    //!< data socket (ref'd)
+    //! the object of the "sock" member of the operation's object (ref'd), kept with the state (#6505)
+    QoreObject* sock_obj;
     SocketPollOperationBase* current_op = nullptr;  //!< current inner operation (ref'd)
 
     FtpDataState data_state = FtpDataState::CONNECTING;

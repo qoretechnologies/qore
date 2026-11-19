@@ -38,6 +38,8 @@
 #define HE_TAG_CONST        1
 #define HE_TAG_SCOPED_CONST 2
 
+#include <cstdio>
+#include <map>
 #include <string>
 #include <cstring>
 #include "qore/intern/QoreNativeParseInfo.h"
@@ -160,12 +162,23 @@ struct QoreParseState {
    bool line_start_directive_active = false;
    //! Provenance of the current legacy options; tokens copy it before later directives can restore %modern.
    QoreNativeParseInfo native_parse_info;
+   //! the line of the last text that no scanner rule matched, which is reported once per line (issue #6512)
+   int unexpected_text_line = 0;
    //! the extent of the last expression in parentheses that the parser reduced ('(' exp ')'): an operand of the
    //! chomp, trim or splice operator with this extent is in parentheses of its own (issue #1867)
    int paren_first_line = 0, paren_first_col = 0, paren_last_line = 0, paren_last_col = 0;
    //! true if the parentheses of the last expression in parentheses are those of a list: (a, b), not ((a, b)), so
    //! that its elements are the arguments of a call (issue #1867)
    bool paren_list = false;
+   //! for each source file that the scanner reads and that has not ended, the first byte of the line that the last
+   //! block read ends in, or -1 if it ends with a newline: a file whose last line is a parse directive without a
+   //! newline gets one at its end, as the rules of the parse directives end with a newline (qore_scanner_read(),
+   //! issue #2740)
+   std::map<FILE*, int> file_line_first;
+   //! for each file included with %include whose scan has not ended, the end of the last token of the including file
+   //! (its last line and column), where the scan of the including file resumes: the location of a token starts at the
+   //! end of the last one, so the scan of an included file starts at its first line and column (issue #6561)
+   std::vector<std::pair<int, int>> include_resume_loc;
 };
 
 //! returns the description of a syntax error on a line that starts with % and \a name, which no parse directive's
@@ -183,6 +196,7 @@ DLLLOCAL extern QoreParseState* yyget_extra(yyscan_t scanner);
 DLLLOCAL void qore_scanner_end_input(yyscan_t scanner);
 DLLLOCAL extern int yyparse(yyscan_t yyscanner);
 DLLLOCAL extern struct yy_buffer_state* yy_scan_string(const char*, yyscan_t scanner);
+DLLLOCAL extern struct yy_buffer_state* yy_scan_bytes(const char*, int, yyscan_t scanner);
 DLLLOCAL void yyset_in(FILE* in_str, yyscan_t yyscanner);
 DLLLOCAL int yylex_destroy(yyscan_t yyscanner);
 DLLLOCAL void yyset_lineno(int line_number, yyscan_t yyscanner);

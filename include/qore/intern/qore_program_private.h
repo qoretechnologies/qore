@@ -82,6 +82,10 @@ class qore_object_private;
 class RObject;
 class RSetHelper;
 
+// suspends the inlined calls of the IR interpreter whose callees belong to a Program that a debugger attaches to
+// (declared in QoreIR.h; issue #6473)
+DLLLOCAL void qore_ir_suspend_inline_states(const void* dpgm_addr);
+
 typedef vector_map_t<int, unsigned> ptid_map_t;
 //typedef std::map<int, unsigned> ptid_map_t;
 
@@ -459,6 +463,8 @@ class qore_program_private;
 #ifdef DEBUG
 //! Throws a C++ exception from a parse of the Program armed by dbg_parse_with_cxx_exception() (debug builds, tests)
 DLLLOCAL void qore_dbg_parse_throw_point(const QoreProgram* pgm);
+//! Stops a parse of the Program at the gate armed by dbg_arm_parse_start_gate() (debug builds, tests; see below)
+DLLLOCAL int qore_dbg_parse_start_gate(const QoreProgram* pgm, ExceptionSink* xsink);
 //! Called by the parsing thread when scoped options of the given kind are in effect (debug builds, tests); see
 //! dbg_arm_parse_scope_gate()
 DLLLOCAL void qore_dbg_parse_scope_begin(QoreProgram* pgm, const char* kind);
@@ -625,11 +631,51 @@ public:
     // modules loadded with parse commands
     strset_t parse_modules;
 
+    //! the module requests (without their version requirements) of the %requires directives before and after the
+    //! header of the module that the Program parses; an AOT module records which of its dependencies are requested
+    //! only after it (qore#6351)
+    strset_t pre_header_requires;
+    strset_t post_header_requires;
+    //! the names of the modules that the module requests of the Program's parse loaded (qore#6351)
+    std::map<std::string, std::string> module_request_names;
+    //! the module requests whose module was loaded by the request itself, not found loaded (qore#6351)
+    strset_t loading_requires;
+    //! the module requests after the header made while the module's code restricted a domain that its header declares
+    //! again, which the header does not remove for them (qore#6351)
+    strset_t restricted_requires;
+    //! the domains that the module's code restricts again after its header (qore#6351)
+    int64 dom_restricted_after_header = 0;
+    //! the domains that the module's code restricts with its own parse directives, before or after its header
+    //! (qore#6351)
+    int64 dom_restricted_by_code = 0;
+    //! true if the parse depends on where the code is loaded: a conditional on a define that is neither built in nor
+    //! set by the code (a parse option or a define of the loading code), or an included file found through an
+    //! environment variable or a search path (qore#6351)
+    bool load_dependent_parse = false;
+    //! the sequence number of the last module registration when the header of the Program's module closed: a module
+    //! registered until then was loaded before the header, or by other code (qore#6351)
+    uint64_t module_header_close_seq = 0;
+
     //! the module requests of %try-module directives that failed, in parse order, without duplicates
     /** An AOT module records them in its module metadata, since its code takes the branch for the module being
         unavailable; see QoreAOTModuleFileInfo
     */
     std::vector<std::string> unavailable_try_modules;
+
+    //! the options that the Program's directives gave each module that they loaded, in the order of the directives
+    /** For each module that a %requires or %try-module directive of the Program loaded, the parse options that it
+        gave the module to inherit then (not the options that relieve restrictions); recorded once per module, for the
+        first directive.  An AOT module records them in its module metadata, so that the loader loads its dependencies
+        with them, in the same order, as its source does (qore#6406); see QoreAOTModuleFileInfo; a module requested
+        before the header of a user module has QMDR_BEFORE_HEADER (qore#6386)
+    */
+    std::vector<QoreModuleDependencyRestriction> parse_module_restrictions;
+
+    //! true if a conditional directive (%ifdef, %ifndef, %if) was parsed before the header of a user module
+    /** The modules that the module requests before its header can then depend on where it is loaded (qore#6386; see
+        QMDR_INEXACT)
+    */
+    bool conditional_before_module_header = false;
 
     //! the files that %include directives opened while this Program was parsed, by their real paths, without duplicates
     /** qcc lists them in the depfile of an AOT module, with which an incremental build and the module loader decide
@@ -689,6 +735,12 @@ public:
     // when true, parse errors and warnings are also captured as structured diagnostics (machine-readable
     // form for tooling / AI coding assistants); see Program::setParseDiagnosticsCollected()
     bool collect_diagnostics = false;
+    // when true, the diagnostics of the parse actions are kept together, not cleared at the start of each one (set for
+    // the Programs that the AOT compiler creates; issue #6555)
+    bool accumulate_diagnostics = false;
+    // incremented whenever the diagnostics are cleared, so that an exception's index into them is not used once it
+    // refers to another diagnostic (issue #6555)
+    uint32_t diagnostics_gen = 0;
     // structured diagnostics captured during the current/last parse action (cleared on each parse start)
     std::vector<QoreDiagnostic> diagnostics;
 
@@ -731,6 +783,12 @@ public:
         above, whose other members the parsing thread writes as well
     */
     std::atomic<bool> parsing_in_progress{false};
+    //! true while the parse state of the Program (parsing_in_progress) is that of an expression alone
+    /** An expression adds no code to the Program, so its parse does not keep threads out of it, as a parse of code
+        does (refusesRuntimeEntry()); threads that run in the Program already run while it is parsed in any case.  Set
+        by parseExpression() before parsing_in_progress and cleared after it (qore#6518)
+    */
+    std::atomic<bool> expression_parse_only{false};
 
     //! true if the parse options cannot be changed; set by QoreProgram::lockOptions() from any thread
     std::atomic<bool> po_locked{false};
@@ -1067,7 +1125,13 @@ public:
     }
 
     typedef std::set<q_exp_t> q_exp_set_t;
+    //! the expressions of the Program (Expression objects), guarded by exp_set_lock
     q_exp_set_t exp_set;
+    //! guards exp_set, which threads change and read while they create, run and delete the expressions of the
+    //! Program; the parse of an expression is serialized by the parse lock, but its deletion and its run are not
+    //! (qore#6493); an expression is deleted after it is removed from the set, with the lock released, as its deletion
+    //! can run code
+    mutable std::mutex exp_set_lock;
     q_exp_t new_expression = nullptr;
 
     int tclear = 0;   // clearing thread-local variables in progress? if so, this is the TID
@@ -1176,6 +1240,13 @@ public:
     //! true if the %set-time-zone directive recorded in \c time_zone_directive follows the header of a user module,
     //! whose declared domains have then removed the restrictions they relieve (qore#6270)
     bool time_zone_after_module_header = false;
+    //! true if the %set-time-zone directive recorded in \c time_zone_directive applies only to a load of the module
+    //! as library code: the module's own restriction disallowed it where it is, and the locale control domain that its
+    //! header declares removes the restriction in a load as library code (qore#6352)
+    bool time_zone_trusted_only = false;
+    //! true if the module's code restricts locale control again after its header (%no-locale-control): a load as
+    //! library code does not lift that restriction (qore#6352)
+    bool locale_control_restricted_after_header = false;
     //! true once the header of a user module has been parsed (QoreUserModuleDefContextHelper::close())
     bool module_header_closed = false;
 
@@ -1212,6 +1283,8 @@ public:
         dmap
     */
     std::set<std::string> source_defines;
+    //! the names of the built-in defines, which are fixed for the library (qore#6351)
+    strset_t builtin_defines;
 
     struct source_parse_define_t {
         std::string source_file;
@@ -1689,6 +1762,32 @@ public:
 
     DLLLOCAL void addParseModule(const char* mod) {
         parse_modules.insert(mod);
+    }
+
+    //! Records the options that a directive of the Program gave a module that it loaded (see
+    //! parse_module_restrictions), and whether the directive precedes the header of a user module
+    DLLLOCAL void addParseModuleRestrictions(const char* mod, const QoreParseOptions& restrictions) {
+        for (const auto& i : parse_module_restrictions) {
+            if (i.module == mod) {
+                return;
+            }
+        }
+        parse_module_restrictions.emplace_back(mod, restrictions, module_header_closed ? 0 : QMDR_BEFORE_HEADER);
+    }
+
+    //! Records the module request of a %requires directive before or after the header of the module parsed
+    /** a request before the header is loaded with the restrictions in effect there, one after it without the domains
+        that the header declares (qore#6351)
+    */
+    DLLLOCAL void addModuleRequest(const char* spec, const char* name, bool loaded) {
+        module_request_names[spec] = name;
+        if (loaded) {
+            loading_requires.insert(spec);
+        }
+        if (module_header_closed && (dom_restricted_after_header & module_own_dom)) {
+            restricted_requires.insert(spec);
+        }
+        (module_header_closed ? post_header_requires : pre_header_requires).insert(spec);
     }
 
     //! Records the module request of a %try-module directive that failed
@@ -2301,7 +2400,7 @@ public:
         countThreadEntryIntern(tid, false);
         // a thread that code run by a parse or its commit starts can enter the Program while it is committed
         // (refusedByCommit())
-        if (parsing_in_progress || commit_entry_restricted) {
+        if (refusesRuntimeEntry() || commit_entry_restricted) {
             std::lock_guard<std::mutex> cl(threadContainerLock());
             parse_tids.insert(tid);
         }
@@ -2512,17 +2611,33 @@ public:
         return 0;
     }
 
+    //! Returns true if a parse keeps threads out of the Program: one of code, not of an expression (qore#6518)
+    /** Called with plock held.  parsing_in_progress is read first: the expression parse sets expression_parse_only
+        before it sets parsing_in_progress, and clears it with plock held after parsing_in_progress is cleared, so a
+        thread that sees parsing_in_progress set by an expression parse also sees expression_parse_only set
+    */
+    DLLLOCAL bool refusesRuntimeEntry() const {
+        return parsing_in_progress && !expression_parse_only;
+    }
+
     //! Raises PROGRAM-ERROR if the current thread cannot initialize a deferred closure of the Program now (#6243)
     /** A closure of a constant expression whose initialization is deferred is initialized by the commit of the parse
         (initDeferredCode()) or, if code run by the parse or its commit runs it earlier, on demand by the thread that
         runs it: the committing thread or a thread that such code started (parse_tids), as for the entry into the
         Program (refusedByCommit()); another thread cannot initialize it while the Program is parsed or committed, as
-        it would do so outside of the parse, in its own context
+        it would do so outside of the parse, in its own context.
+
+        Unlike the entry into the Program (refusesRuntimeEntry()), this is refused during the parse of an expression
+        too: the initialization of a closure is parse work, which must not run beside the parse of the expression.  A
+        commit initializes all deferred closures, so a closure can only still be deferred if the source of an
+        expression declared it (qore#6524), and a thread that runs it is refused only while another expression is
+        parsed (qore#6518)
     */
     DLLLOCAL int checkDeferredClosureInit(ExceptionSink* xsink) {
         int tid = q_gettid();
         AutoLocker al(plock);
-        // the same threads as the entry into the Program (incThreadCount())
+        // the threads that can enter the Program during a parse of code or a commit (incThreadCount()); during the
+        // parse of an expression, only the parsing thread
         if ((parsing_in_progress && parse_tid != tid) || refusedByCommit(tid)) {
             if (xsink) {
                 xsink->raiseException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and "
@@ -2566,7 +2681,7 @@ public:
         // entry handlers either; see ProgramThreadCountContextHelper::set()); without an exception sink as well.  A
         // commit is part of the parse: while it runs, only the committing thread, which holds the parse lock, and the
         // threads that code run by the parse or the commit started can enter it (refusedByCommit(), issue #6243)
-        if (parsing_in_progress || refusedByCommit(tid)) {
+        if (refusesRuntimeEntry() || refusedByCommit(tid)) {
             if (xsink) {
                 xsink->raiseException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and "
                     "cannot be accessed at runtime");
@@ -2595,7 +2710,7 @@ public:
                 "therefore cannot be accessed at runtime");
         }
         // a commit is part of the parse: see incThreadCount(int, ExceptionSink*) (issue #6243)
-        if (parsing_in_progress || refusedByCommit(tid)) {
+        if (refusesRuntimeEntry() || refusedByCommit(tid)) {
             throw QoreStandardException("PROGRAM-ERROR", "the Program accessed is currently undergoing parsing and "
                 "cannot be accessed at runtime");
         }
@@ -3099,6 +3214,11 @@ public:
 #ifdef DEBUG
         // a test makes the parse leave with a C++ exception here, after it has started (see ParseStartGuard)
         qore_dbg_parse_throw_point(pgm);
+        // the parse of an expression stops at the gate of dbg_arm_parse_start_gate() here, with the Program's parse
+        // state set, so that a test can enter the Program then (a parse of code stops in beginParse(); qore#6518)
+        if (expression_mode && qore_dbg_parse_start_gate(pgm, xsink)) {
+            return -1;
+        }
 #endif
         //printd(5, "qore_program_private::internParsePending() code: %p %d bytes label: '%s' src: '%s' offset: %d\n",
         //    code, strlen(code), label, orig_src ? orig_src : "(null)", offset);
@@ -3130,7 +3250,19 @@ public:
         QoreParseState state;
         yylex_init_extra(&state, &lexer);
 
-        yy_scan_string(code, lexer);
+        // the rules of the parse directives end with a newline, which a directive on the last line of the code
+        // without one would not match: such code gets one at its end; other code is not changed, so that an error
+        // at its end keeps its location (issue #2740)
+        size_t code_len = strlen(code);
+        const char* last_nl = strrchr(code, '\n');
+        const char* last_line = last_nl ? last_nl + 1 : code;
+        if (*last_line == '%') {
+            std::string terminated(code, code_len);
+            terminated += '\n';
+            yy_scan_bytes(terminated.c_str(), terminated.size(), lexer);
+        } else {
+            yy_scan_string(code, lexer);
+        }
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
         {
@@ -3173,9 +3305,9 @@ public:
         pwo.setWarnMask(wm);
         parseSink = xsink;
 
-        // structured diagnostics are scoped to a single parse action
-        if (collect_diagnostics) {
-            diagnostics.clear();
+        // structured diagnostics are scoped to a single parse action, unless they are accumulated
+        if (collect_diagnostics && !accumulate_diagnostics) {
+            clearDiagnostics();
         }
 
         if (pendingParseSink) {
@@ -3188,8 +3320,28 @@ public:
     DLLLOCAL void setParseDiagnosticsCollected(bool collect) {
         collect_diagnostics = collect;
         if (!collect) {
-            diagnostics.clear();
+            clearDiagnostics();
         }
+    }
+
+    //! clears the diagnostics; the exceptions that refer to them by their index no longer do (issue #6555)
+    DLLLOCAL void clearDiagnostics() {
+        diagnostics.clear();
+        ++diagnostics_gen;
+    }
+
+    //! makes the Program collect its parse diagnostics and keep those of all of its parse actions together (the
+    //! Programs that the AOT compiler creates for its reports; issue #6555)
+    DLLLOCAL void setParseDiagnosticsAccumulated() {
+        collect_diagnostics = true;
+        accumulate_diagnostics = true;
+    }
+
+    //! records that the exception is the diagnostic just recorded, the last one (issue #6555)
+    DLLLOCAL void markDiagnostic(QoreException& e) const {
+        e.diagnostic_pgm_id = programId;
+        e.diagnostic_index = static_cast<int32_t>(diagnostics.size()) - 1;
+        e.diagnostic_gen = diagnostics_gen;
     }
 
     //! returns true if structured parse-diagnostic collection is enabled
@@ -3204,6 +3356,15 @@ public:
         QoreProgram.cpp.
     */
     DLLLOCAL void collectModuleLoadErrors(const QoreProgramLocation& loc, ExceptionSink& xsink);
+
+    //! records the exceptions of the parse that no error diagnostic stands for as error diagnostics
+    /** Called at the end of a parse action when diagnostics are collected: an exception can be raised in the parse
+        without a diagnostic (ex: in the initialization of a constant, by a module command, or by a parse directive),
+        and every exception that fails the parse must be a diagnostic of it (issue #6516).  An exception that is a
+        diagnostic of this Program is marked with its ID when it is raised (QoreExceptionBase::diagnostic_pgm_id), and
+        so is each exception added here, so that a later call does not add it again.
+    */
+    DLLLOCAL void addExceptionDiagnostics(ExceptionSink* xsink);
 
     //! returns the structured diagnostics collected during the last parse action as a
     //! list<hash<ParseDiagnosticInfo>> (implemented in QoreProgram.cpp); never returns nullptr
@@ -3344,6 +3505,7 @@ public:
 
         psg.handOver();
         int rc = internParsePending(xsink, code, label, orig_src, offset);
+        addExceptionDiagnostics(xsink);
         warnSink = nullptr;
 #ifdef DEBUG
         parseSink = nullptr;
@@ -3414,6 +3576,7 @@ public:
         if (!*xsink) {
             ensureIrExecMode(this, xsink);
         }
+        addExceptionDiagnostics(xsink);
 
 #ifdef DEBUG
         parseSink = nullptr;
@@ -3521,6 +3684,7 @@ public:
             if (!*xsink) {
                 ensureIrExecMode(this, xsink);
             }
+            addExceptionDiagnostics(xsink);
 
 #ifdef DEBUG
             parseSink = nullptr;
@@ -3594,6 +3758,7 @@ public:
         if (!*xsink) {
             ensureIrExecMode(this, xsink);
         }
+        addExceptionDiagnostics(xsink);
 
 #ifdef DEBUG
         parseSink = nullptr;
@@ -3620,7 +3785,10 @@ public:
                 pp.warnSink = nullptr;
                 // an expression parsed before the exception is not returned
                 if (pp.new_expression) {
-                    pp.exp_set.erase(pp.new_expression);
+                    {
+                        std::lock_guard<std::mutex> el(pp.exp_set_lock);
+                        pp.exp_set.erase(pp.new_expression);
+                    }
                     delete pp.new_expression;
                     pp.new_expression = nullptr;
                 }
@@ -3685,6 +3853,7 @@ public:
         } else {
             parsing_in_progress = false;
         }
+        addExceptionDiagnostics(xsink);
 
 #ifdef DEBUG
         parseSink = nullptr;
@@ -3754,6 +3923,23 @@ public:
         assert(!new_expression);
         expression_mode = true;
 
+        // the parse state of the Program is the expression's alone, which does not keep threads out of it: the flag
+        // is set before the parse sets parsing_in_progress and cleared after it clears it, also with an exception
+        // (qore#6518)
+        class ExpressionParseOnlyHelper {
+        public:
+            ExpressionParseOnlyHelper(qore_program_private& pp) : pp(pp) {
+                pp.expression_parse_only = true;
+            }
+            ~ExpressionParseOnlyHelper() {
+                // cleared with plock held, after parsing_in_progress: see refusesRuntimeEntry()
+                AutoLocker al(pp.plock);
+                pp.expression_parse_only = false;
+            }
+        private:
+            qore_program_private& pp;
+        } epoh(*this);
+
         QoreStringMaker exp_code("return (%s);", code);
 
         NonStandardParseFlagHelper nspfh(*this);
@@ -3763,8 +3949,13 @@ public:
         if (!internParsePending(xsink, exp_code.c_str(), label, orig_src, offset, false)) {
             internParseCommit(false);   // finalize parsing, back out or commit all changes
         } else {
+            // the Program had no code pending: what its namespaces have pending was added by the failed expression,
+            // such as a declaration after the expression in its code, which is a parse error (issue #6524); it is
+            // rolled back, so that a later parse does not find it and a later commit does not commit it
+            qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
             parsing_in_progress = false;
         }
+        addExceptionDiagnostics(xsink);
 
 #ifdef DEBUG
         parseSink = nullptr;
@@ -3775,7 +3966,10 @@ public:
         q_exp_t rv = new_expression;
         if (new_expression) {
             if (*xsink) {
-                exp_set.erase(new_expression);
+                {
+                    std::lock_guard<std::mutex> el(exp_set_lock);
+                    exp_set.erase(new_expression);
+                }
                 delete new_expression;
                 rv = nullptr;
             }
@@ -4372,6 +4566,17 @@ public:
             qore_dbg_parse_scope_begin(pgm, "directive");
         }
 #endif
+        // a restriction of locale control after the header of a module applies in every load of it (qore#6352), as
+        // does the restriction of any domain after it, also for the modules requested then (qore#6351)
+        if (set) {
+            if (module_header_closed) {
+                if (po & PO_NO_LOCALE_CONTROL) {
+                    locale_control_restricted_after_header = true;
+                }
+                dom_restricted_after_header |= static_cast<int64>(po.getLo());
+            }
+            dom_restricted_by_code |= static_cast<int64>(po.getLo());
+        }
         return 0;
     }
 
@@ -4463,6 +4668,26 @@ public:
         // check PO_NO_LOCALE_CONTROL
         ExceptionSink xsink;
         if (pwo.parse_options & PO_NO_LOCALE_CONTROL) {
+            // after the header of a module that declares the locale control domain, which was not applied, as the
+            // module is not loaded as library code (as when qcc compiles it), the restriction in effect at the header
+            // is removed in a load as library code, unless the module's code restricts locale control again after
+            // the header: an AOT image records the directive for such a load (qore#6352); the zone is checked as in
+            // that load
+            if (module_header_closed && (module_own_dom & QDOM_LOCALE_CONTROL)
+                    && !(module_trusted_dom & QDOM_LOCALE_CONTROL) && !locale_control_restricted_after_header) {
+                if (*zone == '-' || *zone == '+') {
+                    QTZM.findCreateOffsetZone(zone, &xsink);
+                } else {
+                    QTZM.findLoadRegion(zone, &xsink);
+                }
+                if (xsink) {
+                    mergeParseException(xsink);
+                    return;
+                }
+                time_zone_directive = zone;
+                time_zone_after_module_header = true;
+                time_zone_trusted_only = true;
+            }
             mergeParseException(xsink);
             return;
         }
@@ -4474,6 +4699,7 @@ public:
         // an AOT image records where the directive is, as its loader checks it against the restrictions in effect
         // there (qore#6270)
         time_zone_after_module_header = module_header_closed;
+        time_zone_trusted_only = false;
     }
 
     //! sets the time zone of the Program as the %set-time-zone directive with the given argument does
@@ -4516,6 +4742,9 @@ public:
             }
             if ((only_first_except && !exceptions_raised) || !only_first_except) {
                 QoreException *ne = new ParseException(loc, err, d.release());
+                if (collect_diagnostics) {
+                    markDiagnostic(*ne);
+                }
                 sink->raiseException(ne);
             }
             exceptions_raised++;
@@ -5071,7 +5300,13 @@ public:
         if (*xsink) {
             return QoreValue();
         }
-        if (exp_set.find(exp) == exp_set.end()) {
+        // the expression is not deleted while it runs: its Expression object, which deletes it, is in use
+        bool registered;
+        {
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            registered = exp_set.find(exp) != exp_set.end();
+        }
+        if (!registered) {
             xsink->raiseException("INVALID-EXPRESSION", "expression not registered to this Program object");
             return QoreValue();
         }
@@ -5106,12 +5341,14 @@ public:
     }
 
     DLLLOCAL void deleteExpression(q_exp_t exp) {
-        AutoLocker al(plock);
-        q_exp_set_t::iterator i = exp_set.find(exp);
-        if (i != exp_set.end()) {
-            exp_set.erase(exp);
-            delete exp;
+        {
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            if (!exp_set.erase(exp)) {
+                return;
+            }
         }
+        // deleted with the lock released: its deletion can run code, which can create or delete expressions
+        delete exp;
     }
 
     DLLLOCAL void importClass(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path,
@@ -5574,6 +5811,10 @@ public:
         return pgm.priv->lockParsing(xsink);
     }
 
+    //! Implements Program::skipPendingStatements(); returns the number of statements skipped, or -1 if an exception
+    //! was raised (the parse lock could not be acquired)
+    DLLLOCAL static int64 skipPendingStatements(QoreProgram& pgm, ExceptionSink* xsink);
+
     //! Releases the parse lock; clears and dereferences a Program deleted while the thread held it
     /** @param pgm the Program
         @param xsink exceptions raised while the Program is cleared are appended here; if null, they are handled
@@ -5758,7 +5999,21 @@ public:
     }
 
     DLLLOCAL static bool parseIsDefined(QoreProgram* pgm, const char* name) {
-        return pgm->priv->isDefined(name);
+        // a conditional on a define that is neither built in (fixed for the library) nor set by the code itself can
+        // take another branch where the code is loaded than where it is compiled (a parse option, a define of the
+        // loading code): an AOT module records it (qore#6351)
+        qore_program_private* pp = pgm->priv;
+        if (pp->builtin_defines.find(name) == pp->builtin_defines.end()
+                && pp->source_defines.find(name) == pp->source_defines.end()) {
+            pp->load_dependent_parse = true;
+        }
+        return pp->isDefined(name);
+    }
+
+    //! records that the parse depends on the environment where the code is loaded (an included file found through an
+    //! environment variable or a search path; qore#6351)
+    DLLLOCAL static void setLoadDependentParse(QoreProgram* pgm) {
+        pgm->priv->load_dependent_parse = true;
     }
 
     DLLLOCAL static bool runTimeIsDefined(QoreProgram* pgm, const char* name) {
@@ -6070,6 +6325,9 @@ public:
             pgm.priv->diagnostics.push_back(QoreDiagnostic(false, err, -1, loc, desc->c_str()));
         }
         QoreException* ne = new ParseException(loc, err, desc_holder.release());
+        if (pgm.priv->collect_diagnostics) {
+            pgm.priv->markDiagnostic(*ne);
+        }
         ne->arg = arg_holder.release();
         wsink.raiseException(ne);
     }
@@ -6096,6 +6354,9 @@ public:
             pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
         }
         QoreException *ne = new ParseException(loc, warn, desc);
+        if (pgm->priv->collect_diagnostics) {
+            pgm->priv->markDiagnostic(*ne);
+        }
         pgm->priv->warnSink->raiseException(ne);
     }
 
@@ -6113,6 +6374,9 @@ public:
             pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
         }
         QoreException *ne = new ParseException(loc, warn, desc);
+        if (pgm->priv->collect_diagnostics) {
+            pgm->priv->markDiagnostic(*ne);
+        }
         pgm->priv->warnSink->raiseException(ne);
     }
 
@@ -6128,6 +6392,9 @@ public:
             pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str(), &metadata));
         }
         QoreException* ne = new ParseException(loc, warn, desc);
+        if (pgm->priv->collect_diagnostics) {
+            pgm->priv->markDiagnostic(*ne);
+        }
         pgm->priv->warnSink->raiseException(ne);
     }
 
@@ -6140,6 +6407,8 @@ public:
         if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
             return;
         dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
+        // the IR interpreter no longer inlines the calls of this Program's methods (issue #6473)
+        qore_ir_suspend_inline_states(&dpgm);
         printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
@@ -7139,6 +7408,24 @@ DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
 //! renders the collected parse diagnostics as human-readable code frames; exported so the standalone
 //! interpreter (--code-frames) can render them.  Returns the number of error diagnostics rendered.
 DLLEXPORT unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* source_text, FILE* os);
+
+//! gets the diagnostic recorded for an exception of a parse, if its Program kept it; returns false if there is none
+//! (issue #6555)
+DLLLOCAL bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic& diag);
+
+//! serializes diagnostics as a JSON array (the form of qore_get_parse_diagnostics_json())
+DLLLOCAL std::string qore_diagnostics_json(const std::vector<QoreDiagnostic>& diags);
+
+//! renders diagnostics as code frames (the form of qore_render_parse_diagnostic_frames()); \a source_text returns
+//! the source text of the file of a diagnostic, or nullptr if it is not known; returns the number of errors rendered
+DLLLOCAL unsigned qore_render_diagnostic_frames(const std::vector<QoreDiagnostic>& diags,
+    const std::function<const char* (const QoreDiagnostic&)>& source_text, FILE* os);
+
+//! records the exceptions in \a xsink that are not diagnostics of the parse of the Program as error diagnostics
+/** For exceptions raised before a parse action starts (ex: a file that cannot be opened); exported so the standalone
+    interpreter (--diag-format=json, --code-frames) can report every exception that fails its parse (issue #6516)
+*/
+DLLEXPORT void qore_add_parse_exception_diagnostics(QoreProgram& pgm, ExceptionSink& xsink);
 
 //! Registers code that the library calls before it waits for threads to end; see Qore::register_exit_hook()
 /** @return the hook's ID, or -1 if an exception was raised: the code is sandboxed, or the hooks of the process have

@@ -150,6 +150,26 @@ public:
         return accept_vec.size() == 1;
     }
 
+    //! returns true if this is a union with a member whose type is the value's own type
+    /** A member that comes before it could accept the value by converting it; the union accepts it as it is, whatever
+        the order of its members (qore#6407).  Called only before a conversion, so plain types pay nothing for it, and
+        a union whose members have no exact type for the value's base type \a t (n.getType()) pays only a mask test.
+    */
+    DLLLOCAL bool unionAcceptsExactly(const QoreValue& n, qore_type_t t) const {
+        uint64_t bit = static_cast<uint64_t>(t) < 64 ? (1ull << t) : 0;
+        if (!(union_exact_mask & bit)) {
+            return false;
+        }
+        // a member of a plain scalar type keeps a value of that type (an enum value has the base type of its enum)
+        if ((union_scalar_mask & bit) && !n.isEnum()) {
+            return true;
+        }
+        return unionAcceptsExactlyImpl(n);
+    }
+
+    //! returns true if \a ti is a union with an enum type that accepts the enum value \a n (qore#6277, qore#6407)
+    DLLLOCAL static bool unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& n);
+
     DLLLOCAL bool acceptsRuntimeValueWithoutFilter(const QoreValue& n) const {
         if (n.isEnum()) {
             return false;
@@ -232,6 +252,13 @@ public:
 
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e parseReturns(const QoreTypeInfo* ti, QoreTypeSpec t) {
+        return parseReturnsInline(ti, t);
+    }
+
+    //! parseReturns(), inlined explicitly for a call on a hot path whose inlining depended on the size of the libqore
+    //! unit (qore#6494; tools/hot-inlining.txt)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static qore_type_result_e parseReturnsInline(const QoreTypeInfo* ti,
+            QoreTypeSpec t) {
         // a value of a type parameter returns what its bound returns, or anything if it has none (qore#5774)
         if (const QoreTypeInfo* src = getTypeParameterSourceType(ti)) {
             ti = src;
@@ -289,6 +316,44 @@ public:
     DLLLOCAL static bool isType(const QoreTypeInfo* ti, qore_type_t t) {
         return ti ? ti->isType(t) : false;
     }
+
+    //! returns true if the type takes NOTHING at run time (no type takes everything); cached in the type
+    /** a list whose element type does not take NOTHING cannot hold NOTHING (qore#6435)
+    */
+    DLLLOCAL static bool runtimeTakesNothing(const QoreTypeInfo* ti) {
+        if (!ti || !hasType(ti)) {
+            return true;
+        }
+        signed char c = ti->takes_nothing_cache.load(std::memory_order_relaxed);
+        if (c >= 0) {
+            return c;
+        }
+        bool rv = ti->runtimeAcceptsValue(QoreValue()) != QTI_NOT_EQUAL;
+        ti->takes_nothing_cache.store(rv ? 1 : 0, std::memory_order_relaxed);
+        return rv;
+    }
+
+    //! returns true if the element type of the complex list type \a lti takes NOTHING; cached in the list type
+    /** a list whose element type does not take NOTHING cannot hold NOTHING (qore#6435)
+    */
+    DLLLOCAL static bool listElementTakesNothing(const QoreTypeInfo* lti) {
+        signed char c = lti->list_elem_takes_nothing_cache.load(std::memory_order_relaxed);
+        return c >= 0 ? c : listElementTakesNothingIntern(lti);
+    }
+
+    //! computes and caches the value returned by listElementTakesNothing()
+    DLLLOCAL static bool listElementTakesNothingIntern(const QoreTypeInfo* lti);
+
+    //! returns the list type whose element type is the or-nothing type of the element type of the complex list type
+    //! \a lti (list<*int> for list<int>), or \a lti if its element type takes NOTHING; cached in the list type
+    //! (qore#6435)
+    DLLLOCAL static const QoreTypeInfo* getOrNothingListType(const QoreTypeInfo* lti) {
+        const QoreTypeInfo* rv = lti->or_nothing_list_cache.load(std::memory_order_acquire);
+        return rv ? rv : getOrNothingListTypeIntern(lti);
+    }
+
+    //! computes and caches the type returned by getOrNothingListType()
+    DLLLOCAL static const QoreTypeInfo* getOrNothingListTypeIntern(const QoreTypeInfo* lti);
 
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e runtimeAcceptsValue(const QoreTypeInfo* ti, const QoreValue n) {
@@ -729,9 +794,10 @@ public:
             str.sprintf("no value");
     }
 
-    // static version of method, checking for null pointer
-    DLLLOCAL static void acceptInputParam(const QoreTypeInfo* ti, int param_num, const char* param_name, QoreValue& n,
-            ExceptionSink* xsink) {
+    // static version of method, checking for null pointer; inlined explicitly: the fast path of the parameters of
+    // every call, whose inlining depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static void acceptInputParam(const QoreTypeInfo* ti, int param_num,
+            const char* param_name, QoreValue& n, ExceptionSink* xsink) {
         if (hasType(ti)) {
             if (ti->acceptsRuntimeValueWithoutFilter(n)) {
                 return;
@@ -1282,6 +1348,12 @@ protected:
         qore_get_type_identity_serial()
     */
     uint64_t identity_serial = 0;
+    //! for a union type, the base value types (bit n for type n < 64) that one of its members has exactly (qore#6407)
+    uint64_t union_exact_mask = 0;
+    //! for a union type, the base value types (as above) that a member of the plain scalar type has (ex: int)
+    uint64_t union_scalar_mask = 0;
+
+    DLLLOCAL bool unionAcceptsExactlyImpl(const QoreValue& n) const;
 
     DLLLOCAL QoreTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname)
             : accept_vec(a_vec), return_vec(r_vec), tname(tname) {
@@ -1503,6 +1575,13 @@ protected:
 private:
     const q_accept_vec_t accept_vec;
     mutable std::atomic<signed char> contains_type_parameter_cache {-1};
+    //! whether the type takes NOTHING at run time: -1 = not known yet; see runtimeTakesNothing()
+    mutable std::atomic<signed char> takes_nothing_cache {-1};
+    //! for a complex list type: whether its element type takes NOTHING: -1 = not known yet; see
+    //! listElementTakesNothing()
+    mutable std::atomic<signed char> list_elem_takes_nothing_cache {-1};
+    //! for a complex list type: its list<*T> type; see getOrNothingListType()
+    mutable std::atomic<const QoreTypeInfo*> or_nothing_list_cache {nullptr};
 };
 
 class QoreAnyTypeInfo : public QoreTypeInfo {
@@ -4526,6 +4605,15 @@ public:
             members(std::move(members)) {
     }
 
+    //! records the member types that a value of the type is accepted as, given the value types of the members
+    /** Called when the union type is made, outside the lock of the type caches that get_value_type() takes
+        (qore#6407)
+    */
+    DLLLOCAL void initExactMembers(const type_vec_t& value_types);
+
+    //! returns true if a member of the union has the value's own type (see unionAcceptsExactly())
+    DLLLOCAL bool hasExactMember(const QoreValue& n) const;
+
     //! Returns true if this is an or-nothing union type
     DLLLOCAL bool isOrNothing() const {
         return orNothing;
@@ -4543,6 +4631,9 @@ protected:
     bool orNothing;  //!< true if this union type accepts NOTHING
     //! the member types as declared, without duplicates
     const type_vec_t members;
+    //! the value types of the members (without NOTHING), which a value of one of them is accepted as (qore#6407)
+    type_vec_t exact_members;
+
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         qore_string_private::get(str)->concat(&tname);
@@ -4590,6 +4681,34 @@ struct QoreTypeParamInstantiation {
     DLLLOCAL bool empty() const {
         return !owner || type_args.empty();
     }
+};
+
+class qore_type_decl_refs_private;
+
+//! Keeps the declarations (classes, hashdecls and enums) that types refer to, for a value that holds the types
+/** The type of a class, hashdecl or enum is freed with its declaration, which the Program that declared it releases
+    when it is deleted; a value that holds types without being a value of them (the explicit type arguments of a call
+    reference, the type arguments that a closure captures) keeps their declarations with this object, as
+    QoreExternalTypeDeclRefs does for the API (issue #6489).  Nothing is allocated for types without declarations.
+*/
+class QoreTypeDeclRefs {
+public:
+    DLLLOCAL QoreTypeDeclRefs() = default;
+
+    //! Releases the references
+    DLLLOCAL ~QoreTypeDeclRefs();
+
+    DLLLOCAL QoreTypeDeclRefs(const QoreTypeDeclRefs&) = delete;
+    DLLLOCAL QoreTypeDeclRefs& operator=(const QoreTypeDeclRefs&) = delete;
+
+    //! References the declarations that the types refer to, in addition to those already referenced
+    DLLLOCAL void add(const type_vec_t& types);
+
+    //! References the declarations that the type refers to, in addition to those already referenced
+    DLLLOCAL void add(const QoreTypeInfo* ti);
+
+private:
+    qore_type_decl_refs_private* priv = nullptr;
 };
 
 //! Returns the current call-local generic type-parameter instantiation, if any

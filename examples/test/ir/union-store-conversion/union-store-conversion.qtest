@@ -18,7 +18,8 @@
 #! Tests that a value stored in a local of a union type is converted to the first member that accepts it in every mode
 /** The IR interpreter stored an int in a top-level local of the type <tt>union<float, int></tt> (and in a local in a
     try block) as it was, because the union accepts an int, where the AST interpreter, JIT code and every mode in a
-    function convert the value to the first member that accepts it (the float 1.0) (qore#6282).
+    function convert the value to the first member that accepts it (the float 1.0) (qore#6282).  A union now keeps a
+    value of one of its member types as it is, whatever the order of its members (qore#6407): every mode keeps the int.
 
     The test generates a program that stores an int, a float and a number, given at runtime, in locals of unions of
     float, number, int and string members in different orders, at the top level, in a try block at the top level, in a
@@ -49,14 +50,15 @@ class UnionStoreConversionTest inherits QUnit::Test {
             "sub show(string label, auto v) { printf(\"%s: %y %s\\n\", label, v, v.fullType()); }\n"
             "sub fail(string label, hash<ExceptionInfo> ex) { printf(\"%s: %s\\n\", label, ex.err); }\n";
 
-        #! the results of the AST interpreter that the issue names: an int is converted to the first member that accepts it
+        #! the results of the AST interpreter for the locals of the issue: a union keeps an int as it is, as it has an
+        #! int member, whatever the order of its members (qore#6407)
         const Expected = (
-            "top union<float, int> 1: 1.0 float",
-            "top try union<float, int> 1: 1.0 float",
-            "sub union<float, int> 1: 1.0 float",
-            "sub try union<float, int> 1: 1.0 float",
-            "top union<number, int> 1: 1 number",
-            "top try union<number, int> 1: 1 number",
+            "top union<float, int> 1: 1 integer",
+            "top try union<float, int> 1: 1 integer",
+            "sub union<float, int> 1: 1 integer",
+            "sub try union<float, int> 1: 1 integer",
+            "top union<number, int> 1: 1 integer",
+            "top try union<number, int> 1: 1 integer",
             "top union<int, float> 1: 1 integer",
             "top try union<int, float> 1: 1 integer",
         );
@@ -118,7 +120,8 @@ class UnionStoreConversionTest inherits QUnit::Test {
         f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "union-store-conversion.q"));
         f.close();
-        string expected = "top: 1.0 float\nsub: 1.0 float\n";
+        # the union keeps the int as it has an int member (qore#6407)
+        string expected = "top: 1 integer\nsub: 1 integer\n";
         foreach string mode in (ExecModeHarness::ExecModes) {
             assertEq(expected, run(sprintf("--exec-mode=%s %s", mode, file)).join("\n") + "\n", mode);
         }

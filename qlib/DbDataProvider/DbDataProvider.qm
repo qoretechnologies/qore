@@ -529,6 +529,13 @@ mv.doRequest({"concurrent": True});
     @section dbdataprovider_relnotes Release Notes
 
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - added the \c "recursive" search option of @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider", which
+      searches the rows of a recursive query (see
+      <a href="../../SqlUtil/html/sql_operations.html#select_option_recursive">SqlUtil select option recursive</a>);
+      the record type of such a search, given by its iterators and by
+      @ref DataProvider::AbstractDataProvider::getRecordType() "getRecordType()" and
+      @ref DataProvider::AbstractDataProvider::getRecordTypeWithOptions() "getRecordTypeWithOptions()" with the search
+      options, has the columns of the query (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - code restricted from the \c DATABASE domain (@ref Qore::PO_NO_DATABASE "PO_NO_DATABASE") cannot open a
       datasource from a connection string given as the \c datasource option or create a
       @ref DbDataProvider::DatasourceConnection "DatasourceConnection", also through other code:

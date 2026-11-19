@@ -147,9 +147,9 @@ public class TimerDispatchTest inherits QUnit::Test {
         assertEq(0, started.waitForZero(10s), "owner-tagged timer callback did not start within 10s");
 
         # flush must block for the remainder of the callback's 1s sleep
-        date t0 = now_us();
+        int t0 = clock_get_monotonic_us();
         ctrl.flushCallbacksByOwner(owner);
-        date elapsed = now_us() - t0;
+        date elapsed = microseconds(clock_get_monotonic_us() - t0);
 
         assertTrue(callback_done, "flushCallbacksByOwner() must wait for the in-flight callback to finish");
         # the callback was ~10ms+dispatch into its 1s sleep when flush was called, so

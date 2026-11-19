@@ -392,9 +392,25 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - a string given as the first argument of the \c in data provider expression is a bound value, as with the other
+      databases; it was written into the SQL as a column name
+      (<a href="https://github.com/qoretechnologies/qore/issues/6574">issue 6574</a>)
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - fixed the \c in expression with the values as the arguments after the field, as the DPQL parser gives them
+      (ex: <tt>\@id in (1, 4)</tt>), which raised \c DATA-PROVIDER-EXPRESSION-ERROR or \c RUNTIME-OVERLOAD-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6581">issue 6581</a>)
     - fixed a column declared with \c "default null", which was described with the default value \c null, so
       table alignment set it again every time
       (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
+    - implemented @ref select_option_recursive "recursive queries" with recursive subquery factoring, which needs
+      Oracle 11.2 or later (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
+    - a create-as-select gives the values of its select in the SQL as literals that give them exactly
+      (@ref OracleSqlUtilBase::OracleTable::getInlineSqlValue() "OracleTable::getInlineSqlValue()"), as Oracle
+      refuses bind values in it; a recursive query can be its select or the select of an insert-select
+      (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
     - the \c "except" @ref select_option_set_operators "set operator" of a select is Oracle's \c MINUS
       (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
     - fixed the \c IN operator with a driver other than \c oracle (ex: \c jdbc), which cannot bind the collection of
@@ -2233,7 +2249,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     #! Returns the SQL that sets or removes the comment of a view: Oracle comments on a view as on a table
     private softlist<string> getViewCommentSqlImpl(AbstractView view, *string comment, *string old_comment) {
         return sprintf("comment on table %s is %s", oracle_get_sql_object_name(view.name),
-            "'" + replace(comment ?? "", "'", "''") + "'");
+            AbstractSqlUtilBase::getSqlStringLiteral(comment ?? ""));
     }
 
     private OracleFunction makeFunctionImpl(string name, string src, *hash opts) {
@@ -2840,6 +2856,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
             # try to drop any table created to back the materialized view, ignoring ORA-00942
             # "table or view does not exist" errors but rethrowing all others
             # the name is in a string literal, where each single quote is doubled
+            AbstractSqlUtilBase::checkSqlStringValue(name);
             ds.execRaw("begin execute immediate 'drop table " + replace(name, "'", "''") + "'; exception when "
                 "others then if sqlcode != -942 then raise; end if; end;");
         }
@@ -3152,10 +3169,11 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "return_type": AbstractDataProviderTypeMap."any",
                 },
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    # the arguments are the expression, the type, and an optional size and scale; the type name is checked
+                    # first, as it is written into the SQL (qore#6572)
+                    string name = QoreTypeMap{args[1]} ?? SqlUtil::sql_check_cast_type(args[1]);
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
-                    # the arguments are the expression, the type, and an optional size and scale
-                    string name = QoreTypeMap{args[1]} ?? args[1];
                     *hash<auto> desc = OraTypeMap{name};
                     string sql = sprintf ("cast (%s as %s", exp0, name);
                     if (desc.size == SZ_MAND) {
@@ -3339,36 +3357,24 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 },
             },
             OP_IN: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": OP_IN,
-                    "display_name": OP_IN,
-                    "short_desc": "Returns True if the first argument is found in the second argument",
-                    "desc": "Returns True if the first argument is found in the second argument",
-                    "symbol": OP_IN,
-                    "groups": "Comparison",
-                    "args": (
-                        DataProviderSignatureAnyType,
-                        DataProviderSignatureAnyType,
-                    ),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+                # the generic description, which accepts the values as a list or as the other arguments (issue #6581)
+                "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN},
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     auto val = args[0];
                     # make a copy of "info" before modifying
                     hash<QueryInfo> info0 = info;
 
-                    # add column argument first
-                    string exp0;
-                    if (val.typeCode() == NT_STRING) {
-                        # assume column name
-                        exp0 = val;
-                    } else {
-                        exp0 = info.table.getExpressionArg(\info, role, val,
-                            AbstractDataProviderTypeMap."any");
-                    }
+                    # add column argument first: a column is given as a field reference; a string is a value, which is
+                    # bound, as in the default expression map, and never written into the SQL (qore#6574)
+                    string exp0 = info.table.getExpressionArg(\info, role, val, AbstractDataProviderTypeMap."any");
 
-                    *string sql = OracleTable::getInSql(\info, exp0, args[1] ?? (), "ORACLE-IN-OPERATOR-ERROR");
+                    # the values are a list (field, list), or the other arguments in the varargs form of DPQL (field, v1,
+                    # v2, ...), as in the generic "in" operator (issue #6581)
+                    list<auto> in_vals = args[1..];
+                    if (in_vals.size() == 1 && in_vals[0].typeCode() == NT_LIST) {
+                        in_vals = in_vals[0];
+                    }
+                    *string sql = OracleTable::getInSql(\info, exp0, in_vals, "ORACLE-IN-OPERATOR-ERROR");
                     if (sql) {
                         return sql;
                     }
@@ -3670,8 +3676,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
                     if (exists args[1]) {
-                        string fmt = OracleTable::convertDateFormat(args[1]);
-                        return sprintf("to_timestamp(%s, '%s')", exp0, fmt);
+                        return sprintf("to_timestamp(%s, %s)", exp0, OracleTable::getDateFormatLiteral(args[1]));
                     }
                     return sprintf("cast(%s as timestamp)", exp0);
                 },
@@ -3728,8 +3733,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."date");
-                    string fmt = OracleTable::convertDateFormat(args[1]);
-                    return sprintf("to_char(%s, '%s')", exp0, fmt);
+                    return sprintf("to_char(%s, %s)", exp0, OracleTable::getDateFormatLiteral(args[1]));
                 },
             },
         };
@@ -3759,8 +3763,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         const OracleCopMap = (
             COP_CAST: (
                 "code": string sub (string cve, list<auto> args) {
-                    string name = QoreTypeMap{args[0]} ?? args[0];
-                    hash desc = OraTypeMap{name};
+                    string name = QoreTypeMap{args[0]} ?? SqlUtil::sql_check_cast_type(args[0]);
+                    # a type that the driver does not describe (ex: a sized type name such as "varchar2(10 char)") is given as
+                    # it is (qore#6572)
+                    *hash<auto> desc = OraTypeMap{name};
                     string sql = sprintf ("cast (%s as %s", cve, name);
                     switch (name) {
                         default:
@@ -4191,6 +4197,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         @since OracleSqlUtilBase 1.7 a schema or table name that is not an ordinary name is quoted in upper case
     */
     string getSqlName() {
+        # issue #3544: the common table expression of a recursive query has no schema
+        if (recursive_cte) {
+            return oracle_get_sql_identifier(name);
+        }
         return oracle_get_sql_identifier(schema) + "." + oracle_get_sql_object_name(name)
             + (dblink ? "@" + dblink : "");
     }
@@ -4907,14 +4917,23 @@ group by p.index_name", schema.upr(), name.upr());
         @since %Qore 3.0
     */
     static string convertDateFormat(string fmt) {
+        # the format is written into an SQL string literal (qore#6553)
+        sql_literal_check_encoding(fmt);
         # use negative lookahead to avoid double-replacing "HH24" -> "HH2424"
         fmt = regex_subst(fmt, "HH(?!24)", "HH24", RE_Global);
         fmt = regex_subst(fmt, "mm", "MI", RE_Global);
         fmt = regex_subst(fmt, "us", "FF6", RE_Global);
         fmt = regex_subst(fmt, "ms", "FF3", RE_Global);
-        # escape single quotes for safe SQL embedding
-        fmt = regex_subst(fmt, "'", "''", RE_Global);
         return fmt;
+    }
+
+    #! Returns the date format converted by convertDateFormat() as an SQL string literal (qore#6557)
+    /** The format is given in single quotes, with each single quote doubled
+
+        @throw VALUE-ERROR the format is not valid in its encoding
+    */
+    static string getDateFormatLiteral(string fmt) {
+        return "'" + replace(convertDateFormat(fmt), "'", "''") + "'";
     }
 
     private ForeignConstraints getForeignConstraintsImpl(*hash opts) {
@@ -5501,6 +5520,202 @@ group by p.index_name", schema.upr(), name.upr());
         # a DATE never equals a value with fractional seconds; the generic comparison is used
     }
 
+    #! Returns @ref False: Oracle refuses bind values in a create-as-select, whose values are given in the SQL
+    /** The values are given with getInlineSqlValue(), in the time zone of the datasource (its \c "timezone" option),
+        as the oracle driver binds them
+
+        @since OracleSqlUtilBase 1.7
+    */
+    private bool createAsSelectBindsValuesImpl() {
+        return False;
+    }
+
+    #! Returns the SQL literal of a value of a create-as-select, in the time zone of the datasource
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private string getCreateAsSelectInlineValueImpl(auto v) {
+        return OracleTable::getInlineSqlValue(v, v.typeCode() == NT_DATE ? OracleTable::getDatasourceTimeZone(ds)
+            : NOTHING);
+    }
+
+    #! Returns the time zone in which the oracle driver binds a date: that of the datasource's \c "timezone" option
+    /** @return the time zone of the option, or @ref nothing for the current time zone (the driver's default)
+
+        @throw VALUE-ERROR the time zone of the option cannot be found
+
+        @since OracleSqlUtilBase 1.7
+    */
+    static *TimeZone getDatasourceTimeZone(AbstractDatasource ds) {
+        auto tzname;
+        try {
+            tzname = ds.getOption("timezone");
+        } catch (hash<ExceptionInfo> ex) {
+            # a datasource without the option: the current time zone, as the driver's default
+        }
+        if (tzname.typeCode() == NT_STRING && tzname.val()) {
+            return OracleTable::getTimeZone(tzname);
+        }
+    }
+
+    #! Returns the time zone of a \c "timezone" option of the oracle driver: a region name or a UTC offset
+    /** @param name a region name, or a UTC offset as <tt>+DD[:DD[:DD]]</tt> (the driver reports a whole-hour offset
+        as \c "+01")
+
+        @throw VALUE-ERROR the time zone cannot be found
+
+        @since OracleSqlUtilBase 1.7
+    */
+    static TimeZone getTimeZone(string name) {
+        if (*list<*string> offset = (name =~ x/^([-+])([0-9]{2})(?::?([0-9]{2})(?::?([0-9]{2}))?)?$/)) {
+            int seconds = offset[1].toInt() * 3600 + (offset[2] ?? "0").toInt() * 60 + (offset[3] ?? "0").toInt();
+            return new TimeZone(offset[0] == "-" ? -seconds : seconds);
+        }
+        try {
+            return new TimeZone(name);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "VALUE-ERROR", sprintf("the time zone %y of the datasource cannot be found for a date value: %s: %s",
+                name, ex.err, ex.desc);
+        }
+    }
+
+    #! Returns an Oracle SQL literal that gives a value exactly, for a statement that cannot bind it
+    /** The literal never changes the statement it is given in:
+        - a string is given as <tt>UNISTR('...')</tt> with only ASCII letters, digits, space and punctuation other
+          than quotes, backslashes, \c % and \c : in its argument: every other character is given as a \c \\XXXX
+          UTF-16 code unit escape, whatever the character set of the database; the value is a national character
+          string, which compares with a \c CHAR column without blank padding, as a bound string does (and converts a
+          \c VARCHAR2 column it is compared with, which can keep an index on the column from being used)
+        - an \c int or a \c number is given as a decimal number, a \c float as a \c BINARY_DOUBLE literal with the
+          digits that give it exactly (ex: <tt>1e-1d</tt> for \c 0.1), a negative number in parentheses, a date as
+          <tt>to_timestamp('...', 'YYYYMMDDHH24MISSFF6')</tt> in the given time zone (as the oracle driver binds a
+          date), a \c bool as \c 1 or \c 0, and \c NOTHING and \c NULL as \c null
+        - other values, such as binary values and the collection that the \c "in" operator binds with the oracle
+          driver, are refused
+
+        @param v the value
+        @param tz the time zone of the datasource, in which a date is given (the current time zone if not given)
+
+        @return the SQL literal of the value
+
+        @throw VALUE-ERROR the value cannot be given exactly: a string whose encoding is invalid (also a lone UTF-16
+        surrogate), that has a NUL character, or that has more than 2000 UTF-16 code units (a character outside of the
+        Basic Multilingual Plane has two) or an escaped form longer than 4000 bytes (the limits of
+        Oracle's national character strings and string literals); a \c float or a \c number that is not a finite
+        value, or a \c number with an absolute value of \c 1e126 or more; a relative date (a duration), or a date
+        whose year is before 1 or after 9999; or a value of another type
+
+        @since OracleSqlUtilBase 1.7
+    */
+    static string getInlineSqlValue(auto v, *TimeZone tz) {
+        switch (v.typeCode()) {
+            case NT_NOTHING:
+            case NT_NULL:
+                return "null";
+
+            case NT_BOOLEAN:
+                return v ? "1" : "0";
+
+            case NT_INT:
+                return OracleTable::wrapNegative(v.toString());
+
+            case NT_FLOAT: {
+                if (v.nanp() || v.infp()) {
+                    throw "VALUE-ERROR", sprintf("the float value %y cannot be given in the SQL", v);
+                }
+                string str = v.toStringRoundTrip(True);
+                if (str !~ /^-?[0-9]+(\.[0-9]+)?(e[-+]?[0-9]+)?$/i) {
+                    throw "VALUE-ERROR", sprintf("the float value %y cannot be given in the SQL", v);
+                }
+                return OracleTable::wrapNegative(str + "d");
+            }
+
+            case NT_NUMBER: {
+                if (v.nanp() || v.infp() || v.abs() >= 1e126n) {
+                    throw "VALUE-ERROR", sprintf("the number value %y cannot be given in the SQL", v);
+                }
+                string str = v.toStringRoundTrip();
+                if (str !~ /^-?[0-9]+(\.[0-9]+)?$/) {
+                    throw "VALUE-ERROR", sprintf("the number value %y cannot be given in the SQL", v);
+                }
+                return OracleTable::wrapNegative(str);
+            }
+
+            case NT_DATE: {
+                if (v.relative()) {
+                    throw "VALUE-ERROR", sprintf("the relative date (duration) %y cannot be given in the SQL", v);
+                }
+                date d = (tz ?? TimeZone::get()).date(v);
+                int year = d.years();
+                if (year < 1 || year > 9999) {
+                    throw "VALUE-ERROR", sprintf("the date %y cannot be given in the SQL: Oracle's years are from 1 "
+                        "to 9999", v);
+                }
+                string str = d.format("YYYYMMDDHHmmSSus");
+                if (str !~ /^[0-9]{20}$/) {
+                    throw "VALUE-ERROR", sprintf("the date %y cannot be given in the SQL", v);
+                }
+                return sprintf("to_timestamp('%s', 'YYYYMMDDHH24MISSFF6')", str);
+            }
+
+            case NT_STRING: {
+                binary utf16;
+                try {
+                    # the conversion refuses a string whose encoding is invalid
+                    utf16 = convert_encoding(v, "UTF-16BE").toBinary();
+                } catch (hash<ExceptionInfo> ex) {
+                    throw "VALUE-ERROR", sprintf("a string with an invalid %s encoding cannot be given in the SQL: "
+                        "%s: %s", v.encoding(), ex.err, ex.desc);
+                }
+                int units = utf16.size() / 2;
+                if (units * 2 != utf16.size()) {
+                    throw "VALUE-ERROR", "a string with an invalid encoding cannot be given in the SQL";
+                }
+                if (units > 2000) {
+                    throw "VALUE-ERROR", sprintf("a string of %d characters cannot be given in the SQL; Oracle's "
+                        "national character strings have at most 2000", units);
+                }
+                string str = "";
+                for (int i = 0; i < units; ++i) {
+                    int unit = (utf16[i * 2] << 8) | utf16[i * 2 + 1];
+                    if (!unit) {
+                        throw "VALUE-ERROR", "a string with a NUL character cannot be given in the SQL";
+                    }
+                    # a high surrogate must be followed by a low one, and a low one must follow a high one
+                    if (unit >= 0xd800 && unit <= 0xdbff) {
+                        int next = i + 1 < units ? ((utf16[i * 2 + 2] << 8) | utf16[i * 2 + 3]) : 0;
+                        if (next < 0xdc00 || next > 0xdfff) {
+                            throw "VALUE-ERROR", "a string with a lone UTF-16 surrogate cannot be given in the SQL";
+                        }
+                    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+                        int prev = i ? ((utf16[i * 2 - 2] << 8) | utf16[i * 2 - 1]) : 0;
+                        if (prev < 0xd800 || prev > 0xdbff) {
+                            throw "VALUE-ERROR", "a string with a lone UTF-16 surrogate cannot be given in the SQL";
+                        }
+                    }
+                    # only ASCII letters, digits, space and punctuation other than quotes, backslashes and the
+                    # characters of bind placeholders as they are
+                    if (unit >= 0x20 && unit < 0x7f && unit != 0x27 && unit != 0x22 && unit != 0x5c && unit != 0x25
+                        && unit != 0x3a) {
+                        str += chr(unit);
+                    } else {
+                        str += sprintf("\\%04X", unit);
+                    }
+                }
+                if (str.size() > 4000) {
+                    throw "VALUE-ERROR", sprintf("a string whose escaped form has %d bytes cannot be given in the SQL; "
+                        "Oracle's string literals have at most 4000", str.size());
+                }
+                return "UNISTR('" + str + "')";
+            }
+        }
+        throw "VALUE-ERROR", sprintf("a value of type %y cannot be given in the SQL", v.type());
+    }
+
+    #! Returns a numeric literal, in parentheses if it is negative, so that a minus sign before it cannot make a comment
+    private static string wrapNegative(string str) {
+        return str[0] == "-" ? "(" + str + ")" : str;
+    }
+
     #! returns a string for use in SQL queries representing the DB-specific value of the argument; returns NOTHING if the type cannot be converted to an SQL string
     private *string getSqlValueImpl(auto v) {
         switch (v.typeCode()) {
@@ -5509,7 +5724,9 @@ group by p.index_name", schema.upr(), name.upr());
             case NT_INT: return v.toString();
 
             # double any single quotes in strings
-            case NT_STRING: v =~ s/'/''/g; return "'" + v + "'";
+            # issue #6586: the quotes are doubled without a regular expression, and a string whose encoding is
+            # invalid is refused
+            case NT_STRING: return AbstractSqlUtilBase::getSqlStringLiteral(v);
 
             case NT_NULL:
             case NT_NOTHING: return "null";
@@ -6238,6 +6455,42 @@ group by p.index_name", schema.upr(), name.upr());
     */
     private string getSetOperatorSql(string op) {
         return op == "except" ? "minus" : AbstractTable::getSetOperatorSql(op);
+    }
+
+    #! Returns @ref nothing if the server supports recursive queries (recursive subquery factoring), which need Oracle 11.2
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private *string getRecursiveQueryUnsupportedReasonImpl() {
+        int major = oracle_get_server_major_version(ds);
+        if (major > 11) {
+            return;
+        }
+        if (major == 11) {
+            auto version = ds.getServerVersion();
+            # the oracle driver gives the release, such as "... Release 11.2.0.4.0"; the jdbc driver gives a hash
+            *int minor = version.typeCode() == NT_HASH
+                ? version.minor_version.toInt()
+                : (version =~ x/Release 11\.([0-9]+)/)[0].toInt();
+            if (minor >= 2) {
+                return;
+            }
+        }
+        return sprintf("recursive queries need Oracle 11.2 or later; the server's version is %y",
+            ds.getServerVersion());
+    }
+
+    #! Returns \c "with": Oracle has no \c RECURSIVE keyword
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private string getRecursiveWithSqlImpl() {
+        return "with";
+    }
+
+    #! Returns @ref False: a recursive query needs \c UNION \c ALL on Oracle
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool recursiveQuerySupportsUnionDistinctImpl() {
+        return False;
     }
 
     private bool asteriskRequiresPrefix() {

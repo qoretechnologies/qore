@@ -1,0 +1,35 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a registry of callbacks that the code of any Program can register and that
+# DdHookMid runs while it is loaded (qore#6351)
+
+%modern
+
+module DdHook {
+    version = "1.0";
+    desc = "a module of aot-dependency-domains.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DdHook {
+    public class Hooks {
+        public {
+            static list<code> hooks = ();
+        }
+
+        #! registers a callback
+        static reg(code c) {
+            push hooks, c;
+        }
+
+        #! runs the callbacks; returns their number
+        static int fire() {
+            foreach code c in (hooks) {
+                c();
+            }
+            return hooks.size();
+        }
+    }
+}

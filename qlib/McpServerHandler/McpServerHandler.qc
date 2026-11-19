@@ -1848,6 +1848,11 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             return True;
         }
 
+        # a value that is not valid in its encoding (request data) names no media type, and the substitution below
+        # cannot remove its parameters (qore#6553)
+        if (!(astr =~ /^/)) {
+            return False;
+        }
         do {
             astr =~ s/;[^,]*//;
         } while (astr.rfind(";") != -1);

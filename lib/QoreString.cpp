@@ -68,6 +68,11 @@
 #include <iconv.h>
 #include <map>
 #include <memory>
+#include <new>
+
+//! returns a copy of a source string that is the target of an operation or part of its text, or nullptr if it cannot
+//! be made (out of line: the slow path of the operations that take a source string)
+static QORE_INTERN_NOINLINE QoreString* qore_own_source_copy(const QoreString* str);
 #include <set>
 #include <string>
 
@@ -512,6 +517,12 @@ static void base64_concat(qore_string_private& str, unsigned char c, size_t& lin
 
 void qore_string_private::concatBase64(const char* bbuf, size_t size, size_t maxlinelen, bool url_encode) {
     //printd(0, "bbuf=%p, size=" QSD "\n", bbuf, size);
+    // a source that is part of the string's text is copied first, as the text moves
+    QoreStringOwnSource src(*this, bbuf, size);
+    bbuf = src.get();
+    if (!src.ok()) {
+        return;
+    }
     if (!size) {
         return;
     }
@@ -1696,6 +1707,8 @@ void qore_string_private::splice_simple(size_t offset, size_t num, QoreString* e
 
 void qore_string_private::splice_simple(size_t offset, size_t num, const char* str, size_t str_len,
         QoreString* extract) {
+    // a source that is part of the target's text (including a view) is located again after the buffer changes
+    qore_offset_t own = str_len ? ownDataOffset(str) : -1;
     mutableBuffer();
     // the callers give an offset within the string; see QoreString::replace()
     assert(offset <= len);
@@ -1709,6 +1722,19 @@ void qore_string_private::splice_simple(size_t offset, size_t num, const char* s
         num = len - offset;
     } else {
         end = offset + num;
+    }
+
+    // a source that is part of the string is moved by the changes below: it is copied first, before anything is
+    // changed
+    std::unique_ptr<char, QoreFreeDeleter> own_copy;
+    if (own >= 0) {
+        str = ownedBuffer() + own;
+        own_copy.reset(static_cast<char*>(malloc(str_len)));
+        if (!own_copy) {
+            return;
+        }
+        memcpy(own_copy.get(), str, str_len);
+        str = own_copy.get();
     }
 
     // add to extract string if any
@@ -1944,6 +1970,20 @@ void qore_string_private::splice_complex(qore_offset_t offset, qore_offset_t num
     if (*xsink)
         return;
 
+    // a source that is part of the string is moved by the changes below: it is copied first, before anything is
+    // changed
+    const char* src = str->priv->effective_buf();
+    size_t src_len = str->priv->len;
+    std::unique_ptr<char, QoreFreeDeleter> own_copy;
+    if (src_len && ownDataOffset(src) >= 0) {
+        own_copy.reset(static_cast<char*>(malloc(src_len)));
+        if (!own_copy) {
+            return;
+        }
+        memcpy(own_copy.get(), src, src_len);
+        src = own_copy.get();
+    }
+
     //printd(5, "splice_complex(offset=" QSD ", num=" QSD ", str='%s', len=" QSD ") clen=" QSD
     //    " ownedBuffer()='%s'\n", offset, num, str->c_str(), len, clen, ownedBuffer());
 
@@ -1990,23 +2030,23 @@ void qore_string_private::splice_complex(qore_offset_t offset, qore_offset_t num
 
     //printd(5, "offset=" QSD ", end=" QSD ", num=" QSD "\n", offset, end, num);
     // get number of entries to insert
-    if (str->priv->len > (size_t)num) { // make bigger
+    if (src_len > (size_t)num) { // make bigger
         size_t ol = len;
-        check_char(len - num + str->priv->len);
+        check_char(len - num + src_len);
         // move trailing entries forward if necessary
         //printd(5, "priv->buf='%s'(" QSD "), str='%s'(" QSD "), end=" QSD ", num=" QSD ", newlen=" QSD "\n", ownedBuffer(), ol,
         //    str->priv->ownedBuffer(), str->priv->len, end, num, len);
         if (end != ol)
-            memmove(ownedBuffer() + (end - num + str->priv->len), ownedBuffer() + end, ol - end);
-    } else if ((size_t)num > str->priv->len) { // make string smaller
+            memmove(ownedBuffer() + (end - num + src_len), ownedBuffer() + end, ol - end);
+    } else if ((size_t)num > src_len) { // make string smaller
         // move the trailing bytes down: only the len - end bytes after the removed range exist
-        memmove(ownedBuffer() + offset + str->priv->len, ownedBuffer() + end, sizeof(char) * (len - end));
+        memmove(ownedBuffer() + offset + src_len, ownedBuffer() + end, sizeof(char) * (len - end));
     }
 
-    memcpy(ownedBuffer() + offset, str->priv->effective_buf(), str->priv->len);
+    memmove(ownedBuffer() + offset, src, src_len);
 
     // calculate new length
-    len = len - num + str->priv->len;
+    len = len - num + src_len;
 
     // set last entry to NULL
     ownedBuffer()[len] = '\0';
@@ -2664,6 +2704,12 @@ void QoreString::reset() {
 
 void QoreString::set(const char* str, const QoreEncoding* new_qore_encoding) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the text is replaced
+    QoreStringOwnSource src(*priv, str);
+    str = src.get();
+    if (!src.ok()) {
+        return;
+    }
     if (priv->view_parent) {
         priv->abandon_view();
     }
@@ -2679,6 +2725,12 @@ void QoreString::set(const char* str, const QoreEncoding* new_qore_encoding) {
 
 void QoreString::set(const char* str, size_t len) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the text is replaced
+    QoreStringOwnSource src(*priv, str, len);
+    str = src.get();
+    if (!src.ok()) {
+        return;
+    }
     if (priv->view_parent) {
         priv->abandon_view();
     }
@@ -2695,18 +2747,29 @@ void QoreString::set(const char* str, size_t len) {
 
 void QoreString::set(const QoreString* str) {
     QORE_ASSERT_MUTABLE(this);
+    // the string itself is unchanged
+    if (str == this) {
+        return;
+    }
+    // a source that is part of the string's text (such as a view of it) is copied first, as the text is replaced
+    size_t slen = str->priv->len;
+    const QoreEncoding* senc = str->priv->getEncoding();
+    QoreStringOwnSource src(*priv, slen ? str->priv->effective_buf() : nullptr, slen);
+    if (!src.ok()) {
+        return;
+    }
     if (priv->view_parent) {
         priv->abandon_view();
     }
-    priv->len = str->priv->len;
+    priv->len = slen;
     priv->resetOwnedAsciiPrefix();
-    priv->encoding = str->priv->getEncoding();
-    allocate(str->priv->len + 1);
+    priv->encoding = senc;
+    allocate(slen + 1);
     // copy string and trailing null (source may be a view)
-    if (str->priv->len) {
-        memcpy(priv->ownedBuffer(), str->priv->effective_buf(), str->priv->len);
+    if (slen) {
+        memcpy(priv->ownedBuffer(), src.get(), slen);
     }
-    priv->ownedBuffer()[str->priv->len] = '\0';
+    priv->ownedBuffer()[slen] = '\0';
 }
 
 void QoreString::set(const QoreString& str) {
@@ -2757,6 +2820,17 @@ void QoreString::replaceAll(const char* old_str, const char* new_str) {
     QORE_ASSERT_MUTABLE(this);
     assert(old_str);
     assert(new_str);
+    // sources that are part of the string's text are copied first, as the text changes
+    QoreStringOwnSource old_src(*priv, old_str);
+    QoreStringOwnSource new_src(*priv, new_str);
+    old_str = old_src.get();
+    if (!old_src.ok()) {
+        return;
+    }
+    new_str = new_src.get();
+    if (!new_src.ok()) {
+        return;
+    }
 
     int old_len = ::strlen(old_str);
     // an empty string is found at every position; there is nothing to replace
@@ -3130,6 +3204,12 @@ void QoreString::concatBase64Url(const QoreString& str) {
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::concatHex(const char* binbuf, size_t size) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the text moves
+    QoreStringOwnSource src(*priv, binbuf, size);
+    binbuf = src.get();
+    if (!src.ok()) {
+        return;
+    }
     //printf("priv->buf=%p, size=" QSD "\n", binbuf, size);
     if (!size)
         return;
@@ -3147,16 +3227,44 @@ void QoreString::concatHex(const char* binbuf, size_t size) {
 
 int QoreString::concatEncode(ExceptionSink* xsink, const QoreString& str, unsigned code) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (qore_string_private::isOwnSource(*priv, *str.priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(&str));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return concatEncode(xsink, *own_copy, code);
+    }
     return priv->concatEncode(xsink, str, code);
 }
 
 int QoreString::concatDecode(ExceptionSink* xsink, const QoreString& str, unsigned code) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (qore_string_private::isOwnSource(*priv, *str.priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(&str));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return concatDecode(xsink, *own_copy, code);
+    }
     return priv->concatDecode(xsink, str, code);
 }
 
 void QoreString::concatAndHTMLEncode(const QoreString* str, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (str && qore_string_private::isOwnSource(*priv, *str->priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(str));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return;
+        }
+        concatAndHTMLEncode(own_copy.get(), xsink);
+        return;
+    }
     priv->concatEncode(xsink, str, CE_HTML);
 }
 
@@ -3164,6 +3272,12 @@ void QoreString::concatAndHTMLEncode(const QoreString* str, ExceptionSink* xsink
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::concatAndHTMLEncode(const char* str) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the text moves
+    QoreStringOwnSource src(*priv, str);
+    str = src.get();
+    if (!src.ok()) {
+        return;
+    }
     // if it's not a null string
     if (str) {
         size_t i = 0;
@@ -3204,6 +3318,12 @@ void QoreString::concatAndHTMLDecode(const char* str) {
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::concatAndHTMLDecode(const char* str, size_t slen) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the text moves
+    QoreStringOwnSource src(*priv, str, slen);
+    str = src.get();
+    if (!src.ok()) {
+        return;
+    }
     if (!slen)
         return;
 
@@ -3264,6 +3384,12 @@ void QoreString::concatAndHTMLDecode(const char* str, size_t slen) {
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::concatDecodeUrl(const char* url) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the text moves
+    QoreStringOwnSource src(*priv, url);
+    url = src.get();
+    if (!src.ok()) {
+        return;
+    }
     if (!url)
         return;
 
@@ -3283,6 +3409,15 @@ void QoreString::concatDecodeUrl(const char* url) {
 // assume encoding according to http://tools.ietf.org/html/rfc3986#section-2.1
 int QoreString::concatDecodeUrl(const QoreString& url_str, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (qore_string_private::isOwnSource(*priv, *url_str.priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(&url_str));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return concatDecodeUrl(*own_copy, xsink);
+    }
    assert(xsink);
    if (!priv->getEncoding()->isAsciiCompat()) {
        // the result is made in UTF-8 and converted to the encoding of this string: the characters that the operation
@@ -3306,6 +3441,15 @@ int QoreString::concatDecodeUrl(const QoreString& url_str, ExceptionSink* xsink)
 // assume encoding according to http://tools.ietf.org/html/rfc3986#section-2.1
 int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, bool encode_all) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (qore_string_private::isOwnSource(*priv, *url.priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(&url));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return concatEncodeUrl(xsink, *own_copy, encode_all);
+    }
     assert(xsink);
     if (!url.size())
         return 0;
@@ -3366,6 +3510,15 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
 
 int QoreString::concatEncodeUriRequest(ExceptionSink* xsink, const QoreString& url) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (qore_string_private::isOwnSource(*priv, *url.priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(&url));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return concatEncodeUriRequest(xsink, *own_copy);
+    }
     assert(xsink);
     if (!url.size())
         return 0;
@@ -3392,6 +3545,15 @@ int QoreString::concatEncodeUriRequest(ExceptionSink* xsink, const QoreString& u
 
 int QoreString::concatDecodeUriRequest(const QoreString& url_str, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (qore_string_private::isOwnSource(*priv, *url_str.priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(&url_str));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return concatDecodeUriRequest(*own_copy, xsink);
+    }
     assert(xsink);
     if (!priv->getEncoding()->isAsciiCompat()) {
         // the result is made in UTF-8 and converted to the encoding of this string: the characters that the operation
@@ -3432,7 +3594,10 @@ void QoreString::concat(const std::string& str) {
 
 void QoreString::concat(const char* str, size_t size) {
     QORE_ASSERT_MUTABLE(this);
-    priv->check_char(priv->len + size);
+    // only growth or a view moves the text (the test is the one that check_char() makes)
+    if (priv->view_parent || priv->len + size >= priv->allocated) {
+        str = priv->growKeepingSource(priv->len + size, str);
+    }
     memcpy(priv->ownedBuffer() + priv->len, str, size);
     priv->len += size;
     priv->ownedBuffer()[priv->len] = '\0';
@@ -3488,8 +3653,11 @@ void QoreString::concat(const QoreString* str, size_t size, ExceptionSink* xsink
             size = cstr->priv->len;
         }
 
-        // if priv->buffer needs to be resized; the new length is the current length plus the bytes appended
-        priv->check_char(priv->len + size + STR_CLASS_EXTRA);
+        // if priv->buffer needs to be resized; the new length is the current length plus the bytes appended; a
+        // source that is part of the string is found again after it grows
+        if (priv->view_parent || priv->len + size + STR_CLASS_EXTRA >= priv->allocated) {
+            src = priv->growKeepingSource(priv->len + size + STR_CLASS_EXTRA, src);
+        }
         // concatenate new string (source may be a view)
         memcpy(priv->ownedBuffer() + priv->len, src, size);
         priv->len += size;
@@ -3578,6 +3746,12 @@ int QoreString::compareSoft(const QoreString* str, ExceptionSink* xsink) const {
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::concatEscape(const char* str, char c, char esc_char) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the text moves
+    QoreStringOwnSource src(*priv, str);
+    str = src.get();
+    if (!src.ok()) {
+        return;
+    }
     // if it's not a null string
     if (str) {
         size_t i = 0;
@@ -3601,6 +3775,16 @@ void QoreString::concatEscape(const char* str, char c, char esc_char) {
 
 void QoreString::concatEscape(const QoreString* str, char c, char esc_char, ExceptionSink* xsink) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (str && qore_string_private::isOwnSource(*priv, *str->priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(str));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return;
+        }
+        concatEscape(own_copy.get(), c, esc_char, xsink);
+        return;
+    }
     if (!priv->getEncoding()->isAsciiCompat()) {
         // the result is made in UTF-8 and converted to the encoding of this string: the characters that the operation
         // writes are not ASCII bytes in an encoding that is not ASCII-compatible (UTF-16*, EBCDIC), and the
@@ -3705,9 +3889,33 @@ size_t QoreString::length() const {
     if (priv->getEncoding()->isMultiByte() && priv->len) {
         bool invalid;
         const char* b = priv->effective_buf();
-        return priv->getLengthFrom(b, 0, invalid);
+        size_t rc = priv->getLengthFrom(b, 0, invalid);
+        // text that is not valid in the encoding has one character per byte, as this function cannot raise an
+        // exception: the count of the characters before the first invalid byte sequence is not the length of the
+        // string (qore#6597)
+        return invalid ? priv->getLengthCountingInvalidBytes(b) : rc;
     }
     return priv->len;
+}
+
+size_t qore_string_private::getLengthCountingInvalidBytes(const char* b) const {
+    const QoreEncoding* enc = getEncoding();
+    // an encoding made of units of more than one byte (UTF-16) skips an invalid unit, so that the text after it is
+    // read in whole units; a byte is skipped where a whole unit does not remain
+    size_t unit = enc->getMinCharWidth();
+    const char* p = b;
+    const char* end = b + len;
+    size_t n = 0;
+    while (p < end) {
+        qore_offset_t l = enc->getCharLen(p, end - p);
+        if (l > 0) {
+            p += l;
+        } else {
+            p += unit > 1 && static_cast<size_t>(end - p) >= unit ? unit : 1;
+        }
+        ++n;
+    }
+    return n;
 }
 
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
@@ -3778,6 +3986,53 @@ void QoreString::allocate(unsigned requested_size) {
 
 const QoreEncoding* QoreString::getEncoding() const {
     return priv->getEncoding();
+}
+
+static QORE_INTERN_NOINLINE QoreString* qore_own_source_copy(const QoreString* str) {
+    // every allocation is checked: a copy that cannot be made fails the operation
+    size_t n = str->size();
+    std::unique_ptr<char, QoreFreeDeleter> buf(static_cast<char*>(malloc(n + 1)));
+    if (!buf) {
+        return nullptr;
+    }
+    memcpy(buf.get(), str->c_str(), n);
+    buf.get()[n] = '\0';
+    try {
+        // the string adopts the buffer
+        QoreString* rv = new QoreString(buf.get(), n, n + 1, str->getEncoding());
+        buf.release();
+        return rv;
+    } catch (std::bad_alloc&) {
+        return nullptr;
+    }
+}
+
+QORE_INTERN_NOINLINE void qore_string_private::concatOwnText(const char* str) {
+    size_t slen = ::strlen(str);
+    if (slen) {
+        concat_intern(str, slen);
+    }
+}
+
+QORE_INTERN_NOINLINE const char* qore_string_private::growKeepingSource(size_t i, const char* src) {
+    qore_offset_t own = ownDataOffset(src);
+    check_char(i);
+    return own >= 0 ? ownedBuffer() + own : src;
+}
+
+qore_offset_t qore_string_private::ownDataOffsetViewPath(const char* p) const {
+    assert(view_parent);
+    if (!len) {
+        return -1;
+    }
+    // the view's text starts at view_offset in the parent's buffer; the offsets are kept when the buffer changes
+    const qore_string_private* parent = qore_string_private::get(view_parent);
+    if (!parent->buffer) {
+        return -1;
+    }
+    uintptr_t b = reinterpret_cast<uintptr_t>(parent->buffer + view_offset);
+    uintptr_t q = reinterpret_cast<uintptr_t>(p);
+    return (q >= b && q < b + len) ? static_cast<qore_offset_t>(q - b) : -1;
 }
 
 const char* qore_string_private::effective_buf_view_path() const {
@@ -3854,6 +4109,50 @@ void qore_string_private::checkAsciiPrefix(const char* b, size_t prefix) const {
 void qore_string_private::raiseInvalidEncoding(ExceptionSink* xsink) const {
     // the exception that QoreEncoding raises for text that is not valid in a multi-byte encoding
     xsink->raiseException("INVALID-ENCODING", "invalid %s encoding encountered in string", getEncoding()->getCode());
+}
+
+int qore_string_private::checkValidEncodingIntern(const QoreString& str, const char* func, const char* what,
+        ExceptionSink* xsink) {
+    const qore_string_private* p = str.priv;
+    if (p->getEncoding() == QCS_UTF8) {
+        const char* b = p->effective_buf();
+        // the bytes of an ASCII prefix are valid characters in UTF-8
+        size_t start = p->getAsciiPrefix(b, p->len);
+        if (start == p->len) {
+            return 0;
+        }
+        bool incomplete;
+        size_t valid = start + IconvHelper::validUtf8Prefix(b + start, p->len - start, incomplete);
+        if (valid == p->len) {
+            return 0;
+        }
+        xsink->raiseException("INVALID-ENCODING", "%s: the %s string is not valid UTF-8: invalid byte sequence at "
+            "byte offset %zu", func, what, valid);
+        return -1;
+    }
+    if (qore_string_encoding_valid(str)) {
+        return 0;
+    }
+    xsink->raiseException("INVALID-ENCODING", "%s: the %s string is not valid %s", func, what,
+        p->getEncoding()->getCode());
+    return -1;
+}
+
+int64 qore_string_private::getCheckedUtf8Length(const QoreString& str, const char* op, ExceptionSink* xsink) {
+    const qore_string_private* p = str.priv;
+    assert(p->getEncoding() == QCS_UTF8);
+    if (checkValidEncodingIntern(str, op, "subject", xsink)) {
+        return -1;
+    }
+    // the ASCII prefix is known after the check; each character of valid UTF-8 after it has one byte that is not a
+    // continuation byte
+    const char* b = p->effective_buf();
+    size_t start = p->getAsciiPrefix(b, p->len);
+    size_t n = start;
+    for (size_t i = start; i < p->len; ++i) {
+        n += (static_cast<unsigned char>(b[i]) & 0xc0) != 0x80;
+    }
+    return static_cast<int64>(n);
 }
 
 void qore_string_private::prepareMutableBuffer() {
@@ -4079,6 +4378,12 @@ int QoreString::insertch(char c, size_t pos, unsigned times) {
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 int QoreString::insert(const char* str, size_t pos) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the text moves
+    QoreStringOwnSource src(*priv, str);
+    str = src.get();
+    if (!src.ok()) {
+        return -1;
+    }
     if (pos > priv->len)
         return -1;
 
@@ -4270,23 +4575,56 @@ void QoreString::trim(char c) {
 
 int QoreString::trim(ExceptionSink* xsink, const QoreString* chars) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (chars && qore_string_private::isOwnSource(*priv, *chars->priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(chars));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return trim(xsink, own_copy.get());
+    }
     qore_string_private* pchars = chars ? chars->priv : nullptr;
     return priv->trimLeading(xsink, pchars) || priv->trimTrailing(xsink, pchars);
 }
 
 int QoreString::trimLeading(ExceptionSink* xsink, const QoreString* chars) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (chars && qore_string_private::isOwnSource(*priv, *chars->priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(chars));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return trimLeading(xsink, own_copy.get());
+    }
     return priv->trimLeading(xsink, chars ? chars->priv : nullptr);
 }
 
 int QoreString::trimTrailing(ExceptionSink* xsink, const QoreString* chars) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is the string or part of its text is copied first, as the operation changes the text
+    if (chars && qore_string_private::isOwnSource(*priv, *chars->priv)) {
+        std::unique_ptr<QoreString> own_copy(qore_own_source_copy(chars));
+        if (!own_copy) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return trimTrailing(xsink, own_copy.get());
+    }
     return priv->trimTrailing(xsink, chars ? chars->priv : nullptr);
 }
 
 // remove trailing chars
 void QoreString::trim_trailing(const char* chars) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the operation changes the text
+    QoreStringOwnSource own_chars(*priv, chars);
+    chars = own_chars.get();
+    if (!own_chars.ok()) {
+        return;
+    }
     if (!priv->len)
         return;
     if (priv->view_parent) {
@@ -4307,6 +4645,12 @@ void QoreString::trim_trailing(const char* chars) {
 // remove leading char
 void QoreString::trim_leading(const char* chars) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the operation changes the text
+    QoreStringOwnSource own_chars(*priv, chars);
+    chars = own_chars.get();
+    if (!own_chars.ok()) {
+        return;
+    }
     if (!priv->len)
         return;
     if (priv->view_parent) {
@@ -4331,6 +4675,12 @@ void QoreString::trim_leading(const char* chars) {
 // remove leading and trailing blanks
 void QoreString::trim(const char* chars) {
     QORE_ASSERT_MUTABLE(this);
+    // a source that is part of the string's text is copied first, as the operation changes the text
+    QoreStringOwnSource own_chars(*priv, chars);
+    chars = own_chars.get();
+    if (!own_chars.ok()) {
+        return;
+    }
     trim_trailing(chars);
     trim_leading(chars);
 }
@@ -4408,9 +4758,14 @@ void QoreString::prepend(const char* str) {
 
 void QoreString::prepend(const char* str, size_t size) {
     QORE_ASSERT_MUTABLE(this);
+   // a source that is part of the string is found again after it grows and its data moves forward
+   qore_offset_t own = priv->ownDataOffset(str);
    priv->check_char(priv->len + size + 1);
    // move memory forward
    memmove((char*)priv->ownedBuffer() + size, priv->ownedBuffer(), priv->len + 1);
+   if (own >= 0) {
+      str = priv->ownedBuffer() + size + own;
+   }
    // copy new memory to beginning
    memcpy((char*)priv->ownedBuffer(), str, size);
    priv->len += size;
@@ -4588,4 +4943,25 @@ void TempEncodingHelper::removeBom() {
     qore_string_private* pstr = qore_string_private::get(str);
     assert(pstr->encoding);
     q_remove_bom(str, pstr->encoding);
+}
+
+// documented in qore_string_private.h
+bool qore_string_encoding_valid(const QoreString& str) {
+    if (!str.size()) {
+        return true;
+    }
+    if (str.getEncoding() == QCS_UTF8) {
+        bool incomplete = false;
+        return IconvHelper::validUtf8Prefix(str.c_str(), str.size(), incomplete) == str.size();
+    }
+    const QoreEncoding* enc = str.getEncoding();
+    // ASCII text in an encoding that represents every ASCII character as itself is valid; it needs no conversion
+    if (enc->isAsciiCompat() && !qore_encoding_private::isStateful(enc) && str.isDataAscii()) {
+        return true;
+    }
+    // a string in another encoding is valid if it can be converted to UTF-8; the conversion is made without an
+    // exception sink, so that it raises nothing (also no cancellation or sandbox limit, which a later call raises)
+    QoreString utf8(QCS_UTF8);
+    return !qore_string_private::convert_encoding_intern(str.c_str(), str.size(), enc, utf8, QCS_UTF8, nullptr,
+        false);
 }

@@ -7176,6 +7176,56 @@ static QoreAOTContext* buildContextFromSlotMap(
 
 // ---- IR Function Deserialization (Phase 5) ----
 
+//! Returns the target that an instruction read from an AOT module always branches to and does not have, or nullptr
+/** The interpreter and the JIT take the targets of a branch, a conditional branch, a switch, an iterator step and the
+    blocks of the incoming values of a phi without a check (qore#6468)
+*/
+static const char* qore_aot_ir_missing_target(const QoreIRInstruction& inst) {
+    if (auto* br = qore_ir_inst_cast<const QoreIRBranchInstruction*>(&inst)) {
+        return br->target ? nullptr : "branch target";
+    }
+    if (auto* brif = qore_ir_inst_cast<const QoreIRBranchIfInstruction*>(&inst)) {
+        return brif->true_target && brif->false_target ? nullptr : "conditional branch target";
+    }
+    if (auto* fused = qore_ir_inst_cast<const QoreIRBranchIfLtLocalIntInstruction*>(&inst)) {
+        return fused->true_target && fused->false_target ? nullptr : "conditional branch target";
+    }
+    if (auto* next = qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(&inst)) {
+        return next->done_target && next->continue_target ? nullptr : "iterator step target";
+    }
+    if (auto* phi = qore_ir_inst_cast<const QoreIRPhiInstruction*>(&inst)) {
+        for (const QoreIRPhiIncoming& in : phi->incoming) {
+            if (!in.block) {
+                return "block for an incoming value of a phi";
+            }
+        }
+        return nullptr;
+    }
+    if (auto* sw = qore_ir_inst_cast<const QoreIRSwitchIntInstruction*>(&inst)) {
+        if (!sw->default_target) {
+            return "switch default target";
+        }
+        for (const QoreIRSwitchCase& c : sw->cases) {
+            if (!c.target) {
+                return "switch case target";
+            }
+        }
+        return nullptr;
+    }
+    if (auto* sw = qore_ir_inst_cast<const QoreIRSwitchStringInstruction*>(&inst)) {
+        if (!sw->default_target) {
+            return "switch default target";
+        }
+        for (const QoreIRSwitchStringCase& c : sw->cases) {
+            if (!c.target) {
+                return "switch case target";
+            }
+        }
+        return nullptr;
+    }
+    return nullptr;
+}
+
 //! Deserialize a single IR instruction from binary data
 /** @return the deserialized instruction, or nullptr on error */
 static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
@@ -7258,8 +7308,13 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         return nullptr;
     }
     uint16_t exc_target_idx = QoreAOTBinaryReader::readU16(ptr);
-    QoreIRBasicBlock* exc_target = (exc_target_idx != 0xFFFF && exc_target_idx < blocks.size())
-        ? blocks[exc_target_idx].get() : nullptr;
+    // an index beyond the blocks of the function is refused, not read as no handler (qore#6468)
+    if (exc_target_idx != 0xFFFF && exc_target_idx >= blocks.size()) {
+        error = "malformed IR: exception target block index " + std::to_string(exc_target_idx)
+            + " is beyond the " + std::to_string(blocks.size()) + " block(s) of the function";
+        return nullptr;
+    }
+    QoreIRBasicBlock* exc_target = exc_target_idx != 0xFFFF ? blocks[exc_target_idx].get() : nullptr;
 
     std::unique_ptr<QoreIRInstruction> inst;
 
@@ -7291,6 +7346,19 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     rctx.num_parent_locals = num_parent_locals;
     rctx.enclosing_body_locals = enclosing_body_locals;
     inst = ginfo->read_fn(opcode_raw, exc_target, operands, result_id, rctx);
+    // a block index beyond the blocks of the function, and a missing target of an instruction that always branches
+    // to it, are refused: the interpreter takes such a target without a check (qore#6468)
+    if (inst && rctx.bad_block_index) {
+        error = "malformed IR: a block index is beyond the " + std::to_string(blocks.size())
+            + " block(s) of the function";
+        inst.reset();
+    } else if (inst) {
+        const char* missing = qore_aot_ir_missing_target(*inst);
+        if (missing) {
+            error = std::string("malformed IR: the instruction has no ") + missing;
+            inst.reset();
+        }
+    }
     if (!inst) {
         const OpcodeInfo* oi = getOpcodeInfo(opcode_raw);
         error = std::string("opcode ") + (oi && oi->name ? oi->name : "<unknown>")
@@ -8122,9 +8190,16 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             return nullptr;
         }
         const char* block_name = reader.readStringRef(ptr);
-        // bit 0: is_loop_header; bits 1-3: loop_cancel (see serializeIRFunction())
+        // bit 0: is_loop_header; bits 1-3: loop_cancel; bit 4 (from format version QORE_AOT_DEBUG_FLOW_VERSION):
+        // debug_flow (see serializeIRFunction())
         uint8_t block_flags = QoreAOTBinaryReader::readU8(ptr);
-        uint8_t loop_cancel = static_cast<uint8_t>(block_flags >> 1);
+        const bool debug_flow_flags = reader.getHeader().version >= QORE_AOT_DEBUG_FLOW_VERSION;
+        uint8_t loop_cancel = static_cast<uint8_t>(debug_flow_flags ? (block_flags >> 1) & 0x7 : block_flags >> 1);
+        if (debug_flow_flags && (block_flags & ~0x1f)) {
+            error = "invalid flags " + std::to_string(block_flags) + " of block " + std::to_string(i)
+                + " of function " + func->name;
+            return nullptr;
+        }
         if (loop_cancel > QORE_IR_LOOP_CANCEL_MAX) {
             error = "invalid loop cancellation kind " + std::to_string(loop_cancel) + " in block "
                 + std::to_string(i) + " of function " + func->name;
@@ -8135,6 +8210,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         func->blocks[i]->name = block_name ? block_name : "";
         func->blocks[i]->is_loop_header = (block_flags & 1) != 0;
         func->blocks[i]->loop_cancel = static_cast<QoreIRLoopCancel>(loop_cancel);
+        func->blocks[i]->debug_flow = debug_flow_flags && (block_flags & 0x10);
 
         for (int j = 0; j < num_insts; ++j) {
             if (checkCancel()) {
@@ -9852,8 +9928,9 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
         std::string& error, bool ignore, bool ignore_after_header) {
     std::string zone;
     bool after_module_header;
+    bool trusted_only;
     std::string read_error;
-    if (!readTimeZone(reader, zone, after_module_header, read_error)) {
+    if (!readTimeZone(reader, zone, after_module_header, trusted_only, read_error)) {
         error = "AOT time zone metadata read error";
         if (label && *label) {
             error += " in ";
@@ -9867,6 +9944,11 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
     }
     // a directive after the header of a module is checked against the restrictions that the header's domains leave
     if (after_module_header ? ignore_after_header : ignore) {
+        return true;
+    }
+    // a directive that the module's own restriction disallowed when it was compiled applies only to a load of the
+    // module as library code, where the locale control domain that the header declares removes it (qore#6352)
+    if (trusted_only && !qore_module_load_is_trusted()) {
         return true;
     }
     qore_program_private* pp = qore_program_private::get(*pgm);
@@ -10695,6 +10777,28 @@ static QoreStringNode* aotThreadStackInitError(const AOTThreadStackError& e, con
     aot_module_init_error.desc = err;
     aot_module_init_error.err = e.err;
     return err;
+}
+
+// the functional domains that the module metadata record of the AOT module whose initialization runs in this thread
+// declares, if set (see QoreAOTModuleExpectedDomainsHelper; qore#6351)
+static thread_local std::string aot_module_init_expected_module;
+static thread_local int64 aot_module_init_expected_domains = 0;
+static thread_local bool aot_module_init_expected_set = false;
+
+QoreAOTModuleExpectedDomainsHelper::QoreAOTModuleExpectedDomainsHelper(const char* module, int64 domains)
+        : old_domains(aot_module_init_expected_domains), old_set(aot_module_init_expected_set) {
+    // the new name is copied before anything is changed: a failed allocation changes nothing
+    std::string new_module(module);
+    old_module.swap(aot_module_init_expected_module);
+    aot_module_init_expected_module.swap(new_module);
+    aot_module_init_expected_domains = domains;
+    aot_module_init_expected_set = true;
+}
+
+QoreAOTModuleExpectedDomainsHelper::~QoreAOTModuleExpectedDomainsHelper() {
+    aot_module_init_expected_module.swap(old_module);
+    aot_module_init_expected_domains = old_domains;
+    aot_module_init_expected_set = old_set;
 }
 
 QoreAOTModuleInitLoaderHelper::QoreAOTModuleInitLoaderHelper(QoreProgram* loader)
@@ -15437,6 +15541,20 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
+        // the module loader relieved the module's dependencies with the domains that its metadata record declares
+        // (qore#6351): they must be those of its header; checked once, by the module's own initialization
+        if (aot_module_init_expected_set && mod_name && aot_module_init_expected_module == mod_name) {
+            aot_module_init_expected_set = false;
+            if (own_dom != aot_module_init_expected_domains) {
+                QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): "
+                    "the module metadata record declares the functional domains 0x%llx, but the module declares "
+                    "0x%llx in its header; the module is damaged: rebuild it", mod_name,
+                    module_context_desc.c_str(), static_cast<unsigned long long>(aot_module_init_expected_domains),
+                    static_cast<unsigned long long>(own_dom));
+                local_pgm->waitForTerminationAndDeref(nullptr);
+                return err;
+            }
+        }
         if (own_dom) {
             int64 removed = qore_program_private::setModuleOwnDomains(*local_pgm, own_dom,
                 qore_module_load_is_trusted());
@@ -15869,7 +15987,7 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
             "with a statically registered module is invalid: %s", record ? error.c_str() : "it is missing");
     } else {
         QMM.registerAOTStaticModuleIntern(xsink, tpgm, reinterpret_cast<qore_binary_module_desc_t>(desc_fn), path,
-            &info);
+            info);
     }
     if (xsink) {
         xsink.handleExceptions();
@@ -15878,7 +15996,7 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
 
 // Phase 4 slice 10d: script-context register path.  Called by the
 // glue object that qcc emits for `qcc -o binary *.qo` (slice 10d).
-// Differs from qore_aot_register_into_program / qore_aot_module_init_v3:
+// Differs from qore_aot_register_into_program_v2() / qore_aot_module_init_v3:
 //
 //   * NO shadow module program created.  Metadata is deserialized
 //     straight into the caller's @p tpgm via

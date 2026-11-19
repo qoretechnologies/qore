@@ -1,0 +1,17 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RoFire.qm - test library module whose initialization fires the registry of RoLib (qore#6520)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires RoLib
+
+module RoFire {
+    version = "1.0";
+    desc = "test library module whose initialization fires the registry of RoLib";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        RoLib::ro_fire();
+    };
+}

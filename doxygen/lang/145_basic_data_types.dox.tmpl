@@ -295,8 +295,18 @@ bool same = c'a' == "a";        # True
     @par Description:
     %Qore integers are 64-bit signed integers.
 
-    @par Immediate Value Example:
-    \c 100
+    @par Immediate Value Examples:
+    - \c 100 (decimal)
+    - \c 0x1f (hexadecimal: \c 31)
+    - \c 017 (octal: \c 15)
+
+    @anchor octal_integer_literals
+    @par Octal Integer Literals:
+    An integer literal with a leading zero is octal: its digits are \c 0 to \c 7, so <tt>010</tt> is \c 8, and a
+    literal with a leading zero that contains \c 8 or \c 9 (<tt>08</tt>, <tt>019</tt>) is a parse error.  A literal of
+    another type with a leading zero is decimal: a @ref number "number" (<tt>010n</tt> is \c 10), a
+    @ref float "float" (<tt>010.5</tt>) and a @ref relative_dates "relative date" (<tt>010ms</tt> is 10
+    milliseconds).  An integer literal that cannot be represented as a 64-bit signed integer is a parse error.
 
     @par Pseudo Class for Type Integer:
     @ref Qore::zzz8intzzz9

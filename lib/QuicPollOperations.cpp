@@ -60,6 +60,7 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 // pending (ngtcp2_conn_get_expiry2() == UINT64_MAX), QORE_QUIC_NO_TIMER_POLL_MS.  Per RFC 9002, ACK-only packets are
 // not loss-detected, so the peer's retransmission timer drives recovery then.
 #include "qore/intern/QuicPollTimeout.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 //! Maximum packets to process per continuePoll() call for QUIC client connections.
 /** Prevents a single connection from monopolizing the shared I/O thread when
@@ -3144,7 +3145,7 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(E
     auto cancel_stream = [&]() {
         sock->priv->m.unlock();
         ExceptionSink cancel_xsink;
-        sock->cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
+        qore_socket_object_private(sock).cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
         cancel_xsink.clear();
         sock->priv->m.lock();
     };

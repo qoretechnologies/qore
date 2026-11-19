@@ -156,6 +156,7 @@ sub run_cases() {
     check("kept: new %= 0", sub () { zh.m %= id(0); }, show_zh);
     list<auto> zl = mk_list((2, 3));
     code show_zl = auto sub () { return zl; };
+    # an element past the end of a list<int> that would leave a gap is refused before the operation (qore#6435)
     check("kept: new elem /= 0", sub () { zl[4] /= id(0); }, show_zl);
     hash<auto> xh = mk_hash({"a": 2});
     code show_xh = auto sub () { return xh; };
@@ -168,6 +169,14 @@ sub run_cases() {
     code show_xl = auto sub () { return xl; };
     check("kept: extract new elem", sub () { extract xl[3], 0, 1; }, show_xl);
     check("kept: splice new elem", sub () { splice xl[4], 0, 1, id(1); }, show_xl);
+    # a list whose element type takes NOTHING (a list<*int> at run time) gets the gap, and keeps the new elements
+    list<auto> ol = mk_list(cast<list<*int>>((2, 3)));
+    code show_ol = auto sub () { return ol; };
+    check("kept: or-nothing new elem /= 0", sub () { ol[4] /= id(0); }, show_ol);
+    list<auto> ox = mk_list(cast<list<*int>>((2, 3)));
+    code show_ox = auto sub () { return ox; };
+    check("kept: or-nothing extract new elem", sub () { extract ox[3], 0, 1; }, show_ox);
+    check("kept: or-nothing splice new elem", sub () { splice ox[4], 0, 1, id(1); }, show_ox);
     # an operation that cannot reach its target releases the entries it created on the way
     hash<auto> nh = mk_hash({"a": "b"});
     code show_nh = auto sub () { return nh; };

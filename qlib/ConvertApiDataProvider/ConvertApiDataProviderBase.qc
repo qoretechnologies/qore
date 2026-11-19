@@ -1,0 +1,755 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ConvertApiDataProviderBase.qc ConvertAPI data provider base class
+
+/*  ConvertApiDataProviderBase.qc Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#! Contains all public definitions in the ConvertApiDataProvider module
+public namespace ConvertApiDataProvider {
+
+#! Base class for ConvertAPI data providers
+public class ConvertApiDataProviderBase inherits DataProvider::AbstractDataProvider {
+    public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+        };
+
+        #! Base constructor options for ConvertAPI data providers
+        const BaseConstructorOptions = {
+            "convertapirestclient": <DataProviderOptionInfo>{
+                "display_name": "ConvertAPI REST Client",
+                "short_desc": "The ConvertApiRestClientIo object",
+                "type": AbstractDataProviderType::get(
+                    new Type("ConvertApiRestClient::ConvertApiRestClientIo")),
+                "desc": "The `ConvertApiRestClientIo` object to use for API calls",
+            },
+            "convertapirestclient_options": <DataProviderOptionInfo>{
+                "display_name": "ConvertAPI REST Client Options",
+                "short_desc": "Options for creating a ConvertApiRestClientIo",
+                "type": AbstractDataProviderType::get(AutoHashType),
+                "desc": "Options for creating a `ConvertApiRestClientIo` object if one is not provided "
+                    "directly",
+            },
+        };
+    }
+
+    private {
+        #! The REST client object for API calls
+        ConvertApiRestClient::ConvertApiRestClientIo rest;
+
+        #! The connection object, if applicable
+        *ConvertApiRestClient::ConvertApiRestConnection conn;
+
+        #! Converter list cache: API URL -> {"timestamp": date, "converters": list}
+        static hash<string, hash<auto>> converter_cache = {};
+
+        #! Converter information cache: API URL, source and destination format -> {"timestamp": date, "converter": hash}
+        static hash<string, hash<auto>> converter_info_cache = {};
+
+        #! Converter list and information cache lock
+        static Mutex converter_lock();
+    }
+
+    #! Creates the object with no arguments for child classes
+    private constructor() {
+    }
+
+    #! Creates the object with a REST client
+    constructor(ConvertApiRestClient::ConvertApiRestClientIo rest) {
+        self.rest = rest;
+    }
+
+    #! Creates the object with a connection
+    constructor(ConvertApiRestClient::ConvertApiRestConnection conn) {
+        self.conn = conn;
+        rest = conn.getAsync();
+    }
+
+    #! Creates the object with options
+    constructor(*hash<auto> options) {
+        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", BaseConstructorOptions, options);
+        if (copts.convertapirestclient) {
+            rest = copts.convertapirestclient;
+        } else {
+            rest = new ConvertApiRestClient::ConvertApiRestClientIo(copts.convertapirestclient_options ?? {});
+        }
+    }
+
+    #! Returns the REST client
+    ConvertApiRestClient::ConvertApiRestClientIo getRestClient() {
+        return rest;
+    }
+
+    #! Returns the connection, if any
+    *ConvertApiRestClient::ConvertApiRestConnection getConnection() {
+        return conn;
+    }
+
+    #! Sets the logger for the data provider and its REST client
+    /** The data provider logs the errors that it handles itself, such as a converter list or description that cannot
+        be read, and the REST client logs its requests
+    */
+    setLogger(*LoggerInterface logger) {
+        rest.setLogger(logger);
+        LoggerWrapper::setLogger(logger);
+    }
+
+    #! Returns the supported reference data types for this provider
+    *hash<string, bool> getSupportedReferenceData() {
+        return {
+            "source_formats": True,
+            "destination_formats": True,
+        };
+    }
+
+    #! Returns reference data of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when working with an app action
+
+        @return a list of allowed values for this data
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        switch (type) {
+            case "source_formats":
+                return getReferenceSourceFormats();
+            case "destination_formats":
+                return getReferenceDestinationFormats(action_opts.from);
+        }
+    }
+
+    #! Returns the converters supported by ConvertAPI
+    /** The list is read from the \c info endpoint and cached for @ref ConverterCacheTtl.
+
+        @return a list of converter hashes as returned by the \c info endpoint; each converter has the keys
+        \c Name, \c Title, \c Description, \c SourceFileFormats, \c DestinationFileFormats and
+        \c ConverterParameterGroups, among others
+    */
+    list<auto> getConverters() {
+        string key = rest.getUrl();
+        {
+            AutoLock al(converter_lock);
+            *hash<auto> entry = converter_cache{key};
+            if (entry && (entry.timestamp + ConverterCacheTtl) > now_us()) {
+                return entry.converters;
+            }
+        }
+        list<auto> converters = doGetAny("info") ?? ();
+        AutoLock al(converter_lock);
+        converter_cache{key} = {
+            "timestamp": now_us(),
+            "converters": converters,
+        };
+        return converters;
+    }
+
+    #! Returns the information about a converter
+    /** @param from the source format
+        @param to the destination format
+
+        @return the converter hash as returned by the \c info endpoint
+
+        @throw CONVERTAPI-UNKNOWN-CONVERTER no converter exists for the given formats
+    */
+    hash<auto> getConverterInfo(string from, string to) {
+        string path = sprintf("info/%s/to/%s", ConvertApiDataProviderBase::checkFormat(from),
+            ConvertApiDataProviderBase::checkFormat(to));
+        *list<auto> rv;
+        try {
+            rv = doGetAny(path);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 404) {
+                throw "CONVERTAPI-UNKNOWN-CONVERTER", sprintf("no converter from %y to %y", from, to), ex.arg;
+            }
+            rethrow;
+        }
+        if (!rv || rv[0].typeCode() != NT_HASH) {
+            throw "CONVERTAPI-UNKNOWN-CONVERTER", sprintf("no converter from %y to %y", from, to);
+        }
+        return rv[0];
+    }
+
+    #! Returns the information about a converter, which is cached
+    /** The information is read with getConverterInfo() and cached for @ref ConverterCacheTtl, as the options and the
+        request type of the \c convert-file action are built from it whenever the formats are given; an unknown
+        converter is not cached
+
+        @param from the source format
+        @param to the destination format
+
+        @return the converter hash as returned by the \c info endpoint
+
+        @throw CONVERTAPI-UNKNOWN-CONVERTER no converter exists for the given formats
+    */
+    hash<auto> getCachedConverterInfo(string from, string to) {
+        *hash<auto> converter = getConverterInfoFromCache(from, to);
+        if (converter) {
+            return converter;
+        }
+        converter = getConverterInfo(from, to);
+        AutoLock al(converter_lock);
+        converter_info_cache{ConvertApiDataProviderBase::getConverterInfoCacheKey(rest.getUrl(), from, to)} = {
+            "timestamp": now_us(),
+            "converter": converter,
+        };
+        return converter;
+    }
+
+    #! Returns the information about a converter if it is cached, without a request
+    /** @param from the source format
+        @param to the destination format
+
+        @return the converter hash as returned by the \c info endpoint, or @ref nothing if it is not cached (see
+        getCachedConverterInfo())
+    */
+    *hash<auto> getConverterInfoFromCache(string from, string to) {
+        string key = ConvertApiDataProviderBase::getConverterInfoCacheKey(rest.getUrl(), from, to);
+        AutoLock al(converter_lock);
+        *hash<auto> entry = converter_info_cache{key};
+        if (entry && (entry.timestamp + ConverterCacheTtl) > now_us()) {
+            return entry.converter;
+        }
+    }
+
+    #! Returns the key of a converter in the converter information cache
+    private static string getConverterInfoCacheKey(string url, string from, string to) {
+        return sprintf("%s %s %s", url, from.lwr(), to.lwr());
+    }
+
+    #! Returns a readable label for a source format
+    /** @param fmt the format
+        @param extension @ref True if the format is a file name extension
+
+        @return the format in upper case for a file name extension (ex: \c "DOCX"), otherwise in title case, with
+        hyphens as spaces (ex: \c "Images" for \c images)
+    */
+    static string getFormatLabel(string fmt, bool extension) {
+        if (extension) {
+            return fmt.upr();
+        }
+        return (foldl $1 + " " + $2, (map $1.substr(0, 1).upr() + $1.substr(1), fmt.split("-")));
+    }
+
+    #! Returns a readable label for a destination format of a converter
+    /** @param converter the converter, as returned by the \c info endpoint
+        @param to one of its destination formats
+
+        @return the converter title without its \c " API" suffix, for example \c "Delete PDF Pages" for \c pdf to
+        \c delete-pages, or, for a converter with several destination formats or without a title, the label of the
+        format (see getFormatLabel())
+    */
+    static string getDestinationLabel(hash<auto> converter, string to) {
+        if (converter.Title.val() && converter.DestinationFileFormats.size() == 1) {
+            return regex_subst(converter.Title, " API$", "");
+        }
+        return ConvertApiDataProviderBase::getFormatLabel(to,
+            inlist(to.lwr(), (map $1.lwr(), converter.DestinationExtensions ?? ())));
+    }
+
+    #! Returns the source formats as reference data
+    private *list<hash<AllowedValueInfo>> getReferenceSourceFormats() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            # source format -> list of destination formats
+            hash<auto> formats = {};
+            # the file name extensions of the source formats
+            hash<string, bool> extensions = {};
+            foreach hash<auto> converter in (getConverters()) {
+                foreach string from in (converter.SourceFileFormats) {
+                    if (!formats{from}) {
+                        formats{from} = ();
+                    }
+                    formats{from} += converter.DestinationFileFormats;
+                }
+                map extensions{$1.lwr()} = True, converter.SourceExtensions;
+            }
+            foreach string from in (sort(keys formats)) {
+                string label = ConvertApiDataProviderBase::getFormatLabel(from, extensions{from.lwr()} ?? False);
+                rv += <AllowedValueInfo>{
+                    "display_name": label,
+                    "short_desc": sprintf("Convert from %s", label),
+                    "desc": sprintf("Convert from `%s` to: %s", from, (foldl $1 + ", " + $2,
+                        (map sprintf("`%s`", $1), sort(formats{from})))),
+                    "value": from,
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # no source formats are offered; the error is logged, so that the empty list can be diagnosed
+            logCaughtError("%s (%s): the converters cannot be read, so no source formats are offered: %s: %s",
+                getName(), self.className(), ex.err, ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns the destination formats for the given source format as reference data
+    /** @param from the source format; if not set, no value is returned
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceDestinationFormats(*string from) {
+        if (!from.val()) {
+            return;
+        }
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            *list<auto> converters = doGetAny(sprintf("info/%s/to/*",
+                ConvertApiDataProviderBase::checkFormat(from)));
+            foreach hash<auto> converter in (converters) {
+                foreach string to in (converter.DestinationFileFormats) {
+                    rv += <AllowedValueInfo>{
+                        "display_name": ConvertApiDataProviderBase::getDestinationLabel(converter, to),
+                        "short_desc": converter.Title ?? sprintf("%s to %s", from.upr(), to.upr()),
+                        "desc": trim(converter.Description ?? converter.Title ?? ""),
+                        "value": to,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # no destination formats are offered; the error is logged, so that the empty list can be diagnosed
+            logCaughtError("%s (%s): the converters of the selected source format cannot be read, so no destination "
+                "formats are offered: %s: %s", getName(), self.className(), ex.err, ex.desc);
+        }
+        return rv;
+    }
+
+    #! Converts a file with the given converter
+    /** @param from the source format (ex: \c "docx")
+        @param to the destination format (ex: \c "pdf")
+        @param req the common request fields: \c file, \c url, \c files, \c urls, \c store_file, \c file_name,
+        \c timeout and \c parameters (see @ref ConvertApiCommonFields)
+        @param converter_params other converter parameters with their ConvertAPI names
+        @param url_param if set, the \c url request field is sent as a parameter with this name and a URL value
+        instead of as the \c File parameter (for example \c "Url" for the \c html to \c pdf converter, which
+        renders the web page)
+        @param input_in_parameters @ref True if the converter takes its input in a converter parameter instead of a
+        source file (such as \c data to \c qrcode, which takes \c Data), so that a request without a source file or
+        URL is valid
+
+        @return the conversion result: \c ConversionCost and \c Files; the \c FileData of each file is decoded to
+        a binary value
+
+        The request is sent with a transport deadline that covers its conversion timeout (see
+        getConversionRequestTimeout()), not with the client's request timeout alone.
+
+        @throw CONVERTAPI-ERROR invalid request
+        @throw CONVERTAPI-API-ERROR ConvertAPI returned an error
+    */
+    hash<auto> convert(string from, string to, hash<auto> req, *hash<auto> converter_params, *string url_param,
+            *bool input_in_parameters) {
+        list<hash<auto>> params = ConvertApiDataProviderBase::makeParameters(req, converter_params, url_param,
+            input_in_parameters);
+        string path = sprintf("convert/%s/to/%s", ConvertApiDataProviderBase::checkFormat(from),
+            ConvertApiDataProviderBase::checkFormat(to));
+        return ConvertApiDataProviderBase::processResult(doPost(path, {"Parameters": params},
+            getConversionRequestTimeout(req.timeout)));
+    }
+
+    #! Returns the transport deadline of a conversion request in milliseconds
+    /** The deadline is the conversion timeout (@ref DefaultConversionTimeout if the request gives none) plus
+        @ref ConversionTransferAllowance for sending the request and receiving the result, or the client's own request
+        timeout if that is longer.  A conversion can run for up to 1200 seconds, much longer than the default request
+        timeout of the client, and a request that timed out would be sent again by the transport retries.
+
+        @param conversion_timeout the conversion timeout of the request in seconds, if any
+
+        @return the deadline in milliseconds
+    */
+    private int getConversionRequestTimeout(*softint conversion_timeout) {
+        int seconds = (conversion_timeout > 0 ? conversion_timeout : DefaultConversionTimeout)
+            + ConversionTransferAllowance;
+        return max(rest.getTimeout(), seconds * 1000);
+    }
+
+    #! Returns @ref True if the request gives a source file or URL in its \c file, \c url, \c files or \c urls field
+    static bool hasInput(hash<auto> req) {
+        return req.file || req.url.val() || req.files || req.urls;
+    }
+
+    #! Returns @ref True unless the converter is known to take no source file
+    /** A few converters, such as \c data to \c qrcode, take their input in a converter parameter (\c Data) instead
+        of a \c File or \c Files parameter.  The converters are read from the cached list of the \c info endpoint
+        (see getConverters()).
+
+        @param from the source format
+        @param to the destination format
+
+        @return @ref False if the converter's parameters are known and include neither \c File nor \c Files, otherwise
+        @ref True
+    */
+    bool takesFileInput(string from, string to) {
+        foreach hash<auto> converter in (getConverters()) {
+            if (!inlist(from.lwr(), (map $1.lwr(), converter.SourceFileFormats))
+                || !inlist(to.lwr(), (map $1.lwr(), converter.DestinationFileFormats))) {
+                continue;
+            }
+            if (!converter.ConverterParameterGroups) {
+                return True;
+            }
+            foreach hash<auto> group in (converter.ConverterParameterGroups) {
+                foreach hash<auto> param in (group.ConverterParameters) {
+                    if (param.Name == "File" || param.Name == "Files") {
+                        return True;
+                    }
+                }
+            }
+            return False;
+        }
+        return True;
+    }
+
+    #! Returns the ConvertAPI \c Parameters list for a request
+    /** @param req the common request fields (see @ref ConvertApiCommonFields)
+        @param converter_params other converter parameters with their ConvertAPI names
+        @param url_param if set, the \c url field is sent as a parameter with this name and a URL value
+        @param input_in_parameters @ref True if the converter takes its input in a converter parameter, so that the
+        request does not need a source file or URL
+
+        @return the list of ConvertAPI parameter hashes
+
+        @throw CONVERTAPI-ERROR invalid request
+    */
+    static list<hash<auto>> makeParameters(hash<auto> req, *hash<auto> converter_params, *string url_param,
+            *bool input_in_parameters) {
+        # the request must give an input (the fields of the "source" group), unless the converter takes it in a
+        # converter parameter: a single input either as a file or as a URL, or several in files and urls; no converter
+        # takes both a single input and several; this is checked here, before a request is made, as the request types
+        # do not enforce the required group and the exclusive fields that their options declare
+        if (!input_in_parameters && !ConvertApiDataProviderBase::hasInput(req)) {
+            throw "CONVERTAPI-ERROR", "no input: give 'file' or 'url', or 'files' or 'urls' for converters that "
+                "take several files";
+        }
+        if (req.file && req.url.val()) {
+            throw "CONVERTAPI-ERROR", "give either 'file' or 'url', not both";
+        }
+        if ((req.file || req.url.val()) && (req.files || req.urls)) {
+            throw "CONVERTAPI-ERROR", "give a single input in 'file' or 'url', or several in 'files' and 'urls', not "
+                "both";
+        }
+        list<hash<auto>> params = ();
+        # the main input
+        if (req.file) {
+            params += {"Name": "File", "FileValue": ConvertApiDataProviderBase::makeFileValue(req.file)};
+        }
+        if (req.url.val()) {
+            if (url_param) {
+                params += {"Name": url_param, "Value": req.url};
+            } else {
+                params += {"Name": "File", "FileValue": {"Url": req.url}};
+            }
+        }
+        list<hash<auto>> file_values = ();
+        foreach auto file in (req.files) {
+            file_values += ConvertApiDataProviderBase::makeFileValue(file);
+        }
+        foreach auto url in (req.urls) {
+            file_values += {"Url": string(url)};
+        }
+        if (file_values) {
+            params += {"Name": "Files", "FileValues": file_values};
+        }
+        # the output is always given explicitly, so that the result does not depend on the account defaults
+        params += {"Name": "StoreFile", "Value": req.store_file ? True : False};
+        if (req.file_name.val()) {
+            params += {"Name": "FileName", "Value": req.file_name};
+        }
+        if (exists req.timeout) {
+            params += {"Name": "Timeout", "Value": int(req.timeout)};
+        }
+        # the converter parameters; parameters given in their own fields take precedence over the same parameters
+        # in the "parameters" hash
+        # the parameters may be narrowed, so they are combined in an "auto!" local
+        hash<auto!> other = {};
+        if (req.parameters) {
+            other += req.parameters;
+        }
+        if (converter_params) {
+            other += converter_params;
+        }
+        foreach string name in (keys other) {
+            if (!exists other{name}) {
+                continue;
+            }
+            # the source is given only in the source fields, so that a parameter cannot conflict with them; the html
+            # converters take the "url" field as their Url parameter
+            if (name =~ /^(File|Files|Url|StoreFile|FileName|Timeout|Secret|Token)$/i) {
+                throw "CONVERTAPI-ERROR", sprintf("parameter %y cannot be given as a converter parameter; use "
+                    "the request field for it instead", name);
+            }
+            params += ConvertApiDataProviderBase::makeParameter(name, other{name});
+        }
+        return params;
+    }
+
+    #! Returns a ConvertAPI parameter hash for a converter parameter value
+    /** @param name the ConvertAPI parameter name
+        @param val the value; a file hash (with \c name and \c content keys) is sent as a file, and a list of file
+        hashes as a list of files
+
+        @return a ConvertAPI parameter hash
+    */
+    static hash<auto> makeParameter(string name, auto val) {
+        if (ConvertApiDataProviderBase::isFile(val)) {
+            return {"Name": name, "FileValue": ConvertApiDataProviderBase::makeFileValue(val)};
+        }
+        if (val.typeCode() == NT_LIST && val && ConvertApiDataProviderBase::isFile(val[0])) {
+            return {"Name": name, "FileValues": (map ConvertApiDataProviderBase::makeFileValue($1), val)};
+        }
+        return {"Name": name, "Value": val};
+    }
+
+    #! Returns @ref True if the value is a file hash with \c name and \c content keys
+    static bool isFile(auto val) {
+        return val.typeCode() == NT_HASH && val.hasKey("name") && val.hasKey("content");
+    }
+
+    #! Returns a ConvertAPI file value for a file hash
+    /** @param file a file hash with \c name and \c content keys (see @ref DataProvider::FileDataType); the
+        content can be binary data, a base64-encoded string, a base64 \c data: URI, or text
+
+        @return a ConvertAPI file value with \c Name and \c Data keys
+
+        @throw CONVERTAPI-ERROR the file has no name or content
+    */
+    static hash<auto> makeFileValue(auto file) {
+        if (!ConvertApiDataProviderBase::isFile(file) || !file.name.val()) {
+            throw "CONVERTAPI-ERROR", sprintf("invalid file value: expecting a hash with 'name' and 'content' keys; "
+                "got type %y", file.fullType());
+        }
+        if (!exists file.content || !file.content.size()) {
+            throw "CONVERTAPI-ERROR", sprintf("file %y has no content", file.name);
+        }
+        string data;
+        switch (file.content.typeCode()) {
+            case NT_BINARY:
+                data = make_base64_string(file.content);
+                break;
+            case NT_STRING: {
+                *string b64 = (file.content =~ x/^data:[^;]+;base64,(.*)$/s)[0];
+                if (b64.val()) {
+                    data = b64;
+                } else if (file.content =~ /^[A-Z0-9+\/]+(=*)?$/i) {
+                    data = file.content;
+                } else {
+                    data = make_base64_string(file.content);
+                }
+                break;
+            }
+            default:
+                throw "CONVERTAPI-ERROR", sprintf("file %y content has type %y; expecting \"binary\" or "
+                    "\"string\"", file.name, file.content.type());
+        }
+        return {
+            "Name": file.name,
+            "Data": data,
+        };
+    }
+
+    #! Processes a conversion result: decodes the \c FileData of each output file to binary data
+    /** @param body the response body of a conversion request
+
+        @return the processed result
+    */
+    static hash<auto> processResult(hash<auto> body) {
+        if (body.Files.typeCode() != NT_LIST) {
+            return body;
+        }
+        # the response may be narrowed, so the result is built in "auto!" locals
+        hash<auto!> rv = body;
+        list<auto> files = ();
+        foreach hash<auto> file in (body.Files) {
+            hash<auto!> f = file;
+            if (f.FileData.typeCode() == NT_STRING) {
+                f.FileData = parse_base64_string(f.FileData);
+            }
+            files += f;
+        }
+        rv.Files = files;
+        return rv;
+    }
+
+    #! Checks a source or destination format before it is used in a URL path
+    /** @param fmt the format, ex: \c "docx", \c "pdf" or \c "delete-pages"
+
+        @return the format in lower case
+
+        @throw CONVERTAPI-ERROR the format contains invalid characters, or is the \c * wildcard, which would select
+        an arbitrary converter
+    */
+    static string checkFormat(string fmt) {
+        if (fmt !~ /^[a-z0-9][a-z0-9\-_.]*$/i) {
+            throw "CONVERTAPI-ERROR", sprintf("invalid format %y; expecting a format name such as \"docx\" or "
+                "\"pdf\"", fmt);
+        }
+        return fmt.lwr();
+    }
+
+    #! Makes a POST request to the ConvertAPI API
+    /** @param path the API path
+        @param body the request body
+        @param timeout_ms a transport deadline for this request only, in milliseconds; if not given, the client's
+        request timeout applies
+        @return the response body
+
+        @throw CONVERTAPI-API-ERROR if the response indicates an error
+    */
+    hash<auto> doPost(string path, *hash<auto> body, *int timeout_ms) {
+        auto rv = doRestRequest("POST", path, body, timeout_ms);
+        return rv.typeCode() == NT_HASH ? rv : {};
+    }
+
+    #! Makes a GET request to the ConvertAPI API and returns a hash response
+    /** @param path the API path
+        @return the response body
+
+        @throw CONVERTAPI-API-ERROR if the response indicates an error
+    */
+    hash<auto> doGet(string path) {
+        auto rv = doRestRequest("GET", path);
+        return rv.typeCode() == NT_HASH ? rv : {};
+    }
+
+    #! Makes a GET request to the ConvertAPI API and returns the response body of any type
+    /** The \c info endpoints return lists.
+
+        @param path the API path
+        @return the response body
+
+        @throw CONVERTAPI-API-ERROR if the response indicates an error
+    */
+    auto doGetAny(string path) {
+        return doRestRequest("GET", path);
+    }
+
+    #! Makes a REST request with retry handling
+    /** @param method the HTTP method
+        @param path the API path
+        @param body optional request body
+        @param timeout_ms a transport deadline for this request only, in milliseconds; if not given, the client's
+        request timeout applies; the client's own timeout is not changed
+        @return the response body
+
+        @throw CONVERTAPI-API-ERROR if the response indicates an error
+    */
+    private auto doRestRequest(string method, string path, auto body = NOTHING, *int timeout_ms) {
+        int retries = 0;
+        while (True) {
+            try {
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "CONVERTAPI-ERROR", sprintf("unsupported HTTP method: %s", method);
+                }
+                auto response = timeout_ms
+                    ? rest.restDoRequestWithTimeout(method, path, send_body ? body : NOTHING, NOTHING, timeout_ms)
+                    : rest.restDoRequest(method, path, send_body ? body : NOTHING);
+                return response.body;
+            } catch (hash<ExceptionInfo> ex) {
+                if (retryRequest(ex, \retries, method)) {
+                    continue;
+                }
+                ConvertApiDataProviderBase::checkError(ex);
+                rethrow;
+            }
+        }
+    }
+
+    #! Checks if a request should be retried
+    /** Requests are retried after the transport errors of @ref isRetriableTransportError() and after an HTTP 429
+        response, after the delay that the server asks for (see @ref getRetryAfterWait()).  Both waits are made with
+        \c DataProviderRetryUtil::waitTransportRetry(), whose unit is one second unless a process shortens it with
+        \c DataProviderRetryUtil::setTransportRetryDelayUnit(), for example to test a retry without waiting
+    */
+    private bool retryRequest(hash<ExceptionInfo> ex, reference<int> retries, string method) {
+        if (retries >= MaxRetries || DataProviderRetryUtil::retriesSuppressed()) {
+            return False;
+        }
+        if (ConvertApiDataProviderBase::isRetriableTransportError(ex, method)) {
+            ++retries;
+            DataProviderRetryUtil::waitTransportRetry(pow(2, retries));
+            return True;
+        }
+        # Retry on rate limit errors (HTTP 429): the server refused the request, so it can be sent again
+        if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 429) {
+            *int wait_secs = ConvertApiDataProviderBase::getRetryAfterWait(ex.arg.headers."retry-after");
+            if (!exists wait_secs) {
+                return False;
+            }
+            ++retries;
+            DataProviderRetryUtil::waitTransportRetry(wait_secs);
+            return True;
+        }
+        return False;
+    }
+
+    #! Returns @ref True if a request that failed with the given transport error is to be sent again
+    /** A conversion (a \c POST request) is not sent again after a transport error: the connection can fail after
+        ConvertAPI performed the conversion, which would then be charged again.  The HTTP client already sends a
+        request again when that is safe, for example when it was not submitted (see
+        \c HttpClientIo::HttpClientConnectionManager::resendRequest()).  Other requests are retried after the
+        transport errors of @ref RetrySet (see \c DataProviderRetryUtil::isRetriableTransportError()).
+
+        @param ex the exception raised by the request
+        @param method the HTTP method of the request
+
+        @return @ref True if the request is to be sent again
+    */
+    static bool isRetriableTransportError(hash<auto> ex, string method) {
+        return method != "POST" && DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet);
+    }
+
+    #! Returns how long to wait before a rate-limited request is sent again, in seconds
+    /** @param retry_after the value of the \c Retry-After header of the HTTP 429 response, if any
+
+        @return the delay in seconds that the header gives (at least 1), @ref DefaultRetryAfter if there is no
+        header, or @ref NOTHING if the request is not to be sent again: the server asks for a longer wait than
+        @ref MaxRetryAfter, or gives the time in another form than a number of seconds, so a retry could come before
+        the server permits it
+    */
+    static *int getRetryAfterWait(*string retry_after) {
+        if (!retry_after.val()) {
+            return DefaultRetryAfter;
+        }
+        if (retry_after !~ /^\s*[0-9]+\s*$/) {
+            return;
+        }
+        int wait_secs = retry_after.toInt();
+        if (wait_secs > MaxRetryAfter) {
+            return;
+        }
+        return wait_secs < 1 ? 1 : wait_secs;
+    }
+
+    #! Raises a ConvertAPI error response as a \c CONVERTAPI-API-ERROR exception
+    /** ConvertAPI reports errors with an HTTP error status and a body with \c Code and \c Message keys, for
+        example <tt>{"Code": 4011, "Message": "Unauthorized. Invalid or missing API credentials."}</tt>.
+
+        @param ex the exception raised by the REST client
+
+        @throw CONVERTAPI-API-ERROR the exception is a ConvertAPI error response; the exception argument is the
+        argument of the original exception (with \c status_code and \c body keys)
+    */
+    static checkError(hash<ExceptionInfo> ex) {
+        if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.body.typeCode() == NT_HASH && ex.arg.body.Message) {
+            throw "CONVERTAPI-API-ERROR", sprintf("%s (code %y, HTTP status %y)", ex.arg.body.Message,
+                ex.arg.body.Code, ex.arg.status_code), ex.arg;
+        }
+    }
+}
+
+} # namespace ConvertApiDataProvider

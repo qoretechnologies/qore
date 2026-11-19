@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exception paths of try statements
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class TryCatchParityTest
+
+#! The exception semantics of try statements are the same in every execution mode (qore#6392)
+/** The worker runs try statements whose exceptions are caught, rethrown (with and without arguments) and replaced in
+    nested try statements, leave blocks with on_exit, on_error and on_success handlers, are raised by a handler, by a
+    catch block or by a runtime error, and whose try and catch blocks are left by return, break and continue; it
+    prints each exception's error, description, argument, location and call stack, and the order in which the
+    temporaries of the statements are released.  It runs in each execution mode, on the IR tier and as a program
+    compiled with qcc -O0 and -O3, and every run must give the result of the AST interpreter.
+*/
+class TryCatchParityTest inherits QUnit::Test {
+    public {
+        const Expected = "simple:\n"
+            "  release a\n"
+            "  caught: TEMP/thrown/\"a\" try-catch-parity-worker.q:43\n"
+            "    [thrower:47 raise_in_temp:53 simple:254 run:260]\n"
+            "rethrow:\n"
+            "  inner: INNER/thrown/1 try-catch-parity-worker.q:43\n"
+            "    [thrower:62 rethrow_plain:254 run:261]\n"
+            "  outer: INNER/thrown/1 try-catch-parity-worker.q:43\n"
+            "    [thrower:62 rethrow_plain:254 run:261]\n"
+            "rethrow with arguments:\n"
+            "  outer: REPLACED/new desc/3 try-catch-parity-worker.q:43\n"
+            "    [thrower:75 rethrow_args:254 run:262]\n"
+            "new exception in catch:\n"
+            "  inner: FIRST/thrown/4 try-catch-parity-worker.q:43\n"
+            "    [thrower:87 nested_new_exception:254 run:263]\n"
+            "  outer: SECOND/thrown/\"FIRST\" try-catch-parity-worker.q:43\n"
+            "    [thrower:90 nested_new_exception:254 run:263]\n"
+            "nested fallthrough:\n"
+            "  inner: INNER/thrown/5 try-catch-parity-worker.q:43\n"
+            "    [thrower:100 nested_fallthrough:254 run:264]\n"
+            "  after inner\n"
+            "  outer: OUTER/thrown/6 try-catch-parity-worker.q:43\n"
+            "    [thrower:105 nested_fallthrough:254 run:264]\n"
+            "handlers in try:\n"
+            "  release b\n"
+            "  on_error (nested block)\n"
+            "  on_exit (nested block)\n"
+            "  on_error (try block)\n"
+            "  on_exit (try block)\n"
+            "  caught: TEMP/thrown/\"b\" try-catch-parity-worker.q:43\n"
+            "    [thrower:47 raise_in_temp:119 handlers_in_try:254 run:265]\n"
+            "  on_exit (catch block)\n"
+            "handler and rethrow:\n"
+            "  on_error before rethrow\n"
+            "  on_exit in catch before rethrow\n"
+            "  outer: H/thrown/7 try-catch-parity-worker.q:43\n"
+            "    [thrower:131 handler_rethrow_in_try:254 run:266]\n"
+            "handler raises:\n"
+            "  try body\n"
+            "  caught: FROM_HANDLER/thrown/8 try-catch-parity-worker.q:43\n"
+            "    [thrower:143 handler_raises_in_try:254 run:267]\n"
+            "return from try:\n"
+            "  on_exit (return from try)\n"
+            "  returned 9\n"
+            "return from catch:\n"
+            "  on_exit (return from catch)\n"
+            "  returned 11\n"
+            "loop jumps:\n"
+            "  loop 0: LOOP 0\n"
+            "  loop 0 end\n"
+            "  loop 2: LOOP 2\n"
+            "catch raises:\n"
+            "  catch with c\n"
+            "  release c\n"
+            "  outer: TWO/thrown/11 try-catch-parity-worker.q:43\n"
+            "    [thrower:197 catch_raises:254 run:271]\n"
+            "rethrow through frames:\n"
+            "  caught: DEEP/thrown/12 try-catch-parity-worker.q:43\n"
+            "    [thrower:214 rethrow_from_function:206 uncaught_through_frames:254 run:272]\n"
+            "runtime error:\n"
+            "  1\n"
+            "  caught: DIVISION-BY-ZERO/division by zero found in integer expression/null try-catch-parity-worker.q:227\n"
+            "    [runtime_error:254 run:273]\n"
+            "many temporaries:\n"
+            "  t1t2t3t4t5t6\n"
+            "  release t6\n"
+            "  release t5\n"
+            "  release t4\n"
+            "  release t3\n"
+            "  release t2\n"
+            "  release t1\n"
+            "  u1u2u3u4u5u6\n"
+            "  release u6\n"
+            "  release u5\n"
+            "  release u4\n"
+            "  release u3\n"
+            "  release u2\n"
+            "  release u1\n"
+            "many temporaries raising:\n"
+            "  release t5\n"
+            "  release t4\n"
+            "  release t3\n"
+            "  release t2\n"
+            "  release t1\n"
+            "  c1c2c3c4c5TEMP\n"
+            "  release c5\n"
+            "  release c4\n"
+            "  release c3\n"
+            "  release c2\n"
+            "  release c1\n"
+            "  caught: TEMP/thrown/\"t5\" try-catch-parity-worker.q:43\n"
+            "    [thrower:47 raise_in_temp:242 many_temps:275 <anonymous closure>:254 run:275]\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("TryCatchParityTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s", libqore_dir,
+                qore_bin, mode, getWorker()), ExecModeHarness::NativeCheck::Jit), mode);
+        }
+    }
+
+    testIrTier() {
+        assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=tiered %s",
+            libqore_dir, qore_bin, getWorker())), "IR tier");
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-try-catch-parity-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "try-catch-parity" + opt;
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                getWorker()));
+            assertTrue(is_file(exe), sprintf("compiled program (%s): %s", opt, out));
+            assertEq(Expected, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)), "qcc " + opt);
+        }
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "try-catch-parity-worker.q";
+    }
+}

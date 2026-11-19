@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT code generation and the serialized debug IR of an AOT executable
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+
+# The temp scope of a return statement's expression is opened with the scope of the statement by one instruction
+# (QoreIROpcode::PushTempMarkPair, qore#6444), which the debug IR of AOT code stores as the two PushTempMark
+# instructions that it stands for.  A debugger attached to an AOT program runs that debug IR in the IR interpreter;
+# the locals of a function whose return expression reads one of them must still be destroyed in reverse declaration
+# order (qore#6309), as in the AST interpreter.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class ReturnTempScopeDebugIrTest
+
+class ReturnTempScopeDebugIrTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir;
+        TmpDir tmp_dir;
+
+        # f() and g() are called through call_function() while a debugger is attached, so that the AOT functions run
+        # their debug IR (whose statements make the step events that the output reports; AOT top-level code and
+        # closures are native code without them); each return reads the local declared last, of which the value read
+        # is a temporary of the return statement
+        const ProbeSource = "%modern
+%allow-debugger
+
+class Attached inherits DebugProgram {
+    public { int steps = 0; }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {}
+    onStep(ProgramControl pgm, int blockStatementId, *int statementId, *int breakpointId, reference flow,
+            reference rs, reference rts) {
+        ++steps;
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int statementId, reference rs, reference rts) { rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onException(ProgramControl pgm, int statementId, hash<auto> ex, reference dismiss, reference rs,
+            reference rts) {
+        rs = DebugStep;
+    }
+    onExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+}
+
+our string log;
+class D {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { log += \"~\" + n; }
+    string get() { return n; }
+}
+
+string sub f() {
+    list<D> l = (new D(\"l\"),);
+    D k = new D(\"k\");
+    log += \"|\";
+    return k.get();
+}
+
+auto sub g() {
+    auto x = new D(\"a\");
+    auto y = new D(\"b\");
+    log += \"|\";
+    return y.get();
+}
+
+Attached r();
+ProgramControl pc = ProgramControl::getProgram();
+string rv;
+Counter cnt(1);
+background sub () {
+    on_exit cnt.dec();
+    r.addProgram(pc);
+    on_exit r.removeProgram(pc);
+    rv = call_function(\"f\");
+    rv += call_function(\"g\");
+}();
+cnt.waitForZero();
+printf(\"rv=%s log=%s stepped=%y\\n\", rv, log, r.steps > 0);
+";
+    }
+
+    constructor() : QUnit::Test("ReturnTempScopeDebugIr", "1.0") {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        tmp_dir = new TmpDir("return-temp-scope-debug-ir");
+        addTestCase("debug IR of a return with a temp scope releases the locals in order",
+            \testDebugIrReturnOrder());
+        set_return_value(main());
+    }
+
+    testDebugIrReturnOrder() {
+        string src = tmp_dir.path + "/probe.q";
+        string exe = tmp_dir.path + "/probe.aot";
+        {
+            File f();
+            f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(ProbeSource);
+        }
+
+        # the AST interpreter is the benchmark
+        string ast_out = backquote(sprintf("%s -b --exec-mode=ast %s 2>&1", qore_bin, src));
+        assertEq("rv=kb log=|~k~l|~b~a stepped=True\n", ast_out, "AST destruction order");
+
+        foreach bool strip in ((False, True)) {
+            string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile%s --output %s %s 2>&1",
+                libqore_dir, qore_bin, strip ? " --strip-source" : "", exe, src));
+            assertTrue(is_file(exe), "AOT compile succeeds: " + compile_out);
+            string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+            assertEq(ast_out, aot_out, sprintf("the debug IR of the AOT functions destroys the locals as the AST "
+                "interpreter does (strip-source: %y)", strip));
+            unlink(exe);
+        }
+    }
+}

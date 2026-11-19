@@ -62,7 +62,8 @@ class CompoundAssignmentNothingUnionTest inherits QUnit::Test {
             assertEq("-2.5 float", res{kind + " *union<int, float> -= 2.5"}, kind);
             assertEq("2.5 float", res{kind + " *union<int, float> += 2.5"}, kind);
             assertEq("-2.5 float", res{kind + " *union<float, int> -= 2.5"}, kind);
-            assertEq("-2.0 float", res{kind + " *union<float, int> -= 2"}, kind);
+            # the union accepts the int as it is, whatever the order of its members (qore#6407)
+            assertEq("-2 integer", res{kind + " *union<float, int> -= 2"}, kind);
             assertEq("-2.5 number", res{kind + " *union<int, number> -= 2.5n"}, kind);
             # an operand that the union does not accept
             assertEq("RUNTIME-TYPE-ERROR", res{kind + " *union<int, float> -= 2.5n"}, kind);

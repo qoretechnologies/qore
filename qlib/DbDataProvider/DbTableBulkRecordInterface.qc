@@ -38,6 +38,9 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
 
         #! use the native buffer-column shape
         bool use_columnar = True;
+
+        #! the \c "recursive" search option, if any: the rows are those of a recursive query
+        *hash<auto> recursive;
     }
 
     #! creates the iterator
@@ -50,6 +53,7 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
             : AbstractDataProviderBulkRecordInterface(block_size, search_options.requires_result,
                 search_options.max_records, search_options.limit) {
         self.table = table;
+        recursive = search_options.recursive;
         # release the transaction with a rollback in the destructor if we do not already have a transaction lock
         release_transaction = !table.getDatasource().currentThreadInTransaction() && !search_options.forupdate;
         # the destructor does not run if the constructor fails, so an implicit transaction acquired by the
@@ -125,7 +129,7 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
     /** @return the record type of the table
     */
     *hash<string, AbstractDataField> getRecordType() {
-        return table.getRecordType();
+        return DbTableReadHelper::getSearchRecordType(table, {"recursive": recursive});
     }
 
     #! Called when the iterator is marked as invalid

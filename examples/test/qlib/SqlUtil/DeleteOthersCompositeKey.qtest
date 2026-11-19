@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class DeleteOthersCompositeKeyTest
+
+#! the rows that the \c delete_others upsert option keeps are those of the input's primary key values (issue #6580)
+/** the values of a composite primary key were joined with \c "-", so that different keys gave the same string
+    (<tt>("a-b", "c")</tt> and <tt>("a", "b-c")</tt>), and a row that was not in the input was kept; runs on SQLite and
+    on PostgreSQL when \c QORE_DB_CONNSTR_PGSQL is set
+*/
+class DeleteOthersCompositeKeyTest inherits QUnit::Test {
+    private {
+        *Datasource pgsql;
+    }
+
+    constructor() : Test("DeleteOthersCompositeKey", "1.0", \ARGV) {
+        addTestCase("SQLite: delete_others with a composite key", \sqliteTest());
+        addTestCase("PostgreSQL: delete_others with a composite key", \pgsqlTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "DeleteOthersCompositeKey");
+            pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%endif
+    }
+
+    globalTearDown() {
+        if (pgsql) {
+            pgsql.rollback();
+            delete pgsql;
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        check(ds);
+    }
+
+    pgsqlTest() {
+        if (!pgsql) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set or no pgsql module");
+        }
+        on_exit pgsql.rollback();
+        check(pgsql);
+    }
+
+    private check(Datasource ds) {
+        # SQLite gives a table the primary key that it is created with
+        ds.exec("create table del_others_ck (k1 varchar(20) not null, k2 varchar(20) not null, v integer, "
+            "primary key (k1, k2))");
+        AbstractTable t = new Table(ds, "del_others_ck").getTable();
+
+        # keys whose values joined with "-" are the same, and keys with the characters of the key's encoding
+        list<hash<auto>> rows = (
+            {"k1": "a-b", "k2": "c", "v": 1},
+            {"k1": "a", "k2": "b-c", "v": 2},
+            {"k1": "1:x;", "k2": "", "v": 3},
+            {"k1": "1:x", "k2": ";", "v": 4},
+            {"k1": "", "k2": "1:x;", "v": 5},
+        );
+        map t.insert($1), rows;
+
+        # the input keeps the first of each pair: the others are deleted, and the kept rows are updated
+        list<hash<auto>> input = (
+            {"k1": "a-b", "k2": "c", "v": 10},
+            {"k1": "1:x;", "k2": "", "v": 30},
+        );
+        list<hash<auto>> info;
+        code cb = sub (string table_name, hash<auto> row, int result) {
+            info += {"k1": row.k1, "k2": row.k2, "result": result};
+        };
+        *hash<string, int> rh = t.upsertFromIterator(input.iterator(), AbstractTable::UpsertAuto,
+            {"delete_others": True, "info_callback": cb});
+        assertEq(3, rh.deleted);
+        assertEq(2, rh.updated + rh.verified);
+        assertEq(({"k1": "1:x;", "k2": "", "v": 30}, {"k1": "a-b", "k2": "c", "v": 10}),
+            t.selectRows({"orderby": ("k1", "k2")}));
+        # the deleted rows are given to the callback
+        assertEq(("/1:x;", "1:x/;", "a/b-c"),
+            sort(map sprintf("%s/%s", $1.k1, $1.k2), info, $1.result == AbstractTable::UR_Deleted));
+
+        # an input with every row of the table deletes nothing
+        rh = t.upsertFromIterator(input.iterator(), AbstractTable::UpsertAuto, {"delete_others": True});
+        assertEq(NOTHING, rh.deleted);
+        assertEq(2, t.rowCount());
+
+        # a table without a primary key: an error before any change, where the delete step raised RUNTIME-TYPE-ERROR
+        # after the input was upserted
+        ds.exec("create table del_others_nopk (k varchar(20) not null, v integer)");
+        AbstractTable np = new Table(ds, "del_others_nopk").getTable();
+        np.insert({"k": "a", "v": 1});
+        assertThrows("UPSERT-ERROR", "needs a primary key", \np.upsertFromIterator(),
+            (({"k": "b", "v": 2},).iterator(), AbstractTable::UpsertInsertOnly, {"delete_others": True}));
+        # nothing was changed
+        assertEq(({"k": "a", "v": 1},), np.selectRows());
+    }
+}

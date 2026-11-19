@@ -105,7 +105,7 @@
     |<tt>--output-dir=</tt><em>dir</em>|Output directory for batch \c -c builds
     |<tt>--depfile-dir=</tt><em>dir</em>|Write one dependency file per batch output into <em>dir</em>
     |<tt>--batch-build-sidecars</tt>|Write incremental-build index, manifest, status, dependency, and stamp sidecars for every batch output; requires \c --depfile-dir
-    |<tt>-l</tt>, <tt>--load=</tt><em>module</em>|Load a module before parsing sources
+    |<tt>-l</tt>, <tt>--load=</tt><em>module</em>|Load a module before parsing sources, when compiling a script, an object or an executable (an executable loads it when it starts); not when compiling a module, which uses @ref requires "%requires"; the parse errors and warnings of the module are reported as those of the compiled code, and its warnings are errors with \c -r
     |<tt>--stub=</tt><em>file</em>|Preload declaration-only source supplied by a host
     |<tt>--define=</tt><em>name</em><tt>[=</tt><em>value</em><tt>]</tt>|Set parser defines before parsing
     |<tt>--parse-option=</tt><em>name</em>|Set a parse option before parsing
@@ -121,9 +121,20 @@
     |<tt>--big-fn-threshold=</tt><em>N</em>|Compile very large functions with \c OptimizeNone, default 200
     |<tt>-e</tt>, <tt>--entry=</tt><em>fn</em>|Entry function for generated one-shot or link-mode \c main()
     |<tt>-r</tt>, <tt>--warnings-are-errors</tt>|Treat Qore parser warnings as fatal compile errors
+    |<tt>--diag-format=json</tt>|Report the parse errors and warnings of the compiled code as one JSON array on stdout at the end of the run, in the form of @ref diag_json_format "qore --diag-format=json" (also \c QORE_DIAG_FORMAT=json); the other output of the run goes to stderr
+    |<tt>--code-frames</tt>|Report the parse errors and warnings of the compiled code as @ref diag_code_frames "code frames" on stderr (also \c QORE_CODE_FRAMES)
     |<tt>--dump-info</tt>|Inspect embedded AOT metadata without executing the artifact
     |<tt>--dump-symbols</tt>|Include an nm-like symbol table in dump output
     |<tt>--dump-sections</tt>|Include object and AOT section tables in dump output
+
+    \c qcc reports each parse error and warning of the code it compiles (of the parse or of its commit) on stderr, in
+    the form of other compilers, unless \c --diag-format=json or \c --code-frames selects another form:
+    @verbatim
+<file>:<line>[:<column>]: error|warning: <code>: <message>
+    @endverbatim
+    The column is 1-based, and is left out when it is not known; a diagnostic without a location starts with the file
+    name, if known, or \c qcc.  A message that lists more than one item (ex: the variants that a call could match) goes
+    on over the following lines.
 
     AOT compilation requires @ref modern "%modern" source semantics. Modern
     script and application sources should use the <tt>.qr</tt> extension; <tt>.q</tt> keeps

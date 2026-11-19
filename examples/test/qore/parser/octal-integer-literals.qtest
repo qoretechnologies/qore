@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class OctalIntegerLiteralsTest
+
+#! octal integer literals (issue #504): an integer literal with a leading zero is octal, so one with an 8 or a 9 is a
+#! parse error instead of a decimal; literals of other types with a leading zero are decimal
+class OctalIntegerLiteralsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("octal integer literals", "1.0") {
+        addTestCase("octal values", \octalValues());
+        addTestCase("invalid digits", \invalidDigits());
+        addTestCase("overflow", \overflow());
+        addTestCase("other literals with a leading zero", \otherLiterals());
+        set_return_value(main());
+    }
+
+    private octalValues() {
+        assertEq(0, evalExpr("0"));
+        assertEq(0, evalExpr("00"));
+        assertEq(7, evalExpr("07"));
+        assertEq(8, evalExpr("010"));
+        assertEq(15, evalExpr("017"));
+        assertEq(511, evalExpr("0777"));
+        assertEq(-8, evalExpr("-010"));
+        assertEq(MAXINT, evalExpr("0777777777777777777777"));
+        # decimal and hexadecimal literals are unchanged
+        assertEq(1009, evalExpr("1009"));
+        assertEq(31, evalExpr("0x1f"));
+    }
+
+    private invalidDigits() {
+        hash<string, string> cases = {
+            "08": "8",
+            "09": "9",
+            "008": "8",
+            "019": "9",
+            "0189": "8",
+            "0778": "8",
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            assertEq(sprintf("invalid digit '%s' in octal integer literal '%s'; an integer literal with a leading "
+                "zero is octal", i.value, i.key), parseError(i.key), i.key);
+        }
+        # also as an operand and an argument
+        assertRegex("invalid digit '9' in octal integer literal '09'", parseError("1 + 09"));
+        assertRegex("invalid digit '8' in octal integer literal '08'", parseError("abs(08)"));
+    }
+
+    private overflow() {
+        assertRegex("^numeric overflow in octal integer literal '01777777777777777777777'",
+            parseError("01777777777777777777777"));
+        # 2^63, one more than the largest integer
+        assertRegex("^numeric overflow in octal integer literal '01000000000000000000000'",
+            parseError("01000000000000000000000"));
+        # the largest integer, also negated
+        assertEq(MAXINT, evalExpr("0777777777777777777777"));
+        assertEq(-MAXINT, evalExpr("-0777777777777777777777"));
+    }
+
+    private otherLiterals() {
+        assertEq(10n, evalExpr("010n"));
+        assertEq(8.5, evalExpr("08.5"));
+        assertEq(10.5, evalExpr("010.5"));
+        assertEq(10ms, evalExpr("010ms"));
+        assertEq(9s, evalExpr("09s"));
+        # a date literal with a year with a leading zero
+        assertEq(date("0834-01-01"), evalExpr("0834-01-01"));
+    }
+
+    #! returns the value of the expression, parsed as the return value of a function in a new Program
+    private auto evalExpr(string expr) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("auto sub get() { return " + expr + "; }\n", "expr");
+        return p.callFunction("get");
+    }
+
+    #! returns the description of the parse error of the expression, or NOTHING
+    private *string parseError(string expr) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse("auto sub get() { return " + expr + "; }\n", "expr");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err, expr);
+            return ex.desc;
+        }
+        return NOTHING;
+    }
+}

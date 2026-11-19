@@ -620,7 +620,8 @@ list<TypedHashMember> TypedHash::getMembers() [flags=RET_VALUE_ONLY] {
 hash<auto> TypedHash::doCast(hash<auto> h) {
     QoreReflectionCaller caller;
     // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
-    // in the language: visibility decides, not the Program of the handle (see reflection_can_see_typed_hash())
+    // in the language, or the typed hash is exported by the user module that declares it: visibility decides, not the
+    // Program of the handle (see reflection_check_typed_hash_init())
     if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
@@ -658,7 +659,8 @@ hash<auto> info = th.doCastWithOverrides(serialized_info, {
 hash<auto> TypedHash::doCastWithOverrides(hash<auto> h, hash<auto> overrides) {
     QoreReflectionCaller caller;
     // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
-    // in the language: visibility decides, not the Program of the handle (see reflection_can_see_typed_hash())
+    // in the language, or the typed hash is exported by the user module that declares it: visibility decides, not the
+    // Program of the handle (see reflection_check_typed_hash_init())
     if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
@@ -694,7 +696,8 @@ hash<auto> typed_values = th.doCastValues({
 hash<auto> TypedHash::doCastValues(hash<auto> values) {
     QoreReflectionCaller caller;
     // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
-    // in the language: visibility decides, not the Program of the handle (see reflection_can_see_typed_hash())
+    // in the language, or the typed hash is exported by the user module that declares it: visibility decides, not the
+    // Program of the handle (see reflection_check_typed_hash_init())
     if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
@@ -759,7 +762,8 @@ hash<auto> typed_values = th.doCastValuesWithOverrides({
 hash<auto> TypedHash::doCastValuesWithOverrides(hash<auto> values, hash<auto> overrides) {
     QoreReflectionCaller caller;
     // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
-    // in the language: visibility decides, not the Program of the handle (see reflection_can_see_typed_hash())
+    // in the language, or the typed hash is exported by the user module that declares it: visibility decides, not the
+    // Program of the handle (see reflection_check_typed_hash_init())
     if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }

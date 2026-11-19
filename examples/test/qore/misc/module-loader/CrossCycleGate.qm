@@ -1,0 +1,32 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module CrossCycleGate {
+    version = "1.0";
+    desc = "the rendezvous of the inits of CrossCycleA and CrossCycleB";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    # the rendezvous uses a Counter
+    domains = "THREAD_CLASS";
+    init = sub () { cross_cycle_arrived = new Counter(2); };
+}
+
+# decremented by the init of each module of the cycle; both inits have started, so both features are reserved, when
+# it reaches zero
+our Counter cross_cycle_arrived;
+
+#! returns once the inits of both modules of the cycle have started
+/** Each module's init calls it before it loads the other module, so that both threads hold their module's feature
+    when either asks for the other's, and the cycle forms in every attempt instead of only when the threads happen to
+    interleave so (issue #6517).  The wait is bounded so that a loader that serializes the inits fails the attempt
+    with an error instead of hanging it.
+*/
+public sub cross_cycle_rendezvous() {
+    cross_cycle_arrived.dec();
+    if (cross_cycle_arrived.waitForZero(30s)) {
+        throw "CROSS-CYCLE-GATE-ERROR", "the init of the other module of the cycle did not start";
+    }
+}

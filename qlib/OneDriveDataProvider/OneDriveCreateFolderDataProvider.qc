@@ -110,7 +110,8 @@ public class OneDriveCreateFolderDataProvider inherits OneDriveDataProviderBase 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string path;
         if (req.parent_id) {
-            path = getDriveBasePath(req) + "/items/" + req.parent_id + "/children";
+            path = getDriveBasePath(req) + "/items/" + getItemIdPathSegment(req.parent_id, "parent ID")
+                + "/children";
         } else {
             path = getDriveBasePath(req) + "/root/children";
         }

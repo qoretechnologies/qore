@@ -193,6 +193,7 @@ class ServerProcess {
     #! Waits for the process to end and reads the rest of its output; returns False if it did not end in time
     bool wait() {
         if (!proc.wait(HangTimeout)) {
+            dumpStacks("the server did not end in time");
             return False;
         }
         while (*string s = proc.readStdout(1024, 0)) {
@@ -221,9 +222,63 @@ class ServerProcess {
         while (out.find(end) < 0) {
             *string s = proc.readStdout(1024, HangTimeout);
             if (!exists s) {
+                dumpStacks(sprintf("the server did not write %y", end));
                 throw "TEST-ERROR", sprintf("the server did not write %y: %y", end, out);
             }
             out += s;
+        }
+    }
+
+    #! Prints the stacks of the threads of the server process that has not done what the test waits for (qore#6496)
+    /** The first debugger that attaches prints them; where none can (none is installed, or ptrace is not allowed, as
+        in many containers), the list of the threads of the process from /proc: name, state, the kernel function that
+        a thread waits in, and its kernel stack if readable
+    */
+    private dumpStacks(string why) {
+        int pid = proc.id();
+        printf("*** %s: output so far: %y; the stacks of server process %d:\n", why, out, pid);
+        foreach string cmd in ((
+            "eu-stack -p " + pid,
+            "gdb -p " + pid + " -batch -ex 'set debuginfod enabled off' -ex 'thread apply all bt'",
+            "lldb -p " + pid + " -b -o 'thread backtrace all'",
+            "sample " + pid + " 2 -mayDie",
+        )) {
+            try {
+                string stacks = backquote("timeout 120 " + cmd + " 2>/dev/null");
+                # a debugger that cannot attach prints little or nothing
+                if (stacks =~ /#[0-9]+ +(0x|[a-z_])/ || stacks.size() > 2000) {
+                    printf("*** %s:\n%s\n", cmd, stacks);
+                    return;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # the tool is absent or refused; try the next one
+            }
+        }
+        string task_dir = sprintf("/proc/%d/task", pid);
+        if (!is_dir(task_dir)) {
+            printf("*** no debugger could attach and there is no %s\n", task_dir);
+            return;
+        }
+        printf("*** no debugger could attach; the threads of the process:\n");
+        foreach string tid in (sort(glob(task_dir + "/*"))) {
+            *string comm = readText(tid + "/comm");
+            *string stat = readText(tid + "/stat");
+            # the state is the field after the name, which is in parentheses
+            *string state = stat ? (stat =~ x/\) ([A-Za-z]) /)[0] : NOTHING;
+            printf("  thread %s %y state %s wchan %s\n", basename(tid), trim(comm ?? ""), state ?? "?",
+                trim(readText(tid + "/wchan") ?? "?"));
+            *string kstack = readText(tid + "/stack");
+            if (kstack) {
+                printf("%s", kstack);
+            }
+        }
+    }
+
+    #! Returns the contents of the given file, or NOTHING if it cannot be read
+    private static *string readText(string path) {
+        try {
+            return ReadOnlyFile::readTextFile(path);
+        } catch (hash<ExceptionInfo> ex) {
         }
     }
 

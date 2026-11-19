@@ -1762,6 +1762,12 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          }
       }
 
+      // the exceptions raised before the parse started (ex: a script file that cannot be opened) are diagnostics of
+      // it too in the diagnostic modes (issue #6516)
+      if (diag_json || code_frames) {
+         qore_add_parse_exception_diagnostics(**qpgm, xsink);
+      }
+
       // structured-diagnostics mode: emit the collected diagnostics as JSON and exit without executing
       if (diag_json) {
          printf("%s\n", qore_get_parse_diagnostics_json(**qpgm).c_str());
@@ -1791,7 +1797,13 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             }
          }
          unsigned errs = qore_render_parse_diagnostic_frames(**qpgm, src_ptr, stderr);
-         rc = errs ? 2 : 0;
+         // a parse can also fail with an exception that is not a diagnostic of the parse (ex: an exception in the
+         // initialization of a constant): the parse failed, and the exception is shown as without --code-frames when
+         // no error diagnostic stands for it (issue #6509)
+         rc = (errs || xsink.isException()) ? 2 : 0;
+         if (!errs && xsink.isException()) {
+            xsink.handleExceptions();
+         }
          // suppress the default human-readable error/warning output (frames replace it)
          xsink.clear();
          wsink.clear();

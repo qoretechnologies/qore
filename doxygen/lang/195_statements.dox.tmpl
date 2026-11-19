@@ -614,6 +614,13 @@ int sub check(int i) {
     requires the cleanup.\n\n
     Note that if this statement is reached when executing in a loop, the <tt><b>on_exit</b></tt> code will be executed
     for each iteration of the loop.\n\n
+    @anchor on_block_exit_in_block
+    An <tt><b>on_exit</b></tt>, <tt><b>on_success</b></tt> or <tt><b>on_error</b></tt> statement must be a statement of
+    a block in braces, as it runs when that block ends: it cannot be the body of another statement without braces
+    (an @ref if "if" or \c else, a loop, a \c try or \c catch, a \c context, \c subcontext or \c summarize
+    statement, or another \c on_exit, \c on_success or \c on_error statement), whose scope would be unclear; <tt>if (x) on_success f();</tt> is a parse error, and
+    <tt>if (x) { on_success f(); }</tt> runs \c f() when the \c if block ends.  Inside braces, it can be nested
+    (<tt>on_exit { on_success f(); }</tt>).\n\n
     By using this statement, programmers ensure that necessary cleanup will be performed regardless of the exit status
     of the block (exception, @ref return "return", etc).
 
@@ -665,7 +672,8 @@ int sub check(int i) {
     similar to <tt><b>on_success</b></tt> statements, except <tt><b>on_error</b></tt> statements are only executed
     when there is an active exception when the block is exited.\n\n
     Note that if this statement is reached when executing in a loop, the <tt><b>on_success</b></tt> code will be
-    executed for each iteration of the loop (as long as there is no active exception).
+    executed for each iteration of the loop (as long as there is no active exception).\n\n
+    See @ref on_block_exit_in_block "on_exit statements" for where it can be used.\n
 
     @par Example
 @code{.py}
@@ -713,7 +721,8 @@ int sub check(int i) {
     @ref rethrow "rethrow statements" are allowed in \c on_error statements, allowing for exception enrichment.
     Note that the code in this statement can only be executed once in any block, as a block (even a block within a
     loop) can only exit the loop once with an active exception (in contrast to @ref on_success "on_success" and
-    @ref on_exit "on_exit statements", which are executed for every iteration of a loop).
+    @ref on_exit "on_exit statements", which are executed for every iteration of a loop).\n\n
+    See @ref on_block_exit_in_block "on_exit statements" for where it can be used.\n
 
     @par Example
 @code{.py}{

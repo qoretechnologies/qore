@@ -540,6 +540,12 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         //    name.c_str(), val.getFullTypeName(), p, p ? p->name.c_str() : "n/a");
 
         AOTPreloadedSourceSymbolResolutionHelper apssrh;
+        // the exceptions that the initialization raises are those after the last one of the parse sink now: the sink
+        // holds the other exceptions of the parse too
+        const QoreException* prev_tail = nullptr;
+        if (ExceptionSink* psink = getProgram()->getParseExceptionSink()) {
+            prev_tail = qore_es_private::get(*psink)->tail;
+        }
         // resolve a deferred explicit declared type here (rather than eagerly in the parser) so that forward
         // references to hashdecls/classes declared later in the same module resolve correctly; the class/namespace
         // parse context pushed above is in scope, matching the behavior of type inference
@@ -579,8 +585,33 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         // Enrich exception with constant name for better debugging
         if (err) {
             ExceptionSink* xsink = getProgram()->getParseExceptionSink();
-            if (xsink) {
-                xsink->appendLastDescription(" (while initializing constant '%s')", name.c_str());
+            // the exceptions that the initialization raised (ExceptionSink::appendLastDescription() changes the first
+            // exception of the sink, which can be another one of the parse); none if the sink does not hold the last
+            // exception that it held before any more
+            QoreException* e = xsink ? qore_es_private::get(*xsink)->head : nullptr;
+            if (prev_tail) {
+                while (e && e != prev_tail) {
+                    e = e->next;
+                }
+                if (e) {
+                    e = e->next;
+                }
+            }
+            for (; e; e = e->next) {
+                if (e->desc.getType() == NT_STRING) {
+                    QoreStringNodeHolder desc(e->desc.get<const QoreStringNode>()->copy());
+                    desc->sprintf(" (while initializing constant '%s')", name.c_str());
+                    e->desc.discard(nullptr);
+                    e->desc = desc.release();
+                }
+                // an exception raised outside of user code (ex: by an operator of the initializer folded here,
+                // which runs without a location) is located at the constant, so that it can be reported at its
+                // source (issue #6516)
+                if (e->start_line < 0 && loc) {
+                    e->set(*loc);
+                    e->start_column = loc->start_column;
+                    e->end_column = loc->end_column;
+                }
             }
         }
         assert(!parse_context.lvids);
@@ -671,12 +702,12 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
         RuntimeConfig& rc;
         QoreParseOptions old_po;
 
-        DLLLOCAL ConstantInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
+        ConstantInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
                 old_po(rc.getParseOptions()) {
             rc.setParseOptions(po);
         }
 
-        DLLLOCAL ~ConstantInitRcParseOptionsHelper() {
+        ~ConstantInitRcParseOptionsHelper() {
             rc.setParseOptions(old_po);
         }
     } init_rc_po(rc_get_tls_ref(), pwo.parse_options);
@@ -741,6 +772,17 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
         // Enrich exception with constant name for better debugging
         xsink.appendLastDescription(" (while initializing constant '%s')", name.c_str());
         if (runtime_xsink) {
+            // an exception raised outside of user code (ex: by an operator of the initializer, which runs without a
+            // location) is located at the constant, so that it can be reported at its source (issue #6516)
+            if (loc) {
+                for (QoreException* ex = xsink.getException(); ex; ex = ex->next) {
+                    if (ex->start_line < 0) {
+                        ex->set(*loc);
+                        ex->start_column = loc->start_column;
+                        ex->end_column = loc->end_column;
+                    }
+                }
+            }
             runtime_xsink->assimilate(xsink);
         } else {
             qore_program_private::addParseException(getProgram(), xsink, loc);

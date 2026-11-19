@@ -52,6 +52,7 @@ class ConnectionOptionValuesTest inherits QUnit::Test {
         addTestCase("connection option validation", \connectionOptions());
         addTestCase("data provider option validation", \dataProviderOptions());
         addTestCase("client option errors", \clientOptions());
+        addTestCase("hash and list option values", \containerOptions());
         set_return_value(main());
     }
 
@@ -166,6 +167,59 @@ class ConnectionOptionValuesTest inherits QUnit::Test {
         ex = getException(sub () { dp.check(desc, {"mode": "bad-mode"}); });
         checkNoValue(ex, "OPTION-VALUE-ERROR", "mode", Secret);
         assertRegex("bad-mode", ex.desc, "a value that is not allowed of an option that is not sensitive");
+    }
+
+    #! The type error of a hash or list option that is not sensitive gives no value: it can hold credentials
+    #! (issue #6504)
+    containerOptions() {
+        HashDataType inner("inner_type");
+        inner.addField(new QoreDataField("auth", "auth", AbstractDataProviderTypeMap."hash"));
+        HashDataType outer("outer_type");
+        outer.addField(new QoreDataField("inner", "inner", inner));
+        outer.addField(new QoreDataField("port", "port", AbstractDataProviderTypeMap."*int"));
+
+        OptionCheckingDataProvider dp();
+        hash<string, hash<DataProviderOptionInfo>> desc = {
+            "conn": <DataProviderOptionInfo>{
+                "display_name": "Connection",
+                "short_desc": "Connection",
+                "type": outer,
+                "desc": "Connection",
+            },
+            "count": <DataProviderOptionInfo>{
+                "display_name": "Count",
+                "short_desc": "Count",
+                "type": AbstractDataProviderTypeMap."int",
+                "desc": "Count",
+            },
+        };
+
+        # a field of a nested hash refuses a credential: the path of the field is given, not the value
+        hash<ExceptionInfo> ex = getException(sub () {
+            dp.check(desc, {"conn": {"inner": {"auth": "Bearer " + Secret}}});
+        });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "conn", Secret);
+        assertRegex("outer_type", ex.desc, "the type is named");
+        assertRegex("inner\\.auth", ex.desc, "the field is named");
+
+        # a field of the outer hash
+        ex = getException(sub () { dp.check(desc, {"conn": {"inner": {"auth": {}}, "port": Secret}}); });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "conn", Secret);
+        assertRegex("\"port\"", ex.desc, "the field is named");
+
+        # a list given for a hash option
+        ex = getException(sub () { dp.check(desc, {"conn": ("Bearer " + Secret,)}); });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "conn", Secret);
+        assertRegex("type \"list\"", ex.desc, "the type of the value is named");
+
+        # a string given for a hash option, such as serialized headers
+        ex = getException(sub () { dp.check(desc, {"conn": "Authorization: Bearer " + Secret}); });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "conn", Secret);
+
+        # the type error of a scalar value of an option that is not sensitive still gives the value
+        ex = getException(sub () { dp.check(desc, {"count": "not-a-count"}); });
+        assertEq("OPTION-VALUE-ERROR", ex.err);
+        assertRegex("not-a-count", ex.desc, "a scalar value of an option that is not sensitive is given");
     }
 
     clientOptions() {

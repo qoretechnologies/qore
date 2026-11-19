@@ -35,6 +35,7 @@
 
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <atomic>
 #include <chrono>
@@ -234,7 +235,7 @@ public:
         @return 0 on success, -1 if an exception was raised
     */
     DLLLOCAL int watchQuicResponseSend(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
-        return sock_obj->watchQuicResponseSend(session_id, stream_id, xsink);
+        return qore_socket_object_private(sock_obj).watchQuicResponseSend(session_id, stream_id, xsink);
     }
 
     //! Drops a watch added with addResponseSendWatch() whose registration with the QUIC session failed
@@ -274,7 +275,7 @@ public:
         AutoLocker al(op_lock);
         close_notify_streams.insert(stream_key);
         // lock order: op_lock, then the socket's locks, as in deliverSessionLifecycleEvents()
-        if (sock_obj && sock_obj->isQuicSessionClosedOrGone(session_id)) {
+        if (sock_obj && qore_socket_object_private(sock_obj).isQuicSessionClosedOrGone(session_id)) {
             peer_closed_streams.insert(stream_key);
         }
     }

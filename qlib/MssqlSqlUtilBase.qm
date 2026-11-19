@@ -186,6 +186,18 @@ hash<auto> desc = {
     schema alignment.
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - a boolean given in SQL (a default value, or the value of a column or update operator) is \c 1 or \c 0, as
+      T-SQL has no \c true and \c false literals (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - implemented @ref select_option_recursive "recursive queries" on SQL Server; a query with a \c max_depth sets the
+      recursion limit of the statement to it with \c MAXRECURSION; Sybase raises \c RECURSIVE-QUERY-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
+    - a recursive query can be the select of an insert-select or a create-as-select, whose WITH clause starts the
+      statement (see @ref select_option_recursive_insert_create)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
     - the triggers of a table on SQL Server are read from the database: a table with triggers is aligned with no
       change, and a changed trigger, or an encrypted one, whose definition cannot be read, is dropped and created;
       each alignment created the triggers again, which failed as they existed.  A trigger of the table that the
@@ -363,12 +375,14 @@ string sub mssql_get_sql_object_name(string name) {
 
 # returns a string for an SQL string literal: in single quotes, with each single quote doubled
 string sub mssql_get_string_literal(string str) {
-    return "'" + replace(str, "'", "''") + "'";
+    # issue #6586: a string whose encoding is invalid is refused
+    return AbstractSqlUtilBase::getSqlStringLiteral(str);
 }
 
 # returns a string for a Unicode SQL string literal: N and the string in single quotes, with each single quote doubled
 string sub mssql_get_unicode_string_literal(string str) {
-    return "N'" + replace(str, "'", "''") + "'";
+    # issue #6586: a string whose encoding is invalid is refused
+    return "N" + AbstractSqlUtilBase::getSqlStringLiteral(str);
 }
 
 # returns a name in brackets, with each "]" doubled, without any other check of the name
@@ -2070,6 +2084,11 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
 
 #! provides the Mssql-specific implementation of the SqlUtil::AbstractTable interface
 public class MssqlTable inherits SqlUtil::AbstractTable {
+    #! the largest recursion limit that the \c MAXRECURSION hint of SQL Server can give
+    /** @since MssqlSqlUtilBase 1.1
+    */
+    const MssqlMaxRecursionLimit = 32767;
+
     public {
         #! sybase flag
         bool is_sybase;
@@ -2533,8 +2552,7 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."date");
-                    string fmt = MssqlTable::convertDateFormat(args[1]);
-                    return sprintf("FORMAT(%s, '%s')", exp0, fmt);
+                    return sprintf("FORMAT(%s, %s)", exp0, MssqlTable::getDateFormatLiteral(args[1]));
                 },
             },
         };
@@ -2559,8 +2577,10 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         const MssqlCopMap = (
             COP_CAST: (
                 "code": string sub (string cve, list<auto> args) {
-                    string name = QoreTypeMap{args[0]} ?? args[0];
-                    hash desc = MssqlTypeMap{name};
+                    string name = QoreTypeMap{args[0]} ?? SqlUtil::sql_check_cast_type(args[0]);
+                    # a type that the driver does not describe (ex: a sized type name such as "varchar2(10 char)") is given as
+                    # it is (qore#6572)
+                    *hash<auto> desc = MssqlTypeMap{name};
                     string sql = sprintf ("cast (%s as %s", cve, name);
                     switch (name) {
                         default:
@@ -2603,22 +2623,22 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
             ),
             COP_YEAR: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 4)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 4)", arg1);
                 }
             ),
             COP_YEAR_MONTH: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 7)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 7)", arg1);
                 }
             ),
             COP_YEAR_DAY: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 10)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 10)", arg1);
                 }
             ),
             COP_YEAR_HOUR: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 13)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 13)", arg1);
                 }
             ),
             COP_SEQ: (
@@ -2842,7 +2862,75 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
 
     #! returns the name of the table to be used in SQL (with a possible qualifiers for schema, etc)
     string getSqlName() {
+        # issue #3544: the common table expression of a recursive query has no schema
+        if (recursive_cte) {
+            return mssql_get_sql_identifier(name);
+        }
         return mssql_get_sql_identifier(schema) + "." + mssql_get_sql_identifier(name);
+    }
+
+    #! Returns @ref nothing for SQL Server, which supports recursive queries; Sybase does not
+    /** @since MssqlSqlUtilBase 1.1
+    */
+    private *string getRecursiveQueryUnsupportedReasonImpl() {
+        if (is_sybase) {
+            return "the Sybase database does not support recursive queries";
+        }
+    }
+
+    #! Returns \c "with": SQL Server has no \c RECURSIVE keyword
+    /** @since MssqlSqlUtilBase 1.1
+    */
+    private string getRecursiveWithSqlImpl() {
+        return "with";
+    }
+
+    #! Returns @ref False: a recursive query needs \c UNION \c ALL on SQL Server
+    /** @since MssqlSqlUtilBase 1.1
+    */
+    private bool recursiveQuerySupportsUnionDistinctImpl() {
+        return False;
+    }
+
+    #! Returns the SQL of a recursive query
+    /** SQL Server ends a recursive query with an error after 100 levels of recursion by default: a query with a
+        \c max_depth sets the limit of the statement to it (the limit that runs it exactly) with a \c MAXRECURSION
+        hint, or removes the limit for a \c max_depth above 32767, the largest limit that the hint can give, as
+        \c max_depth bounds the recursion; a query without \c max_depth keeps the default limit
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    private string getRecursiveQuerySqlImpl(string with_sql, string select_sql, hash<auto> rq) {
+        string sql = with_sql + " " + select_sql;
+        if (exists rq.max_depth) {
+            # MAXRECURSION 0 is no limit, so a query with a max_depth of 0 has a limit of 1
+            sql += sprintf(" option (maxrecursion %d)", rq.max_depth > MssqlMaxRecursionLimit
+                ? 0
+                : (rq.max_depth ?: 1));
+        }
+        return sql;
+    }
+
+    #! Returns the SQL of an insert-select whose select is a recursive query
+    /** SQL Server needs the WITH clause before the statement: <tt>with ... insert into t (c1, c2) select ...</tt>,
+        with the \c MAXRECURSION hint of getRecursiveQuerySqlImpl() at its end
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    private string getRecursiveInsertSelectSqlImpl(string insert_sql, string with_sql, string select_sql,
+            hash<auto> rq) {
+        return getRecursiveQuerySqlImpl(with_sql, insert_sql + " " + select_sql, rq);
+    }
+
+    #! Returns the SQL of a create-as-select whose select is a recursive query
+    /** SQL Server needs the WITH clause before the statement: <tt>with ... select ... into t from ...</tt>, with the
+        \c MAXRECURSION hint of getRecursiveQuerySqlImpl() at its end
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    private string getRecursiveCreateAsSelectSqlImpl(string with_sql, string select_sql, hash<auto> rq,
+            *hash<auto> opt) {
+        return getRecursiveQuerySqlImpl(with_sql, getCreateAsSelectSqlImpl(select_sql, opt), rq);
     }
 
     #! returns a name as an SQL identifier for SQL Server and Sybase
@@ -2869,6 +2957,8 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         @since %Qore 3.0
     */
     static string convertDateFormat(string fmt) {
+        # the format is written into an SQL string literal (qore#6553)
+        sql_literal_check_encoding(fmt);
         fmt = regex_subst(fmt, "YYYY", "yyyy", RE_Global);
         fmt = regex_subst(fmt, "YY(?!yy)", "yy", RE_Global);
         fmt = regex_subst(fmt, "DD", "dd", RE_Global);
@@ -2876,9 +2966,16 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         fmt = regex_subst(fmt, "us", "ffffff", RE_Global);
         fmt = regex_subst(fmt, "ms(?!s)", "fff", RE_Global);
         # MM and HH and mm are the same in both formats
-        # escape single quotes for safe SQL embedding
-        fmt = regex_subst(fmt, "'", "''", RE_Global);
         return fmt;
+    }
+
+    #! Returns the date format converted by convertDateFormat() as an SQL string literal (qore#6557)
+    /** The format is given in single quotes, with each single quote doubled (see mssql_get_string_literal())
+
+        @throw VALUE-ERROR the format is not valid in its encoding
+    */
+    static string getDateFormatLiteral(string fmt) {
+        return mssql_get_string_literal(convertDateFormat(fmt));
     }
 
     #! Returns the expression map for Mssql
@@ -3662,12 +3759,15 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             case NT_NUMBER: return string(v);
 
             # double any single quotes in strings
-            case NT_STRING: v =~ s/'/''/g; return "'" + v + "'";
+            # issue #6586: the quotes are doubled without a regular expression, and a string whose encoding is
+            # invalid is refused
+            case NT_STRING: return AbstractSqlUtilBase::getSqlStringLiteral(v);
 
             case NT_NULL:
             case NT_NOTHING: return "null";
 
-            case NT_BOOLEAN: return v ? "true" : "false";
+            # issue #6586: T-SQL has no boolean literal; a bit value is given
+            case NT_BOOLEAN: return v ? "1" : "0";
 
             case NT_DATE: return sprintf("cast('%s' as datetimeoffset(6))",
                 TimeZone::get().date(v).format("YYYY-MM-DD HH:mm:SS.us Z"));
@@ -4284,8 +4384,8 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         # this rule is broken here with reason:
         # In a SELECT statement, always use an ORDER BY clause with the TOP clause.
         # This is the only way to predictably indicate which rows are affected by TOP
-        sql = regex_subst(sql, "^select ", sprintf("select top %d ", info.query_hash.limit));
-        info.args += info.query_hash.limit.toInt();
+        # the limit is written in the SQL, so it is not a bind argument, and it follows "distinct" (issue #6583)
+        sql = regex_subst(sql, "^select (distinct )?", sprintf("select $1top %d ", info.query_hash.limit));
     }
 
     #! processes a string for use in SQL select statements when there is an "order by" and "offset" argument

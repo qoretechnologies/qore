@@ -334,6 +334,11 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
         // with pcre2_match_data_create_from_pattern(); it is reported as an error below rather than
         // being silently treated as "no match"
         if (rc < 1) {
+            // a subject that is not valid UTF-8 is not given back unchanged as if nothing matched (qore#6553)
+            if (qore_pcre2_invalid_utf_error(rc)) {
+                qore_pcre2_raise_invalid_subject(rc, md, "regular expression substitution", xsink);
+                return nullptr;
+            }
             if (qore_pcre2_check_match_error(rc, xsink)) {
                 assert(*xsink);
                 return nullptr;
@@ -427,6 +432,11 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
         int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
             match_options, md);
         if (rc < 1) {
+            // a subject that is not valid UTF-8 is not given back unchanged as if nothing matched (qore#6553)
+            if (qore_pcre2_invalid_utf_error(rc)) {
+                qore_pcre2_raise_invalid_subject(rc, md, "regular expression substitution", xsink);
+                return nullptr;
+            }
             if (qore_pcre2_check_match_error(rc, xsink)) {
                 assert(*xsink);
                 return nullptr;
@@ -510,7 +520,9 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
         tstr->concat(replacement->c_str(), replacement->size());
 
         ptr = t->c_str() + ovector[1];
-        match_options = PCRE2_NO_UTF_CHECK;
+        // as in exec(): a byte-matching pattern such as \C can end inside a UTF-8 character, where the next match keeps
+        // PCRE2's offset validation
+        match_options = (static_cast<unsigned char>(*ptr) & 0xc0) == 0x80 ? 0 : PCRE2_NO_UTF_CHECK;
 
         if (!global) {
             break;
