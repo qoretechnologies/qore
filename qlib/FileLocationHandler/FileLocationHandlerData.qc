@@ -39,7 +39,7 @@ class FileLocationHandlerData inherits AbstractFileLocationHandler {
         @return the location string without the scheme
     */
     private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
-        return location;
+        return AbstractFileLocationHandler::checkTextEncoding(location, opts.encoding_errors, scheme + "://");
     }
 
     #! Retrieves a binary file from the given location
@@ -119,7 +119,8 @@ class FileLocationHandlerData inherits AbstractFileLocationHandler {
         @return a stream reader for the location string without the scheme
     */
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
-        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), location.encoding());
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), location.encoding(),
+            opts.encoding_errors);
     }
 
     #! Retrieves a binary file from the given location
@@ -160,7 +161,9 @@ class FileLocationHandlerData inherits AbstractFileLocationHandler {
     /** @return supported read options
     */
     private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
-        return {};
+        return {
+            "encoding_errors": EncodingErrorsOption,
+        };
     }
 
     #! Gets supported write options

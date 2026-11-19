@@ -74,7 +74,8 @@ public class FixedLengthFileIterator inherits FixedLengthUtil::FixedLengthAbstra
         @param opts Global options; see @ref fixedlengthglobals for more information
     */
     constructor(string path, hash<auto> spec, *hash<auto> opts)
-        : FixedLengthAbstractIterator(new InputStreamLineIterator(new FileInputStream(path), opts.encoding, opts.eol),
+        : FixedLengthAbstractIterator(new InputStreamLineIterator(new FileInputStream(path), opts.encoding, opts.eol,
+            True, DefaultStreamBufferSize, opts.encoding_errors),
             spec, opts) {
         m_file_path = path;
         # do not convert every string to the same encoding

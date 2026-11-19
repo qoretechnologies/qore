@@ -190,6 +190,12 @@
     \c INVALID-ENCODING for text that is not valid in its encoding, unless their new \c encoding_errors option is
     \c "latin1" or \c "keep" (see @ref encoding_errors; issue #6604).
 
+    @par Module Text Readers Raise INVALID-ENCODING by Default
+    The CSV and fixed-length readers, the file location handlers and the text reads of the \c FileDataProvider and
+    \c FtpClientDataProvider modules raise \c INVALID-ENCODING for invalid text unless their new \c encoding_errors
+    option is \c "latin1" (for ISO-8859-1 data, as EDIFACT and HL7 v2 data often are) or \c "keep" (see
+    @ref encoding_errors and @ref filelocationhandler_encoding_errors; issue #6604).
+
     @par INVALID-ENCODING Replaces STREAM-ENCODING-ERROR and FILE-GETCHAR-ERROR for Invalid Characters
     @ref Qore::ReadOnlyFile::read() "ReadOnlyFile::read()",
     @ref Qore::StreamReader::readString() "StreamReader::readString()" and
@@ -1618,6 +1624,8 @@
       - the writers can quote fields by type and write a field without a value without quotes, so that it can be told
         apart from an empty string (see @ref csvwriter_quoting)
         (<a href="https://github.com/qoretechnologies/qore/issues/3113">issue 3113</a>)
+      - the readers take the \c "encoding_errors" option (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - see @ref csvutil_v1_12 for all changes
 
     - @ref connectionproviderintro "ConnectionProvider" module
@@ -1645,6 +1653,8 @@
       - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); errors
         written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no terminal I/O
         instead of raising an exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - the @ref DataProvider::EncodingErrorsOptionInfo "EncodingErrorsOptionInfo" option of the data providers that
+        read text (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - see @ref dataprovider_v3_12 for all changes
 
     - @ref datasourceproviderintro "DatasourceProvider" module
@@ -1693,6 +1703,11 @@
     - @ref empathicbuildingdataproviderintro "EmpathicBuildingDataProvider" module
       - see @ref empathicbuildingdataprovider_v1_2 for all changes
 
+    - @ref filedataproviderintro "FileDataProvider" module
+      - the get request takes the \c encoding_errors field for text (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - see @ref filedataprovider_v2_2 for all changes
+
     - @ref filelocationhandlerintro "FileLocationHandler" module
       - \c http(s):// and \c rest(s):// locations use @ref httpclientiointro "HttpClientIo" and
         @ref restclientiointro "RestClientIo" (HTTP/1.1, HTTP/2 and HTTP/3)
@@ -1701,6 +1716,9 @@
       - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
         terminal I/O instead of raising an exception
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - text reads check the text in its encoding, with the \c encoding_errors read option (see
+        @ref filelocationhandler_encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - see @ref filelocationhandler_v3_0 for all changes
 
     - @ref filepollerintro "FilePoller" module
@@ -1712,6 +1730,16 @@
         next poll instead of stopping polling (see @ref filepollererrors;
         <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
       - see @ref file_poller_2_1 for all changes
+
+    - @ref fixedlengthutilintro "FixedLengthUtil" module
+      - the iterators and the read data provider take the \c "encoding_errors" option (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - see @ref fixedlengthutil_v1_7 for all changes
+
+    - @ref ftpclientdataproviderintro "FtpClientDataProvider" module
+      - the \c get-file request takes the \c encoding_errors field for text (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - see @ref ftpclientdataprovider_v2_1 for all changes
 
     - @ref ftppollerintro "FtpPoller" module
       - uses the \c start_thread capability of the code that a host runs

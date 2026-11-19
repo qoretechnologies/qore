@@ -87,6 +87,42 @@
           "source": "Character encoding for the input file (and output data)",
           "message": "入力ファイル（および出力データ）の文字エンコーディング"
         },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "エンコーディングエラー"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "文字エンコーディングとして有効でないテキストの扱い"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as `ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+          "message": "文字エンコーディングとして有効でない入力テキストの扱い。`raise`（デフォルト）は `INVALID-ENCODING` エラーを発生させ、`latin1` は無効なテキスト（行単位で読み取るデータでは行全体）を `ISO-8859-1` として読み取り、`keep` はチェックせずに入力エンコーディングのまま保持します"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.display_name": {
+          "source": "Raise an Error",
+          "message": "エラーを発生させる"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.desc": {
+          "source": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+          "message": "有効でないテキストに対して `INVALID-ENCODING` エラーを発生させます。デフォルト"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.display_name": {
+          "source": "Read as Latin-1",
+          "message": "Latin-1 として読み取る"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.desc": {
+          "source": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its bytes",
+          "message": "有効でないテキスト（行単位で読み取るデータでは行全体）をそのバイトのまま `ISO-8859-1` として読み取ります"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.display_name": {
+          "source": "Keep Without a Check",
+          "message": "チェックせずに保持"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.desc": {
+          "source": "Keep the text in the input encoding as read, without a check",
+          "message": "テキストを読み取ったまま、チェックせずに入力エンコーディングで保持します"
+        },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
           "message": "改行文字"

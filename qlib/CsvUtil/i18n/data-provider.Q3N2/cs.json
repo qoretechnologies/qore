@@ -163,6 +163,42 @@
           "source": "7-bit ASCII",
           "message": "7bitové ASCII"
         },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Chyby kódování"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Co dává text, který není platný ve svém kódování znaků"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as `ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+          "message": "Co dává vstupní text, který není platný ve svém kódování znaků: `raise` (výchozí) vyvolá chybu `INVALID-ENCODING`, `latin1` přečte neplatný text (u dat čtených po řádcích celý řádek) jako `ISO-8859-1` a `keep` jej ponechá ve vstupním kódování bez kontroly"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.display_name": {
+          "source": "Raise an Error",
+          "message": "Vyvolat chybu"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.desc": {
+          "source": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+          "message": "Vyvolat chybu `INVALID-ENCODING` pro neplatný text; výchozí"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.display_name": {
+          "source": "Read as Latin-1",
+          "message": "Číst jako Latin-1"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.desc": {
+          "source": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its bytes",
+          "message": "Číst neplatný text (u dat čtených po řádcích celý řádek) jako `ISO-8859-1` s jeho bajty"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.display_name": {
+          "source": "Keep Without a Check",
+          "message": "Ponechat bez kontroly"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.desc": {
+          "source": "Keep the text in the input encoding as read, without a check",
+          "message": "Ponechat text ve vstupním kódování tak, jak byl přečten, bez kontroly"
+        },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
           "message": "Znaky konce řádku"
@@ -550,6 +586,42 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
           "source": "7-bit ASCII",
           "message": "7bitové ASCII"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Chyby kódování"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Co dává text, který není platný ve svém kódování znaků"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as `ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+          "message": "Co dává vstupní text, který není platný ve svém kódování znaků: `raise` (výchozí) vyvolá chybu `INVALID-ENCODING`, `latin1` přečte neplatný text (u dat čtených po řádcích celý řádek) jako `ISO-8859-1` a `keep` jej ponechá ve vstupním kódování bez kontroly"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.display_name": {
+          "source": "Raise an Error",
+          "message": "Vyvolat chybu"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.desc": {
+          "source": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+          "message": "Vyvolat chybu `INVALID-ENCODING` pro neplatný text; výchozí"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.display_name": {
+          "source": "Read as Latin-1",
+          "message": "Číst jako Latin-1"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.desc": {
+          "source": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its bytes",
+          "message": "Číst neplatný text (u dat čtených po řádcích celý řádek) jako `ISO-8859-1` s jeho bajty"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.display_name": {
+          "source": "Keep Without a Check",
+          "message": "Ponechat bez kontroly"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.desc": {
+          "source": "Keep the text in the input encoding as read, without a check",
+          "message": "Ponechat text ve vstupním kódování tak, jak byl přečten, bez kontroly"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",

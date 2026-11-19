@@ -75,6 +75,42 @@
           "source": "ISO 8859-9 (Turkish)",
           "message": "ISO 8859-9 (турецьке)"
         },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Помилки кодування"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Що дає текст, недійсний у своєму кодуванні символів"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as `ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+          "message": "Що дає вхідний текст, недійсний у своєму кодуванні символів: `raise` (за замовчуванням) викликає помилку `INVALID-ENCODING`, `latin1` читає недійсний текст (увесь рядок для даних, що читаються рядками) як `ISO-8859-1`, а `keep` залишає його у вхідному кодуванні без перевірки"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.display_name": {
+          "source": "Raise an Error",
+          "message": "Викликати помилку"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.desc": {
+          "source": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+          "message": "Викликати помилку `INVALID-ENCODING` для недійсного тексту; за замовчуванням"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.display_name": {
+          "source": "Read as Latin-1",
+          "message": "Читати як Latin-1"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.desc": {
+          "source": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its bytes",
+          "message": "Читати недійсний текст (увесь рядок для даних, що читаються рядками) як `ISO-8859-1` з його байтами"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.display_name": {
+          "source": "Keep Without a Check",
+          "message": "Залишити без перевірки"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.desc": {
+          "source": "Keep the text in the input encoding as read, without a check",
+          "message": "Залишити текст у вхідному кодуванні таким, як його прочитано, без перевірки"
+        },
         "app.RWRpZmFjdA.action.cmVhZA.option.c2tpcF9zZXJ2aWNlX3NlZ21lbnRz.display_name": {
           "source": "Skip Service Segments",
           "message": "Пропускати службові сегменти"
