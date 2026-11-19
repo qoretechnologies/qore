@@ -163,6 +163,42 @@
           "source": "7-bit ASCII",
           "message": "7-bitowy ASCII"
         },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Błędy kodowania"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Co daje tekst, który nie jest prawidłowy w swoim kodowaniu znaków"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as `ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+          "message": "Co daje tekst wejściowy, który nie jest prawidłowy w swoim kodowaniu znaków: `raise` (domyślnie) zgłasza błąd `INVALID-ENCODING`, `latin1` odczytuje nieprawidłowy tekst (cały wiersz w przypadku danych czytanych wierszami) jako `ISO-8859-1`, a `keep` zachowuje go w kodowaniu wejściowym bez sprawdzania"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.display_name": {
+          "source": "Raise an Error",
+          "message": "Zgłoś błąd"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.desc": {
+          "source": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+          "message": "Zgłoś błąd `INVALID-ENCODING` dla nieprawidłowego tekstu; domyślnie"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.display_name": {
+          "source": "Read as Latin-1",
+          "message": "Odczytaj jako Latin-1"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.desc": {
+          "source": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its bytes",
+          "message": "Odczytaj nieprawidłowy tekst (cały wiersz w przypadku danych czytanych wierszami) jako `ISO-8859-1`, z jego bajtami"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.display_name": {
+          "source": "Keep Without a Check",
+          "message": "Zachowaj bez sprawdzania"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.desc": {
+          "source": "Keep the text in the input encoding as read, without a check",
+          "message": "Zachowaj tekst w kodowaniu wejściowym tak, jak został odczytany, bez sprawdzania"
+        },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
           "message": "Znaki końca linii"
@@ -550,6 +586,42 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
           "source": "7-bit ASCII",
           "message": "7-bitowy ASCII"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Błędy kodowania"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Co daje tekst, który nie jest prawidłowy w swoim kodowaniu znaków"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as `ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+          "message": "Co daje tekst wejściowy, który nie jest prawidłowy w swoim kodowaniu znaków: `raise` (domyślnie) zgłasza błąd `INVALID-ENCODING`, `latin1` odczytuje nieprawidłowy tekst (cały wiersz w przypadku danych czytanych wierszami) jako `ISO-8859-1`, a `keep` zachowuje go w kodowaniu wejściowym bez sprawdzania"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.display_name": {
+          "source": "Raise an Error",
+          "message": "Zgłoś błąd"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.desc": {
+          "source": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+          "message": "Zgłoś błąd `INVALID-ENCODING` dla nieprawidłowego tekstu; domyślnie"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.display_name": {
+          "source": "Read as Latin-1",
+          "message": "Odczytaj jako Latin-1"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.desc": {
+          "source": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its bytes",
+          "message": "Odczytaj nieprawidłowy tekst (cały wiersz w przypadku danych czytanych wierszami) jako `ISO-8859-1`, z jego bajtami"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.display_name": {
+          "source": "Keep Without a Check",
+          "message": "Zachowaj bez sprawdzania"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.desc": {
+          "source": "Keep the text in the input encoding as read, without a check",
+          "message": "Zachowaj tekst w kodowaniu wejściowym tak, jak został odczytany, bez sprawdzania"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",

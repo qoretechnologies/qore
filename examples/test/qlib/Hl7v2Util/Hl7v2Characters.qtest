@@ -1,0 +1,419 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires Hl7v2Util
+
+%exec-class Hl7v2CharactersTest
+
+#! Tests HL7 v2 parsing and writing of text with characters other than ASCII (issue #6697)
+/** The parser works on characters: a 2-byte (é), 3-byte (€) or 4-byte (😀) UTF-8 character is one character next to
+    a separator or the escape character.
+*/
+public class Hl7v2CharactersTest inherits QUnit::Test {
+    public {
+        #! A message with non-ASCII characters in fields, repetitions, components and subcomponents, next to the
+        #! separators and the escape character
+        const Message = "MSH|^~\\&|ADT|HÔPITAL|EHR|HÔPITAL|202605261200||ADT^A01|MSG€01|P|2.5.1\r"
+            "PID|1||é€😀^^^MRN^MR~ü^^^SSN^SS||Müller^José^😀||19800101|F|||Straße 1&Hof^^Zürich^ZH^8001\r"
+            "OBX|1|ST|NOTE||é\\F\\€\\S\\😀\\R\\ü\\T\\ß\\E\\x\\.br\\y\\X41\\Ω\r"
+            "NTE|1||😀\\\\€\r";
+    }
+
+    constructor() : Test("Hl7v2CharactersTest", "1.0") {
+        addTestCase("parsing multi-byte characters", \parseTest());
+        addTestCase("escape and unescape", \escapeTest());
+        addTestCase("unterminated escape sequences", \unterminatedEscapeTest());
+        addTestCase("writing", \writeTest());
+        addTestCase("schema field lengths", \schemaLengthTest());
+        addTestCase("schema serialization", \schemaSerializationTest());
+        addTestCase("non-ASCII separators", \separatorTest());
+        addTestCase("lengths in characters", \lengthTest());
+        addTestCase("large message", \largeTest());
+        addTestCase("schema directory path", \schemaDirTest());
+        set_return_value(main());
+    }
+
+    private parseTest() {
+        Hl7v2Message msg(Message);
+        assertEq(("MSH", "PID", "OBX", "NTE"), map $1.tag, msg.getSegments());
+        assertEq("HÔPITAL", msg.getAddress("MSH-4"));
+        assertEq("MSG€01", msg.getAddress("MSH-10"));
+        # repetitions and components ending in non-ASCII characters before a separator
+        assertEq("é€😀", msg.getAddress("PID-3.1"));
+        assertEq("MRN", msg.getAddress("PID-3.4"));
+        assertEq("ü", msg.getAddress("PID-3(2).1"));
+        assertEq("SSN", msg.getAddress("PID-3(2).4"));
+        assertEq("Müller", msg.getAddress("PID-5.1"));
+        assertEq("José", msg.getAddress("PID-5.2"));
+        assertEq("😀", msg.getAddress("PID-5.3"));
+        assertEq("Zürich", msg.getAddress("PID-11.3"));
+
+        hash<Hl7v2Segment> pid = msg.getSegments()[1];
+        assertEq(("Straße 1", "Hof"), pid.fields[10].repetitions[0][0]);
+        assertEq((("é€😀", "", "", "MRN", "MR"), ("ü", "", "", "SSN", "SS")), pid.fields[2].repetitions);
+
+        # escape sequences next to non-ASCII characters
+        assertEq("é|€^😀~ü&ß\\x\nyAΩ", msg.getAddress("OBX-5"));
+        # an empty escape code (two escape characters in a row) is kept
+        assertEq("😀\\\\€", msg.getAddress("NTE-3"));
+
+        # the message is written back as it was read
+        assertEq(Message, msg.getText());
+
+        # the same through the read data provider, from the data and from a file
+        Hl7v2ReadDataProvider prov({"data": Message});
+        list<hash<auto>> rows = map $1, prov.searchRecords();
+        assertEq(("MSH", "PID", "OBX", "NTE"), map $1.tag, rows);
+        assertEq("é|€^😀~ü&ß\\x\nyAΩ", rows[2].fields[4].repetitions[0][0]);
+
+        TmpDir dir();
+        string path = dir.path + DirSep + "msg.hl7";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Message);
+        }
+        Hl7v2ReadDataProvider file_prov({"path": path});
+        AbstractDataProviderRecordIterator i = file_prov.searchRecords({"tag": "PID"});
+        assertTrue(i.next());
+        assertEq((("Müller", "José", "😀"),), i.getValue().fields[4].repetitions);
+        assertFalse(i.next());
+    }
+
+    private escapeTest() {
+        Hl7v2Delimiters d();
+        assertEq("é\\F\\€\\S\\😀\\R\\ü\\T\\ß\\E\\x\\.br\\y", d.escape("é|€^😀~ü&ß\\x\ny"));
+        assertEq("é|€^😀~ü&ß\\x\ny", d.unescape("é\\F\\€\\S\\😀\\R\\ü\\T\\ß\\E\\x\\.br\\y"));
+        assertEq("Grüße € 😀", d.escape("Grüße € 😀"));
+        assertEq("Grüße € 😀", d.unescape("Grüße € 😀"));
+        # a hexadecimal escape next to non-ASCII characters
+        assertEq("éA€BC😀", d.unescape("é\\X41\\€\\X4243\\😀"));
+        # control characters next to non-ASCII characters are written as hexadecimal escapes
+        assertEq("é\\X0D\\€\\X09\\😀", d.escape("é\r€\t😀"));
+        # an escape sequence at the start and at the end
+        assertEq("|é|", d.unescape("\\F\\é\\F\\"));
+        # an empty escape code is kept as it was: two escape characters
+        assertEq("é\\\\€", d.unescape("é\\\\€"));
+        assertEq("\\\\", d.unescape("\\\\"));
+        # an unknown escape code is kept with its escape characters
+        assertEq("é\\Zü\\€", d.unescape("é\\Zü\\€"));
+        foreach string str in ("é", "€", "😀", "a|é^€~😀&\\\n", "\\😀\\", strmul("é€😀|\\", 100)) {
+            assertEq(str, d.unescape(d.escape(str)));
+        }
+
+        Hl7v2Base base();
+        assertEq(("é", "€\\F\\😀", ""), base.splitEscaped("é|€\\F\\😀|", "|"));
+        assertFalse(base.containsUnescaped("é\\T\\😀", "&"));
+        assertTrue(base.containsUnescaped("é\\T\\😀&", "&"));
+    }
+
+    private unterminatedEscapeTest() {
+        Hl7v2Delimiters d();
+        # "é\Fé" has four characters
+        assertThrows("HL7V2-ESCAPE-ERROR", "unterminated HL7 escape sequence in field value of length 4\$",
+            \d.unescape(), "é\\Fé");
+        assertThrows("HL7V2-ESCAPE-ERROR", "of length 3\$", \d.unescape(), "😀\\€");
+        assertThrows("HL7V2-ESCAPE-ERROR", "of length 1\$", \d.unescape(), "\\");
+        assertThrows("HL7V2-ESCAPE-ERROR", "of length 5\$", \d.unescape(), "\\F\\é\\");
+
+        Hl7v2Base base();
+        assertThrows("HL7V2-ESCAPE-ERROR", "in value of length 4\$", \base.splitEscaped(), ("é\\Fé", "|"));
+        assertThrows("HL7V2-ESCAPE-ERROR", "in value of length 3\$", \base.containsUnescaped(), ("😀\\€", "&"));
+        # the length of the rest of the segment after the tag, in characters
+        string rest = "1|ST|NOTE||é \\F";
+        assertEq(15, rest.length());
+        assertThrows("HL7V2-ESCAPE-ERROR", "in value of length 15\$", \base.parseMessage(),
+            "MSH|^~\\&|A\rOBX|" + rest + "\r");
+    }
+
+    private writeTest() {
+        Hl7v2Base base();
+        assertEq("PID|1||é€😀^^^MRN||Müller^José&😀|Ω\\F\\ü",
+            base.formatSegment({
+                "tag": "PID",
+                "fields": ("1", "", ("é€😀", "", "", "MRN"), "", ("Müller", ("José", "😀")), "Ω|ü"),
+            }));
+        assertEq("MSH|^~\\&|HÔPITAL|€", base.formatSegment({"tag": "MSH", "fields": ("^~\\&", "HÔPITAL", "€")}));
+
+        # an observation result message built with non-ASCII values is parsed back to the same values
+        string text = Hl7v2Util::hl7v2_build_oru_r01({
+            "message_control_id": "ORU€1",
+            "sending_application": "QORE",
+            "sending_facility": "HÔPITAL",
+            "patient": {
+                "id": "é€😀",
+                "family_name": "Müller",
+                "given_name": "José",
+            },
+            "observations": ({
+                "observation_id": {"code": "NOTE", "text": "Notiz für 😀", "coding_system": "L"},
+                "value": "Grüße | € ^ 😀 ~ ü & ß \\ Ω",
+                "result_status": "F",
+            },),
+        });
+        Hl7v2Message parsed(text);
+        assertEq("ORU€1", parsed.getAddress("MSH-10"));
+        assertEq("HÔPITAL", parsed.getAddress("MSH-4"));
+        assertEq("é€😀", parsed.getAddress("PID-3.1"));
+        assertEq("Müller", parsed.getAddress("PID-5.1"));
+        assertEq("José", parsed.getAddress("PID-5.2"));
+        assertEq("Notiz für 😀", parsed.getAddress("OBX-3.2"));
+        assertEq("Grüße | € ^ 😀 ~ ü & ß \\ Ω", parsed.getAddress("OBX-5"));
+
+        # the write data provider writes the message, which reads back to the same values
+        TmpDir dir();
+        string path = dir.path + DirSep + "out.hl7";
+        Hl7v2WriteDataProvider writer({"path": path});
+        Hl7v2Message msg(Message);
+        hash<auto> result = writer.createRecord({"message": msg.getMessage()});
+        assertEq(4, result.segments);
+        assertEq(Message, ReadOnlyFile::readTextFile(path));
+        # the number of characters written, not of bytes
+        assertEq(Message.length(), result.characters);
+        # (the message has multi-byte characters, so its numbers of bytes and characters differ)
+        assertGt(Message.length(), Message.size());
+        Hl7v2ReadDataProvider reader({"path": path});
+        list<hash<auto>> rows = map $1, reader.searchRecords();
+        assertEq((map $1.fields, msg.getSegments()), (map $1.fields, rows));
+
+        # a simple segment with non-ASCII values is written escaped and read back
+        string seg_path = dir.path + DirSep + "seg.hl7";
+        Hl7v2WriteDataProvider seg_writer({"path": seg_path});
+        seg_writer.createRecord({"tag": "ZZZ", "fields": ("é|😀", ("€", "ü^ß"))});
+        string seg_text = ReadOnlyFile::readTextFile(seg_path);
+        assertEq("ZZZ|é\\F\\😀|€^ü\\S\\ß\r", seg_text);
+        Hl7v2Base reader_base();
+        hash<Hl7v2Segment> seg = reader_base.parseMessage(seg_text).segments[0];
+        assertEq("é|😀", reader_base.getFieldValue(seg, 1));
+        assertEq("€", reader_base.getFieldValue(seg, 2, NOTHING, 1));
+        assertEq("ü^ß", reader_base.getFieldValue(seg, 2, NOTHING, 2));
+    }
+
+    private schemaLengthTest() {
+        Hl7v2Schema schema({
+            "version": "2.5.1",
+            "segments": {
+                "ZPN": {
+                    "tag": "ZPN",
+                    "name": "Patient Note",
+                    "fields": (
+                        {"position": 1, "name": "Note", "max_length": 4, "max_repetitions": "*"},
+                        {"position": 2, "name": "Name", "max_length": 6},
+                    ),
+                },
+            },
+        });
+        string msh = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\r";
+        # exactly the maximum length in characters, in 2-, 3- and 4-byte characters
+        foreach string value in ("éééé", "€€€€", "😀😀😀😀", "é€😀a") {
+            assertEq((), schema.validateMessageText(msh + "ZPN|" + value + "\r"), value);
+        }
+        # components are counted without their separators
+        assertEq((), schema.validateMessageText(msh + "ZPN|é€^😀ü|Müller\r"));
+
+        # one character more
+        list<hash<Hl7v2ValidationIssue>> issues = schema.validateMessageText(msh + "ZPN|é€😀éü\r");
+        assertEq(1, issues.size());
+        assertEq("field-too-long", issues[0].code);
+        assertEq("ZPN-1", issues[0].address);
+        assertRegex("length 5 exceeds schema maximum 4", issues[0].message);
+
+        issues = schema.validateMessageText(msh + "ZPN|é|Müller😀\r");
+        assertEq(("field-too-long",), map $1.code, issues);
+        assertEq("ZPN-2", issues[0].address);
+        assertRegex("length 7 exceeds schema maximum 6", issues[0].message);
+
+        # in a repetition
+        issues = schema.validateMessageText(msh + "ZPN|éé~😀😀😀😀😀\r");
+        assertEq(("ZPN-1",), map $1.address, issues);
+    }
+
+    private schemaSerializationTest() {
+        Hl7v2Schema schema({
+            "version": "2.5.1",
+            "meta": {"source": "Qüelle € 😀", "note": "Grüße Ω"},
+            "segments": {
+                "ZPN": {
+                    "tag": "ZPN",
+                    "name": "Patient Note — é€😀",
+                    "desc": "Beschreibung: ü ß 😀",
+                    "fields": (
+                        {"position": 1, "name": "Notiz für 😀", "datatype": "ST", "max_length": 4},
+                    ),
+                },
+            },
+        });
+        string serialized = Hl7v2SchemaValueSerializer::serializeSchema(schema);
+        # the text is written as it is, in quotes
+        assertRegex("\"Patient Note — é€😀\"", serialized);
+        assertRegex("\"Notiz für 😀\"", serialized);
+        Hl7v2Schema parsed(cast<hash>(Util::parse_to_qore_value(serialized)));
+        assertEq("Qüelle € 😀", parsed.meta.source);
+        assertEq("Grüße Ω", parsed.meta.note);
+        hash<Hl7v2SegmentDef> def = parsed.getSegmentDef("ZPN");
+        assertEq("Patient Note — é€😀", def.name);
+        assertEq("Beschreibung: ü ß 😀", def.desc);
+        assertEq("Notiz für 😀", def.fields[0].name);
+        assertEq(4, def.fields[0].max_length);
+        assertEq(schema.toHash(), parsed.toHash());
+
+        # a schema file with such text is loaded
+        TmpDir dir();
+        string path = dir.path + DirSep + "schema.qv";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(serialized);
+        }
+        Hl7v2Schema loaded = Hl7v2SchemaRegistry::loadFile(path, True);
+        assertEq("Patient Note — é€😀", loaded.getSegmentDef("ZPN").name);
+    }
+
+    private separatorTest() {
+        # a one-character field separator other than ASCII
+        Hl7v2Delimiters d("§", "^~\\&");
+        assertEq("§", d.getFieldSeparator());
+        assertEq("é\\F\\€", d.escape("é§€"));
+        assertEq("é§€", d.unescape("é\\F\\€"));
+        # and encoding characters other than ASCII
+        Hl7v2Delimiters d2("§", "¤¦¬µ");
+        assertEq("¤", d2.getComponentSeparator());
+        assertEq("¦", d2.getRepetitionSeparator());
+        assertEq("¬", d2.getEscapeCharacter());
+        assertEq("µ", d2.getSubcomponentSeparator());
+        assertEq("¤¦¬µ", d2.getEncodingCharacters());
+        assertEq("é¬F¬€¬S¬😀¬E¬", d2.escape("é§€¤😀¬"));
+        assertEq("é§€¤😀¬", d2.unescape("é¬F¬€¬S¬😀¬E¬"));
+        # a separator of more than one character is rejected
+        assertThrows("HL7V2-DELIMITER-ERROR", "must be one character", sub () { new Hl7v2Delimiters("§§", "^~\\&"); });
+        assertThrows("HL7V2-DELIMITER-ERROR", "at least four characters", sub () {
+            new Hl7v2Delimiters("§", "¤¦¬");
+        });
+
+        # a message with them is parsed and written back
+        string text = "MSH§^~\\&§ADT§HÔPITAL§§§202605261200§§ADT^A01§MSG1§P§2.5.1\r"
+            "PID§1§§é€😀^^^MRN~ü§§Müller^José&😀§\\F\\é\r";
+        Hl7v2Message msg(text);
+        assertEq("§", msg.getMessage().delimiters.field_separator);
+        assertEq("HÔPITAL", msg.getAddress("MSH-4"));
+        assertEq("ADT", msg.getAddress("MSH-9.1"));
+        assertEq("é€😀", msg.getAddress("PID-3.1"));
+        assertEq("ü", msg.getAddress("PID-3(2).1"));
+        assertEq("Müller", msg.getAddress("PID-5.1"));
+        assertEq(("José", "😀"), msg.getSegments()[1].fields[4].repetitions[0][1]);
+        assertEq("§é", msg.getAddress("PID-6"));
+        assertEq(text, msg.getText());
+
+        string text2 = "MSH§¤¦¬µ§ADT§HÔPITAL\rPID§1§§é€😀¤¤¤MRN¦ü§§Müller¤JoséµÑ§¬F¬é¬S¬\r";
+        Hl7v2Message msg2(text2);
+        assertEq("¤¦¬µ", msg2.getMessage().delimiters.component_separator
+            + msg2.getMessage().delimiters.repetition_separator + msg2.getMessage().delimiters.escape_character
+            + msg2.getMessage().delimiters.subcomponent_separator);
+        assertEq("é€😀", msg2.getAddress("PID-3.1"));
+        assertEq("MRN", msg2.getAddress("PID-3.4"));
+        assertEq("ü", msg2.getAddress("PID-3(2).1"));
+        assertEq(("José", "Ñ"), msg2.getSegments()[1].fields[4].repetitions[0][1]);
+        assertEq("§é¤", msg2.getAddress("PID-6"));
+        assertEq(text2, msg2.getText());
+
+        # a segment written with them is read back
+        Hl7v2Base base(d2);
+        string seg = base.formatSegment({"tag": "ZZZ", "fields": (("é§", "€¤"), "😀¬")});
+        assertEq("ZZZ§é¬F¬¤€¬S¬§😀¬E¬", seg);
+        Hl7v2Base reader(d2);
+        hash<Hl7v2Segment> parsed = reader.parseSegment(seg);
+        assertEq("é§", reader.getFieldValue(parsed, 1, NOTHING, 1));
+        assertEq("€¤", reader.getFieldValue(parsed, 1, NOTHING, 2));
+        assertEq("😀¬", reader.getFieldValue(parsed, 2));
+    }
+
+    private lengthTest() {
+        Hl7v2Base base();
+        # two characters (four bytes) are too short for a segment
+        assertThrows("HL7V2-PARSE-ERROR", "segment 1 is too short", \base.parseSegment(), "ÉÉ");
+        # an MSH segment needs MSH-1 and MSH-2: seven characters are too short, however many bytes they have
+        assertThrows("HL7V2-PARSE-ERROR", "missing MSH-1/MSH-2", \base.parseSegment(), "MSH§¤¦¬");
+        assertThrows("HL7V2-DELIMITER-ERROR", "invalid MSH segment", sub () { new Hl7v2Delimiters("MSH§¤¦¬"); });
+        # MSH-2 is counted in characters when writing
+        assertThrows("HL7V2-WRITE-ERROR", "at least four characters", \base.formatSegment(),
+            {"tag": "MSH", "fields": ("¤¦¬",)});
+        Hl7v2Base base2(new Hl7v2Delimiters("§", "¤¦¬µ"));
+        assertEq("MSH§¤¦¬µ§A", base2.formatSegment({"tag": "MSH", "fields": ("¤¦¬µ", "A")}));
+        # a segment of a tag only, followed by a non-ASCII character that is not the field separator
+        assertThrows("HL7V2-PARSE-ERROR", "does not use the active field separator", \base.parseSegment(), "PIDé");
+        assertEq("PID", base.parseSegment("PID").tag);
+    }
+
+    private largeTest() {
+        # 20000 segments with non-ASCII characters
+        list<string> parts = ("MSH|^~\\&|ADT|HÔPITAL|EHR|HOSP|202605261200||ORU^R01|MSG1|P|2.5.1",);
+        for (int n = 0; n < 20000; ++n) {
+            push parts, sprintf("OBX|%d|ST|é€😀^Nötiz||Wert %d \\F\\ ü~😀", n + 1, n);
+        }
+        # and a field of 200000 non-ASCII characters with escapes in it
+        push parts, "NTE|1||" + strmul("é€😀\\T\\", 50000);
+        string text = parts.join("\r") + "\r";
+
+        Hl7v2Message msg(text);
+        list<hash<Hl7v2Segment>> segs = msg.getSegments();
+        assertEq(20002, segs.size());
+        assertEq(20000, (select segs, $1.tag == "OBX").size());
+        Hl7v2Base base();
+        assertEq("é€😀", base.getFieldValue(segs[1], 3, NOTHING, 1));
+        assertEq("Nötiz", base.getFieldValue(segs[1], 3, NOTHING, 2));
+        assertEq("Wert 0 | ü", base.getFieldValue(segs[1], 5, 1, 1));
+        assertEq("😀", base.getFieldValue(segs[1], 5, 2, 1));
+        assertEq("20000", base.getFieldValue(segs[20000], 1));
+        assertEq("Wert 19999 | ü", base.getFieldValue(segs[20000], 5, 1, 1));
+        string expected = strmul("é€😀&", 50000);
+        assertEq(200000, expected.length());
+        assertEq(expected, msg.getAddress("NTE-3"));
+        assertEq(text, msg.getText());
+    }
+
+    private schemaDirTest() {
+        # a schema directory whose name has characters other than ASCII and that ends with the directory separator
+        TmpDir tmp();
+        string schema_dir = tmp.path + DirSep + "Ré€😀" + DirSep;
+        mkdir(schema_dir + "2.5.1", 0700, True);
+        Hl7v2Schema schema({
+            "version": "2.5.1",
+            "segments": {
+                "ZPN": {
+                    "tag": "ZPN",
+                    "name": "Notiz é€😀",
+                    "fields": (
+                        {"position": 1, "name": "Feld ü", "datatype": "ST", "max_length": 4},
+                    ),
+                },
+            },
+        });
+        {
+            File f();
+            f.open2(schema_dir + "2.5.1" + DirSep + "schema.qv", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Hl7v2SchemaValueSerializer::serializeSchema(schema));
+        }
+        Hl7v2Schema loaded = Hl7v2SchemaRegistry::loadVersion("2.5.1", schema_dir, True);
+        assertEq("Notiz é€😀", loaded.getSegmentDef("ZPN").name);
+
+        # the path of a version that is not there is the directory and the version without a second separator
+        string expected_path = schema_dir + "9.9" + DirSep + "schema.qv";
+        *hash<ExceptionInfo> err;
+        try {
+            Hl7v2SchemaRegistry::loadVersion("9.9", schema_dir, True);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("FILE-OPEN2-ERROR", err.err);
+        assertNeq(-1, err.desc.find("'" + expected_path + "'"), err.desc);
+        assertEq(-1, err.desc.find(DirSep + DirSep), err.desc);
+    }
+}

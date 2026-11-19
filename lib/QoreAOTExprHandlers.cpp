@@ -2329,7 +2329,8 @@ static bool write_expr_obj_method_ref(AOTExprWriteCtx& ctx) {
     }
     if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::OBJ_METHOD_REF_EXPR));
-        ctx.writer.writeStringRef(omr->getMethodName().c_str());
+        // with the method resolved when parsing (qore#6680)
+        ctx.writer.writeStringRef(qore_aot_object_method_ref_name(omr).c_str());
         return classifyAndWriteExpr(ctx.writer, omr->getExp(), ctx.parent_locals,
             ctx.parent_globals, ctx.const_reverse_map);
     }
@@ -2545,7 +2546,8 @@ static bool write_expr_obj_method_ref_expr(AOTExprWriteCtx& ctx) {
         return false;
     }
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::OBJ_METHOD_REF_EXPR));
-    ctx.writer.writeStringRef(omr->getMethodName().c_str());
+    // with the method resolved when parsing (qore#6680)
+    ctx.writer.writeStringRef(qore_aot_object_method_ref_name(omr).c_str());
     return classifyAndWriteExpr(ctx.writer, omr->getExp(), ctx.parent_locals,
         ctx.parent_globals, ctx.const_reverse_map);
 }
@@ -2565,7 +2567,13 @@ static QoreValue read_expr_obj_method_ref_expr(AOTExprReadCtx& ctx) {
         target.discard(nullptr);
         return QoreValue();
     }
-    return QoreValue(new ParseObjectMethodReferenceNode(&loc_builtin, target, strdup(method_name)));
+    // the method resolved when parsing is restored (qore#6680)
+    ParseObjectMethodReferenceNode* omr = qore_aot_make_object_method_ref(ctx.pgm, target, method_name);
+    if (!omr) {
+        ctx.error = "invalid object method reference name";
+        return QoreValue();
+    }
+    return QoreValue(omr);
 }
 
 // ============================================================================

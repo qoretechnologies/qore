@@ -708,7 +708,7 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
         # options that configure the construction of a client no longer apply, since there is nothing to
         # construct; accepting one would silently ignore it
         hash<string, hash<FileHandlerOptionInfo>> ropts = http_handler.getReadOptions();
-        assertEq(("encoding", "headers", "method"), sort(keys ropts));
+        assertEq(("encoding", "encoding_errors", "headers", "method"), sort(keys ropts));
         assertEq(("encoding", "headers", "method"), sort(keys http_handler.getWriteOptions()));
 
         # an unbound handler keeps the full set
@@ -720,7 +720,8 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
         object rc = create_object("RestClient", {"url": "http://localhost:1", "data": "json"}, True);
         AbstractFileLocationHandler rest_handler = FileLocationHandler::getRestHandlerForClient(rc);
         assertTrue(rest_handler.isBound());
-        assertEq(("encoding", "headers", "method"), sort(keys rest_handler.getReadOptions()));
+        assertEq(("encoding", "encoding_errors", "headers", "method"), sort(keys rest_handler.getReadOptions()));
+        assertEq(("encoding", "headers", "method"), sort(keys rest_handler.getWriteOptions()));
 
         # an unbound rest:// location cannot write to an output stream, but a bound one can, since it has a
         # client to send the buffered data to

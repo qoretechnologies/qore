@@ -565,7 +565,7 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
                 }
             }
         };
-        code eod_callback = sub () {};
+        code eod_callback = sub (*string err) {};
         # get receive callback with appropriate framing
         code dsrecv_callback = use_connect
             ? connect_get_recv(recv_data_callback, eod_callback)
@@ -1076,7 +1076,7 @@ rest.setContentEncoding("gzip");
                 }
             }
         };
-        code eod_callback = sub () {};
+        code eod_callback = sub (*string err) {};
         # response serialization
         string rs;
         # raw response

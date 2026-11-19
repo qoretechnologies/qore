@@ -229,6 +229,7 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                     },),
                 },
             },
+            "encoding_errors": EncodingErrorsOptionInfo,
             "eol": <DataProviderOptionInfo>{
                 "display_name": "End Of Line Chars",
                 "short_desc": "The end of line / record character(s)",

@@ -41,7 +41,7 @@ public namespace EdifactUtil {
             if (!base.size()) {
                 return leaf;
             }
-            if (base[base.size() - 1] == "/") {
+            if (base.substr(-1) == "/") {
                 return base + leaf;
             }
             return base + "/" + leaf;
@@ -74,9 +74,9 @@ public namespace EdifactUtil {
             d.chdir(dir);
             foreach string entry in (d.listFileNames()) {
                 string name = basename(entry);
-                if (name.size() > prefix.size() + 1
-                        && name.substr(0, prefix.size()) == prefix
-                        && name[prefix.size()] == ".") {
+                if (name.length() > prefix.length() + 1
+                        && name.substr(0, prefix.length()) == prefix
+                        && name[prefix.length()] == ".") {
                     return resolvePath(dir, entry);
                 }
             }
@@ -99,8 +99,8 @@ public namespace EdifactUtil {
         }
 
         private string sanitizeLine(string line) {
-            if (line.size() && line[line.size() - 1] == "\r") {
-                return line.substr(0, line.size() - 1);
+            if (line.size() && line.substr(-1) == "\r") {
+                return line.substr(0, -1);
             }
             return line;
         }

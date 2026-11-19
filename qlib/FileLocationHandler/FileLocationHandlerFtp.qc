@@ -130,7 +130,7 @@ class FileLocationHandlerFtpPollOperation inherits Qore::AbstractPollOperation<a
             if (!op.currentOpReady()) {
                 if (!rv) {
                     throw "FTP-POLL-ERROR", sprintf("FTP operation for %y cannot continue in state %y and "
-                        "has nothing to wait for", url, cur.getState());
+                        "has nothing to wait for", get_masked_url(url), cur.getState());
                 }
                 return rv;
             }
@@ -188,6 +188,13 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
                 "desc": "the encoding of the file's data (read / write)",
             },
         };
+
+        #! Valid FTP location read options
+        /** @since FileLocationHandler 3.0
+        */
+        const FtpClientLocationReadOpts = FtpClientLocationOpts + {
+            "encoding_errors": EncodingErrorsOption,
+        };
     }
 
     #! Retrieves a text file from the given location
@@ -202,7 +209,8 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
     private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
         string file;
         FtpClient f = getFtpClient(scheme, location, opts, \file);
-        return f.getAsString(file, opts.encoding);
+        return AbstractFileLocationHandler::checkTextEncoding(f.getAsString(file, opts.encoding),
+            opts.encoding_errors, AbstractFileLocationHandler::getRequestedLocation(scheme, location));
     }
 
     #! Retrieves a binary file from the given location
@@ -246,7 +254,7 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making an FTP transfer
     */
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
-        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding);
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding, opts.encoding_errors);
     }
 
     #! Retrieves a binary file from the given location
@@ -330,7 +338,7 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
     /** @return supported read options
     */
     private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
-        return FtpClientLocationOpts;
+        return FtpClientLocationReadOpts;
     }
 
     #! Gets supported write options

@@ -7,8 +7,7 @@
 // sharing: the instructions of a statement share its location, so that the IR interpreter and native code store the
 // location only where the statement changes.  An instruction without one keeps none, the instructions of a
 // PushTempMarkPair, which is written as two PushTempMark instructions, keep the pair's, the IR function of a handler
-// written in an instruction has a location table of its own, and an image of an earlier format takes the location of
-// each instruction, as before.
+// written in an instruction has a location table of its own. The reader rejects images predating statement locations.
 
 #include <qore/Qore.h>
 #include <qore/QoreAOT.h>
@@ -206,7 +205,7 @@ static void nestedTable(QoreProgram* pgm) {
     expect(e[4]->stmt_loc == e[0]->stmt_loc, "the return has the function's statement location");
 }
 
-//! an image of the format before QORE_AOT_STATEMENT_LOCATIONS_VERSION: the IR takes the instructions' own locations
+//! Checks refusal of an image written before QORE_AOT_STATEMENT_LOCATIONS_VERSION
 static void earlierFormat(QoreProgram* pgm) {
     QoreAOTBinaryWriter writer;
     uint32_t section = writer.beginSection(QoreAOTSectionType::TOPLEVEL);
@@ -247,16 +246,8 @@ static void earlierFormat(QoreProgram* pgm) {
     }
     std::string error;
     std::unique_ptr<QoreIRFunction> ir = read(pgm, data, error);
-    expect(ir && error.empty(), "the function of the earlier format is read");
-    if (!ir) {
-        fprintf(stderr, "error: %s\n", error.c_str());
-        return;
-    }
-    auto& e = ir->blocks[0]->instructions;
-    expect(e.size() == 3 && same(e[0]->stmt_loc, 7, 7, "earlier.q") && e[0]->stmt_loc == e[0]->loc,
-        "an instruction of the earlier format takes its own location");
-    expect(e.size() == 3 && e[1]->stmt_loc == e[0]->stmt_loc && e[2]->stmt_loc == e[0]->stmt_loc,
-        "an instruction of the earlier format with the lines of the one before takes its location");
+    expect(!ir && error.find("unsupported binary format version 46 ") != std::string::npos,
+        "the reader rejects the earlier format before decoding statement locations");
 }
 
 int main() {

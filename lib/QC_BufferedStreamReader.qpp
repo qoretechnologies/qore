@@ -62,13 +62,24 @@ qclass BufferedStreamReader [arg=BufferedStreamReader* sr; ns=Qore; vparent=Stre
 /** @param input_stream the @ref InputStream for reading data
     @param encoding the character encoding of the data from the @ref InputStream; if not present, the @ref default_encoding "default character encoding" is assumed
     @param buffer_size the size of the internal buffer in bytes; must be a positive integer
+    @param encoding_errors what text read that is not valid in the @ref character_encoding "character encoding"
+    gives; one of the @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING,
+    \c "latin1" tags the whole string read ISO-8859-1 with its bytes, \c "keep" tags it with the encoding without a
+    check; see @ref encoding_errors; it can be changed with StreamReader::setEncodingErrors()
 
     @throw STREAM-BUFFER-ERROR an invalid stream buffer size was specified; the buffer size must be a positive integer
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
+
+    @since %Qore 3.0 the \a encoding_errors parameter
  */
 BufferedStreamReader::constructor(Qore::InputStream[InputStream] input_stream, *string encoding,
-        int buffer_size = DefaultStreamBufferSize) [flags=NAMED_ARGS] {
+        int buffer_size = DefaultStreamBufferSize, *string encoding_errors) [flags=NAMED_ARGS] {
+   qore_encoding_errors_t ee;
+   if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
+      return;
+   }
    SimpleRefHolder<BufferedStreamReader> reader(new BufferedStreamReader(xsink, input_stream.release(),
-       encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, buffer_size));
+       encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, buffer_size, ee));
    if (*xsink)
       return;
    self->setPrivate(CID_BUFFEREDSTREAMREADER, reader.release());
