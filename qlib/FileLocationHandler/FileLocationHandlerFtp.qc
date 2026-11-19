@@ -130,7 +130,7 @@ class FileLocationHandlerFtpPollOperation inherits Qore::AbstractPollOperation<a
             if (!op.currentOpReady()) {
                 if (!rv) {
                     throw "FTP-POLL-ERROR", sprintf("FTP operation for %y cannot continue in state %y and "
-                        "has nothing to wait for", url, cur.getState());
+                        "has nothing to wait for", get_masked_url(url), cur.getState());
                 }
                 return rv;
             }
