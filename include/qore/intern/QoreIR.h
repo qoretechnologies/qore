@@ -4496,6 +4496,13 @@ public:
         (qore#6545), or if a reference, a closure or code evaluated through the AST can reach it
     */
     std::vector<const LocalVar*> written_shared_locals;
+    //! Transient (never serialized): true for the call of an outlined function-body helper, false for an
+    //! init-expression helper
+    /** On an exception, the result of the call of a function-body helper is the value of a return or of a handler's
+        return of the helper that the exception interrupted, which the coordinator holds as the value of its own
+        return until after its locals (see QoreIRToLLVM::outline_held_return, qore#6650)
+    */
+    bool function_body = false;
 };
 
 //! Returns the instruction as the given instruction class pointer type if it is one, otherwise nullptr

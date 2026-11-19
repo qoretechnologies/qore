@@ -4712,6 +4712,30 @@ private:
                 region.contained_locals.push_back(lv);
             }
         }
+        // the helper releases its locals in the reverse order of their declaration, as the function does: a local
+        // declared later is released first, before a catch block's exception variable declared before it, for
+        // example (qore#6650); the sets above have no order
+        std::unordered_map<const LocalVar*, size_t> decl_order;
+        decl_order.reserve(fn.all_body_locals.size());
+        for (size_t i = 0; i < fn.all_body_locals.size(); ++i) {
+            decl_order.emplace(fn.all_body_locals[i], i);
+        }
+        auto order_key = [&](const LocalVar* lv) {
+            auto i = decl_order.find(lv);
+            if (i != decl_order.end()) {
+                return std::make_pair(i->second, static_cast<size_t>(0));
+            }
+            // a parameter or another local that is not a body local: by its slot
+            auto s = fn.local_var_slots.find(lv);
+            return std::make_pair(SIZE_MAX, s != fn.local_var_slots.end() ? static_cast<size_t>(s->second)
+                : SIZE_MAX);
+        };
+        auto by_declaration = [&](const LocalVar* a, const LocalVar* b) {
+            return order_key(a) < order_key(b);
+        };
+        std::stable_sort(region.contained_locals.begin(), region.contained_locals.end(), by_declaration);
+        std::stable_sort(region.shared_locals.begin(), region.shared_locals.end(), by_declaration);
+        std::stable_sort(region.written_shared_locals.begin(), region.written_shared_locals.end(), by_declaration);
         return true;
     }
 };
@@ -5344,6 +5368,7 @@ private:
             // before the call (qore#6300)
             call->shared_locals = region.shared_locals;
             call->written_shared_locals = region.written_shared_locals;
+            call->function_body = true;
             call->result = fn->createValue();
             if (call->result.id > fn->max_value_id) {
                 fn->max_value_id = call->result.id;
@@ -5457,6 +5482,27 @@ private:
         }
         helper->total_local_count = region.contained_locals.size()
             + region.shared_locals.size();
+        // the function's tables of its try statements, keyed by instruction, go with the instructions that the helper
+        // lowers: the value of a return of a try block that the exception interrupted is released before the catch
+        // block runs and the information of a catch block is released when a jump leaves it; without them, the helper
+        // kept the return value until it returned, after the catch block (qore#6650)
+        for (auto& b : helper->blocks) {
+            for (auto& inst_ptr : b->instructions) {
+                const QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst) {
+                    continue;
+                }
+                if (auto i = fn->catch_interrupted_returns.find(inst); i != fn->catch_interrupted_returns.end()) {
+                    helper->catch_interrupted_returns.insert(*i);
+                }
+                if (auto i = fn->catch_cleanup_results.find(inst); i != fn->catch_cleanup_results.end()) {
+                    helper->catch_cleanup_results.insert(*i);
+                }
+            }
+        }
+        // the catch blocks without an exit block that an exception leaving the helper leaves are closed before the
+        // locals that the helper releases, as the function closes them before its locals (qore#6650)
+        helper->catch_exit_unwind = fn->catch_exit_unwind;
 
         UndoRecord rec;
         rec.helper_idx = helpers.size();
