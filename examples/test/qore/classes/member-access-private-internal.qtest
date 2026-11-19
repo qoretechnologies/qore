@@ -21,7 +21,9 @@
     the member hash (\c keys), and a member that a class reaches through a public path as well is public there.  The
     probe prints, for each class context and object, the results of a method call, a member read and write, a call of
     a method of \c A that reads the member and the keys of the object, and the result of parsing typed member
-    accesses, in every execution mode and as a qcc-compiled executable.
+    accesses; a name in a class resolves to a member only if the class can access it (issue #6667): a member reached
+    only through a base class that a base class inherits with \c private:internal is not a candidate, so the name
+    resolves to the constant of the class; all in every execution mode and as a qcc-compiled executable.
 */
 class MemberAccessPrivateInternalTest inherits QUnit::Test {
     public {

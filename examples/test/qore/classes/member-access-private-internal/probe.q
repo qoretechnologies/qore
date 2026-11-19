@@ -133,3 +133,54 @@ foreach hash<auto> i in (Typed.pairIterator()) {
     printf("typed, %s: %s\n", i.key, r);
 }
 
+# a name in a class (issue #6667): a member reached only through a base class that a base class inherits with
+# private:internal is not a candidate; the name resolves to the constant of the class, and a private:internal member
+# of the base class is used by its own methods
+const Names = "class G { public { int v = 1; } }
+class P inherits private:internal G {
+    private:internal { int w = 3; }
+    int getW() { return w; }
+}
+class C inherits P {
+    const v = 2;
+    int get() { return v; }
+}
+auto sub run(string what) {
+    switch (what) {
+        case 'constant': return (new C()).get();
+        case 'own internal member': return (new C()).getW();
+    }
+}
+";
+{
+    Program n(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+    n.parse("%modern\n" + Names, "names");
+    foreach string w in ("constant", "own internal member") {
+        printf("name, %s: %y\n", w, n.callFunction("run", w));
+    }
+}
+# a private:internal member of a base class is not a candidate for a name in a subclass
+{
+    Program n(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+    string r;
+    try {
+        n.parse("%modern\n" + Names + "class NoCandidate inherits P { auto get() { return w; } }\n", "names");
+        r = "parses";
+    } catch (hash<ExceptionInfo> ex) {
+        r = ex.err;
+    }
+    printf("name, private:internal member of the base class in a subclass: %s\n", r);
+}
+# a member that a subclass declares with the name of a member hidden behind a private:internal base class of its base
+# class is still a conflicting declaration, as before (the name resolution does not change the declaration checks)
+{
+    Program n(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+    string r;
+    try {
+        n.parse("%modern\n" + Names + "class R inherits P { public { string v = 'r'; } }\n", "names");
+        r = "parses";
+    } catch (hash<ExceptionInfo> ex) {
+        r = ex.err;
+    }
+    printf("name, a member redeclared in a subclass: %s\n", r);
+}

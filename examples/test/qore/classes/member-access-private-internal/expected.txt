@@ -75,3 +75,7 @@ typed, unrelated subclass of the base class: PARSE-EXCEPTION: illegal access to 
 typed, the inheriting class: parses
 typed, the base class itself: parses
 typed, outside, through a public path: parses
+name, constant: 2
+name, own internal member: 3
+name, private:internal member of the base class in a subclass: PARSE-EXCEPTION
+name, a member redeclared in a subclass: PARSE-TYPE-ERROR

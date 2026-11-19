@@ -2289,6 +2289,9 @@
     - the members of a class inherited with @ref private_inheritance "private:internal" are accessible on objects of
       the inheriting class only in that class, the declaring class and the classes between them, and a member that a
       class also reaches through a public base class is public there (issue #6640)
+    - a name in a class resolves to a member only if the class can access it: a member reached only through a base
+      class that a base class inherits with @ref private_inheritance "private:internal" is not a candidate
+      (issue #6667)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,

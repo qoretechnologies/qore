@@ -3977,10 +3977,19 @@ public:
 
     DLLLOCAL int parseResolveInternalMemberAccess(const char* mem, const QoreTypeInfo*& memberTypeInfo) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
+        // the members of the base classes must be imported, so that a member that this class cannot access is found
+        // with its access in this class (issue #6667): parseInit() can initialize the class partially without them
+        const_cast<qore_class_private*>(this)->initializeMembers();
 
         const qore_class_private* qc = nullptr;
         ClassAccess access;
         const QoreMemberInfo* omi = parseFindMember(mem, qc, access);
+        // a member that the class cannot access, reached only through a base class inherited with private:internal
+        // by a base class (access Inaccessible in the merged member table), is not a candidate for a name in the
+        // class (issue #6667)
+        if (omi && access == Inaccessible) {
+            omi = nullptr;
+        }
         if (omi) {
             memberTypeInfo = omi->getTypeInfo();
         }
