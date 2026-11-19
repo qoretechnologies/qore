@@ -617,6 +617,15 @@ public:
         See design/dgc.md, "A write inside a set that a real reference holds".
     */
     DLLLOCAL bool deferScanToPinnedMember();
+
+    //! Returns true if \a o is in this object's recursive set and the set is valid and not stale
+    /** The set is read with this object's rsection held: setRSet() replaces this object's set, and frees the old one
+        when it holds the last reference to it, only with the rsection held exclusively, and this object's reference
+        to its set keeps the set alive while it is read.  A set loaded with no lock can be freed by a thread that
+        recomputes it between the load and the reads (#6792).
+    */
+    DLLLOCAL bool hasInValidSet(const RObject& o);
+
     DLLLOCAL void removeInvalidateRSetIntern();
 
     //! Takes this object's recursive set out of the closed state, so that scans enter it again

@@ -215,14 +215,12 @@ DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, Except
 //! Returns true if an object that a write removed from \a root needs a scan of its own after the root's (#6335)
 /** Not if it is in no recursive set, nor if the removed value holds its only reference (it is freed when the value is
     released), nor if the root's scan reached it (it is in the root's valid set).
+
+    The sets are compared by their pointers with no lock; a set is read only under the root's rsection, which keeps
+    it alive (RObject::hasInValidSet()): another thread can recompute the root's set and free the one loaded here
+    (#6792).
 */
-DLLLOCAL inline bool qore_removed_object_needs_scan(RObject* o, RObject* root) {
-    RSet* rs = o->rset.load(std::memory_order_acquire);
-    if (!rs || o->refs() <= 1) {
-        return false;
-    }
-    return !(root && rs == root->rset.load(std::memory_order_acquire) && rs->active() && !rs->isStale());
-}
+DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 
 class qore_object_private : public RObject {
 public:

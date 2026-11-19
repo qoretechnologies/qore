@@ -1036,6 +1036,27 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
     return h;
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_removed_object_scan_hook_t> qore_dbg_removed_object_scan_hook{nullptr};
+#endif
+
+bool qore_removed_object_needs_scan(RObject* o, RObject* root) {
+    RSet* rs = o->rset.load(std::memory_order_acquire);
+    if (!rs || o->refs() <= 1) {
+        return false;
+    }
+    if (!root || rs != root->rset.load(std::memory_order_acquire)) {
+        return true;
+    }
+#ifdef DEBUG
+    // a test holds the thread here, after it compared the sets and before it reads the set (#6792)
+    if (qore_dbg_removed_object_scan_hook_t hook = qore_dbg_removed_object_scan_hook.load()) {
+        hook();
+    }
+#endif
+    return !root->hasInValidSet(*o);
+}
+
 //! scans the objects in a recursive set that a removed value holds, directly or in its lists and hashes (#6335)
 void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink) {
     if (!needs_scan(v)) {
