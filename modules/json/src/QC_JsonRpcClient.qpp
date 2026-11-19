@@ -185,6 +185,7 @@ JsonRpcClient::copy() {
 
     @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw INVALID-ENCODING the response is not valid in its encoding (since json 3.0)
     @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
     @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
 
@@ -216,6 +217,7 @@ hash<auto> JsonRpcClient::callArgs(string[doc] method, auto[doc] args) {
 
     @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw INVALID-ENCODING the response is not valid in its encoding (since json 3.0)
     @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
     @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
 
@@ -248,6 +250,7 @@ hash<auto> JsonRpcClient::call(string[doc] method, ...) {
 
     @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw INVALID-ENCODING the response is not valid in its encoding (since json 3.0)
     @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
     @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
 
@@ -289,6 +292,7 @@ hash<auto> JsonRpcClient::callId(auto id, string[doc] method, ...) {
 
     @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw INVALID-ENCODING the response is not valid in its encoding (since json 3.0)
     @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
     @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
 
@@ -332,6 +336,7 @@ hash<auto> JsonRpcClient::callArgsWithInfo(reference<auto> info, string[doc] met
 
     @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw INVALID-ENCODING the response is not valid in its encoding (since json 3.0)
     @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
     @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
 
@@ -376,6 +381,7 @@ hash<auto> JsonRpcClient::callIdArgsWithInfo(reference<hash<auto>> info, auto id
 
     @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw INVALID-ENCODING the response is not valid in its encoding (since json 3.0)
     @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
     @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
 
@@ -418,6 +424,7 @@ hash<auto> JsonRpcClient::callWithInfo(reference<hash<auto>> info, string[doc] m
 
     @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw INVALID-ENCODING the response is not valid in its encoding (since json 3.0)
     @throw HTTP-CLIENT-TIMEOUT timeout on response from HTTP server
     @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
 

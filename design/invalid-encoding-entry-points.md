@@ -51,9 +51,9 @@ this work; no change).
 | `PollPipeline::addCheckRegex()` | strings strictly; binary as before | done |
 | HTTP client response bodies (`qore_http_response_body_string()`, `qore_decode_http_response_body()`) | HTML and other text (or no Content-Type): ISO-8859-1; structured types: `INVALID-ENCODING` (HTTP/1.1 completes the request with the error, HTTP/2 completes the stream with it); chunks given to a receive callback are given as received | done for `HTTPClient` (`HttpBodyCharset.qtest`: HTTP/1.1, HTTP/2); the qlib client modules (HttpClientIo, RestClientIo, RestClient, FileLocationHandlerHttp) decode with the public `decode_http_body()`: #6604 |
 | Mime quoted-printable / base64 / encoded-word decoding, part bodies; MailMessage `force_encoding()` paths; POP3 data | the HTTP client rule (#6604); `sanitize_filename()` gives `"attachment"` (done) | #6604 |
-| JSON parser output (`modules/json`) | raise | #6604 |
+| JSON parser output (`modules/json`: `parse_json()` and its callers, `JsonSaxParser`, `parse_toon()`) | raise | done (#6604; `JsonInvalidEncoding.qtest`) |
 | File, `StreamReader` and line readers (CsvUtil, FixedLengthUtil, Ndjson, file data providers) | an `encoding_errors` option (raise, latin1, keep), default raise | #6604 |
-| MongoDB BSON strings; proto2 protobuf strings | raise | #6604 |
+| MongoDB BSON strings and keys; proto2 protobuf strings and map keys | raise | done (#6604; `bson-array.cpp`, `protobuf/test/invalid-encoding.qtest`) |
 | YAML (libyaml), IMAP and SMTP replies (ISO-8859-1), Mime header text (`convert_encoding()`) | already valid | covered |
 | `ENV`, `ARGV` | trusted | unchanged |
 

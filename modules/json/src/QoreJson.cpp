@@ -838,12 +838,20 @@ static int do_json_value(QoreString* str, QoreValue v, int format, int depth,
 
 QoreValue parse_json(const QoreString* str, ExceptionSink* xsink, const char* where, const char* what) {
     const QoreEncoding* enc = str->getEncoding();
-    // in text in an encoding compatible with ASCII, the bytes of a UTF-16 byte order mark at the start are skipped, as
-    // before; they are not checked
     size_t skip = 0;
-    if (enc->isAsciiCompat() && str->size() >= 2) {
+    if (str->size() >= 2) {
         const unsigned char* data = reinterpret_cast<const unsigned char*>(str->c_str());
-        if ((data[0] == 0xFE && data[1] == 0xFF) || (data[0] == 0xFF && data[1] == 0xFE)) {
+        bool be = data[0] == 0xFE && data[1] == 0xFF;
+        bool le = data[0] == 0xFF && data[1] == 0xFE;
+        if (enc->isAsciiCompat()) {
+            // in text in an encoding compatible with ASCII, the bytes of a UTF-16 byte order mark at the start are
+            // skipped, as before; they are not checked
+            if (be || le) {
+                skip = 2;
+            }
+        } else if (enc == QCS_UTF16 && (be || le)) {
+            // the byte order mark of text in the generic UTF-16 encoding gives its byte order
+            enc = le ? QCS_UTF16LE : QCS_UTF16BE;
             skip = 2;
         }
     }
@@ -857,9 +865,11 @@ QoreValue parse_json(const QoreString* str, ExceptionSink* xsink, const char* wh
     // the parser works on the bytes of the text: in a multi-byte encoding other than UTF-8, a byte of a character can
     // be an ASCII character (the second byte of Shift_JIS "ソ", 83 5C, is "\\"; UTF-16), so the text is converted
     TempEncodingHelper utf8;
-    // the text after the bytes skipped, if any, when it is converted
+    // the text after the bytes skipped, if any, when it is converted, in the encoding of its byte order
     QoreString rest(enc);
     if (enc != QCS_UTF8 && (enc->isMultiByte() || !enc->isAsciiCompat())) {
+        // text in a multi-byte encoding other than UTF-8, in an encoding that is not compatible with ASCII (EBCDIC,
+        // UTF-16, UTF-32) or in a stateful encoding (ISO-2022-JP, UTF-7)
         const QoreString* src = str;
         if (skip) {
             rest.concat(str->c_str() + skip, str->size() - skip);

@@ -328,8 +328,8 @@ static void check_public_api() {
         {QCS_UTF8, "abc", 3, -1},
         {QCS_UTF8, "a\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80", 10, -1},
         {QCS_UTF8, "ab\xe9", 3, 2},
-        {QCS_UTF8, "a\xed\xa0\x80b", 5, 1},          // a surrogate
-        {QCS_UTF8, "abc\xc0\xafd", 6, 3},             // an overlong form
+        {QCS_UTF8, "a\xed\xa0\x80" "b", 5, 1},          // a surrogate
+        {QCS_UTF8, "abc\xc0\xaf" "d", 6, 3},             // an overlong form
         {QCS_UTF8, "\xf4\x90\x80\x80", 4, 0},          // above U+10FFFF
         {QCS_UTF8, "ab\xe2\x82", 4, 2},               // cut off by the end of the text
         {QCS_UTF8, "a\0b\xff", 4, 3},                 // a NUL byte is a character

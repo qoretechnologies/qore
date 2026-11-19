@@ -719,9 +719,11 @@ string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONL
     @note An integer outside the range of an \c int is returned as a \c number, which keeps its value; see
     @ref jsonserializationguide
 
-    @note A JSON string in a multi-byte encoding other than UTF-8 (ex: \c Shift_JIS, \c UTF-16) is converted to UTF-8
-    to be parsed, and the strings returned are UTF-8; the strings of a JSON string in UTF-8 or a single-byte encoding
-    have its encoding
+    @note A JSON string in a multi-byte encoding other than UTF-8 (ex: \c Shift_JIS, \c UTF-16), in an encoding that
+    is not compatible with ASCII (ex: EBCDIC) or in a stateful encoding (ex: \c ISO-2022-JP) is converted to UTF-8 to
+    be parsed, and the strings returned are UTF-8; the byte order mark of a JSON string in the generic \c UTF-16
+    encoding gives its byte order; the strings of a JSON string in UTF-8 or another single-byte encoding compatible
+    with ASCII have its encoding
 
     @see @ref jsonserializationguide
 
@@ -730,7 +732,7 @@ string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONL
     - json 3.0 numbers are parsed as RFC 8259 section 6 defines them, and an integer outside the range of an \c int
       is returned as a \c number
     - json 3.0 the JSON string must be valid in its encoding, and a JSON string in a multi-byte encoding other than
-      UTF-8 is converted to UTF-8 to be parsed
+      UTF-8, in an encoding not compatible with ASCII or in a stateful encoding is converted to UTF-8 to be parsed
  */
 auto parse_json(string json_str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return parse_json(json_str, xsink);
@@ -756,7 +758,7 @@ nothing parseJSON() [flags=RUNTIME_NOOP,DEPRECATED] {
     @deprecated use parse_json(); camel-case function names were deprecated in json 1.5
  */
 auto parseJSON(string json_str) [flags=RET_VALUE_ONLY,DEPRECATED] {
-    return parse_json(json_str, xsink);
+    return parse_json(json_str, xsink, "parseJSON()");
 }
 ///@}
 

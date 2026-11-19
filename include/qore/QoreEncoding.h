@@ -261,7 +261,7 @@ DLLEXPORT qore_offset_t q_get_char_len(const QoreEncoding* enc, const char* p, s
 /** The check of the text readers of %Qore (see @ref encoding_errors): UTF-8 is checked as RFC 3629 defines it (a
     surrogate, an overlong form or a code point above U+10FFFF is not valid), the other multi-byte encodings with their
     character functions, US-ASCII byte by byte, a stateful encoding with a conversion; a single-byte encoding has no
-    invalid bytes
+    invalid bytes; a byte order mark is not interpreted (text in the generic \c UTF-16 encoding is checked as UTF-16BE)
 
     @param enc the encoding of the text
     @param p the text

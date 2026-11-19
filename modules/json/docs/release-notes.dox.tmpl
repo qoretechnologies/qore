@@ -6,14 +6,12 @@
 
     @section json_v3_0_0 json Module Version 3.0.0
 
-    - text that is not valid in its encoding raises \c INVALID-ENCODING with the byte offset of the first invalid
-      byte sequence: @ref Qore::Json::parse_json() "parse_json()" (and so @ref Qore::Json::jwt_decode()
-      "jwt_decode()" and the responses of @ref Qore::Json::JsonRpcClient "JsonRpcClient") checks the JSON string,
-      and @ref Qore::Json::JsonSaxParser "JsonSaxParser" each string and key; invalid UTF-8 was returned in strings
+    - @ref Qore::Json::parse_json() "parse_json()" (and so @ref Qore::Json::jwt_decode() "jwt_decode()"),
+      @ref Qore::Json::parse_toon() "parse_toon()" and @ref Qore::Json::JsonSaxParser "JsonSaxParser" raise
+      \c INVALID-ENCODING for text that is not valid in its encoding, which was returned in strings
       (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
     - @ref Qore::Json::parse_json() "parse_json()" converts a JSON string in a multi-byte encoding other than UTF-8
-      (ex: \c Shift_JIS, \c UTF-16) to UTF-8 to parse it; its bytes were parsed as they were, so that a character
-      with a byte of an ASCII character, such as Shift_JIS \c "ソ" (83 5C), or UTF-16 text could not be parsed
+      (ex: \c Shift_JIS, \c UTF-16) to UTF-8 to parse it, which it could not, and returns UTF-8 strings for it
       (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
     - input that ends inside a JSON object or array after \c "{", \c "[" or \c "," raises \c JSON-PARSE-ERROR;
       it was parsed as @ref nothing, so a truncated document could not be told from an empty one
