@@ -1821,8 +1821,11 @@ QoreIRInstruction* QoreIRBuilder::createTakeHandedOverReturn(QoreIRValue value, 
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createReleaseHandedOverReturn(const QoreProgramLocation* loc) {
+QoreIRInstruction* QoreIRBuilder::createReleaseHandedOverReturn(const QoreProgramLocation* loc, QoreIRValue result) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseHandedOverReturn);
+    if (result.isValid()) {
+        inst->operands.push_back(result);
+    }
     inst->loc = loc;
     return inst;
 }

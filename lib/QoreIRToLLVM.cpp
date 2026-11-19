@@ -38236,7 +38236,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::ReleaseHandedOverReturn: {
             // a return in a handler replaces the value that handlers run out of line handed over (#6137); an exception
-            // that a destructor raises is pending for the instructions after it, as with ReleaseOwnedTemp
+            // that a destructor raises is pending for the instructions after it, as with ReleaseOwnedTemp.  The form
+            // with an operand clears the result of a ScopeExit for the IR interpreter (#6552): the result of native
+            // code is a value of its run, which nothing can see again
+            if (!inst->operands.empty()) {
+                return true;
+            }
             if (!handler_return_handed) {
                 error = "ReleaseHandedOverReturn: the function has no handed-over return";
                 return false;

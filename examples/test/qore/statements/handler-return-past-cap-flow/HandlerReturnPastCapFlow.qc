@@ -17,9 +17,10 @@
     past the cap; a block with a local and handlers past the cap (its handlers run, then its local is released, then the
     function returns); a handler past the cap in a loop of a handler; a function and a closure called from handlers
     past the cap that return from their own handlers, which does not end the caller's code; an on_error handler, run as
-    a function of its own, with handlers nested 16 and 17 deep and a statement after their block; and two threads that
-    run handlers past the cap at the same time.  HandlerReturnPastCapFlow.q gives the output of the AST interpreter in
-    every execution mode, on the IR tier and compiled with qcc.
+    a function of its own, with handlers nested 16 and 17 deep and a statement after their block; integers handed over
+    at the end of a block (any value is returned as it is, also one that the IR interpreter could take for its own);
+    and two threads that run handlers past the cap at the same time. HandlerReturnPastCapFlow.q gives the output of the
+    AST interpreter in every execution mode, on the IR tier and compiled with qcc.
 */
 class HandlerReturnPastCapFlowBase inherits QUnit::Test {
     public {
@@ -95,6 +96,14 @@ hf17(0)[1]: ex:ERR [\"after-block\"]
 hf17(17)[0]: ex:ERR []
 hf17(17)[1]: ex:ERR []
 thr: {\"h17\"/[\"after-block\"]: 400}
+bv(0)[0]: \"body\" [\"after-block\"]
+bv(0)[1]: \"body\" [\"after-block\"]
+bv(1)[0]: 111404561622354 []
+bv(1)[1]: 111404561622354 []
+bv(2)[0]: 106890482114871 []
+bv(2)[1]: 106890482114871 []
+bv(3)[0]: 8 []
+bv(3)[1]: 8 []
 bord(0)[0]: T:body [\"h17\", \"~loc\", \"after-block\", \"~body\"]
 bord(0)[1]: T:body [\"h17\", \"~loc\", \"after-block\", \"~body\"]
 bord(1)[0]: T:ret17 [\"h17\", \"~loc\", \"~ret17\"]
