@@ -590,6 +590,45 @@ if (x == 1) return t;
     }
     return NOTHING;
 }
+# handlers past the cap return integers, also ones that equal values that the IR interpreter could use internally
+auto sub iv(int x) {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+if (x == 1) return 0x613761376137; if (x == 2) return 0x655265526552; if (x == 3) return 0;
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+    return 42;
+}
 # handlers of one scope that return conditionally, several of them for the same argument: past the budget of the
 # handlers lowered inline
 auto sub c7(int x) {
@@ -643,5 +682,6 @@ run("b17", \b17(), (-1, 0, 15, 16, 17));
 run("p", \p(), (-2, -1, 0, 1, 16, 17));
 run("q", \q(), (-2, -1, 0, 1, 16, 17));
 run("fe", \fe(), (0, 1, 17));
+run("iv", \iv(), (0, 1, 2, 3));
 run("c7", \c7(), (0, 1, 2, 3, 4, 5, 6, 7, 8, 15));
 run("s", \s(), (0, 1, 2, 3, 5, 6, 7, 15, 16, 17, 18, 31));

@@ -1386,6 +1386,8 @@ public:
 
     //! Keeps a reference to the value of a return that an exception interrupted until releaseHeldReturns() (#5920)
     DLLLOCAL void holdReturn(QoreValue v) {
+        // only nodes: the marker of the handed-over return is the first entry that is not one (#6137)
+        assert(v.hasNode());
         held_returns.push_back(v);
     }
 
@@ -1489,23 +1491,20 @@ private:
     //! handed-over return after its marker (see findHandedOverReturn())
     std::vector<QoreValue> held_returns;
     static constexpr size_t NoHandedOver = static_cast<size_t>(-1);
-    //! the integer of the marker entry that the handed-over return follows in held_returns (#6137)
-    static constexpr int64 HandedOverMarker = 0x613761376137ll;
-
-    //! Returns the marker entry of the handed-over return in held_returns
-    /** The held returns are otherwise always nodes (holdReturn()), so the first entry that is this integer is the
-        marker: the handed-over return, the value that handlers run out of line past the inline cap handed over to the
-        return whose cleanups run them (also no value, with a return without one), is the entry after it
+    //! Returns the marker entry of the handed-over return in held_returns: no value
+    /** The held returns are otherwise always nodes (holdReturn() is given only nodes), so the first entry that is not
+        a node is the marker, whatever the values are: the handed-over return, the value that handlers run out of line
+        past the inline cap handed over to the return whose cleanups run them (any value, also no value), is the entry
+        after it (#6137)
     */
     static QoreValue handedOverMarker() {
-        return QoreValue(HandedOverMarker);
+        return QoreValue();
     }
 
     //! Returns the index of the handed-over return in held_returns, or NoHandedOver
     DLLLOCAL size_t findHandedOverReturn() const {
-        uint64_t marker = toBits(handedOverMarker());
         for (size_t i = 0, e = held_returns.size(); i + 1 < e; ++i) {
-            if (toBits(held_returns[i]) == marker) {
+            if (!held_returns[i].hasNode()) {
                 return i + 1;
             }
         }

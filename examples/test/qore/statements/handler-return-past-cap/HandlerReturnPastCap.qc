@@ -16,7 +16,8 @@
     nested 15, 16, 17 and 32 deep whose outermost two and innermost two return a value, an object (the release of the
     replaced values), no value, or nothing (the return's own value survives); handlers in blocks of their own; a
     handler registered before the nested ones that replaces their value, also from a try statement; a foreach statement
-    left by the return, which releases its element, the value handed over, after the handlers; and handlers of one
+    left by the return, which releases its element, the value handed over, after the handlers; integers handed over
+    (any value is returned as it is, also one that the IR interpreter could take for its own); and handlers of one
     scope with overlapping conditions, also on_exit, on_success and on_error handlers.  HandlerReturnPastCap.q
     gives the output of the AST interpreter in every execution mode, on the IR tier and compiled with qcc.  The control
     flow of a return past the cap (the end of the code around the handler's run) is #6552.
@@ -168,6 +169,14 @@ fe(1)[0]: T:fe-g [\"~fe-body\", \"~fe-g\"]
 fe(1)[1]: T:fe-g [\"~fe-body\", \"~fe-g\"]
 fe(17)[0]: T:fe-g [\"~fe-body\", \"~fe-g\"]
 fe(17)[1]: T:fe-g [\"~fe-body\", \"~fe-g\"]
+iv(0)[0]: 42 []
+iv(0)[1]: 42 []
+iv(1)[0]: 106890482114871 []
+iv(1)[1]: 106890482114871 []
+iv(2)[0]: 111404561622354 []
+iv(2)[1]: 111404561622354 []
+iv(3)[0]: 0 []
+iv(3)[1]: 0 []
 c7(0)[0]: \"c-body\" []
 c7(0)[1]: \"c-body\" []
 c7(1)[0]: \"c3\" []
