@@ -611,6 +611,10 @@ module SqlUtil {
     - fixed an upsert closure (@ref SqlUtil::AbstractTable::getUpsertClosure()) called after
       @ref SqlUtil::AbstractTable::clear(), which raised \c OBJECT-ALREADY-DELETED with a table's primary key: the
       closure keeps a copy of the key's columns (<a href="https://github.com/qoretechnologies/qore/issues/6686">issue 6686</a>)
+    - fixed the upsert of a row of list values (bulk DML) by @ref SqlUtil::AbstractTable::upsertFromIterator() or an
+      upsert closure made from a row of list values, which failed with a bind error with every driver but Oracle: its
+      rows are upserted row by row where the driver cannot bind them as arrays, and lists of different lengths raise
+      \c UPSERT-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6691">issue 6691</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index

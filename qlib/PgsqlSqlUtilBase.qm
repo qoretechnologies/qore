@@ -4673,8 +4673,19 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         return int sub (hash<auto> h) {
             # detect single-row input (scalars) and convert to hash-of-lists for UNNEST compatibility
-            if (h.firstValue().typeCode() != NT_LIST) {
+            if (h.firstValue().typeCode() != NT_LIST || !isBulkUpsertRow(h)) {
                 h = map {$1.key: ($1.value,)}, h.pairIterator();
+            } else {
+                # the lists must have the same length, and a column that is not a list has its value in every row
+                # (issue #6691)
+                checkBulkUpsertRow(h);
+                int size = h.firstValue().size();
+                # a row of empty lists upserts nothing
+                if (!size) {
+                    return UR_Unchanged;
+                }
+                h = map {$1.key: $1.value.typeCode() == NT_LIST ? $1.value : getRepeatedList($1.value, size)},
+                    h.pairIterator();
             }
             # deduplicate rows by PK columns if using DO UPDATE
             if (needs_dedup) {
@@ -4873,6 +4884,46 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         9.5, for earlier versions upsert operations are not atomic
     */
     code getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
+        # a row of list values (bulk DML) is upserted row by row (issue #6691)
+        return getUpsertRowsClosure(row, getPgsqlUpsertClosure(getBulkUpsertExampleRow(row), upsert_strategy, opt));
+    }
+
+    #! returns @ref True "True" if the row is a row of list values (bulk DML)
+    /** the first value is a list; a list for an array column is a value of the column: the first column that is not
+        an array decides (its value is a list in a row of list values); a row of only array columns is a row of list
+        values if an element of its first value is a list or \c NULL (the value of the column in a row) (issue #6691)
+    */
+    private bool isBulkUpsertRow(hash<auto> row) {
+        auto v = row.firstValue();
+        if (v.typeCode() != NT_LIST) {
+            return False;
+        }
+        Columns cols = describe();
+        foreach hash<auto> i in (row.pairIterator()) {
+            *AbstractColumn col = cols{i.key} ?? cols{i.key.lwr()};
+            if (!col || col.native_type != "ARRAY") {
+                return i.value.typeCode() == NT_LIST;
+            }
+        }
+        foreach auto e in (v) {
+            if (e.typeCode() == NT_LIST || e === NULL || !exists e) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! returns a list of the given number of the value (issue #6691)
+    private static list<auto> getRepeatedList(auto v, int size) {
+        list<auto> rv = ();
+        for (int i = 0; i < size; ++i) {
+            rv += v;
+        }
+        return rv;
+    }
+
+    #! returns the upsert closure for a row that is not a row of list values
+    private code getPgsqlUpsertClosure(hash<auto> row, int upsert_strategy, *hash<auto> opt) {
         # check upsert options
         validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
 

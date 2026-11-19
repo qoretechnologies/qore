@@ -2784,6 +2784,13 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         if (!ss_has_merge)
             return AbstractTable::getUpsertClosure(row, upsert_strategy, opt);
 
+        # a row of list values (bulk DML) is upserted row by row (issue #6691)
+        return getUpsertRowsClosure(row, getMssqlMergeUpsertClosure(getBulkUpsertExampleRow(row), upsert_strategy,
+            opt));
+    }
+
+    #! returns the upsert closure with a merge statement for a row that is not a row of list values
+    private code getMssqlMergeUpsertClosure(hash<auto> row, int upsert_strategy, *hash<auto> opt) {
         # check upsert options
         validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
 
