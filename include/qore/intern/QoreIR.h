@@ -1640,6 +1640,11 @@ public:
     // debug line-change gate below reports the wrong line
     int32_t cached_start_line;
     QoreIRIntrinsic intrinsic = QoreIRIntrinsic::None;
+    //! the value that the instruction defines; declared here, in the padding after the 16-bit intrinsic, so that the
+    //! runtime location (stmt_loc) adds no size to the instruction: a larger instruction changed the sizes that the
+    //! IR of every function allocates, and with them the state of the heap that the code allocates from afterwards
+    //! (qore#6646)
+    QoreIRValue result{};
     //! the source location of the instruction: of the expression or the statement that it was lowered from (the
     //! call site of a call, the line of the debugger's step events and of native debug information)
     const QoreProgramLocation* loc = nullptr;
@@ -1655,7 +1660,6 @@ public:
         (qore_ir_set_deserialized_statement_locations()).
     */
     const QoreProgramLocation* stmt_loc = nullptr;
-    QoreIRValue result{};
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;
     // For list/hash creation instructions; for CheckReturnValue, the declared return type
