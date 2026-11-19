@@ -1555,10 +1555,9 @@ extern "C" DLLEXPORT void qore_rt_dbg_step(const AbstractStatement* statement, v
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
     }
-    // the event runs in the statement's own location, as in the IR interpreter: native code updates the runtime
-    // location only when the line changes, so it is still that of the code before, which can be another statement
-    // on the same line or the statement that contains this one (#6248); the next line that native code reaches sets
-    // it again
+    // the event runs in the statement's own location, as in the IR interpreter (#6248): native code stores no
+    // location for the step instruction, so the location is still that of the code before; the step hook restores
+    // the code's location after the event (QoreIRToLLVM::emitDebugStepHook(), qore#6646)
     if (statement && statement->loc) {
         *get_runtime_location_cache().loc_ptr = statement->loc;
     }
@@ -9605,6 +9604,8 @@ static bool qore_rt_debugger_attached(const UserVariantBase* uvb) {
 static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         const UserVariantBase* uvb, uint64_t* args, int nargs,
         uint64_t** arg_cleanups, uint64_t& result_bits) {
+    // the closure's statements store their own locations: the caller continues in its own (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_NATIVE_CLOSURE_LEAF_INLINE");
     const bool disabled = disabled_env.get();
     // the leaf runs without entering the closure's Program: once that Program is being deleted, the call path refuses
@@ -14228,6 +14229,8 @@ DLLLOCAL uint64_t execClosureDirectConsume(const QoreClosureBase* cb, const User
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBase* uvb,
         int nargs, const uint64_t* args, ExceptionSink* xsink, uint64_t** arg_cleanups) {
+    // the closure's statements store their own locations: the caller continues in its own (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     // a call that gives the references of its temporary arguments releases them in the callee's frame (issue
     // #5882)
     if (arg_cleanups) {
@@ -15559,6 +15562,8 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
         return 0;
     }
 
+    // the handlers' statements store their own locations: the caller continues in its own (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
 

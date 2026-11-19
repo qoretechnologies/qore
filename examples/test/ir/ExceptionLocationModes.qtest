@@ -335,6 +335,42 @@ class Probes {
     }
 }
 
+class E {
+    destructor() {
+        int i = 0;
+        i += 1;
+    }
+}
+
+class MoreProbes {
+    # handlers that run out of line (a block with on_exit and on_error), before the condition of the loop raises
+    static int pHandlersWhile(int x) {
+        while (x > 0
+            && (x / (x - 3))) {
+            on_exit { x += 0; }
+            on_error { x += 0; }
+            --x;
+        }
+        return x;
+    }
+
+    # handlers that run out of line before the destructor of a local of their block
+    static int pHandlersDtor(int x) {
+        if (x > 0) {
+            on_exit { x += 0; }
+            on_error { x += 0; }
+            D d();
+            x += 1;
+        }
+        return x;
+    }
+
+    # a destructor with statements of its own run in the statement that then raises
+    static int pDtorThenDiv(int x) {
+        return (map $1, (new E(),)).size() + x / (x - x);
+    }
+}
+
 # the reproducer of qore#6646
 sub run() {
     list<T> l = (new T(), new T());
@@ -408,6 +444,9 @@ hash<string, code> probes = {
     "destructor of a temporary": \Probes::pDtorTemp(),
     "after a call": \Probes::pAfterCall(),
     "closure": closure,
+    "out-of-line handlers then condition": \MoreProbes::pHandlersWhile(),
+    "out-of-line handlers then destructor": \MoreProbes::pHandlersDtor(),
+    "destructor then division": \MoreProbes::pDtorThenDiv(),
 };
 
 for (int j = 0; j < 3; ++j) {
@@ -435,16 +474,18 @@ run2();
 
         #! results that the AST interpreter must give, so that a wrong result of the AST interpreter fails the test
         const Pinned = (
-            "if: ERR exception-location.qr:21-21 <- Probes::pIf:377-377",
-            "do while: DIVISION-BY-ZERO exception-location.qr:43-45 <- Probes::pDoWhile:377-377",
-            "if condition: DIVISION-BY-ZERO exception-location.qr:150-153 <- Probes::pIfCondDiv:377-377",
+            "if: ERR exception-location.qr:21-21 <- Probes::pIf:416-416",
+            "do while: DIVISION-BY-ZERO exception-location.qr:43-45 <- Probes::pDoWhile:416-416",
+            "if condition: DIVISION-BY-ZERO exception-location.qr:150-153 <- Probes::pIfCondDiv:416-416",
             "foreach iteration: RUNTIME-TYPE-ERROR exception-location.qr:176-178 <- Probes::pForeachIterAssign:"
-                "377-377",
+                "416-416",
             "destructor at block end: DTOR exception-location.qr:4-4 <- D::destructor:254-256 "
-                "<- Probes::pDtorBlock:377-377",
+                "<- Probes::pDtorBlock:416-416",
             "destructor at if end: DTOR exception-location.qr:4-4 <- D::destructor:261-264 "
-                "<- Probes::pDtorIf:377-377",
-            "run2: ERR2 exception-location.qr:315-315 <- run2:389-389",
+                "<- Probes::pDtorIf:416-416",
+            "run2: ERR2 exception-location.qr:351-351 <- run2:428-428",
+            "out-of-line handlers then condition: DIVISION-BY-ZERO exception-location.qr:309-314 <- "
+                "MoreProbes::pHandlersWhile:416-416",
         );
     }
 
@@ -481,7 +522,7 @@ run2();
         hash<string, bool> lines = map {$1: True}, expected.split("\n");
         assertEq((), (select Pinned, !lines{$1}), "pinned AST results");
         # the report of the unhandled exception at the end
-        assertRegex("unhandled QORE User exception thrown in TID 1 in run2\\(\\) \\(exception-location\\.qr:315 ",
+        assertRegex("unhandled QORE User exception thrown in TID 1 in run2\\(\\) \\(exception-location\\.qr:351 ",
             expected, "unhandled exception report");
 
         hash<string, list<string>> wrong();

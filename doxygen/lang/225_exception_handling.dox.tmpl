@@ -60,6 +60,11 @@
     |when a block statement (a block in braces in a block) ends: by the destructor of a local variable of the block|the destructor's statement; the call of the destructor in the call stack is located at the lines of the block statement, from its first statement to its closing brace
     |when a statement ends: by the destructor of a temporary value of the statement|the destructor's statement; the call of the destructor in the call stack is located at the statement
 
+    The columns of a call stack entry (the \c start_column and \c end_column keys of its
+    @ref Qore::CallStackInfo "CallStackInfo" hash) can differ between execution modes for the entry of a
+    @ref rethrow "rethrow" and for a frame without a call site, such as the call of a destructor: compiled code can give
+    the columns of the statement that contains the statement when both are on the same lines.
+
     For example, in the following code the exception is located at line 3 in every execution mode, not at the lines of
     the \c if statement (2-4) or of its block (3-4); an exception raised by the condition of the \c if statement
     would be located at lines 2-4:
