@@ -135,6 +135,15 @@ class ThrowRestClass inherits AbstractRestClass {
         }
     }
 
+    hash<HttpHandlerResponseInfo> getNodesc(hash<auto> cx, *hash<auto> ah) {
+        try {
+            # an exception without a description has no "desc" key
+            throw "INNER-ERROR";
+        } catch (hash<ExceptionInfo> ex) {
+            throw "NODESC-ERROR", "the outer error", {"arg": ex, "wrapped": {"ex": ex}}.(ah.where ?? "arg");
+        }
+    }
+
     hash<HttpHandlerResponseInfo> getData(hash<auto> cx, *hash<auto> ah) {
         # an argument with "err", "file" and "line" but no "desc" is data of the application, not an exception
         throw "DATA-ERROR", "the description", {"err": "PARSE", "file": "input.csv", "line": 3};
@@ -331,6 +340,20 @@ class HttpServerErrorBodyLocationTest inherits QUnit::Test {
                 assertEq(sort(("type", "err", "desc")), sort(ex.arg.ex.keys()), label);
             } else {
                 assertRegex(ThisFile, ex.arg.ex.file, label);
+            }
+
+            # an inner exception without a description, given as the argument and wrapped in it as "ex"
+            foreach string place in (("arg", "wrapped")) {
+                response = get("throw?action=nodesc&where=" + place);
+                assertEq(409, response.status_code, label + " " + place);
+                ex = parse_json(response.body);
+                hash<auto> inner = place == "arg" ? ex.arg : ex.arg.ex;
+                assertEq("INNER-ERROR", inner.err, label + " " + place);
+                if (!debug) {
+                    assertEq(sort(("type", "err")), sort(inner.keys()), label + " " + place);
+                } else {
+                    assertRegex(ThisFile, inner.file, label + " " + place);
+                }
             }
 
             # data of the application is given as it is

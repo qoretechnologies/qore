@@ -1107,8 +1107,9 @@ public *int sub http_parse_content_length(auto value) {
     wrap the exception that they rethrow); not its location (\c file, \c line, \c endline, \c source, \c offset,
     \c lang) or its call stack.
 
-    An argument or its \c ex key is taken as the information of an exception if it is a hash with \c err, \c desc,
-    and a \c callstack list or both \c file and \c line; any other argument is given as it is.  Exceptions in
+    An argument or its \c ex key is taken as the information of an exception if it is a hash with \c err and a
+    \c callstack list (as every exception has, also one without a description), or with \c err, \c desc, \c file
+    and \c line; any other argument is given as it is.  Exceptions in
     other places of the argument (in other keys, deeper, or in lists) are not looked for: an argument that has them
     is given as it is.
 
@@ -1124,8 +1125,11 @@ public hash<ExceptionInfo> sub http_get_client_exception_info(hash<auto> ex) {
     ex = {} + ex;
     hash<ExceptionInfo> rv = <ExceptionInfo>{
         "err": ex.err,
-        "desc": ex.desc,
     };
+    # an exception thrown without a description has no "desc" key
+    if (exists ex.desc) {
+        rv.desc = ex.desc;
+    }
     if (ex.type.typeCode() == NT_STRING) {
         rv.type = ex.type;
     }
@@ -1152,14 +1156,15 @@ public hash<ExceptionInfo> sub http_get_client_exception_info(hash<auto> ex) {
 }
 
 #! Returns True if the value is the information of an exception, with its location or its call stack
-/** A hash with \c err, \c desc, and a \c callstack list or both \c file and \c line; the keys are tested with
-    hasKey(), which a hash of a hashdecl answers for any key
+/** A hash with \c err and a \c callstack list, or with \c err, \c desc, \c file and \c line; the keys are tested
+    with hasKey(), which a hash of a hashdecl answers for any key
 
     @since %HttpServerUtil 1.6
 */
 bool sub http_is_exception_info(auto v) {
-    return v.typeCode() == NT_HASH && v.hasKey("err") && v.hasKey("desc")
-        && ((v.hasKey("callstack") && v.callstack.typeCode() == NT_LIST) || (v.hasKey("file") && v.hasKey("line")));
+    return v.typeCode() == NT_HASH && v.hasKey("err")
+        && ((v.hasKey("callstack") && v.callstack.typeCode() == NT_LIST)
+            || (v.hasKey("desc") && v.hasKey("file") && v.hasKey("line")));
 }
 
 #! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)
