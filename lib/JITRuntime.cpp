@@ -5149,7 +5149,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     QoreValue obj_val = fromBits(object_bits);
     QoreObject* obj = obj_val.getType() == NT_OBJECT ? obj_val.get<QoreObject>() : nullptr;
     if (!obj) {
-        // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference()
+        // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference();
+        // the name of a static method of the declared class is that of the method, without the class reference that
+        // the static-bound form carries (see below), as in the other execution modes (qore#6684)
+        if (method_name[0] == '\x01') {
+            if (const char* end = strchr(method_name + 1, '\x01')) {
+                method_name = end + 1;
+            }
+        }
         return toBits(qore_make_pseudo_method_reference(&loc_builtin, obj_val, method_name, xsink));
     }
 
