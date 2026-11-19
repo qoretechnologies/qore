@@ -466,7 +466,11 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
               smaller set is updated in case the unique key values are present in the target table; the value of this
               key should be set to the columns to omit in the update clause; a select-first upsert neither compares
-              nor updates them, and a row with no other column to update is unchanged when its key exists
+              nor updates them; with every strategy, a row with no other column to update (as a row with only the
+              key columns) does not update the row of its key (@ref UR_Unchanged), and is inserted if the key does not
+              exist, except by an update-only upsert; a strategy that tries the insert first (insert-first,
+              insert-only, and the merge statements of some drivers) raises the database's error if the row cannot be
+              inserted (ex: a row without a value for a column that is \c NOT \c NULL without a default)
             - \c upsert_columns: a list of column names that identifies the unique index or constraint to use for the
               upsert operation
         */
@@ -509,6 +513,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             raised; with this upsert strategy, the following row result codes are possible:
             - @ref UR_Inserted
             - @ref UR_Verified (the only value returned by certain drivers with optimized upsert implementations)
+            - @ref UR_Unchanged (a row with no column to update whose key exists; see the \c omit_update option)
         */
         const UpsertInsertFirst = 1;
 
@@ -517,6 +522,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             this upsert strategy, the following row result codes are possible:
             - @ref UR_Inserted
             - @ref UR_Verified (the only value returned by certain drivers with optimized upsert implementations)
+            - @ref UR_Unchanged (a row with no column to update whose key exists; see the \c omit_update option)
         */
         const UpsertUpdateFirst = 2;
 
@@ -533,6 +539,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         /** With this upsert strategy, the following row result codes are possible:
             - @ref UR_Inserted
             - @ref UR_Verified (the only value returned by certain drivers with optimized upsert implementations)
+            - @ref UR_Unchanged (a row with no column to update whose key exists; see the \c omit_update option)
         */
         const UpsertAuto = 4;
 
@@ -589,7 +596,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! row was updated because it was different (only possible with @ref UpsertSelectFirst)
         const UR_Updated = 3;
 
-        #! row was unchanged (only possible with @ref UpsertSelectFirst, @ref UpsertInsertOnly, and @ref UpsertUpdateOnly)
+        #! row was unchanged (with @ref UpsertSelectFirst, @ref UpsertInsertOnly, and @ref UpsertUpdateOnly, and with any strategy for a row with no column to update whose key exists)
         const UR_Unchanged = 4;
 
         #! row was deleted (only possible with batch upsert methods such as @ref AbstractTable::upsertFromIterator() where \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True")
@@ -5125,7 +5132,9 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         - \c "inserted": the number of rows inserted
         - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than @ref SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
         - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "unchanged": the number of rows unchanged; this key is returned with @ref SqlUtil::AbstractTable::UpsertSelectFirst,
+          @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly, and with any
+          strategy for rows with no column to update whose key exists
         - \c "deleted": the number of rows deleted; this can only be returned if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
         @throw OPTION-ERROR invalid or unsupported option
@@ -5166,7 +5175,9 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         - \c "inserted": the number of rows inserted
         - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than @ref SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
         - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly,  or @ref SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "unchanged": the number of rows unchanged; this key is returned with @ref SqlUtil::AbstractTable::UpsertSelectFirst,
+          @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly, and with any
+          strategy for rows with no column to update whose key exists
         - \c "deleted": the number of rows deleted; this can only be returned if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
         @throw OPTION-ERROR invalid or unsupported option
@@ -5629,9 +5640,9 @@ hash<auto> h = table.upsertFromSelectCommit(table2, ("where": ("account_type": "
         - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is
           @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since
           rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is
-          @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly, or
-          @ref SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "unchanged": the number of rows unchanged; this key is returned with @ref SqlUtil::AbstractTable::UpsertSelectFirst,
+          @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly, and with any
+          strategy for rows with no column to update whose key exists
         - \c "deleted": the number of rows deleted; this can only be returned if
           \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
@@ -5699,7 +5710,9 @@ hash h = table.upsertFromSelect(table2, ("where": ("account_type": "CUSTOMER")),
         - \c "inserted": the number of rows inserted
         - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than @ref SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
         - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "unchanged": the number of rows unchanged; this key is returned with @ref SqlUtil::AbstractTable::UpsertSelectFirst,
+          @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly, and with any
+          strategy for rows with no column to update whose key exists
         - \c "deleted": the number of rows deleted; this can only be returned if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
         @throw OPTION-ERROR invalid or unsupported option
@@ -9289,9 +9302,9 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     */
     private code<int(hash<auto>)> getUpsertInsertFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         string insert_sql = getUpsertInsertSql(example_row);
-        list updc = ();
-        string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
+        list updc = getUpsertUpdateColumns(example_row, cols, opt);
         # a row with only key columns (or with all other columns omitted from the update) has nothing to update
+        *string update_sql = updc ? getUpsertUpdateSql(example_row, cols, \updc, opt) : NOTHING;
         *string key_sql = updc ? NOTHING : getUpsertKeySelectSql(cols, example_row);
 
         return int sub (hash<auto> row) {
@@ -9300,8 +9313,9 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
             }
 
             if (key_sql) {
+                # nothing to update: the existing row is unchanged (issue #6692)
                 if (ds.vselectRow(key_sql, row{cols.keys()}.values())) {
-                    return UR_Verified;
+                    return UR_Unchanged;
                 }
             } else if (tryUpdate(update_sql, row, cols, updc)) {
                 return UR_Verified;
@@ -9314,9 +9328,21 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     }
 
     private code<int(hash<auto>)> getUpsertUpdateFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
-        list updc = ();
-        string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
         string insert_sql = getUpsertInsertSql(example_row);
+        list updc = getUpsertUpdateColumns(example_row, cols, opt);
+        if (!updc) {
+            # a row with only key columns, or with all other columns omitted from the update, has nothing to update:
+            # an existing row is unchanged, and a new row is inserted (issue #6692)
+            string key_sql = getUpsertKeySelectSql(cols, example_row);
+            return int sub (hash<auto> row) {
+                if (ds.vselectRow(key_sql, row{cols.keys()}.values())) {
+                    return UR_Unchanged;
+                }
+                ds.vexec(insert_sql, row.values());
+                return UR_Inserted;
+            };
+        }
+        string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
 
         return int sub (hash<auto> row) {
             if (tryUpdate(update_sql, row, cols, updc))
@@ -9460,7 +9486,13 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     }
 
     private code<int(hash<auto>)> getUpsertUpdateOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
-        list updc = ();
+        list updc = getUpsertUpdateColumns(example_row, cols, opt);
+        if (!updc) {
+            # nothing to update: a row is unchanged, and no row is inserted (issue #6692)
+            return int sub (hash<auto> row) {
+                return UR_Unchanged;
+            };
+        }
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
 
         return int sub (hash<auto> row) {
@@ -9567,12 +9599,22 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         return sql;
     }
 
+    #! returns the columns of a row that an upsert updates: the columns that are not in the key nor omitted with the
+    #! \c omit_update option
+    private list<string> getUpsertUpdateColumns(hash<auto> row, Columns cols, *hash<auto> opt) {
+        # hash of columns to skip on update if applicable
+        *hash<string, bool> suh = map {$1: True}, opt.omit_update;
+        return select keys row, !cols.hasKey($1) && !suh{$1};
+    }
+
     private string getUpsertUpdateSql(hash<auto> row, Columns cols, reference updc, *hash<auto> opt) {
         # make list of columns not in unique key if necessary
         if (!updc) {
-            # hash of columns to skip on update if applicable
-            *hash suh = map {$1: True}, opt.omit_update;
-            map updc += $1, keys row, !cols.hasKey($1) && !suh.$1;
+            updc = getUpsertUpdateColumns(row, cols, opt);
+        }
+        # an update without columns is not valid SQL: the callers handle a row with nothing to update (issue #6692)
+        if (!updc) {
+            throw "UPSERT-ERROR", sprintf("%s: the upsert has no column to update: %y", getDesc(), keys row);
         }
 
         # make sql

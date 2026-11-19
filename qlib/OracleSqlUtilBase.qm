@@ -6299,10 +6299,13 @@ group by p.index_name", schema.upr(), name.upr());
         # hash of columns to skip on update if applicable
         *hash suh = map {$1: True}, opt.omit_update;
         map updc += $1, row.keyIterator(), !cols.hasKey($1) && !suh.$1;
-        # cannot use merge where only the join columns are present
-        if (!updc)
-            throw "UPSERT-ERROR", sprintf("cannot use the UpsertUpdateOnly upsert option on table %y when the only "
-                "columns present are the columns for the unique key used for the update: %y", getSqlName(), keys row);
+        # nothing to update: a row is unchanged, and no row is inserted (issue #6692)
+        if (!updc) {
+            # a row of list values (bulk DML) gives UR_Verified, as with the merge statements (issue #6691)
+            return int sub (hash<auto> crow) {
+                return crow.firstValue().lsize() > 1 ? UR_Verified : UR_Unchanged;
+            };
+        }
 
         string sql = sprintf("merge into %s t using dual on (", getSqlName());
         # a key value is converted as the column stores it, so that the row stored for the key is matched (issue #6676)
