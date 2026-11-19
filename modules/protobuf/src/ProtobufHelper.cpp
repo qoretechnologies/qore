@@ -31,9 +31,48 @@ using google::protobuf::Descriptor;
 using google::protobuf::FieldDescriptor;
 using google::protobuf::Reflection;
 
+namespace {
+// the number of message levels being converted in this thread: the conversion recurses with the nesting of messages
+thread_local int nesting_depth = 0;
+
+//! counts a message level of a conversion, and checks the nesting depth and the thread's stack
+class NestingGuard {
+public:
+    DLLLOCAL NestingGuard(const Descriptor* desc, ExceptionSink* xsink) {
+        // the top-level message is level 0
+        if (++nesting_depth > ProtobufHelper::MaxNesting + 1) {
+            xsink->raiseException("PROTOBUF-DEPTH-ERROR", "message type '%s' is nested more than %d levels deep; "
+                "deeper messages cannot be converted", std::string(desc->full_name()).c_str(),
+                ProtobufHelper::MaxNesting);
+            return;
+        }
+        if (q_check_stack(xsink)) {
+            return;
+        }
+        ok = true;
+    }
+
+    DLLLOCAL ~NestingGuard() {
+        --nesting_depth;
+    }
+
+    DLLLOCAL explicit operator bool() const {
+        return ok;
+    }
+
+private:
+    bool ok = false;
+};
+}
+
 QoreHashNode* ProtobufHelper::messageToHash(const Message& msg, ExceptionSink* xsink) {
     const Descriptor* desc = msg.GetDescriptor();
     const Reflection* ref = msg.GetReflection();
+
+    NestingGuard guard(desc, xsink);
+    if (!guard) {
+        return nullptr;
+    }
 
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
 
@@ -64,6 +103,11 @@ bool ProtobufHelper::hashToMessage(const QoreHashNode* hash, Message* msg, Excep
 
     const Descriptor* desc = msg->GetDescriptor();
     const Reflection* ref = msg->GetReflection();
+
+    NestingGuard guard(desc, xsink);
+    if (!guard) {
+        return false;
+    }
 
     ConstHashIterator hi(hash);
     while (hi.next()) {
@@ -147,6 +191,11 @@ QoreValue ProtobufHelper::fieldToQore(const Message& msg, const FieldDescriptor*
         case FieldDescriptor::CPPTYPE_ENUM:
             return (int64)ref->GetEnumValue(msg, field);
         case FieldDescriptor::CPPTYPE_MESSAGE: {
+            // an unset message field has no value; its default instance is not converted, which for a message type
+            // with a field of its own type would never end
+            if (!ref->HasField(msg, field)) {
+                return QoreValue();
+            }
             const Message& sub = ref->GetMessage(msg, field);
             return messageToHash(sub, xsink);
         }
@@ -351,7 +400,15 @@ QoreHashNode* ProtobufHelper::mapFieldToHash(const Message& msg, const FieldDesc
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
 
     int count = ref->FieldSize(msg, field);
+    if (!count) {
+        return hash.release();
+    }
     const Descriptor* entry_desc = field->message_type();
+    // a map entry is a message level, as in protobuf's parsers
+    NestingGuard guard(entry_desc, xsink);
+    if (!guard) {
+        return nullptr;
+    }
     const FieldDescriptor* key_field = entry_desc->map_key();
     const FieldDescriptor* value_field = entry_desc->map_value();
 
@@ -411,6 +468,14 @@ bool ProtobufHelper::setMapFieldFromHash(Message* msg, const FieldDescriptor* fi
     const Descriptor* entry_desc = field->message_type();
     const FieldDescriptor* key_field = entry_desc->map_key();
     const FieldDescriptor* value_field = entry_desc->map_value();
+    if (hash->empty()) {
+        return true;
+    }
+    // a map entry is a message level, as in protobuf's parsers
+    NestingGuard guard(entry_desc, xsink);
+    if (!guard) {
+        return false;
+    }
 
     ConstHashIterator hi(hash);
     while (hi.next()) {

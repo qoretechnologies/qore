@@ -30,6 +30,7 @@ thread), [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md) (which t
 | Who a timeout stops | only the threads of the expired call | other callers of the same sandbox are unaffected; a sandbox-wide interrupt is still available with `requestInterrupt()` |
 | Nested timed sandboxes | every enclosing call's deadline stays in force | an inner sandbox cannot extend the time its caller was given |
 | Memory passed out of the sandbox | stays charged until it is freed | otherwise a sandbox gets around its limit by handing data to the host |
+| Memory that a trusted build allocates (`SandboxManager::createTrustedBuildCall()`) | charged to no caller; the caller's code that the build calls is charged to the caller | the shared state of every caller; charging the first caller would bill it for as long as the state lives (see `design/sandbox-provenance.md`) |
 | Nested memory limits | every ancestor with a limit is charged | as for time: an inner sandbox cannot use more than its caller was given |
 
 ## Phase 1: wall-time limit and reason codes

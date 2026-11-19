@@ -123,8 +123,28 @@ int run_thread(void* (*fn)(void*)) {
 }
 }
 
+#ifdef __linux__
+namespace {
+//! stores the size of the stack of the thread that runs it in the size_t that \a arg points to
+void* get_stack_size(void* arg) {
+    pthread_attr_t attr;
+    if (!pthread_getattr_np(pthread_self(), &attr)) {
+        void* addr;
+        size_t size;
+        if (!pthread_attr_getstack(&attr, &addr, &size)) {
+            *static_cast<size_t*>(arg) = size;
+        }
+        pthread_attr_destroy(&attr);
+    }
+    return nullptr;
+}
+}
+#endif
+
 //! returns the smallest stack in KB that a thread can be created with: PTHREAD_STACK_MIN (sysconf() where the
-//! platform gives it at run time, as glibc does) rounded up to the page size
+//! platform gives it at run time, as glibc does) rounded up to the page size, or, on Linux, the stack that a thread
+//! created with it gets, if larger: ThreadSanitizer gives a thread at least about 134KB, whatever it asks for
+//! (qore#6587), so that no smaller stack is ever tried
 size_t min_stack_kb() {
     size_t page = static_cast<size_t>(sysconf(_SC_PAGESIZE));
     size_t min = PTHREAD_STACK_MIN;
@@ -135,6 +155,18 @@ size_t min_stack_kb() {
     }
 #endif
     min = (min + page - 1) / page * page;
+#ifdef __linux__
+    pthread_attr_t attr;
+    if (!pthread_attr_init(&attr)) {
+        pthread_t thread;
+        size_t actual = 0;
+        if (!pthread_attr_setstacksize(&attr, min) && !pthread_create(&thread, &attr, get_stack_size, &actual)
+                && !pthread_join(thread, nullptr) && actual > min) {
+            min = (actual + page - 1) / page * page;
+        }
+        pthread_attr_destroy(&attr);
+    }
+#endif
     return (min + 1023) / 1024;
 }
 

@@ -29,6 +29,7 @@
 #include <qore/QoreValue.h>
 #include <qore/QoreStringNode.h>
 #include <qore/DateTimeNode.h>
+#include "qore/intern/qore_string_private.h"
 #include <qore/intern/AbstractStatement.h>
 #include <qore/intern/qore_program_private.h>
 #include <qore/intern/ContextStatement.h>
@@ -152,6 +153,11 @@ static bool qore_ir_try_string_no_arg_pseudo_fast_path(bool pseudo, bool base_kn
         return false;
     }
     switch (intrinsic) {
+        case QoreIRIntrinsic::StringLength: {
+            QoreStringValueHelper str(base);
+            res = QoreValue(static_cast<int64>(qore_string_private::characterCount(**str, xsink)));
+            return true;
+        }
         case QoreIRIntrinsic::StringLower:
             res = fromBits(qore_rt_pseudo_string_lwr_noguard(toBits(base), xsink));
             return true;
@@ -256,11 +262,9 @@ static bool qore_ir_try_common_no_arg_pseudo_fast_path(QoreIRIntrinsic intrinsic
             }
             return false;
         case QoreIRIntrinsic::StringStrlen:
-        case QoreIRIntrinsic::StringLength:
             if (base_type == NT_STRING) {
                 QoreStringValueHelper s(base);
-                res = QoreValue(static_cast<int64_t>(intrinsic == QoreIRIntrinsic::StringStrlen
-                    ? s->strlen() : s->length()));
+                res = QoreValue(static_cast<int64_t>(s->strlen()));
                 return true;
             }
             return false;
@@ -496,6 +500,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/qore_list_private.h>
 #include <qore/intern/qore_date_private.h>
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // the trace switches, which the interpreter reads on every return of a function, read from the environment once
@@ -2927,6 +2932,139 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
 // argument releases
 // when it returns if the read gave the frame a reference of its own; an implicit argument ($1) is not one: a later $1
 // reads its element slot again
+//! Returns true if \a local is the untyped variable of a foreach loop, which can hold a reference given by an element
+/** Such a variable reads as the referenced lvalue: it does not hold the value read, which the read owns, so a call
+    that writes the referenced lvalue and its parameter must be given it, to destroy it at the parameter's write as
+    the AST interpreter does (c.m(r) in foreach auto r in ((\o,)); issues #6441, #6538).  Decided statically, when the
+    function is analyzed, from the facts of its lowering (QoreIRFunction::reference_element_locals,
+    reference_store_locals): such a read is a consumed argument of its call, whose instruction then has
+    QORE_IR_GIVES_CALL_ARGS and QORE_IR_GIVES_CALL_TEMPS, which the interpreter's call sites already test, so that the
+    interpreter's loop is the same code as for any other call
+*/
+static bool qore_ir_element_local_may_read_reference(const QoreIRFunction& func, const LocalVar* local) {
+    // a variable that no element and no store that can be a reference is assigned to (a loop over a list of ints)
+    // is not one
+    const void* key = reinterpret_cast<const void*>(local);
+    return func.element_store_locals.count(key)
+        && (func.reference_element_locals.count(key) || func.reference_store_locals.count(key));
+}
+
+//! Returns true if the call \a inst is known, when the function is analyzed, to call a variant none of whose
+//! parameters takes its argument over
+/** A function, a static method, or a method that cannot be overridden (of a final class, or a final variant) whose IR
+    is known or can be lowered now and shows that no parameter takes its argument over
+    (QoreIRFunction::param_take_over), or a builtin
+    variant, whose argument list holds its arguments until it returns, as in the AST interpreter.  Anything else (an
+    overridable method, a call reference, a closure, a callee whose IR is not known yet) can take an argument over
+    (issue #6538)
+*/
+static bool qore_ir_call_known_to_take_no_arg_over(const QoreIRInstruction* inst) {
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    const QoreMethod* method = nullptr;
+    const QoreClass* qc = nullptr;
+    const char* name = nullptr;
+    switch (inst->opcode) {
+        case QoreIROpcode::CallDirect: {
+            const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
+            variant = call->variant;
+            name = call->func ? call->func->getName() : nullptr;
+            break;
+        }
+        case QoreIROpcode::CallStaticDirect: {
+            const auto* call = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
+            variant = call->variant;
+            name = call->method ? call->method->getName() : nullptr;
+            break;
+        }
+        case QoreIROpcode::CallMethodDirect: {
+            const auto* call = static_cast<const QoreIRCallMethodDirectInstruction*>(inst);
+            variant = call->variant;
+            method = call->method;
+            qc = call->qc;
+            break;
+        }
+        case QoreIROpcode::InvokeMethodDirect: {
+            const auto* call = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
+            variant = call->variant;
+            method = call->method;
+            qc = call->qc;
+            break;
+        }
+        case QoreIROpcode::DotEvalMethodDirect: {
+            const auto* call = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+            if (call->pseudo) {
+                return false;
+            }
+            variant = call->variant;
+            method = call->method;
+            qc = call->qc;
+            if (!method) {
+                // the lowering leaves the target to the run-time dispatch when the parser did not resolve the
+                // variant (an argument of an unknown type): the method and class resolved at parse time are those of
+                // the call's expression
+                const auto* dot = call->expr.hasNode()
+                    ? dynamic_cast<const QoreDotEvalOperatorNode*>(call->expr.getInternalNode()) : nullptr;
+                const MethodCallNode* m = dot ? dot->getMethodCall() : nullptr;
+                if (m && !m->isPseudo()) {
+                    method = m->getMethod();
+                    qc = m->getClass();
+                }
+            }
+            break;
+        }
+        default:
+            return false;
+    }
+    if (!variant) {
+        // a call whose variant is resolved when it is made (an argument of an unknown type) calls the single
+        // variant of a function or method that has no other
+        const QoreFunction* f = nullptr;
+        if (method) {
+            f = qore_method_private::get(*method)->getFunction();
+        } else if (inst->opcode == QoreIROpcode::CallDirect) {
+            f = static_cast<const QoreIRCallDirectInstruction*>(inst)->func;
+        } else if (inst->opcode == QoreIROpcode::CallStaticDirect) {
+            const QoreMethod* static_method = static_cast<const QoreIRCallStaticDirectInstruction*>(inst)->method;
+            f = static_method ? qore_method_private::get(*static_method)->getFunction() : nullptr;
+        }
+        if (!f || f->numVariants() != 1 || f->hasInheritedVariants() || f->hasGenericClassAncestor()) {
+            return false;
+        }
+        variant = f->first();
+    }
+    if (inst->opcode != QoreIROpcode::CallDirect && inst->opcode != QoreIROpcode::CallStaticDirect) {
+        // a method that can be overridden calls a variant known only when the call is made
+        if (!method || !qc || method->getClass() != qc) {
+            return false;
+        }
+        const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
+        if (!qc->isFinal() && !(method_variant && method_variant->isFinal())) {
+            return false;
+        }
+        name = method->getName();
+    }
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb) {
+        return true;
+    }
+    const QoreIRFunction* callee_ir = uvb->getCachedIR();
+    // a callee that has not run yet has no IR: it is lowered now, without promoting its tier, as the batch
+    // compilation of native code lowers its callees (a variant without statements, from a source-stripped qmod, has
+    // none to lower)
+    if (!callee_ir && name && uvb->getStatementBlock() && !uvb->irLoweringFailed()) {
+        uvb->forceIRLowering(name, false, false);
+        callee_ir = uvb->getCachedIR();
+    }
+    return callee_ir && !callee_ir->param_take_over;
+}
+
+//! Returns true if the read of \a local is given to the call \a call_inst: the variable can hold a reference given by
+//! an element (qore_ir_element_local_may_read_reference()) and the call can take an argument over
+static bool qore_ir_element_read_given_to_call(const QoreIRFunction& func, const LocalVar* local,
+        const QoreIRInstruction* call_inst) {
+    return qore_ir_element_local_may_read_reference(func, local) && !qore_ir_call_known_to_take_no_arg_over(call_inst);
+}
+
 static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::LoadLocal:
@@ -3261,6 +3399,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             return true;
         }
         const auto& insts = call_block[id]->instructions;
+        if (qore_ir_element_read_given_to_call(func, load->local, insts[call_pos[id]].get())) {
+            return true;
+        }
         const uint32_t scope = insts[call_pos[id]]->temp_scope_id;
         if (!scope) {
             return true;
@@ -3547,7 +3688,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                 return false;
             }
             const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
-            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()) {
+            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()
+                    || qore_ir_element_read_given_to_call(func, load->local,
+                        call_block->instructions[call_pos].get())) {
                 return false;
             }
             auto w = last_write.find(load->local);
@@ -4939,8 +5082,6 @@ static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
     }
     if (intrinsic == QoreIRIntrinsic::Size || intrinsic == QoreIRIntrinsic::StringStrlen) {
         kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringSize;
-    } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-        kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringLength;
     } else {
         return false;
     }
@@ -5254,8 +5395,6 @@ static QORE_INTERN_NOINLINE bool computeInterpreterNativeLeafState(QoreIRCallDir
         QoreIRCallDirectInstruction::NativeLeafKind kind;
         if (intrinsic == QoreIRIntrinsic::Size || intrinsic == QoreIRIntrinsic::StringStrlen) {
             kind = QoreIRCallDirectInstruction::NativeLeafKind::StringSize;
-        } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-            kind = QoreIRCallDirectInstruction::NativeLeafKind::StringLength;
         } else {
             return reject();
         }
@@ -7690,7 +7829,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     if (lt == NT_OBJECT) {
                         QoreObject* o = const_cast<QoreObject*>(lhs_val.get<const QoreObject>());
                         if (rhs_val.getType() == NT_LIST) {
-                            return o->getSlice(rhs_val.get<const QoreListNode>(), xsink);
+                            return qore_object_ops(o).getSlice(rhs_val.get<const QoreListNode>(), xsink);
                         }
                         QoreStringNodeValueHelper key(rhs_val);
                         return o->evalMember(*key, xsink);
@@ -13229,8 +13368,10 @@ dispatch_folded_step_host:
                         LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
                         weak_ref_load = lvv && isWeakReferenceType(lvv->val.getType());
                     }
-                } else if (local_inst->auto_ref) {
-                    // FAST PATH: direct slot cache access (most common case)
+                } else if (local_inst->auto_ref || (local_inst->slot_id < locals_ir_only.size()
+                        && locals_ir_only[local_inst->slot_id])) {
+                    // An IR-only local has no runtime-stack value to borrow. Read it from its slot for
+                    // non-owning loads too, honoring strong and weak references before borrowing a plain value.
                     uint32_t sid = local_inst->slot_id;
                     bool is_ir_only_local = sid < locals_ir_only.size()
                         && locals_ir_only[sid];
@@ -13277,12 +13418,13 @@ dispatch_folded_step_host:
                             goto load_local_done;
                         }
                         if (cache_has_value) {
-                            if (local_inst->borrowed_local_load
+                            if (!local_inst->auto_ref || local_inst->borrowed_local_load
                                     || (local_inst->auto_local_string_append && cached_node_type == NT_STRING)) {
-                                // Load pairs with a local mutation and has no
-                                // other consumers: borrow the slot-cache reference
-                                // so the builder node stays unique at the mutation
-                                // site (native code borrows via alloca loads)
+                                // The consumer borrows this local until it mutates the value or the iterator
+                                // takes its own reference (#6638); a load that pairs with a local string append
+                                // and has no other consumers borrows the slot-cache reference so the builder
+                                // node stays unique at the mutation site (#6279; native code borrows via alloca
+                                // loads)
                                 out = cached_val;
                                 if ((local_inst->auto_local_string_append || local_inst->string_append_local_cow
                                         || local_inst->list_push_local_cow)
@@ -13739,7 +13881,10 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                 }
-                if (!preserve_weak_result) {
+                // a weak reference to an object is read as its object also as the base of a call: the receiver
+                // of a call read from a container is a temporary of the statement, which keeps the object until
+                // the statement ends, as in the AST interpreter (qore#6594)
+                if (!preserve_weak_result || qore_value_is_object_weak_reference(out)) {
                     evaluateOwnedWeakReferenceResult(out, xsink);
                     if (xsink && *xsink) {
                         unwindForException();
@@ -14886,7 +15031,11 @@ load_local_done:
                 // Dot-eval method dispatch handles weak refs itself. Preserve the raw
                 // reference when this load is only used as a dot-eval base; a weak reference to a destroyed
                 // object is read as no value, as the AST interpreter reads a member without "self."
-                bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
+                // a weak reference to an object is read as its object also as the base of a call: the receiver of
+                // a call read from a member is a temporary of the statement, kept until the statement ends, as in
+                // the AST interpreter (qore#6594)
+                bool needs_eval = (!isDotEvalOnlyBase(inst)
+                    || qore_value_is_object_weak_reference(*val)) && val->needsEval();
                 QoreValue out = needs_eval ? val->eval(xsink)
                     : (qore_weak_reference_target_destroyed(*val) ? QoreValue() : val.release());
                 if (xsink && *xsink) {
@@ -14952,7 +15101,11 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
+                // a weak reference to an object is read as its object also as the base of a call: the receiver of
+                // a call read from a member is a temporary of the statement, kept until the statement ends, as in
+                // the AST interpreter (qore#6594)
+                bool needs_eval = (!isDotEvalOnlyBase(inst)
+                    || qore_value_is_object_weak_reference(*val)) && val->needsEval();
                 QoreValue out = needs_eval ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
                     unwindForException();
@@ -20451,7 +20604,7 @@ load_local_done:
                         } else if (lt == NT_OBJECT) {
                             QoreObject* o = const_cast<QoreObject*>(lhs_val.get<const QoreObject>());
                             if (rhs_val.getType() == NT_LIST) {
-                                res = o->getSlice(rhs_val.get<const QoreListNode>(), xsink);
+                                res = qore_object_ops(o).getSlice(rhs_val.get<const QoreListNode>(), xsink);
                             } else {
                                 QoreStringNodeValueHelper key(rhs_val);
                                 res = o->evalMember(*key, xsink);
@@ -21887,7 +22040,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
             }
             if (t == NT_STRING) {
                 QoreStringValueHelper str(value);
-                return QoreValue(static_cast<int64>(str->length()));
+                return QoreValue(static_cast<int64>(qore_string_private::characterCount(**str, xsink)));
             }
             if (t == NT_BINARY) {
                 return QoreValue(static_cast<int64>(value.get<const BinaryNode>()->size()));
@@ -23265,7 +23418,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (bt == NT_OBJECT) {
                 QoreObject* o = const_cast<QoreObject*>(left.get<const QoreObject>());
                 if (right.getType() == NT_LIST) {
-                    return o->getSlice(right.get<const QoreListNode>(), xsink);
+                    return qore_object_ops(o).getSlice(right.get<const QoreListNode>(), xsink);
                 }
                 QoreHashKeyHelper key(right, xsink);
                 if (*xsink) {

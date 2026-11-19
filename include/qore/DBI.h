@@ -34,6 +34,10 @@
 
 #include <string>
 
+#ifndef _WIN32
+#include <sys/socket.h>
+#endif
+
 //! @file DBI.h describes Qore's DBI interface for writing database drivers
 
 // DBI Driver capabilities
@@ -508,6 +512,37 @@ DLLEXPORT QoreListNode* qore_dbi_make_typed_select_rows_result(Datasource* ds, c
     @since %Qore 3.0
 */
 DLLEXPORT int qore_dbi_check_connect_path(Datasource* ds, const char* path, int mode, ExceptionSink* xsink);
+
+//! defined if qore_dbi_check_connect_address() is available
+/** @since %Qore 3.0
+*/
+#define QORE_HAS_DBI_CHECK_CONNECT_ADDRESS 1
+
+#ifndef _WIN32
+//! checks an address that a connection of the datasource reached against the sandbox of the code that chose it
+/** For a driver whose client library can connect to an address that it did not report as a destination of the
+    connection (see @ref QDBI_METHOD_GET_CONNECT_TARGETS), for example by following a redirect of the server while it
+    connects: the driver checks the address that the connection reached before it sends anything else, such as the
+    credentials.  The address is checked against the network policy of every sandbox that governed the code that chose
+    the connection values of the datasource, exactly as the destinations are checked before the connection: with the
+    same record of that code, taken with the connection values in use (see Datasource::getConnectChoosers()), so that
+    a driver's check cannot differ from the Qore library's.
+
+    @param ds the datasource whose connection is being opened
+    @param hostname the host name that the address was resolved from, so that a host name pattern of the policy
+    applies, or nullptr for an address that has no host name (an address that the server redirected to, for example)
+    @param addr the address that the connection reached
+    @param len the length of \a addr
+    @param xsink a denial is raised here (\c NETWORK-ACCESS-DENIED)
+
+    @return 0 if every policy allows the address (also when no sandbox restricts the connection), -1 if an exception
+    was raised
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_dbi_check_connect_address(Datasource* ds, const char* hostname, const struct sockaddr* addr,
+        socklen_t len, ExceptionSink* xsink);
+#endif
 
 //! returns true if a sandbox that restricts network or filesystem access governed the code that chose the connection values of the datasource
 /** A driver that cannot check a resource of a connection (such as a URI that names options and files) refuses it if

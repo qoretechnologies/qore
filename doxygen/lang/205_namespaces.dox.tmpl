@@ -63,6 +63,25 @@ A::C::MyConst;
 A::B::MyOtherConst;
     @endcode
 
+    @anchor class_member_scope_resolution
+    @par Class Member Resolution with a Class Name
+    A constant, static class variable or static method given with a class name, as in <tt>Klass::name</tt> or
+    <tt>Klass::name()</tt>, is found in a class named \c Klass that provides it.  The classes with the name are tried
+    in this order, and the first one that provides the member is used:
+    - the class of the @ref Qore "Qore" namespace, of the namespace being parsed and of the root namespace's index
+      (the order of @ref unqualified_symbol_resolution "unqualified symbol resolution")
+    - in a class, the class itself and its parent classes with the name
+    - the other classes with the name in any namespace, by the depth and then the path of their namespace
+
+    So a class with the name that does not provide the member, such as a class of the @ref Qore "Qore" namespace,
+    does not hide one that does.  A call such as <tt>Klass::name()</tt> calls a function of a namespace named
+    \c Klass, or a constant or static variable of a class with the name holding a closure or call reference, before a
+    static method of another class with the name; a constant or static variable in any of the classes is found before
+    a static method in another.  A call reference <tt>\\Klass::name()</tt> is resolved in the same order, except
+    that it raises a parse exception where the call would call a constant or static variable.  With
+    @ref allow-bare-refs "%allow-bare-refs", a call in a method of a class also reaches a non-static method of the
+    class or of a parent class with the name, as a base class method call.
+
     @anchor ambiguous_symbol_resolution
     @par Ambiguous Resolution
     When two namespaces at the same depth both provide a match in step 3 above, which one wins is unspecified and can change when unrelated code or modules are loaded.  To make this visible, %Qore raises the @ref ambiguous-call-resolution "ambiguous-call-resolution" warning when an unqualified function call matches functions in more than one namespace; the warning requires @ref require-types "%require-types" and is not raised for calls resolved to the @ref Qore "Qore" namespace or to the namespace currently being parsed.  Resolve the ambiguity by using an explicit @ref namespace_paths "namespace path" in the call or by renaming one of the functions.

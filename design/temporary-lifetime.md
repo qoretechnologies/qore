@@ -439,7 +439,9 @@ left its slot for the exit Phi's at each element.
 
 A streaming operator that stops before its iterator is exhausted (`take` at its count, `takewhile` at an element,
 `first`, `any`, `all`) releases the element it stopped at and its iterator when it returns, and its source like map
-and select (`lowerWithSourceRelease()`).
+and select (`lowerWithSourceRelease()`). For a fused `first` over a variable, the iterator takes its own
+reference before any stage runs. A plain local is borrowed at that point. Reading through a reference gives the
+statement its own temporary, which survives the iterator and is released at the end of the statement (#6638).
 
 `examples/test/ir/streaming-element-cleanup/` compares the release order with the AST interpreter's in every mode
 and with AOT.

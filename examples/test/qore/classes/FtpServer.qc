@@ -542,7 +542,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                     } else {
                         map result += $1.name + "\r\n", files;
                     }
-                    data.send(result);
+                    # an empty directory has an empty listing
+                    data.send(result ?? "");
                 }
 
                 data.close();

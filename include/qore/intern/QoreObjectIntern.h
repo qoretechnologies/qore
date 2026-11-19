@@ -47,6 +47,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/RSection.h"
 #include "qore/intern/RSet.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #define OS_OK            0
 #define OS_DELETED      -1
@@ -1031,7 +1032,7 @@ public:
         vl.del();
 
         // lock current object
-        pobj->rml.wrlock();
+        qore_var_rwlock_ops(pobj->rml).wrlock();
     }
 
     DLLLOCAL ~qore_object_lock_handoff_helper() {

@@ -37,6 +37,7 @@
 #include "qore/intern/QoreLogicalNotOperatorNode.h"
 #include "qore/intern/QoreLogicalOrOperatorNode.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreHashObjectDereferenceOperatorNode::op_str(". or {} operator expression");
 
@@ -261,7 +262,7 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
         if (for_assignment) {
             // only throw a parse exception if parse exceptions are enabled
             if (!can_be_hash && !can_be_obj) {
-                if (getProgram()->getParseExceptionSink()) {
+                if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                     QoreStringNode* edesc = new QoreStringNode("cannot convert lvalue defined as ");
                     QoreTypeInfo::getThisType(lti, *edesc);
                     edesc->sprintf(" to a hash using the '.' or '{}' operator in an assignment expression");
@@ -351,7 +352,7 @@ QoreValue QoreHashObjectDereferenceOperatorNode::evalImpl(bool& needs_deref, Exc
     QoreObject* o = const_cast<QoreObject*>(lh->get<const QoreObject>());
 
     if (rh->getType() == NT_LIST)
-        return o->getSlice(rh->get<const QoreListNode>(), xsink);
+        return qore_object_ops(o).getSlice(rh->get<const QoreListNode>(), xsink);
 
     QoreStringNodeValueHelper key(*rh);
     ValueHolder rv(o->evalMember(*key, xsink), xsink);
