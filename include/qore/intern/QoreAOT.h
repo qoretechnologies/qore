@@ -304,6 +304,17 @@ DLLLOCAL const name_vec_t* qore_aot_read_callref_arg_names(const QoreAOTBinaryRe
 */
 DLLLOCAL std::string qore_aot_named_call_arg_prefix(const FunctionCallBase* call, bool with_map = true);
 
+//! The AOT variant key name(type1,type2,...), using serializable parameter type paths.
+std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
+
+//! Encodes an inline constructor's class and, for named arguments, the binding and selected constructor signature.
+DLLLOCAL std::string qore_aot_inline_constructor_ref(const FunctionCallBase* call, std::string class_ref,
+        const char* deferred_signature = nullptr);
+
+//! Finds the exact constructor selected by a named call when the class's variants are available.
+DLLLOCAL const AbstractQoreFunctionVariant* qore_aot_find_constructor_variant(const QoreClass* qc,
+        const char* signature);
+
 //! sets the binding of the arguments of a named call read with qore_aot_parse_named_call_arg_prefix() on the call
 /** a function call resolved at run time by parameter name is replaced with a RuntimeNamedFunctionCallNode
 
