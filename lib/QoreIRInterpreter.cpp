@@ -2786,16 +2786,16 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_ir_local_stores_simple_value(const Qo
         && QoreTypeInfo::parseAcceptsReturns(ti, vt) && !QoreTypeInfo::returnsEnum(ti);
 }
 
-//! Returns the line given, which the compiler cannot evaluate a test of before the code that calls this function
+//! Returns the location given, which the compiler cannot evaluate a test of before the code that calls this function
 /** An empty asm statement that "changes" the value: the compiler does not move a volatile asm statement out of the
     branch that it is in, so a test of the value it returns is made in that branch (see the line test in execute()).
     It emits no instruction.
 */
-static QORE_INTERN_ALWAYS_INLINE int32_t qore_ir_opaque_line(int32_t line) {
+static QORE_INTERN_ALWAYS_INLINE const QoreProgramLocation* qore_ir_opaque_loc(const QoreProgramLocation* loc) {
 #if defined(__GNUC__) || defined(__clang__)
-    __asm__ __volatile__("" : "+r"(line));
+    __asm__ __volatile__("" : "+r"(loc));
 #endif
-    return line;
+    return loc;
 }
 
 //! returns the number of instructions that the release of a local \a inst (UninstantiateLocal) advances by: 2 if it
@@ -7108,6 +7108,10 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         }
     }
 
+    // the closure's statements store their own locations: the caller continues in its own, which it does not store
+    // again (QoreIRInstruction::stmt_loc), as after a function run inline (QoreIRInlineCalleeParseOptionsHelper) and
+    // a closure run on the call path (execJITWithDeopt()) (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     QoreValue ir_return_value;
     IRDirectParams dp{args, nargs};
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
@@ -8671,6 +8675,8 @@ static QORE_INTERN_NOINLINE bool qore_ir_handler_return(QoreValue value, Excepti
 static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
         IRCallFrame* parent_frame = nullptr, const StatementBlock* dbg_statements = nullptr,
         QoreProgram* dbg_pgm = nullptr, bool unwinding = false, const std::vector<uint32_t>* try_returns = nullptr) {
+    // the handler's statements store their own locations: the caller continues in its own (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     std::vector<QoreValue>* parent_slot_cache = parent_frame ? &parent_frame->locals_slot_cache.vector() : nullptr;
     // Every on_block_exit handler must have been compiled to IR by
     // QoreIRLowering::compileAllHandlerIRs/compileBlockHandlerIRs before
@@ -9754,9 +9760,9 @@ static QORE_INTERN_NOINLINE void qore_ir_release_failed_method_call(QoreListNode
 #define QORE_IR_DISPATCH_FOLDED_DEBUG_STEP() \
     if (debug_active) [[unlikely]] { \
         if (QoreIRDebugStatementInstruction* folded_step = qore_ir_folded_debug_step(inst)) { \
-            if (folded_step->cached_start_line >= 0) { \
-                *rl_cache.loc_ptr = folded_step->loc; \
-                last_ephemeral_line = folded_step->cached_start_line; \
+            if (folded_step->stmt_loc) { \
+                *rl_cache.loc_ptr = folded_step->stmt_loc; \
+                last_stmt_loc = folded_step->stmt_loc; \
             } \
             inst = folded_step; \
             goto dispatch_folded_step; \
@@ -11196,7 +11202,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Uses a vector (not set) — duplicates are harmless (discard on NOTHING is a no-op)
     // and 0-2 entries per statement makes linear scan faster than hash table overhead.
     auto& ephemeral_weak_ref_slots = frame.ephemeral_weak_ref_slots;
-    int last_ephemeral_line = -1;
+    // the runtime location that the frame stored last (QoreIRInstruction::stmt_loc)
+    const QoreProgramLocation* last_stmt_loc = nullptr;
 
     std::unordered_map<uint32_t, int32_t> weak_load_temp_slots;
     auto& borrowed_temp_remaining = frame.borrowed_temp_remaining;
@@ -11848,23 +11855,26 @@ next_instruction:
         }
         // the dispatch of the step event of a statement that an operation keeps (qore_ir_folded_debug_step())
 dispatch_folded_step:
-        // the line usually does not change from one instruction to the next: that test comes first, as GCC otherwise
-        // may order the two tests either way, and the sign test first costs two more instructions per instruction
-        // executed (8-20 per iteration of the benchmark loops); no branch hint, as the line changes often enough that
-        // moving the update out of line costs more.  Neither writing the test first nor nesting the sign test keeps
-        // the order: the two tests have no side effects, so the compiler may evaluate them in either order, and GCC
-        // swapped them when the rest of this function grew.  The sign test therefore reads the line through
-        // qore_ir_opaque_line(), which the compiler cannot evaluate before the first test
-        if (inst->cached_start_line != last_ephemeral_line) {
-            if (qore_ir_opaque_line(inst->cached_start_line) >= 0) {
+        // the runtime location is the location of the statement whose code the instruction is (stmt_loc), stored when
+        // it changes: not when the line changes, as a statement can start on the line of the statement or the block
+        // that contains it (qore#6646).  It usually does not change from one instruction to the next: that test
+        // comes first, as GCC otherwise may order the two tests either way, and the null test first costs two more
+        // instructions per instruction executed (8-20 per iteration of the benchmark loops); no branch hint, as the
+        // statement changes often enough that moving the update out of line costs more.  Neither writing the test
+        // first nor nesting the null test keeps the order: the two tests have no side effects, so the compiler may
+        // evaluate them in either order, and GCC swapped them when the rest of this function grew.  The null test
+        // therefore reads the location through qore_ir_opaque_loc(), which the compiler cannot evaluate before the
+        // first test
+        if (inst->stmt_loc != last_stmt_loc) {
+            if (qore_ir_opaque_loc(inst->stmt_loc)) {
                 // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is
                 // attached, the current statement is set by the DebugStatement instruction of each statement and kept,
                 // so that the call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
                 if (!debug_active) {
                     *rl_cache.stmt_ptr = nullptr;
                 }
-                *rl_cache.loc_ptr = inst->loc;
-                last_ephemeral_line = inst->cached_start_line;
+                *rl_cache.loc_ptr = inst->stmt_loc;
+                last_stmt_loc = inst->stmt_loc;
             }
         }
         // Log instruction execution for diagnostics (zero-cost path when disabled)
@@ -17582,9 +17592,9 @@ load_local_done:
                         // statement on the same line or the statement that contains this one (#6248).  The
                         // statement's location is the instruction's for lowered code; the location of the
                         // instruction of deserialized AOT closure IR has no columns, unlike its statement's
-                        if (dbg_inst->cached_start_line >= 0 && dbg_stmt->loc) {
+                        if (dbg_inst->stmt_loc && dbg_stmt->loc) {
                             *rl_cache.loc_ptr = dbg_stmt->loc;
-                            last_ephemeral_line = dbg_inst->cached_start_line;
+                            last_stmt_loc = dbg_inst->stmt_loc;
                         }
                         // the current statement of the frame, which the frames of its calls record
                         *rl_cache.stmt_ptr = dbg_stmt;
@@ -17652,11 +17662,11 @@ load_local_done:
                     assert(ip + 1 < block->instructions.size());
                     inst = folded_host;
                     debug_active = false;
-                    // the operation's location, if it starts on another line, as the dispatch of the operation after
-                    // a DebugStatement instruction sets it
-                    if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
-                        *rl_cache.loc_ptr = inst->loc;
-                        last_ephemeral_line = inst->cached_start_line;
+                    // the operation's runtime location, if it differs, as the dispatch of the operation after a
+                    // DebugStatement instruction sets it
+                    if (inst->stmt_loc && inst->stmt_loc != last_stmt_loc) {
+                        *rl_cache.loc_ptr = inst->stmt_loc;
+                        last_stmt_loc = inst->stmt_loc;
                     }
                     goto dispatch_folded_step_host;
                 }
@@ -21604,9 +21614,9 @@ load_local_done:
                     }
                 } else if (xsink) {
                     QoreValue arg = getIRValue(values, inst->operands[0]);
-                    // Set the runtime location to the throw statement's location so
-                    // that the exception gets the correct source file/line info
-                    QoreProgramOptionalLocationHelper loc_helper(inst->loc);
+                    // the exception is raised in the throw statement's location (its runtime location, which the
+                    // dispatch has stored already unless the frame keeps the statement's location of a debugger)
+                    QoreProgramOptionalLocationHelper loc_helper(inst->stmt_loc ? inst->stmt_loc : inst->loc);
                     // throw args are always a list: (err, desc[, arg])
                     // use the same raiseException(list) API as the AST path
                     if (arg.getType() == NT_LIST) {

@@ -9563,18 +9563,21 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
     if (!loc_cache_ptr || !stmt_cache_ptr) {
         return;
     }
-    if (!inst->loc || inst->loc->start_line <= 0) {
+    // the runtime location of the instruction (QoreIRInstruction::stmt_loc), stored when it changes: not when the
+    // line changes, as a statement can start on the line of the statement or the block that contains it (qore#6646)
+    const QoreProgramLocation* loc = inst->stmt_loc;
+    if (!loc || loc->start_line <= 0) {
         return;
     }
-    if (inst->loc->start_line == last_runtime_line) {
+    if (loc == last_runtime_loc) {
         return;
     }
-    last_runtime_line = inst->loc->start_line;
+    last_runtime_loc = loc;
 
     if (aot_mode) {
         // AOT mode: store the location that the image holds, inline, as the JIT stores the location pointer
         builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)), stmt_cache_ptr);
-        builder->CreateStore(getAotLocationConstant(inst->loc, module), loc_cache_ptr);
+        builder->CreateStore(getAotLocationConstant(loc, module), loc_cache_ptr);
     } else {
         // JIT mode: inline store of statement + location pointers; in a function of a debuggable program, the
         // statement is set by the step hook of each statement instead (see emitDebugStepHook())
@@ -9583,7 +9586,7 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
                 stmt_cache_ptr);
         }
         llvm::Value* loc_val = builder->CreateIntToPtr(
-            llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
+            llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(loc)),
             llvm::PointerType::getUnqual(ctx));
         builder->CreateStore(loc_val, loc_cache_ptr);
     }
@@ -14567,6 +14570,18 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
     builder->CreateCondBr(attached, fire, cont, llvm::MDBuilder(ctx).createBranchWeights(1, 2000));
 
     builder->SetInsertPoint(fire);
+    // the event of a step instruction runs in its own location while a debugger is attached: a statement's in the
+    // statement's location, as with the IR interpreter (#6248), a block's in the location of the statement that
+    // contains the block, as the AST interpreter makes the event of a block before its statements; the location that
+    // the code stored before is restored after it, so that the code without a debugger, which stores no location for
+    // the event, continues in the same location as the code with one (qore#6646)
+    const QoreProgramLocation* event_loc = nullptr;
+    if (!folded_host) {
+        event_loc = synthetic ? inst->stmt_loc : inst->loc;
+        if (event_loc) {
+            emitRuntimeLocationStore(event_loc);
+        }
+    }
     if (synthetic) {
         // the entered block, which the parse tree outlives the native code with; without it, the block is resolved
         // from the marker's file and line
@@ -14611,12 +14626,200 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
     // mid-native-frame); routes to the instruction's exception target or the
     // function-level error-return block.
     emitExceptionCheck(module, llvm_func, inst);
-    // the operation then runs in its own location if it starts on another line, as after a DebugStatement instruction
-    if (folded_host && folded_host->loc && inst->loc && folded_host->loc->start_line != inst->loc->start_line) {
-        emitRuntimeLocationStore(folded_host->loc);
+    // the operation then runs in its own runtime location if it differs, as after a DebugStatement instruction
+    if (folded_host && folded_host->stmt_loc && inst->loc && folded_host->stmt_loc != inst->loc) {
+        emitRuntimeLocationStore(folded_host->stmt_loc);
+    } else if (!folded_host && last_runtime_loc) {
+        // the event stores the statement's location (qore_rt_dbg_step()): the code's is restored
+        emitRuntimeLocationStore(last_runtime_loc);
     }
     builder->CreateBr(cont);
     builder->SetInsertPoint(cont);
+}
+
+void QoreIRToLLVM::removeRedundantRuntimeLocationStores(llvm::Function* llvm_func) {
+    auto* loc_inst = llvm::dyn_cast_or_null<llvm::Instruction>(loc_cache_ptr);
+    if (!loc_inst || loc_inst->getFunction() != llvm_func) {
+        return;
+    }
+    // the location value that a block leaves (the last one it stores) or nullptr if it stores none, and the location
+    // in which each block is entered: nullptr for an unknown location
+    std::unordered_map<const llvm::BasicBlock*, llvm::Value*> last_store;
+    std::unordered_map<const llvm::BasicBlock*, llvm::Value*> entry_loc;
+    auto is_loc_store = [loc_inst](llvm::Instruction& i) -> llvm::StoreInst* {
+        auto* st = llvm::dyn_cast<llvm::StoreInst>(&i);
+        return st && st->getPointerOperand() == loc_inst && llvm::isa<llvm::Constant>(st->getValueOperand())
+            ? st : nullptr;
+    };
+    // the location is unknown after a store of a value that is not a constant location (none is emitted), and after
+    // a call of code that stores locations of its own and does not restore the caller's: native code of the module
+    // (an outlined region of the function, a function compiled with it), a call through a pointer and the step events
+    // of the debugger; the runtime functions that native code calls restore the location of their caller
+    auto clobbers = [loc_inst](const llvm::Instruction& i) {
+        if (auto* st = llvm::dyn_cast<llvm::StoreInst>(&i)) {
+            return st->getPointerOperand() == loc_inst && !llvm::isa<llvm::Constant>(st->getValueOperand());
+        }
+        auto* call = llvm::dyn_cast<llvm::CallBase>(&i);
+        if (!call) {
+            return false;
+        }
+        const llvm::Function* callee = call->getCalledFunction();
+        if (!callee) {
+            return !call->isInlineAsm();
+        }
+        if (callee->isIntrinsic()) {
+            return false;
+        }
+        if (!callee->isDeclaration()) {
+            return true;
+        }
+        llvm::StringRef name = callee->getName();
+        return name == "qore_rt_dbg_step" || name == "qore_rt_dbg_synthetic_block_step";
+    };
+    std::unordered_set<const llvm::BasicBlock*> unknown_exit;
+    for (llvm::BasicBlock& bb : *llvm_func) {
+        llvm::Value* last = nullptr;
+        bool unknown = false;
+        for (llvm::Instruction& i : bb) {
+            if (llvm::StoreInst* st = is_loc_store(i)) {
+                last = st->getValueOperand();
+                unknown = false;
+            } else if (clobbers(i)) {
+                last = nullptr;
+                unknown = true;
+            }
+        }
+        last_store[&bb] = last;
+        if (unknown) {
+            unknown_exit.insert(&bb);
+        }
+    }
+    // the entry locations, from the exits of the predecessors, iterated to a fixed point; a block not reached yet
+    // has no entry yet (absent from the map), which no predecessor's exit contradicts
+    const llvm::BasicBlock* entry_bb = &llvm_func->getEntryBlock();
+    auto exit_loc = [&](const llvm::BasicBlock* bb, bool& known) -> llvm::Value* {
+        if (unknown_exit.count(bb)) {
+            known = true;
+            return nullptr;
+        }
+        if (llvm::Value* v = last_store[bb]) {
+            known = true;
+            return v;
+        }
+        auto it = entry_loc.find(bb);
+        known = it != entry_loc.end();
+        return known ? it->second : nullptr;
+    };
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (llvm::BasicBlock& bb : *llvm_func) {
+            llvm::Value* in = nullptr;
+            if (&bb != entry_bb && !bb.isEHPad() && !bb.hasAddressTaken()) {
+                bool first = true;
+                bool any_known = false;
+                for (const llvm::BasicBlock* pred : llvm::predecessors(&bb)) {
+                    bool known;
+                    llvm::Value* v = exit_loc(pred, known);
+                    if (!known) {
+                        // a predecessor not reached yet: it takes the value of the others, which a later pass checks
+                        continue;
+                    }
+                    any_known = true;
+                    if (first) {
+                        in = v;
+                        first = false;
+                    } else if (in != v) {
+                        in = nullptr;
+                    }
+                }
+                if (!any_known) {
+                    in = nullptr;
+                }
+            }
+            auto it = entry_loc.find(&bb);
+            if (it == entry_loc.end()) {
+                entry_loc[&bb] = in;
+                changed = true;
+            } else if (it->second != in) {
+                // the entry locations only go from a value to unknown (nullptr), so the iteration ends
+                if (it->second) {
+                    it->second = nullptr;
+                    changed = true;
+                }
+            }
+        }
+    }
+    // a block entered in different locations that stores one location first, as the condition of a loop, which is
+    // entered from the code before the loop and from the loop's next iteration: if the predecessors that leave
+    // another location only go to the block, the store is moved to their ends, where it runs once before a loop, and
+    // the block is entered in the location that it stores (qore#6646)
+    for (llvm::BasicBlock& bb : *llvm_func) {
+        if (&bb == entry_bb || bb.isEHPad() || bb.hasAddressTaken() || entry_loc[&bb]) {
+            continue;
+        }
+        llvm::StoreInst* first = nullptr;
+        for (llvm::Instruction& i : bb) {
+            if (llvm::StoreInst* st = is_loc_store(i)) {
+                first = st;
+                break;
+            }
+            if (clobbers(i)) {
+                break;
+            }
+        }
+        if (!first) {
+            continue;
+        }
+        llvm::Value* v = first->getValueOperand();
+        std::vector<llvm::BasicBlock*> store_preds;
+        bool same = false;
+        bool ok = true;
+        for (llvm::BasicBlock* pred : llvm::predecessors(&bb)) {
+            bool known;
+            llvm::Value* pv = exit_loc(pred, known);
+            if (known && pv == v) {
+                same = true;
+                continue;
+            }
+            // an unconditional branch to the block (every block has its terminator here)
+            auto* br = llvm::dyn_cast_or_null<llvm::BranchInst>(pred->getTerminator());
+            if (pred == &bb || !br || !br->isUnconditional() || br->getSuccessor(0) != &bb) {
+                ok = false;
+                break;
+            }
+            if (std::find(store_preds.begin(), store_preds.end(), pred) == store_preds.end()) {
+                store_preds.push_back(pred);
+            }
+        }
+        if (!ok || !same) {
+            continue;
+        }
+        for (llvm::BasicBlock* pred : store_preds) {
+            new llvm::StoreInst(v, loc_inst, pred->getTerminator()->getIterator());
+            last_store[pred] = v;
+            unknown_exit.erase(pred);
+        }
+        first->eraseFromParent();
+        entry_loc[&bb] = v;
+    }
+
+    // the stores of the location that the thread holds are removed
+    for (llvm::BasicBlock& bb : *llvm_func) {
+        llvm::Value* cur = entry_loc[&bb];
+        for (auto it = bb.begin(); it != bb.end();) {
+            llvm::Instruction& i = *it++;
+            if (llvm::StoreInst* st = is_loc_store(i)) {
+                if (cur && st->getValueOperand() == cur) {
+                    st->eraseFromParent();
+                } else {
+                    cur = st->getValueOperand();
+                }
+            } else if (clobbers(i)) {
+                cur = nullptr;
+            }
+        }
+    }
 }
 
 void QoreIRToLLVM::emitRuntimeLocationStore(const QoreProgramLocation* loc) {
@@ -15801,7 +16004,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     loc_cache_ptr = nullptr;
     stmt_cache_ptr = nullptr;
     call_site_cache_ptr = nullptr;
-    last_runtime_line = -1;
+    last_runtime_loc = nullptr;
     // the thread's runtime location slots and its data for the frames of native calls, got with one call
     // (QoreNativeEntrySlots)
     {
@@ -17266,8 +17469,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             fflush(stderr);
         }
         builder->SetInsertPoint(llvm_block);
-        // a block is entered from predecessors at any line, so its first location is always stored
-        last_runtime_line = -1;
+        // a block is entered from predecessors in any location, so its first location is always stored
+        last_runtime_loc = nullptr;
 
         // Track the IR block being lowered so the debug-step hook (issue #5352) can
         // read its name to skip per-statement events in ".cond" blocks.
@@ -17419,7 +17622,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // Update runtime_loc for exception stack traces (per source line change)
             // Skip for PHI nodes — LLVM requires PHI nodes at the top of basic blocks;
             // emitting a runtime call before the PHI would violate this constraint.
-            if (inst->opcode != QoreIROpcode::Phi) {
+            // nor for the step events of the debugger, which store their own location while a debugger is attached,
+            // and nothing without one (see emitDebugStepHook())
+            if (inst->opcode != QoreIROpcode::Phi && inst->opcode != QoreIROpcode::DebugStatement
+                    && inst->opcode != QoreIROpcode::DebugBlock) {
                 emitRuntimeLocationUpdate(inst, module);
             }
             if (q_env_is_set("QORE_LLVM_DEBUG")) {
@@ -18124,6 +18330,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     if (!finalizeCleanupFrame(llvm_func, fn_name, error)) {
         return false;
     }
+
+    removeRedundantRuntimeLocationStores(llvm_func);
 
     sizeCallArrayBuffer();
 

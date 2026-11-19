@@ -1555,10 +1555,9 @@ extern "C" DLLEXPORT void qore_rt_dbg_step(const AbstractStatement* statement, v
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
     }
-    // the event runs in the statement's own location, as in the IR interpreter: native code updates the runtime
-    // location only when the line changes, so it is still that of the code before, which can be another statement
-    // on the same line or the statement that contains this one (#6248); the next line that native code reaches sets
-    // it again
+    // the event runs in the statement's own location, as in the IR interpreter (#6248): native code stores no
+    // location for the step instruction, so the location is still that of the code before; the step hook restores
+    // the code's location after the event (QoreIRToLLVM::emitDebugStepHook(), qore#6646)
     if (statement && statement->loc) {
         *get_runtime_location_cache().loc_ptr = statement->loc;
     }
@@ -13163,7 +13162,12 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         val = fromBits(result_bits);
     }
 
-    // Restore thread-local runtime parse options/location saved above.
+    // Restore thread-local runtime parse options/location saved above.  The callers' code depends on it: native
+    // code and the IR interpreter store their runtime location only when their statement changes
+    // (QoreIRInstruction::stmt_loc, qore#6646), so the location must be the caller's again after the call.  It is
+    // restored only when the variant has a parse location, and not when an exception other than QoreJITException
+    // leaves exec_fn() (native code and the IR interpreter report errors through xsink); not RAII, as it is restored
+    // before the body locals are released
     if (swapped_runtime_ctx) {
         const AbstractStatement* dummy_stmt;
         const QoreProgramLocation* dummy_loc;
@@ -15559,6 +15563,8 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
         return 0;
     }
 
+    // the handlers' statements store their own locations: the caller continues in its own (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
 
