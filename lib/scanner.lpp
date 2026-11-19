@@ -51,6 +51,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include "parser.hpp"
@@ -2150,7 +2151,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                           // ignore exception in this case
                                                           xsink.clear();
                                                        } else {
-                                                          yylval->trymod = new TryModuleError(var.giveBuffer(), xsink.catchException());
+                                                          yylval->trymod = new TryModuleError(var.giveBuffer(), qore_exception_sink_ops(xsink).catchException());
                                                           return TRY_MODULE_ERROR;
                                                        }
                                                     }

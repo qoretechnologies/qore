@@ -152,7 +152,9 @@ public:
         if (close) {
             assert(cmd == DAH_ACQUIRE);
             assert(ds->isOpen());
-            stmt.closeIntern(xsink);
+            // the close after a describe() keeps the values bound to the statement, which are bound again when it is
+            // prepared again (issue #6690)
+            stmt.closeIntern(xsink, true);
         }
 
         /* release the Datasource if:
@@ -251,6 +253,25 @@ bool QoreSQLStatement::dropInheritedData() {
     return true;
 }
 
+// binds again the values that were bound to the statement before a describe() closed it, in the order that the
+// driver applied them: bind() sets every position, and the placeholders and values set positions of their own
+// (issue #6690)
+int QoreSQLStatement::rebindAfterDescribe(ExceptionSink* xsink) {
+    if (!rebind_after_describe) {
+        return 0;
+    }
+    const qore_dbi_private* drv = qore_dbi_private::get(*priv->ds->getDriver());
+    if ((bind_args && drv->stmt_bind(this, *bind_args, xsink))
+        || (placeholder_args && drv->stmt_bind_placeholders(this, *placeholder_args, xsink))
+        || (value_args && drv->stmt_bind_values(this, *value_args, xsink))) {
+        // the statement is closed with its values, so that the next action prepares it and binds them again
+        closeIntern(xsink, true);
+        return -1;
+    }
+    rebind_after_describe = false;
+    return 0;
+}
+
 int QoreSQLStatement::checkStatus(ExceptionSink* xsink, DBActionHelper& dba, int stat, const char* action) {
     //printd(5, "QoreSQLStatement::checkStatus() this: %p stat: %d status: %d action: '%s' ssize: %d\n", this, stat,
     //    status, action, ssize);
@@ -265,6 +286,10 @@ int QoreSQLStatement::checkStatus(ExceptionSink* xsink, DBActionHelper& dba, int
             if (status == STMT_IDLE && str.strlen()) {
                 if (prepareIntern(xsink))
                     return -1;
+                // a statement closed by a describe() before is described with its values (issue #6690)
+                if (rebindAfterDescribe(xsink)) {
+                    return -1;
+                }
             }
 
             if (execDescribeIntern(dba, xsink))
@@ -280,6 +305,12 @@ int QoreSQLStatement::checkStatus(ExceptionSink* xsink, DBActionHelper& dba, int
         if (stat > STMT_IDLE && status == STMT_IDLE && str.strlen()) {
             if (prepareIntern(xsink))
                 return -1;
+
+            // describe() closed the statement after describing it: the values that were bound to it are bound again
+            // (issue #6690)
+            if (rebindAfterDescribe(xsink)) {
+                return -1;
+            }
 
             if (stat == status)
                 return 0;
@@ -342,6 +373,12 @@ void QoreSQLStatement::deref(ExceptionSink* xsink) {
 
         if (prepare_args)
             prepare_args->deref(xsink);
+        if (bind_args)
+            bind_args->deref(xsink);
+        if (placeholder_args)
+            placeholder_args->deref(xsink);
+        if (value_args)
+            value_args->deref(xsink);
 
         delete this;
     }
@@ -365,6 +402,11 @@ void QoreSQLStatement::transactionDone(bool clear, bool close, ExceptionSink* xs
         else // otherwise, any handles are freed but the local data stays in place
             qore_dbi_private::get(*priv->ds->getDriver())->stmt_free(this, xsink);
     }
+    // a statement closed at the end of the transaction is prepared again without the values bound to it, also if a
+    // describe() closed it before (issue #6690)
+    if (close) {
+        discardBoundValues(xsink);
+    }
     // if "clear" is set, then we clear the datasource; another thread reads it with the statement's lock held
     if (clear && priv->ds) {
         AutoLocker al(stmt_lock);
@@ -372,7 +414,37 @@ void QoreSQLStatement::transactionDone(bool clear, bool close, ExceptionSink* xs
     }
 }
 
-int QoreSQLStatement::closeIntern(ExceptionSink* xsink) {
+void QoreSQLStatement::discardBoundValues(ExceptionSink* xsink) {
+    rebind_after_describe = false;
+    if (bind_args) {
+        bind_args->deref(xsink);
+        bind_args = nullptr;
+    }
+    if (placeholder_args) {
+        placeholder_args->deref(xsink);
+        placeholder_args = nullptr;
+    }
+    if (value_args) {
+        value_args->deref(xsink);
+        value_args = nullptr;
+    }
+}
+
+void QoreSQLStatement::storeBindArgs(const QoreListNode& l, ExceptionSink* xsink) {
+    // bind() sets every position, so the values given to bindPlaceholders() and bindValues() before are replaced
+    discardBoundValues(xsink);
+    bind_args = l.listRefSelf();
+}
+
+int QoreSQLStatement::closeIntern(ExceptionSink* xsink, bool keep_values) {
+    // the values bound to the statement are kept to bind them again only after a describe() that closes the statement
+    // or a failure to bind them again; otherwise the statement is prepared again without them (issue #6690)
+    if (keep_values) {
+        rebind_after_describe = bind_args || placeholder_args || value_args;
+    } else {
+        discardBoundValues(xsink);
+    }
+
     // driver data of a connection that an ancestor of this process opened is given up without calling the driver
     if (dropInheritedData() || !priv->data)
         return 0;
@@ -389,6 +461,10 @@ int QoreSQLStatement::prepareArgs(bool n_raw, const QoreString& n_str, const Qor
     raw = n_raw;
     str = n_str;
 
+    // the values bound to a statement prepared before are not bound to a new one (issue #6690); discarded first, so
+    // that a failure below cannot leave them to be bound to the new statement
+    discardBoundValues(xsink);
+
     if (prepare_args) {
         prepare_args->deref(xsink);
         if (*xsink) {
@@ -398,7 +474,7 @@ int QoreSQLStatement::prepareArgs(bool n_raw, const QoreString& n_str, const Qor
     }
 
     prepare_args = args ? args->listRefSelf() : nullptr;
-    return 0;
+    return *xsink ? -1 : 0;
 }
 
 int QoreSQLStatement::prepareIntern(ExceptionSink* xsink) {
@@ -409,7 +485,8 @@ int QoreSQLStatement::prepareIntern(ExceptionSink* xsink) {
         data_generation.store(qore_fork_get_generation(), std::memory_order_release);
     }
     else
-        closeIntern(xsink);
+        // the values to bind again after a describe() are kept for the next try (issue #6690)
+        closeIntern(xsink, rebind_after_describe);
     return rc;
 }
 
@@ -449,7 +526,13 @@ int QoreSQLStatement::bind(const QoreListNode& l, ExceptionSink* xsink) {
     if (checkStatus(xsink, dba, STMT_PREPARED, "bind"))
         return -1;
 
-    return qore_dbi_private::get(*priv->ds->getDriver())->stmt_bind(this, l, xsink);
+    int rc = qore_dbi_private::get(*priv->ds->getDriver())->stmt_bind(this, l, xsink);
+    // the values are kept to bind them again if describe() closes the statement (issue #6690); bind() sets every
+    // position, so the values given to bindPlaceholders() and bindValues() before are replaced
+    if (!rc) {
+        storeBindArgs(l, xsink);
+    }
+    return rc;
 }
 
 int QoreSQLStatement::bindPlaceholders(const QoreListNode& l, ExceptionSink* xsink) {
@@ -460,7 +543,15 @@ int QoreSQLStatement::bindPlaceholders(const QoreListNode& l, ExceptionSink* xsi
     if (checkStatus(xsink, dba, STMT_PREPARED, "bindPlaceholders"))
         return -1;
 
-    return qore_dbi_private::get(*priv->ds->getDriver())->stmt_bind_placeholders(this, l, xsink);
+    int rc = qore_dbi_private::get(*priv->ds->getDriver())->stmt_bind_placeholders(this, l, xsink);
+    // the values are kept to bind them again if describe() closes the statement (issue #6690)
+    if (!rc) {
+        if (placeholder_args) {
+            placeholder_args->deref(xsink);
+        }
+        placeholder_args = l.listRefSelf();
+    }
+    return rc;
 }
 
 int QoreSQLStatement::bindValues(const QoreListNode& l, ExceptionSink* xsink) {
@@ -471,7 +562,15 @@ int QoreSQLStatement::bindValues(const QoreListNode& l, ExceptionSink* xsink) {
     if (checkStatus(xsink, dba, STMT_PREPARED, "bindValues"))
         return -1;
 
-    return qore_dbi_private::get(*priv->ds->getDriver())->stmt_bind_values(this, l, xsink);
+    int rc = qore_dbi_private::get(*priv->ds->getDriver())->stmt_bind_values(this, l, xsink);
+    // the values are kept to bind them again if describe() closes the statement (issue #6690)
+    if (!rc) {
+        if (value_args) {
+            value_args->deref(xsink);
+        }
+        value_args = l.listRefSelf();
+    }
+    return rc;
 }
 
 int QoreSQLStatement::exec(const QoreListNode* args, ExceptionSink* xsink) {
@@ -490,8 +589,12 @@ int QoreSQLStatement::exec(const QoreListNode* args, ExceptionSink* xsink) {
         return -1;
     }
 
-    if (args && args->size() && qore_dbi_private::get(*priv->ds->getDriver())->stmt_bind(this, *args, xsink)) {
-        return -1;
+    if (args && args->size()) {
+        if (qore_dbi_private::get(*priv->ds->getDriver())->stmt_bind(this, *args, xsink)) {
+            return -1;
+        }
+        // the values are bound as with bind() (issue #6690)
+        storeBindArgs(*args, xsink);
     }
 
     return execIntern(dba, xsink);
