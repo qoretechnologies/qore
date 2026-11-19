@@ -8364,6 +8364,13 @@ static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key
     if (!class_ctx) {
         helper.vl.addMemberNotification(obj, key);
     }
+    // a member that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+    if (const ReferenceNode* ref = helper.getReference()) {
+        helper.clearPtr();
+        if (helper.doLValue(ref, false)) {
+            return;
+        }
+    }
 
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
     helper.assign(stored);
@@ -8398,7 +8405,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
             }
             h = stored.get<QoreHashNode>();
         }
-        qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+        // an element that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+        if (!qore_assign_through_element_reference(h->getKeyValue(key), val, xsink)) {
+            qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+        }
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
         // LValueHelper::doHashLValue() including hashdecl error behavior.
@@ -8456,7 +8466,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             }
             h = stored.get<QoreHashNode>();
         }
-        qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+        // an element that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+        if (!qore_assign_through_element_reference(h->getKeyValue(key), val, xsink)) {
+            qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+        }
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
         // LValueHelper::doHashLValue() including hashdecl error behavior.
@@ -8563,6 +8576,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         if (qore_list_private::get(*l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
             return toBits(QoreValue());
         }
+        // an element that holds a reference is assigned through it, as the AST interpreter assigns it, before the
+        // value is checked against the element type (qore#6661)
+        if (static_cast<size_t>(index) < l->size()
+                && qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink)) {
+            return *xsink ? toBits(QoreValue()) : val_bits;
+        }
         // Apply element type coercion if the list has a typed value type
         // (e.g. list<softint> converts "50" → 50 before storing)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
@@ -8663,6 +8682,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         // (qore#6435)
         if (qore_list_private::get(*l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
             return toBits(QoreValue());
+        }
+        // an element that holds a reference is assigned through it, as the AST interpreter assigns it, before the
+        // value is checked against the element type (qore#6661)
+        if (static_cast<size_t>(index) < l->size()
+                && qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink)) {
+            return *xsink ? toBits(QoreValue()) : val_bits;
         }
         // Apply element type coercion if the list has a typed value type
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
