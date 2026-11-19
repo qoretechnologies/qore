@@ -42,7 +42,12 @@ public:
     static constexpr int MaxNesting = 100;
 
     //! Convert a protobuf Message to a Qore hash
-    DLLLOCAL static QoreHashNode* messageToHash(const google::protobuf::Message& msg,
+    /** @param msg the message to convert
+        @param where the method converting it, for the \c INVALID-ENCODING exception of a string that is not valid
+        UTF-8 (ex: \c "ProtobufSchema::decode()")
+        @param xsink for Qore-language exceptions
+    */
+    DLLLOCAL static QoreHashNode* messageToHash(const google::protobuf::Message& msg, const char* where,
         ExceptionSink* xsink);
 
     //! Convert a Qore hash to a protobuf Message
@@ -52,15 +57,15 @@ public:
 private:
     DLLLOCAL static QoreValue fieldToQore(const google::protobuf::Message& msg,
         const google::protobuf::FieldDescriptor* field,
-        const google::protobuf::Reflection* ref, ExceptionSink* xsink);
+        const google::protobuf::Reflection* ref, const char* where, ExceptionSink* xsink);
 
     DLLLOCAL static QoreListNode* repeatedFieldToList(const google::protobuf::Message& msg,
         const google::protobuf::FieldDescriptor* field,
-        const google::protobuf::Reflection* ref, ExceptionSink* xsink);
+        const google::protobuf::Reflection* ref, const char* where, ExceptionSink* xsink);
 
     DLLLOCAL static QoreValue repeatedElementToQore(const google::protobuf::Message& msg,
         const google::protobuf::FieldDescriptor* field,
-        const google::protobuf::Reflection* ref, int index, ExceptionSink* xsink);
+        const google::protobuf::Reflection* ref, int index, const char* where, ExceptionSink* xsink);
 
     DLLLOCAL static bool setFieldFromQore(google::protobuf::Message* msg,
         const google::protobuf::FieldDescriptor* field,
@@ -74,7 +79,7 @@ private:
 
     DLLLOCAL static QoreHashNode* mapFieldToHash(const google::protobuf::Message& msg,
         const google::protobuf::FieldDescriptor* field,
-        const google::protobuf::Reflection* ref, ExceptionSink* xsink);
+        const google::protobuf::Reflection* ref, const char* where, ExceptionSink* xsink);
 
     DLLLOCAL static bool setMapFieldFromHash(google::protobuf::Message* msg,
         const google::protobuf::FieldDescriptor* field,

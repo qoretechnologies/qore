@@ -346,6 +346,11 @@ hash<auto> ProtobufSchema::defaultMessage(string type) {
     @throw PROTOBUF-ENCODE-ERROR if serialization fails
     @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
     @ref protobufnesting)
+    @throw ENCODING-CONVERSION-ERROR if a string for a \c string field or a string map key cannot be converted to
+    UTF-8
+
+    @note a protobuf string is UTF-8 text: the strings for \c string fields are converted to UTF-8 from their
+    encodings, and string map keys from the default encoding (the encoding of hash keys)
 
     @since %protobuf 1.0
 */
@@ -371,7 +376,8 @@ binary ProtobufSchema::encode(string type, hash<auto> data) {
     @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
     @ref protobufnesting)
 
-    @note the strings of the hash returned are tagged UTF-8
+    @note the strings of the hash returned are tagged UTF-8; string map keys are converted to the default encoding
+    (the encoding of hash keys), as parse_json() converts its keys
 
     @since %protobuf 1.0
 */
@@ -392,6 +398,11 @@ hash<auto> ProtobufSchema::decode(string type, binary data) {
     @throw PROTOBUF-JSON-ERROR if JSON conversion fails
     @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
     @ref protobufnesting)
+    @throw ENCODING-CONVERSION-ERROR if a string for a \c string field or a string map key cannot be converted to
+    UTF-8
+
+    @note the strings for \c string fields are converted to UTF-8 from their encodings and string map keys from the
+    default encoding, as in encode(); the JSON string returned is tagged UTF-8
 
     @since %protobuf 1.0
 */
@@ -414,6 +425,11 @@ string ProtobufSchema::toJson(string type, hash<auto> data) {
     @ref protobufnesting)
     @throw PROTOBUF-DECODE-ERROR if a string map key in the message contains a NUL character, which a hash key cannot
     hold, so the message cannot be decoded to a hash
+    @throw INVALID-ENCODING if \a json is not valid text in its encoding
+    @throw ENCODING-CONVERSION-ERROR if \a json cannot be converted to UTF-8
+
+    @note \a json is checked in its own encoding and converted to UTF-8 (the encoding libprotobuf parses); the strings
+    of the hash returned are tagged UTF-8, and string map keys are converted to the default encoding, as in decode()
 
     @since %protobuf 1.0
 */

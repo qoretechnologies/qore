@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  default-encoding-keys.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+# test-exec-mode: children - the checks run in child qore processes whose default character encodings differ
+# test-platform: macos - iconv conversions between UTF-8 and the ISO-8859-1 default encoding set with QORE_CHARSET
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
+%requires Util
+
+%exec-class ProtobufDefaultEncodingKeysTest
+
+#! The string map keys of a message are UTF-8 on the wire and in the default encoding in a hash, whatever the default
+#! encoding is (qore#6604)
+class ProtobufDefaultEncodingKeysTest inherits QUnit::Test {
+    constructor() : Test("ProtobufDefaultEncodingKeysTest", "1.0", \ARGV) {
+        addTestCase("map keys across default encodings", \keysTest());
+        set_return_value(main());
+    }
+
+    keysTest() {
+        string script = get_script_dir() + DirSep + "data" + DirSep + "default-encoding-keys.q";
+        string yes = make_hex_string(binary("yes"));
+        foreach string enc in (("ISO-8859-1", "UTF-8")) {
+            hash<string, string> r = run(enc, script);
+            # "ké" in the default encoding
+            string key = make_hex_string(binary(convert_encoding("ké", enc)));
+            assertEq(key, r."map-key", enc);
+            # the map key on the wire is UTF-8
+            assertEq("0a080a036bc3a9120176", r.encoded, enc);
+            assertEq(key, r."decoded-key", enc + ": a decoded key is in the default encoding");
+            assertEq(yes, r."decoded-found", enc);
+            assertEq(make_hex_string(binary("v")), r."decoded-value", enc);
+            assertEq(key, r."json-key", enc + ": a key parsed from JSON is in the default encoding");
+            assertEq(yes, r."json-found", enc);
+            assertEq(make_hex_string(binary("{\"m\":{\"ké\":\"v\"}}")), r."to-json", enc);
+            assertEq(make_hex_string(binary("UTF-8")), r."to-json-encoding", enc);
+        }
+    }
+
+    #! runs the child script with the given default encoding and returns its results
+    private hash<string, string> run(string encoding, string script) {
+        string qore = TestInterpreter::qore_interpreter();
+        # the output of the child (its results are ASCII lines) is taken as ISO-8859-1, in which every byte is a
+        # character, as messages that it may print are in its own default encoding
+        string output = binary_to_string(binary(backquote(sprintf("QORE_CHARSET=%s '%s' '%s' 2>&1", encoding, qore,
+            script))), "ISO-8859-1");
+        hash<string, string> results;
+        foreach string line in (output.split("\n")) {
+            *list<*string> parts = (line =~ x/^([a-z-]+)=([0-9a-f]*)$/);
+            if (parts) {
+                results{parts[0]} = parts[1];
+            }
+        }
+        assertEq(make_hex_string(binary(encoding)), results.default, sprintf("the child's default encoding: %s",
+            output));
+        return results;
+    }
+}

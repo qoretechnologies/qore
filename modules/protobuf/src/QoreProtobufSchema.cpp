@@ -454,7 +454,7 @@ QoreHashNode* QoreProtobufSchema::getDefaultMessage(const char* type, ExceptionS
     }
 
     std::unique_ptr<google::protobuf::Message> msg(proto->New());
-    return ProtobufHelper::messageToHash(*msg, xsink);
+    return ProtobufHelper::messageToHash(*msg, "ProtobufSchema::getDefaultMessage()", xsink);
 }
 
 BinaryNode* QoreProtobufSchema::encode(const char* type, const QoreHashNode* data,
@@ -505,7 +505,7 @@ QoreHashNode* QoreProtobufSchema::decode(const char* type, const BinaryNode* dat
         return nullptr;
     }
 
-    return ProtobufHelper::messageToHash(*msg, xsink);
+    return ProtobufHelper::messageToHash(*msg, "ProtobufSchema::decode()", xsink);
 }
 
 QoreStringNode* QoreProtobufSchema::toJson(const char* type, const QoreHashNode* data,
@@ -541,7 +541,8 @@ QoreStringNode* QoreProtobufSchema::toJson(const char* type, const QoreHashNode*
         return nullptr;
     }
 
-    return new QoreStringNode(json);
+    // libprotobuf writes JSON as UTF-8 text
+    return new QoreStringNode(json.data(), json.size(), QCS_UTF8);
 }
 
 QoreHashNode* QoreProtobufSchema::fromJson(const char* type, const QoreString& json,
@@ -561,15 +562,25 @@ QoreHashNode* QoreProtobufSchema::fromJson(const char* type, const QoreString& j
     google::protobuf::util::JsonParseOptions opts;
     opts.ignore_unknown_fields = false;
 
+    // libprotobuf parses JSON as UTF-8 text: the text is checked in its own encoding and converted to UTF-8
+    if (q_check_text_encoding(json.getEncoding(), json.c_str(), json.size(), "ProtobufSchema::fromJson()",
+            "JSON text", xsink)) {
+        return nullptr;
+    }
+    TempEncodingHelper utf8_json(json, QCS_UTF8, xsink);
+    if (!utf8_json) {
+        return nullptr;
+    }
+
     auto status = google::protobuf::util::JsonStringToMessage(
-        std::string(json.c_str(), json.size()), msg.get(), opts);
+        std::string(utf8_json->c_str(), utf8_json->size()), msg.get(), opts);
     if (!status.ok()) {
         xsink->raiseException("PROTOBUF-JSON-ERROR", "failed to parse JSON as message type '%s': %s",
             type, status.ToString().c_str());
         return nullptr;
     }
 
-    return ProtobufHelper::messageToHash(*msg, xsink);
+    return ProtobufHelper::messageToHash(*msg, "ProtobufSchema::fromJson()", xsink);
 }
 
 QoreListNode* QoreProtobufSchema::serializeFileDescriptors(ExceptionSink* xsink) const {

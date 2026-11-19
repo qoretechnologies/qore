@@ -1,9 +1,12 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - iconv conversions of ISO-8859-1, UTF-16LE and Shift_JIS text to and from UTF-8 in libqore
 
 # A decoded string field or string map key that is not valid UTF-8 raises INVALID-ENCODING (qore#6604): proto3
 # refuses such a message itself, proto2 does not check it; strings are tagged UTF-8, and bytes fields are binary data.
+# Strings in other encodings are converted to UTF-8 where they enter protobuf: the strings and map keys of a hash that
+# is encoded or converted to JSON, and the JSON text given to fromJson(), which is checked in its encoding.
 
 %modern
 
@@ -35,27 +38,31 @@ class ProtobufInvalidEncodingTest inherits QUnit::Test {
         addTestCase("proto2 strings", \proto2Strings());
         addTestCase("proto2 valid strings", \proto2Valid());
         addTestCase("proto3 strings", \proto3Strings());
+        addTestCase("encode strings in other encodings", \encodeOtherEncodings());
+        addTestCase("toJson strings in other encodings", \toJsonOtherEncodings());
+        addTestCase("fromJson text encodings", \fromJsonEncodings());
         set_return_value(main());
     }
 
     proto2Strings() {
         Protobuf::ProtobufSchema schema(Proto2);
         # field 1 (string): "a" + e9
-        assertThrows("INVALID-ENCODING", "^ProtobufSchema: the string field 'test\\.M\\.s' is not valid UTF-8: "
-            "invalid byte sequence at byte offset 1$", \schema.decode(), ("test.M", <0a0261e9>));
+        assertThrows("INVALID-ENCODING", "^ProtobufSchema::decode\\(\\): the string field 'test\\.M\\.s' is not valid "
+            "UTF-8: invalid byte sequence at byte offset 1$", \schema.decode(), ("test.M", <0a0261e9>));
         # a surrogate (CESU-8) and an overlong form
         assertThrows("INVALID-ENCODING", "string field 'test\\.M\\.s'.*byte offset 0$", \schema.decode(),
             ("test.M", <0a03eda080>));
         assertThrows("INVALID-ENCODING", "string field 'test\\.M\\.s'.*byte offset 0$", \schema.decode(),
             ("test.M", <0a02c0af>));
         # field 2 (repeated string): the second element
-        assertThrows("INVALID-ENCODING", "^ProtobufSchema: the string field 'test\\.M\\.r' is not valid UTF-8: "
-            "invalid byte sequence at byte offset 2$", \schema.decode(), ("test.M", <12016112036263ff>));
+        assertThrows("INVALID-ENCODING", "^ProtobufSchema::decode\\(\\): the string field 'test\\.M\\.r' is not valid "
+            "UTF-8: invalid byte sequence at byte offset 2$", \schema.decode(), ("test.M", <12016112036263ff>));
         # field 3 (map): a key, a value
-        assertThrows("INVALID-ENCODING", "^ProtobufSchema: the map key of field 'test\\.M\\.m' is not valid UTF-8: "
-            "invalid byte sequence at byte offset 1$", \schema.decode(), ("test.M", <1a060a026be91200>));
-        assertThrows("INVALID-ENCODING", "^ProtobufSchema: the string field 'test\\.M\\.MEntry\\.value' is not "
-            "valid UTF-8: invalid byte sequence at byte offset 0$", \schema.decode(), ("test.M", <1a060a016b1201e9>));
+        assertThrows("INVALID-ENCODING", "^ProtobufSchema::decode\\(\\): the map key of field 'test\\.M\\.m' is not "
+            "valid UTF-8: invalid byte sequence at byte offset 1$", \schema.decode(), ("test.M", <1a060a026be91200>));
+        assertThrows("INVALID-ENCODING", "^ProtobufSchema::decode\\(\\): the string field "
+            "'test\\.M\\.MEntry\\.value' is not valid UTF-8: invalid byte sequence at byte offset 0$", \schema.decode(),
+            ("test.M", <1a060a016b1201e9>));
         # field 5 (a nested message with a string)
         assertThrows("INVALID-ENCODING", "string field 'test\\.N\\.t'", \schema.decode(), ("test.M", <2a030a01e9>));
     }
@@ -85,5 +92,77 @@ class ProtobufInvalidEncodingTest inherits QUnit::Test {
         hash<auto> h = schema.decode("test3.M", <0a0361c3a9>);
         assertEq("aé", h.s);
         assertEq("UTF-8", h.s.encoding());
+    }
+
+    encodeOtherEncodings() {
+        Protobuf::ProtobufSchema schema(Proto2);
+        string e_acute = convert_encoding("é", "ISO-8859-1");
+        assertEq(<e9>, binary(e_acute));
+        # the wire has the UTF-8 text, not the ISO-8859-1 bytes
+        assertEq(<0a02c3a9>, schema.encode("test.M", {"s": e_acute}));
+        assertEq(<120261621202c3a9>, schema.encode("test.M", {"r": ("ab", e_acute)}));
+        assertEq(<1a080a016b1203c3a976>, schema.encode("test.M", {"m": {"k": e_acute + "v"}}));
+        assertEq(<2a040a02c3a9>, schema.encode("test.M", {"n": {"t": e_acute}}));
+        # a map key is in the default encoding (UTF-8 here) and is UTF-8 on the wire
+        assertEq(<1a070a036bc3a91200>, schema.encode("test.M", {"m": {"ké": ""}}));
+
+        hash<auto> h = schema.decode("test.M", schema.encode("test.M", {
+            "s": e_acute,
+            "r": (e_acute,),
+            "m": {"ké": e_acute},
+            "n": {"t": convert_encoding("€", "ISO-8859-15")},
+        }));
+        assertEq("é", h.s);
+        assertEq("UTF-8", h.s.encoding());
+        assertEq(("é",), h.r);
+        assertEq({"ké": "é"}, h.m);
+        assertEq("€", h.n.t);
+
+        # UTF-16LE and Shift_JIS text
+        assertEq(<0a02c3a9>, schema.encode("test.M", {"s": convert_encoding("é", "UTF-16LE")}));
+        binary sjis = schema.encode("test.M", {"s": convert_encoding("日本", "SHIFT_JIS")});
+        assertEq("日本", schema.decode("test.M", sjis).s);
+
+        # a string that cannot be converted to UTF-8
+        string bad = binary_to_string(<82>, "SHIFT_JIS");
+        assertThrows("ENCODING-CONVERSION-ERROR", \schema.encode(), ("test.M", {"s": bad}));
+        assertThrows("ENCODING-CONVERSION-ERROR", \schema.encode(), ("test.M", {"r": ("a", bad)}));
+        assertThrows("ENCODING-CONVERSION-ERROR", \schema.encode(), ("test.M", {"m": {"k": bad}}));
+    }
+
+    toJsonOtherEncodings() {
+        Protobuf::ProtobufSchema schema(Proto2);
+        string e_acute = convert_encoding("é", "ISO-8859-1");
+        string json = schema.toJson("test.M", {"s": e_acute, "r": (e_acute,), "m": {"ké": e_acute}});
+        # the JSON text is UTF-8 and tagged UTF-8
+        assertEq("UTF-8", json.encoding());
+        assertRegex("\"s\":\"é\"", json);
+        assertRegex("\"r\":\\[\"é\"\\]", json);
+        assertRegex("\"m\":{\"ké\":\"é\"}", json);
+        hash<auto> h = schema.fromJson("test.M", json);
+        assertEq("é", h.s);
+        assertEq(("é",), h.r);
+        assertEq({"ké": "é"}, h.m);
+    }
+
+    fromJsonEncodings() {
+        Protobuf::ProtobufSchema schema(Proto2);
+        # JSON text in ISO-8859-1 is converted to UTF-8
+        string json = convert_encoding("{\"s\":\"é\",\"m\":{\"ké\":\"vé\"}}", "ISO-8859-1");
+        assertEq(<e9>, binary(json.substr(6, 1)));
+        hash<auto> h = schema.fromJson("test.M", json);
+        assertEq("é", h.s);
+        assertEq("UTF-8", h.s.encoding());
+        assertEq({"ké": "vé"}, h.m);
+        # UTF-16LE JSON text
+        h = schema.fromJson("test.M", convert_encoding("{\"s\":\"€\"}", "UTF-16LE"));
+        assertEq("€", h.s);
+
+        # JSON text that is not valid in its encoding
+        assertThrows("INVALID-ENCODING", "^ProtobufSchema::fromJson\\(\\): the JSON text is not valid UTF-8: "
+            "invalid byte sequence at byte offset 6$", \schema.fromJson(), ("test.M",
+            binary_to_string(<7b2273223a22e9227d>, "UTF-8")));
+        assertThrows("INVALID-ENCODING", "^ProtobufSchema::fromJson\\(\\): the JSON text is not valid ",
+            \schema.fromJson(), ("test.M", binary_to_string(<7b2273223a2282>, "SHIFT_JIS")));
     }
 }
