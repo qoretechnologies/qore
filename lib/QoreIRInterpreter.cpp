@@ -496,6 +496,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/qore_list_private.h>
 #include <qore/intern/qore_date_private.h>
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // the trace switches, which the interpreter reads on every return of a function, read from the environment once
@@ -4186,7 +4187,7 @@ static void acceptInterpreterIRReturnType(const UserSignature* sig, const QoreTy
     if (value.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
         QoreTypeInfo::acceptAssignment(rt, "<block return>", value, xsink, nullptr);
         if (xsink && *xsink && sig) {
-            xsink->overrideLocation(*sig->getParseLocation());
+            qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
             xsink->appendLastDescription(": block missing return statement");
         }
     } else {
@@ -8757,7 +8758,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                     std::unique_ptr<SingleArgvContextHelper> argv_helper;
                     std::unique_ptr<CatchExceptionHelper> ex_helper;
                     if (type == OBE_Error && xsink) {
-                        QoreException* except = xsink->getException();
+                        QoreException* except = qore_exception_sink_ops(xsink).getException();
                         if (except) {
                             ex_helper.reset(new CatchExceptionHelper(except));
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
@@ -9012,7 +9013,7 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_enclosing(QoreIRDebugFrameSt
         tlpd->dbgException(e.stmt, xsink);
         rc = true;
         if (*xsink) {
-            st.exc_reported = xsink->getException();
+            st.exc_reported = qore_exception_sink_ops(xsink).getException();
             continue;
         }
         // the debugger dismissed the exception: the function ends, which returns no value (#5825)
@@ -9032,13 +9033,13 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_exception(QoreIRDebugFrameSt
     if (!xsink || !xsink->isException()) {
         return false;
     }
-    const QoreException* except = xsink->getException();
+    const QoreException* except = qore_exception_sink_ops(xsink).getException();
     if (except == st.exc_reported || !st.frame_stmt) {
         return false;
     }
     tlpd->dbgException(st.frame_stmt, xsink);
     if (*xsink) {
-        st.exc_reported = xsink->getException();
+        st.exc_reported = qore_exception_sink_ops(xsink).getException();
         qore_ir_dbg_start_chain(st, st.frame_stmt);
     } else {
         // the debugger dismissed the exception: the function ends, which returns no value (#5825)
@@ -10446,7 +10447,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             std::unique_ptr<SingleArgvContextHelper> argv_helper;
                             std::unique_ptr<CatchExceptionHelper> ex_helper;
                             if (type == OBE_Error && xsink) {
-                                QoreException* except = xsink->getException();
+                                QoreException* except = qore_exception_sink_ops(xsink).getException();
                                 if (except) {
                                     ex_helper.reset(new CatchExceptionHelper(except));
                                     argv_helper.reset(new SingleArgvContextHelper(
@@ -11543,7 +11544,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // block
     auto dbgHandlersRan = [&]() QORE_IR_LAMBDA_INLINE {
         if (debug_active && xsink && xsink->isException()) {
-            dbg_state.exc_reported = xsink->getException();
+            dbg_state.exc_reported = qore_exception_sink_ops(xsink).getException();
         }
     };
     // the result of the frame after unwindForException() on an exception: false, or true if the debugger dismissed
@@ -12996,7 +12997,7 @@ dispatch_folded_step_host:
                     }
                     if (debug_active) {
                         tlpd->dbgException(get_exception_statement(inst), xsink);
-                        dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
+                        dbg_state.exc_reported = *xsink ? qore_exception_sink_ops(xsink).getException() : nullptr;
                         if (*xsink) {
                             qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
                         }
@@ -13100,7 +13101,7 @@ dispatch_folded_step_host:
                                     std::unique_ptr<SingleArgvContextHelper> argv_helper;
                                     std::unique_ptr<CatchExceptionHelper> ex_helper;
                                     if (type == OBE_Error && xsink) {
-                                        QoreException* except = xsink->getException();
+                                        QoreException* except = qore_exception_sink_ops(xsink).getException();
                                         if (except) {
                                             ex_helper.reset(new CatchExceptionHelper(except));
                                             argv_helper.reset(new SingleArgvContextHelper(
@@ -13198,7 +13199,7 @@ dispatch_folded_step_host:
                     ++ip;
                     break;
                 }
-                QoreException* caught = xsink->catchException();
+                QoreException* caught = qore_exception_sink_ops(xsink).catchException();
                 if (ir_trace_exceptions_env.get()) {
                     fprintf(stderr, "[ir-exception] func='%s' catch.exception caught=%p xsink=%d\n",
                         func.name.c_str(), static_cast<void*>(caught), xsink && *xsink ? 1 : 0);
@@ -15239,7 +15240,7 @@ load_local_done:
                     }
                     // Set exception location to the constant location if an exception occurred
                     if (xsink && *xsink && rcr->loc) {
-                        xsink->setLastLocation(*rcr->loc);
+                        qore_exception_sink_ops(xsink).setLastLocation(*rcr->loc);
                     }
                 } else {
                     // AOT mode: expr holds the resolved constant value directly.
@@ -18085,7 +18086,7 @@ load_local_done:
                                     std::unique_ptr<SingleArgvContextHelper> argv_helper;
                                     std::unique_ptr<CatchExceptionHelper> ex_helper;
                                     if (type == OBE_Error && xsink) {
-                                        QoreException* except = xsink->getException();
+                                        QoreException* except = qore_exception_sink_ops(xsink).getException();
                                         if (except) {
                                             ex_helper.reset(new CatchExceptionHelper(except));
                                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
@@ -21628,7 +21629,7 @@ load_local_done:
                     // throw args are always a list: (err, desc[, arg])
                     // use the same raiseException(list) API as the AST path
                     if (arg.getType() == NT_LIST) {
-                        xsink->raiseException(arg.get<const QoreListNode>());
+                        qore_exception_sink_ops(xsink).raiseException(arg.get<const QoreListNode>());
                     } else {
                         QoreValue owned_arg = arg.needsRef() ? arg.refSelf() : arg;
                         xsink->raiseExceptionArg("IR-EXEC-THROW", owned_arg, "throw");
@@ -21636,7 +21637,7 @@ load_local_done:
                 }
                 if (debug_active && xsink && *xsink) {
                     tlpd->dbgException(get_exception_statement(inst), xsink);
-                    dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
+                    dbg_state.exc_reported = *xsink ? qore_exception_sink_ops(xsink).getException() : nullptr;
                     // the debugger can set the local variables of the frame at the stop of the exception
                     invalidateExternalCaches();
                     if (*xsink) {
@@ -21716,7 +21717,7 @@ load_local_done:
                     }
                 } else if (debug_active && *xsink) {
                     tlpd->dbgException(get_exception_statement(inst), xsink);
-                    dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
+                    dbg_state.exc_reported = *xsink ? qore_exception_sink_ops(xsink).getException() : nullptr;
                     // the debugger can set the local variables of the frame at the stop of the exception
                     invalidateExternalCaches();
                     if (*xsink) {

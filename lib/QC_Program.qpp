@@ -47,6 +47,7 @@
 #include "qore/intern/ql_debug.h"
 
 #include "qore/intern/ModuleInfo.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 extern QoreModuleManager QMM;
 
 // records the Program whose code creates an independent Program: it inherits no code or namespaces from that code,
@@ -1858,7 +1859,7 @@ while (wh) {
         if (!wsink.isException())
             return QoreValue();
 
-        QoreException *e = wsink.catchException();
+        QoreException *e = qore_exception_sink_ops(wsink).catchException();
         return e->makeExceptionObjectAndDelete(xsink);
     }
 
@@ -1918,7 +1919,7 @@ pgm.parseCommit();
         if (!wsink.isException())
             return QoreValue();
 
-        QoreException *e = wsink.catchException();
+        QoreException *e = qore_exception_sink_ops(wsink).catchException();
         return e->makeExceptionObjectAndDelete(xsink);
     }
 
@@ -1989,7 +1990,7 @@ while (exists wh) {
     if (!wsink.isException())
         return QoreValue();
 
-    QoreException *e = wsink.catchException();
+    QoreException *e = qore_exception_sink_ops(wsink).catchException();
     return e->makeExceptionObjectAndDelete(xsink);
 }
 
@@ -3321,7 +3322,7 @@ pgm.loadModule("mysql");
     ExceptionSink wsink;
     QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, nullptr, QMLO_NONE, warning_mask);
     if (!*xsink && wsink) {
-        return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+        return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
     }
     return QoreValue();
 }
@@ -3413,7 +3414,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
     ExceptionSink wsink;
     QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, program, QMLO_INJECT, warning_mask);
     if (!*xsink && wsink) {
-        return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+        return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
     }
     return QoreValue();
 }
@@ -3525,7 +3526,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
         //p->unregisterQoreObject(self, xsink);
         self->doDelete(xsink);
         if (!*xsink && wsink) {
-            return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+            return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
         }
     }
     return QoreValue();
@@ -3630,7 +3631,7 @@ Program::loadApplyToPrivateUserModule(
         //p->unregisterQoreObject(self, xsink);
         self->doDelete(xsink);
         if (!*xsink && wsink) {
-            return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+            return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
         }
     }
     return QoreValue();

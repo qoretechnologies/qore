@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/ThrowStatement.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 int ThrowStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     ValueEvalOptimizedRefHolder a(args, xsink);
@@ -39,7 +40,7 @@ int ThrowStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
     assert(a->getType() == NT_LIST);
 
-    xsink->raiseException(a->get<const QoreListNode>());
+    qore_exception_sink_ops(xsink).raiseException(a->get<const QoreListNode>());
     return 0;
 }
 
@@ -50,7 +51,7 @@ int ThrowStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excepti
 
     assert(a->getType() == NT_LIST);
 
-    xsink->raiseException(a->get<const QoreListNode>());
+    qore_exception_sink_ops(xsink).raiseException(a->get<const QoreListNode>());
     return 0;
 }
 
