@@ -907,7 +907,12 @@ class PgsqlTest inherits SqlTestBase {
         }
 
         const int Workers = 32;
-        const int Iterations = 200;
+        # the workers start at once (the gate below), so that their introspections overlap from the first iteration:
+        # 25 iterations of 32 workers exercise the concurrent introspection that the case is for (#5359); each
+        # iteration runs about ten catalog queries, whose time grows with the load of the server and the size of its
+        # catalog, not with what the case tests, so that more iterations only make the case slower on a loaded server
+        # (200 iterations exceeded the time limit of the test on a loaded macOS host, issue #6711)
+        const int Iterations = 25;
         const string TableName = "pgsql_trigger_concurrency";
         const string FunctionName = "pgsql_trigger_concurrency_func";
 
