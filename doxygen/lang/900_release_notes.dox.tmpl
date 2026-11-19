@@ -3420,6 +3420,9 @@
       others omitted with \c omit_update), which gave an invalid update statement, or with an update-only upsert
       inserted the row (SQL Server) or raised an error (Oracle)
       (<a href="https://github.com/qoretechnologies/qore/issues/6692">issue 6692</a>); see @ref sqlutilv3_11_0
+    - fixed the upserts and the \c delete_others upsert option of @ref sqlutilintro "SqlUtil" on MySQL without a strict
+      SQL mode, which did not find the row of an integer key out of the range of its column
+      (<a href="https://github.com/qoretechnologies/qore/issues/6689">issue 6689</a>); see @ref sqlutilv3_11_0
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
