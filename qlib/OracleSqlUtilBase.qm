@@ -5725,8 +5725,8 @@ group by p.index_name", schema.upr(), name.upr());
 
         @return the SQL literal of the value
 
-        @throw VALUE-ERROR the value cannot be given exactly: a string whose encoding is invalid (also a lone UTF-16
-        surrogate), that has a NUL character, or that has more than 2000 UTF-16 code units (a character outside of the
+        @throw VALUE-ERROR the value cannot be given exactly: a string whose encoding is invalid (also one with a lone
+        UTF-16 surrogate, which its conversion to UTF-16 refuses), that has a NUL character, or that has more than 2000 UTF-16 code units (a character outside of the
         Basic Multilingual Plane has two) or an escaped form longer than 4000 bytes (the limits of
         Oracle's national character strings and string literals); a \c float or a \c number that is not a finite
         value, or a \c number with an absolute value of \c 1e126 or more; a relative date (a duration), or a date
@@ -5808,18 +5808,8 @@ group by p.index_name", schema.upr(), name.upr());
                     if (!unit) {
                         throw "VALUE-ERROR", "a string with a NUL character cannot be given in the SQL";
                     }
-                    # a high surrogate must be followed by a low one, and a low one must follow a high one
-                    if (unit >= 0xd800 && unit <= 0xdbff) {
-                        int next = i + 1 < units ? ((utf16[i * 2 + 2] << 8) | utf16[i * 2 + 3]) : 0;
-                        if (next < 0xdc00 || next > 0xdfff) {
-                            throw "VALUE-ERROR", "a string with a lone UTF-16 surrogate cannot be given in the SQL";
-                        }
-                    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
-                        int prev = i ? ((utf16[i * 2 - 2] << 8) | utf16[i * 2 - 1]) : 0;
-                        if (prev < 0xd800 || prev > 0xdbff) {
-                            throw "VALUE-ERROR", "a string with a lone UTF-16 surrogate cannot be given in the SQL";
-                        }
-                    }
+                    # the surrogates of the code units come in pairs: the conversion to UTF-16BE refuses a string
+                    # with a lone surrogate (it is not valid text; qore#6730)
                     # only ASCII letters, digits, space and punctuation other than quotes, backslashes and the
                     # characters of bind placeholders as they are
                     if (unit >= 0x20 && unit < 0x7f && unit != 0x27 && unit != 0x22 && unit != 0x5c && unit != 0x25
