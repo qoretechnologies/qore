@@ -156,6 +156,9 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" with a description of another
+      table name, which raised \c LOCK-ERROR instead of giving the SQL that renames the table
+      (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>)
     - a string that is not valid in its encoding is refused with a \c VALUE-ERROR exception when it would be written into
       an SQL string literal, with every driver; added @ref SqlUtil::sql_literal_check_encoding()
       "sql_literal_check_encoding()", which the driver modules use for it, and the check of the value of an immediate

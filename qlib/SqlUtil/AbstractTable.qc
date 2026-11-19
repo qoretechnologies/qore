@@ -12981,9 +12981,20 @@ list<auto> l = table.getAlignSql(table2);
 
         # check name
         if (name != t.name) {
-            l += AbstractDatabase::doCallback(opt, getRenameSql(t.name), AbstractDatabase::AC_Rename, "table", name,
-                NOTHING, t.name);
-            name = t.name;
+            # the comment of the table is read under its name before the rename: it is compared below, after the
+            # name has changed (issue #6721)
+            if (supportsTableComments()) {
+                getCommentUnlocked();
+            }
+            # the SQL is made under the lock that the caller holds: getRenameSql() takes it (issue #6721)
+            l += AbstractDatabase::doCallback(opt, getRenameSqlImpl(t.name), AbstractDatabase::AC_Rename, "table",
+                name, NOTHING, t.name);
+            # a table whose SQL is executed by the callback is renamed in the table cache too, as by getRenameSql()
+            if (opt.sql_callback_executed) {
+                doRenameIntern(t.name, opt.db_table_cache);
+            } else {
+                name = t.name;
+            }
         }
 
         bool uixc = uniqueIndexCreatesConstraintImpl();
