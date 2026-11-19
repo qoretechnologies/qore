@@ -258,6 +258,12 @@ public:
         return i < paramReadOnlyList.size() && paramReadOnlyList[i];
     }
 
+    //! Returns the typed callable type of the signature (code<ReturnType(ParamTypes...)>), made once (qore#6660)
+    /** Called at run time only, when the types of the signature are resolved: the type of a closure or call
+        reference, and the fast check of a callable for the typed callable type it has
+    */
+    DLLLOCAL const QoreTypeInfo* getRuntimeCodeTypeInfo() const;
+
 protected:
     unsigned short num_param_types = 0,    // number of parameters that have type information
         min_param_types = 0;                // minimum number of parameters with type info (without default args)
@@ -276,6 +282,8 @@ protected:
 
     bool declares_type_parameters = false;
     mutable std::atomic<signed char> type_param_substitution_cache {-1};
+    //! the typed callable type of the signature; see getRuntimeCodeTypeInfo()
+    mutable std::atomic<const QoreTypeInfo*> runtime_code_type_cache {nullptr};
 
     DLLLOCAL QORE_INTERN_NOINLINE bool computeTypeParameterSubstitution() const;
 };

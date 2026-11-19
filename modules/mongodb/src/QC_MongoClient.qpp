@@ -87,7 +87,12 @@ MongoClient::constructor(string uri) {
             "character; URIs cannot contain NUL characters"));
         return;
     }
-    SimpleRefHolder<QoreMongoClient> holder(new QoreMongoClient(uri->c_str(), xsink));
+    // MongoDB URIs are UTF-8
+    TempEncodingHelper utf8_uri(uri, QCS_UTF8, xsink);
+    if (*xsink) {
+        return;
+    }
+    SimpleRefHolder<QoreMongoClient> holder(new QoreMongoClient(utf8_uri->c_str(), xsink));
     if (*xsink) {
         return;
     }
@@ -142,7 +147,12 @@ MongoDatabase MongoClient::getDatabase(string name) {
             xsink)) {
         return QoreValue();
     }
-    mongoc_database_t* db = client->getDatabase(name->c_str());
+    // MongoDB names are UTF-8
+    TempEncodingHelper utf8_name(name, QCS_UTF8, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    mongoc_database_t* db = client->getDatabase(utf8_name->c_str());
     if (!db) {
         xsink->raiseException("MONGODB-CLIENT-ERROR", "failed to get database '%s'", name->c_str());
         return QoreValue();

@@ -1810,6 +1810,26 @@ QoreIRInstruction* QoreIRBuilder::createHandlerReturn(QoreIRValue value, const Q
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createTakeHandedOverReturn(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::TakeHandedOverReturn);
+    if (value.isValid()) {
+        inst->operands.push_back(value);
+    }
+    // a reference of its own to a value of any type, the value that a handler handed over or the operand
+    inst->result = func->createValue();
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createReleaseHandedOverReturn(const QoreProgramLocation* loc, QoreIRValue result) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseHandedOverReturn);
+    if (result.isValid()) {
+        inst->operands.push_back(result);
+    }
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createSetCodeParseOptions(const QoreParseOptions& po,
         const QoreProgramLocation* loc) {
     // four 32-bit words, each an integer that every tier holds inline (an int of 64 bits can be a node)

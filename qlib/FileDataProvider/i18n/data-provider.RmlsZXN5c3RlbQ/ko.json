@@ -195,6 +195,18 @@
           "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
           "message": "`text` = `True`인 경우 사용할 문자열 인코딩입니다(기본값: `UTF-8`)"
         },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "인코딩 오류"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "문자 인코딩에서 유효하지 않은 텍스트의 처리 방식"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What text that is not valid in its character encoding gives if `text` = `True`: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` returns the text as `ISO-8859-1`, and `keep` returns it in the encoding without a check",
+          "message": "`text` = `True`인 경우 문자 인코딩에서 유효하지 않은 텍스트의 처리 방식입니다. `raise`(기본값)는 `INVALID-ENCODING` 오류를 발생시키고, `latin1`은 텍스트를 `ISO-8859-1`로 반환하며, `keep`은 검사 없이 해당 인코딩으로 반환합니다"
+        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
           "source": "Max Len",
           "message": "최대 길이"

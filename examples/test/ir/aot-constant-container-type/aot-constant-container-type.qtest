@@ -21,6 +21,9 @@
     list of the closures of a constant expression got the parse type of its closures, which is the generic closure
     type, as they are initialized after the expression.  AOTConstantContainerType.q gives the output of the AST
     interpreter in every execution mode and compiled with qcc.
+
+    C4's closures have different signatures (nothing() and nothing(int)), so the type of its list is list<code>: a
+    code<nothing(int)> type does not accept a closure that takes no argument (qore#6660).
 */
 class AOTConstantContainerTypeTest inherits QUnit::Test {
     public {
@@ -28,7 +31,7 @@ class AOTConstantContainerTypeTest inherits QUnit::Test {
         const Expected = "C1 hash<string, list<code>> list<code<nothing()>>
 C2 list<code<nothing()>>
 C3 hash<string, list<code>> list<code<nothing()>>
-C4 list<code<nothing(int)>>
+C4 list<code>
 X1 hash<string, list<code>> list<code>
 X2 hash<string, list<code<nothing()>>> list<code<nothing()>>
 X3 hash<string, list<auto>> list<code<nothing()>>

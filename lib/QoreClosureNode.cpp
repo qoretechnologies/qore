@@ -113,7 +113,7 @@ const QoreTypeInfo* QoreClosureBase::getCallTypeInfo() const {
     if (f) {
         AbstractFunctionSignature* sig = f->getUniqueSignature();
         if (sig) {
-            return qore_get_complex_code_type_from_signature(sig);
+            return sig->getRuntimeCodeTypeInfo();
         }
     }
     return nullptr;

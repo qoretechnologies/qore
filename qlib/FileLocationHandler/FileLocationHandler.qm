@@ -126,6 +126,30 @@ FileLocationHandler::writeFileToLocation("conn://prod-s3/reports/2026-08.csv", t
     @ref FileLocationHandler::FileLocationHandler::tryRegisterHandler() "FileLocationHandler::tryRegisterHandler()" in
     its \c init code to register a handler for a new scheme.
 
+    @section filelocationhandler_encoding_errors Text That Is Not Valid in Its Encoding
+
+    The text reads (@ref FileLocationHandler::FileLocationHandler::getTextFileFromLocation()
+    "getTextFileFromLocation()" and
+    @ref FileLocationHandler::FileLocationHandler::getStreamReaderFromLocation() "getStreamReaderFromLocation()")
+    check the text read in its encoding, as the text readers of %Qore do (see @ref encoding_errors): the stream
+    readers are created with the option, and the text of a file read whole (ex: received over FTP, SFTP or HTTP) is
+    checked with
+    @ref FileLocationHandler::AbstractFileLocationHandler::checkTextEncoding() "AbstractFileLocationHandler::checkTextEncoding()".
+    The \c encoding_errors read option of the handlers that read text says what text that is not valid gives, one of
+    the @ref encoding_errors_constants:
+    - \c "raise" (the default): an \c INVALID-ENCODING exception is raised
+    - \c "latin1": the text is returned as \c ISO-8859-1, with its bytes (for data in ISO-8859-1, such as EDIFACT
+      and HL7 v2 data often are)
+    - \c "keep": the text is returned in its encoding without a check
+
+    A text in a single-byte encoding has no invalid bytes, so it is not checked.  A \c conn:// location passes the
+    option to the handler it resolves to.
+
+    @par Example
+    @code{.py}
+string text = FileLocationHandler::getTextFileFromLocation("sftp://user@host/in/orders.edi{encoding_errors=latin1}");
+    @endcode
+
     @section filelocationhandlerdocs FileLocationHandler Documentation
 
     - @subpage filelocationhandler_conn "Named Connection Locations": <tt>conn://</tt> locations, how a named
@@ -356,6 +380,9 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
 
 
     @section filelocationhandler_v3_0 FileLocationHandler v3.0
+    - text reads (\c getTextFileFromLocation() and \c getStreamReaderFromLocation()) check the text in its encoding
+      and take the \c encoding_errors read option (see @ref filelocationhandler_encoding_errors)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
     - errors loading the handler modules of \c QORE_FILE_LOCATION_HANDLERS are left out when the module's code has no
       terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
       (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)

@@ -529,6 +529,27 @@ enum HTTP3Mode : int {
     Required = 2,
 };
 
+/** @defgroup encoding_errors_constants Encoding Errors Constants
+    The values of the \c encoding_errors option of the text readers (@ref Qore::ReadOnlyFile "ReadOnlyFile",
+    @ref Qore::File "File", @ref Qore::StreamReader "StreamReader",
+    @ref Qore::BufferedStreamReader "BufferedStreamReader",
+    @ref Qore::InputStreamLineIterator "InputStreamLineIterator", @ref Qore::FileLineIterator "FileLineIterator",
+    and @ref Qore::ReadOnlyFile::readTextFile() "ReadOnlyFile::readTextFile()"): what text read that is not valid
+    in its @ref character_encoding "character encoding" gives; see @ref encoding_errors
+
+    @since %Qore 3.0
+ */
+///@{
+//! raise an \c INVALID-ENCODING exception for text that is not valid in its encoding (the default)
+const ENCODING_ERRORS_RAISE = "raise";
+
+//! tag the whole string read ISO-8859-1, with its bytes, if it is not valid in its encoding
+const ENCODING_ERRORS_LATIN1 = "latin1";
+
+//! tag the string read with the encoding of the reader without a check
+const ENCODING_ERRORS_KEEP = "keep";
+///@}
+
 /** @defgroup io_constants I/O Constants
     These constants are all instantiations of the @ref File "File class"
 

@@ -39,6 +39,42 @@
           "source": "Path to a file containing one HL7 v2 message.",
           "message": "Ruta a un archivo que contiene un mensaje HL7 v2."
         },
+        "app.SEw3djI.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Errores de codificación"
+        },
+        "app.SEw3djI.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Lo que produce el texto que no es válido en su codificación de caracteres"
+        },
+        "app.SEw3djI.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as `ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+          "message": "Lo que produce el texto de entrada que no es válido en su codificación de caracteres: `raise` (el valor predeterminado) genera un error `INVALID-ENCODING`, `latin1` lee el texto no válido (una línea completa, para datos leídos por líneas) como `ISO-8859-1`, y `keep` lo conserva en la codificación de entrada sin comprobación"
+        },
+        "app.SEw3djI.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.display_name": {
+          "source": "Raise an Error",
+          "message": "Generar un error"
+        },
+        "app.SEw3djI.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.desc": {
+          "source": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+          "message": "Generar un error `INVALID-ENCODING` para el texto no válido; el valor predeterminado"
+        },
+        "app.SEw3djI.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.display_name": {
+          "source": "Read as Latin-1",
+          "message": "Leer como Latin-1"
+        },
+        "app.SEw3djI.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.desc": {
+          "source": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its bytes",
+          "message": "Leer el texto no válido (una línea completa, para datos leídos por líneas) como `ISO-8859-1`, con sus bytes"
+        },
+        "app.SEw3djI.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.display_name": {
+          "source": "Keep Without a Check",
+          "message": "Conservar sin comprobación"
+        },
+        "app.SEw3djI.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.desc": {
+          "source": "Keep the text in the input encoding as read, without a check",
+          "message": "Conservar el texto en la codificación de entrada tal como se leyó, sin comprobación"
+        },
         "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
           "source": "Read HL7 v2 Inline Data",
           "message": "Leer datos en línea HL7 v2"

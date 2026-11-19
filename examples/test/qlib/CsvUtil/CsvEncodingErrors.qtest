@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires CsvUtil
+
+%exec-class CsvEncodingErrorsTest
+
+#! Tests the encoding_errors option of the CSV readers (issue #6604)
+/** Text that is not valid in the encoding of the input raises \c INVALID-ENCODING by default; \c "latin1" reads the
+    invalid line as ISO-8859-1 and \c "keep" keeps it in the encoding of the input without a check.
+*/
+public class CsvEncodingErrorsTest inherits QUnit::Test {
+    public {
+        #! UTF-8 data whose second line has the ISO-8859-1 byte of "é", which is not valid UTF-8
+        const Data = binary("a,b\n") + <e9> + binary("x,y\nc,d\n");
+
+        #! The second record read with "latin1"
+        const Latin1Record = {"0": "éx", "1": "y"};
+    }
+
+    constructor() : Test("CsvEncodingErrorsTest", "1.0") {
+        addTestCase("file iterator", \fileIteratorTest());
+        addTestCase("stream iterator", \streamIteratorTest());
+        addTestCase("read data provider", \dataProviderTest());
+        addTestCase("option metadata", \metadataTest());
+        set_return_value(main());
+    }
+
+    #! Writes the test data to a file and returns its path
+    private string writeData(TmpDir dir) {
+        string path = dir.path + DirSep + "data.csv";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Data);
+        return path;
+    }
+
+    #! Returns all records of the iterator
+    private static list<hash<auto>> readAll(AbstractIterator i) {
+        list<hash<auto>> rv = ();
+        while (i.next()) {
+            push rv, i.getValue();
+        }
+        return rv;
+    }
+
+    #! Checks the records read with each option value
+    private checkRecords(code get_iterator) {
+        # the default raises INVALID-ENCODING
+        assertThrows("INVALID-ENCODING", "not valid UTF-8", \readAll(), get_iterator());
+        assertThrows("INVALID-ENCODING", "not valid UTF-8", \readAll(), get_iterator({"encoding_errors": "raise"}));
+
+        # "latin1" reads the invalid line as ISO-8859-1
+        list<hash<auto>> recs = readAll(get_iterator({"encoding_errors": "latin1"}));
+        assertEq(3, recs.size());
+        assertEq({"0": "a", "1": "b"}, recs[0]);
+        assertEq(Latin1Record, recs[1]);
+        assertEq("ISO-8859-1", recs[1]."0".encoding());
+        assertEq(<e978>, binary(recs[1]."0"));
+        assertEq("UTF-8", recs[2]."0".encoding());
+        assertEq({"0": "c", "1": "d"}, recs[2]);
+
+        # "keep" keeps the line in the encoding of the input without a check: the line is read, and the CSV parser
+        # cannot split the text that is not valid
+        assertThrows("INVALID-ENCODING", "invalid UTF-8 encoding encountered in string: error iterating input line 2",
+            \readAll(), get_iterator({"encoding_errors": "keep"}));
+
+        # an unknown value is rejected
+        assertThrows("ENCODING-ERRORS-ERROR", sub () { readAll(get_iterator({"encoding_errors": "ignore"})); });
+    }
+
+    private fileIteratorTest() {
+        TmpDir dir();
+        string path = writeData(dir);
+        checkRecords(AbstractIterator sub (*hash<auto> opts) {
+            return new CsvFileIterator(path, {"encoding": "UTF-8"} + opts);
+        });
+        # the multi-type constructor takes it as well
+        hash<auto> spec = {"rec": {"a": {"type": "string", "index": 0}, "b": {"type": "string", "index": 1}}};
+        CsvFileIterator i(path, spec, {"encoding": "UTF-8", "encoding_errors": "latin1"});
+        list<hash<auto>> recs = readAll(i);
+        assertEq("éx", recs[1].a);
+        assertEq("ISO-8859-1", recs[1].a.encoding());
+        assertThrows("INVALID-ENCODING", \readAll(), new CsvFileIterator(path, spec, {"encoding": "UTF-8"}));
+    }
+
+    private streamIteratorTest() {
+        checkRecords(AbstractIterator sub (*hash<auto> opts) {
+            return new CsvIterator(new BinaryInputStream(Data), "UTF-8", opts);
+        });
+    }
+
+    private dataProviderTest() {
+        TmpDir dir();
+        string path = writeData(dir);
+        # the path, binary data and stream inputs
+        foreach hash<auto> input in ({"path": path}, {"data": Data}) {
+            assertThrows("INVALID-ENCODING", \readAll(), new CsvReadDataProvider(input).searchRecords());
+            list<hash<auto>> recs = readAll(new CsvReadDataProvider(input + {"encoding_errors": "latin1"})
+                .searchRecords());
+            assertEq(Latin1Record, recs[1], input.firstKey());
+            assertThrows("INVALID-ENCODING", "error iterating input line 2", \readAll(),
+                new CsvReadDataProvider(input + {"encoding_errors": "keep"}).searchRecords());
+        }
+        list<hash<auto>> recs = readAll(new CsvReadDataProvider({"stream": new BinaryInputStream(Data),
+            "encoding_errors": "latin1"}).searchRecords());
+        assertEq(Latin1Record, recs[1]);
+        recs = readAll(new CsvReadDataProvider(path, {"encoding_errors": "latin1"}).searchRecords());
+        assertEq(Latin1Record, recs[1]);
+        recs = readAll(new CsvReadDataProvider(new BinaryInputStream(Data), {"encoding_errors": "latin1"})
+            .searchRecords());
+        assertEq(Latin1Record, recs[1]);
+
+        # a value that is not allowed is rejected
+        assertThrows("OPTION-VALUE-ERROR", "encoding_errors", sub () {
+            new CsvReadDataProvider({"data": Data, "encoding_errors": "ignore"});
+        });
+    }
+
+    private metadataTest() {
+        hash<DataProviderOptionInfo> info = CsvReadDataProvider::ConstructorOptions.encoding_errors;
+        assertEq("raise", info.default_value);
+        assertEq(("raise", "latin1", "keep"), map $1.value, info.allowed_values);
+        assertEq(DataProvider::EncodingErrorsOptionInfo, info);
+    }
+}

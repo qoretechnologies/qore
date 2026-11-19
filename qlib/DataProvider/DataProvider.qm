@@ -1750,6 +1750,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - added @ref DataProvider::EncodingErrorsOptionInfo "EncodingErrorsOptionInfo", the \c encoding_errors option
+      of the data providers that read text (see @ref encoding_errors)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
     - the errors of the validation of data provider options name the options but no longer contain the options
       provided or the values of options marked \c sensitive, which can be credentials; for an option that is not
       sensitive, a value that its type or its allowed values refuse is still given

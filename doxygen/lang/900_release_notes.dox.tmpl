@@ -218,6 +218,23 @@
     \c INVALID-ENCODING for it where they read it, or a high surrogate and the code unit after it, as a character
     (see @ref utf16_validity; issue #6604).
 
+    @par Text Readers Check the Encoding of the Text They Read
+    The file and stream readers and the line iterators, and so the modules that read text with them, raise
+    \c INVALID-ENCODING for text that is not valid in its encoding, unless their new \c encoding_errors option is
+    \c "latin1" or \c "keep" (see @ref encoding_errors; issue #6604).
+
+    @par Module Text Readers Raise INVALID-ENCODING by Default
+    The CSV and fixed-length readers, the file location handlers and the text reads of the \c FileDataProvider and
+    \c FtpClientDataProvider modules raise \c INVALID-ENCODING for invalid text unless their new \c encoding_errors
+    option is \c "latin1" (for ISO-8859-1 data, as EDIFACT and HL7 v2 data often are) or \c "keep" (see
+    @ref encoding_errors and @ref filelocationhandler_encoding_errors; issue #6604).
+
+    @par INVALID-ENCODING Replaces STREAM-ENCODING-ERROR and FILE-GETCHAR-ERROR for Invalid Characters
+    @ref Qore::ReadOnlyFile::read() "ReadOnlyFile::read()",
+    @ref Qore::StreamReader::readString() "StreamReader::readString()" and
+    @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()" raise \c INVALID-ENCODING for an invalid character,
+    where they raised \c STREAM-ENCODING-ERROR and \c FILE-GETCHAR-ERROR (see @ref encoding_errors; issue #6604).
+
     @par trunc_str() Raises INVALID-ENCODING for a String Not Valid in Its Encoding Within the Length
     @ref Qore::trunc_str() "trunc_str()" raises \c INVALID-ENCODING for an invalid character within the length, also
     when the whole string is within it, where it returned the part before the character or the string unchecked
@@ -1086,6 +1103,11 @@
     take the access of their whole path, not of its last edge (see @ref multiple_path_inheritance; issue #6498).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par An encoding_errors Option for Text Readers
+    The file and stream readers and the line iterators take an \c encoding_errors option (\c "raise", \c "latin1"
+    or \c "keep") that sets what text read that is not valid in its encoding gives (see @ref encoding_errors;
+    issue #6604).
+
     @par Testing Whether a String Is Valid in Its Encoding
     @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests whether a string is valid in its
     encoding (strict UTF-8 as RFC 3629 defines it), without raising an exception (issue #6554).
@@ -1646,6 +1668,8 @@
       - the writers can quote fields by type and write a field without a value without quotes, so that it can be told
         apart from an empty string (see @ref csvwriter_quoting)
         (<a href="https://github.com/qoretechnologies/qore/issues/3113">issue 3113</a>)
+      - the readers take the \c "encoding_errors" option (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - see @ref csvutil_v1_12 for all changes
 
     - @ref connectionproviderintro "ConnectionProvider" module
@@ -1673,6 +1697,8 @@
       - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); errors
         written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no terminal I/O
         instead of raising an exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - the @ref DataProvider::EncodingErrorsOptionInfo "EncodingErrorsOptionInfo" option of the data providers that
+        read text (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - see @ref dataprovider_v3_12 for all changes
 
     - @ref datasourceproviderintro "DatasourceProvider" module
@@ -1721,6 +1747,11 @@
     - @ref empathicbuildingdataproviderintro "EmpathicBuildingDataProvider" module
       - see @ref empathicbuildingdataprovider_v1_2 for all changes
 
+    - @ref filedataproviderintro "FileDataProvider" module
+      - the get request takes the \c encoding_errors field for text (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - see @ref filedataprovider_v2_2 for all changes
+
     - @ref filelocationhandlerintro "FileLocationHandler" module
       - \c http(s):// and \c rest(s):// locations use @ref httpclientiointro "HttpClientIo" and
         @ref restclientiointro "RestClientIo" (HTTP/1.1, HTTP/2 and HTTP/3)
@@ -1729,6 +1760,9 @@
       - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
         terminal I/O instead of raising an exception
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - text reads check the text in its encoding, with the \c encoding_errors read option (see
+        @ref filelocationhandler_encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - see @ref filelocationhandler_v3_0 for all changes
 
     - @ref filepollerintro "FilePoller" module
@@ -1740,6 +1774,16 @@
         next poll instead of stopping polling (see @ref filepollererrors;
         <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
       - see @ref file_poller_2_1 for all changes
+
+    - @ref fixedlengthutilintro "FixedLengthUtil" module
+      - the iterators and the read data provider take the \c "encoding_errors" option (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - see @ref fixedlengthutil_v1_7 for all changes
+
+    - @ref ftpclientdataproviderintro "FtpClientDataProvider" module
+      - the \c get-file request takes the \c encoding_errors field for text (see @ref encoding_errors)
+        (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - see @ref ftpclientdataprovider_v2_1 for all changes
 
     - @ref ftppollerintro "FtpPoller" module
       - uses the \c start_thread capability of the code that a host runs
@@ -2369,10 +2413,23 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
+      a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
+      take it for the byte order of a line (see @ref encoding_errors; issue #6604)
+    - @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()" checks every byte of a multi-byte character and
+      returns a \c UTF-16LE surrogate pair whole, where it checked only the first byte and returned half of the pair
+      (see @ref encoding_errors; issue #6620)
+    - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" of @ref sqlutilintro "SqlUtil"
+      with a description of another table name, which raised \c LOCK-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>); see @ref sqlutilv3_11_0
     - fixed @ref Qore::SQL::SQLStatement::describe() "SQLStatement::describe()" before the first execution of a statement
       with a driver that describes it without executing it (ex: oracle), which lost the values given to
       @ref Qore::SQL::SQLStatement::bind() "SQLStatement::bind()": the next fetch returned \c NULL for them
       (<a href="https://github.com/qoretechnologies/qore/issues/6690">issue 6690</a>)
+    - a method call resolved at run time (as on a value of type \c object) or a call reference made through it skips
+      an inaccessible @ref private_methods "private method" of a parent class and calls the accessible method of a
+      later parent class, as a call through a variable of the class does, instead of raising \c METHOD-IS-PRIVATE
+      (issue #6704)
     - @ref Qore::trunc_str() "trunc_str()" returns a string with a NUL byte that is shorter than the length whole,
       where it returned its bytes up to the NUL byte and memory after them (issue #6604)
     - SqlUtil driver modules: the names of types, their attributes, functions, procedures, packages and materialized
@@ -2388,6 +2445,10 @@
       found in a class with that name that provides it, also when the name resolves first to another class with that
       name that does not (such as a class of the Qore namespace; see @ref class_member_scope_resolution); the
       reference raised a parse exception (issue #1527)
+    - code that the AST interpreter runs (in any execution mode) returns the value of a return in an
+      @ref on_exit "on_exit", @ref on_success "on_success" or @ref on_error "on_error" handler when a handler of the
+      same block that runs after it completes normally, as compiled code does, instead of going on with the function
+      (see @ref on_exit_return; issue #6677)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
@@ -2408,6 +2469,8 @@
     - a call of a method in a diamond class hierarchy tests the variants of a method of a shared ancestor once, not
       once for each path to the ancestor, so that a later path through a private edge no longer hides the parent
       classes after it, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see @ref overloading_intro; issue #6488)
+    - @ref connectionprovider_3_1 "ConnectionProvider" accepts closures and call references for \c code connection
+      options and checks parameterized option types by assignment (issue #6712)
     - @ref connectionproviderintro "ConnectionProvider" module: a list connection option with allowed element values
       accepts its allowed elements; every non-empty list was refused (see @ref connectionprovider_3_1; issue #6490)
     - @ref Qore::thread_list() "thread_list()" lists a thread from the time its TID is returned by the
@@ -3652,6 +3715,27 @@
     - fixed an upsert closure of @ref sqlutilintro "SqlUtil" kept across a call of
       @ref SqlUtil::AbstractTable::clear() "AbstractTable::clear()", which raised \c OBJECT-ALREADY-DELETED
       (<a href="https://github.com/qoretechnologies/qore/issues/6686">issue 6686</a>); see @ref sqlutilv3_11_0
+    - fixed the upsert of a row of list values (bulk DML) with @ref sqlutilintro "SqlUtil" by
+      \c upsertFromIterator() or an upsert closure made from such a row, which failed with a bind error with every
+      driver but Oracle (<a href="https://github.com/qoretechnologies/qore/issues/6691">issue 6691</a>), and with the
+      select-first strategy on Oracle (<a href="https://github.com/qoretechnologies/qore/issues/6688">issue 6688</a>);
+      see @ref sqlutilv3_11_0
+    - fixed the upsert of a row with no column to update with @ref sqlutilintro "SqlUtil" (only key columns, or the
+      others omitted with \c omit_update), which gave an invalid update statement, or with an update-only upsert
+      inserted the row (SQL Server) or raised an error (Oracle)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6692">issue 6692</a>); see @ref sqlutilv3_11_0
+    - fixed the upserts and the \c delete_others upsert option of @ref sqlutilintro "SqlUtil" on MySQL without a strict
+      SQL mode, which did not find the row of an integer key out of the range of its column
+      (<a href="https://github.com/qoretechnologies/qore/issues/6689">issue 6689</a>); see @ref sqlutilv3_11_0
+    - fixed the upserts of @ref sqlutilintro "SqlUtil" on PostgreSQL with an array column in the upsert key, which
+      failed with a missing operator for the array types
+      (<a href="https://github.com/qoretechnologies/qore/issues/6695">issue 6695</a>); see @ref sqlutilv3_11_0
+    - fixed @ref SqlUtil::op_in() "op_in()" on SQLite with dates, which failed with a syntax error, and with numbers
+      and floats, which compared otherwise than the same values bound
+      (<a href="https://github.com/qoretechnologies/qore/issues/6634">issue 6634</a>); see @ref sqlite3sqlutilv12
+    - fixed @ref SqlUtil::cop_value() "cop_value()" and the update operators on SQLite with floats, which lost
+      precision (an update stored another value); a relative date raises an error there, as SQLite has no interval
+      type (<a href="https://github.com/qoretechnologies/qore/issues/6715">issue 6715</a>); see @ref sqlite3sqlutilv12
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)

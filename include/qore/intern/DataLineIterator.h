@@ -133,11 +133,14 @@ public:
 
 private:
     DLLLOCAL void doReset(ExceptionSink* xsink) {
+        // the lines of a string are not checked: the string has been checked or tagged when it was made
         if (!str->getEncoding()->isAsciiCompat()) {
             src = new InputStreamLineIterator(xsink, new EncodingConversionInputStream(new StringInputStream(*str),
-                str->getEncoding(), QCS_UTF8, xsink), QCS_UTF8, *eol, trim);
+                str->getEncoding(), QCS_UTF8, xsink), QCS_UTF8, *eol, trim, DefaultStreamBufferSize,
+                qore_encoding_errors_t::KEEP);
         } else {
-            src = new InputStreamLineIterator(xsink, new StringInputStream(*str), str->getEncoding(), *eol, trim);
+            src = new InputStreamLineIterator(xsink, new StringInputStream(*str), str->getEncoding(), *eol, trim,
+                DefaultStreamBufferSize, qore_encoding_errors_t::KEEP);
         }
     }
 

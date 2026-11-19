@@ -938,14 +938,25 @@ public class ConnectionSchemeCache {
                         }
                         continue;
                     }
-                    if (info.ignore_types{vtype}) {
-                        delete options{i.key};
-                        continue;
+                    # A runtime type name does not describe assignability: closures and function references
+                    # both satisfy code, and a typed collection reports only its container name.
+                    try {
+                        Reflection::Type target(DataProvider::OptimalQoreDataTypeMap{type} ?? type);
+                        i.value = target.acceptsValue(i.value);
+                        options{i.key} = i.value;
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "UNKNOWN-TYPE" && ex.err != "RUNTIME-TYPE-ERROR") {
+                            rethrow;
+                        }
+                        if (info.ignore_types{vtype}) {
+                            delete options{i.key};
+                            continue;
+                        }
+                        # The value and the underlying assignment diagnostic can contain credentials.
+                        throw "CONNECTION-OPTION-ERROR",
+                            sprintf("Connection %y (type %y) option %y was passed with type %s; expecting %y",
+                                conn_name, scheme_info.display_name, i.key, i.value.fullType(), type);
                     }
-                    # only the type of the value, which can be a credential
-                    throw "CONNECTION-OPTION-ERROR",
-                        sprintf("Connection %y (type %y) option %y was passed with type %s; expecting %y",
-                            conn_name, scheme_info.display_name, i.key, i.value.fullType(), type);
                 }
                 if (info.subst_env_vars) {
                     options{i.key} = substitute_env_vars(i.value);

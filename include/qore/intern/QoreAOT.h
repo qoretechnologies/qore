@@ -69,6 +69,7 @@ class LocalVar;
 class QoreClass;
 class QoreFunction;
 class LocalFunctionCallReferenceNode;
+class ParseObjectMethodReferenceNode;
 class QoreIRFunction;
 class QoreIRLValuePathInstruction;
 class QoreMethod;
@@ -1031,6 +1032,40 @@ DLLLOCAL const QoreMethod* qore_aot_find_named_method(const QoreClass* qc, const
 //! Resolves a class reference emitted by qore_aot_encode_class_ref().
 DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         const char* class_ref, bool pseudo = false);
+
+//! Returns the name of an object method reference as an AOT image stores it, with the method resolved when parsing
+/** For a normal method of a parent class resolved for the receiver's declared class, which a reference to the method
+    of an object of that class refers to, as a call does (qore#6680), the name is given with both classes, as
+    "\x02<declared class reference>\x01<method class reference>\x01<method name>"; otherwise it is the method name.
+    Native code passes it to qore_rt_create_object_method_ref_aot(), and the serialized expressions of an image (such
+    as default argument values and member initializers) store it; qore_aot_decode_object_method_ref() reads it.
+*/
+DLLLOCAL std::string qore_aot_object_method_ref_name(const ParseObjectMethodReferenceNode* omr);
+
+//! Decodes a name of qore_aot_object_method_ref_name()
+/** @param pgm the Program whose classes the class references are resolved in
+    @param ref the name as stored
+    @param method_name set to the method name in \a ref
+    @param declared_class set to the declared class of the receiver, or nullptr if \a ref gives none or it cannot be
+    resolved
+    @param method set to the method resolved when parsing (the method class's own normal method of the name, also
+    while the class is being loaded), or nullptr if \a ref gives none or it cannot be resolved
+
+    @return true if \a ref is valid (also when the classes cannot be resolved), false if it is malformed
+*/
+DLLLOCAL bool qore_aot_decode_object_method_ref(QoreProgram* pgm, const char* ref, const char*& method_name,
+        const QoreClass*& declared_class, const QoreMethod*& method);
+
+//! Creates an object method reference node of an expression read from an AOT image
+/** @param pgm the Program whose classes the class references are resolved in
+    @param target the object expression, whose reference is taken over
+    @param ref the name as stored (see qore_aot_object_method_ref_name())
+
+    @return the node, with the declared class and the method resolved when parsing restored if \a ref gives them, or
+    nullptr if \a ref is malformed (then \a target is released)
+*/
+DLLLOCAL ParseObjectMethodReferenceNode* qore_aot_make_object_method_ref(QoreProgram* pgm, QoreValue target,
+        const char* ref);
 
 //! Finds a method of a class or of its parent classes that may not be committed yet, without an access check
 /** A method reference in an expression that is read while a module's classes are being loaded, such as the initial
