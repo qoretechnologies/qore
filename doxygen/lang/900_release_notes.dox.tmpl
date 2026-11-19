@@ -2420,11 +2420,6 @@
     - a call by name of a \c constructor() or \c destructor() method that only a parent class declares, and a call
       reference by name to a \c constructor(), \c destructor() or \c copy() method, are refused with an exception, where
       they crashed (see @ref class_special_methods "special methods"; issue #6783)
-    - the members of a class inherited with @ref private_inheritance "private:internal" are accessible on objects of
-      the inheriting class only in that class, the declaring class and the classes between them (issue #6640)
-    - a name in a class resolves to a member only if the class can access it: a member reached only through a base
-      class that a base class inherits with @ref private_inheritance "private:internal" is not a candidate
-      (issue #6667)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)
