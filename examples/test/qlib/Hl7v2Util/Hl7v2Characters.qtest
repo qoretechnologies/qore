@@ -37,6 +37,7 @@ public class Hl7v2CharactersTest inherits QUnit::Test {
         addTestCase("non-ASCII separators", \separatorTest());
         addTestCase("lengths in characters", \lengthTest());
         addTestCase("large message", \largeTest());
+        addTestCase("schema directory path", \schemaDirTest());
         set_return_value(main());
     }
 
@@ -376,5 +377,43 @@ public class Hl7v2CharactersTest inherits QUnit::Test {
         assertEq(200000, expected.length());
         assertEq(expected, msg.getAddress("NTE-3"));
         assertEq(text, msg.getText());
+    }
+
+    private schemaDirTest() {
+        # a schema directory whose name has characters other than ASCII and that ends with the directory separator
+        TmpDir tmp();
+        string schema_dir = tmp.path + DirSep + "Ré€😀" + DirSep;
+        mkdir(schema_dir + "2.5.1", 0700, True);
+        Hl7v2Schema schema({
+            "version": "2.5.1",
+            "segments": {
+                "ZPN": {
+                    "tag": "ZPN",
+                    "name": "Notiz é€😀",
+                    "fields": (
+                        {"position": 1, "name": "Feld ü", "datatype": "ST", "max_length": 4},
+                    ),
+                },
+            },
+        });
+        {
+            File f();
+            f.open2(schema_dir + "2.5.1" + DirSep + "schema.qv", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Hl7v2SchemaValueSerializer::serializeSchema(schema));
+        }
+        Hl7v2Schema loaded = Hl7v2SchemaRegistry::loadVersion("2.5.1", schema_dir, True);
+        assertEq("Notiz é€😀", loaded.getSegmentDef("ZPN").name);
+
+        # the path of a version that is not there is the directory and the version without a second separator
+        string expected_path = schema_dir + "9.9" + DirSep + "schema.qv";
+        *hash<ExceptionInfo> err;
+        try {
+            Hl7v2SchemaRegistry::loadVersion("9.9", schema_dir, True);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("FILE-OPEN2-ERROR", err.err);
+        assertNeq(-1, err.desc.find("'" + expected_path + "'"), err.desc);
+        assertEq(-1, err.desc.find(DirSep + DirSep), err.desc);
     }
 }

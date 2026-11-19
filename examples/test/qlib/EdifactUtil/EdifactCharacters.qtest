@@ -27,6 +27,75 @@ public class EdifactCharactersTest inherits QUnit::Test {
             "LOC+é+€+😀'"
             "UNT+5+1'"
             "UNZ+1+REF€01'";
+
+        #! directory files with characters other than ASCII in names, descriptions and codes; the lines are
+        #! separated with LF, and loaderTest() writes them with CRLF too
+        const DirFiles = {
+            "EDED.99Z": "1.   Data element directory\n"
+                "\n"
+                "     1001  Dokumentname é€😀                                    [C]\n"
+                "\n"
+                "     Desc: Code für den Dokumentnamen € 😀\n"
+                "\n"
+                "     Repr: an..3\n",
+            "EDCD.99Z": "2.   Composite data element directory\n"
+                "\n"
+                "     C002  DOKUMENT/NACHRICHT é\n"
+                "\n"
+                "     Desc: Kennung eines Dokuments – Grüße 😀\n"
+                "\n"
+                "010  1001 DOKUMENTNAME CODE é€                     C  an..3\n"
+                "020  1131 CODELISTE 😀                              C  an..3\n",
+            "EDSD.99Z": "2.   Segment specifications\n"
+                "\n"
+                "       BGM  BEGINN DER NACHRICHT é€😀\n"
+                "\n"
+                "       Function: Typ und Funktion der Nachricht – Straße 😀\n"
+                "\n"
+                "010    C002 DOKUMENT/NACHRICHT é                    C    1\n"
+                "020    1004 DOKUMENTNUMMER €                        C    1 an..35\n",
+            "UNCL.99Z": "CHAPTER 6 Code list\n"
+                "\n"
+                "     1001  Dokumentname é€😀                                    [C]\n"
+                "\n"
+                "     Desc: Code für den Dokumentnamen € 😀\n"
+                "\n"
+                "     Repr: an..3\n"
+                "\n"
+                "     29     Bestellantwort – Grüße 😀\n",
+            "EDMD/ORDRSP_D.99Z": "                              UN/EDIFACT\n"
+                "\n"
+                "                        Bestellantwort message é\n"
+                "\n"
+                "                                           Message Type : ORDRSP\n"
+                "                                           Version      : D\n"
+                "                                           Release      : 99Z\n"
+                "\n"
+                "Function: Antwort auf eine Bestellung – é€😀\n"
+                "Note: Notiz für Zürich €\n"
+                "\n"
+                "4.1    Segment clarification\n"
+                "\n"
+                "0010   UNH, Nachrichtenkopf é\n"
+                "0020   BGM, Beginn der Nachricht €\n"
+                "0030       Segment group 1:  RFF-DTM 😀\n"
+                "0040           RFF, Referenz ü\n"
+                "\n"
+                "4.2    Segment index (alphabetical sequence by tag)\n"
+                "\n"
+                "BGM BEGINN DER NACHRICHT €\n"
+                "RFF REFERENZ ü\n"
+                "UNH NACHRICHTENKOPF é\n"
+                "\n"
+                "4.3.1  Segment table\n"
+                "\n"
+                "Pos    Tag Name                                      S   R\n"
+                "\n"
+                "0010   UNH Nachrichtenkopf é                         M   1\n"
+                "0020   BGM Beginn der Nachricht €                    M   1\n"
+                "0030       Segment group 1                            C   5\n"
+                "0040   RFF Referenz ü                                M   1\n",
+        };
     }
 
     constructor() : Test("EdifactCharactersTest", "1.0") {
@@ -37,6 +106,8 @@ public class EdifactCharactersTest inherits QUnit::Test {
         addTestCase("escape and unescape", \escapeTest());
         addTestCase("writer", \writerTest());
         addTestCase("large interchange", \largeTest());
+        addTestCase("schema cache", \cacheTest());
+        addTestCase("directory loader with CRLF files", \loaderTest());
         set_return_value(main());
     }
 
@@ -249,5 +320,214 @@ public class EdifactCharactersTest inherits QUnit::Test {
         string expected = strmul("é€😀+", 50000);
         assertEq(200000, expected.length());
         assertEq(expected, big_seg.data_elements[3][0]);
+    }
+
+    private cacheTest() {
+        TmpDir tmp();
+        # a cache root whose name has characters other than ASCII and that ends with the directory separator
+        string root = tmp.path + "/Ré€😀/";
+        EdifactDirectoryCache cache(root);
+        assertEq(root + "UN/EDIFACT/D99Z/schema.qv", cache.getSchemaPath("D99Z"));
+
+        EdifactSchema schema("D99Z");
+        schema.meta.source = "Qüelle € 😀";
+        schema.meta.source_dir = root;
+        schema.element_defs."1001" = <EdifactElementDef>{
+            "id": "1001",
+            "name": "Dokumentname é€😀",
+            "type": "an",
+            "min_length": 0,
+            "max_length": 3,
+            "desc": "Code für den Dokumentnamen € 😀",
+        };
+        schema.composite_defs.C002 = <EdifactCompositeDef>{
+            "id": "C002",
+            "name": "DOKUMENT/NACHRICHT é",
+            "components": (
+                <EdifactComponentDef>{
+                    "id": "1001",
+                    "status": "C",
+                    "min": 0,
+                    "max": 1,
+                    "desc": "Komponente – Grüße 😀",
+                },
+                <EdifactComponentDef>{
+                    "id": "1131",
+                    "status": "M",
+                    "min": 1,
+                    "max": 1,
+                    "desc": "Codeliste é€",
+                },
+            ),
+            "desc": "Kennung €",
+        };
+        schema.segment_defs.BGM = <EdifactSegmentDef>{
+            "tag": "BGM",
+            "name": "Beginn der Nachricht é€😀",
+            "segment_elements": (
+                <EdifactSegmentElementDef>{
+                    "id": "C002",
+                    "status": "C",
+                    "min": 0,
+                    "max": 1,
+                    "composite": True,
+                    "desc": "Straße ü",
+                },
+                <EdifactSegmentElementDef>{
+                    "id": "1004",
+                    "status": "C",
+                    "min": 0,
+                    "max": 1,
+                    "composite": False,
+                    "desc": "Nummer 😀",
+                },
+            ),
+            "desc": "Funktion 😀",
+        };
+        schema.message_defs.ORDRSP = <EdifactMessageDef>{
+            "type": "ORDRSP",
+            "name": "Bestellantwort é",
+            "version": "D",
+            "release": "99Z",
+            "structure": (
+                <EdifactMessageNode>{
+                    "kind": "segment",
+                    "id": "BGM",
+                    "pos": "0010",
+                    "name": "Beginn €",
+                    "status": "M",
+                    "min": 1,
+                    "max": 1,
+                    "children": (),
+                },
+                <EdifactMessageNode>{
+                    "kind": "segment",
+                    "id": "DTM",
+                    "pos": "0020",
+                    "name": "Datum é",
+                    "status": "C",
+                    "min": 0,
+                    "max": 5,
+                    "children": (),
+                },
+            ),
+            "segment_index": ({"tag": "BGM", "name": "BEGINN 😀"}, {"tag": "DTM", "name": "DATUM é"}),
+            "function": "Antwort – é€😀",
+            "notes": ("Notiz für Zürich", "zweite Notiz €"),
+        };
+        # (each list has more than one element: a list of one element is read back from the cache as the element)
+        # a code with a key other than ASCII
+        schema.codelists.uncl = {
+            "1001": {
+                "name": "Dokumentname é",
+                "codes": {"29": "Bestellantwort €", "Ä1": "Code 😀"},
+            },
+        };
+
+        cache.writeSchema(schema);
+        assertTrue(is_file(cache.getSchemaPath("D99Z")));
+        # the text is written as it is
+        string contents = ReadOnlyFile::readTextFile(cache.getSchemaPath("D99Z"));
+        assertRegex("\"Dokumentname é€😀\"", contents);
+        assertRegex("\"Ä1\"=\"Code 😀\"", contents);
+
+        *EdifactSchema loaded = cache.loadSchema("D99Z", {"cache_error": "error"});
+        assertEq(Type::Object, loaded.type());
+        assertEq("Qüelle € 😀", loaded.meta.source);
+        assertEq(root, loaded.meta.source_dir);
+        assertEq("Dokumentname é€😀", loaded.element_defs."1001".name);
+        assertEq("Code für den Dokumentnamen € 😀", loaded.element_defs."1001".desc);
+        assertEq("Komponente – Grüße 😀", loaded.composite_defs.C002.components[0].desc);
+        assertEq("Beginn der Nachricht é€😀", loaded.segment_defs.BGM.name);
+        assertEq("Straße ü", loaded.segment_defs.BGM.segment_elements[0].desc);
+        assertEq("Antwort – é€😀", loaded.message_defs.ORDRSP.function);
+        assertEq("Beginn €", loaded.message_defs.ORDRSP.structure[0].name);
+        assertEq("Code 😀", loaded.codelists.uncl."1001".codes."Ä1");
+        assertEq(schema.toHash(), loaded.toHash());
+    }
+
+    #! writes the directory files under the given directory with the given line separator
+    private writeDirFiles(string dir, string eol) {
+        mkdir(dir + "EDMD", 0700, True);
+        foreach hash<auto> i in (DirFiles.pairIterator()) {
+            File f();
+            f.open2(dir + i.key, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(replace(i.value, "\n", eol));
+        }
+    }
+
+    #! asserts that no string in the value has a CR
+    private assertNoCr(auto val, string path) {
+        switch (val.typeCode()) {
+            case NT_STRING:
+                assertEq(-1, val.find("\r"), path);
+                break;
+            case NT_LIST:
+                foreach auto v in (val) {
+                    assertNoCr(v, sprintf("%s[%d]", path, $#));
+                }
+                break;
+            case NT_HASH:
+                foreach hash<auto> i in (val.pairIterator()) {
+                    assertEq(-1, i.key.find("\r"), path);
+                    assertNoCr(i.value, path + "." + i.key);
+                }
+                break;
+        }
+    }
+
+    private loaderTest() {
+        TmpDir tmp();
+        # directories whose names have characters other than ASCII and that end with the directory separator
+        string lf_dir = tmp.path + "/Ré€😀/lf/";
+        string crlf_dir = tmp.path + "/Ré€😀/crlf/";
+        writeDirFiles(lf_dir, "\n");
+        writeDirFiles(crlf_dir, "\r\n");
+
+        EdifactDirectoryLoader loader();
+        EdifactSchema lf = loader.loadFromFlatDir(lf_dir, "D99Z");
+        EdifactSchema crlf = loader.loadFromFlatDir(crlf_dir, "D99Z");
+
+        # the paths are the directory and the file name without a second separator
+        foreach string dir in (lf_dir, crlf_dir) {
+            EdifactSchema schema = dir == lf_dir ? lf : crlf;
+            assertEq({
+                "EDED": dir + "EDED.99Z",
+                "EDCD": dir + "EDCD.99Z",
+                "EDSD": dir + "EDSD.99Z",
+                "EDMD": dir + "EDMD",
+                "UNCL": dir + "UNCL.99Z",
+            }, schema.meta.parsed_files);
+            assertEq(dir + "EDMD", schema.raw.files.EDMD);
+        }
+
+        hash<auto> h = crlf.toHash() - ("meta", "raw");
+        assertNoCr(h, "schema");
+        # the CRLF files give the same definitions as the LF files
+        assertEq(lf.toHash() - ("meta", "raw"), h);
+
+        assertEq("Dokumentname é€😀", crlf.element_defs."1001".name);
+        assertEq("Code für den Dokumentnamen € 😀", crlf.element_defs."1001".desc);
+        assertEq(3, crlf.element_defs."1001".max_length);
+        assertEq("DOKUMENT/NACHRICHT é", crlf.composite_defs.C002.name);
+        assertEq("Kennung eines Dokuments – Grüße 😀", crlf.composite_defs.C002.desc);
+        assertEq(("DOKUMENTNAME CODE é€", "CODELISTE 😀"), map $1.desc, crlf.composite_defs.C002.components);
+        assertEq("BEGINN DER NACHRICHT é€😀", crlf.segment_defs.BGM.name);
+        assertEq("Typ und Funktion der Nachricht – Straße 😀", crlf.segment_defs.BGM.desc);
+        assertEq(("DOKUMENT/NACHRICHT é", "DOKUMENTNUMMER €"), map $1.desc, crlf.segment_defs.BGM.segment_elements);
+        assertEq("Dokumentname é€😀", crlf.codelists.uncl."1001".name);
+        assertEq("Code für den Dokumentnamen € 😀", crlf.codelists.uncl."1001".desc);
+        assertEq({"29": "Bestellantwort – Grüße 😀"}, crlf.codelists.uncl."1001".codes);
+
+        hash<EdifactMessageDef> msg = crlf.message_defs.ORDRSP;
+        assertEq("Bestellantwort message é", msg.name);
+        assertEq("99Z", msg.release);
+        assertEq("Antwort auf eine Bestellung – é€😀", msg.function);
+        assertEq(("Notiz für Zürich €",), msg.notes);
+        assertEq(("UNH", "BGM", "SG1"), map $1.id, msg.structure);
+        assertEq(("Nachrichtenkopf é", "Beginn der Nachricht €"), map $1.name, msg.structure[0..1]);
+        assertEq(("M", "M", "C"), map $1.status, msg.structure);
+        assertEq("Referenz ü", msg.structure[2].children[0].name);
+        assertEq(("BEGINN DER NACHRICHT €", "REFERENZ ü", "NACHRICHTENKOPF é"), map $1.name, msg.segment_index);
     }
 }

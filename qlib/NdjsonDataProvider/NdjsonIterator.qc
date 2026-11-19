@@ -77,8 +77,8 @@ public class NdjsonIterator inherits AbstractIterator {
         for (int i = 0; i < lines.size(); i++) {
             string line = lines[i];
             # Remove trailing CR if present (CRLF case)
-            if (line.size() > 0 && line[line.size() - 1] == "\r") {
-                lines[i] = line.substr(0, line.size() - 1);
+            if (line.size() > 0 && line.substr(-1) == "\r") {
+                lines[i] = line.substr(0, -1);
                 line = lines[i];
             }
             if (line.size() > opts.max_line_length) {
@@ -249,15 +249,15 @@ public class InputStreamNdjsonIterator inherits AbstractIterator {
                     line = convert_encoding(line, "UTF-8");
                 }
 
-                # Check line length
-                if (line.size() > opts.max_line_length) {
-                    throw "NDJSON-LINE-TOO-LONG", sprintf("line %d exceeds maximum length of %d bytes (actual: %d)",
-                        line_number, opts.max_line_length, line.size());
-                }
-
                 # Remove trailing CR if present (CRLF case)
                 if (line.size() > 0 && line.substr(-1) == "\r") {
                     line = line.substr(0, -1);
+                }
+
+                # Check line length; the CR of a CRLF line ending is not counted, as with NdjsonIterator
+                if (line.size() > opts.max_line_length) {
+                    throw "NDJSON-LINE-TOO-LONG", sprintf("line %d exceeds maximum length of %d bytes (actual: %d)",
+                        line_number, opts.max_line_length, line.size());
                 }
                 empty = line.empty() || line =~ /^\s*$/;
             } catch (hash<ExceptionInfo> ex) {

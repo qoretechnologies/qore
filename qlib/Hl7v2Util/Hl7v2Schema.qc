@@ -469,7 +469,7 @@ public namespace Hl7v2Util {
             if (!base) {
                 return leaf;
             }
-            return base[base.size() - 1] == DirSep ? base + leaf : base + DirSep + leaf;
+            return base.substr(-1) == DirSep ? base + leaf : base + DirSep + leaf;
         }
     }
 
@@ -585,10 +585,10 @@ public namespace Hl7v2Util {
         private bool isFieldElement(string tag, hash<auto> element) {
             string path = element.path ?? "";
             string prefix = tag + ".";
-            if (path.substr(0, prefix.size()) != prefix) {
+            if (path.substr(0, prefix.length()) != prefix) {
                 return False;
             }
-            string name = path.substr(prefix.size());
+            string name = path.substr(prefix.length());
             return !IgnoredElementNames{name};
         }
 
