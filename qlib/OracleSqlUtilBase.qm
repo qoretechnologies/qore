@@ -4777,22 +4777,26 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         return rv;
     }
 
-    #! returns the type that the "delete_others" upsert option converts a key value to (issue #6675)
-    /** a string longer than the largest \c CHAR or \c NCHAR is not cast, as a cast would truncate it, and it cannot
-        be the value of such a column
+    #! returns the SQL expression that converts a key value to the type of its column (issues #6675, #6676)
+    /** a cast to \c CHAR(2000 BYTE) or \c NCHAR(1000) truncates a longer value, which could then match another row:
+        such a value gives \c NULL, which matches no row, as it cannot be the value of a \c CHAR or \c NCHAR column
     */
-    private *string getDeleteOthersKeyCastType(string type, auto val) {
-        if (val.typeCode() == NT_STRING) {
-            # the length is measured as the database measures it: CHAR in bytes in the encoding that the value is
-            # bound in, NCHAR in UTF-16 code units (a character above U+FFFF counts as two)
-            if (type == "CHAR(2000 BYTE)" && convert_encoding(val, ds.getOSEncoding()).size() > 2000) {
-                return;
-            }
-            if (type == "NCHAR(1000)" && convert_encoding(val, "UTF-16BE").size() > 2000) {
-                return;
-            }
+    private string getKeyCastExpr(string expr, string type) {
+        *string cond;
+        if (type == "CHAR(2000 BYTE)") {
+            cond = "lengthb(%s) <= 2000";
+        } else if (type == "NCHAR(1000)") {
+            cond = "lengthb(to_nchar(%s)) <= 2000";
         }
-        return type;
+        if (!cond) {
+            return sprintf("cast(%s as %s)", expr, type);
+        }
+        # a bound value is named once in a scalar subquery, as it is bound once
+        if (expr == "%v") {
+            return sprintf("(select case when %s then cast(v as %s) end from (select %%v as v from dual))",
+                sprintf(cond, "v"), type);
+        }
+        return sprintf("case when %s then cast(%s as %s) end", sprintf(cond, expr), expr, type);
     }
 
     private Columns describeImpl() {
@@ -6490,9 +6494,11 @@ group by p.index_name", schema.upr(), name.upr());
             return getUpsertInsertOnly(cols, row, opt);
 
         string sql = sprintf("merge into %s t using (select ", getSqlName());
-        sql += foldl $1 + "," + $2, (map sprintf("%v as %s", getColumnSqlName($1)), keys row);
+        sql += foldl $1 + "," + $2, (map "%v as " + getColumnSqlName($1), keys row);
         sql += " from dual) source on (";
-        sql += foldl $1 + " and " + $2, (map sprintf("t.%s = source.%s", $1, $1), getColumnSqlNames(cols.keys()));
+        # the stored key is compared with the bound value converted as the column stores it; the value inserted is the
+        # value as bound, as with a plain insert (issue #6676)
+        sql += getUpsertMergeKeyConditions(cols, row);
         sql += sprintf(") when not matched then insert (");
         sql += foldl $1 + "," + $2, getColumnSqlNames(keys row);
         sql += ") values (";
@@ -6513,9 +6519,11 @@ group by p.index_name", schema.upr(), name.upr());
     #! high-performance "insert only" upsert supporting bulk DML
     private code getUpsertInsertOnly(Columns cols, hash<auto> row, *hash<auto> opt) {
         string sql = sprintf("merge into %s t using (select ", getSqlName());
-        sql += foldl $1 + "," + $2, (map sprintf("%v as %s", $1), getColumnSqlNames(row.keys()));
+        sql += foldl $1 + "," + $2, (map "%v as " + getColumnSqlName($1), keys row);
         sql += " from dual) source on (";
-        sql += foldl $1 + " and " + $2, (map sprintf("t.%s = source.%s", $1, $1), getColumnSqlNames(cols.keys()));
+        # the stored key is compared with the bound value converted as the column stores it; the value inserted is the
+        # value as bound, as with a plain insert (issue #6676)
+        sql += getUpsertMergeKeyConditions(cols, row);
         sql += sprintf(") when not matched then insert (");
         sql += foldl $1 + "," + $2, getColumnSqlNames(row.keys());
         sql += ") values (";
@@ -6545,7 +6553,8 @@ group by p.index_name", schema.upr(), name.upr());
                 "columns present are the columns for the unique key used for the update: %y", getSqlName(), keys row);
 
         string sql = sprintf("merge into %s t using dual on (", getSqlName());
-        sql += foldl $1 + " and " + $2, (map sprintf("%s=%v", $1), getColumnSqlNames(cols.keys()));
+        # a key value is converted as the column stores it, so that the row stored for the key is matched (issue #6676)
+        sql += getUpsertKeyConditions(cols, row);
         sql += sprintf(") when matched then update set ");
 
         # get update columns
