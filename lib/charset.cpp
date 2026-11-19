@@ -371,6 +371,12 @@ QoreEncodingManager::QoreEncodingManager() {
         false);
     addAlias(QCS_UTF16LE, "UTF16LE");
 
+    // every Unicode character can be represented in the built-in Unicode encodings, as in the Unicode forms created
+    // on the fly (qore#6604)
+    for (const QoreEncoding* enc : {QCS_UTF8, QCS_UTF16, QCS_UTF16BE, QCS_UTF16LE}) {
+        qore_encoding_private::get(*const_cast<QoreEncoding*>(enc))->unicode_complete = true;
+    }
+
     QCS_ISO_8859_1 = addUnlocked(ISO88591_STR, "latin-1, Western European character set");
     addAlias(QCS_ISO_8859_1, "ISO88591");
     addAlias(QCS_ISO_8859_1, "ISO-8859-1");
@@ -1617,8 +1623,8 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
       that parses or splits it.
 
     A name with iconv conversion flags after "//" (ex: "UTF-16LE//") that iconv does not know is probed and converted
-    without the flags if iconv knows that name (musl does not take the flags off, and macOS takes them off only in a
-    target name), so that the encoding has the same
+    without the flags if iconv knows that name (musl rejects every name with flags, and GNU libiconv, as on macOS with
+    MacPorts, a name whose flags are empty), so that the encoding has the same
     properties on every platform; see qore_encoding_private::iconvCodeWithoutFlags().
 
     If iconv does not know the encoding, the properties are not changed: no text can be converted to or from the
@@ -1626,7 +1632,8 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
     error when the encoding is named (ex: in a string tagged with an encoding only for information).
 */
 void qore_encoding_private::probe() {
-    // a name with conversion flags that iconv does not accept is given to iconv without them (musl, macOS)
+    // a name with conversion flags that iconv does not accept is given to iconv without them (musl; GNU libiconv for
+    // empty flags)
     iconv_code = iconvCodeWithoutFlags(code, [](const std::string& name) -> bool {
         ProbeConverter to(name.c_str(), "UTF-8");
         ProbeConverter from("UTF-8", name.c_str());

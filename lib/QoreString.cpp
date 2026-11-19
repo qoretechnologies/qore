@@ -914,8 +914,7 @@ bool qore_string_private::conversion_needs_roundtrip_check(const QoreEncoding* f
         return false;
     }
     // every character has a representation in Unicode, so these conversions cannot lose data
-    if (to == QCS_UTF8 || to == QCS_UTF16 || to == QCS_UTF16BE || to == QCS_UTF16LE
-            || qore_encoding_private::get(*to)->unicode_complete) {
+    if (qore_encoding_private::get(*to)->unicode_complete) {
         return false;
     }
     // an all-ASCII source moving between ASCII-compatible encodings cannot lose data either;
