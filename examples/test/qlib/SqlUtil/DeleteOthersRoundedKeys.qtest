@@ -1,0 +1,248 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class DeleteOthersRoundedKeysTest
+
+#! the delete_others upsert option keeps the row of an input key that the column rounds (issue #6635)
+/** a key value that the column rounds when it stores it (a date with fractional seconds in a column with whole
+    seconds, a number with more decimals than the column, a float in an integer column) was not found by the lookup
+    of the input keys that matched no row, as the bound value was compared with the rounded one, so the row that the
+    upsert had just written was deleted; runs on SQLite, and on PostgreSQL, MySQL, Oracle and SQL Server when
+    \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL, \c QORE_DB_CONNSTR_ORACLE and \c QORE_DB_CONNSTR_FREETDS are
+    set
+*/
+class DeleteOthersRoundedKeysTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dbs;
+        hash<string, string> skips = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "mssql": "QORE_DB_CONNSTR_FREETDS is not set",
+        };
+    }
+
+    constructor() : Test("DeleteOthersRoundedKeys", "1.0", \ARGV) {
+        addTestCase("SQLite: rounded keys", \sqliteTest());
+        addTestCase("PostgreSQL: rounded keys", \pgsqlTest());
+        addTestCase("MySQL: rounded keys", \mysqlTest());
+        addTestCase("Oracle: rounded keys", \oracleTest());
+        addTestCase("SQL Server: rounded keys", \mssqlTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "DeleteOthersRoundedKeys");
+            dbs.pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%else
+        skips.pgsql = "no pgsql module";
+%endif
+%ifndef NoMysql
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            connect("mysql", *string sub () { return MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL,
+                "DeleteOthersRoundedKeys"); });
+        }
+%else
+        skips.mysql = "no mysql module";
+%endif
+%ifndef NoOracle
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            connect("oracle", *string sub () { return OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE,
+                "DeleteOthersRoundedKeys"); });
+        }
+%else
+        skips.oracle = "no oracle module";
+%endif
+%ifndef NoFreetds
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            connect("mssql", *string sub () { return MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS,
+                "DeleteOthersRoundedKeys"); });
+        }
+%else
+        skips.mssql = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        foreach string k in (keys dbs) {
+            dbs{k}.rollback();
+        }
+        remove dbs;
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            MysqlRunDatabase::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            OracleRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            MssqlRunDatabase::teardown();
+        }
+    }
+
+    private connect(string db, code get_connstr) {
+        try {
+            Datasource ds(get_connstr());
+            ds.open();
+            dbs{db} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skips{db} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        # SQLite stores the values as they are given: nothing is rounded, and the rows are kept as well
+        check(ds, "sqlite", (
+            {"type": "timestamp", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "numeric(10,2)", "key": 1.005n, "other": 5n},
+            # "integer primary key" would be the rowid, which takes only integers
+            {"type": "int", "key": 1.4, "other": 5},
+        ));
+    }
+
+    pgsqlTest() {
+        Datasource ds = getDs("pgsql");
+        check(ds, "pgsql", (
+            {"type": "timestamp(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "timestamptz(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "numeric(10,2)", "key": 1.005n, "other": 5n},
+            {"type": "integer", "key": 1.4, "other": 5},
+            {"type": "bigint", "key": 1.6, "other": 5},
+            # a number is rounded half up, a float to the nearest even: each is found as it was stored
+            {"type": "integer", "key": 2.5n, "other": 2},
+            {"type": "integer", "key": 2.5, "other": 3},
+            {"type": "real", "key": 1.1, "other": 5.5},
+            {"type": "numeric(10,2)", "key": 1.005n, "other": 5n, "composite": True},
+        ));
+    }
+
+    mysqlTest() {
+        Datasource ds = getDs("mysql");
+        check(ds, "mysql", (
+            {"type": "datetime(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "decimal(10,2)", "key": 1.005n, "other": 5n},
+            {"type": "int", "key": 1.4, "other": 5},
+            # a number is bound as a string, which an int column rounds; the other row is the truncated value
+            {"type": "int", "key": 1.5n, "other": 1},
+            {"type": "int", "key": -1.5n, "other": -1},
+            {"type": "int unsigned", "key": 2.5n, "other": 2},
+            {"type": "float", "key": 1.1, "other": 5.5},
+            {"type": "int", "key": 1.5n, "other": 1, "composite": True},
+        ));
+    }
+
+    oracleTest() {
+        Datasource ds = getDs("oracle");
+        check(ds, "oracle", (
+            {"type": "timestamp(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "date", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "number(10,2)", "key": 1.005n, "other": 5n},
+            {"type": "integer", "key": 1.4, "other": 5},
+            {"type": "integer", "key": 1.5n, "other": 1},
+            {"type": "float(10)", "key": 1.2345, "other": 5.5},
+            {"type": "timestamp(0) with local time zone", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "number(10,2)", "key": 1.005n, "other": 5n, "composite": True},
+        ));
+    }
+
+    mssqlTest() {
+        Datasource ds = getDs("mssql");
+        check(ds, "mssql", (
+            {"type": "datetime2(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "numeric(10,2)", "key": 1.005n, "other": 5n},
+            {"type": "int", "key": 1.4, "other": 5},
+            # truncated (1)
+            {"type": "int", "key": 1.6, "other": 5},
+            {"type": "datetime", "key": 2026-01-01T10:00:00.0015, "other": 2025-01-01T10:00:00},
+            {"type": "smalldatetime", "key": 2026-01-01T10:00:30.5, "other": 2025-01-01T10:00:00},
+            {"type": "datetimeoffset(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "real", "key": 1.1, "other": 5.5},
+            {"type": "money", "key": 1.00005, "other": 5.5},
+            {"type": "numeric(10,2)", "key": 1.005n, "other": 5n, "composite": True},
+        ));
+    }
+
+    private Datasource getDs(string db) {
+        if (!dbs{db}) {
+            testSkip(skips{db});
+        }
+        return dbs{db};
+    }
+
+    #! for each key type: a table with a row of another key; the input row's key is rounded by the column; after the
+    #! upsert with delete_others, the input's row remains and the other one is deleted
+    private check(Datasource ds, string db, list<hash<auto>> cases) {
+        on_exit ds.rollback();
+        int n = 0;
+        foreach hash<auto> c in (cases) {
+            ++n;
+            string name = sprintf("dork_%d", n);
+            string desc = sprintf("%s: %s %y%s", db, c.type, c.key, c.composite ? " (composite)" : "");
+            # a composite key: the rounded column and a string column, which is not converted
+            hash<auto> extra = c.composite ? {"s": "a"} : {};
+            ds.exec(sprintf("create table %s (k %s not null, %sv integer, primary key (k%s))", name, c.type,
+                c.composite ? "s varchar(10) not null, " : "", c.composite ? ", s" : ""));
+            on_exit {
+                ds.rollback();
+                ds.exec("drop table " + name);
+                ds.commit();
+            }
+            ds.commit();
+            AbstractTable t = new Table(ds, name).getTable();
+            t.insert({"k": c.other, "v": 1} + extra);
+            *hash<string, int> rh = t.upsertFromIterator(({"k": c.key, "v": 2} + extra,).iterator(),
+                AbstractTable::UpsertAuto, {"delete_others": True});
+            *list<hash<auto>> rows = t.selectRows();
+            assertEq(1, rows.size(), desc + ": the rows that remain");
+            assertEq(2, rows[0].v, desc + ": the input's row remains");
+            assertEq(1, rh.deleted, desc + ": the other row is deleted");
+            # the key as the database stored it, given again, deletes nothing
+            rh = t.upsertFromIterator(({"k": rows[0].k, "v": 3} + extra,).iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True});
+            assertEq(NOTHING, rh.deleted, desc + ": nothing more is deleted");
+            assertEq(1, t.rowCount(), desc + ": one row");
+        }
+    }
+}

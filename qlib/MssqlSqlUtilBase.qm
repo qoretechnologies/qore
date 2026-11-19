@@ -3138,6 +3138,61 @@ so.name = %v", name);
         return new Columns(rv);
     }
 
+    #! returns the types that the "delete_others" upsert option converts the values of numeric, date and time key columns to (issue #6635)
+    /** the types are given by the catalog as the columns are declared (ex: \c "numeric(10,2)",
+        \c "datetime2(0)", \c "int"), so that a bound value is rounded as the column rounds it when it stores it
+    */
+    private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+        # Sybase has no information_schema: the values are compared as they are bound
+        if (is_sybase) {
+            return;
+        }
+        *hash<auto> qh = ds.select("select column_name, data_type, numeric_precision, numeric_scale, "
+            "datetime_precision from information_schema.columns where table_schema = %v and table_name = %v",
+            schema, name);
+        hash<string, string> rv;
+        context (qh) {
+            string col = %column_name.lwr();
+            if (!inlist(col, pkl)) {
+                continue;
+            }
+            string dt = %data_type.lwr();
+            *string type;
+            switch (dt) {
+                case "tinyint":
+                case "smallint":
+                case "int":
+                case "bigint":
+                case "date":
+                case "datetime":
+                case "smalldatetime":
+                    type = dt;
+                    break;
+                case "decimal":
+                case "numeric":
+                    type = sprintf("%s(%d,%d)", dt, %numeric_precision, %numeric_scale);
+                    break;
+                case "datetime2":
+                case "datetimeoffset":
+                case "time":
+                    type = sprintf("%s(%d)", dt, %datetime_precision);
+                    break;
+                case "real":
+                case "money":
+                case "smallmoney":
+                    type = dt;
+                    break;
+                case "float":
+                    type = sprintf("float(%d)", %numeric_precision);
+                    break;
+            }
+            if (type) {
+                rv{col} = type;
+            }
+        }
+        return rv;
+    }
+
     private Columns describeMssqlImpl() {
         # get column descriptions
         *hash qh = ds.select("select * from information_schema.columns where table_schema = %v and "

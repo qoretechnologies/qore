@@ -4733,6 +4733,43 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         }
     }
 
+    #! returns the types that the "delete_others" upsert option converts the values of numeric, date and time key columns to (issue #6635)
+    /** the types are given by the catalog as the columns are declared (ex: \c "NUMBER(10,2)", \c "TIMESTAMP(0)",
+        \c "DATE"), so that a bound value is rounded as the column rounds it when it stores it
+    */
+    private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+        if (!tablespace)
+            setTableInfoIntern();
+        *hash<auto> qh = ds.select("select column_name, data_type, data_precision, data_scale from "
+            + systemView("dba_tab_columns") + (dblink ? "@" + dblink : "") + " where owner = %v and table_name = %v",
+            schema.upr(), name.upr());
+        hash<string, string> rv;
+        context (qh) {
+            string col = %column_name.lwr();
+            if (!inlist(col, pkl)) {
+                continue;
+            }
+            string dt = %data_type;
+            *string type;
+            if (dt == "NUMBER") {
+                if (exists %data_precision && %data_precision !== NULL) {
+                    type = sprintf("NUMBER(%d,%d)", %data_precision, %data_scale ?? 0);
+                } else if (exists %data_scale && %data_scale !== NULL && %data_scale.toInt() == 0) {
+                    # INTEGER: NUMBER(*,0)
+                    type = "NUMBER(38,0)";
+                }
+            } else if (dt == "FLOAT" && exists %data_precision && %data_precision !== NULL) {
+                type = sprintf("FLOAT(%d)", %data_precision);
+            } else if (dt == "DATE" || dt =~ /^TIMESTAMP\([0-9]\)( WITH (LOCAL )?TIME ZONE)?$/) {
+                type = dt;
+            }
+            if (type) {
+                rv{col} = type;
+            }
+        }
+        return rv;
+    }
+
     private Columns describeImpl() {
         if (!tablespace)
             setTableInfoIntern();
