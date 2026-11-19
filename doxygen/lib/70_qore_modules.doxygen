@@ -583,6 +583,18 @@ int max = max_conn ? atoi(max_conn.c_str()) : 10;
     - Before %Qore 3.0, \c copy() was called with the parent Program's lock held, and a thread of the module that
       took the Program's lock while it held the module's lock (to parse, for example) could deadlock with a thread
       creating a child Program.
+    - A module whose callbacks can fail derives its data from AbstractQoreProgramExternalDataEx instead, whose
+      \c copy(), \c init() and \c doDeref() take an ExceptionSink.  An exception raised in \c copy() or \c init()
+      fails the creation of the child Program with that exception (\c Program::constructor() raises it), and the
+      copies already made are released, without \c init() having been called on them; an exception raised in
+      \c doDeref() is reported to the code that deletes the Program.  The callbacks must raise their errors in the
+      sink and never let a C++ exception escape.  A \c copy() that returns \c nullptr without an exception still
+      means that the child does not inherit the data.
+    - A C++ exception (\c AbstractException) that the callbacks of a class derived from
+      AbstractQoreProgramExternalData alone let escape is converted to a %Qore exception as a safety net; a failed
+      \c copy() then fails the creation of the child as well.  Before %Qore 3.0, such an exception escaped the
+      creation of the child, and the child was created without the data of a module whose \c copy() could not
+      report an error.
 
     @code{.cpp}
 // the data of the module in a Program, created by the module's ns_init() function

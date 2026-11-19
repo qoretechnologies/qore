@@ -1017,7 +1017,7 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 }
 
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
-        QoreProgram* p_pgm, const QoreParseOptions* p_parse_options)
+        QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
@@ -1050,8 +1050,8 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     constructed = true;
     // the parent's external data is copied here rather than from setParent(), so that a module's
     // copy hook runs against a complete Program, as AbstractQoreProgramExternalData::copy()
-    // documents
-    copyExternalData();
+    // documents; a failure is reported in xsink, and the caller deletes the Program (issue #6786)
+    copyExternalData(xsink);
     // a Program that code that is not trusted creates has no host: none of its defines was set by one (its parse
     // option defines included); the library modules that it loads have their own platform defines
     if (qore_caller_is_untrusted()) {
@@ -1059,6 +1059,13 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
             source_defines.insert(i.first);
         }
     }
+}
+
+void qore_program_private::deleteFailedChild(QoreProgram* pgm, ExceptionSink* xsink) {
+    assert(pgm->priv->extmap.empty());
+    ExceptionSink del_xsink;
+    pgm->waitForTerminationAndDeref(&del_xsink);
+    xsink->assimilate(del_xsink);
 }
 
 void qore_program_private::markSandboxedParse() {
@@ -2426,9 +2433,9 @@ unsigned qore_program_private_base::getOwnExtDataCopies() const {
     return rc;
 }
 
-void qore_program_private_base::copyExternalData() {
+int qore_program_private_base::copyExternalData(ExceptionSink* xsink) {
     if (!ext_parent) {
-        return;
+        return 0;
     }
     QoreProgram* p_pgm = ext_parent;
     ext_parent = nullptr;
@@ -2443,7 +2450,7 @@ void qore_program_private_base::copyExternalData() {
     {
         AutoLocker al(parent->plock);
         if (parent->extmap.empty()) {
-            return;
+            return 0;
         }
         parent_data.assign(parent->extmap.begin(), parent->extmap.end());
         ++parent->ext_copy_count;
@@ -2463,20 +2470,52 @@ void qore_program_private_base::copyExternalData() {
         ext_data_copy_frames = frame.prev;
     });
 
+    // the errors of the module callbacks; the caller's sink may hold exceptions already (issue #6786)
+    ExceptionSink copy_xsink;
     for (auto& i : parent_data) {
         // External data whose state belongs to the parent alone returns nullptr rather than a copy (the AOT
         // script data does: a child Program runs its own AOT load).  Storing that null would crash the
         // init() loop below, and again when the child's teardown calls doDeref() on it.
-        AbstractQoreProgramExternalData* copy = i.second->copy(pgm);
+        AbstractQoreProgramExternalData* copy = qore_ext_data_copy(i.second, pgm, &copy_xsink);
+        if (copy_xsink) {
+            // a copy made with the exception was released already
+            assert(!copy);
+            break;
+        }
         if (copy) {
             // the Program is registered already, so other threads can look up its external data
             AutoLocker al(plock);
             extmap.insert(extmap_t::value_type(i.first, copy));
         }
     }
-    for (auto& i : extmap) {
-        i.second->init();
+    if (!copy_xsink) {
+        for (auto& i : extmap) {
+            qore_ext_data_init(i.second, &copy_xsink);
+            if (copy_xsink) {
+                break;
+            }
+        }
+        if (!copy_xsink) {
+            return 0;
+        }
     }
+
+    // a copy or an init() failed: the child Program is not created (fail-closed: it must not run without the data of
+    // a module, issue #6786); the copies already made are released, whether init() ran on them or not
+    extmap_t copies;
+    {
+        AutoLocker al(plock);
+        copies = extmap;
+        extmap.clear();
+    }
+    for (auto& i : copies) {
+        qore_ext_data_deref(i.second, &copy_xsink);
+    }
+    if (xsink) {
+        xsink->assimilate(copy_xsink);
+    }
+    // otherwise the destructor of copy_xsink reports the exceptions as unhandled
+    return -1;
 }
 
 int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guard, bool nested) {
@@ -3833,14 +3872,16 @@ void qore_program_private::del(ExceptionSink* xsink) {
         AutoLocker al(plock);
         waitForExternalDataCopiesIntern();
     }
-    for (auto& i : extmap) {
-        try {
-            i.second->doDeref();
-        } catch (AbstractException& e) {
-            e.convert(xsink);
+    // each data is released, also when the release of another one raises an exception (issue #6786); a module's
+    // callback is always given a sink
+    if (!extmap.empty()) {
+        ExceptionSink local_xsink;
+        ExceptionSink* deref_xsink = xsink ? xsink : &local_xsink;
+        for (auto& i : extmap) {
+            qore_ext_data_deref(i.second, deref_xsink);
         }
+        extmap.clear();
     }
-    extmap.clear();
 
     // the Program object released the Program after it had stopped reporting its code (clearScanHolder()), unless the
     // data of the Program is deleted while the object still holds it (a Program cleared at the end of the process by
@@ -4638,8 +4679,8 @@ QoreProgram::QoreProgram(int64 po) : QoreProgram(QoreParseOptions(po)) {
 }
 
 QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, const char* ecn,
-        const QoreParseOptions* parent_po)
-        : priv(new qore_program_private(this, po, pgm, parent_po)) {
+        const QoreParseOptions* parent_po, ExceptionSink* xsink)
+        : priv(new qore_program_private(this, po, pgm, parent_po, xsink)) {
     printd(QPP_DBG_LVL, "QoreProgram::QoreProgram(), this: %p, pgm: %p, priv: %p, pgmid: " QLLD "\n", this, pgm, priv,
         (int64)priv->getProgramId());
     priv->exec_class = ec;
@@ -6043,6 +6084,90 @@ AbstractQoreProgramExternalData::~AbstractQoreProgramExternalData() {
 }
 
 void AbstractQoreProgramExternalData::init() {
+}
+
+AbstractQoreProgramExternalDataEx::~AbstractQoreProgramExternalDataEx() {
+}
+
+void AbstractQoreProgramExternalDataEx::init(ExceptionSink* xsink) {
+}
+
+AbstractQoreProgramExternalData* AbstractQoreProgramExternalDataEx::copy(QoreProgram* pgm) const {
+    ExceptionSink xsink;
+    AbstractQoreProgramExternalData* rv = qore_ext_data_copy(this, pgm, &xsink);
+    // the destructor of the sink reports the exception as unhandled
+    return rv;
+}
+
+void AbstractQoreProgramExternalDataEx::init() {
+    ExceptionSink xsink;
+    init(&xsink);
+}
+
+void AbstractQoreProgramExternalDataEx::doDeref() {
+    ExceptionSink xsink;
+    doDeref(&xsink);
+}
+
+namespace {
+// converts a C++ exception that a legacy callback of AbstractQoreProgramExternalData let escape (issue #6786)
+void ext_data_convert_std_exception(const char* func, const std::exception& e, ExceptionSink* xsink) {
+    xsink->raiseException("PROGRAM-EXTERNAL-DATA-ERROR", "AbstractQoreProgramExternalData::%s() threw a C++ "
+        "exception: %s", func, e.what());
+}
+}
+
+AbstractQoreProgramExternalData* qore_ext_data_copy(const AbstractQoreProgramExternalData* data, QoreProgram* pgm,
+        ExceptionSink* xsink) {
+    assert(!*xsink);
+    AbstractQoreProgramExternalData* rv;
+    if (const AbstractQoreProgramExternalDataEx* ex = dynamic_cast<const AbstractQoreProgramExternalDataEx*>(data)) {
+        rv = ex->copy(pgm, xsink);
+    } else {
+        try {
+            rv = data->copy(pgm);
+        } catch (AbstractException& e) {
+            e.convert(xsink);
+            return nullptr;
+        } catch (std::exception& e) {
+            ext_data_convert_std_exception("copy", e, xsink);
+            return nullptr;
+        }
+    }
+    // a copy returned together with an exception is released at once: the copy failed
+    if (rv && *xsink) {
+        qore_ext_data_deref(rv, xsink);
+        return nullptr;
+    }
+    return rv;
+}
+
+void qore_ext_data_init(AbstractQoreProgramExternalData* data, ExceptionSink* xsink) {
+    if (AbstractQoreProgramExternalDataEx* ex = dynamic_cast<AbstractQoreProgramExternalDataEx*>(data)) {
+        ex->init(xsink);
+        return;
+    }
+    try {
+        data->init();
+    } catch (AbstractException& e) {
+        e.convert(xsink);
+    } catch (std::exception& e) {
+        ext_data_convert_std_exception("init", e, xsink);
+    }
+}
+
+void qore_ext_data_deref(AbstractQoreProgramExternalData* data, ExceptionSink* xsink) {
+    if (AbstractQoreProgramExternalDataEx* ex = dynamic_cast<AbstractQoreProgramExternalDataEx*>(data)) {
+        ex->doDeref(xsink);
+        return;
+    }
+    try {
+        data->doDeref();
+    } catch (AbstractException& e) {
+        e.convert(xsink);
+    } catch (std::exception& e) {
+        ext_data_convert_std_exception("doDeref", e, xsink);
+    }
 }
 
 int get_warning_code(const char* str) {
