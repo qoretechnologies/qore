@@ -6921,6 +6921,11 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
             inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
             return false;
         }
+        // a variant that the class context cannot call is not cached: the generic call path raises the error of the
+        // AST interpreter, whose variant search skips it (qore#6735)
+        if (!qore_class_private::runtimeCheckMethodVariantAccess(*method, variant, class_ctx)) {
+            return false;
+        }
         // a variant with functional domains declared in Qore source is checked against the caller on each call
         // that resolves it at run time (see qore_get_variant_denied_domains()), so it is not cached here
         if (variant->isUser() && variant->getUserVariantBase()->getDeclaredDomain()) {
