@@ -6993,6 +6993,10 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         }
     }
 
+    // the closure's statements store their own locations: the caller continues in its own, which it does not store
+    // again (QoreIRInstruction::stmt_loc), as after a function run inline (QoreIRInlineCalleeParseOptionsHelper) and
+    // a closure run on the call path (execJITWithDeopt()) (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     QoreValue ir_return_value;
     IRDirectParams dp{args, nargs};
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;

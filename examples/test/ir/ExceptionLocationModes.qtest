@@ -447,6 +447,7 @@ hash<string, code> probes = {
     "out-of-line handlers then condition": \MoreProbes::pHandlersWhile(),
     "out-of-line handlers then destructor": \MoreProbes::pHandlersDtor(),
     "destructor then division": \MoreProbes::pDtorThenDiv(),
+    "closure then division": \LastProbes::pClosureThenDiv(),
 };
 
 for (int j = 0; j < 3; ++j) {
@@ -470,22 +471,33 @@ for (int j = 0; j < 3; ++j) {
     }
 }
 run2();
+
+class LastProbes {
+    # a closure with statements of its own called in the statement that then raises
+    static int pClosureThenDiv(int x) {
+        code c = int sub (int a) {
+            int b = a;
+            return b;
+        };
+        return c(x) + x / (x - x);
+    }
+}
 ';
 
         #! results that the AST interpreter must give, so that a wrong result of the AST interpreter fails the test
         const Pinned = (
-            "if: ERR exception-location.qr:21-21 <- Probes::pIf:416-416",
-            "do while: DIVISION-BY-ZERO exception-location.qr:43-45 <- Probes::pDoWhile:416-416",
-            "if condition: DIVISION-BY-ZERO exception-location.qr:150-153 <- Probes::pIfCondDiv:416-416",
+            "if: ERR exception-location.qr:21-21 <- Probes::pIf:417-417",
+            "do while: DIVISION-BY-ZERO exception-location.qr:43-45 <- Probes::pDoWhile:417-417",
+            "if condition: DIVISION-BY-ZERO exception-location.qr:150-153 <- Probes::pIfCondDiv:417-417",
             "foreach iteration: RUNTIME-TYPE-ERROR exception-location.qr:176-178 <- Probes::pForeachIterAssign:"
-                "416-416",
+                "417-417",
             "destructor at block end: DTOR exception-location.qr:4-4 <- D::destructor:254-256 "
-                "<- Probes::pDtorBlock:416-416",
+                "<- Probes::pDtorBlock:417-417",
             "destructor at if end: DTOR exception-location.qr:4-4 <- D::destructor:261-264 "
-                "<- Probes::pDtorIf:416-416",
-            "run2: ERR2 exception-location.qr:351-351 <- run2:428-428",
+                "<- Probes::pDtorIf:417-417",
+            "run2: ERR2 exception-location.qr:351-351 <- run2:429-429",
             "out-of-line handlers then condition: DIVISION-BY-ZERO exception-location.qr:309-314 <- "
-                "MoreProbes::pHandlersWhile:416-416",
+                "MoreProbes::pHandlersWhile:417-417",
         );
     }
 

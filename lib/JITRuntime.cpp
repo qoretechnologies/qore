@@ -9604,8 +9604,6 @@ static bool qore_rt_debugger_attached(const UserVariantBase* uvb) {
 static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         const UserVariantBase* uvb, uint64_t* args, int nargs,
         uint64_t** arg_cleanups, uint64_t& result_bits) {
-    // the closure's statements store their own locations: the caller continues in its own (qore#6646)
-    QoreRuntimeLocationRestoreHelper loc_restore;
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_NATIVE_CLOSURE_LEAF_INLINE");
     const bool disabled = disabled_env.get();
     // the leaf runs without entering the closure's Program: once that Program is being deleted, the call path refuses
@@ -14229,8 +14227,6 @@ DLLLOCAL uint64_t execClosureDirectConsume(const QoreClosureBase* cb, const User
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBase* uvb,
         int nargs, const uint64_t* args, ExceptionSink* xsink, uint64_t** arg_cleanups) {
-    // the closure's statements store their own locations: the caller continues in its own (qore#6646)
-    QoreRuntimeLocationRestoreHelper loc_restore;
     // a call that gives the references of its temporary arguments releases them in the callee's frame (issue
     // #5882)
     if (arg_cleanups) {
