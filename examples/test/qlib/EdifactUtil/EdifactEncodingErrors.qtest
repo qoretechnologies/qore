@@ -34,9 +34,8 @@ public class EdifactEncodingErrorsTest inherits QUnit::Test {
             f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
             f.write(Data);
         }
-        # the iterators read all of the text when they are created; the segments are parsed as they are iterated
-        # NOTE: the segments are not iterated here: the parser does not handle text other than ASCII yet (reported
-        # separately)
+        # the iterators read all of the text and split it into segments when they are created; the segments are
+        # parsed as they are iterated
         foreach code get_iterator in (
                 AbstractIterator sub (*hash<auto> opts) {
                     return new EdifactIterator(new BinaryInputStream(Data), {"encoding": "UTF-8"} + opts);
@@ -46,14 +45,23 @@ public class EdifactEncodingErrorsTest inherits QUnit::Test {
                 }) {
             assertThrows("INVALID-ENCODING", "not valid UTF-8", get_iterator);
             assertThrows("INVALID-ENCODING", "not valid UTF-8", get_iterator, {"encoding_errors": "raise"});
-            assertEq(Type::Object, get_iterator({"encoding_errors": "latin1"}).type());
-            # the text kept without a check cannot be split into segments
+            # the bytes read as ISO-8859-1 give "é", and the segments are parsed (issue #6697)
+            checkSegments(get_iterator({"encoding_errors": "latin1"}));
+            # the text kept without a check cannot be split into segments: the invalid bytes are found when its
+            # characters are processed
             assertThrows("INVALID-ENCODING", "invalid UTF-8 encoding encountered", get_iterator,
                 {"encoding_errors": "keep"});
             assertThrows("ENCODING-ERRORS-ERROR", get_iterator, {"encoding_errors": "ignore"});
             # data in a single-byte encoding has no invalid bytes
-            assertEq(Type::Object, get_iterator({"encoding": "ISO-8859-1"}).type());
+            checkSegments(get_iterator({"encoding": "ISO-8859-1"}));
         }
+    }
+
+    #! Checks the segments of the data read with its byte <e9> as "é"
+    private checkSegments(AbstractIterator i) {
+        list<hash<auto>> segs = map $1, i;
+        assertEq(("UNB", "UNH", "FTX", "UNT", "UNZ"), map $1.tag, segs);
+        assertEq((("AAA",), ("",), ("",), ("Café",)), segs[2].data_elements);
     }
 
     private dataProviderTest() {
@@ -64,7 +72,15 @@ public class EdifactEncodingErrorsTest inherits QUnit::Test {
         assertThrows("INVALID-ENCODING", sub () {
             new EdifactReadDataProvider({"stream": new BinaryInputStream(Data), "encoding": "UTF-8"});
         });
-        assertEq(Type::Object, new EdifactReadDataProvider({"stream": new BinaryInputStream(Data),
-            "encoding": "UTF-8", "encoding_errors": "latin1"}).type());
+        EdifactReadDataProvider prov({"stream": new BinaryInputStream(Data), "encoding": "UTF-8",
+            "encoding_errors": "latin1"});
+        list<hash<auto>> rows = map $1, prov.searchRecords();
+        assertEq(("UNB", "UNH", "FTX", "UNT", "UNZ"), map $1.tag, rows);
+        assertEq((("AAA",), ("",), ("",), ("Café",)), rows[2].data_elements);
+
+        assertThrows("INVALID-ENCODING", "invalid UTF-8 encoding encountered", sub () {
+            new EdifactReadDataProvider({"stream": new BinaryInputStream(Data), "encoding": "UTF-8",
+                "encoding_errors": "keep"});
+        });
     }
 }

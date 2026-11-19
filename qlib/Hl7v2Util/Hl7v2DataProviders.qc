@@ -174,7 +174,7 @@ public namespace Hl7v2Util {
             f.write(text);
             return {
                 "path": path,
-                "characters": text.size(),
+                "characters": text.length(),
                 "segments": segments,
             };
         }

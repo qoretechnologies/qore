@@ -1,0 +1,253 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires EdifactUtil
+
+%exec-class EdifactCharactersTest
+
+#! Tests EDIFACT parsing and writing of text with characters other than ASCII (issue #6697)
+/** The parser works on characters: a 2-byte (é), 3-byte (€) or 4-byte (😀) UTF-8 character is one character next to
+    a separator or the release character.
+*/
+public class EdifactCharactersTest inherits QUnit::Test {
+    public {
+        #! A UTF-8 (UNOY) interchange with non-ASCII characters in elements and components, next to the separators,
+        #! the release character and the segment terminator
+        const Interchange = "UNB+UNOY:3+SÉNDER:14+RÉCEIVER+260122:1200+REF€01'"
+            "UNH+1+ORDERS:D:96A:UN'"
+            "NAD+BY+é€😀::91++Café?+Bar:€?:x+Zürich'"
+            "FTX+AAA+++😀?'quoted?? é'"
+            "LOC+é+€+😀'"
+            "UNT+5+1'"
+            "UNZ+1+REF€01'";
+    }
+
+    constructor() : Test("EdifactCharactersTest", "1.0") {
+        addTestCase("parsing multi-byte characters", \parseTest());
+        addTestCase("base split functions", \baseTest());
+        addTestCase("non-ASCII UNA delimiters", \unaTest());
+        addTestCase("segment and UNA lengths in characters", \lengthTest());
+        addTestCase("escape and unescape", \escapeTest());
+        addTestCase("writer", \writerTest());
+        addTestCase("large interchange", \largeTest());
+        set_return_value(main());
+    }
+
+    private parseTest() {
+        EdifactDataIterator i(Interchange);
+        list<hash<EdifactSegment>> segs = i.getAllSegments();
+        assertEq(("UNB", "UNH", "NAD", "FTX", "LOC", "UNT", "UNZ"), map $1.tag, segs);
+
+        assertEq(("UNOY", "3"), segs[0].data_elements[0]);
+        assertEq(("SÉNDER", "14"), segs[0].data_elements[1]);
+        assertEq(("RÉCEIVER",), segs[0].data_elements[2]);
+        assertEq(("REF€01",), segs[0].data_elements[4]);
+
+        # a 4-byte character before a component separator, an escaped element separator after a 2-byte one, an
+        # escaped component separator after a 3-byte one and a 2-byte character before the segment terminator
+        assertEq((("BY",), ("é€😀", "", "91"), ("",), ("Café+Bar", "€:x"), ("Zürich",)), segs[2].data_elements);
+        # an escaped segment terminator after a 4-byte character and an escaped release character before a space
+        assertEq((("AAA",), ("",), ("",), ("😀'quoted? é",)), segs[3].data_elements);
+        assertEq("FTX+AAA+++😀?'quoted?? é", segs[3].raw);
+        # one non-ASCII character elements
+        assertEq((("é",), ("€",), ("😀",)), segs[4].data_elements);
+
+        # the interchange header is read from the UNB segment
+        EdifactDataIterator i2(Interchange);
+        while (i2.next()) {
+            if (i2.getTag() == "UNZ") {
+                break;
+            }
+        }
+        assertEq("SÉNDER", i2.getInterchange().sender_id);
+        assertEq("RÉCEIVER", i2.getInterchange().recipient_id);
+        assertEq("REF€01", i2.getInterchange().control_reference);
+
+        # the same through the read data provider
+        EdifactReadDataProvider prov({"data": Interchange});
+        list<hash<auto>> rows = map $1, prov.searchRecords();
+        assertEq(7, rows.size());
+        assertEq((("BY",), ("é€😀", "", "91"), ("",), ("Café+Bar", "€:x"), ("Zürich",)), rows[2].data_elements);
+
+        # and from a file
+        TmpDir dir();
+        string path = dir.path + DirSep + "chars.edi";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Interchange);
+        }
+        list<hash<auto>> file_segs = map $1, new EdifactFileIterator(path, {"encoding": "UTF-8"});
+        assertEq((map $1.data_elements, segs), (map $1.data_elements, file_segs));
+    }
+
+    private baseTest() {
+        EdifactBase base();
+        assertEq(("é", "€+😀", ""), base.splitWithRelease("é+€?+😀+", "+"));
+        assertEq(("😀?:é", "€"), base.splitWithRelease("😀?:é+€", "+", False));
+        assertEq(("é?ü",), base.splitWithRelease("é??ü", "+"));
+        assertFalse(base.containsUnescaped("é?:€😀", ":"));
+        assertTrue(base.containsUnescaped("é?:€:😀", ":"));
+        assertTrue(base.containsUnescaped("😀:", ":"));
+
+        hash<EdifactSegment> seg = base.parseSegment("FTX+AAA+😀:€+é");
+        assertEq("FTX", seg.tag);
+        assertEq((("AAA",), ("😀", "€"), ("é",)), seg.data_elements);
+
+        assertEq(("ABC+é", "😀", "DEF"), base.splitIntoSegments("ABC+é'😀'\nDEF'"));
+        assertEq(("FTX+é?'€",), base.splitIntoSegments("FTX+é?'€'"));
+    }
+
+    private unaTest() {
+        # a component separator and a decimal notation other than ASCII
+        string data = "UNA§+€? 'UNB+UNOY§3+SÉNDER§14+RECEIVER+260122§1200+REF1'FTX+AAA+++é?§😀§ü€5'UNZ+1+REF1'";
+        EdifactDataIterator i(data);
+        list<hash<EdifactSegment>> segs = i.getAllSegments();
+        assertEq(("UNA", "UNB", "FTX", "UNZ"), map $1.tag, segs);
+        EdifactDelimiters delim = i.getDelimiters();
+        assertEq("§", delim.component_separator);
+        assertEq("+", delim.element_separator);
+        assertEq("€", delim.decimal_notation);
+        assertEq("?", delim.release_character);
+        assertEq("'", delim.segment_terminator);
+        assertEq(("UNOY", "3"), segs[1].data_elements[0]);
+        assertEq(("SÉNDER", "14"), segs[1].data_elements[1]);
+        assertEq(("é§😀", "ü€5"), segs[2].data_elements[3]);
+
+        EdifactDelimiters una("UNA§+€? '");
+        assertEq("UNA§+€? '", una.generateUna());
+
+        # a release character and a segment terminator other than ASCII
+        data = "UNA:+.¿ ¶UNB+UNOY:3+S¿+NDÉR+RECEIVER+260122:1200+REF1¶FTX+AAA+++a¿¶b¿¿c¶UNZ+1+REF1¶";
+        i = new EdifactDataIterator(data);
+        segs = i.getAllSegments();
+        assertEq(("UNA", "UNB", "FTX", "UNZ"), map $1.tag, segs);
+        delim = i.getDelimiters();
+        assertEq("¿", delim.release_character);
+        assertEq("¶", delim.segment_terminator);
+        assertEq(("S+NDÉR",), segs[1].data_elements[1]);
+        assertEq(("a¶b¿c",), segs[2].data_elements[3]);
+        una = new EdifactDelimiters("UNA:+.¿ ¶");
+        assertEq("UNA:+.¿ ¶", una.generateUna());
+        assertEq("a¿¶b¿¿c", una.escape("a¶b¿c"));
+    }
+
+    private lengthTest() {
+        EdifactBase base();
+        # two characters (four bytes) are too short for a segment
+        assertThrows("EDIFACT-PARSE-ERROR", "segment too short", \base.parseSegment(), "ÉÉ");
+        assertThrows("EDIFACT-PARSE-ERROR", "invalid segment tag", \base.parseSegment(), "ÉÉÉ");
+
+        # a UNA segment is 9 characters, not 9 bytes
+        assertThrows("EDIFACT-DELIMITER-ERROR", "too short: 7 characters", sub () {
+            new EdifactDelimiters("UNAéééé");
+        });
+        # seven characters (11 bytes) at the start are not taken as a UNA segment
+        assertEq(("UNAéééé",), base.splitIntoSegments("UNAéééé'"));
+        assertEq(":", base.delimiters.component_separator);
+    }
+
+    private escapeTest() {
+        EdifactDelimiters delim();
+        assertEq("é?+€?:😀???'ü", delim.escape("é+€:😀?'ü"));
+        assertEq("é+€:😀?'ü", delim.unescape("é?+€?:😀???'ü"));
+        assertEq("é😀", delim.unescape("?é?😀"));
+        assertEq("Grüße aus Köln €", delim.escape("Grüße aus Köln €"));
+        foreach string str in ("é", "€", "😀", "a+é:€?😀'", "?😀?", strmul("é€😀+", 100)) {
+            assertEq(str, delim.unescape(delim.escape(str)));
+        }
+
+        EdifactDelimiters una("UNA§+€? '");
+        assertEq("a?§é?+€", una.escape("a§é+€"));
+        assertEq("a§é+€", una.unescape(una.escape("a§é+€")));
+    }
+
+    private writerTest() {
+        # a raw segment that ends with a non-ASCII character gets the terminator
+        EdifactDataWriter w({"write_una": False});
+        w.writeRawSegment("FTX+AAA+++Café");
+        assertEq("FTX+AAA+++Café'", w.getData());
+        # one that ends with the terminator after a non-ASCII character does not get another one
+        w.clear();
+        w.writeRawSegment("FTX+AAA+++😀'");
+        assertEq("FTX+AAA+++😀'", w.getData());
+        w.clear();
+        w.writeRawSegment("FTX+AAA+++é€😀");
+        w.writeRawSegment("LOC+€'");
+        assertEq("FTX+AAA+++é€😀'LOC+€'", w.getData());
+
+        # written segments are escaped and read back to the same values
+        EdifactDataWriter w2();
+        w2.writeInterchangeHeader(<EdifactInterchangeInfo>{
+            "sender_id": "SÉNDER",
+            "recipient_id": "RÉCEIVER",
+            "control_reference": "REF1",
+        });
+        w2.writeMessageHeader(<EdifactMessageInfo>{
+            "message_reference": "1",
+            "message_type": "ORDERS",
+            "message_version": "D",
+            "message_release": "96A",
+        });
+        w2.writeSegment("NAD", (("BY",), ("Café+Bar", "€:x", "😀'?"), ("Zürich",)));
+        w2.writeRawSegment("FTX+AAA+++Grüße");
+        w2.writeMessageTrailer();
+        w2.writeInterchangeTrailer();
+        string data = w2.getData();
+        assertRegex("NAD\\+BY\\+Café\\?\\+Bar:€\\?:x:😀\\?'\\?\\?\\+Zürich'", data);
+
+        list<hash<EdifactSegment>> segs = (new EdifactDataIterator(data)).getAllSegments();
+        assertEq(("UNA", "UNB", "UNH", "NAD", "FTX", "UNT", "UNZ"), map $1.tag, segs);
+        assertEq(("SÉNDER",), segs[1].data_elements[1]);
+        assertEq((("BY",), ("Café+Bar", "€:x", "😀'?"), ("Zürich",)), segs[3].data_elements);
+        assertEq((("AAA",), ("",), ("",), ("Grüße",)), segs[4].data_elements);
+        # both segments are counted in the message trailer
+        assertEq(("4",), segs[5].data_elements[0]);
+    }
+
+    private largeTest() {
+        # 20000 segments with non-ASCII characters
+        list<string> parts = ("UNB+UNOY:3+SENDER+RECEIVER+260122:1200+REF1'UNH+1+ORDERS:D:96A:UN'",);
+        for (int n = 0; n < 20000; ++n) {
+            push parts, sprintf("FTX+AAA+++é€😀 %d?+x:Zürich'", n);
+        }
+        # and one element of 200000 non-ASCII characters with escaped separators in it
+        string big = strmul("é€😀?+", 50000);
+        push parts, "FTX+BIG+++" + big + "'UNT+20003+1'UNZ+1+REF1'";
+        string data = parts.join("");
+
+        EdifactDataIterator i(data);
+        int count = 0;
+        *hash<auto> first;
+        *hash<auto> last;
+        *hash<auto> big_seg;
+        while (i.next()) {
+            hash<auto> seg = i.getValue();
+            if (seg.tag != "FTX") {
+                continue;
+            }
+            if (seg.data_elements[0][0] == "BIG") {
+                big_seg = seg;
+                continue;
+            }
+            if (!count) {
+                first = seg;
+            }
+            last = seg;
+            ++count;
+        }
+        assertEq(20000, count);
+        assertEq(("é€😀 0+x", "Zürich"), first.data_elements[3]);
+        assertEq(("é€😀 19999+x", "Zürich"), last.data_elements[3]);
+        string expected = strmul("é€😀+", 50000);
+        assertEq(200000, expected.length());
+        assertEq(expected, big_seg.data_elements[3][0]);
+    }
+}

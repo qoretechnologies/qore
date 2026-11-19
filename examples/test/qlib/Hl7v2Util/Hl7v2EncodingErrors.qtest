@@ -43,10 +43,20 @@ public class Hl7v2EncodingErrorsTest inherits QUnit::Test {
             new Hl7v2ReadDataProvider({"path": path, "encoding_errors": "raise"});
         });
         # an unknown value is rejected by the reader of the file, which shows that the option is passed to it
-        # NOTE: "latin1" and "keep" are not checked with the message: the parser does not handle text other than
-        # ASCII yet (reported separately)
         assertThrows("ENCODING-ERRORS-ERROR", sub () {
             new Hl7v2ReadDataProvider({"path": path, "encoding_errors": "ignore"});
+        });
+
+        # the bytes read as ISO-8859-1 give "é", and the message is parsed (issue #6697)
+        Hl7v2ReadDataProvider prov({"path": path, "encoding_errors": "latin1"});
+        list<hash<auto>> rows = map $1, prov.searchRecords();
+        assertEq(("MSH", "PID"), map $1.tag, rows);
+        assertEq((("René", "Marie"),), rows[1].fields[4].repetitions);
+
+        # the text kept without a check cannot be parsed: the invalid bytes are found when its characters are
+        # processed
+        assertThrows("INVALID-ENCODING", "invalid UTF-8 encoding encountered", sub () {
+            new Hl7v2ReadDataProvider({"path": path, "encoding_errors": "keep"});
         });
     }
 }
