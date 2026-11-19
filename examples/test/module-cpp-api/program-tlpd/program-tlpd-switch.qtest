@@ -11,7 +11,7 @@
 # at run time, and that a switch alone creates no thread-local data in the Program and runs none of its thread
 # initialization code.
 #
-# Each case but the last runs a child script in a qore subprocess, in the execution mode of this test: a failed
+# Each case but the last runs a child script in a qore subprocess, with the interpreter options of this test: a failed
 # assertion of the library aborts the process.
 
 %modern
@@ -21,6 +21,7 @@
 %requires FsUtil
 %requires tlpdprobe
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class ProgramTlpdSwitchTest
 
@@ -44,14 +45,15 @@ class ProgramTlpdSwitchTest inherits QUnit::Test {
 
     private {
         string qore_bin;
-        *string exec_mode;
+        #! the interpreter options of this process (with its execution mode, if any), which the subprocesses get
+        list<string> interpreter_opts;
         #! the directory of the files of the subprocesses
         TmpDir tmp("qore-program-tlpd-");
     }
 
     constructor() : Test("ProgramTlpdSwitchTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
-        exec_mode = ProgramTlpdSwitchTest::getExecMode();
+        qore_bin = TestInterpreter::qore_interpreter();
+        interpreter_opts = TestInterpreter::interpreter_options(get_script_path());
         addTestCase("a read in an entered Program", \testEnteredRead());
         addTestCase("a write in an entered Program", \testEnteredWrite());
         addTestCase("a read in a Program made current by a module", \testSwitchedRead());
@@ -203,8 +205,12 @@ class ProgramTlpdSwitchTest inherits QUnit::Test {
             unlink(err_file);
         }
         # no core file for an expected abort
+        string opts;
+        foreach string opt in (interpreter_opts) {
+            opts += ProgramTlpdSwitchTest::shellQuote(opt) + " ";
+        }
         string cmd = sprintf("ulimit -c 0; %s -b %s%s %s 2>%s; echo \"rc=$?\"",
-            ProgramTlpdSwitchTest::shellQuote(qore_bin), exec_mode ? "--exec-mode=" + exec_mode + " " : "",
+            ProgramTlpdSwitchTest::shellQuote(qore_bin), opts,
             ProgramTlpdSwitchTest::shellQuote(get_script_dir() + script), args,
             ProgramTlpdSwitchTest::shellQuote(err_file));
         string out = backquote(cmd);
@@ -215,19 +221,6 @@ class ProgramTlpdSwitchTest inherits QUnit::Test {
             "out": m[0] ?? "",
             "err": is_file(err_file) ? ReadOnlyFile::readTextFile(err_file) : "",
         };
-    }
-
-    #! returns the execution mode given on the command line, if any
-    private static *string getExecMode() {
-        for (int i = 0; i < QORE_ARGV.size(); ++i) {
-            *string mode = (QORE_ARGV[i] =~ x/^--exec-mode=(.+)$/)[0];
-            if (mode) {
-                return mode;
-            }
-            if (QORE_ARGV[i] == "--exec-mode" && i + 1 < QORE_ARGV.size()) {
-                return QORE_ARGV[i + 1];
-            }
-        }
     }
 
     private static string shellQuote(string value) {
