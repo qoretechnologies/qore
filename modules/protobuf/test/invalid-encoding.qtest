@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A decoded string field or string map key that is not valid UTF-8 raises INVALID-ENCODING (qore#6604): proto3
+# refuses such a message itself, proto2 does not check it; strings are tagged UTF-8, and bytes fields are binary data.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires protobuf
+
+%exec-class ProtobufInvalidEncodingTest
+
+class ProtobufInvalidEncodingTest inherits QUnit::Test {
+    public {
+        const Proto2 = "syntax = \"proto2\";\n"
+            "package test;\n"
+            "message M {\n"
+            "  optional string s = 1;\n"
+            "  repeated string r = 2;\n"
+            "  map<string, string> m = 3;\n"
+            "  optional bytes b = 4;\n"
+            "  optional N n = 5;\n"
+            "}\n"
+            "message N { optional string t = 1; }\n";
+
+        const Proto3 = "syntax = \"proto3\";\n"
+            "package test3;\n"
+            "message M { string s = 1; }\n";
+    }
+
+    constructor() : QUnit::Test("protobuf invalid encoding", "1.0", \ARGV) {
+        addTestCase("proto2 strings", \proto2Strings());
+        addTestCase("proto2 valid strings", \proto2Valid());
+        addTestCase("proto3 strings", \proto3Strings());
+        set_return_value(main());
+    }
+
+    proto2Strings() {
+        Protobuf::ProtobufSchema schema(Proto2);
+        # field 1 (string): "a" + e9
+        assertThrows("INVALID-ENCODING", "^ProtobufSchema: the string field 'test\\.M\\.s' is not valid UTF-8: "
+            "invalid byte sequence at byte offset 1$", \schema.decode(), ("test.M", <0a0261e9>));
+        # a surrogate (CESU-8) and an overlong form
+        assertThrows("INVALID-ENCODING", "string field 'test\\.M\\.s'.*byte offset 0$", \schema.decode(),
+            ("test.M", <0a03eda080>));
+        assertThrows("INVALID-ENCODING", "string field 'test\\.M\\.s'.*byte offset 0$", \schema.decode(),
+            ("test.M", <0a02c0af>));
+        # field 2 (repeated string): the second element
+        assertThrows("INVALID-ENCODING", "^ProtobufSchema: the string field 'test\\.M\\.r' is not valid UTF-8: "
+            "invalid byte sequence at byte offset 2$", \schema.decode(), ("test.M", <12016112036263ff>));
+        # field 3 (map): a key, a value
+        assertThrows("INVALID-ENCODING", "^ProtobufSchema: the map key of field 'test\\.M\\.m' is not valid UTF-8: "
+            "invalid byte sequence at byte offset 1$", \schema.decode(), ("test.M", <1a060a026be91200>));
+        assertThrows("INVALID-ENCODING", "^ProtobufSchema: the string field 'test\\.M\\.MEntry\\.value' is not "
+            "valid UTF-8: invalid byte sequence at byte offset 0$", \schema.decode(), ("test.M", <1a060a016b1201e9>));
+        # field 5 (a nested message with a string)
+        assertThrows("INVALID-ENCODING", "string field 'test\\.N\\.t'", \schema.decode(), ("test.M", <2a030a01e9>));
+    }
+
+    proto2Valid() {
+        Protobuf::ProtobufSchema schema(Proto2);
+        hash<auto> h = schema.decode("test.M", schema.encode("test.M", {
+            "s": "é€😀",
+            "r": ("a", "ü"),
+            "m": {"ké": "vé"},
+            "b": <e9ff>,
+        }));
+        assertEq("é€😀", h.s);
+        assertEq("UTF-8", h.s.encoding());
+        assertEq(("a", "ü"), h.r);
+        assertEq("UTF-8", h.r[1].encoding());
+        assertEq({"ké": "vé"}, h.m);
+        assertEq("UTF-8", h.m."ké".encoding());
+        # a bytes field is binary data, which has no encoding
+        assertEq(<e9ff>, h.b);
+    }
+
+    proto3Strings() {
+        Protobuf::ProtobufSchema schema(Proto3);
+        # proto3 refuses a message with a string that is not valid UTF-8 itself
+        assertThrows("PROTOBUF-DECODE-ERROR", \schema.decode(), ("test3.M", <0a0261e9>));
+        hash<auto> h = schema.decode("test3.M", <0a0361c3a9>);
+        assertEq("aé", h.s);
+        assertEq("UTF-8", h.s.encoding());
+    }
+}

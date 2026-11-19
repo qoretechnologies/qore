@@ -65,6 +65,21 @@ private:
 };
 }
 
+// returns the value of a string field as a UTF-8 string; raises INVALID-ENCODING if it is not valid UTF-8
+/* A protobuf string is UTF-8 text: proto3 refuses a message with one that is not valid UTF-8, but proto2 does not
+   check it (qore#6604); the text is checked where it enters the program
+*/
+static QoreStringNode* protobuf_string(const std::string& val, const FieldDescriptor* field, const char* what,
+        ExceptionSink* xsink) {
+    if (q_get_invalid_text_offset(QCS_UTF8, val.data(), val.size()) >= 0) {
+        QoreString desc;
+        desc.sprintf("%s '%s'", what, std::string(field->full_name()).c_str());
+        q_check_text_encoding(QCS_UTF8, val.data(), val.size(), "ProtobufSchema", desc.c_str(), xsink);
+        return nullptr;
+    }
+    return new QoreStringNode(val.data(), val.size(), QCS_UTF8);
+}
+
 QoreHashNode* ProtobufHelper::messageToHash(const Message& msg, ExceptionSink* xsink) {
     const Descriptor* desc = msg.GetDescriptor();
     const Reflection* ref = msg.GetReflection();
@@ -186,7 +201,7 @@ QoreValue ProtobufHelper::fieldToQore(const Message& msg, const FieldDescriptor*
                     return bin.release();
                 }
             }
-            return new QoreStringNode(val);
+            return protobuf_string(val, field, "string field", xsink);
         }
         case FieldDescriptor::CPPTYPE_ENUM:
             return (int64)ref->GetEnumValue(msg, field);
@@ -248,7 +263,7 @@ QoreValue ProtobufHelper::repeatedElementToQore(const Message& msg,
                     return bin.release();
                 }
             }
-            return new QoreStringNode(val);
+            return protobuf_string(val, field, "string field", xsink);
         }
         case FieldDescriptor::CPPTYPE_ENUM:
             return (int64)ref->GetRepeatedEnumValue(msg, field, index);
@@ -421,6 +436,14 @@ QoreHashNode* ProtobufHelper::mapFieldToHash(const Message& msg, const FieldDesc
         switch (key_field->cpp_type()) {
             case FieldDescriptor::CPPTYPE_STRING:
                 key_str = entry_ref->GetString(entry, key_field);
+                // a string key is UTF-8 text, as a string field is
+                if (q_get_invalid_text_offset(QCS_UTF8, key_str.data(), key_str.size()) >= 0) {
+                    QoreString desc;
+                    desc.sprintf("map key of field '%s'", std::string(field->full_name()).c_str());
+                    q_check_text_encoding(QCS_UTF8, key_str.data(), key_str.size(), "ProtobufSchema", desc.c_str(),
+                        xsink);
+                    return nullptr;
+                }
                 break;
             case FieldDescriptor::CPPTYPE_INT32:
                 key_str = std::to_string(entry_ref->GetInt32(entry, key_field));

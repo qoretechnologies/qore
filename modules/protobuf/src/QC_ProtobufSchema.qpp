@@ -365,8 +365,13 @@ binary ProtobufSchema::encode(string type, hash<auto> data) {
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-DECODE-ERROR if parsing fails, or a string map key in the message contains a NUL character,
     which a hash key cannot hold
+    @throw INVALID-ENCODING if a string field or a string map key of a \c proto2 message is not valid UTF-8 (a
+    \c proto3 message with such a string fails to parse, \c PROTOBUF-DECODE-ERROR); a \c bytes field holds data
+    that is not text
     @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
     @ref protobufnesting)
+
+    @note the strings of the hash returned are tagged UTF-8
 
     @since %protobuf 1.0
 */
