@@ -5329,6 +5329,34 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         return ds.vselectRows(sql, args);
     }
 
+    #! returns the key of each of the given columns in a row read from the table (issue #6674)
+    /** @param row a row read from the table
+        @param cols the columns as the table's description gives them
+        @param what the operation that needs the columns, for the error message
+
+        @return each column mapped to the key that gives its value in \a row: the column's name, or the key that is
+        the name in another case (a driver may give the names of the result in lower case, ex: MySQL)
+
+        @throw UPSERT-ERROR a column is not in the row, so that the row could not be matched by it
+    */
+    private hash<string, string> getResultColumnKeys(hash<auto> row, list<string> cols, string what) {
+        hash<string, string> rv;
+        foreach string col in (cols) {
+            if (row.hasKey(col)) {
+                rv{col} = col;
+                continue;
+            }
+            string lc = col.lwr();
+            *list<string> ks = select keys row, $1.lwr() == lc;
+            if (ks.size() != 1) {
+                throw "UPSERT-ERROR", sprintf("%s: %s cannot find the column %y in the rows read from the table "
+                    "(columns: %y)", getDesc(), what, col, keys row);
+            }
+            rv{col} = ks[0];
+        }
+        return rv;
+    }
+
     #! deletes the rows of the table that are not in the input of an upsert with the "delete_others" option
     /** @param pkh the primary key values of the input, by their exact key (getDeleteOthersKey())
         @param pkl the columns of the primary key
@@ -5347,14 +5375,21 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         # the rows whose exact key is not the key of an input row; only their key values are kept, unless the info
         # callback is given the rows
         list<hash<auto>> unmatched = ();
+        # the names of the key columns in the rows read, which a driver may give in another case than the table's
+        # description (ex: MySQL); a row's key values are always taken by these names (issue #6674)
+        *hash<string, string> rkeys;
         foreach hash<auto> row in (getStatement()) {
-            string key = getDeleteOthersKey(row, pkl);
+            if (!rkeys) {
+                rkeys = getResultColumnKeys(row, pkl, "the 'delete_others' option");
+            }
+            hash<auto> rk = (map {$1: row{rkeys{$1}}}, pkl);
+            string key = getDeleteOthersKey(rk, pkl);
             if (exists pkh{key}) {
                 # each key is the key of one row: the input keys that remain matched no row
                 remove pkh{key};
                 continue;
             }
-            unmatched += exists opt.info_callback ? row : row{pkl};
+            unmatched += {"key": rk, "row": exists opt.info_callback ? row : NOTHING};
         }
         if (!unmatched) {
             return;
@@ -5374,21 +5409,25 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
             *list<hash<auto>> found = casts
                 ? selectDeleteOthersKeys(pkl, casts, block)
                 : selectRows({"columns": pkl, "where": block});
+            *hash<string, string> fkeys;
             foreach hash<auto> frow in (found) {
-                kept{getDeleteOthersKey(frow, pkl)} = True;
+                if (!fkeys) {
+                    fkeys = getResultColumnKeys(frow, pkl, "the 'delete_others' option");
+                }
+                kept{getDeleteOthersKey((map {$1: frow{fkeys{$1}}}, pkl), pkl)} = True;
             }
         }
 
         hash<string, int> rh;
-        foreach hash<auto> row in (unmatched) {
-            if (kept{getDeleteOthersKey(row, pkl)}) {
+        foreach hash<auto> u in (unmatched) {
+            if (kept{getDeleteOthersKey(u.key, pkl)}) {
                 continue;
             }
-            self.del(row{pkl});
+            self.del(u.key);
 
             ++rh.deleted;
             if (opt.info_callback) {
-                opt.info_callback(getSqlName(), row, UR_Deleted);
+                opt.info_callback(getSqlName(), u.row, UR_Deleted);
             }
             if (opt.commit_block) {
                 if (++opt.change_count >= opt.commit_block) {
@@ -9217,6 +9256,9 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         string insert_sql = getUpsertInsertSql(example_row);
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
 
+        # the names of the columns in the row read, which a driver may give in another case than the table's
+        # description (ex: MySQL) (issue #6674)
+        *hash<string, string> dkeys;
         return int sub (hash<auto> row) {
             list<auto> args = row.(cols.keys()).values();
             #printf("select_sql: %s args: %y\n", select_sql, args);
@@ -9225,7 +9267,10 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
                 ds.vexec(insert_sql, row.values());
                 return UR_Inserted;
             }
-            if (dbrow == row{updc})
+            if (!dkeys) {
+                dkeys = getResultColumnKeys(dbrow, updc, "a select-first upsert");
+            }
+            if ((map {$1: dbrow{dkeys{$1}}}, updc) == row{updc})
                 return UR_Unchanged;
 
             #printf("dbrow: %y row{%y}: %y\n", dbrow, updc, row{updc});
