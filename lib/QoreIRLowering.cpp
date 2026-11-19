@@ -16994,7 +16994,9 @@ QoreIRValue QoreIRLowering::lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreVal
 QoreIRValue QoreIRLowering::lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue value,
         const QoreProgramLocation* loc, std::string& error) {
     QoreIRValue result;
-    bool should_invoke = !exception_stack.empty() && expressionCanThrow(expr);
+    // The operand has already been evaluated, including its exception edge. Converting that value
+    // to bool cannot raise; keep the conversion with its operand so its last use is visible.
+    bool should_invoke = op != QoreIROpcode::ToBool && !exception_stack.empty() && expressionCanThrow(expr);
     if (should_invoke) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -26703,6 +26705,22 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     return result_phi->result;
 }
 
+QoreIRValue QoreIRLowering::lowerConsumedTruthValue(const QoreValue& expr, const QoreProgramLocation* loc,
+        std::string& error) {
+    QoreIRValue value = lowerExpression(expr, error);
+    if (!value.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue result = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, expr, value, loc, error);
+    // A constructor declaration returns the value borrowed from the variable. Once its truth value has
+    // been consumed, keeping the construction temporary would delay destruction on reassignment (#6657).
+    if (result.isValid() && expr.getType() == NT_VARREF
+            && dynamic_cast<const VarRefNewObjectNode*>(expr.getInternalNode())) {
+        builder.createReleaseOwnedTemp(value, loc);
+    }
+    return result;
+}
+
 QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     if (dynamic_cast<const QoreLogicalOrOperatorNode*>(node)) {
@@ -26716,12 +26734,7 @@ QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
 
-    QoreIRValue left_value = lowerExpression(and_node->getLeft(), error);
-    if (!left_value.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue left_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, and_node->getLeft(), left_value,
-        and_node->loc, error);
+    QoreIRValue left_bool = lowerConsumedTruthValue(and_node->getLeft(), and_node->loc, error);
     if (!left_bool.isValid()) {
         return QoreIRValue();
     }
@@ -26737,12 +26750,7 @@ QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& 
     builder.createBranchIf(left_bool, rhs_block, merge_block);
 
     builder.setBlock(rhs_block);
-    QoreIRValue right_value = lowerExpression(and_node->getRight(), error);
-    if (!right_value.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue right_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, and_node->getRight(), right_value,
-        and_node->loc, error);
+    QoreIRValue right_bool = lowerConsumedTruthValue(and_node->getRight(), and_node->loc, error);
     if (!right_bool.isValid()) {
         return QoreIRValue();
     }
@@ -26767,12 +26775,7 @@ QoreIRValue QoreIRLowering::lowerLogicalOr(const QoreValue& expr, std::string& e
         return QoreIRValue();
     }
 
-    QoreIRValue left_value = lowerExpression(or_node->getLeft(), error);
-    if (!left_value.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue left_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, or_node->getLeft(), left_value,
-        or_node->loc, error);
+    QoreIRValue left_bool = lowerConsumedTruthValue(or_node->getLeft(), or_node->loc, error);
     if (!left_bool.isValid()) {
         return QoreIRValue();
     }
@@ -26788,12 +26791,7 @@ QoreIRValue QoreIRLowering::lowerLogicalOr(const QoreValue& expr, std::string& e
     builder.createBranchIf(left_bool, merge_block, rhs_block);
 
     builder.setBlock(rhs_block);
-    QoreIRValue right_value = lowerExpression(or_node->getRight(), error);
-    if (!right_value.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue right_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, or_node->getRight(), right_value,
-        or_node->loc, error);
+    QoreIRValue right_bool = lowerConsumedTruthValue(or_node->getRight(), or_node->loc, error);
     if (!right_bool.isValid()) {
         return QoreIRValue();
     }
@@ -26818,12 +26816,7 @@ QoreIRValue QoreIRLowering::lowerLogicalNot(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
 
-    QoreIRValue value = lowerExpression(not_node->getExp(), error);
-    if (!value.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue bool_value = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, not_node->getExp(), value,
-        not_node->loc, error);
+    QoreIRValue bool_value = lowerConsumedTruthValue(not_node->getExp(), not_node->loc, error);
     if (!bool_value.isValid()) {
         return QoreIRValue();
     }
@@ -26926,12 +26919,7 @@ QoreIRValue QoreIRLowering::lowerQuestionMark(const QoreValue& expr, std::string
         return QoreIRValue();
     }
 
-    QoreIRValue cond_value = lowerExpression(ternary->get(0), error);
-    if (!cond_value.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue cond_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, ternary->get(0), cond_value,
-        ternary->loc, error);
+    QoreIRValue cond_bool = lowerConsumedTruthValue(ternary->get(0), ternary->loc, error);
     if (!cond_bool.isValid()) {
         return QoreIRValue();
     }

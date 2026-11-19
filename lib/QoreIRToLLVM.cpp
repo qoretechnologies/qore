@@ -6209,8 +6209,23 @@ void QoreIRToLLVM::emitTempReleaseSequence(llvm::Module& module, const std::vect
 // documented in QoreIRToLLVM.h
 void QoreIRToLLVM::emitCleanupSlotRelease(llvm::Value* alloca_ptr, llvm::FunctionCallee decref) {
     llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+    llvm::BasicBlock* next = nullptr;
+    if (builder->GetInsertPoint() == builder->GetInsertBlock()->end() && released_constructor_slots.count(alloca_ptr)) {
+        // Paths that skipped the consuming truth test still own the object. Where the release
+        // dominates this cleanup, LLVM folds the empty-slot test and the call away (#6657).
+        auto* func = builder->GetInsertBlock()->getParent();
+        auto* release = llvm::BasicBlock::Create(ctx, "constructor.release", func);
+        next = llvm::BasicBlock::Create(ctx, "constructor.done", func);
+        immediate_dominator[next] = builder->GetInsertBlock();
+        builder->CreateCondBr(builder->CreateIsNotNull(val), release, next);
+        builder->SetInsertPoint(release);
+    }
     builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
     builder->CreateCall(decref, {val, xsink_arg});
+    if (next) {
+        builder->CreateBr(next);
+        builder->SetInsertPoint(next);
+    }
 }
 
 llvm::BasicBlock* QoreIRToLLVM::emitExceptionTempRelease(llvm::Module& module, llvm::Function* llvm_func,
@@ -15812,6 +15827,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_cleanup_slot.clear();
     exit_temp_cleanup_slot.clear();
     persistent_cleanup_allocas.clear();
+    released_constructor_slots.clear();
     call_return_cleanup_allocas.clear();
     rarely_held_cleanup_allocas.clear();
     element_read_held_flag = nullptr;
@@ -21497,6 +21513,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     clear_cleanup_alloca(consumed_cleanup);
                     clear_consumed_operand_cleanup(inst->operands[0].id);
                 }
+            } else if (is_ir_only) {
+                // The local cache owns the assigned value. Keeping the coercion's extra reference until frame
+                // exit would keep a replaced object alive after the local releases it (#6657).
+                clear_cleanup_alloca(consumed_cleanup);
             }
             return true;
         }
@@ -38561,6 +38581,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return true;
                 }
                 slot = alloca_it->second;
+                auto def = value_definitions.find(value_id);
+                if (inst->operands.size() == 1 && def != value_definitions.end()
+                        && (def->second->opcode == QoreIROpcode::NewObject
+                            || (def->second->opcode == QoreIROpcode::Invoke
+                                && static_cast<const QoreIRInvokeInstruction*>(def->second)->invoke_opcode
+                                    == QoreIROpcode::NewObject))) {
+                    // This slot holds only a constructed object or NOTHING. Clear it unconditionally
+                    // so later cleanup can see the empty slot without repeating the ownership test.
+                    auto decref = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    emitCleanupSlotRelease(slot, decref);
+                    released_constructor_slots.insert(slot);
+                    return true;
+                }
             }
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));

@@ -11,6 +11,7 @@ class P {
     private { string n; }
     constructor(string n) { self.n = n; }
     destructor() { printf("~%s\n", n); }
+    string tag() { return n; }
 }
 
 int sub thrower(int i) {
@@ -18,6 +19,57 @@ int sub thrower(int i) {
         throw "ERR";
     }
     return i;
+}
+
+# A constructor declaration gives its object to the local. Once the first operand has used that
+# object, replacing the local can run its destructor before another side effect in the same statement.
+sub constructor_condition() {
+    int other = 0;
+    reference<int> ref = \other;
+    printf("constructor args %d %d\n", P p("condition-old") ? 1 : 0, (p = new P("condition-new")) ? 1 : 0);
+}
+
+int sub constructor_marker() {
+    printf("constructor pipeline\n");
+    return 0;
+}
+
+sub local_condition() {
+    try {
+        P p("local-old");
+        printf("local args %d %d\n", p ? 1 : 0, (p = new P("local-new")) ? 1 : 0);
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
+}
+
+sub print_pair(P a, P b) {
+    printf("held %s %s\n", a.tag(), b.tag());
+}
+
+sub constructor_argument() {
+    # The truthy arm of ?: keeps the object for the call across evaluation of the second argument.
+    print_pair((P p("held-old") ?: new P("fallback")), p = new P("held-new"));
+}
+
+sub constructor_pipeline() {
+    int n = int(first (map 1, P p("pipeline-old"))) + ((p = new P("pipeline-new")) ? 1 : 0) + constructor_marker();
+}
+
+printf("top args %d %d\n", P top("top-old") ? 1 : 0, (top = new P("top-new")) ? 1 : 0);
+
+sub captured_condition() {
+    printf("captured args %d %d\n", P p("captured-old") ? 1 : 0, (p = new P("captured-new")) ? 1 : 0);
+    code capture = sub () { printf("captured %s\n", p.tag()); };
+    capture();
+}
+
+for (int i = 0; i < 2; ++i) {
+    constructor_condition();
+    constructor_pipeline();
+    local_condition();
+    constructor_argument();
+    captured_condition();
 }
 
 auto x;
