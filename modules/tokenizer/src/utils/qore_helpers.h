@@ -41,6 +41,49 @@ inline std::string qoreStdString(const QoreString* s) {
     return s ? std::string(s->c_str(), s->size()) : std::string();
 }
 
+//! Gives the text of a Qore string as UTF-8, checked where it enters the tokenizer (qore#6604)
+/** The tokenizer works on UTF-8 text: its vocabularies, regular expressions (PCRE2 in UTF mode) and Unicode
+    normalizers all expect UTF-8.  The text is first checked in its own encoding with q_check_text_encoding(), and
+    text in another encoding is then converted to UTF-8, so that the same text gives the same tokens in any
+    encoding and bytes that are not valid text never reach the pipeline (PCRE2 refuses a subject that is not valid
+    UTF-8, which skipped the Split step).
+
+    @param s the string; nullptr gives an empty string
+    @param out the UTF-8 text, including any NUL characters
+    @param where the Qore method that takes the text, for the exception (ex: \c "HFTokenizer::encode()")
+    @param what what the text is, for the exception (ex: \c "text")
+    @param xsink for an \c INVALID-ENCODING exception or the exception of the conversion
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+inline int qoreUtf8StdString(const QoreString* s, std::string& out, const char* where, const char* what,
+        ExceptionSink* xsink) {
+    if (!s) {
+        out.clear();
+        return 0;
+    }
+    if (q_check_text_encoding(s->getEncoding(), s->c_str(), s->size(), where, what, xsink)) {
+        return -1;
+    }
+    TempEncodingHelper utf8(s, QCS_UTF8, xsink);
+    if (!utf8) {
+        return -1;
+    }
+    out.assign(utf8->c_str(), utf8->size());
+    return 0;
+}
+
+//! Gives a string value as checked UTF-8 text as qoreUtf8StdString() does; a value that is not a string gives an
+//! empty string, as with safeGetStdString()
+inline int safeGetUtf8StdString(QoreValue v, std::string& out, const char* where, const char* what,
+        ExceptionSink* xsink) {
+    if (v.isNullOrNothing() || v.getType() != NT_STRING) {
+        out.clear();
+        return 0;
+    }
+    return qoreUtf8StdString(v.get<const QoreStringNode>(), out, where, what, xsink);
+}
+
 //! Safely gets a string value from a QoreValue, including any NUL characters.
 inline std::string safeGetStdString(QoreValue v) {
     if (v.isNullOrNothing() || v.getType() != NT_STRING) {

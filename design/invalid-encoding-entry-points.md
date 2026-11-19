@@ -76,5 +76,11 @@ and `YamlRpcHandler` method matching, `OpenApi3`/`Swagger` path templates, `McpS
 
 ## Other matchers
 
-- `modules/tokenizer` (`SplitPreTokenizer.cpp`) uses PCRE2 directly and takes a UTF-8 error as the end of the
-  matches: #6604.
+- `modules/tokenizer` (`SplitPreTokenizer.cpp`) uses PCRE2 directly and takes a match error as the end of the
+  matches.  Text enters the tokenizer through `qoreUtf8StdString()` (`modules/tokenizer/src/utils/qore_helpers.h`),
+  which raises `INVALID-ENCODING` for text that is not valid in its encoding and converts other encodings to UTF-8
+  (the text to encode, words, tokens, added tokens, the special tokens and chat template of `loadConfig()`, chat
+  messages), so valid input gives no UTF-8 error there; decoded text is UTF-8 with U+FFFD for each maximal invalid
+  subsequence, as Hugging Face tokenizers give (`modules/tokenizer/test/invalid-encoding.qtest`): done (#6604).
+  The model, normalizer, pre-tokenizer and decoder configuration strings (vocabularies, merges, patterns) come from
+  `parse_json()`, which checks them, and are taken as they are.

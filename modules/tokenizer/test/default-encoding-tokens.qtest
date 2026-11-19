@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  default-encoding-tokens.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+# test-exec-mode: children - the checks run in child qore processes whose default character encodings differ
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
+%requires Util
+
+%exec-class TokenizerDefaultEncodingTokensTest
+
+#! Tokens and decoded text are UTF-8 strings, and the keys of getVocab() are in the default encoding, whatever the
+#! default encoding is (qore#6604)
+class TokenizerDefaultEncodingTokensTest inherits QUnit::Test {
+    constructor() : Test("TokenizerDefaultEncodingTokensTest", "1.0", \ARGV) {
+        addTestCase("tokens across default encodings", \tokensTest());
+        set_return_value(main());
+    }
+
+    tokensTest() {
+        string script = get_script_dir() + DirSep + "data" + DirSep + "default-encoding-tokens.q";
+        string utf8 = make_hex_string(binary("UTF-8"));
+        string e_acute = "c3a9";
+        foreach string enc in (("ISO-8859-1", "UTF-8")) {
+            hash<string, string> r = run(enc, script);
+            assertEq(e_acute, r."id-to-token", enc);
+            assertEq(utf8, r."id-to-token-encoding", enc + ": idToToken() gives UTF-8");
+            assertEq(e_acute, r.tokens, enc);
+            assertEq(utf8, r."tokens-encoding", enc + ": the tokens of an encoding are UTF-8");
+            assertEq("7820c3a9", r.decoded, enc);
+            assertEq(utf8, r."decoded-encoding", enc + ": decoded text is UTF-8");
+            # hash keys are in the default encoding
+            assertEq(make_hex_string(binary(enc)), r."vocab-key-encoding", enc);
+        }
+        hash<string, string> iso = run("ISO-8859-1", script);
+        assertEq("e9", iso."vocab-key", "the vocabulary key is converted to ISO-8859-1");
+        assertEq(make_hex_string(binary("ENCODING-CONVERSION-ERROR")), iso."vocab-euro",
+            "a token that ISO-8859-1 cannot represent cannot be a key");
+        hash<string, string> u = run("UTF-8", script);
+        assertEq(e_acute, u."vocab-key");
+        assertEq(make_hex_string(binary("none")), u."vocab-euro");
+    }
+
+    #! runs the child script with the given default encoding and returns its results
+    private hash<string, string> run(string encoding, string script) {
+        string qore = TestInterpreter::qore_interpreter();
+        string output = backquote(sprintf("QORE_CHARSET=%s %s %s 2>&1", encoding, qore, script));
+        hash<string, string> results;
+        foreach string line in (output.split("\n")) {
+            *list<*string> parts = (line =~ x/^([a-z-]+)=([0-9a-f]*)$/);
+            if (parts) {
+                results{parts[0]} = parts[1];
+            }
+        }
+        assertEq(make_hex_string(binary(encoding)), results.default, sprintf("the child's default encoding: %s",
+            output));
+        return results;
+    }
+}

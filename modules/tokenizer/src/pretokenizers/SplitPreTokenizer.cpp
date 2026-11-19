@@ -159,8 +159,17 @@ std::vector<PreToken> SplitPreTokenizer::pretokenize(const std::string& text) co
     while (offset <= subject_len) {
         int rc = pcre2_match(re, subject, subject_len, offset, 0, md, nullptr);
         if (rc < 0) {
-            // PCRE2_ERROR_NOMATCH (no further matches) or a hard error (e.g. bad
-            // UTF-8): stop; any remaining text is emitted as the trailing segment.
+            // PCRE2_ERROR_NOMATCH: no further matches; any remaining text is emitted as the trailing segment.
+            //
+            // Any other error is a defensive fallback that also ends the matches, as this interface cannot report
+            // an error; the remaining text is still tokenized, as the trailing segment.  PCRE2 refuses a subject
+            // that is not valid UTF-8, which made one invalid byte in the input skip the Split step for the whole
+            // text; all text is now checked and converted to UTF-8 where it enters the tokenizer
+            // (qoreUtf8StdString(), qore#6604), so valid input does not get here with a UTF-8 error: the
+            // pre-tokenizers before this one split only at character boundaries, the offset is advanced by whole
+            // characters, and the normalizers give UTF-8 (except a Replace normalizer whose std::regex pattern
+            // matches part of a character, as std::regex matches bytes).  The other errors are a match or depth
+            // limit, or no memory for the JIT stack.
             break;
         }
         PCRE2_SIZE* ov = pcre2_get_ovector_pointer(md);

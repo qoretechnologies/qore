@@ -1,0 +1,405 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  invalid-encoding.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires Util
+%requires QUnit
+
+%requires json
+
+%requires tokenizer
+
+%exec-class TokenizerInvalidEncodingTest
+
+#! Text that is not valid in its encoding raises INVALID-ENCODING where it enters a tokenizer (qore#6604)
+/** Text in another encoding is converted to UTF-8 and gives the same token IDs; decoded text is UTF-8 with U+FFFD for
+    each maximal invalid subsequence, as Hugging Face tokenizers give
+*/
+class TokenizerInvalidEncodingTest inherits QUnit::Test {
+    #! "ab", an invalid byte, "cd": the invalid byte sequence is at byte offset 2
+    const BadBytes = <6162ff6364>;
+
+    #! the replacement character U+FFFD
+    const Repl = "�";
+
+    constructor() : Test("TokenizerInvalidEncodingTest", "1.0") {
+        addTestCase("encoding methods", \encodeMethods());
+        addTestCase("forms of invalid UTF-8 and other encodings", \invalidForms());
+        addTestCase("tokens and added tokens", \tokens());
+        addTestCase("configuration and chat templates", \chatTemplates());
+        addTestCase("text in other encodings", \otherEncodings());
+        addTestCase("the Split pre-tokenizer", \split());
+        addTestCase("decoded text is UTF-8", \decode());
+        addTestCase("ByteFallback decoder", \byteFallback());
+        addTestCase("tokens are UTF-8", \utf8Tokens());
+        set_return_value(main());
+    }
+
+    #! returns the bytes as a string tagged UTF-8 without a check
+    private static string utf8(binary b) {
+        return binary_to_string(b, "UTF-8");
+    }
+
+    #! returns the expected exception description pattern
+    private static string msg(string loc, string what, int offset, string enc = "UTF-8") {
+        return sprintf("^%s: the %s is not valid %s: invalid byte sequence at byte offset %d$",
+            regex_escape(loc), regex_escape(what), enc, offset);
+    }
+
+    #! escapes the regular expression characters of a string
+    private static string regex_escape(string s) {
+        foreach string c in ("\\", "(", ")", "[", "]", "{", "}", ".", "*", "+", "?", "^", "$", "|") {
+            s = replace(s, c, "\\" + c);
+        }
+        return s;
+    }
+
+    private Tokenizer::HFTokenizer gpt2() {
+        return new Tokenizer::HFTokenizer(parse_json(ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/gpt2-tokenizer.json")));
+    }
+
+    private Tokenizer::HFTokenizer bert() {
+        return new Tokenizer::HFTokenizer(parse_json(ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json")));
+    }
+
+    private Tokenizer::HFTokenizer chatTokenizer() {
+        return new Tokenizer::HFTokenizer({
+            "model": {
+                "type": "WordPiece",
+                "vocab": {"[UNK]": 0, "hello": 1},
+                "unk_token": "[UNK]",
+                "continuing_subword_prefix": "##",
+            },
+            "added_tokens": (
+                {"id": 2, "content": "<s>", "special": True},
+                {"id": 3, "content": "</s>", "special": True},
+            ),
+        });
+    }
+
+    #! returns the GPT-2 byte-level token ID of each byte
+    private static list<int> byteIds(Tokenizer::HFTokenizer tok, binary b) {
+        list<int> rv = ();
+        for (int i = 0; i < b.size(); ++i) {
+            rv += tok.tokenToId(byteChar(b[i]));
+        }
+        return rv;
+    }
+
+    #! returns the character of the GPT-2 byte-to-unicode mapping for a byte
+    private static string byteChar(int b) {
+        int cp;
+        if ((b >= 0x21 && b <= 0x7e) || (b >= 0xa1 && b <= 0xac) || (b >= 0xae && b <= 0xff)) {
+            cp = b;
+        } else {
+            # the other bytes map to 256 + n in their order
+            int n = 0;
+            for (int i = 0; i < b; ++i) {
+                if (!((i >= 0x21 && i <= 0x7e) || (i >= 0xa1 && i <= 0xac) || (i >= 0xae && i <= 0xff))) {
+                    ++n;
+                }
+            }
+            cp = 256 + n;
+        }
+        if (cp < 0x80) {
+            return chr(cp, "UTF-8");
+        }
+        return utf8(parse_hex_string(sprintf("%02x%02x", 0xc0 | (cp >> 6), 0x80 | (cp & 0x3f))));
+    }
+
+    encodeMethods() {
+        Tokenizer::HFTokenizer tok = gpt2();
+        string bad = utf8(BadBytes);
+
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encode()", "text", 2), \tok.encode(), (bad,));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeWithOptions()", "text", 2),
+            \tok.encodeWithOptions(), (bad, "ok"));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeWithOptions()", "text pair", 2),
+            \tok.encodeWithOptions(), ("ok", bad));
+
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeAdvanced()", "text", 2),
+            \tok.encodeAdvanced(), (bad,));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeAdvanced()", "text_pair option", 2),
+            \tok.encodeAdvanced(), ("ok", {"text_pair": bad}));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeAdvanced()", "text", 2),
+            \tok.encodeAdvanced(), (bad, {"is_pretokenized": True}));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeAdvanced()", "word at index 1", 2),
+            \tok.encodeAdvanced(), ("", {"is_pretokenized": True, "words": ("ok", bad)}));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodePreTokenized()", "word at index 1", 2),
+            \tok.encodePreTokenized(), (("ok", bad),));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodePreTokenized()", "text_pair option", 2),
+            \tok.encodePreTokenized(), (("ok",), {"text_pair": bad}));
+
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeBatch()", "text at index 1", 2),
+            \tok.encodeBatch(), (("ok", bad),));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeBatch()", "text_pair option", 2),
+            \tok.encodeBatch(), (("ok",), {"text_pair": bad}));
+
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeForModel()", "text", 2),
+            \tok.encodeForModel(), (bad,));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeForModel()", "text_pair option", 2),
+            \tok.encodeForModel(), ("ok", {"text_pair": bad}));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeForModel()", "word at index 0", 2),
+            \tok.encodeForModel(), ("", {"is_pretokenized": True, "words": (bad,)}));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeForModel()", "text", 2),
+            \tok.encodeForModel(), (bad, {"is_pretokenized": True}));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeBatchForModel()", "text at index 1", 2),
+            \tok.encodeBatchForModel(), (("ok", bad),));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeBatchPairsForModel()", "text at index 1", 2),
+            \tok.encodeBatchPairsForModel(), (("ok", bad), ("x", "y")));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encodeBatchPairsForModel()", "text pair at index 1", 2),
+            \tok.encodeBatchPairsForModel(), (("ok", "fine"), ("x", bad)));
+
+        # the same valid text is encoded as before
+        assertEq(tok.encode("abcd").input_ids, tok.encodeAdvanced("abcd").input_ids);
+        assertEq(2, tok.encodeBatch(("ok", "abcd")).size());
+    }
+
+    invalidForms() {
+        Tokenizer::HFTokenizer tok = gpt2();
+        # a surrogate (CESU-8), an overlong form of "/", above U+10FFFF, a character cut off by the end, a
+        # continuation byte without a lead byte, after valid text other than ASCII and after a NUL character
+        list<list<auto>> cases = (
+            (<61eda080>, 1),
+            (<61c0af>, 1),
+            (<61f4908080>, 1),
+            (<61e282>, 1),
+            (<80>, 0),
+            (<c3a9e282ac80>, 5),
+            (<610062ff>, 3),
+        );
+        foreach list<auto> c in (cases) {
+            assertThrows("INVALID-ENCODING", msg("HFTokenizer::encode()", "text", c[1]), \tok.encode(),
+                (utf8(c[0]),), sprintf("%y", c[0]));
+        }
+        # a multi-byte encoding is checked in its own encoding
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encode()", "text", 1, "Shift_JIS"), \tok.encode(),
+            (binary_to_string(<6183>, "Shift_JIS"),));
+        # US-ASCII text has only ASCII characters
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encode()", "text", 1, "US-ASCII"), \tok.encode(),
+            (binary_to_string(<61e9>, "US-ASCII"),));
+    }
+
+    tokens() {
+        Tokenizer::HFTokenizer tok = gpt2();
+        string bad = utf8(BadBytes);
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::tokenToId()", "token", 2), \tok.tokenToId(), (bad,));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::addTokens()", "token at index 1", 2),
+            \tok.addTokens(), (("<|ok|>", bad),));
+        # the tokens before the invalid one are added
+        assertGt(-1, tok.tokenToId("<|ok|>"));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::addTokens()", "token content at index 0", 2),
+            \tok.addTokens(), (({"content": bad, "special": True},),));
+
+        hash<auto> config = parse_json(ReadOnlyFile::readTextFile(get_script_dir()
+            + "/test_data/gpt2-tokenizer.json"));
+        config.added_tokens += {"id": 50257, "content": bad, "special": True};
+        int index = config.added_tokens.size() - 1;
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()",
+            sprintf("added token content at index %d", index), 2),
+            auto sub () { return new Tokenizer::HFTokenizer(config); });
+
+        # a valid token other than ASCII
+        assertEq(2634, tok.tokenToId("Ã©"));
+    }
+
+    chatTemplates() {
+        string bad = utf8(BadBytes);
+        Tokenizer::HFTokenizer tok = chatTokenizer();
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::loadConfig()", "chat_template", 2), \tok.loadConfig(),
+            ({"chat_template": bad},));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::loadConfig()", "eos_token", 2), \tok.loadConfig(),
+            ({"eos_token": bad},));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::loadConfig()", "bos_token content", 2),
+            \tok.loadConfig(), ({"bos_token": {"content": bad}},));
+        # nothing is changed by a configuration with invalid text
+        assertThrows("INVALID-ENCODING", \tok.loadConfig(), ({"model_max_length": 77, "chat_template": "x",
+            "eos_token": "</s>", "sep_token": bad},));
+        assertEq(-1, tok.getModelMaxLength());
+        assertEq(3, tok.getEosTokenId(), "the EOS token is found among the added tokens");
+        assertThrows("TOKENIZER-ERROR", "no chat_template", \tok.applyChatTemplate(), (({"content": "x"},),));
+
+        tok.loadConfig({"chat_template": "{% for message in messages %}[{{ message['role'] }}]"
+            "{{ message['content'] }}{% endfor %}", "eos_token": "</s>"});
+        assertEq("[user]é€", tok.applyChatTemplate(({"role": "user", "content": "é€"},)));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::applyChatTemplate()", "message content at index 1", 2),
+            \tok.applyChatTemplate(), (({"role": "user", "content": "ok"}, {"role": "user", "content": bad}),));
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::applyChatTemplate()", "message role at index 0", 2),
+            \tok.applyChatTemplate(), (({"role": bad, "content": "ok"},),));
+
+        # a template without a message loop
+        tok.loadConfig({"chat_template": "plain"});
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::applyChatTemplate()", "message content at index 0", 2),
+            \tok.applyChatTemplate(), (({"role": "user", "content": bad},),));
+    }
+
+    otherEncodings() {
+        string text = "Café über naïve: €";
+        foreach Tokenizer::HFTokenizer tok in ((bert(), gpt2())) {
+            hash<auto> u = tok.encode(text);
+            foreach string enc in ("ISO-8859-15", "UTF-16LE", "UTF-16BE", "WINDOWS-1252") {
+                hash<auto> e = tok.encode(convert_encoding(text, enc));
+                assertEq(u.input_ids, e.input_ids, enc);
+                assertEq(u.tokens, e.tokens, enc);
+                # offsets are byte offsets in the UTF-8 text
+                assertEq(u.offset_mapping, e.offset_mapping, enc);
+                assertEq(u.input_ids, tok.encodeAdvanced(convert_encoding(text, enc)).input_ids, enc);
+                assertEq(u.input_ids, tok.encodeBatch((convert_encoding(text, enc),))[0].input_ids, enc);
+                assertEq(tok.encodeForModel(text).input_ids,
+                    tok.encodeForModel(convert_encoding(text, enc)).input_ids, enc);
+                assertEq(tok.encodeWithOptions("a", text).input_ids,
+                    tok.encodeWithOptions("a", convert_encoding(text, enc)).input_ids, enc);
+            }
+        }
+        # the bytes of an ISO-8859-1 string were tokenized as they were, as bytes that are not valid UTF-8
+        Tokenizer::HFTokenizer tok = gpt2();
+        string latin1 = convert_encoding("café", "ISO-8859-1");
+        assertEq(tok.encode("café").input_ids, tok.encode(latin1).input_ids);
+        assertEq("café", tok.decode(tok.encode(latin1).input_ids));
+        # a Japanese text in Shift_JIS
+        assertEq(tok.encode("日本語のテキスト").input_ids,
+            tok.encode(convert_encoding("日本語のテキスト", "Shift_JIS")).input_ids);
+
+        # tokens in another encoding
+        assertEq(2634, tok.tokenToId(convert_encoding("Ã©", "ISO-8859-1")));
+        assertEq(1, tok.addTokens((convert_encoding("<|é|>", "ISO-8859-1"),)));
+        hash<auto> e = tok.encode("x<|é|>");
+        assertEq("<|é|>", e.tokens.last());
+        assertEq("<|é|>", tok.idToToken(e.input_ids.last()));
+
+        # chat messages and templates in another encoding give UTF-8 text
+        Tokenizer::HFTokenizer chat = chatTokenizer();
+        chat.loadConfig({"chat_template": convert_encoding("{% for message in messages %}é{{ message['content'] }}"
+            "{% endfor %}", "ISO-8859-1")});
+        string prompt = chat.applyChatTemplate(({"role": "user", "content": convert_encoding("ü½", "UTF-16LE")},));
+        assertEq("éü½", prompt);
+        assertEq("UTF-8", prompt.encoding());
+        chat.loadConfig({"chat_template": "plain"});
+        prompt = chat.applyChatTemplate(({"content": convert_encoding("ü", "ISO-8859-1")},));
+        assertEq("ü", prompt);
+        assertEq("UTF-8", prompt.encoding());
+    }
+
+    split() {
+        Tokenizer::HFTokenizer tok(parse_json(ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/gpt4-style-split-tokenizer.json")));
+        # \p{N}{1,3} splits the digits, and the spaces are split from the word
+        list<int> ids = (2043, 6, 50, 220, 220, 220, 16, 17, 18, 19, 20, 21, 2124);
+        assertEq(ids, tok.encode("IT'S   123456 x").input_ids);
+        # an invalid byte made PCRE2 refuse the whole text, which skipped the Split step (the digits were merged)
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::encode()", "text", 15), \tok.encode(),
+            (utf8(binary("IT'S   123456 x") + <ff>),));
+        # text other than ASCII is split as ASCII text is
+        list<int> ids2 = tok.encode("IT'S   123456 xé").input_ids;
+        assertEq(ids[0..11], ids2[0..11]);
+        assertEq("IT'S   123456 xé", tok.decode(ids2));
+        # and also in another encoding
+        assertEq(ids2, tok.encode(convert_encoding("IT'S   123456 xé", "ISO-8859-1")).input_ids);
+    }
+
+    decode() {
+        Tokenizer::HFTokenizer tok = gpt2();
+        # whole tokens are decoded as before
+        string text = "é€😀 ok";
+        hash<auto> enc = tok.encode(text);
+        string d = tok.decode(enc.input_ids);
+        assertEq(text, d);
+        assertEq("UTF-8", d.encoding());
+        assertEq((text,), tok.decodeBatch((enc.input_ids,)));
+
+        # "😀" is two byte-level tokens: "ðŁĺ" (f0 9f 98) and "Ģ" (80)
+        list<int> ids = tok.encode("😀").input_ids;
+        assertEq(2, ids.size());
+        d = tok.decode(ids[0..0]);
+        assertEq(Repl, d);
+        assertEq("UTF-8", d.encoding());
+        assertTrue(d.isEncodingValid());
+        assertEq(Repl, tok.decode(ids[1..1]));
+        assertEq("😀", tok.decode(ids));
+        list<string> l = tok.decodeBatch((ids[0..0], ids, ids[1..1]));
+        assertEq((Repl, "😀", Repl), l);
+        foreach string s in (l) {
+            assertEq("UTF-8", s.encoding());
+            assertTrue(s.isEncodingValid());
+        }
+
+        # each maximal invalid subsequence gives one U+FFFD, as Rust's String::from_utf8_lossy() does
+        list<list<auto>> cases = (
+            (<f09f98>, Repl),
+            (<f09f9841>, Repl + "A"),
+            (<41e28242>, "A" + Repl + "B"),
+            (<ff>, Repl),
+            (<c0af>, Repl + Repl),
+            (<eda080>, Repl + Repl + Repl),
+            (<f4908080>, Repl + Repl + Repl + Repl),
+            (<e0809f>, Repl + Repl + Repl),
+            (<80bf>, Repl + Repl),
+            (<c3a9f09f>, "é" + Repl),
+            (<f09f9880c3a9>, "😀é"),
+            (<f48fbfbf>, utf8(<f48fbfbf>)),
+        );
+        foreach list<auto> c in (cases) {
+            d = tok.decode(byteIds(tok, c[0]));
+            assertEq(c[1], d, sprintf("%y", c[0]));
+            assertEq("UTF-8", d.encoding());
+            assertTrue(d.isEncodingValid(), sprintf("%y", c[0]));
+        }
+    }
+
+    byteFallback() {
+        Tokenizer::HFTokenizer tok({
+            "model": {
+                "type": "BPE",
+                "vocab": {"<0xF0>": 0, "<0x9F>": 1, "<0x98>": 2, "<0x80>": 3, "A": 4, "<0xC3>": 5, "<0xA9>": 6},
+                "merges": (),
+            },
+            "decoder": {"type": "ByteFallback"},
+        });
+        assertEq("😀", tok.decode((0, 1, 2, 3)));
+        assertEq("éA", tok.decode((5, 6, 4)));
+        # as in Hugging Face tokenizers, each byte token of a run that is not valid UTF-8 gives U+FFFD
+        string d = tok.decode((0, 1, 4));
+        assertEq(Repl + Repl + "A", d);
+        assertEq("UTF-8", d.encoding());
+        assertTrue(d.isEncodingValid());
+        assertEq(Repl + Repl + Repl, tok.decode((5, 6, 0)));
+        assertEq((Repl, "😀"), tok.decodeBatch(((3,), (0, 1, 2, 3))));
+    }
+
+    # the tokens of an encoding, idToToken() and the keys of getVocab() are UTF-8 text; the default encoding of this
+    # process is UTF-8, so only default-encoding-tokens.qtest, whose children have other default encodings, shows
+    # the encoding tag of a token apart from the default encoding
+    utf8Tokens() {
+        Tokenizer::HFTokenizer gpt4(parse_json(ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/gpt4-style-split-tokenizer.json")));
+        Tokenizer::HFTokenizer llama(parse_json(ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/tinyllama-tokenizer.json")));
+        foreach Tokenizer::HFTokenizer tok in ((gpt4, llama)) {
+            hash<auto> enc = tok.encode("I'm sure HÉR'S café 😀 日本");
+            hash<string, int> vocab = tok.getVocab();
+            int non_ascii = 0;
+            foreach string t in (enc.tokens) {
+                assertEq("UTF-8", t.encoding(), t);
+                assertTrue(t.isEncodingValid(), t);
+                if (t !~ /^[\x00-\x7f]*$/) {
+                    ++non_ascii;
+                }
+                int id = tok.tokenToId(t);
+                assertEq(enc.input_ids[$#], id, t);
+                string s = tok.idToToken(id);
+                assertEq(t, s);
+                assertEq("UTF-8", s.encoding(), t);
+                assertEq(id, vocab{t}, t);
+            }
+            assertGt(3, non_ascii, "tokens other than ASCII were checked");
+        }
+    }
+}
