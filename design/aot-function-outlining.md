@@ -275,7 +275,7 @@ This generalizes the existing Phase 1.5 init-expression outliner
   own unwind path — the same sequence a real nested call produces.
 - The helper takes the function's tables of its try statements for the
   instructions that it lowers (`catch_interrupted_returns`,
-  `catch_cleanup_results`; `catch_exit_depths` and `catch_exit_unwind`
+  `catch_cleanup_results`, `catch_exit_unwind`; `catch_exit_depths`
   too, qore#6651), releases its locals in their declaration
   order (the coordinator's `all_body_locals` order), and an exception in
   it whose handler's temp scope is the coordinator's leaves every temp
