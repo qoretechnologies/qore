@@ -7275,9 +7275,9 @@ static bool qore_aot_read_stmt_loc(const QoreAOTBinaryReader& reader, const uint
             }
             const QoreProgramLocation* loc = nullptr;
             const bool inst_file_same = inst.loc && file == inst_file;
-            if (!owner_func) {
-                // no location without a function to own it, as for the instruction's own (deserializeIRInstruction())
-            } else if (inst_file_same && inst.loc->start_line == start_line && inst.loc->end_line == end_line) {
+            // deserializeIRFunction() reads every instruction for the function that owns its locations
+            assert(owner_func);
+            if (inst_file_same && inst.loc->start_line == start_line && inst.loc->end_line == end_line) {
                 loc = inst.loc;
             } else {
                 // the file is interned in the Program, as the instruction's own (see deserializeIRInstruction())

@@ -6,8 +6,9 @@
 // whose code they are, are written to AOT images (QORE_AOT_STATEMENT_LOCATIONS_VERSION) and read back with the same
 // sharing: the instructions of a statement share its location, so that the IR interpreter and native code store the
 // location only where the statement changes.  An instruction without one keeps none, the instructions of a
-// PushTempMarkPair, which is written as two PushTempMark instructions, keep the pair's, and an image of an earlier
-// format takes the location of each instruction, as before.
+// PushTempMarkPair, which is written as two PushTempMark instructions, keep the pair's, the IR function of a handler
+// written in an instruction has a location table of its own, and an image of an earlier format takes the location of
+// each instruction, as before.
 
 #include <qore/Qore.h>
 #include <qore/QoreAOT.h>
@@ -144,6 +145,67 @@ static void roundTripLocations(QoreProgram* pgm) {
     expect(n[4]->stmt_loc == e[0]->stmt_loc, "the return has the statement's location");
 }
 
+//! the IR function of a handler written in an instruction of a function has a statement location table of its own:
+//! the function's table continues after it, and the handler's locations are its own
+static void nestedTable(QoreProgram* pgm) {
+    QoreProgramLocation stmt1("stmt.q", 3, 6);
+    QoreProgramLocation stmt2("stmt.q", 4, 4);
+
+    auto handler = std::make_shared<QoreIRFunction>("handler", "handler");
+    {
+        QoreIRBuilder hb(handler.get());
+        hb.setBlock(handler->createBlock("entry"));
+        hb.createConstInt(1)->stmt_loc = &stmt2;
+        // a location of the enclosing function's table is a new entry of the handler's
+        hb.createConstInt(2)->stmt_loc = &stmt1;
+        hb.createReturnNothing()->stmt_loc = &stmt1;
+        handler->max_value_id = 32;
+    }
+
+    QoreIRFunction fn("nested-table", "nested-table");
+    QoreIRBuilder b(&fn);
+    QoreIRBasicBlock* entry = fn.createBlock("entry");
+    b.setBlock(entry);
+    b.createConstInt(1)->stmt_loc = &stmt1;
+    QoreIRInstruction* obe = entry->appendInstruction<QoreIROnBlockExitInstruction>(OBE_Unconditional, handler);
+    obe->stmt_loc = &stmt1;
+    // the location of the instruction before the handler's function, which the function's table continues with
+    b.createConstInt(2)->stmt_loc = &stmt1;
+    // a location of the handler's table only is a new entry of the function's
+    b.createConstInt(3)->stmt_loc = &stmt2;
+    b.createReturnNothing()->stmt_loc = &stmt1;
+    fn.max_value_id = 32;
+
+    std::string error;
+    std::unique_ptr<QoreIRFunction> ir = roundTrip(pgm, fn, error);
+    expect(ir && error.empty(), "the function with a handler is read back");
+    if (!ir) {
+        fprintf(stderr, "error: %s\n", error.c_str());
+        return;
+    }
+    auto& e = ir->blocks[0]->instructions;
+    expect(e.size() == 5 && e[1]->opcode == QoreIROpcode::OnBlockExit, "the instructions are read back");
+    if (e.size() != 5 || e[1]->opcode != QoreIROpcode::OnBlockExit) {
+        return;
+    }
+    const auto* robe = static_cast<const QoreIROnBlockExitInstruction*>(e[1].get());
+    expect(robe->handler_ir && robe->handler_ir->blocks.size() == 1
+        && robe->handler_ir->blocks[0]->instructions.size() == 3, "the handler's function is read back");
+    if (!robe->handler_ir || robe->handler_ir->blocks.size() != 1
+            || robe->handler_ir->blocks[0]->instructions.size() != 3) {
+        return;
+    }
+    auto& h = robe->handler_ir->blocks[0]->instructions;
+    expect(same(h[0]->stmt_loc, 4, 4, "stmt.q") && same(h[1]->stmt_loc, 3, 6, "stmt.q")
+        && h[2]->stmt_loc == h[1]->stmt_loc, "the handler's instructions have their statement locations");
+    expect(h[1]->stmt_loc != e[0]->stmt_loc, "the handler's function has a location table of its own");
+    expect(e[1]->stmt_loc == e[0]->stmt_loc && e[2]->stmt_loc == e[0]->stmt_loc,
+        "the function's table continues after the handler's function");
+    expect(same(e[3]->stmt_loc, 4, 4, "stmt.q") && e[3]->stmt_loc != h[0]->stmt_loc,
+        "a location of the handler's table only is a new entry of the function's");
+    expect(e[4]->stmt_loc == e[0]->stmt_loc, "the return has the function's statement location");
+}
+
 //! an image of the format before QORE_AOT_STATEMENT_LOCATIONS_VERSION: the IR takes the instructions' own locations
 static void earlierFormat(QoreProgram* pgm) {
     QoreAOTBinaryWriter writer;
@@ -201,6 +263,7 @@ int main() {
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
     QoreProgram* pgm = qore_create_program(PO_NEW_STYLE);
     roundTripLocations(pgm);
+    nestedTable(pgm);
     earlierFormat(pgm);
     qore_destroy_program(pgm);
     qore_cleanup();

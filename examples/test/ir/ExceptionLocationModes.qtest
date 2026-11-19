@@ -630,6 +630,8 @@ if (ARGV[0] == "debug") {
 
         #! results that the AST interpreter must give for AotIrScript
         const AotIrPinned = (
+            "if condition: DIVISION-BY-ZERO 30-33 <- Probes::pIfCond:111-111 <- run:133-133",
+            "nested handler: DIVISION-BY-ZERO 43-46 <- Probes::pNestedHandler:111-111 <- run:133-133",
             "closure: DIVISION-BY-ZERO 60-63 <- <anonymous closure>:111-111 <- run:133-133",
             "nested handler in a closure: DIVISION-BY-ZERO 72-75 <- <anonymous closure>:111-111 <- run:133-133",
             "unhandled QORE System exception thrown in TID 2 in <background operator>() "
@@ -650,6 +652,8 @@ if (ARGV[0] == "debug") {
             "run2: ERR2 exception-location.qr:351-351 <- run2:429-429",
             "out-of-line handlers then condition: DIVISION-BY-ZERO exception-location.qr:309-314 <- "
                 "MoreProbes::pHandlersWhile:417-417",
+            "closure then division: DIVISION-BY-ZERO exception-location.qr:443-443 <- "
+                "LastProbes::pClosureThenDiv:417-417",
         );
     }
 

@@ -13162,7 +13162,12 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         val = fromBits(result_bits);
     }
 
-    // Restore thread-local runtime parse options/location saved above.
+    // Restore thread-local runtime parse options/location saved above.  The callers' code depends on it: native
+    // code and the IR interpreter store their runtime location only when their statement changes
+    // (QoreIRInstruction::stmt_loc, qore#6646), so the location must be the caller's again after the call.  It is
+    // restored only when the variant has a parse location, and not when an exception other than QoreJITException
+    // leaves exec_fn() (native code and the IR interpreter report errors through xsink); not RAII, as it is restored
+    // before the body locals are released
     if (swapped_runtime_ctx) {
         const AbstractStatement* dummy_stmt;
         const QoreProgramLocation* dummy_loc;
