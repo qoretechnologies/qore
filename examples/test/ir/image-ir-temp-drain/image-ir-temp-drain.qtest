@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the script runs in a child process in AST mode and as a qcc executable
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class ImageIrTempDrainTest
+
+#! the IR of an image drains the temp scopes that an exception leaves as lowered IR does (qore#6742)
+/** The IR of an image did not carry the temp scopes of its instructions, so the IR interpreter released the
+    temporaries of a statement that an exception ended in another order than the AST interpreter when it ran IR read
+    from an image (here, a closure of a qcc executable without native closures).  From the format that carries them
+    (QORE_AOT_TEMP_SCOPES_VERSION), the output must be the AST interpreter's; a qcc of an earlier format skips the test.
+*/
+class ImageIrTempDrainTest inherits QUnit::Test {
+    public {
+        const TempScopesVersion = 50;
+    }
+
+    private {
+        TmpDir tmp("qore-image-ir-temp-drain-");
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("image IR temp drain", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("closure IR from an image", \drainTest());
+        set_return_value(main());
+    }
+
+    drainTest() {
+        *string fmt = (backquote(sprintf("%s %s -V 2>&1", env, qcc_bin)) =~ x/AOT binary format: ([0-9]+)/)[0];
+        if (!fmt || fmt.toInt() < TempScopesVersion) {
+            testSkip(sprintf("qcc writes images of format %y, which do not carry the temp scopes of instructions",
+                fmt));
+        }
+        string script = get_script_dir() + DirSep + "image-ir-temp-drain.q";
+        string expected = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1", env, qore_bin, script));
+        string exe = tmp.path + DirSep + "image-ir-temp-drain";
+        string out = backquote(sprintf("%s %s -O0 -o %s %s 2>&1", env, qcc_bin, exe, script));
+        assertTrue(is_file(exe), out);
+        assertEq(expected, backquote(sprintf("%s QORE_DISABLE_AOT_NATIVE_CLOSURES=1 %s 2>&1", env, exe)));
+    }
+}
