@@ -2028,7 +2028,10 @@ if (url =~ m{https?://[\w.]+/\w+})
     |!Argument|!Processing
     |@ref string_type "string"|This operator returns @ref True "True" if the regular expression in \a regex matches the string in \a expression.
 
-    This operator does not throw any exceptions.
+    <b>Exceptions Thrown by =~</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the string is not valid in its encoding: such a string cannot be matched, and the operator does not take it as one that does not match, so that a check that rejects matching strings cannot accept it; see @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" to test a string without an exception
+    |\c ENCODING-CONVERSION-ERROR|the string is not in UTF-8 and cannot be converted to it
 
     <hr>
     @subsection regex_no_match_operator Regular Expression No Match Operator (!~)
@@ -2053,7 +2056,10 @@ if (str !~ /hello/)
     |!Argument|!Processing
     |@ref string_type "string"|This operator returns @ref True "True" if the regular expression in \a regex does not match the string in \a expression.
 
-    This operator does not throw any exceptions.
+    <b>Exceptions Thrown by !~</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the string is not valid in its encoding: such a string cannot be matched, and the operator does not take it as one that does not match, so that a check that rejects matching strings cannot accept it; see @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" to test a string without an exception
+    |\c ENCODING-CONVERSION-ERROR|the string is not in UTF-8 and cannot be converted to it
 
     <hr>
     @subsection regex_subst_operator Regular Expression Substitution Operator
@@ -2088,7 +2094,7 @@ str =~ s{http://old\.example\.com}{https://new.example.com}g;
     |\c INVALID-ENCODING|the \a lvalue string is not valid in its encoding: such a string cannot be matched, and the operator does not leave it unchanged as if nothing in it matched, so that a substitution that escapes or removes text cannot let it through unprocessed; the \a lvalue is not changed
     |\c ENCODING-CONVERSION-ERROR|the \a lvalue string is not in UTF-8 and cannot be converted to it
     |\c REGEX-SUBST-ERROR|infinite recursion detected: an empty pattern matched with the global option
-    |\c REGEX-ERROR|the regular expression engine gave up before it could determine a result (match, depth or heap limit), or a match that ends inside a UTF-8 character (as with \c \\C) left the next match at an offset inside a character
+    |\c REGEX-ERROR|the regular expression engine gave up before it could determine a result (match, depth or heap limit)
 
     <hr>
     @subsection regex_extract_operator Regular Expression Pattern Extraction Operator
@@ -2114,7 +2120,10 @@ list =~ x/(.*)\.(.*)/;
     |!Argument|!Processing
     |@ref string_type "string"|This operator extracts strings from \a string based on patterns enclosed in parentheses in the regular expression.
 
-    This operator does not throw any exceptions.
+    <b>Exceptions Thrown by =~ x//</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the string is not valid in its encoding: such a string cannot be matched, and the operator does not take it as one that does not match, so that a check that rejects matching strings cannot accept it; see @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" to test a string without an exception
+    |\c ENCODING-CONVERSION-ERROR|the string is not in UTF-8 and cannot be converted to it
 
     <hr>
     @subsection transliteration_operator Transliteration Operator

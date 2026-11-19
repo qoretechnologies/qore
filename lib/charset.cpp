@@ -1231,13 +1231,19 @@ static qore_offset_t GB18030_get_char_len(const char* p, size_t len) {
     return (u[1] < 0x40 || u[1] == 0x7f || u[1] == 0xff) ? 0 : 2;
 }
 
-// Shift_JIS and its variants (CP932): two bytes with a first byte 0x81 - 0x9f or 0xe0 - 0xfc and a second byte
-// 0x40 - 0xfc; any other byte is a single-byte character (ex: JIS X 0201 kana 0xa1 - 0xdf)
+// JIS X 0201 Roman/control bytes and half-width kana use one byte. JIS X 0208 Appendix 1
+// uses the lead ranges 81-9f and e0-ef. Windows-31J and other extended forms go through fc.
+template <bool Extended>
 static qore_offset_t SJIS_get_char_len(const char* p, size_t len) {
     assert(len);
     const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
-    if (!((u[0] >= 0x81 && u[0] <= 0x9f) || (u[0] >= 0xe0 && u[0] <= 0xfc))) {
+    if (u[0] <= 0x7f || (u[0] >= 0xa1 && u[0] <= 0xdf)) {
         return 1;
+    }
+    constexpr unsigned last_lead = Extended ? 0xfc : 0xef;
+    if (!((u[0] >= 0x81 && u[0] <= 0x9f) || (u[0] >= 0xe0 && u[0] <= last_lead))) {
+        // The Windows family also has single-byte extensions outside JIS X 0201.
+        return Extended ? 1 : 0;
     }
     if (len < 2) {
         return -2;
@@ -1441,7 +1447,7 @@ const multibyte_family multibyte_families[] = {
     // iconv implementations and variants (ex: CP932) map them differently, so it is handled the same way on every
     // platform; that the second bytes of its double-byte characters can be ASCII characters is handled by the
     // character boundary checks of all of these families
-    QORE_MULTIBYTE_FAMILY("SJIS", SJIS_get_char_len, 2, true),
+    QORE_MULTIBYTE_FAMILY("SJIS", SJIS_get_char_len<true>, 2, true),
 };
 #undef QORE_MULTIBYTE_FAMILY
 
@@ -1639,6 +1645,17 @@ void qore_encoding_private::probe() {
         ProbeConverter from("UTF-8", name.c_str());
         return to.valid() && from.valid();
     });
+    // Select the named Shift_JIS forms directly. A probe of the platform converter can accept malformed
+    // pairs or identify the extended Windows repertoire as Shift_JIS.
+    const bool windows_sjis = code == "CP932" || code == "Windows-31J";
+    if (windows_sjis || code == "Shift_JIS" || code == "SHIFT-JIS" || code == "SHIFTJIS" || code == "SJIS"
+            || code == "MS_KANJI" || code == "CSSHIFTJIS") {
+        setCharFunctions(windows_sjis ? form_functions::get<SJIS_get_char_len<true>, nullptr>(1, 2)
+            : form_functions::get<SJIS_get_char_len<false>, nullptr>(1, 2));
+        needs_boundary_check = true;
+        ascii_compat = false;
+        return;
+    }
     ProbeConverter to(getIconvCode(), "UTF-8");
     bool no_encoder = !to.valid() && errno == EINVAL;
     ProbeConverter from("UTF-8", getIconvCode());

@@ -123,6 +123,39 @@
     an arithmetic column operator is an SQL literal, an alias referenced in a superquery or a window is an identifier,
     and a string first argument of the Oracle \c in expression is bound (issue #6574).
 
+    @par A Regular Expression Match Raises INVALID-ENCODING for a String Not Valid in Its Encoding
+    Every regular expression match (the @ref regex_match_operator "=~", @ref regex_no_match_operator "!~" and
+    @ref regex_extract_operator "=~ x//" operators, @ref Qore::regex() "regex()", @ref Qore::regex_extract()
+    "regex_extract()", @ref Qore::Regex "Regex", @ref Qore::RegexMatchIterator "RegexMatchIterator" and
+    @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator") raises an \c INVALID-ENCODING exception for a
+    string that is not valid in its encoding, which it took as one that does not match; the new
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests a string without an exception, and a
+    pattern with \c \\C, which matches one byte and so can match a part of a character, raises
+    \c REGEX-COMPILATION-ERROR (issue #6554).
+
+    @par URL Decoding Refuses a Result That Is Not Valid UTF-8
+    @ref Qore::decode_url() "decode_url()" and @ref Qore::decode_uri_request() "decode_uri_request()" raise
+    \c URL-ENCODING-ERROR when the decoded string is not valid UTF-8 (ex: from \c "%C0%AF", a lone \c "%80" or an
+    encoded surrogate), which they returned (issue #6554).
+
+    @par HttpServer Refuses a Request Head That Is Not Valid Text
+    The @ref httpserverintro "HttpServer" module answers with \c 400, before any handler sees it, a request whose path,
+    query, method or HTTP version is not valid UTF-8 text, whose HTTP/1.x header names have a byte above 0x7f, or whose
+    body is not valid in its encoding; a header value that is not valid UTF-8 is given in ISO-8859-1 (RFC 9110 obs-text),
+    also by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" (issue #6554).
+
+    @par HTTP Clients Check a Response Body's Encoding
+    A response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other
+    text, as a page's declared charset is often wrong, and fails with \c INVALID-ENCODING when it is JSON, YAML, XML or
+    another structured type, with @ref Qore::HTTPClient "HTTPClient", also for an error status, which raised
+    \c HTTP-CLIENT-RECEIVE-ERROR; a response header value that is not valid UTF-8 is given in ISO-8859-1, as RFC 9110
+    obs-text (issue #6554).
+
+    @par WebSocket Servers Close a Connection That Sends Text That Is Not UTF-8
+    A WebSocket text message that is not valid UTF-8 closes the connection with code 1007 (RFC 6455 section 8.1)
+    before the connection's code sees it, in @ref websockethandlerintro "WebSocketHandler" over HTTP/1.1, HTTP/2 and
+    HTTP/3 (issue #6554).
+
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
     \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
@@ -671,6 +704,12 @@
     they ignored them (<a href="https://github.com/qoretechnologies/qore/issues/757">issue 757</a>); see
     @ref sqlutilv3_11_0.
 
+    @par SqlUtil delete_others Deletes Every Row for an Empty Input and Needs Key Values
+    An upsert with the \c delete_others option and an empty input deletes every row of the table, as documented,
+    as does strict reference data of a schema that gives a table no rows; it deleted nothing.  An input row without a
+    plain value of each column of the primary key raises \c UPSERT-ERROR, where every row was deleted
+    (<a href="https://github.com/qoretechnologies/qore/issues/6607">issue 6607</a>); see @ref sqlutilv3_11_0.
+
     @par Schemas Align Their Views
     The views that a @ref Schema::AbstractSchema "schema" gives with \c getViewsImpl(), as the schema classes that
     SchemaReverse generates do, are aligned with the schema (see @ref schema_views); they were ignored
@@ -1057,6 +1096,11 @@
     or write files at a caller's path or directory, or change the index directory, are in the \c FILESYSTEM domain
     (writers and builder also \c PROCESS_CONTROL), so code restricted with @ref Qore::PO_NO_FILESYSTEM
     "PO_NO_FILESYSTEM" cannot call them; index lookups are unchanged (issue #6500).
+
+    @par The Least Restrictive Path to a Class Inherited Through Several Paths Applies
+    A class reached through a private and a public path is public for every lookup in every execution mode (its
+    methods, members, \c instanceof, casts, types), where the first path found decided, and inherited method variants
+    take the access of their whole path, not of its last edge (see @ref multiple_path_inheritance; issue #6498).
 
     @subsection qore_3_0_0_new_features New Features in Qore
     @par An encoding_errors Option for Text Readers
@@ -2386,11 +2430,21 @@
     - a static method call reference to a method of a class that a Program imported
       (@ref Qore::Program::importClass() "Program::importClass()") raises \c PROGRAM-ERROR when it is called after the
       Program is deleted; the call could read memory that was released with the Program (issue #6622)
+    - a constant, static class variable or static method given as \c "Class::name" (also in a call reference) is
+      found in a class with that name that provides it, also when the name resolves first to another class with that
+      name that does not (such as a class of the Qore namespace; see @ref class_member_scope_resolution); the
+      reference raised a parse exception (issue #1527)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
       so that two redirects between the same files in opposite directions at the same time can no longer deadlock
       (issue #6567)
+    - @ref httpserverintro "HttpServer", @ref swaggerintro "Swagger" and
+      @ref restschemavalidatorintro "RestSchemaValidator" modules: a handler path or a schema \c pattern that is not a valid regular expression raises
+      \c REGEX-COMPILATION-ERROR when the handler is set or the schema is loaded, and a Swagger path template with a
+      parameter that is not valid raises \c INVALID-PATH-COMPONENT then, instead of failing each request with a 500
+      response; a content type that a request accepts is no longer taken as a regular expression (see @ref http1_7,
+      @ref swagger_2_6 and @ref restschemavalidator_2_5; issue #6603)
     - \c UNREFERENCED-VARIABLE warnings ignored the code's own warning directives when the code was committed, and
       qcc and qore could disagree; a @ref disable-warning "%disable-warning" or @ref enable-warning "%enable-warning"
       directive now applies to the variables declared after it (issue #6589)
@@ -2452,6 +2506,9 @@
       \c instanceof an unrelated class, a failed cast or type check, at parse time or at run time) visits each
       ancestor once, not once per path, which took exponential time in a chain of diamonds (see @ref inheritance;
       issue #6522)
+    - a member of a class that a hierarchy reaches through a \c private:internal path and another path has one value
+      that every class reads and writes, where the classes read separate values, and the parse of such a hierarchy no
+      longer aborts a debug build (see @ref multiple_path_inheritance; issue #6523)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
@@ -3077,6 +3134,10 @@
     - at process exit, modules were deleted before the modules that require them, and objects held through opaque
       references were released too late, so destructors failed with \c PROGRAM-ERROR (see
       @ref module_deletion_order)
+    - the order in which modules are deleted at process exit depended on whether a module was loaded from a stale
+      AOT module's source or from the AOT module; a dependency cycle made by a run-time module load is now broken at
+      the module loaded (see @ref module_deletion_order;
+      <a href="https://github.com/qoretechnologies/qore/issues/6251">issue 6251</a>)
     - an unhandled exception raised by a destructor at program exit leaves exit status 3 (see @ref exception_handling)
     - a debugger callback could get a deleted @ref Qore::ProgramControl "ProgramControl" object, which could crash the
       process, and a copy of a @ref Qore::Breakpoint "Breakpoint" shared the original's ID and Program (see
@@ -3609,6 +3670,29 @@
     - fixed a select of @ref sqlutilintro "SqlUtil" on SQL Server with a limit and no offset or ordering, which wrote
       <tt>top N</tt> and also bound the limit as an argument that the SQL does not use, and put \c top before
       \c distinct (<a href="https://github.com/qoretechnologies/qore/issues/6583">issue 6583</a>)
+    - fixed the \c delete_others upsert option of @ref sqlutilintro "SqlUtil", which deleted a row that the upsert
+      wrote when the database stores its key in another form or rounds it, and deleted rows while reading the table
+      (<a href="https://github.com/qoretechnologies/qore/issues/6607">issue 6607</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6635">issue 6635</a>); see @ref sqlutilv3_11_0
+    - fixed the \c delete_others upsert option of @ref sqlutilintro "SqlUtil", which deleted the row of an input key of
+      a \c CHAR(n) or \c NCHAR(n) primary key on Oracle, or of a \c char(n) key with trailing spaces on PostgreSQL
+      (<a href="https://github.com/qoretechnologies/qore/issues/6675">issue 6675</a>); see @ref sqlutilv3_11_0
+    - fixed the \c delete_others upsert option of @ref sqlutilintro "SqlUtil" on MySQL with a primary key column whose
+      name is not in lower case, which deleted no row but reported the rows not in the input as deleted, and a
+      select-first upsert on MySQL, which updated an unchanged row of a table with such a column
+      (<a href="https://github.com/qoretechnologies/qore/issues/6674">issue 6674</a>); see @ref sqlutilv3_11_0
+    - fixed the upsert methods of @ref sqlutilintro "SqlUtil", which did not find the row of a key that the column
+      rounds or pads when it stores it (ex: <tt>1.005</tt> in a <tt>numeric(10,2)</tt> key): they inserted another row
+      or failed with a primary key violation (<a href="https://github.com/qoretechnologies/qore/issues/6676">issue 6676</a>);
+      see @ref sqlutilv3_11_0
+    - fixed the select-first upsert of @ref sqlutilintro "SqlUtil", which ignored the \c omit_update option: it compared
+      and updated the columns that the option omits (<a href="https://github.com/qoretechnologies/qore/issues/6683">issue 6683</a>)
+    - fixed the \c delete_others upsert option of @ref sqlutilintro "SqlUtil" with rows of list values (bulk DML),
+      which deleted every row of the table, those of the input as well
+      (<a href="https://github.com/qoretechnologies/qore/issues/6687">issue 6687</a>); see @ref sqlutilv3_11_0
+    - fixed an upsert closure of @ref sqlutilintro "SqlUtil" kept across a call of
+      @ref SqlUtil::AbstractTable::clear() "AbstractTable::clear()", which raised \c OBJECT-ALREADY-DELETED
+      (<a href="https://github.com/qoretechnologies/qore/issues/6686">issue 6686</a>); see @ref sqlutilv3_11_0
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
@@ -3624,6 +3708,18 @@
     - a user module that a module loads at run time with @ref Qore::load_module() "load_module()" is deleted after
       that module when the process ends, together with the native modules it requires, so the cleanup no longer uses
       the declarations of a native module that was already deleted (issue #6501)
+    - in the C++ API, \c QoreString::parseBase64UrlToString() and \c QoreStringNode::parseBase64UrlToString()
+      without an encoding argument decode base64url instead of base64, as the overloads with one do (issue #6621)
+    - code of a @ref Qore::Program "Program" could be associated with the thread-local data of another Program in
+      some cases; the thread-local data is now kept consistent with the current Program, and a closure-bound variable
+      is never created in the thread-local data of another Program (\c PROGRAM-THREAD-LOCAL-ERROR).  The C++ API
+      documentation states that code that runs a Program's code must enter it with
+      \c QoreExternalProgramContextHelper
+      (<a href="https://github.com/qoretechnologies/qore/issues/6185">issue 6185</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6537">issue 6537</a>)
+    - the C++ API's \c QoreProgramContextHelper switches the thread-local data of the Program with the current
+      Program; it never creates the data or runs the Program's thread initialization code
+      (<a href="https://github.com/qoretechnologies/qore/issues/6537">issue 6537</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

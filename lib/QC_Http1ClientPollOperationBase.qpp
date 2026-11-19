@@ -2745,8 +2745,11 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
         active_method.clear();
     }
 
-    // Convert binary body to string for text-based content types
-    QoreValue body = convertBodyEncoding(xsink);
+    // Convert binary body to string for text-based content types; a body that is not valid in its encoding
+    // (qore#6554) is an error of the request, which completes it as any other error does, after the connection's
+    // state is updated below
+    ExceptionSink body_xsink;
+    QoreValue body = convertBodyEncoding(&body_xsink);
 
     // Build response hash
     ReferenceHolder<QoreHashNode> resp(new QoreHashNode(autoTypeInfo), xsink);
@@ -2791,9 +2794,21 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
         closeConnectionPriv(false, xsink);
     }
 
-    // Dispatch to action
+    // Dispatch to action; a body error without an action (a request that was cancelled) is not reported
+    if (!action) {
+        body_xsink.clear();
+    }
     if (action) {
-        action->execute(resp.release(), xsink);
+        if (body_xsink) {
+            QoreStringValueHelper err(body_xsink.getExceptionErr());
+            QoreStringValueHelper desc(body_xsink.getExceptionDesc());
+            std::string err_str(err->c_str());
+            std::string desc_str(desc->c_str());
+            body_xsink.clear();
+            action->executeError(err_str.c_str(), desc_str.c_str(), xsink);
+        } else {
+            action->execute(resp.release(), xsink);
+        }
         action->deref(xsink);
     }
 
@@ -3033,8 +3048,8 @@ QoreValue Http1ClientPollOperationPriv::convertBodyEncoding(ExceptionSink* xsink
     // Content-Type; see qore_get_http_body_charset()
     QoreValue ct_val = response_headers ? response_headers->getKeyValue("content-type") : QoreValue();
     QoreStringValueHelper ct_str(ct_val.getType() == NT_STRING ? ct_val : QoreValue());
-    return qore_decode_http_body(ct_val.getType() == NT_STRING ? ct_str->c_str() : nullptr, response_body,
-        assumed_encoding.load(std::memory_order_relaxed));
+    return qore_decode_http_response_body(ct_val.getType() == NT_STRING ? ct_str->c_str() : nullptr, response_body,
+        assumed_encoding.load(std::memory_order_relaxed), xsink);
 }
 
 // --- Error handling ---

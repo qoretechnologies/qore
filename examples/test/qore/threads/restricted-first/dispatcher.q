@@ -10,19 +10,28 @@
 %strict-args
 
 const Source = "
-# dispatches n tool calls in parallel; returns the result or the error of each
+# dispatches 2 tool calls in parallel; returns the result or the error of each.  The first tool's thread runs until the
+# second start was tried: the second tool releases it when its thread starts, and the refusal of the second start
+# releases it otherwise, so a sandbox limit of one thread is always reached (the wait is bounded only against a hang)
 list<string> sub run(int n) {
     QoreAgentStrategies::ParallelToolDispatcher d({\"max_concurrent\": n});
     list<hash<auto>> tools = ();
     for (int i = 0; i < n; ++i) {
         tools += {\"name\": \"t\" + i};
     }
+    Counter second_tried(1);
     try {
         list<hash<auto>> results = d.dispatchToolsParallel(tools, auto sub (string name, hash<auto> args) {
+            if (name == \"t0\") {
+                second_tried.waitForZero(60s);
+            } else if (name == \"t1\") {
+                second_tried.dec();
+            }
             return name;
         });
         return map $1.error ?? \"ok\", results;
     } catch (hash<ExceptionInfo> ex) {
+        second_tried.dec();
         return (ex.err,);
     }
 }

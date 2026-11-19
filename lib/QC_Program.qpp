@@ -4242,6 +4242,8 @@ code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_AR
     if (*xsink) {
         return QoreValue();
     }
+    // the identifier is only resolved, which runs no code of the Program, so it is only made current, not entered
+    // (qore#6185)
     QoreProgramContextHelper pch(p);
     // the identifier is resolved in the Program, not as a method of the Program object, which is the stack object
     // of this method (issue #5863)

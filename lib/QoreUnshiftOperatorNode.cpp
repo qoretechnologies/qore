@@ -32,6 +32,7 @@
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreUnshiftOperatorNode::unshift_str("unshift operator expression");
 
@@ -69,7 +70,7 @@ int QoreUnshiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
         if (!QoreTypeInfo::parseAcceptsReturns(leftTypeInfo, NT_LIST)) {
             // only raise a parse exception if parse exceptions are enabled
-            if (getProgram()->getParseExceptionSink()) {
+            if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* edesc = new QoreStringNode("the lvalue expression with the ");
                 edesc->sprintf("'%s' operator is ", getTypeName());
                 QoreTypeInfo::getThisType(leftTypeInfo, *edesc);

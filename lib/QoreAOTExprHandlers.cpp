@@ -1730,7 +1730,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // selects the Program without claiming parse ownership, like the CLOSURE_CREATE slot reader in
     // buildContextFromSlotMap(): a module loader can own parsing while waiting for this thread.  The caller keeps the
     // Program alive, and the Program's runtime metadata lock protects the locations, strings, and locals that the
-    // closure signature allocates.
+    // closure signature allocates.  The record is only read and the closure constructed: no code of the Program
+    // runs, so the Program is only made current, not entered (qore#6185).
     QoreProgramContextHelper closure_program_context(ctx.pgm);
 
     // the record is read with its bounds checked: a malformed record, or one that a default that cannot be read
@@ -2108,7 +2109,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     if (closure_selfid) {
         cached_pre_inst->insert(closure_selfid);
     }
-    closure_ir->cached_pre_instantiated = cached_pre_inst;
+    closure_ir->setCachedPreInstantiated(cached_pre_inst);
 
     // Set cached IR on variant
     makeExprDeserializedClosureIRNameUnique(*closure_ir, closure_variant);
@@ -4049,7 +4050,8 @@ static bool write_expr_const_value(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_const_value(AOTExprReadCtx& ctx) {
     std::string value_error;
-    // the Program resolves the hashdecls and types of typed container values (#5895)
+    // the Program resolves the hashdecls and types of typed container values (#5895); reading the value runs no code
+    // of the Program, so it is only made current, not entered (qore#6185)
     QoreValue rv;
     {
         QoreProgramContextHelper value_pch(ctx.pgm);

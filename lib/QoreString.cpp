@@ -721,6 +721,8 @@ int qore_string_private::concatDecodeUriIntern(ExceptionSink* xsink, const qore_
     }
 
     bool in_query = false;
+    // the decoded text is appended from here; it is checked when the decoding is complete
+    size_t start = len;
 
     // the whole string is decoded, including any part after a NUL character
     const char* url = str.effective_buf();
@@ -837,6 +839,34 @@ int qore_string_private::concatDecodeUriIntern(ExceptionSink* xsink, const qore_
         }
 
         concat(*(url++));
+    }
+
+    // percent encoding can give byte sequences that are not valid in the target encoding (ex: "%FF", "%C0%AF", a
+    // lone continuation byte or a surrogate in UTF-8), and the source can have raw bytes that are not; such a result
+    // is not text and is refused, so that what is decoded from outside the program is valid text (qore#6554)
+    if (len > start) {
+        size_t bad = 0;
+        bool valid;
+        if (encoding == QCS_UTF8) {
+            bool incomplete = false;
+            bad = IconvHelper::validUtf8Prefix(effective_buf() + start, len - start, incomplete);
+            valid = (bad == len - start);
+        } else {
+            QoreString decoded(effective_buf() + start, len - start, encoding);
+            valid = qore_string_encoding_valid(decoded);
+        }
+        if (!valid) {
+            // the target is left as it was
+            terminate(start);
+            if (encoding == QCS_UTF8) {
+                xsink->raiseException("URL-ENCODING-ERROR", "decoding gave a string that is not valid UTF-8: invalid "
+                    "byte sequence at byte offset %zu of the decoded string", bad);
+            } else {
+                xsink->raiseException("URL-ENCODING-ERROR", "decoding gave a string that is not valid in encoding "
+                    "\"%s\"", encoding->getCode());
+            }
+            return -1;
+        }
     }
     return 0;
 }
@@ -3932,13 +3962,14 @@ size_t qore_string_private::characterCount(const QoreString& str, ExceptionSink*
         return p->len;
     }
 
-    if (ep->fcharlen == q_UTF16BE_get_char_len || ep->fcharlen == q_UTF16LE_get_char_len) {
-        // The width of a leading surrogate is four bytes even if the next unit is not a trailing
-        // surrogate. The decoder returns the surrogate itself when it cannot form a scalar.
+    if (ep->fcharlen && !p->isStateful()) {
+        // Qore defines the byte sequences in these encodings. In particular musl iconv accepts a Shift_JIS
+        // lead followed by an apostrophe, which the Qore scanner rejects.
+        bool utf16 = ep->fcharlen == q_UTF16BE_get_char_len || ep->fcharlen == q_UTF16LE_get_char_len;
         const char* b = p->effective_buf();
         size_t count = 0;
         for (size_t i = 0; i < p->len; ++count) {
-            if (!(count % 1024) && qore_check_cancel(xsink, "counting UTF-16 characters")) {
+            if (!(count % 1024) && qore_check_cancel(xsink, "counting string characters")) {
                 return 0;
             }
             qore_offset_t width = ep->fcharlen(b + i, p->len - i);
@@ -3946,18 +3977,22 @@ size_t qore_string_private::characterCount(const QoreString& str, ExceptionSink*
                 p->raiseInvalidEncoding(xsink);
                 return 0;
             }
-            unsigned cp = ep->getUnicode(b + i);
-            if (cp >= 0xd800 && cp <= 0xdfff) {
-                p->raiseInvalidEncoding(xsink);
-                return 0;
+            if (utf16) {
+                // The width alone does not verify the trailing surrogate. The decoder returns the leading
+                // surrogate itself if it cannot form a scalar.
+                unsigned cp = ep->getUnicode(b + i);
+                if (cp >= 0xd800 && cp <= 0xdfff) {
+                    p->raiseInvalidEncoding(xsink);
+                    return 0;
+                }
             }
             i += width;
         }
         return count;
     }
 
-    // The character-width callbacks of some encodings only determine boundaries. Decode the text to
-    // verify its repertoire and shift state. Only an illegal input sequence is a domain error.
+    // Decode stateful text and encodings without a character scanner (including single-byte encodings
+    // with undefined bytes). Only an illegal input sequence is a domain error.
     QoreString utf8(QCS_UTF8);
     size_t bad_offset = SIZE_MAX;
     if (convert_encoding_intern(p->effective_buf(), p->len, enc, utf8, QCS_UTF8, xsink, false, false,
@@ -4045,7 +4080,7 @@ QoreString* QoreString::parseBase64UrlToString(const QoreEncoding* qe, Exception
 }
 
 QoreString* QoreString::parseBase64UrlToString(ExceptionSink* xsink) const {
-    return parseBase64ToString(QCS_DEFAULT, xsink);
+    return parseBase64UrlToString(QCS_DEFAULT, xsink);
 }
 
 BinaryNode *QoreString::parseHex(ExceptionSink* xsink) const {
@@ -5037,4 +5072,60 @@ bool qore_string_encoding_valid(const QoreString& str) {
     QoreString utf8(QCS_UTF8);
     return !qore_string_private::convert_encoding_intern(str.c_str(), str.size(), enc, utf8, QCS_UTF8, nullptr,
         false);
+}
+
+// documented in qore_string_private.h
+QoreStringNode* qore_http_field_value_string(const char* p, size_t len) {
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(p, len, QCS_DEFAULT));
+    qore_http_field_value_check(*str);
+    return str.release();
+}
+
+// documented in qore_string_private.h
+void qore_http_field_value_check(QoreStringNode* str) {
+    if (!qore_string_encoding_valid(*str)) {
+        str->setEncoding(QCS_ISO_8859_1);
+    }
+}
+
+// documented in qore_string_private.h
+bool qore_http_target_text_valid(const char* p, size_t len) {
+    // the common case: ASCII without percent encoding
+    bool simple = true;
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = static_cast<unsigned char>(p[i]);
+        if (c == '%' || c > 0x7f || !c) {
+            simple = false;
+            break;
+        }
+    }
+    if (simple) {
+        return true;
+    }
+    // a raw byte above 0x7f (which RFC 3986 requires to be percent-encoded) or a NUL: the normal path decides, in the
+    // encoding of the socket, which the glue does not know
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = static_cast<unsigned char>(p[i]);
+        if (c > 0x7f || !c) {
+            return false;
+        }
+    }
+    // the path and the query are decoded as HttpServer decodes them (decodeRequestPath(): decode_url() of each), with
+    // the same decoder, so that the result is the same; a NUL character is refused in the decoded path only
+    const char* q = static_cast<const char*>(memchr(p, '?', len));
+    size_t path_len = q ? static_cast<size_t>(q - p) : len;
+    auto decode = [](const char* s, size_t l, bool no_nul) -> bool {
+        QoreString src(s, l, QCS_UTF8);
+        QoreString out(QCS_UTF8);
+        ExceptionSink xsink;
+        if (out.concatDecodeUrl(src, &xsink)) {
+            xsink.clear();
+            return false;
+        }
+        return !no_nul || !memchr(out.c_str(), 0, out.size());
+    };
+    if (!decode(p, path_len, true)) {
+        return false;
+    }
+    return !q || decode(q + 1, len - path_len - 1, false);
 }

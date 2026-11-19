@@ -543,6 +543,9 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
     }
 
     #! creates the object from the arguments
+    /** @note the method and the options are written into the DDL as they are given here; the indexes of a table
+        description are checked by MssqlTable::checkIndexOptions() (qore#6577)
+    */
     constructor(string n_name, bool n_unique, hash n_cols, *string n_filegroup,
             *string n_method, *hash<auto> n_with)
             : AbstractIndex(n_name, n_unique, n_cols) {
@@ -567,7 +570,9 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
             list<string> parts = ();
             HashIterator wi(with_options);
             while (wi.next()) {
-                parts += sprintf("%s = %s", wi.getKey(), wi.getValue());
+                # checked by MssqlTable::checkIndexOptions() (qore#6577); a boolean is ON or OFF
+                auto v = wi.getValue();
+                parts += sprintf("%s = %s", wi.getKey(), v.typeCode() == NT_BOOLEAN ? (v ? "ON" : "OFF") : v);
             }
             sql += sprintf(" with (%s)", parts.join(", "));
         }
@@ -2816,7 +2821,9 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         sql += ") as source (";
         sql += foldl $1 + "," + $2, getColumnSqlNames(row.keys());
         sql += ") on (";
-        sql += foldl $1 + " and " + $2, (map sprintf("t.%s=source.%s", $1, $1), getColumnSqlNames(cols.keys()));
+        # the stored key is compared with the bound value converted as the column stores it; the value inserted is the
+        # value as bound, as with a plain insert (issue #6676)
+        sql += getUpsertMergeKeyConditions(cols, row, "=");
         sql += ")";
         if (upsert_strategy != UpsertInsertOnly) {
             sql += sprintf(" when matched then update set ");
@@ -3131,6 +3138,61 @@ so.name = %v", name);
         }
 
         return new Columns(rv);
+    }
+
+    #! returns the types that the "delete_others" upsert option converts the values of numeric, date and time key columns to (issue #6635)
+    /** the types are given by the catalog as the columns are declared (ex: \c "numeric(10,2)",
+        \c "datetime2(0)", \c "int"), so that a bound value is rounded as the column rounds it when it stores it
+    */
+    private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+        # Sybase has no information_schema: the values are compared as they are bound
+        if (is_sybase) {
+            return;
+        }
+        *hash<auto> qh = ds.select("select column_name, data_type, numeric_precision, numeric_scale, "
+            "datetime_precision from information_schema.columns where table_schema = %v and table_name = %v",
+            schema, name);
+        hash<string, string> rv;
+        context (qh) {
+            string col = %column_name.lwr();
+            if (!inlist(col, pkl)) {
+                continue;
+            }
+            string dt = %data_type.lwr();
+            *string type;
+            switch (dt) {
+                case "tinyint":
+                case "smallint":
+                case "int":
+                case "bigint":
+                case "date":
+                case "datetime":
+                case "smalldatetime":
+                    type = dt;
+                    break;
+                case "decimal":
+                case "numeric":
+                    type = sprintf("%s(%d,%d)", dt, %numeric_precision, %numeric_scale);
+                    break;
+                case "datetime2":
+                case "datetimeoffset":
+                case "time":
+                    type = sprintf("%s(%d)", dt, %datetime_precision);
+                    break;
+                case "real":
+                case "money":
+                case "smallmoney":
+                    type = dt;
+                    break;
+                case "float":
+                    type = sprintf("float(%d)", %numeric_precision);
+                    break;
+            }
+            if (type) {
+                rv{col} = type;
+            }
+        }
+        return rv;
     }
 
     private Columns describeMssqlImpl() {
@@ -3684,11 +3746,57 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return new MssqlPrimaryKey(cname, ch, opt.index_filegroup);
     }
 
+    #! the index methods (the words before \c "index" in \c "create index")
+    const MssqlIndexMethods = {
+        "clustered": True,
+        "nonclustered": True,
+        "columnstore": True,
+        "clustered columnstore": True,
+        "nonclustered columnstore": True,
+    };
+
+    #! Checks the index options that are written into the DDL (qore#6577)
+    /** Called for each index of a table description
+
+        @param iname the name of the index
+        @param opt the index options
+
+        @throw INDEX-OPTION-ERROR the method is not an index method, an option name is not a name, or an option
+        value is not a number, a boolean, a keyword or a number of minutes
+    */
+    static checkIndexOptions(string iname, *hash<auto> opt) {
+        if (exists opt.method && (opt.method.typeCode() != NT_STRING || !MssqlIndexMethods{opt.method.lwr()})) {
+            throw "INDEX-OPTION-ERROR", sprintf("index %y: %y is not an index method; expecting one of: %y", iname,
+                opt.method, keys MssqlIndexMethods);
+        }
+        foreach hash<auto> i in (opt.with.pairIterator()) {
+            if (!regex(i.key, "\\A[A-Za-z_][A-Za-z0-9_]*\\z")) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the index option %y is not a name", iname, i.key);
+            }
+            switch (i.value.typeCode()) {
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_BOOLEAN:
+                    break;
+                case NT_STRING:
+                    # ON, OFF, NONE, ROW, PAGE, ..., a number, or a number of minutes (COMPRESSION_DELAY)
+                    if (regex(i.value, "\\A(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+(?: (?i:minutes?))?)\\z")) {
+                        break;
+                    }
+                default:
+                    throw "INDEX-OPTION-ERROR", sprintf("index %y: the value %y of the index option %y is not a "
+                        "number, a boolean, a keyword or a number of minutes", iname, i.value, i.key);
+            }
+        }
+    }
+
     private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
         if (opt.opclass) {
             throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'opclass' option is not supported "
                 "on MSSQL (SQL Server)", iname);
         }
+        MssqlTable::checkIndexOptions(iname, opt);
         return new MssqlIndex(iname, enabled, ch, opt.index_filegroup, opt.method, opt.with);
     }
 

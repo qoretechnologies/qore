@@ -1560,18 +1560,35 @@ end";
         #! Compares the query of a view with the query of a view of a schema description as MySQL normalizes them
         /** MySQL keeps the query of a view in a form of its own (with qualified, quoted names), which it gives for
             the query of the view of the description as well, made as a view with a name of its own on another
-            connection, so that its DDL does not commit the transaction of this connection, and dropped
+            connection, so that its DDL does not commit the transaction of this connection, and dropped; only a query
+            that AbstractDatabase::viewProbeSourceSafe() accepts is given to it (qore#6578), and it is made also when
+            the SQL is only returned (ex: \c qschema \c diff or \c --dry-run make and drop a probe view)
         */
         private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
             string live_src = AbstractDatabase::normalizeViewSource(live.src);
             if (live_src == AbstractDatabase::normalizeViewSource(tmpl.src)) {
                 return True;
             }
+            # another query is compared as text, so the view is created again by the alignment
+            if (!AbstractDatabase::viewProbeSourceSafe(tmpl.src, True)) {
+                return False;
+            }
             Datasource pds(ds.getConfigHash());
             string probe = "qore_view_probe_" + get_random_string(12).lwr();
-            on_exit {
-                pds.execRaw(sprintf("drop view if exists %s", mysql_get_sql_object_name(probe)));
+            # the probe is dropped also when making or reading it fails; a drop that fails then does not hide that
+            # error, and a drop that fails otherwise is raised
+            string drop_sql = sprintf("drop view if exists %s", mysql_get_sql_object_name(probe));
+            on_success {
+                pds.execRaw(drop_sql);
                 pds.commit();
+            }
+            on_error {
+                try {
+                    pds.execRaw(drop_sql);
+                    pds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    pds.rollback();
+                }
             }
             pds.execRaw(sprintf("create view %s as %s", mysql_get_sql_object_name(probe), tmpl.src));
             *string src = pds.selectRow("select view_definition from information_schema.views where table_schema = "
@@ -2811,6 +2828,76 @@ end";
                     getDesc(), ds.getDriverName());
             }
             return sprintf("drop table%s %s", opt.if_exists ? " if exists" : "", getSqlName());
+        }
+
+        #! returns the types that the "delete_others" upsert option converts the values of numeric, date and time key columns to (issue #6635)
+        /** the types are the targets of MySQL's \c CAST() for the columns as they are declared (ex:
+            \c "decimal(10,2)", \c "datetime(0)", \c "signed"), so that a bound value is rounded as the column
+            rounds it when it stores it; a \c float or \c double column is cast to \c float or \c double (MySQL 8.0.17
+            or later, MariaDB 10.4.5 or later), without the deprecated number of decimals of \c float(M,D)
+        */
+        private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+            *hash<auto> qh = ds.select("select column_name, data_type, column_type, numeric_precision, numeric_scale, "
+                "datetime_precision from information_schema.columns where table_name = %v and table_schema = %v",
+                name, schema);
+            hash<string, string> rv;
+            foreach hash<auto> row in (qh.contextIterator()) {
+                # the result keys of information_schema may be in upper case
+                row = map {$1.key.lwr(): $1.value}, row.pairIterator();
+                string col = row.column_name;
+                if (!inlist(col, pkl)) {
+                    continue;
+                }
+                string dt = row.data_type.lwr();
+                *string type;
+                switch (dt) {
+                    case "tinyint":
+                    case "smallint":
+                    case "mediumint":
+                    case "int":
+                    case "integer":
+                    case "bigint":
+                        type = (row.column_type =~ /unsigned/i) ? "unsigned" : "signed";
+                        break;
+                    case "decimal":
+                    case "numeric":
+                        type = sprintf("decimal(%d,%d)", row.numeric_precision, row.numeric_scale);
+                        break;
+                    case "datetime":
+                    case "timestamp":
+                        type = sprintf("datetime(%d)", row.datetime_precision ?? 0);
+                        break;
+                    case "time":
+                        type = sprintf("time(%d)", row.datetime_precision ?? 0);
+                        break;
+                    case "date":
+                        type = "date";
+                        break;
+                    case "float":
+                        type = "float";
+                        break;
+                    case "double":
+                        type = "double";
+                        break;
+                }
+                if (type) {
+                    rv{col} = type;
+                }
+            }
+            return rv;
+        }
+
+        #! returns the type that the "delete_others" upsert option converts a key value to (issue #6635)
+        /** a number or a string is bound as a string, which MySQL rounds when it stores it in an integer column, but
+            which a cast to an integer type truncates: such a value is converted with a cast to a decimal without
+            decimals, which rounds it in the same way; a float is converted to the integer type, which rounds it as the
+            database does
+        */
+        private *string getDeleteOthersKeyCastType(string type, auto val) {
+            if ((type == "signed" || type == "unsigned") && val.typeCode() != NT_FLOAT && val.typeCode() != NT_INT) {
+                return "decimal(65,0)";
+            }
+            return type;
         }
 
         private Columns describeImpl() {

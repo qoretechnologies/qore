@@ -69,6 +69,7 @@ enum class HttpFastFallback : unsigned {
     Pipelined,       //!< bytes of a following request are already buffered
     Stale,           //!< a cell that the route's rules read is not current
     NoRule,          //!< no rule of the route holds and the route has no otherwise response
+    InvalidText,     //!< the request has text that the normal path refuses (see HttpFastRequestView::invalid_text)
     Count
 };
 
@@ -208,6 +209,11 @@ struct HttpFastRequestView {
     bool has_upgrade = false;
     //! true if bytes of a following request are already buffered
     bool pending = false;
+    //! true if the request has text that the normal path answers with 400 or that it decides in the encoding of the
+    //! socket (qore#6554): a target with a raw byte above 0x7f, whose path or query does not decode to valid UTF-8 or
+    //! whose path decodes to a NUL character, or an HTTP/1.x header name with a byte above 0x7f; set by the code that
+    //! makes the view, which can use the interpreter's text checks
+    bool invalid_text = false;
 };
 
 //! A value that code outside the I/O threads sets and a route reads

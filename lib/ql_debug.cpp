@@ -107,6 +107,7 @@
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -433,7 +434,7 @@ static QoreValue f_dbg_cyclic_type_declarations(const QoreListNode* params, Runt
 }
 
 static QoreValue f_dbg_global_vars(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    return getProgram()->getVarList();
+    return qore_program_ops(getProgram()).getVarList();
 }
 
 // --- C++ unit tests for AsyncIoControllerPriv (debug builds only) ---
@@ -20417,6 +20418,7 @@ static void ut_parse_find_variant_no_args_type_param_inst(UnitTestCounters& c) {
     UT_ASSERT(c, ext, "the generic function is found");
     if (ext) {
         const QoreFunction* func = reinterpret_cast<const QoreFunction*>(ext);
+        // a lookup, which runs no code of the Program, so the Program is only made current (qore#6185)
         QoreProgramContextHelper pch(pgm);
         QoreTypeParamInstantiation inst;
         const AbstractQoreFunctionVariant* variant = func->parseFindVariantNoDiagnostics(type_vec_t(), nullptr,
@@ -27353,6 +27355,11 @@ static QoreValue f_dbg_make_program_flag_only(const QoreListNode* params, Runtim
 static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_sandbox_dbg_cpu_used();
 }
+
+//! Returns the number of call budget frames of the current thread
+static QoreValue f_dbg_sandbox_budget_frames(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_sandbox_dbg_budget_frames();
+}
 #endif
 
 //! functional domain for debug and unit-test hooks
@@ -27500,6 +27507,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_sandbox_budget_frames", f_dbg_sandbox_budget_frames, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_finish", f_dbg_hold_next_thread_finish, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");

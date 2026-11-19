@@ -10,14 +10,26 @@
 %strict-args
 
 const Source = "
-# an LLM backend that returns one entity for every text
+# an LLM backend that returns one entity for every text; the call for the first text returns once the second
+# extraction's start was tried (see run())
 class MockBackend inherits QoreLlmUtils::LlmBackend {
-    constructor() : LlmBackend(<LlmBackendConfig>{\"mode\": \"callback\",
+    private {
+        Counter second_tried;
+    }
+
+    constructor(Counter second_tried) : LlmBackend(<LlmBackendConfig>{\"mode\": \"callback\",
         \"api_callback\": hash<auto> sub (string m, string p, hash<auto> b) { return {}; }}) {
+        self.second_tried = second_tried;
     }
 
     hash<ChatResponse> chat(list<hash<ChatMessage>> messages, *list<hash<ToolDefinition>> tools,
             *hash<LlmRequestOptions> opts) {
+        string request = sprintf(\"%y\", messages);
+        if (request =~ /text 0/) {
+            second_tried.waitForZero(60s);
+        } else if (request =~ /text 1/) {
+            second_tried.dec();
+        }
         hash<auto> args = {\"entities\": ({\"entity_type\": \"PERSON\", \"text\": \"A\", \"start\": 0, \"end\": 1,
             \"confidence\": 0.9},)};
         return <ChatResponse>{
@@ -28,9 +40,13 @@ class MockBackend inherits QoreLlmUtils::LlmBackend {
     }
 }
 
-# extracts n texts in parallel; returns whether each result is valid, or the error
+# extracts 2 texts in parallel; returns whether each result is valid, or the error.  The first text's thread runs
+# until the second start was tried: the second text releases it when its thread starts, and the refusal of the second
+# start releases it otherwise, so a sandbox limit of one thread is always reached (the wait is bounded only against a
+# hang)
 list<string> sub run(int n) {
-    ExtractionPipeline pipeline(new MockBackend(), ExtractionSchema::NerSchema,
+    Counter second_tried(1);
+    ExtractionPipeline pipeline(new MockBackend(second_tried), ExtractionSchema::NerSchema,
         <ExtractionPipelineOptions>{\"batch_parallel\": n});
     list<string> texts = ();
     for (int i = 0; i < n; ++i) {
@@ -40,6 +56,7 @@ list<string> sub run(int n) {
         return map $1.valid ? \"ok\" : ($1.validation_errors ? $1.validation_errors[0] : \"invalid\"),
             pipeline.extractBatch(texts);
     } catch (hash<ExceptionInfo> ex) {
+        second_tried.dec();
         return (ex.err,);
     }
 }
