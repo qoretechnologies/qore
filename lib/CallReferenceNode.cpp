@@ -577,6 +577,12 @@ QoreValue ParseObjectMethodReferenceNode::makeReferenceForClass(QoreObject* o, c
     if (access > Public) {
         // the access check depends on the class context of the caller, so the result is not cached
         if (!qore_class_private::runtimeCheckPrivateClassAccess(*oc)) {
+            // the method that a call of the method makes from here, also when the method found first is not
+            // accessible here (qore#6704); not cached, as it depends on the class context of the caller
+            if (const QoreMethod* pm = qore_class_private::get(*oc)->runtimeFindPublicCommittedMethod(
+                    method.c_str())) {
+                return new RunTimeResolvedMethodReferenceNode(loc, o, pm);
+            }
             if (om->isPrivate()) {
                 xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
                     "cannot create a call reference to %s %s::%s() from outside the class",

@@ -2369,6 +2369,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a method call resolved at run time (as on a value of type \c object) or a call reference made through it skips
+      an inaccessible @ref private_methods "private method" of a parent class and calls the accessible method of a
+      later parent class, as a call through a variable of the class does, instead of raising \c METHOD-IS-PRIVATE
+      (issue #6704)
     - @ref Qore::trunc_str() "trunc_str()" returns a string with a NUL byte that is shorter than the length whole,
       where it returned its bytes up to the NUL byte and memory after them (issue #6604)
     - SqlUtil driver modules: the names of types, their attributes, functions, procedures, packages and materialized
