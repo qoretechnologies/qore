@@ -4377,6 +4377,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // the end of the try statement for an exit from its try block (#5992)
             scope_entry.try_end_depth = try_depth;
             scope_entry.try_outer_target = try_outer_target;
+            scope_entry.try_end_target = catch_block;
             pushBlockCleanup(scope_entry);
             // the code that an exit lowers after it has left the try scope runs outside the try statement, whose catch
             // block is the handler pushed just before (qore#6643): its exceptions go to the handler outside
@@ -4483,6 +4484,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // the end of the try statement for an exit from its catch block (#5992)
             catch_scope_entry.try_end_depth = try_depth;
             catch_scope_entry.try_outer_target = try_outer_target;
+            // a catch block's exceptions are not caught by its own try statement
+            catch_scope_entry.try_end_target = try_outer_target;
             pushBlockCleanup(catch_scope_entry);
         }
         LocalVar* catch_var = try_stmt->getCatchVar();
@@ -5970,7 +5973,10 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                     if (!keep_may_return) {
                         auto* se_inst = builder.createScopeExit(entry.scope_id, is_error, entry.loc,
                             /*inline_lowered=*/false);
-                        se_inst->exception_target = getCurrentExceptionTarget();
+                        // the ScopeExit closes the scope before it runs the handlers: an exception that one of them
+                        // raises goes to the handler outside the scope, as at the end of the block (qore#6658), not
+                        // to the scope's own cleanup, which would close it again
+                        se_inst->exception_target = entry.outer_exception_target;
                         break;
                     }
                 }
@@ -6004,7 +6010,8 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                     if (!may_return) {
                         auto* se_inst = builder.createScopeExit(entry.scope_id, is_error, entry.loc,
                             /*inline_lowered=*/false);
-                        se_inst->exception_target = getCurrentExceptionTarget();
+                        // the handlers run after the scope is closed (see above, qore#6658)
+                        se_inst->exception_target = entry.outer_exception_target;
                         if (!setScopeExitFlowTargets(se_inst, i - 1, error)) {
                             return false;
                         }
@@ -6193,7 +6200,8 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // only once the try statement has ended without an exception: a destructor of a local of its block
                 // can raise one when the block is left, which interrupts the return (qore#5941), and the value that
                 // it would have replaced is kept
-                builder.createCheckException(entry.loc)->exception_target = getCurrentExceptionTarget();
+                // the handler of an exception raised when the try statement ends (qore#6658)
+                builder.createCheckException(entry.loc)->exception_target = entry.try_end_target;
                 builder.createReleaseOwnedTemp(try_replaced_return, entry.loc);
                 if (try_replaced_return_base.isValid() && try_replaced_return_base.id != try_replaced_return.id) {
                     builder.createReleaseOwnedTemp(try_replaced_return_base, entry.loc);
@@ -6214,7 +6222,8 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             // an exception from the try block's end goes to the try statement's catch block; one raised by the
             // release of the replaced value when the statement has ended does not (the AST interpreter's try
             // statement gives the value to the enclosing block after it has left its try and catch blocks)
-            builder.createCheckException(entry.loc)->exception_target = getCurrentExceptionTarget();
+            // the handler of an exception raised when the try statement ends (qore#6658)
+            builder.createCheckException(entry.loc)->exception_target = entry.try_end_target;
             // the IR interpreter takes the exception to the instruction's target; native code to the CheckException's
             builder.createHandlerReturn(handover_try_value, entry.loc)->exception_target = entry.try_outer_target;
             builder.createCheckException(entry.loc)->exception_target = entry.try_outer_target;
@@ -6675,6 +6684,8 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
     // BlockCleanupEntry::handler_exception_target
     const bool set_exception_target = have_scope && scope->block_scope;
     QoreIRBasicBlock* handler_exception_target = set_exception_target ? scope->handler_exception_target : nullptr;
+    // the handler outside the scope, for the handlers that a ScopeExit runs after it has closed the scope (qore#6658)
+    QoreIRBasicBlock* scope_outer_target = have_scope ? scope->outer_exception_target : nullptr;
 
     // the handler bodies lowered inline for an exit, counted from the outermost exit; see
     // QORE_IR_INLINE_HANDLER_BUDGET
@@ -6702,8 +6713,9 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                     || inline_handler_body_depth >= QORE_IR_INLINE_HANDLER_MAX_NESTING))
                     || (debug_flow_path_depth && path_handlers_lowered >= QORE_IR_PATH_INLINE_HANDLER_BUDGET))) {
                 auto* se_inst = builder.createScopeExit(scope_id, is_error, scope_loc, /*inline_lowered=*/false);
-                se_inst->exception_target = set_exception_target ? handler_exception_target
-                    : getCurrentExceptionTarget();
+                // the ScopeExit runs the remaining handlers after it has closed the scope: their exceptions go to the
+                // handler outside the scope, not to the scope's own cleanup, which would close it again (qore#6658)
+                se_inst->exception_target = have_scope ? scope_outer_target : getCurrentExceptionTarget();
                 return true;
             }
             ++inline_handlers_lowered;

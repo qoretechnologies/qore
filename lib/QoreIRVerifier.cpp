@@ -618,6 +618,8 @@ private:
     //! merges the state of an edge into the state of the entry of the block
     bool join(QoreIRVerifyState& to, const QoreIRVerifyState& from, uint32_t from_block, uint32_t to_block,
             bool& changed);
+    //! follows the paths of the exceptions with the stacks that each raise point has (qore#6658)
+    bool verifyExceptionPaths(const std::vector<QoreIRVerifyState>& in);
 };
 
 void QoreIRVerifyOwnership::buildNodes() {
@@ -1066,6 +1068,182 @@ bool QoreIRVerifyOwnership::verify() {
                     && n + 1 != g.block_entry[b])) {
                 break;
             }
+        }
+    }
+    return verifyExceptionPaths(in);
+}
+
+//! Follows the paths of the exceptions with the stacks that each raise point has (qore#6658)
+/** The dataflow of verify() leaves the stacks of a path from an exception edge unknown until it meets a path of the
+    normal control flow, as the handler blocks are entered from raise points with different stacks (deeper scopes, an
+    implicit element pushed or not): a state per block cannot hold them.  Each raise point in a block that a normal
+    path reaches (whose stacks are known) is followed here with its own stacks through the blocks that only exceptions
+    reach (their landing pads, their pops and scope exits, the branches between them), up to a block that a normal
+    path reaches, whose stacks must then be those of the path: a handler that closes again a scope or an implicit
+    element that the path has closed (qore#6643) is refused at its instruction, and so is a path that meets the normal
+    control flow with other stacks.  The temp scopes are not followed: an exception drains them to the temp scope of
+    its handler, which IR read from a module does not give.  Each block is walked once for each set of stacks that
+    reaches it, which are few in lowered code (one per nesting of the raise points that share a handler).
+*/
+bool QoreIRVerifyOwnership::verifyExceptionPaths(const std::vector<QoreIRVerifyState>& in) {
+    const QoreIRFunction& func = g.func;
+    struct Item {
+        uint32_t block;
+        QoreIRVerifyState state;
+        //! the raise point that the path comes from
+        uint32_t from_block;
+        uint32_t from_pos;
+    };
+    std::vector<Item> work;
+    std::unordered_set<std::string> seen;
+    auto key = [](uint32_t b, const QoreIRVerifyState& st) -> std::string {
+        std::string k = std::to_string(b);
+        for (unsigned i = 0; i < QORE_IR_VERIFY_NUM_STACKS; ++i) {
+            k += st.known[i] ? '|' : '?';
+            for (uint32_t id : st.stacks[i]) {
+                k += std::to_string(id);
+                k += ',';
+            }
+        }
+        return k;
+    };
+    auto normalBlock = [&](uint32_t b) -> bool {
+        const QoreIRVerifyState& st = in[g.block_entry[b]];
+        return st.reached && st.known[QORE_IR_VERIFY_SCOPES];
+    };
+    // the state of an exception edge: the stacks are those of the raise point, but the temp scopes, which the
+    // exception drains to its handler's
+    auto exceptionState = [&](const QoreIRVerifyState& at, const QoreIRInstruction& inst, uint32_t b,
+            uint32_t pos, QoreIRVerifyState& es) -> bool {
+        es = at;
+        es.reached = true;
+        if (!apply(es, inst, b, pos, EdgeException)) {
+            return false;
+        }
+        es.stacks[QORE_IR_VERIFY_TEMPS].clear();
+        es.known[QORE_IR_VERIFY_TEMPS] = false;
+        return true;
+    };
+    auto prefix = [&](uint32_t from_block, uint32_t from_pos) {
+        error = "on the path of the exception of block " + std::to_string(from_block) + ", instruction "
+            + std::to_string(from_pos) + ": " + error;
+    };
+    // walks the nodes of a block from its entry with the state, calling raise() for each exception edge and edge()
+    // for each other edge
+    auto walk = [&](uint32_t b, QoreIRVerifyState s, auto&& raise, auto&& edge) -> bool {
+        for (uint32_t n = g.block_entry[b];; ++n) {
+            const auto& insts = func.blocks[b]->instructions;
+            for (uint32_t pos = node_begin[n]; pos < node_end[n]; ++pos) {
+                if (!apply(s, *insts[pos], b, pos, EdgeNormal)) {
+                    return false;
+                }
+            }
+            for (const Edge& e : edges[n]) {
+                if (e.kind == EdgeException) {
+                    if (!raise(s, e)) {
+                        return false;
+                    }
+                    continue;
+                }
+                QoreIRVerifyState es = s;
+                if (e.kind == EdgeDone && !apply(es, *e.inst, b, e.pos, EdgeDone)) {
+                    return false;
+                }
+                if (!edge(es, e)) {
+                    return false;
+                }
+            }
+            if (!(n + 1 < g.num_nodes && node_end[n] <= g.block_end[b] && node_block[n + 1] == b
+                    && n + 1 != g.block_entry[b])) {
+                break;
+            }
+        }
+        return true;
+    };
+    // the raise points of the blocks that a normal path reaches
+    for (uint32_t b = 0; b < func.blocks.size(); ++b) {
+        if (!g.reachable[b] || !normalBlock(b)) {
+            continue;
+        }
+        bool ok = walk(b, in[g.block_entry[b]], [&](const QoreIRVerifyState& s, const Edge& e) -> bool {
+            QoreIRVerifyState es;
+            if (!exceptionState(s, *e.inst, b, e.pos, es)) {
+                return false;
+            }
+            work.push_back({e.to_block, std::move(es), b, e.pos});
+            return true;
+        }, [](const QoreIRVerifyState&, const Edge&) -> bool {
+            return true;
+        });
+        if (!ok) {
+            return false;
+        }
+    }
+    while (!work.empty()) {
+        if (cancelled()) {
+            return false;
+        }
+        Item item = std::move(work.back());
+        work.pop_back();
+        uint32_t b = item.block;
+        QoreIRVerifyState s = std::move(item.state);
+        // the landing pad at the start of the block unwinds the scopes to its depth
+        for (const auto& inst : func.blocks[b]->instructions) {
+            if (inst->opcode == QoreIROpcode::Phi) {
+                continue;
+            }
+            if (const auto* lp = qore_ir_inst_cast<const QoreIRLandingPadInstruction*>(inst.get())) {
+                std::vector<uint32_t>& scopes = s.stacks[QORE_IR_VERIFY_SCOPES];
+                if (s.known[QORE_IR_VERIFY_SCOPES] && scopes.size() < lp->scope_depth) {
+                    error = "malformed IR: the landing pad of block " + std::to_string(b) + " unwinds to "
+                        + std::to_string(lp->scope_depth) + " scopes, but fewer are open on the path";
+                    prefix(item.from_block, item.from_pos);
+                    return false;
+                }
+                if (scopes.size() > lp->scope_depth) {
+                    scopes.resize(lp->scope_depth);
+                }
+            }
+            break;
+        }
+        if (normalBlock(b)) {
+            // the path meets the normal control flow: its stacks must be those of the block
+            const QoreIRVerifyState& ns = in[g.block_entry[b]];
+            for (unsigned i = 0; i < QORE_IR_VERIFY_NUM_STACKS; ++i) {
+                if (i == QORE_IR_VERIFY_TEMPS || !s.known[i] || !ns.known[i]) {
+                    continue;
+                }
+                if (s.stacks[i] != ns.stacks[i]) {
+                    error = "malformed IR: the " + std::string(qore_ir_verify_stack_names[i]) + " open differ from "
+                        "those of the normal paths into block " + std::to_string(b);
+                    prefix(item.from_block, item.from_pos);
+                    return false;
+                }
+            }
+            continue;
+        }
+        if (!seen.insert(key(b, s)).second) {
+            continue;
+        }
+        uint32_t from_block = item.from_block, from_pos = item.from_pos;
+        bool ok = walk(b, std::move(s), [&](const QoreIRVerifyState& at, const Edge& e) -> bool {
+            QoreIRVerifyState es;
+            if (!exceptionState(at, *e.inst, b, e.pos, es)) {
+                prefix(from_block, from_pos);
+                return false;
+            }
+            // a raise point of a handler block: its exception continues the path
+            work.push_back({e.to_block, std::move(es), from_block, from_pos});
+            return true;
+        }, [&](const QoreIRVerifyState& at, const Edge& e) -> bool {
+            work.push_back({e.to_block, at, from_block, from_pos});
+            return true;
+        });
+        if (!ok) {
+            if (error.find("on the path of the exception") == std::string::npos) {
+                prefix(from_block, from_pos);
+            }
+            return false;
         }
     }
     return true;

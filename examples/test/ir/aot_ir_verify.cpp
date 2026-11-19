@@ -577,6 +577,35 @@ static void scopeHandler(QoreIRFunction& fn, QoreIRBuilder& b, bool landing_pad,
     b.createReturnNothing();
 }
 
+//! the element of a loop whose handler restores it, and a return out of the loop that restores it and then runs an
+//! instruction that can raise an exception: with \a stale_handler, the instruction keeps the handler of the element,
+//! which restores it again (qore#6643); otherwise it has the handler outside the loop
+static void elementReturn(QoreIRFunction& fn, QoreIRBuilder& b, bool stale_handler) {
+    QoreIRBasicBlock* element_handler = fn.createBlock("element.exception");
+    QoreIRBasicBlock* outer_handler = fn.createBlock("outer.exception");
+    QoreIRValue index = b.createConstInt(0)->result;
+    QoreIRValue saved = b.createPushImplicitElement(index)->result;
+    b.createConstInt(1)->exception_target = element_handler;
+    // the return: the element is restored, then an instruction that can raise runs
+    b.createPopImplicitElement(saved);
+    b.createConstInt(2)->exception_target = stale_handler ? element_handler : outer_handler;
+    b.createReturnNothing();
+    b.setBlock(element_handler);
+    b.createPopImplicitElement(saved);
+    b.createReturnNothing();
+    b.setBlock(outer_handler);
+    b.createReturnNothing();
+}
+
+//! two nested implicit elements; the outer one is restored, which restores the value from before both
+static void nestedElements(QoreIRFunction& fn, QoreIRBuilder& b) {
+    QoreIRValue index = b.createConstInt(0)->result;
+    QoreIRValue outer = b.createPushImplicitElement(index)->result;
+    b.createPushImplicitElement(index);
+    b.createPopImplicitElement(outer);
+    b.createReturnNothing();
+}
+
 //! two nested implicit arguments, restored innermost first (\a swapped: outermost first)
 static void implicitArgs(QoreIRFunction& fn, QoreIRBuilder& b, bool swapped) {
     QoreIRValue v1 = b.createConstInt(1)->result;
@@ -1112,10 +1141,11 @@ int main(int argc, char** argv) {
         insts.insert(insts.end() - 1, std::move(discard));
     }, NotInnermost);
     run("handler with a landing pad", [](QoreIRFunction& fn, QoreIRBuilder& b) { scopeHandler(fn, b, true); });
+    // the path of the exception, followed with the scopes of its raise point, meets the normal path with the scope of
+    // the raise point still open (qore#6658)
     run("handler without a landing pad", [](QoreIRFunction& fn, QoreIRBuilder& b) {
-        // the scopes are not known on the path from the exception edge: it meets the normal path
         scopeHandler(fn, b, false);
-    });
+    }, nullptr, "differ from those of the normal paths");
     run("scope closed twice", [](QoreIRFunction& fn, QoreIRBuilder& b) { scopeHandler(fn, b, true); },
             [](QoreIRFunction& fn) {
         auto* exit = find<QoreIRScopeExitInstruction>(fn, QoreIROpcode::ScopeExit);
@@ -1175,6 +1205,14 @@ int main(int argc, char** argv) {
     }, [](QoreIRFunction& fn) {
         find(fn, QoreIROpcode::PopImplicitArg)->operands[0] = find(fn, QoreIROpcode::ConstInt)->result;
     }, NotInnermost);
+    // the paths of the exceptions are followed with the stacks of their raise points (qore#6658)
+    run("return out of a loop with the handler outside the loop", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        elementReturn(fn, b, false);
+    });
+    run("return out of a loop with the handler of its element", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        elementReturn(fn, b, true);
+    }, nullptr, "on the path of the exception");
+    run("outer implicit element restored", [](QoreIRFunction& fn, QoreIRBuilder& b) { nestedElements(fn, b); });
     run("contexts", [](QoreIRFunction& fn, QoreIRBuilder& b) { contexts(fn, b, false); });
     run("context destroyed with an exception target", [](QoreIRFunction& fn, QoreIRBuilder& b) {
         contexts(fn, b, false);
