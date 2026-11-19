@@ -2739,14 +2739,21 @@ bool QoreIRFunction::collectHandlerLocals(std::unordered_set<const void*>& local
 
 bool QoreIRFunction::collectOnBlockExitLocals(const QoreIROnBlockExitInstruction& obe,
         std::unordered_set<const void*>& locals) {
+    const StatementBlock* code = obe.stmt ? obe.stmt->getCode() : nullptr;
+    if (obe.handler_ir) {
+        return obe.handler_ir->collectHandlerBodyLocals(code, locals);
+    }
     bool unknown_node_found = false;
-    std::unordered_set<const QoreIRFunction*> visited_handlers;
-    if (obe.stmt) {
-        collectLocalsFromStatementBlock(obe.stmt->getCode(), locals, unknown_node_found);
-    }
-    if (obe.handler_ir && visited_handlers.insert(obe.handler_ir.get()).second) {
-        collectLocalsFromIRFunction(*obe.handler_ir, locals, unknown_node_found, visited_handlers);
-    }
+    collectLocalsFromStatementBlock(code, locals, unknown_node_found);
+    return !unknown_node_found;
+}
+
+bool QoreIRFunction::collectHandlerBodyLocals(const StatementBlock* code,
+        std::unordered_set<const void*>& locals) const {
+    bool unknown_node_found = false;
+    collectLocalsFromStatementBlock(code, locals, unknown_node_found);
+    std::unordered_set<const QoreIRFunction*> visited_handlers{this};
+    collectLocalsFromIRFunction(*this, locals, unknown_node_found, visited_handlers);
     return !unknown_node_found;
 }
 
@@ -3581,7 +3588,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
         block->has_phi_nodes = false;
         for (const auto& inst : block->instructions) {
             // Cache line number: -1 if no location, otherwise store start_line
-            // This avoids two pointer dereferences per instruction in the line-change gate
+            // This avoids two pointer dereferences per instruction in the debugger's line tests
             inst->cached_start_line = inst->loc ? static_cast<int32_t>(inst->loc->start_line) : -1;
 
             if (inst->opcode == QoreIROpcode::Phi) {

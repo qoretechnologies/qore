@@ -385,6 +385,16 @@ QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeText(
     return result;
 }
 
+int QoreHFTokenizer::encodeText(const std::string& text, InternalEncoding& rv, ExceptionSink* xsink) const {
+    try {
+        rv = encodeText(text);
+    } catch (const PreTokenizerError& e) {
+        xsink->raiseException(e.err.c_str(), "%s", e.what());
+        return -1;
+    }
+    return 0;
+}
+
 QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
         const QoreStringNode* text_pair, bool add_special_tokens, const char* where,
         ExceptionSink* xsink) {
@@ -402,20 +412,20 @@ QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
 
     // Encode first text
     std::string text_str;
-    if (qoreUtf8StdString(text, text_str, where, "text", xsink)) {
+    InternalEncoding enc_a;
+    if (qoreUtf8StdString(text, text_str, where, "text", xsink) || encodeText(text_str, enc_a, xsink)) {
         return nullptr;
     }
-    InternalEncoding enc_a = encodeText(text_str);
 
     // Encode second text (optional)
     InternalEncoding enc_b;
     bool has_pair = false;
     if (text_pair && text_pair->size() > 0) {
         std::string pair_str;
-        if (qoreUtf8StdString(text_pair, pair_str, where, "text pair", xsink)) {
+        if (qoreUtf8StdString(text_pair, pair_str, where, "text pair", xsink)
+            || encodeText(pair_str, enc_b, xsink)) {
             return nullptr;
         }
-        enc_b = encodeText(pair_str);
         has_pair = true;
     }
 
@@ -665,10 +675,10 @@ QoreHashNode* QoreHFTokenizer::encodeAdvancedIntern(const QoreStringNode* text,
         enc_a = encodePreTokenizedWords(words);
     } else {
         std::string text_str;
-        if (qoreUtf8StdString(text, text_str, where, indexedWhat("text", index).c_str(), xsink)) {
+        if (qoreUtf8StdString(text, text_str, where, indexedWhat("text", index).c_str(), xsink)
+            || encodeText(text_str, enc_a, xsink)) {
             return nullptr;
         }
-        enc_a = encodeText(text_str);
     }
 
     // Encode second text (optional)
@@ -693,8 +703,8 @@ QoreHashNode* QoreHFTokenizer::encodeAdvancedIntern(const QoreStringNode* text,
                 pair_words.push_back(word);
             }
             enc_b = encodePreTokenizedWords(pair_words);
-        } else {
-            enc_b = encodeText(text_pair);
+        } else if (encodeText(text_pair, enc_b, xsink)) {
+            return nullptr;
         }
         has_pair = true;
     }
@@ -1063,10 +1073,10 @@ int QoreHFTokenizer::encodeForModelIntern(const QoreStringNode* text, const Qore
         enc_a = encodePreTokenizedWords(words);
     } else {
         std::string text_str;
-        if (qoreUtf8StdString(text, text_str, where, indexedWhat("text", index).c_str(), xsink)) {
+        if (qoreUtf8StdString(text, text_str, where, indexedWhat("text", index).c_str(), xsink)
+            || encodeText(text_str, enc_a, xsink)) {
             return -1;
         }
-        enc_a = encodeText(text_str);
     }
 
     InternalEncoding enc_b;
@@ -1093,8 +1103,8 @@ int QoreHFTokenizer::encodeForModelIntern(const QoreStringNode* text, const Qore
                 pair_words.push_back(word);
             }
             enc_b = encodePreTokenizedWords(pair_words);
-        } else {
-            enc_b = encodeText(text_pair);
+        } else if (encodeText(text_pair, enc_b, xsink)) {
+            return -1;
         }
         has_pair = true;
     }

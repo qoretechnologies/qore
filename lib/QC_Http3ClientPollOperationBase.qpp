@@ -48,6 +48,7 @@
 #include "qore/intern/QuicPollTimeout.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -442,7 +443,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         QoreHashNode* poll_info = inner_op->continuePoll(&poll_xsink);
         if (poll_xsink) {
             // Extract error and propagate
-            QoreException* ex_obj = poll_xsink.getException();
+            QoreException* ex_obj = qore_exception_sink_ops(poll_xsink).getException();
             if (ex_obj) {
                 QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
                 QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());

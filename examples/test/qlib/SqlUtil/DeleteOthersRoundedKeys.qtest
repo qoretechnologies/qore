@@ -256,11 +256,26 @@ class DeleteOthersRoundedKeysTest inherits QUnit::Test {
         }
     }
 
+    #! returns the datasources of the mixed-case cases: SQLite when the sqlite3 module is available, and the servers
+    #! connected (issue #6723)
+    private hash<string, Datasource> getMixedCaseDatasources() {
+        hash<string, Datasource> h();
+        if (dbs) {
+            h = dbs;
+        }
+%ifndef NoSqlite3
+        h = {"sqlite": new Datasource("sqlite3:x@:memory:")} + h;
+%endif
+        if (!h) {
+            testSkip("no sqlite3 module and no database connection");
+        }
+        return h;
+    }
+
     #! a key column with a mixed-case name: the rows read are matched by the column, whatever the case of the names
     #! that the driver gives (issue #6674)
     mixedCaseKeyTest() {
-        Datasource sqlite("sqlite3:x@:memory:");
-        hash<string, Datasource> h = {"sqlite": sqlite} + dbs;
+        hash<string, Datasource> h = getMixedCaseDatasources();
         foreach string db in (keys h) {
             # PostgreSQL folds an unquoted name to lower case: there is no mixed-case name to test
             if (db == "pgsql") {
@@ -306,8 +321,7 @@ class DeleteOthersRoundedKeysTest inherits QUnit::Test {
     #! the select-first upsert compares the row read with the input by the columns' names in any case: a row whose
     #! values are unchanged is not updated again (issue #6674)
     mixedCaseSelectFirstTest() {
-        Datasource sqlite("sqlite3:x@:memory:");
-        hash<string, Datasource> h = {"sqlite": sqlite} + dbs;
+        hash<string, Datasource> h = getMixedCaseDatasources();
         foreach string db in (keys h) {
             # PostgreSQL folds an unquoted name to lower case: there is no mixed-case name to test
             if (db == "pgsql") {

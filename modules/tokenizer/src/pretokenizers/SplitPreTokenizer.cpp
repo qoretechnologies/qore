@@ -12,6 +12,7 @@
 #include "utils/qore_helpers.h"
 
 #include <cctype>
+#include <cstdio>
 
 namespace QoreTokenizer {
 
@@ -162,19 +163,23 @@ std::vector<PreToken> SplitPreTokenizer::pretokenize(const std::string& text) co
 
     while (offset <= subject_len) {
         int rc = pcre2_match(re, subject, subject_len, offset, 0, md, nullptr);
-        if (rc < 0) {
-            // PCRE2_ERROR_NOMATCH: no further matches; any remaining text is emitted as the trailing segment.
-            //
-            // Any other error is a defensive fallback that also ends the matches, as this interface cannot report
-            // an error; the remaining text is still tokenized, as the trailing segment.  PCRE2 refuses a subject
-            // that is not valid UTF-8, which made one invalid byte in the input skip the Split step for the whole
-            // text; all text is now checked and converted to UTF-8 where it enters the tokenizer
-            // (qoreUtf8StdString(), qore#6604), so valid input does not get here with a UTF-8 error: the
-            // pre-tokenizers before this one split only at character boundaries, the offset is advanced by whole
-            // characters, and the normalizers give UTF-8 (except a Replace normalizer whose std::regex pattern
-            // matches part of a character, as std::regex matches bytes).  The other errors are a match or depth
-            // limit, or no memory for the JIT stack.
+        if (rc == PCRE2_ERROR_NOMATCH) {
+            // no further matches: any remaining text is emitted as the trailing segment
             break;
+        }
+        if (rc < 0) {
+            // any other error (a match or depth limit, no memory for the JIT stack, or text that is not valid UTF-8)
+            // is raised; the text is never cut silently at the error (qore#6617).  All text is checked and
+            // converted to UTF-8 where it enters the tokenizer (qoreUtf8StdString(), qore#6604), so valid input
+            // does not get here with a UTF-8 error: the pre-tokenizers before this one split only at character
+            // boundaries, the offset is advanced by whole characters, and the normalizers give UTF-8, except a
+            // Replace normalizer whose std::regex pattern matches part of a character, as std::regex matches bytes
+            PCRE2_UCHAR buf[256];
+            pcre2_get_error_message(rc, buf, sizeof(buf));
+            char desc[512];
+            snprintf(desc, sizeof(desc), "Split pre-tokenizer: regular expression match error at byte offset %zu "
+                "of the text: %s", static_cast<size_t>(offset), reinterpret_cast<const char*>(buf));
+            throw PreTokenizerError("PRETOKENIZER-MATCH-ERROR", desc);
         }
         PCRE2_SIZE* ov = pcre2_get_ovector_pointer(md);
         size_t match_start = ov[0];

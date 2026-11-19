@@ -289,6 +289,10 @@ private:
     //! the call whose check of its target (QoreIRInstruction::fused_call_check) is being lowered, whose arguments the
     //! check after them passes to its helper (issue #5824); null otherwise
     const QoreIRInstruction* fused_check_call = nullptr;
+    //! the inline test of each call target that a check before a call's arguments made (emitValidObjectTest()), by
+    //! the target's value: the check after the arguments, where the test dominates it, then tests only the deleted
+    //! status of an object that passed it (issue #6646)
+    std::unordered_map<llvm::Value*, llvm::Value*> valid_object_tests;
     bool aot_direct_closure_fast_entry = true;
 
     // Deferred exception checking for code proven not to observe exceptions before
@@ -835,6 +839,27 @@ private:
         handlers.
     */
     llvm::Value* handler_return_hold = nullptr;
+    //! the value of an interrupted return that an outlined function-body helper hands over to its coordinator
+    /** Created at the entry of a helper with in-region returns of a value or with handlers that can return a value:
+        an exit of the helper on an exception does not release the value of an interrupted return or of a handler's
+        return (holding_return_values, handler_return_hold) but returns it, and the coordinator's call holds it as the
+        value of its own return until after its locals, as the function that the helper was outlined from does
+        (qore#6650)
+    */
+    llvm::AllocaInst* outline_held_return = nullptr;
+    //! true while an exit of an outlined helper on an exception that returns outline_held_return is emitted
+    bool outline_transfer_held = false;
+    //! Returns the value that an exit of the function on an exception returns: NOTHING, or the value of an interrupted
+    //! return that an outlined helper hands over (outline_held_return)
+    llvm::Value* getExceptionExitReturnValue();
+    //! an i8 slot set to 1 when a handler run out of line past the inline cap in the block cleanups of a return
+    //! statement hands a value over to handler_return_hold, which the return takes (#6137)
+    /** See QoreIRScopeExitInstruction::hand_over_return, qore_rt_exec_on_block_exit_return_hold(),
+        qore_rt_take_handed_over_return() and qore_rt_release_handed_over_return(); cleared with
+        handler_return_hold at the catch block of a try statement of the function.  Created at the entry of a function
+        that has such a ScopeExit, which has handler_return_hold too.
+    */
+    llvm::Value* handler_return_handed = nullptr;
     //! true if the function is the body of a handler compiled as a function of its own: the handlers of its blocks
     //! run out of line with qore_rt_exec_on_block_exit_forward() (#6074)
     bool handler_function = false;
@@ -847,6 +872,15 @@ private:
         //! the values of the returns of the try block of the try statement that catches the exception
         //! (QoreIRFunction::catch_interrupted_returns), or nullptr for those of the function (return_value_ids)
         const std::vector<uint32_t>* try_returns;
+        //! true if the first hand-over replaces the values of \a values instead: the call runs the handlers in the
+        //! block cleanups of a return past the inline cap (qore_rt_exec_on_block_exit_return_hold(), #6137)
+        bool own_values = false;
+        //! the value of the return that the first hand-over of the call replaces and the value that it took a
+        //! reference of its own to, if own_values (the operands of QoreIRScopeExitInstruction::hand_over_return)
+        std::vector<uint32_t> values;
+        //! the index of the argument of the call that takes the array of the values that the first hand-over
+        //! releases, followed by the argument that takes their number
+        unsigned replace_arg = 3;
     };
     //! the calls that run handlers out of line with handler_return_hold whose handlers replace the value of an
     //! interrupted return
@@ -941,6 +975,9 @@ private:
     // discard.temps must not clear them while the local alloca still borrows
     // their owned reference.
     std::unordered_set<llvm::Value*> persistent_cleanup_allocas;
+    //! Constructor-result slots cleared by ReleaseOwnedTemp. A later statement cleanup on a path that
+    //! skipped the release still owns the object until that cleanup (#6657).
+    std::unordered_set<llvm::Value*> released_constructor_slots;
     //! Cleanup allocas that the call that uses their value clears when it returns (the slots of the reads of foreach
     //! variables that keep the object of a weak reference for a call, qore#6594): they hold a value only between the
     //! read and the call, so only an exception edge or an exit releases them, not the end of the statement
@@ -1760,7 +1797,8 @@ private:
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
     //! Cached ptr-to-ptr for the thread's call site, the location of the call being made (QoreRcCallSiteHelper)
     llvm::Value* call_site_cache_ptr = nullptr;
-    int last_runtime_line = -1;             //!< Last source line emitted for location tracking
+    //! the runtime location (QoreIRInstruction::stmt_loc) that the code of the block being lowered stored last
+    const QoreProgramLocation* last_runtime_loc = nullptr;
 
     //! Returns the constant location that AOT code holds in its image for `loc`, one per distinct location of the
     //! module, or nullptr if `loc` has no line
@@ -1839,6 +1877,14 @@ private:
     //! libqore (JIT only; QoreIROpcode::CheckCallTarget, issue #5784)
     llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func,
         const QoreClass* qc = nullptr, const QoreClass* method_qc = nullptr);
+
+    //! Emits the inline test of the check of a call's target after its arguments (check_after_args) when the test
+    //! @a tested of the check before them, made on the same value @a qv, dominates it: an object that passed that test,
+    //! whose type, private data and class do not change, is tested only for its deleted status; otherwise the full
+    //! test (emitValidObjectTest()) is made for an object of any class, as the check after the arguments tests only
+    //! that the object has not been deleted (JIT only, issue #6646)
+    llvm::Value* emitValidObjectRetest(llvm::Value* qv, llvm::Value* tested, const QoreJITObjectLayout& layout,
+        llvm::Function* llvm_func);
 
     //! Emits the inline test of the cache of a call site (QoreCallTargetCheckCache::hit()) for code that always runs
     //! with the class context @a class_ctx (QoreIRFunction::static_call_context): true if @a qv is an object that has
@@ -2480,6 +2526,15 @@ private:
             const QoreIRInstruction* inst, bool synthetic, const QoreIRInstruction* folded_host = nullptr);
     //! Stores \a loc as the runtime location of the frame, without the line check of emitRuntimeLocationUpdate()
     void emitRuntimeLocationStore(const QoreProgramLocation* loc);
+
+    //! Removes the stores of the runtime location that store the location that the thread has already
+    /** The code of each block stores the runtime location of its first instruction (emitRuntimeLocationUpdate()),
+        as the block can be entered in any location; a store of the location that every path to it has stored last
+        is removed, such as the store of a loop's location in its condition after the code of its next iteration
+        stored it (qore#6646).  The entry block and the landing pads start in an unknown location; a call restores
+        the location of its caller when it returns.
+    */
+    void removeRedundantRuntimeLocationStores(llvm::Function* llvm_func);
 
     // Get or create the per-function JIT deopt block.
     // On guard failure, branches here to set the thread-local deopt flag

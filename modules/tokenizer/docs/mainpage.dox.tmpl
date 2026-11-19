@@ -62,6 +62,10 @@
     - text in another encoding is converted to UTF-8, so the same text gives the same token IDs in any encoding;
       the offsets of an encoding (\c offset_mapping) are byte offsets in the UTF-8 form of the text
 
+    A regular expression of a \c Split pre-tokenizer that cannot be matched against the text (ex: a match limit, or
+    text made invalid UTF-8 by a \c Replace normalizer whose pattern matches part of a character) raises
+    \c PRETOKENIZER-MATCH-ERROR; the rest of the text is never left unsplit.
+
     Decoded text (@ref Qore::Tokenizer::HFTokenizer::decode() "decode()",
     @ref Qore::Tokenizer::HFTokenizer::decodeBatch() "decodeBatch()") is always valid UTF-8.  Token IDs that give
     only a part of a character (ex: the first byte-level token of an emoji, when a sequence of IDs is decoded in

@@ -487,10 +487,10 @@ hashdecl ExceptionInfo {
     //! position info: the parse label where exception occurred; this is normally the file name; this corresponds to the \a label parameter of the @ref Qore::Program::parse() "Program::parse()" and @ref Qore::Program::parsePending() "Program::parsePending()" methods and the @ref Qore::parse() function, for example
     string file;
 
-    //! position info: start line number
+    //! position info: start line number; see @ref exception_location
     int line;
 
-    //! position info: end line number
+    //! position info: end line number; see @ref exception_location
     int endline;
 
     //! position info: an optional source string; if multiple sections of a file were parsed with different parse labels, then the source file name will normally go here and the "file" key will have the parse label; this corresponds to the source parameter of the Program::parse() and Program::parsePending() methods, for example (if known, for user code only)

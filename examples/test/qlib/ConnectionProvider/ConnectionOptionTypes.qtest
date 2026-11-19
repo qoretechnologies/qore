@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ConnectionProvider
+%exec-class ConnectionOptionTypesTest
+
+string sub option_callback(string input) {
+    return "named " + input;
+}
+
+class ConnectionOptionTypesTest inherits QUnit::Test {
+    constructor() : Test("Connection option type compatibility", "1.0", \ARGV) {
+        addTestCase("a closure retains its captured value", \closureOption());
+        addTestCase("function and runtime-resolved references remain callable", \referenceOptions());
+        addTestCase("a code option rejects non-callable values", \nonCallable());
+        addTestCase("parameterized types check the supplied elements", \listOptions());
+        addTestCase("class options preserve their object", \objectOption());
+        addTestCase("numeric assignment and legacy connection conversions", \conversions());
+        addTestCase("option policy applies after assignment", \optionPolicy());
+        set_return_value(main());
+    }
+
+    private static auto validate(string type, auto value) {
+        hash<ConnectionSchemeInfo> scheme = <ConnectionSchemeInfo>{
+            "display_name": "Example",
+            "options": {"option": <ConnectionOptionInfo>{"type": type}},
+        };
+        return ConnectionSchemeCache::validateConnectionOptions("example", scheme, {"option": value}).option;
+    }
+
+    closureOption() {
+        string prefix = "captured ";
+        code cb = validate("code", string sub(string input) { return prefix + input; });
+        assertEq("captured value", cb("value"));
+    }
+
+    referenceOptions() {
+        code cb = validate("code", \option_callback());
+        assertEq("named first", cb("first"));
+        cb = validate("code", get_call_reference("option_callback"));
+        assertEq("named second", cb("second"));
+    }
+
+    nonCallable() {
+        assertThrows("CONNECTION-OPTION-ERROR", sub() { validate("code", "option_callback"); });
+    }
+
+    listOptions() {
+        list<int> numbers = (1, 2);
+        assertEq(numbers, validate("list<int>", numbers));
+        assertThrows("CONNECTION-OPTION-ERROR", sub() { validate("list<int>", ("one", "two")); });
+    }
+
+    objectOption() {
+        Mutex lock();
+        assertTrue(validate("Qore::Thread::AbstractSmartLock", lock) === lock);
+        assertThrows("CONNECTION-OPTION-ERROR", sub() { validate("Qore::Thread::AbstractSmartLock", new Counter()); });
+    }
+
+    optionPolicy() {
+        hash<ConnectionSchemeInfo> scheme = <ConnectionSchemeInfo>{
+            "display_name": "Example",
+            "options": {"option": <ConnectionOptionInfo>{
+                "type": "list<int>", "ignore_types": {"string": True},
+                "element_allowed_values": (<AllowedValueInfo>{"value": 2},),
+            }},
+        };
+        hash<auto> opts = ConnectionSchemeCache::validateConnectionOptions("example", scheme, {"option": (2,)});
+        assertEq((2,), opts.option);
+        assertThrows("CONNECTION-OPTION-ERROR", sub() {
+            ConnectionSchemeCache::validateConnectionOptions("example", scheme, {"option": (3,)});
+        });
+        opts = ConnectionSchemeCache::validateConnectionOptions("example", scheme, {"option": "obsolete"});
+        assertFalse(exists opts.option);
+        assertThrows("CONNECTION-OPTION-ERROR", sub() { validate("NoSuchOptionType6712", 1); });
+    }
+
+    conversions() {
+        assertEq(NT_FLOAT, validate("float", 7).typeCode());
+        assertEq(7.0, validate("float", 7));
+        assertEq(1500, validate("timeout", 1500ms));
+        assertEq(True, validate("boolean", "true"));
+        assertEq(42, validate("integer", 42));
+    }
+}

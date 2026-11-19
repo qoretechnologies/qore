@@ -300,7 +300,18 @@ private:
     InternalEncoding encodeSegment(const std::string& text) const;
 
     //! Internal: encode text with added token splitting
+    /** @throw PreTokenizerError the text cannot be pre-tokenized
+    */
     InternalEncoding encodeText(const std::string& text) const;
+
+    //! Internal: encode text with added token splitting, raising a Qore exception for an error
+    /** @param text the text in UTF-8
+        @param rv the encoding of the text
+        @param xsink for an error that a pre-tokenizer raises (ex: a regular expression match error)
+
+        @return 0 for OK, -1 if a Qore exception was raised
+    */
+    int encodeText(const std::string& text, InternalEncoding& rv, ExceptionSink* xsink) const;
 };
 
 } // namespace QoreTokenizer
