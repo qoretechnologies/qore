@@ -154,6 +154,10 @@ module HttpServerUtil {
 
     @section httputil1_6 HttpServerUtil 1.6
     - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
+      does not merge the trailer fields of a chunked request body into the request's header fields; they are given
+      apart, and the body is decoded with the request's own header fields
+      (<a href="https://github.com/qoretechnologies/qore/issues/6753">issue 6753</a>)
+    - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
       decodes a decompressed body with the encoding of the request, as an uncompressed body is, not with the socket's
       encoding (<a href="https://github.com/qoretechnologies/qore/issues/6618">issue 6618</a>)
     - @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "AbstractHttpRequestHandler::handleRequest()" is
@@ -4261,7 +4265,8 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @param decode if the body should be decompressed according to its content encoding
         @param listener the listener that received the request, which gives the maximum size of a decompressed body
         unless the handler sets one; see getMaxDecodedBodySize()
-        @param trailers set to the trailer fields sent after a chunked request body, if any
+        @param trailers set to the trailer fields sent after a chunked request body, if any; they are not merged into
+        \a hdr, and the body is decoded with the request's own header fields
 
         @return the request body
 
@@ -4276,11 +4281,12 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
                 ? s.readHTTPChunkedBodyBinary(timeout_ms)
                 : s.readHTTPChunkedBody(timeout_ms);
             body = remove chunked.body;
-            # the other keys are the trailers
+            # the other keys are the trailer fields: they are given to the caller apart and are not merged into the
+            # request's header fields, so that they neither replace nor add a header field (RFC 9110 section 6.5,
+            # RFC 9112 section 7.1.2); the body is decoded with the request's own header fields (qore#6753)
             if (chunked) {
                 trailers = chunked;
             }
-            hdr += chunked;
         }
 
         if (decode && body && hdr."content-encoding" && decompress) {

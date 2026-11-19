@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 request bodies read from local sockets with chunked transfer encoding
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerChunkedTrailersTest
+
+#! Returns what the handler was given: the body, the request header fields that decide how it is decoded, and the
+#! trailer fields
+class TrailerTestHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string text = sprintf("body=%s;ce=%s;ct=%s;x-t=%s;trailer-ce=%s", body.typeCode() == NT_BINARY
+                ? "binary:" + make_hex_string(body) : (body ?? "-"), hdr."content-encoding" ?? "-",
+            hdr."content-type" ?? "-", cx.trailers."x-t" ?? "-", cx.trailers."content-encoding" ?? "-");
+        return AbstractHttpRequestHandler::makeResponse(200, text);
+    }
+}
+
+class TrailerTestHttpServer inherits HttpServer {
+    private:internal {
+        int port;
+    }
+
+    constructor() : HttpServer(<HttpServerOptionInfo>{
+                "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            }) {
+        setDefaultHandler("trailers", new TrailerTestHandler());
+        port = addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;
+        waitForAsyncIo();
+    }
+
+    int getPort() {
+        return port;
+    }
+}
+
+#! Trailer fields of a chunked request body are not merged into the request's header fields (qore#6753)
+public class HttpServerChunkedTrailersTest inherits QUnit::Test {
+    private {
+        TrailerTestHttpServer server;
+    }
+
+    constructor() : Test("HttpServerChunkedTrailersTest", "1.0") {
+        addTestCase("trailers do not replace or add request header fields", \trailerTest());
+        addTestCase("a compressed body is decoded with the request's own header fields", \compressedTest());
+        server = new TrailerTestHttpServer();
+        on_exit delete server;
+        set_return_value(main());
+    }
+
+    #! sends a chunked request with the given header fields, body chunks and trailer fields; returns the response
+    private hash<auto> request(string headers, list<binary> chunks, string trailers) {
+        Socket s();
+        s.connect("127.0.0.1:" + server.getPort(), 10s);
+        on_exit s.close();
+        binary req = binary("POST /x HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
+            "Transfer-Encoding: chunked\r\n" + headers + "\r\n");
+        foreach binary c in (chunks) {
+            req += binary(sprintf("%x\r\n", c.size())) + c + binary("\r\n");
+        }
+        req += binary("0\r\n" + trailers + "\r\n");
+        s.send(req);
+        hash<auto> resp = s.readHTTPHeader(10s);
+        int len = resp."content-length".toInt();
+        resp.body = len ? s.recv(len, 10s) : "";
+        return resp;
+    }
+
+    trailerTest() {
+        # the request has no Content-Encoding; a trailer named Content-Encoding does not make the body compressed,
+        # and a trailer named Content-Type does not change the request's
+        hash<auto> resp = request("Content-Type: text/plain;charset=utf-8\r\n", (binary("hello"),),
+            "Content-Encoding: gzip\r\nContent-Type: application/x-other\r\nX-T: 1\r\n");
+        assertEq(200, resp.status_code, resp.body);
+        assertEq("body=hello;ce=-;ct=text/plain;x-t=1;trailer-ce=gzip", resp.body);
+    }
+
+    compressedTest() {
+        # a gzip body: a trailer named Content-Encoding with another value does not change how it is decompressed
+        binary gz = gzip("compressed body");
+        hash<auto> resp = request("Content-Type: text/plain;charset=utf-8\r\nContent-Encoding: gzip\r\n",
+            (gz.substr(0, 5), gz.substr(5)), "Content-Encoding: identity\r\nX-T: 2\r\n");
+        assertEq(200, resp.status_code, resp.body);
+        assertEq("body=compressed body;ce=gzip;ct=text/plain;x-t=2;trailer-ce=identity", resp.body);
+    }
+}
