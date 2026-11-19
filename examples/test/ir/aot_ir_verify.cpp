@@ -606,6 +606,23 @@ static void nestedElements(QoreIRFunction& fn, QoreIRBuilder& b) {
     b.createReturnNothing();
 }
 
+//! two nested catch blocks; \a exit_depth: one CatchCleanup closes both (a catch-exit depth of 0), otherwise each is
+//! closed by a CatchCleanup of its own; \a extra: one CatchCleanup more
+static void nestedCatches(QoreIRFunction& fn, QoreIRBuilder& b, bool exit_depth, bool extra) {
+    b.createCatchException();
+    b.createCatchException();
+    if (exit_depth) {
+        fn.catch_exit_depths[b.createCatchCleanup()] = 0;
+    } else {
+        b.createCatchCleanup();
+        b.createCatchCleanup();
+    }
+    if (extra) {
+        b.createCatchCleanup();
+    }
+    b.createReturnNothing();
+}
+
 //! two nested implicit arguments, restored innermost first (\a swapped: outermost first)
 static void implicitArgs(QoreIRFunction& fn, QoreIRBuilder& b, bool swapped) {
     QoreIRValue v1 = b.createConstInt(1)->result;
@@ -1177,6 +1194,15 @@ int main(int argc, char** argv) {
         elementReturn(fn, b, true);
     }, nullptr, "on the path of the exception");
     run("outer implicit element restored", [](QoreIRFunction& fn, QoreIRBuilder& b) { nestedElements(fn, b); });
+    // the catch blocks: each CatchCleanup closes the innermost one, or the catch blocks down to its catch-exit depth
+    // (qore#6733, qore#6658)
+    run("nested catch blocks", [](QoreIRFunction& fn, QoreIRBuilder& b) { nestedCatches(fn, b, false, false); });
+    run("nested catch blocks closed at once", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        nestedCatches(fn, b, true, false);
+    });
+    run("a catch block closed once more", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        nestedCatches(fn, b, true, true);
+    }, nullptr, "a CatchCleanup closes a catch block, but none is open");
     run("contexts", [](QoreIRFunction& fn, QoreIRBuilder& b) { contexts(fn, b, false); });
     run("context destroyed with an exception target", [](QoreIRFunction& fn, QoreIRBuilder& b) {
         contexts(fn, b, false);
