@@ -55,6 +55,7 @@
 #include "qore/intern/AbstractIteratorHelper.h"
 #include "qore/QoreIteratorBase.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreBufferNodePrivate.h"
 
 #include <algorithm>
 #include <memory>
@@ -5390,7 +5391,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 bool needs_nullable_copy = false;
                 ok = qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy);
                 if (needs_nullable_copy) {
-                    QoreBufferNode* copy = b->copy(true, xsink);
+                    QoreBufferNode* copy = qore_buffer_node_private(b).copy(true, xsink);
                     if (!copy) {
                         return true;
                     }

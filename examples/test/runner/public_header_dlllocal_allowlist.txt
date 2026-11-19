@@ -108,44 +108,9 @@ include/qore/QoreBufferNode.h|AlignedByteBuffer|AlignedByteBuffer(const AlignedB
 include/qore/QoreBufferNode.h|AlignedByteBuffer|void clear()
 include/qore/QoreBufferNode.h|AlignedByteBuffer|void resize(size_t n_size, bool clear = false)
 include/qore/QoreBufferNode.h|AlignedByteBuffer|~AlignedByteBuffer()
-include/qore/QoreBufferNode.h|QoreBufferNode|QoreBufferDecimal128 getDecimalStorage(size_t index) const
 include/qore/QoreBufferNode.h|QoreBufferNode|QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length, const void* data, const uint8_t* validity, std::shared_ptr<const void> owner, int64_t null_count, int32_t decimal_precision, int32_t decimal_scale)
 include/qore/QoreBufferNode.h|QoreBufferNode|QoreBufferNode(QoreBufferElementType element_type, bool nullable_elements, size_t length, const void* device_data, const uint8_t* device_validity, std::shared_ptr<const void> owner, int64_t null_count, const QoreBufferDeviceInfo& device_info, QoreBufferDeviceCopyToHostCallback copy_to_host, int32_t decimal_precision, int32_t decimal_scale)
 include/qore/QoreBufferNode.h|QoreBufferNode|QoreBufferNode(QoreBufferNode* parent, size_t offset, size_t length)
-include/qore/QoreBufferNode.h|QoreBufferNode|QoreBufferNode* copy(bool n_nullable_elements, ExceptionSink* xsink = nullptr) const
-include/qore/QoreBufferNode.h|QoreBufferNode|QoreBufferNode* storageRoot()
-include/qore/QoreBufferNode.h|QoreBufferNode|bool getBoolBit(size_t index) const
-include/qore/QoreBufferNode.h|QoreBufferNode|bool getValidityBit(size_t index) const
-include/qore/QoreBufferNode.h|QoreBufferNode|bool isUniqueForMutation() const
-include/qore/QoreBufferNode.h|QoreBufferNode|char* stringBytes()
-include/qore/QoreBufferNode.h|QoreBufferNode|const QoreBufferNode* storageRoot() const
-include/qore/QoreBufferNode.h|QoreBufferNode|const char* stringBytes() const
-include/qore/QoreBufferNode.h|QoreBufferNode|const uint64_t* stringOffsets() const
-include/qore/QoreBufferNode.h|QoreBufferNode|const uint8_t* dataBytes() const
-include/qore/QoreBufferNode.h|QoreBufferNode|const uint8_t* validityBytes() const
-include/qore/QoreBufferNode.h|QoreBufferNode|int assignStringList(const QoreListNode* list, ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|int assignStringRange(const QoreBufferNode& source, size_t offset, size_t count, bool reverse, ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|int assignStringStorage(const std::vector<std::string>& values, const std::vector<uint8_t>& nulls, ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|int detachExternalStorage(ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|int ensureOwnedStorage(ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|int fillString(QoreValue value, ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|int materializeDeviceStorage(ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|int materializeDeviceStorageUnlocked(ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|int setStringValue(size_t index, QoreValue value, ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|int setValue(size_t index, QoreValue value, ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|size_t dataByteSize(size_t n_length) const
-include/qore/QoreBufferNode.h|QoreBufferNode|size_t physicalIndex(size_t index) const
-include/qore/QoreBufferNode.h|QoreBufferNode|static QoreBufferNode* wrapExternalDeviceStorageImpl(QoreBufferElementType element_type, bool nullable_elements, size_t length, const void* device_data, const uint8_t* device_validity, std::shared_ptr<const void> owner, int64_t null_count, const QoreBufferDeviceInfo& device_info, QoreBufferDeviceCopyToHostCallback copy_to_host, bool has_decimal_metadata, int32_t decimal_precision, int32_t decimal_scale, ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|static QoreBufferNode* wrapExternalStorageImpl(QoreBufferElementType element_type, bool nullable_elements, size_t offset, size_t length, const void* data, const uint8_t* validity, std::shared_ptr<const void> owner, int64_t null_count, bool has_decimal_metadata, int32_t decimal_precision, int32_t decimal_scale, ExceptionSink* xsink)
-include/qore/QoreBufferNode.h|QoreBufferNode|uint64_t* stringOffsets()
-include/qore/QoreBufferNode.h|QoreBufferNode|uint8_t* dataBytes()
-include/qore/QoreBufferNode.h|QoreBufferNode|uint8_t* validityBytes()
-include/qore/QoreBufferNode.h|QoreBufferNode|void normalizeDecimalMetadata()
-include/qore/QoreBufferNode.h|QoreBufferNode|void resizeStorage(size_t n_length)
-include/qore/QoreBufferNode.h|QoreBufferNode|void setBoolBit(size_t index, bool value)
-include/qore/QoreBufferNode.h|QoreBufferNode|void setDecimalStorage(size_t index, QoreBufferDecimal128 value)
-include/qore/QoreBufferNode.h|QoreBufferNode|void setNull(size_t index)
-include/qore/QoreBufferNode.h|QoreBufferNode|void setValidityBit(size_t index, bool valid)
 include/qore/QoreClass.h|QoreMethod|QoreMethod& operator=(const QoreMethod&)
 include/qore/QoreClass.h|QoreMethod|QoreMethod(const QoreClass* p_class, MethodFunctionBase* n_func, bool n_static = false)
 include/qore/QoreClass.h|QoreMethod|QoreMethod(const QoreMethod&)
@@ -159,13 +124,6 @@ include/qore/QoreColumnarResult.h|Column|Column(std::string n_name, QoreColumnar
 include/qore/QoreColumnarResult.h|Column|Column(std::string n_name, const QoreColumnarTypeDescriptor& n_schema, QoreValue n_data)
 include/qore/QoreColumnarResult.h|Column|~Column()
 include/qore/QoreColumnarResult.h|QoreColumnarResult|bool scanValues(QorePrivateDataScanner& scanner) override
-include/qore/QoreColumnarResult.h|QoreColumnarResult|int addColumnIntern(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema, int flags, const char* err, ExceptionSink* xsink)
-include/qore/QoreColumnarResult.h|QoreColumnarResult|int setRowCount(size_t n_rows, ExceptionSink* xsink)
-include/qore/QoreColumnarResult.h|QoreColumnarResult|static QoreColumnarResult* fromColumnHashIntern(const QoreHashNode* columns, const QoreHashNode* desc, bool script_values, ExceptionSink* xsink)
-include/qore/QoreColumnarResult.h|QoreColumnarResult|static QoreColumnarResult* fromRowsIntern(const QoreListNode* rows, const QoreHashNode* desc, bool script_values, ExceptionSink* xsink)
-include/qore/QoreColumnarResult.h|QoreColumnarResult|static QoreColumnarResult* fromScriptColumnHash(const QoreHashNode* columns, const QoreHashNode* desc, ExceptionSink* xsink)
-include/qore/QoreColumnarResult.h|QoreColumnarResult|static QoreColumnarResult* fromScriptRows(const QoreListNode* rows, const QoreHashNode* desc, ExceptionSink* xsink)
-include/qore/QoreColumnarResult.h|QoreColumnarResult|void attach(QoreObject& self) const
 include/qore/QoreCondition.h|QoreCondition|QoreCondition& operator=(const QoreCondition&)
 include/qore/QoreCondition.h|QoreCondition|QoreCondition(const QoreCondition&)
 include/qore/QoreCondition.h|QoreCondition|int waitWithInterrupt(QoreThreadLock& l, ExceptionSink* xsink, const char* operation, int (*before_block)(void*), void* arg)
