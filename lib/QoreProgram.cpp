@@ -4275,14 +4275,114 @@ void ThreadLocalProgramData::dbgAttach(ExceptionSink* xsink) {
         printd(5, "ThreadLocalProgramData::dbgAttach this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
         runState = DBG_RS_STOPPED;
         runToStatement = nullptr;
+        // the frames running now make their exit events when they return (issue #6602)
+        dbgRecordAttachFrames();
         getProgram()->priv->onAttach(rs, rts, xsink);
         setRunState(rs, rts);
         printd(5, "ThreadLocalProgramData::dbgAttach this: %p, rs: %d, rts: %p, xsink:%d\n", this, runState, runToStatement, xsink && xsink->isEvent());
     }
 }
 
+void ThreadLocalProgramData::dbgRecordAttachFrames() {
+    dbgDropAttachFrames(0);
+    QoreProgram* pgm = getProgram();
+    // a frame runs in the Program that was current when the frame above it was pushed, and the top frame in the
+    // thread's current Program
+    QoreProgram* frame_pgm = ::getProgram();
+    for (const QoreStackLocation* loc = get_runtime_stack_location(); loc; loc = loc->getNext()) {
+        if (frame_pgm == pgm && loc->getCallType() == CT_USER) {
+            // a location of native code is tagged, so that a frame pushed later at its address is not taken for it
+            if (const StatementBlock* block = qore_rt_native_frame_block(loc, true)) {
+                dbg_attach_frames.push_back({loc, block, true});
+            } else if (dynamic_cast<const CodeEvaluationHelper*>(loc)) {
+                // the call of a function, which runs as native code, in the IR interpreter or in the AST
+                // interpreter; the latter two make their own exit events
+                dbg_attach_frames.push_back({loc, nullptr, false});
+            }
+        }
+        frame_pgm = loc->getProgram();
+    }
+    if (!dbg_attach_frames.empty()) {
+        std::reverse(dbg_attach_frames.begin(), dbg_attach_frames.end());
+        // the thread's count of the records of all Programs, which the native returns of any Program keep requested
+        dbg_frame_count = qore_jit_debug_frame_count();
+        dbg_frame_count->fetch_add(static_cast<int>(dbg_attach_frames.size()), std::memory_order_relaxed);
+        qore_jit_request_debug_frame_return();
+    }
+}
+
+void ThreadLocalProgramData::dbgDropAttachFrames(size_t keep) {
+    if (dbg_attach_frames.size() > keep) {
+        assert(dbg_frame_count);
+        dbg_frame_count->fetch_sub(static_cast<int>(dbg_attach_frames.size() - keep), std::memory_order_relaxed);
+        dbg_attach_frames.resize(keep);
+    }
+}
+
+bool ThreadLocalProgramData::dbgIsAttachFrame(const DbgAttachFrame& frame, const QoreStackLocation* loc) {
+    if (frame.loc != loc) {
+        return false;
+    }
+    // a frame pushed later at the same address is not the recorded one: a location of native code is not tagged,
+    // and the call of a function made since the debugger attached does not run as native code
+    return frame.native_loc ? qore_rt_native_frame_tagged(loc)
+        : dynamic_cast<const CodeEvaluationHelper*>(loc) != nullptr;
+}
+
+size_t ThreadLocalProgramData::dbgFlushReturnedFrames(ExceptionSink* xsink) {
+    // the innermost recorded frame still on the call stack; the recorded frames inside it have returned
+    size_t live = 0;
+    for (const QoreStackLocation* loc = get_runtime_stack_location(); loc && !live; loc = loc->getNext()) {
+        for (size_t i = dbg_attach_frames.size(); i; --i) {
+            if (dbgIsAttachFrame(dbg_attach_frames[i - 1], loc)) {
+                live = i;
+                break;
+            }
+        }
+    }
+    // a frame that left the call stack without its exit event ended with an exception: it makes its exit event with
+    // no value now, innermost first, as the AST and IR interpreters make it when the exception leaves the frame; a
+    // call whose block is not known (a function called through the call path that ran as native code) makes none
+    while (dbg_attach_frames.size() > live) {
+        const StatementBlock* block = dbg_attach_frames.back().block;
+        dbgDropAttachFrames(dbg_attach_frames.size() - 1);
+        if (block) {
+            QoreValue rv;
+            dbgFunctionExitIntern(block, rv, xsink);
+        }
+    }
+    return live;
+}
+
+void ThreadLocalProgramData::dbgNativeFrameReturn(const QoreStackLocation* top, const StatementBlock* block,
+        const QoreValue& val, ExceptionSink* xsink) {
+    if (dbg_attach_frames.empty()) {
+        return;
+    }
+    // a debugger that detached, or is detaching, gets no more events: the records are dropped, so that the native
+    // returns of the thread stop checking for them
+    if (runState == DBG_RS_DETACH || attachFlag.load(std::memory_order_acquire) < 0) {
+        dbgDropAttachFrames(0);
+        return;
+    }
+    size_t live = dbgFlushReturnedFrames(xsink);
+    if (live && dbgIsAttachFrame(dbg_attach_frames.back(), top)) {
+        if (!block) {
+            block = dbg_attach_frames.back().block;
+        }
+        dbgDropAttachFrames(live - 1);
+        if (block) {
+            // the debugger gets a copy: the frame's result cannot be changed
+            QoreValue rv = val.refSelf();
+            dbgFunctionExitIntern(block, rv, xsink);
+            rv.discard(xsink);
+        }
+    }
+}
+
 void ThreadLocalProgramData::dbgDetach(ExceptionSink* xsink) {
     if (runState != DBG_RS_STOPPED && runState != DBG_RS_DETACH) {
+        dbgDropAttachFrames(0);
         printd(5, "ThreadLocalProgramData::dbgDetach this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
         DebugRunStateEnum rs = DBG_RS_DETACH;
         const AbstractStatement* rts = runToStatement;
@@ -4313,6 +4413,12 @@ int ThreadLocalProgramData::dbgStep(const StatementBlock* blockStatement, const 
     checkAttach(xsink);
     checkBreakFlag();
     if (runState == DBG_RS_STOPPED || runState == DBG_RS_DETACH) {
+        return 0;
+    }
+    // the exit events of the frames that were running when the debugger attached and ended with an exception since
+    // (#6602)
+    dbgCheckAttachFrames(xsink);
+    if (*xsink) {
         return 0;
     }
     int rc = 0;
@@ -4347,6 +4453,12 @@ int ThreadLocalProgramData::dbgSyntheticBlockStep(const StatementBlock* blockSta
     if (runState == DBG_RS_STOPPED || runState == DBG_RS_DETACH) {
         return 0;
     }
+    // the exit events of the frames that were running when the debugger attached and ended with an exception since
+    // (#6602)
+    dbgCheckAttachFrames(xsink);
+    if (*xsink) {
+        return 0;
+    }
 
     int rc = 0;
     if (runState == DBG_RS_STEP || (runState == DBG_RS_STEP_OVER && functionCallLevel == 0)) {
@@ -4368,6 +4480,14 @@ int ThreadLocalProgramData::dbgSyntheticBlockStep(const StatementBlock* blockSta
 void ThreadLocalProgramData::dbgFunctionEnter(const StatementBlock* statement, ExceptionSink* xsink) {
     checkAttach(xsink);
     checkBreakFlag();
+    if (runState != DBG_RS_STOPPED && runState != DBG_RS_DETACH) {
+        // the exit events of the frames that were running when the debugger attached and ended with an exception
+        // since (#6602)
+        dbgCheckAttachFrames(xsink);
+        if (*xsink) {
+            return;
+        }
+    }
     if (runState == DBG_RS_STOPPED || runState == DBG_RS_DETACH) {
         // no code
     } else if (runState == DBG_RS_STEP || isRunToStatement(statement)) {
@@ -4389,6 +4509,20 @@ void ThreadLocalProgramData::dbgFunctionEnter(const StatementBlock* statement, E
 }
 
 void ThreadLocalProgramData::dbgFunctionExit(const StatementBlock* statement, QoreValue& returnValue, ExceptionSink* xsink) {
+    if (!dbg_attach_frames.empty() && runState != DBG_RS_STOPPED && runState != DBG_RS_DETACH) {
+        // the exit events of the frames that were running when the debugger attached and ended with an exception
+        // since, which are inside this one; a frame of the AST or IR interpreter that was running then makes its own
+        // exit event now, also with an exception pending: its record is removed (#6602)
+        size_t live = dbgFlushReturnedFrames(xsink);
+        if (live && dbgIsAttachFrame(dbg_attach_frames.back(), get_runtime_stack_location())) {
+            dbgDropAttachFrames(live - 1);
+        }
+    }
+    dbgFunctionExitIntern(statement, returnValue, xsink);
+}
+
+void ThreadLocalProgramData::dbgFunctionExitIntern(const StatementBlock* statement, QoreValue& returnValue,
+        ExceptionSink* xsink) {
     if (runState == DBG_RS_STOPPED || runState == DBG_RS_DETACH) {
         // no code
     } else if ((runState == DBG_RS_UNTIL_RETURN && functionCallLevel == 1) || runState == DBG_RS_STEP || (runState == DBG_RS_STEP_OVER && functionCallLevel == 0) || isRunToStatement(statement)) {
@@ -4419,6 +4553,13 @@ void ThreadLocalProgramData::dbgException(const AbstractStatement* statement, Ex
     if (runState != DBG_RS_STOPPED && runState != DBG_RS_DETACH) {
         printd(5, "ThreadLocalProgramData::dbgException() this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
         checkAttach(xsink);
+        // the exit events of the frames that were running when the debugger attached and ended with an exception
+        // before this one was raised (#6602)
+        if (!dbg_attach_frames.empty()) {
+            ExceptionSink frame_xsink;
+            dbgFlushReturnedFrames(&frame_xsink);
+            xsink->assimilate(frame_xsink);
+        }
         functionCallLevel = 0;
         DebugRunStateEnum rs = runState;
         const AbstractStatement* rts = runToStatement;
@@ -4440,6 +4581,10 @@ void qore_program_private::dbgRunExit(QoreValue& rv, ExceptionSink* xsink) {
 
 void ThreadLocalProgramData::dbgExit(const StatementBlock* statement, QoreValue& returnValue, ExceptionSink* xsink) {
     if (runState != DBG_RS_STOPPED && runState != DBG_RS_DETACH) {
+        // the exit events of the frames that were running when the debugger attached and ended with an exception
+        // since; the others make no exit events after the exit (#6602)
+        dbgCheckAttachFrames(xsink);
+        dbgDropAttachFrames(0);
         printd(5, "ThreadLocalProgramData::dbgExit() this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
         DebugRunStateEnum rs = runState;
         const AbstractStatement* rts = runToStatement;

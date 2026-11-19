@@ -9617,10 +9617,16 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
                 std::string error;
                 ok = QoreJIT::instance().executeWithFallback(*ir, ir_return_value, xsink, error,
                     ir->cached_pre_instantiated);
+                // the check is also taken while a debugger has native frames to report, whose returns make their
+                // exit events here (issue #6602)
                 if (!*xsink && qore_jit_deopt_requested()) {
-                    ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr, nullptr, nullptr,
-                        ir->cached_pre_instantiated, (!self && signature.selfid) ? signature.selfid : nullptr,
-                        statements, pgm);
+                    bool deopt = qore_jit_take_guard_deopt();
+                    if (deopt) {
+                        ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr, nullptr, nullptr,
+                            ir->cached_pre_instantiated, (!self && signature.selfid) ? signature.selfid : nullptr,
+                            statements, pgm);
+                    }
+                    qore_jit_debug_frame_return(this, ir_return_value, deopt, xsink);
                 }
             } else {
                 ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr, nullptr, nullptr,
@@ -9903,25 +9909,34 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // and evalTiered falls through to AST.  In JIT, the guard sets a
                 // thread-local flag and returns NOTHING via error_return_block.
                 // Body locals are still instantiated, so AST can re-execute.
+                // the check is also taken while a debugger has native frames to report, whose returns make their
+                // exit events here (issue #6602)
                 if (!*xsink && qore_jit_deopt_requested()) {
-                    printd(2, "evalTiered JIT-DEOPT: '%s' — falling back to AST\n", name);
-                    static constinit QoreLazyValue<bool> debug_deopt_setting([]() -> bool {
-                        QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
-                        const char* debug_env = debug_env_holder.c_str();
-                        return debug_env && strstr(debug_env, "deopt");
-                    });
-                    const bool debug_deopt = debug_deopt_setting.get();
-                    if (debug_deopt) {
-                        fprintf(stderr, "[DEOPT-JIT->AST] Function '%s' deopting from JIT to AST\n",
-                                name ? name : "<unknown>");
-                        fflush(stderr);
+                    bool deopt = qore_jit_take_guard_deopt();
+                    if (deopt) {
+                        printd(2, "evalTiered JIT-DEOPT: '%s' — falling back to AST\n", name);
+                        static constinit QoreLazyValue<bool> debug_deopt_setting([]() -> bool {
+                            QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
+                            const char* debug_env = debug_env_holder.c_str();
+                            return debug_env && strstr(debug_env, "deopt");
+                        });
+                        const bool debug_deopt = debug_deopt_setting.get();
+                        if (debug_deopt) {
+                            fprintf(stderr, "[DEOPT-JIT->AST] Function '%s' deopting from JIT to AST\n",
+                                    name ? name : "<unknown>");
+                            fflush(stderr);
+                        }
+                        if (pgm) {
+                            pgm->recordIRFallback("JIT guard failure");
+                        }
+                        if (statements) {
+                            val = statements->exec(xsink);
+                        }
+                    } else {
+                        // a bit cast, not memcpy(), which a fortified C library checks (see QoreJITIncludes.h)
+                        val = std::bit_cast<QoreValue>(result_bits);
                     }
-                    if (pgm) {
-                        pgm->recordIRFallback("JIT guard failure");
-                    }
-                    if (statements) {
-                        val = statements->exec(xsink);
-                    }
+                    qore_jit_debug_frame_return(this, val, deopt, xsink);
                 } else {
                     // a bit cast, not memcpy(), which a fortified C library checks (see QoreJITIncludes.h)
                     val = std::bit_cast<QoreValue>(result_bits);
