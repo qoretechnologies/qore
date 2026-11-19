@@ -1,0 +1,18 @@
+class C
+deleted by argument: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+deleted by argument through another variable: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+kept by argument: 3
+  iteration 0: 3
+  iteration 1: 6
+deleted in loop: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+map with implicit argument: [2, 3, 4, 5]
+map deleted by argument: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+class D
+deleted by argument: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+deleted by argument through another variable: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+kept by argument: 102
+  iteration 0: 102
+  iteration 1: 204
+deleted in loop: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+map with implicit argument: [101, 102, 103, 104]
+map deleted by argument: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted

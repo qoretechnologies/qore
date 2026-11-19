@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation of the check of a method call's target after its arguments
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CallTargetAfterArgsRetestTest
+
+#! Regression test for issue #6646: the check of a call's target after its arguments in native code
+/** Native code checks the object of a method call whose arguments can have side effects before and after the
+    arguments; where the check before them dominates the check after them, an object that passed it is tested only for
+    its deleted status after them (its type, private data and class do not change), and the full test is made
+    otherwise.
+
+    CallTargetAfterArgsRetest.q makes such calls on objects of the method's class (which pass the check before the
+    arguments) and of a subclass (which do not, and are checked by the helper), with arguments that delete the object
+    directly, through another variable, in an iteration of a loop and in an element of a map, and that do not delete
+    it; its output must be the one in CallTargetAfterArgsRetest.expected, which the AST interpreter prints, in every
+    execution mode and on the IR tier.
+*/
+class CallTargetAfterArgsRetestTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/CallTargetAfterArgsRetest.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/CallTargetAfterArgsRetest.expected");
+    }
+
+    constructor() : QUnit::Test("call target checked after arguments", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

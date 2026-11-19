@@ -289,6 +289,10 @@ private:
     //! the call whose check of its target (QoreIRInstruction::fused_call_check) is being lowered, whose arguments the
     //! check after them passes to its helper (issue #5824); null otherwise
     const QoreIRInstruction* fused_check_call = nullptr;
+    //! the inline test of each call target that a check before a call's arguments made (emitValidObjectTest()), by
+    //! the target's value: the check after the arguments, where the test dominates it, then tests only the deleted
+    //! status of an object that passed it (issue #6646)
+    std::unordered_map<llvm::Value*, llvm::Value*> valid_object_tests;
     bool aot_direct_closure_fast_entry = true;
 
     // Deferred exception checking for code proven not to observe exceptions before
@@ -1825,6 +1829,13 @@ private:
     //! libqore (JIT only; QoreIROpcode::CheckCallTarget, issue #5784)
     llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func,
         const QoreClass* qc = nullptr, const QoreClass* method_qc = nullptr);
+
+    //! Emits the inline test of the check of a call's target after its arguments (check_after_args) when the test
+    //! @a tested of the check before them dominates it: an object that passed that test, whose type, private data and
+    //! class do not change, is tested only for its deleted status; otherwise the full test (emitValidObjectTest()) is
+    //! made (JIT only, issue #6646)
+    llvm::Value* emitValidObjectRetest(llvm::Value* qv, llvm::Value* tested, const QoreJITObjectLayout& layout,
+        llvm::Function* llvm_func);
 
     //! Emits the inline test of the cache of a call site (QoreCallTargetCheckCache::hit()) for code that always runs
     //! with the class context @a class_ctx (QoreIRFunction::static_call_context): true if @a qv is an object that has
