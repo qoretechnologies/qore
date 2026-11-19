@@ -2734,6 +2734,10 @@ DLLLOCAL bool qore_thread_has_no_type_epoch();
 //! Waits until the thread \a tid has entered \a count builtin waits (QoreTypeQuiescentWaitHelper) or the timeout
 //! has passed; returns true in the first case (debug builds, for the tests of issue #6419)
 DLLLOCAL bool qore_type_dbg_wait_entered(int tid, int64 count, int64 timeout_ms);
+
+//! Returns the number of builtin waits (QoreTypeQuiescentWaitHelper) that the thread \a tid has entered, or -1 if
+//! there is no such thread (debug builds, for the tests of issue #6419)
+DLLLOCAL int64 qore_type_dbg_wait_entries(int tid);
 #endif
 
 //! qore_cancellable_poll() as a quiescent wait (see QoreTypeQuiescentWaitHelper), for the waits of builtins made for

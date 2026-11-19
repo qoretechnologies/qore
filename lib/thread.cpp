@@ -1688,21 +1688,28 @@ bool qore_thread_has_no_type_epoch() {
 static std::mutex qore_type_wait_entry_lock;
 static std::condition_variable qore_type_wait_entry_cond;
 
+//! returns the waits that a thread entered, or -1 if there is no such thread; qore_type_wait_entry_lock is held
+static int64 qore_type_dbg_wait_entries_locked(int tid) {
+    int64 rv = -1;
+    thread_list.anyThreadData([tid, &rv](ThreadData* td) -> bool {
+        if (td->tid == tid) {
+            rv = td->type_wait_entries;
+            return true;
+        }
+        return false;
+    });
+    return rv;
+}
+
 bool qore_type_dbg_wait_entered(int tid, int64 count, int64 timeout_ms) {
-    auto entries = [tid]() -> int64 {
-        int64 rv = -1;
-        thread_list.anyThreadData([tid, &rv](ThreadData* td) -> bool {
-            if (td->tid == tid) {
-                rv = td->type_wait_entries;
-                return true;
-            }
-            return false;
-        });
-        return rv;
-    };
     std::unique_lock<std::mutex> lock(qore_type_wait_entry_lock);
     return qore_type_wait_entry_cond.wait_for(lock, std::chrono::milliseconds(timeout_ms),
-        [&]() { return entries() >= count; });
+        [&]() { return qore_type_dbg_wait_entries_locked(tid) >= count; });
+}
+
+int64 qore_type_dbg_wait_entries(int tid) {
+    std::lock_guard<std::mutex> lock(qore_type_wait_entry_lock);
+    return qore_type_dbg_wait_entries_locked(tid);
 }
 #endif
 

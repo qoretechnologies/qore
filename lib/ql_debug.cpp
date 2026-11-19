@@ -403,6 +403,18 @@ static QoreValue f_dbg_type_wait_entered(const QoreListNode* params, RuntimeConf
 #endif
 }
 
+//! Returns the number of builtin waits that a thread has entered, or -1 if there is no such thread (issue #6419)
+/** With dbg_type_wait_entered(), a test makes sure that a thread waits in a given wait: the thread takes its count
+    before the wait, and another thread waits for one more
+*/
+static QoreValue f_dbg_type_wait_entries(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    return qore_type_dbg_wait_entries(static_cast<int>(HARD_QORE_VALUE_INT(params, 0)));
+#else
+    return -1;
+#endif
+}
+
 //! Returns the number of frames of the calling thread that hold a type read through a derived type (issue #6419)
 static QoreValue f_dbg_type_unsafe_frames(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_type_unsafe_frames());
@@ -27310,6 +27322,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_type_wait_entered", f_dbg_type_wait_entered, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_type_wait_entries", f_dbg_type_wait_entries, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
     qns.addBuiltinVariant("dbg_type_retirement_blockers", f_dbg_type_retirement_blockers, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_live_type_declarations", f_dbg_live_type_declarations, QCF_NO_FLAGS,
