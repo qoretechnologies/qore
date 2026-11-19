@@ -586,6 +586,9 @@ module SqlUtil {
       values (bulk DML), which deleted every row of the table, those of the input as well: the key values of each of their
       rows are input keys
       (<a href="https://github.com/qoretechnologies/qore/issues/6687">issue 6687</a>)
+    - fixed an upsert closure (@ref SqlUtil::AbstractTable::getUpsertClosure()) called after
+      @ref SqlUtil::AbstractTable::clear(), which raised \c OBJECT-ALREADY-DELETED with a table's primary key: the
+      closure keeps a copy of the key's columns (<a href="https://github.com/qoretechnologies/qore/issues/6686">issue 6686</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
