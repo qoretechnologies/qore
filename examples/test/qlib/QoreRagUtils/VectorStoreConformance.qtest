@@ -310,12 +310,12 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
 %endif
         Datasource ds((ENV.PGVECTOR_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL));
         on_exit ds.close();
-        try {
-            ds.exec("CREATE EXTENSION IF NOT EXISTS vector");
-            ds.commit();
-        } catch (hash<ExceptionInfo> ex) {
-            on_error ds.rollback();
-            testSkip("pgvector is not available: " + ex.desc);
+        # an extension is an object of the whole database, which a test does not create: concurrent PostgreSQL
+        # tests set up their search_path with the extensions installed at their start; vector is installed by the
+        # database setup (examples/test/docker_test/postgres_lib.sh) (issue #6717)
+        if (!ds.selectRow("select 1 as x from pg_catalog.pg_extension where extname = 'vector'")) {
+            ds.rollback();
+            testSkip("the vector extension is not installed in the database");
         }
         string table = "conformance_" + get_random_string(8).lwr();
         ds.exec(sprintf("CREATE TABLE %s (id text PRIMARY KEY, embedding vector(3), payload jsonb)", table));
