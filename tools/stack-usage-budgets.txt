@@ -62,7 +62,13 @@
 # level over the measured 5102 / 6078 / 5077 (ir function / method / static method), so a growth of 64 B, which
 # costs 62-68 bytes per level, fails the test even within this budget: raise both, by the measured growth, when a
 # growth is accepted
-4304 QoreIRInterpreter::execute
+# #6609: #6627 (the probe table of the pre-instantiated locals) adds 64 B: 4272 B on develop d1539bd5c1, as
+# releaseFrameRuntimeLocal() is now inlined into execute() with the inline probe.  Accepted: the frame is 4208 B with
+# that function out of line, but that costs 13-117 Ir per iteration on the ir call rows (m +26, fs +26, mm +117), and
+# #6627 gained 187-685 there.  The budget is 64 B over 4272, and the x86_64 release budgets of
+# recursion-frame-budget.qtest are 56 bytes per level over the measured 5053 / 6114 / 5041 (glibc, GCC 15.2; 4987 /
+# 6052 / 4975 with the frame of 4208 B), which were 20 bytes per level under the ir method budget
+4336 QoreIRInterpreter::execute
 928 tryExecuteInterpreterInlineIRFunction
 880 tryExecuteInterpreterInlineIRStaticMethod
 96 evalAndRef

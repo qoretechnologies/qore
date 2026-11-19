@@ -67,7 +67,7 @@ public:
         if (!collection) {
             return nullptr;
         }
-        return new QoreStringNode(mongoc_collection_get_name(collection));
+        return new QoreStringNode(mongoc_collection_get_name(collection), QCS_UTF8);
     }
 
     //! Insert one document

@@ -67,7 +67,7 @@ public:
         if (!database) {
             return nullptr;
         }
-        return new QoreStringNode(mongoc_database_get_name(database));
+        return new QoreStringNode(mongoc_database_get_name(database), QCS_UTF8);
     }
 
     //! Get a collection handle
@@ -89,7 +89,8 @@ public:
         }
         ReferenceHolder<QoreListNode> list(new QoreListNode(stringTypeInfo), xsink);
         for (int i = 0; names[i]; i++) {
-            list->push(new QoreStringNode(names[i]), xsink);
+            // MongoDB names are UTF-8
+            list->push(new QoreStringNode(names[i], QCS_UTF8), xsink);
         }
         bson_strfreev(names);
         return list.release();

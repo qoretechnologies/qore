@@ -1511,8 +1511,12 @@ extern "C" DLLEXPORT int64_t qore_rt_check_cancel(ExceptionSink* xsink, const ch
 
 // --- JIT deopt flag ---
 // Thread-local flag set by JIT guard failure to request deopt to AST.
-// evalTiered() checks this after JIT returns and re-executes via AST if set.
+// evalTiered() checks this after JIT returns and re-executes via AST if set.  It is also set while a debugger has
+// native frames to report, so that their returns take the same check (issue #6602); tl_jit_guard_deopt tells a guard
+// failure from that.
 static thread_local bool tl_jit_deopt_requested = false;
+//! set with tl_jit_deopt_requested by a guard failure
+static thread_local bool tl_jit_guard_deopt = false;
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 // Keep the fallback out of the common method path, which already has a signature self local.
@@ -1523,6 +1527,7 @@ static QORE_INTERN_NOINLINE LocalVar* findIRSelfLocal(const QoreIRFunction* ir) 
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 extern "C" DLLEXPORT void qore_rt_request_jit_deopt(void* deopt_counter_ptr) {
     tl_jit_deopt_requested = true;
+    tl_jit_guard_deopt = true;
     if (deopt_counter_ptr) {
         auto* counter = static_cast<std::atomic<uint32_t>*>(deopt_counter_ptr);
         counter->fetch_add(1, std::memory_order_relaxed);
@@ -1534,6 +1539,52 @@ extern "C" DLLEXPORT void qore_rt_request_jit_deopt(void* deopt_counter_ptr) {
 DLLLOCAL bool qore_jit_deopt_requested() {
     bool val = tl_jit_deopt_requested;
     tl_jit_deopt_requested = false;
+    return val;
+}
+
+//! the count of the frames of all Programs in the thread that were running when a debugger attached and have not made
+//! their exit events yet (issue #6602)
+static thread_local std::atomic<int> tl_dbg_attach_frames{0};
+
+DLLLOCAL std::atomic<int>* qore_jit_debug_frame_count() {
+    return &tl_dbg_attach_frames;
+}
+
+DLLLOCAL void qore_jit_request_debug_frame_return() {
+    tl_jit_deopt_requested = true;
+}
+
+//! requests the check of the native returns again while frames of any Program in the thread have not made their exit
+//! events: the return of the native code of another Program must not take the request of this one
+static void qore_jit_rearm_debug_frame_return() {
+    if (tl_dbg_attach_frames.load(std::memory_order_relaxed) > 0) {
+        tl_jit_deopt_requested = true;
+    }
+}
+
+DLLLOCAL QORE_INTERN_NOINLINE __attribute__((cold)) bool qore_jit_take_guard_deopt() {
+    bool val = tl_jit_guard_deopt;
+    tl_jit_guard_deopt = false;
+    return val;
+}
+
+DLLLOCAL QORE_INTERN_NOINLINE __attribute__((cold)) void qore_jit_debug_frame_return(const UserVariantBase* uvb,
+        const QoreValue& val, bool deopt, ExceptionSink* xsink) {
+    // a deoptimized call ran again in the AST interpreter, which made the exit event of the frame
+    if (!deopt && !*xsink && tl_dbg_attach_frames.load(std::memory_order_relaxed) > 0) {
+        ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+        if (tlpd) {
+            tlpd->dbgNativeFrameReturn(get_runtime_stack_location(), uvb->getStatementBlock(), val, xsink);
+        }
+    }
+    qore_jit_rearm_debug_frame_return();
+}
+
+DLLLOCAL bool qore_jit_clear_deopt_request() {
+    bool val = tl_jit_guard_deopt;
+    tl_jit_guard_deopt = false;
+    tl_jit_deopt_requested = false;
+    qore_jit_rearm_debug_frame_return();
     return val;
 }
 
@@ -5149,8 +5200,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     QoreValue obj_val = fromBits(object_bits);
     QoreObject* obj = obj_val.getType() == NT_OBJECT ? obj_val.get<QoreObject>() : nullptr;
     if (!obj) {
-        // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference()
-        return toBits(qore_make_pseudo_method_reference(&loc_builtin, obj_val, method_name, xsink));
+        // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference();
+        // by the method's own name, also when the name has the class references of the "\x01" and "\x02" forms below
+        const char* pseudo_name = method_name;
+        if (method_name[0] == '\x01') {
+            const char* end = strchr(method_name + 1, '\x01');
+            if (!end) {
+                xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "invalid AOT object method reference");
+                return toBits(QoreValue());
+            }
+            pseudo_name = end + 1;
+        } else if (method_name[0] == '\x02') {
+            const QoreClass* declared_class;
+            const QoreMethod* parse_method;
+            if (!qore_aot_decode_object_method_ref(nullptr, method_name, pseudo_name, declared_class, parse_method)) {
+                xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "invalid AOT object method reference");
+                return toBits(QoreValue());
+            }
+        }
+        return toBits(qore_make_pseudo_method_reference(&loc_builtin, obj_val, pseudo_name, xsink));
     }
 
     // a static method of the receiver's declared class: the reference is bound to it, whatever the class of the
@@ -5179,6 +5247,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
         return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, method)));
     }
 
+    // a normal method of a parent class resolved for the receiver's declared class:
+    // "\x02<declared class reference>\x01<method class reference>\x01<method name>" (see
+    // qore_aot_object_method_ref_name()); the classes are resolved only if the method found by name is not accessible
+    // (see below)
+    const char* inherited_ref = nullptr;
+    if (method_name[0] == '\x02') {
+        inherited_ref = method_name;
+        const QoreClass* declared_class;
+        const QoreMethod* parse_method;
+        if (!qore_aot_decode_object_method_ref(nullptr, inherited_ref, method_name, declared_class, parse_method)) {
+            xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "invalid AOT object method reference");
+            return toBits(QoreValue());
+        }
+    }
+
     const QoreClass* obj_class = obj->getClass();
     ClassAccess access = Public;
     const QoreMethod* method = obj_class->findMethod(method_name, access);
@@ -5198,6 +5281,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     }
 
     if (access > Public && !qore_class_private::runtimeCheckPrivateClassAccess(*obj_class)) {
+        // for an object of the declared class, the method resolved for it when parsing, as for a call of the method
+        // and as in ParseObjectMethodReferenceNode::makeReference() (qore#6680)
+        if (inherited_ref) {
+            QoreProgram* pgm = rc_get_current_ref().getProgram();
+            if (!pgm) {
+                pgm = getProgram();
+            }
+            const char* name;
+            const QoreClass* declared_class;
+            const QoreMethod* parse_method;
+            // the declared class can be the copy of a module's class imported into the Program, while the object has
+            // the module's own class, as for a call of the method (qore_rt_same_class())
+            if (pgm && qore_aot_decode_object_method_ref(pgm, inherited_ref, name, declared_class, parse_method)
+                    && parse_method && declared_class->getID() == obj_class->getID()) {
+                return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, parse_method)));
+            }
+        }
+        // the method that a call of the method makes from here, also when the method found first is not accessible
+        // here, as in ParseObjectMethodReferenceNode::makeReferenceForClass() (qore#6704)
+        if (const QoreMethod* pm = qore_class_private::get(*obj_class)->runtimeFindPublicCommittedMethod(
+                method_name)) {
+            return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, pm)));
+        }
         if (method->isPrivate()) {
             xsink->raiseException("ILLEGAL-CALL-REFERENCE",
                 "cannot create a call reference to %s %s::%s() from outside the class",
@@ -12808,6 +12914,23 @@ public:
         return saved_stmt;
     }
 
+    //! Returns the block of the frame's function, and tags the frame if \a tag (see qore_rt_native_frame_block())
+    /** The block is stored for this only: nothing else reads it, so a tag in its low bit, set when a debugger
+        attaches, tells this frame from one pushed later at the same address, which is not tagged (issue #6602)
+    */
+    DLLLOCAL const StatementBlock* debugFrameBlock(bool tag) {
+        uintptr_t bits = reinterpret_cast<uintptr_t>(statements);
+        if (tag) {
+            statements = reinterpret_cast<const StatementBlock*>(bits | 1);
+        }
+        return reinterpret_cast<const StatementBlock*>(bits & ~static_cast<uintptr_t>(1));
+    }
+
+    //! Returns true if the frame is tagged (see debugFrameBlock())
+    DLLLOCAL bool debugFrameTagged() const {
+        return reinterpret_cast<uintptr_t>(statements) & 1;
+    }
+
 private:
     //! the name of the call, which outlives the location (see the constructor)
     const std::string* call_name;
@@ -12871,6 +12994,23 @@ public:
         return saved_stmt;
     }
 
+    //! Returns the block of the frame's function, and tags the frame if \a tag (see qore_rt_native_frame_block())
+    /** The block is stored for this only: nothing else reads it, so a tag in its low bit, set when a debugger
+        attaches, tells this frame from one pushed later at the same address, which is not tagged (issue #6602)
+    */
+    DLLLOCAL const StatementBlock* debugFrameBlock(bool tag) {
+        uintptr_t bits = reinterpret_cast<uintptr_t>(statements);
+        if (tag) {
+            statements = reinterpret_cast<const StatementBlock*>(bits | 1);
+        }
+        return reinterpret_cast<const StatementBlock*>(bits & ~static_cast<uintptr_t>(1));
+    }
+
+    //! Returns true if the frame is tagged (see debugFrameBlock())
+    DLLLOCAL bool debugFrameTagged() const {
+        return reinterpret_cast<uintptr_t>(statements) & 1;
+    }
+
 protected:
     //! Creates the frame without pushing it, for a derived class that pushes it once it is constructed
     /** The frame is pushed by the most derived class, so that other threads, which can read it from then on, find it
@@ -12903,6 +13043,28 @@ private:
     //! the location that this one replaces on the thread's call stack
     const QoreStackLocation* prev;
 };
+
+#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+const StatementBlock* qore_rt_native_frame_block(const QoreStackLocation* loc, bool tag) {
+    if (const QoreJITStackLocation* jit = dynamic_cast<const QoreJITStackLocation*>(loc)) {
+        return const_cast<QoreJITStackLocation*>(jit)->debugFrameBlock(tag);
+    }
+    if (const QoreNativeCallStackLocation* native = dynamic_cast<const QoreNativeCallStackLocation*>(loc)) {
+        return const_cast<QoreNativeCallStackLocation*>(native)->debugFrameBlock(tag);
+    }
+    return nullptr;
+}
+
+bool qore_rt_native_frame_tagged(const QoreStackLocation* loc) {
+    if (const QoreJITStackLocation* jit = dynamic_cast<const QoreJITStackLocation*>(loc)) {
+        return jit->debugFrameTagged();
+    }
+    if (const QoreNativeCallStackLocation* native = dynamic_cast<const QoreNativeCallStackLocation*>(loc)) {
+        return native->debugFrameTagged();
+    }
+    return false;
+}
+#endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 //! The call stack frame of a call that AOT-compiled code makes directly to native code of user code
@@ -13205,30 +13367,38 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         // self, args, body locals, runtime location, and gate state.
     }
 
-    // Check for JIT guard failure or recompilation invalidation requesting deopt to AST
+    // Check for JIT guard failure or recompilation invalidation requesting deopt to AST; the check is also taken
+    // while a debugger has native frames to report, whose returns make their exit events here (issue #6602)
     if (!*xsink && (qore_jit_deopt_requested() || fn_invalidated)) {
-        // Ensure body locals are on thread stack for AST execution
-        if (skip_body_locals) {
-            for (LocalVar* lv : body_locals) {
-                lv->instantiate(po);
+        bool deopt = qore_jit_take_guard_deopt() || fn_invalidated;
+        if (deopt) {
+            // Ensure body locals are on thread stack for AST execution
+            if (skip_body_locals) {
+                for (LocalVar* lv : body_locals) {
+                    lv->instantiate(po);
+                }
             }
-        }
-        StatementBlock* stmts = uvb->getStatementBlock();
-        if (stmts) {
-            // Set TLS returnTypeInfo to the callee's declared return type so that
-            // ReturnStatement::execImpl() performs the correct type check.
-            // Fast-call paths (qore_rt_call_fast et al.) bypass CodeEvaluationHelper,
-            // so TLS returnTypeInfo may still hold the *caller*'s return type here.
-            const QoreTypeInfo* old_rti = saveReturnTypeInfo(
-                qore_rt_get_effective_return_type(uvb->getUserSignature(), receiver_type_info));
-            val = stmts->exec(xsink);
-            saveReturnTypeInfo(old_rti);
-        }
-        if (skip_body_locals) {
-            for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
-                body_locals[i]->uninstantiate(xsink);
+            StatementBlock* stmts = uvb->getStatementBlock();
+            if (stmts) {
+                // Set TLS returnTypeInfo to the callee's declared return type so that
+                // ReturnStatement::execImpl() performs the correct type check.
+                // Fast-call paths (qore_rt_call_fast et al.) bypass CodeEvaluationHelper,
+                // so TLS returnTypeInfo may still hold the *caller*'s return type here.
+                const QoreTypeInfo* old_rti = saveReturnTypeInfo(
+                    qore_rt_get_effective_return_type(uvb->getUserSignature(), receiver_type_info));
+                val = stmts->exec(xsink);
+                saveReturnTypeInfo(old_rti);
             }
+            if (skip_body_locals) {
+                for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+                    body_locals[i]->uninstantiate(xsink);
+                }
+            }
+        } else {
+            val = fromBits(result_bits);
         }
+        // made while the frame is on the call stack, as the AST interpreter makes it
+        qore_jit_debug_frame_return(uvb, val, deopt, xsink);
     } else {
         val = fromBits(result_bits);
     }
@@ -24728,7 +24898,7 @@ QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, Excep
         }
         // a helper is compiled without speculative guards, so it never requests a deoptimization; there is no other
         // tier to run it on
-        if (qore_jit_deopt_requested() && !*xsink) {
+        if (qore_jit_clear_deopt_request() && !*xsink) {
             xsink->raiseException("BACKGROUND-HELPER-ERROR", "internal error: the native code of a background "
                 "expression requested a deoptimization");
         }

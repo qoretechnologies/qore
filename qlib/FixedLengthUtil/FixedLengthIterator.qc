@@ -70,7 +70,8 @@ while (i.next()) {
         @param opts Global options; see @ref fixedlengthglobals for valid values
     */
     constructor(Qore::StringInputStream input, hash<auto> spec, *hash<auto> opts)
-        : FixedLengthAbstractIterator(new InputStreamLineIterator(input, input.getEncoding(), opts.eol, opts.trim), spec, opts) {
+        : FixedLengthAbstractIterator(new InputStreamLineIterator(input, input.getEncoding(), opts.eol,
+            opts.trim ?? True, DefaultStreamBufferSize, opts.encoding_errors), spec, opts) {
     }
 
     #! Instantiates the FixedLengthIterator object from an @ref Qore::InputStream "InputStream"
@@ -109,7 +110,8 @@ while (i.next()) {
         @param opts Global options; see @ref fixedlengthglobals for valid values
     */
     constructor(Qore::InputStream input, string encoding = "UTF-8", hash<auto> spec, *hash<auto> opts)
-        : FixedLengthAbstractIterator(new InputStreamLineIterator(input, encoding, opts.eol, opts.trim), spec, opts) {
+        : FixedLengthAbstractIterator(new InputStreamLineIterator(input, encoding, opts.eol,
+            opts.trim ?? True, DefaultStreamBufferSize, opts.encoding_errors), spec, opts) {
     }
 }
 }

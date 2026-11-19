@@ -72,6 +72,7 @@ public class MongoDbTest inherits QUnit::Test {
         addTestCase("Negative tests", \negativeTests());
         addTestCase("Corner cases", \cornerCaseTests());
         addTestCase("Data type tests", \dataTypeTests());
+        addTestCase("UTF-8 strings and names", \utf8Tests());
         addTestCase("Large data tests", \largeDataTests());
         addTestCase("Memory stress tests", \memoryStressTests());
         addTestCase("Interrupt test", \interruptTests());
@@ -1016,6 +1017,44 @@ sub invalid_cursor(MongoCursor<int> cursor) {
         assertEq("Booleans", found.name, "query by boolean");
 
         # Clean up
+        coll.drop();
+    }
+
+    # MongoDB strings and names are UTF-8: what the module gives the server is converted to UTF-8, and what it reads is
+    # tagged UTF-8 (issue #6615; the keys, which are converted to and from the default encoding, are tested by
+    # qore-mongodb-bson-encoding-test, which runs with a default encoding that is not UTF-8)
+    utf8Tests() {
+        if (!ensureClient()) {
+            return;
+        }
+        # "café" in UTF-8 and ISO-8859-1
+        string utf8 = binary_to_string(<636166c3a9>, "UTF-8");
+        string latin1 = convert_encoding(utf8, "ISO-8859-1");
+        string coll_name = "qore_test_" + utf8;
+        MongoDatabase db = client.getDatabase(test_db);
+        MongoCollection coll = db.createCollection(convert_encoding(coll_name, "ISO-8859-1"));
+        assertEq("UTF-8", coll.getName().encoding());
+        assertEq(binary(coll_name), binary(coll.getName()), "a collection name is converted to UTF-8");
+        bool found;
+        foreach string name in (db.listCollectionNames()) {
+            assertEq("UTF-8", name.encoding());
+            if (binary(name) == binary(coll_name)) {
+                found = True;
+            }
+        }
+        assertTrue(found, "listCollectionNames() gives the name in UTF-8");
+        assertEq(binary(coll_name), binary(db.getCollection(convert_encoding(coll_name, "ISO-8859-1")).getName()),
+            "getCollection() converts the name to UTF-8");
+        assertEq("UTF-8", db.getName().encoding());
+        foreach string name in (client.listDatabaseNames()) {
+            assertEq("UTF-8", name.encoding());
+        }
+
+        coll.insertOne({"text": latin1, "list": (latin1,)});
+        hash<auto> h = coll.findOne({"text": latin1});
+        assertEq("UTF-8", h.text.encoding());
+        assertEq(binary(utf8), binary(h.text));
+        assertEq(binary(utf8), binary(h.list[0]));
         coll.drop();
     }
 

@@ -248,6 +248,11 @@ abstract nothing DebugProgram::onFunctionEnter(ProgramControl[QoreProgram] progr
 
 //! Executed when a function is exited.
 /**
+    A function that was running as native code (JIT or AOT) when the debugger attached reports its exit when it returns
+    normally, and with no value when it ends with an exception, as with the interpreters (except a function called
+    through the call path that ran as native code, which reports none on an exception); it cannot change its result:
+    an assignment to \a return_value has no effect.
+
     @param program the program being debugged
     @param statement_id the statement ID for the exited function
     @param return_value a reference to the return value

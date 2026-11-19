@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires NdjsonDataProvider
+
+%exec-class NdjsonEncodingErrorsTest
+
+#! Tests the encoding_errors option of the NDJSON readers (issue #6604)
+public class NdjsonEncodingErrorsTest inherits QUnit::Test {
+    public {
+        #! UTF-8 NDJSON data whose second line has the ISO-8859-1 byte of "é", which is not valid UTF-8
+        const Data = binary("{\"a\":1}\n{\"b\":\"") + <e9> + binary("\"}\n{\"c\":3}\n");
+    }
+
+    constructor() : Test("NdjsonEncodingErrorsTest", "1.0") {
+        addTestCase("stream iterator", \streamIteratorTest());
+        addTestCase("UTF-16 stream iterator", \utf16Test());
+        addTestCase("read data provider", \dataProviderTest());
+        addTestCase("option metadata", \metadataTest());
+        set_return_value(main());
+    }
+
+    #! Returns all values of the iterator
+    private static list<auto> readAll(AbstractIterator i) {
+        list<auto> rv = ();
+        while (i.next()) {
+            push rv, i.getValue();
+        }
+        return rv;
+    }
+
+    #! Returns an iterator for the data with the given options
+    private static InputStreamNdjsonIterator getIterator(*hash<auto> opts) {
+        hash<NdjsonIteratorOptions> o();
+        map o{$1.key} = $1.value, opts.pairIterator();
+        return new InputStreamNdjsonIterator(new BinaryInputStream(Data), o);
+    }
+
+    private streamIteratorTest() {
+        # the default raises INVALID-ENCODING with the line number
+        assertThrows("INVALID-ENCODING", "^line 2: ", \readAll(), getIterator());
+        assertThrows("INVALID-ENCODING", "^line 2: ", \readAll(), getIterator({"encoding_errors": "raise"}));
+
+        # "latin1" reads the line as ISO-8859-1
+        assertEq(({"a": 1}, {"b": "é"}, {"c": 3}), readAll(getIterator({"encoding_errors": "latin1"})));
+
+        # skip_invalid_json also skips a line that is not valid in its encoding, and the lines after it are read
+        InputStreamNdjsonIterator i = getIterator({"skip_invalid_json": True});
+        assertEq(({"a": 1}, {"c": 3}), readAll(i));
+        assertEq(4, i.getLineNumber());
+
+        # a line kept without a check cannot be processed: the message has the line number, as with "raise";
+        # skip_invalid_json skips it
+        assertThrows("INVALID-ENCODING", "^line 2: .*invalid UTF-8 encoding encountered", \readAll(),
+            getIterator({"encoding_errors": "keep"}));
+        list<auto> l = readAll(getIterator({"encoding_errors": "keep", "skip_invalid_json": True}));
+        assertEq({"a": 1}, l[0]);
+        assertEq({"c": 3}, l.last());
+
+        # an unknown value is rejected
+        assertThrows("ENCODING-ERRORS-ERROR", \getIterator(), {"encoding_errors": "ignore"});
+    }
+
+    #! Lines in UTF-16, which are converted to UTF-8 to be processed
+    private utf16Test() {
+        # the second line has a lone high surrogate (U+D800), which is not valid UTF-16
+        binary data = binary(convert_encoding("{\"a\":1}\n{\"b\":\"", "UTF-16LE")) + <00d8>
+            + binary(convert_encoding("\"}\n{\"c\":3}\n", "UTF-16LE"));
+        code get = InputStreamNdjsonIterator sub (*hash<auto> opts) {
+            hash<NdjsonIteratorOptions> o({"encoding": "UTF-16LE"});
+            map o{$1.key} = $1.value, opts.pairIterator();
+            return new InputStreamNdjsonIterator(new BinaryInputStream(data), o);
+        };
+        assertThrows("INVALID-ENCODING", "^line 2: ", \readAll(), get());
+        # a line kept without a check that cannot be converted for processing has the line number in its message,
+        # and is skipped with skip_invalid_json
+        assertThrows("ENCODING-CONVERSION-ERROR", "^line 2: ", \readAll(), get({"encoding_errors": "keep"}));
+        InputStreamNdjsonIterator i = get({"encoding_errors": "keep", "skip_invalid_json": True});
+        assertEq(({"a": 1}, {"c": 3}), readAll(i));
+        assertEq(4, i.getLineNumber());
+
+        # valid lines with CRLF line endings and characters other than ASCII
+        data = binary(convert_encoding("{\"b\":\"é€😀\"}\r\n\r\n{\"c\":\"ü\"}\r\n", "UTF-16LE"));
+        assertEq(({"b": "é€😀"}, {"c": "ü"}), readAll(get()));
+        # with an empty line read as null, the CR of the empty line is removed as well
+        assertEq(({"b": "é€😀"}, NOTHING, {"c": "ü"}), readAll(get({"skip_empty_lines": False})));
+    }
+
+    private dataProviderTest() {
+        TmpDir dir();
+        string path = dir.path + DirSep + "data.ndjson";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Data);
+        }
+        foreach hash<auto> input in ({"path": path}, {"stream": new BinaryInputStream(Data)}) {
+            assertThrows("INVALID-ENCODING", sub () {
+                map $1, new NdjsonReadDataProvider(input).searchRecords();
+            });
+        }
+        list<hash<auto>> recs = map $1, new NdjsonReadDataProvider({"path": path, "encoding_errors": "latin1"})
+            .searchRecords();
+        assertEq("é", recs[1].b);
+        recs = map $1, new NdjsonReadDataProvider({"path": path, "skip_invalid_json": True}).searchRecords();
+        assertEq(({"a": 1}, {"c": 3}), recs);
+        # the typed options take it as well
+        recs = map $1, new NdjsonReadDataProvider(<NdjsonReadDataProviderOptions>{
+            "stream": new BinaryInputStream(Data),
+            "encoding_errors": "latin1",
+        }).searchRecords();
+        assertEq("é", recs[1].b);
+    }
+
+    private metadataTest() {
+        hash<DataProviderOptionInfo> info = NdjsonReadDataProvider::ConstructorOptions.encoding_errors;
+        assertEq("raise", info.default_value);
+        assertEq(("raise", "latin1", "keep"), map $1.value, info.allowed_values);
+        assertEq("raise", new hash<NdjsonIteratorOptions>().encoding_errors);
+    }
+}

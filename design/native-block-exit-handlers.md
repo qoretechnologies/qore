@@ -6,6 +6,11 @@ its block the handler is also lowered inline, so most executions run the inline 
 the block is left by an exception, and when the block's handlers are not lowered inline (a `ScopeExit` that is not
 `inline_lowered`).
 
+The lowering can reuse a compiled handler when another registration of the same body sees extra parent locals
+(#6701). The inherited slots must keep their numbers. Any additional slots must hold plain scalars and the
+handler's statements and IR, including nested handlers, must use only the original slots. A closure cell, a value
+whose lifetime the handler frame could extend, or an unknown local dependency requires the original layout.
+
 ## Registration and execution
 
 Native code (JIT and AOT) registers each handler when its statement is reached (`OnBlockExit`) on a thread-local

@@ -57,6 +57,8 @@ module NdjsonDataProvider {
     - Support for both LF and CRLF line endings
     - Maximum line length protection
     - UTF-8 encoding support
+    - Text that is not valid in its encoding raises \c INVALID-ENCODING by default (see
+      @ref ndjsondataprovider_encoding_errors)
 
     The following classes are provided by this module:
     - @ref NdjsonDataProvider::NdjsonIterator "NdjsonIterator" - iterator for reading NDJSON from strings
@@ -86,6 +88,25 @@ module NdjsonDataProvider {
     InputStreamNdjsonIterator stream_iter(fis);
     map printf("Record: %y\n", $1), stream_iter;
     @endcode
+
+    @subsection ndjsondataprovider_encoding_errors Text That Is Not Valid in Its Encoding
+
+    @ref NdjsonDataProvider::InputStreamNdjsonIterator "InputStreamNdjsonIterator" and the read data provider (with
+    a \c path or a \c stream) read each line with a @ref Qore::StreamReader "StreamReader", which checks it in the
+    encoding of the input; the \c encoding_errors option says what a line that is not valid gives, one of the
+    @ref encoding_errors_constants:
+    - \c "raise" (the default): an \c INVALID-ENCODING exception is raised, with the line number; with
+      \c skip_invalid_json, the line is skipped instead, as a line that is not valid JSON is, and the lines after
+      it are read
+    - \c "latin1": the line is read as \c ISO-8859-1, with its bytes
+    - \c "keep": the line is kept in the encoding of the input without a check and parsed as it is; a line that
+      cannot be processed then (one with an invalid UTF-8 sequence, or in a UTF-16 or UTF-32 encoding that cannot
+      be converted to UTF-8) raises \c INVALID-ENCODING (or \c ENCODING-CONVERSION-ERROR) with the line number,
+      or with \c skip_invalid_json is skipped
+
+    @ref NdjsonDataProvider::NdjsonIterator "NdjsonIterator" and the \c data option of the read data provider
+    iterate the lines of a string, which are not checked, as a @ref Qore::DataLineIterator "DataLineIterator" does
+    not check them; see @ref encoding_errors
 
     @subsection ndjsondataproviderwriteexample Writing NDJSON
 
@@ -117,6 +138,9 @@ public namespace NdjsonDataProvider {
         bool skip_empty_lines = True;
 
         #! Skip invalid JSON lines instead of throwing an exception (default: False)
+        /** A line read from a stream that is not valid in its encoding is skipped as well: with
+            \c encoding_errors \c "raise", and with \c "keep" when the line cannot be processed
+        */
         bool skip_invalid_json = False;
 
         #! Maximum line length in bytes (default: 10 MB)
@@ -124,6 +148,11 @@ public namespace NdjsonDataProvider {
 
         #! Encoding for the input data (default: UTF-8)
         string encoding = DefaultEncoding;
+
+        #! What a line read from a stream that is not valid in its encoding gives (default: \c "raise")
+        /** One of the @ref encoding_errors_constants; see @ref ndjsondataprovider_encoding_errors
+        */
+        string encoding_errors = ENCODING_ERRORS_RAISE;
     }
 
     #! NDJSON writer options

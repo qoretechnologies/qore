@@ -904,14 +904,14 @@ class Sqlite3KeysTest inherits QUnit::Test {
             }
         }
 
-        # a row of key columns only whose key exists has nothing to update
+        # a row of key columns only whose key exists has nothing to update: the row is unchanged with every strategy
+        # (issue #6692)
         Table composite(ds, "composite_pk");
-        foreach int code in ((AbstractTable::UpsertInsertFirst, AbstractTable::UpsertInsertOnly)) {
+        foreach int code in (AbstractTable::UpsertStrategyDescriptionMap.values()) {
             on_exit ds.rollback();
             composite.insert({"a": 1, "b": "x", "v": "1"});
             int rc = composite.upsert({"a": 1, "b": "x"}, code);
-            assertEq(code == AbstractTable::UpsertInsertOnly ? AbstractTable::UR_Unchanged
-                : AbstractTable::UR_Verified, rc, AbstractTable::UpsertStrategyMap{code});
+            assertEq(AbstractTable::UR_Unchanged, rc, AbstractTable::UpsertStrategyMap{code});
             assertEq(({"a": 1, "b": "x", "v": "1"},), composite.selectRows(), AbstractTable::UpsertStrategyMap{code});
         }
     }

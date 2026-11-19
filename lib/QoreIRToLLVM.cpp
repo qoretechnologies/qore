@@ -485,11 +485,12 @@ static bool isFastMethodCallEligible(
 
 //! the name of the method of an object method reference passed to qore_rt_create_object_method_ref_aot(): a static
 //! method of the receiver's declared class, to which the reference is bound (qore#5990), is given with the class, as
-//! "\x01<class reference>\x01<method name>"
-static std::string qore_aot_object_method_ref_name(const ParseObjectMethodReferenceNode* omr) {
+//! "\x01<class reference>\x01<method name>"; otherwise the name of qore_aot_object_method_ref_name(), which gives a
+//! normal method of a parent class resolved for the declared class with both classes (qore#6680)
+static std::string qore_aot_native_object_method_ref_name(const ParseObjectMethodReferenceNode* omr) {
     const QoreClass* qc = omr->getStaticBoundClass();
     if (!qc) {
-        return omr->getMethodName();
+        return qore_aot_object_method_ref_name(omr);
     }
     std::string rv(1, '\x01');
     rv += qore_aot_encode_class_ref(qc);
@@ -2386,7 +2387,23 @@ llvm::Value* QoreIRToLLVM::emitCallTargetFastTest(const QoreIRExprInstruction* c
     const QoreClass* qc = check->check_any_class ? nullptr : check->check_class;
     const QoreClass* method_qc = check->check_any_class ? nullptr : check->check_method_class;
     if (const QoreJITObjectLayout* layout = qore_jit_object_layout()) {
-        return emitValidObjectTest(target, *layout, llvm_func, qc, method_qc);
+        if (check->check_after_args) {
+            // the check after the arguments tests only that the object has not been deleted: it is made for an
+            // object of any class (QoreIRLowering::emitCallTargetCheckAfterArgs()), so neither test takes the classes
+            assert(!qc && !method_qc);
+            // the test of the check before the arguments, if it dominates this one (issue #6646)
+            auto i = valid_object_tests.find(target);
+            if (i != valid_object_tests.end()) {
+                auto* tested = llvm::dyn_cast<llvm::Instruction>(i->second);
+                if (tested && dominates(tested->getParent(), builder->GetInsertBlock())) {
+                    return emitValidObjectRetest(target, tested, *layout, llvm_func);
+                }
+            }
+            return emitValidObjectTest(target, *layout, llvm_func);
+        }
+        llvm::Value* valid = emitValidObjectTest(target, *layout, llvm_func, qc, method_qc);
+        valid_object_tests[target] = valid;
+        return valid;
     }
     auto fast = module.getOrInsertFunction("qore_rt_call_target_is_valid_object",
         llvm::FunctionType::get(i1_type, {i64_type, ptr_type, ptr_type, i1_type}, false));
@@ -2556,6 +2573,44 @@ llvm::Value* QoreIRToLLVM::emitValidObjectTest(llvm::Value* qv, const QoreJITObj
     result->addIncoming(builder->getFalse(), node_block);
     result->addIncoming(builder->getFalse(), other_block);
     result->addIncoming(valid, status_block);
+    return result;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitValidObjectRetest(llvm::Value* qv, llvm::Value* tested,
+        const QoreJITObjectLayout& layout, llvm::Function* llvm_func) {
+    // JIT only: the layout is the running libqore's
+    assert(!aot_mode);
+    llvm::LLVMContext& ctx = builder->getContext();
+    llvm::BasicBlock* status_block = llvm::BasicBlock::Create(ctx, "obj.retest.status", llvm_func);
+    llvm::BasicBlock* full_block = llvm::BasicBlock::Create(ctx, "obj.retest.full", llvm_func);
+    llvm::BasicBlock* done_block = llvm::BasicBlock::Create(ctx, "obj.retest.done", llvm_func);
+    builder->CreateCondBr(tested, status_block, full_block);
+    // an object that passed the test before the arguments: only its deleted status can have changed
+    // (qore_object_private::isValidInline()); its type, private data and class are read from the same value as in the
+    // full test, which also reads the object's node after the arguments: both rely on the value of the call's target
+    // keeping the object's memory valid until the call
+    builder->SetInsertPoint(status_block);
+    llvm::Value* obj_ptr = builder->CreateIntToPtr(
+        builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK)), ptr_type);
+    llvm::Value* priv = builder->CreateLoad(ptr_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), obj_ptr, layout.priv_offset), "obj.retest.priv");
+    llvm::LoadInst* status = builder->CreateAlignedLoad(i32_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), priv, layout.status_offset), llvm::MaybeAlign(4),
+        "obj.retest.status");
+    status->setAtomic(llvm::AtomicOrdering::Monotonic);
+    llvm::Value* valid = builder->CreateICmpNE(status,
+        llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(layout.deleted_status)), "obj.retest.valid");
+    builder->CreateBr(done_block);
+    // otherwise (the check before the arguments called its helper): the full test, for an object of any class
+    builder->SetInsertPoint(full_block);
+    llvm::Value* full = emitValidObjectTest(qv, layout, llvm_func);
+    llvm::BasicBlock* full_end = builder->GetInsertBlock();
+    builder->CreateBr(done_block);
+    builder->SetInsertPoint(done_block);
+    llvm::PHINode* result = builder->CreatePHI(i1_type, 2, "obj.retest.result");
+    result->addIncoming(valid, status_block);
+    result->addIncoming(full, full_end);
     return result;
 }
 
@@ -2771,7 +2826,29 @@ bool QoreIRToLLVM::lowerSelectorSegmentNext(const QoreIRIteratorNextInstruction*
     return true;
 }
 
+void QoreIRToLLVM::takeOrRefCleanupSlot(llvm::Value* boxed, llvm::Value* slot, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    auto& ctx = module.getContext();
+    llvm::Value* owner = builder->CreateLoad(i64_type, slot);
+    auto* take = llvm::BasicBlock::Create(ctx, "take_temp", llvm_func);
+    auto* ref = llvm::BasicBlock::Create(ctx, "ref_value", llvm_func);
+    auto* owned = llvm::BasicBlock::Create(ctx, "value_owned", llvm_func);
+    builder->CreateCondBr(builder->CreateICmpEQ(owner, boxed), take, ref);
+    builder->SetInsertPoint(take);
+    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
+    builder->CreateBr(owned);
+    builder->SetInsertPoint(ref);
+    auto incref = module.getOrInsertFunction("qore_rt_incref", llvm::FunctionType::get(void_type, {i64_type}, false));
+    builder->CreateCall(incref, {boxed});
+    builder->CreateBr(owned);
+    builder->SetInsertPoint(owned);
+}
+
 llvm::Value* QoreIRToLLVM::emitHelperRef(llvm::Module& module, llvm::Value* val) {
+    // An empty fold's value and the initial accumulator are NOTHING. Their phi edges own no reference.
+    if (auto* constant = llvm::dyn_cast<llvm::ConstantInt>(val); constant && constant->getZExtValue() == VAL_NOTHING) {
+        return val;
+    }
     // Check if value has a node (inline check using NaN-boxing)
     llvm::Value* has_node = hasNodeInline(val);
 
@@ -4082,6 +4159,32 @@ bool QoreIRToLLVM::isReturnValueAlloca(llvm::Value* alloca_ptr) const {
 void QoreIRToLLVM::emitHeldReturnValueRelease(llvm::Module& module) {
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    if (outline_transfer_held && outline_held_return) {
+        // an outlined helper returns the value to its coordinator, which releases it after its own locals; the
+        // values held are the same value, each with a reference of its own (see return_value_family), or the value of
+        // a handler's return that replaced it, whose hand-over released the interrupted one: the first one held is
+        // returned, and the references of the others are released
+        llvm::Value* nothing = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+        auto transfer = [&](llvm::Value* slot) {
+            llvm::Value* val = builder->CreateLoad(i64_type, slot);
+            builder->CreateStore(nothing, slot);
+            llvm::Value* cur = builder->CreateLoad(i64_type, outline_held_return);
+            llvm::Value* free_slot = builder->CreateICmpEQ(cur, nothing);
+            builder->CreateStore(builder->CreateSelect(free_slot, val, cur), outline_held_return);
+            builder->CreateCall(helper, {builder->CreateSelect(free_slot, nothing, val), xsink_arg});
+        };
+        if (handler_return_hold) {
+            transfer(handler_return_hold);
+        }
+        for (uint32_t id : return_value_ids) {
+            auto i = invoke_alloca_map.find(id);
+            if (i == invoke_alloca_map.end() || !i->second) {
+                continue;
+            }
+            transfer(i->second);
+        }
+        return;
+    }
     // the value of a handler's return that replaced an interrupted return (#5992)
     if (handler_return_hold) {
         llvm::Value* val = builder->CreateLoad(i64_type, handler_return_hold);
@@ -4098,6 +4201,14 @@ void QoreIRToLLVM::emitHeldReturnValueRelease(llvm::Module& module) {
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), i->second);
         builder->CreateCall(helper, {val, xsink_arg});
     }
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::getExceptionExitReturnValue() {
+    if (outline_held_return) {
+        return builder->CreateLoad(i64_type, outline_held_return);
+    }
+    return getNothingReturnValue();
 }
 
 void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
@@ -5906,8 +6017,10 @@ void QoreIRToLLVM::emitExceptionExitTail(llvm::Module& module) {
     emitOnBlockExitExec(module);
     emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
+    outline_transfer_held = true;
     emitLocalUninstantiation(module);
-    builder->CreateRet(getNothingReturnValue());
+    outline_transfer_held = false;
+    builder->CreateRet(getExceptionExitReturnValue());
     if (saved_insert) {
         builder->SetInsertPoint(saved_insert, saved_ip);
     }
@@ -6001,6 +6114,10 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
         return handler;
     }
     size_t mark_index = marks.size();
+    // an outlined function-body helper opens none of the temp scopes of the coordinator: a handler's temp scope that
+    // is not among its marks is one that the coordinator opened before the call, which every temp scope of the helper
+    // is nested in (qore#6650)
+    const bool outlined_helper = current_ir_func && !current_ir_func->aot_symbol_owner.empty();
     if (scope_closed) {
         // the first scope after the handler's, below the innermost one left
         uint32_t handler_scope_id = inst->exception_target ? inst->exception_target->getHandlerTempScopeId() : 0;
@@ -6010,10 +6127,14 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
                 break;
             }
         }
-        if (!handler_scope_id || !i || i == marks.size()) {
+        if (!i && handler_scope_id && outlined_helper) {
+            // every remaining scope of the helper
+            mark_index = 1;
+        } else if (!handler_scope_id || !i || i == marks.size()) {
             return handler;
+        } else {
+            mark_index = i + 1;
         }
-        mark_index = i + 1;
     } else {
         while (mark_index > 0 && marks[mark_index - 1].scope_id != inst->temp_scope_id) {
             --mark_index;
@@ -6031,11 +6152,16 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
     if (inst->exception_target && !scope_closed) {
         uint32_t handler_scope_id = inst->exception_target->getHandlerTempScopeId();
         if (handler_scope_id && handler_scope_id != inst->temp_scope_id) {
+            bool found = false;
             for (size_t i = mark_index; i > 0; --i) {
                 if (marks[i - 1].scope_id == handler_scope_id) {
                     mark_index = i;
+                    found = true;
                     break;
                 }
+            }
+            if (!found && outlined_helper) {
+                mark_index = 0;
             }
         }
     }
@@ -14295,7 +14421,11 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
     // release of the statement's temporaries (DiscardTempsKeep), which the AST interpreter releases after it - a
     // temporary receiver of a method call among them (QoreStatementTempScope::holdReceiver()) - by a handler or
     // by the destructor of a local
-    if (!return_value_ids.empty() && inst->opcode != QoreIROpcode::DiscardTempsKeep && inst->result.isValid()
+    // the result of an outlined helper's call on an exception is the value of a return of the helper that the
+    // exception interrupted, which the return had already taken: it is held until after the locals (see
+    // QoreIRToLLVM::outline_held_return, qore#6650)
+    if (!return_value_ids.empty() && inst->opcode != QoreIROpcode::DiscardTempsKeep
+            && inst->opcode != QoreIROpcode::CallAOTHelper && inst->result.isValid()
             && return_value_ids.count(inst->result.id)) {
         auto alloca_it = invoke_alloca_map.find(inst->result.id);
         if (alloca_it != invoke_alloca_map.end() && alloca_it->second) {
@@ -15084,6 +15214,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     holding_return_values = false;
     catch_return_release_blocks.clear();
     handler_return_hold = nullptr;
+    outline_held_return = nullptr;
+    outline_transfer_held = false;
     handler_return_handed = nullptr;
     handler_return_hold_sites.clear();
     {
@@ -15099,6 +15231,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     if (ret->has_value) {
                         returned.push_back(ret->value.id);
                     }
+                } else if (aot_mode && inst->opcode == QoreIROpcode::CallAOTHelper && inst->result.isValid()
+                        && static_cast<const QoreIRCallAOTHelperInstruction*>(inst.get())->function_body) {
+                    // the result of an outlined helper's call on an exception is the value of an interrupted return
+                    // (or of a handler's return) that the helper hands over (see outline_held_return), even where
+                    // the call has no return of its own (qore#6650)
+                    returned.push_back(inst->result.id);
                 }
             }
         }
@@ -15727,6 +15865,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_hash_string_extraction_cache.clear();
     aot_hash_string_extraction_instruction = nullptr;
     current_self_bits = nullptr;
+    valid_object_tests.clear();
     aot_hash_string_extraction_reuses = 0;
     aot_hash_string_extraction_overlap_reuses = 0;
     aot_hash_string_extraction_cross_block_reuses = 0;
@@ -16003,6 +16142,35 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // assigned.
         if (has_on_block_exit_handlers) {
             getOrCreateLocalReloadEpoch(llvm_func);
+        }
+        // an outlined helper with in-region returns of a value or with handlers that can return a value hands the
+        // value of an interrupted return, or the value of a handler's return that replaced it, over to its
+        // coordinator (see outline_held_return)
+        if (aot_mode && !func.aot_symbol_owner.empty()) {
+            // also the value that handlers run out of line past the inline cap hand over to a return (#6137)
+            bool signaled = (has_on_block_exit_handlers && qore_ir_handlers_return_value(func))
+                || qore_ir_has_handed_over_return(func);
+            for (const auto& block : func.blocks) {
+                for (const auto& binst : block->instructions) {
+                    if (signaled) {
+                        break;
+                    }
+                    if (binst && binst->opcode == QoreIROpcode::Return
+                            && static_cast<const QoreIRReturnInstruction*>(binst.get())->has_value
+                            && static_cast<const QoreIRReturnInstruction*>(binst.get())->outline_signal) {
+                        signaled = true;
+                        break;
+                    }
+                }
+                if (signaled) {
+                    break;
+                }
+            }
+            if (signaled) {
+                llvm::IRBuilder<> held_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                outline_held_return = held_builder.CreateAlloca(i64_type, nullptr, "outline_held_return");
+                held_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), outline_held_return);
+            }
         }
         // see handler_return_hold (#5992): only a function with a handler that can return a value has it
         // a function whose returns can take the values that handlers run out of line hand over has it too, with the
@@ -16419,6 +16587,16 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     } else {
                         weak_assigned_locals.insert(key);
                     }
+                }
+            }
+            // a captured local is assigned with := in the function that captures it or in another closure, whose
+            // stores are not in this function: the parse records every weak assignment of a local
+            // (LocalVar::isWeakAssigned()), so that the receiver of a call read from it keeps the object of a weak
+            // reference until the call returns (qore#6645)
+            if (inst_ptr->opcode == QoreIROpcode::LoadClosure) {
+                const auto* local_inst = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
+                if (local_inst->local && local_inst->local->isWeakAssigned()) {
+                    weak_assigned_locals.insert(reinterpret_cast<const void*>(local_inst->local));
                 }
             }
             // Count non-operand value uses (stored in dedicated members, not operands)
@@ -17801,7 +17979,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (call_site) {
                 emitCallSiteSet(inst, module);
             }
-            if (!lowerInstruction(inst, llvm_func, module, error)) {
+            const auto* next = inst_index + 1 < block->instructions.size()
+                ? block->instructions[inst_index + 1].get() : nullptr;
+            if (!lowerInstruction(inst, llvm_func, module, error, next)) {
                 appendQoreIRInstructionDiagnostic(error, inst);
                 if (q_env_is_set("QORE_LLVM_DEBUG")) {
                     fprintf(stderr, "LLVM-FAIL: opcode=%d result=%%%u operands=[",
@@ -18276,8 +18456,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         emitOnBlockExitExec(module);
         emitPreinstantiatedCleanup(module, true);
         emitInvokeCleanup(module);
+        outline_transfer_held = true;
         emitLocalUninstantiation(module);
-        builder->CreateRet(getNothingReturnValue());
+        outline_transfer_held = false;
+        builder->CreateRet(getExceptionExitReturnValue());
     }
 
     // every instruction of the body is lowered: the allocas registered for a local after an UninstantiateLocal of it
@@ -18630,7 +18812,7 @@ llvm::Value* QoreIRToLLVM::emitStringAppendCow(const QoreIRInstruction* inst, ll
 }
 
 bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
-        llvm::Module& module, std::string& error) {
+        llvm::Module& module, std::string& error, const QoreIRInstruction* next) {
     // the slots of the call array buffer that the instruction's code uses are free again once it is lowered: its
     // arrays are used only by its own code (qore#6415)
     struct CallArrayScope {
@@ -21067,20 +21249,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
                 if (steal_cleanup) {
-                    llvm::Value* owner = builder->CreateLoad(i64_type, steal_cleanup);
-                    llvm::BasicBlock* steal_bb = llvm::BasicBlock::Create(ctx, "store_take_temp", llvm_func);
-                    llvm::BasicBlock* ref_bb = llvm::BasicBlock::Create(ctx, "store_ref_value", llvm_func);
-                    llvm::BasicBlock* taken_bb = llvm::BasicBlock::Create(ctx, "store_value_owned", llvm_func);
-                    builder->CreateCondBr(builder->CreateICmpEQ(owner, boxed), steal_bb, ref_bb);
-                    builder->SetInsertPoint(steal_bb);
-                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), steal_cleanup);
-                    builder->CreateBr(taken_bb);
-                    builder->SetInsertPoint(ref_bb);
-                    auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
-                            llvm::FunctionType::get(void_type, {i64_type}, false));
-                    builder->CreateCall(incref_fn, {boxed});
-                    builder->CreateBr(taken_bb);
-                    builder->SetInsertPoint(taken_bb);
+                    takeOrRefCleanupSlot(boxed, steal_cleanup, module, llvm_func);
                     owned_boxed = boxed;
                 } else {
                     owned_boxed = emitHelperRef(module, boxed);
@@ -21894,7 +22063,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 nanboxed_values.insert(inst->result.id);
                 return true;
             }
-            llvm::Value* retained = emitHelperRef(module, boxed);
+            const uint32_t id = inst->operands.front().id;
+            auto slot = invoke_alloca_map.find(id);
+            llvm::Value* retained = boxed;
+            // A fold takes an independent result before releasing its source. If this phi still owns it,
+            // move the reference that the following release would drop. A borrowed incoming value still
+            // needs a reference of its own. Each slot keeps its original cleanup order (#5959).
+            if (next && next->opcode == QoreIROpcode::ReleaseOwnedTemp && next->operands.size() == 1
+                    && next->operands.front().id == id && consumable_phis.count(id)
+                    && slot != invoke_alloca_map.end() && slot->second) {
+                takeOrRefCleanupSlot(boxed, slot->second, module, llvm_func);
+            } else {
+                retained = emitHelperRef(module, boxed);
+            }
             values[inst->result.id] = retained;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(retained, inst->result.id, llvm_func);
@@ -24284,7 +24465,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::Value* obj_boxed = boxValue(obj_val, inv->operands[0].id);
                         llvm::Value* method_name =
                             qore_ir_create_global_string_ptr(builder,
-                                qore_aot_object_method_ref_name(omr), "object_method_ref_name");
+                                qore_aot_native_object_method_ref_name(omr), "object_method_ref_name");
                         auto mr_ft = llvm::FunctionType::get(i64_type,
                                 {i64_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
@@ -34353,7 +34534,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* obj_boxed = boxValue(obj_val, mrinst->operands[0].id);
                     llvm::Value* method_name =
                         qore_ir_create_global_string_ptr(builder,
-                            qore_aot_object_method_ref_name(omr), "object_method_ref_name");
+                            qore_aot_native_object_method_ref_name(omr), "object_method_ref_name");
                     auto mr_ft = llvm::FunctionType::get(i64_type,
                             {i64_type, ptr_type, ptr_type}, false);
                     auto helper = module.getOrInsertFunction(

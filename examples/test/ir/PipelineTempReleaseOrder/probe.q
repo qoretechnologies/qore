@@ -191,6 +191,38 @@ sub firstLocal() {
     printf("first %s\n", s);
 }
 
+# Reuse one load and iterator site for a borrowed list and an owned read through a reference.
+sub alternatingFirstSource() {
+    for (int i = 0; i < 4; ++i) {
+        auto target = (new P("target" + i),);
+        auto src = i % 2 ? \target : (new P("source" + i),);
+        string value = string(first (map 1, src)) + ((src = NOTHING) ?? "") + marker("alternating" + i);
+        printf("alternating %s\n", value);
+    }
+}
+
+# Returning a fused fold can transfer the phi's reference. A failed return-type conversion must release it.
+auto sub lastMapped(auto src) {
+    return foldl $2, (map $1, src);
+}
+
+hash sub lastMappedHash(auto src) {
+    return foldl $2, (map $1, src);
+}
+
+sub foldReturn() {
+    auto value = lastMapped((new P("fold-old"), new P("fold-new")));
+    printf("fold result %s, empty %y\n", value.tag(), lastMapped(()));
+    try {
+        lastMappedHash((new P("fold-invalid"),));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("fold caught %s\n", ex.err);
+    }
+}
+
+foldReturn();
+alternatingFirstSource();
+
 for (int i = 0; i < 2; ++i) {
     f_map_select();
     f_map_select_map();

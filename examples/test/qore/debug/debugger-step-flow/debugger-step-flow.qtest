@@ -48,7 +48,8 @@
 
     A request at a step event of a handler ends the handler, and the block takes the request of its last handler run,
     as with the AST interpreter (StatementBlock::execIntern()): with a handler lowered inline in the code of the
-    block's exit and with handlers that run out of line.  A return requested while a return leaves the function, a
+    block's exit and with handlers that run out of line; a return is kept when a handler that runs after it completes
+    normally, as a return statement in a handler is (#6677).  A return requested while a return leaves the function, a
     thread_exit or an exception raised by a handler or a destructor while it does, are taken as with the AST
     interpreter.
 
@@ -310,22 +311,15 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "steps": (300, 301, 305, 306, "b302", 302, 303, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302",
                     302, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302", 302, 303, "b300", 300, 308),
             },
-            # the IR interpreter: the return in a handler lowered inline returns from the function, also when the
-            # handler that runs after it would replace the request
+            # a return requested in a handler returns from the function, also when the handler that runs after it
+            # completes normally (#6677)
             {"function": "handler_two", "flow": "return", "tag": "handler_two_body", "hit": 2, "block": False,
                 "handler": True,
-                "result": "55",
+                "result": "null",
                 "log": ("second0", "second2-0", "first0", "second1", "second2-1", "first1", "second2", "second2-2",
-                    "first2", "first3", "second4", "second2-4", "first4"),
+                    "first2", "first3"),
                 "steps": (300, 301, 305, 306, "b302", 302, 303, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302",
-                    302, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302", 302, 303, "b300", 300, 308),
-                "ir": {
-                    "result": "null",
-                    "log": ("second0", "second2-0", "first0", "second1", "second2-1", "first1", "second2",
-                    "second2-2", "first2", "first3"),
-                    "steps": (300, 301, 305, 306, "b302", 302, 303, "b300", 300, "b297", 297, 300, 301, 305, 306,
-                    "b302", 302, "b300", 300),
-                },
+                    302, "b300", 300),
             },
             {"function": "handler_mixed", "flow": "break", "tag": "handler_mixed_body", "hit": 2, "block": False,
                 "handler": True,

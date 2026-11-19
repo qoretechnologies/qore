@@ -2391,6 +2391,9 @@ public:
     bool foreach_assignment = false;
     bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
     bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
+    //! Prepared by interpreter analysis. A paired mutation or iterator can borrow a cached plain source.
+    enum class Borrow : uint8_t { None, Mutation, Iterator };
+    Borrow interpreter_borrow = Borrow::None;
     bool is_block_exit = false;    // For UninstantiateLocal: true = block scope exit (clear CVV unconditionally)
     uint32_t slot_id = UINT32_MAX; // Pre-computed slot index into locals_slot_cache
 };
@@ -4042,6 +4045,8 @@ public:
 
     QoreIRValue iterable;               //!< List value or iterable expression result
     FunctionalOperator* iterator_func;  //!< Optional functional operator for lazy evaluation
+    //! Interpreter-only: a plain source borrow ends here, at the adjacent ReleasePlainLocalRead.
+    bool interpreter_ends_source_borrow = false;
 };
 
 //! Advances iterator and branches based on done status
@@ -4556,6 +4561,13 @@ public:
         (qore#6545), or if a reference, a closure or code evaluated through the AST can reach it
     */
     std::vector<const LocalVar*> written_shared_locals;
+    //! Transient (never serialized): true for the call of an outlined function-body helper, false for an
+    //! init-expression helper
+    /** On an exception, the result of the call of a function-body helper is the value of a return or of a handler's
+        return of the helper that the exception interrupted, which the coordinator holds as the value of its own
+        return until after its locals (see QoreIRToLLVM::outline_held_return, qore#6650)
+    */
+    bool function_body = false;
 };
 
 //! Returns the instruction as the given instruction class pointer type if it is one, otherwise nullptr
@@ -5331,6 +5343,10 @@ public:
     */
     static bool collectOnBlockExitLocals(const QoreIROnBlockExitInstruction& obe,
         std::unordered_set<const void*>& locals);
+    //! Collects the locals of this compiled handler and its statement tree, including nested handlers.
+    /** @return false when part of the handler can access unknown locals */
+    bool collectHandlerBodyLocals(const StatementBlock* code, std::unordered_set<const void*>& locals) const;
+
     //! Releases a read of a plain local after its last use when the statement writes the local later
     /** A read of a plain local (qore_ir_is_plain_local_read(), in a function that creates no reference; its storage
         can be IR-only or AST-visible) holds a reference of the frame until the statement's DiscardTemps, while the

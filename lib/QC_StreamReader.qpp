@@ -56,10 +56,23 @@ qclass StreamReader [arg=StreamReader* sr; ns=Qore; internal_members=InputStream
 //! Creates the StreamReader for reading data from the given @ref InputStream.
 /** @param input_stream the @ref InputStream for reading data
     @param encoding character encoding of the data from the @ref InputStream; if not present, the @ref default_encoding "default character encoding" is assumed
+    @param encoding_errors what text read that is not valid in the @ref character_encoding "character encoding"
+    gives; one of the @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING,
+    \c "latin1" tags the whole string read ISO-8859-1 with its bytes, \c "keep" tags it with the encoding without a
+    check; see @ref encoding_errors; it can be changed with StreamReader::setEncodingErrors()
+
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
+
+    @since %Qore 3.0 the \a encoding_errors parameter
  */
-StreamReader::constructor(Qore::InputStream[InputStream] input_stream, *string encoding) [flags=NAMED_ARGS] {
+StreamReader::constructor(Qore::InputStream[InputStream] input_stream, *string encoding,
+        *string encoding_errors) [flags=NAMED_ARGS] {
+    qore_encoding_errors_t ee;
+    if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
+        return;
+    }
     SimpleRefHolder<StreamReader> reader(new StreamReader(xsink, input_stream.release(),
-        encoding ? QEM.findCreate(encoding) : QCS_DEFAULT));
+        encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, ee));
     if (*xsink)
         return;
     self->setPrivate(CID_STREAMREADER, reader.release());
@@ -73,6 +86,48 @@ StreamReader::constructor(Qore::InputStream[InputStream] input_stream, *string e
  */
 string StreamReader::getEncoding() [flags=CONSTANT] {
     return new QoreStringNode(sr->getEncoding()->getCode());
+}
+
+//! Sets what text read that is not valid in the @ref character_encoding "character encoding" of the reader gives
+/** @par Example:
+    @code{.py}
+sr.setEncodingErrors(ENCODING_ERRORS_LATIN1);
+    @endcode
+
+    @param encoding_errors what text read that is not valid in the @ref character_encoding "character encoding"
+    gives; one of the @ref encoding_errors_constants: \c "raise" (the default, also if no argument is given)
+    raises \c INVALID-ENCODING, \c "latin1" tags the whole string read ISO-8859-1 with its bytes, \c "keep" tags
+    it with the encoding without a check; see @ref encoding_errors
+
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
+
+    @see StreamReader::getEncodingErrors()
+
+    @since %Qore 3.0
+ */
+nothing StreamReader::setEncodingErrors(*string encoding_errors) [flags=NAMED_ARGS] {
+    qore_encoding_errors_t ee;
+    if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
+        return QoreValue();
+    }
+    sr->setEncodingErrors(ee);
+}
+
+//! Returns what text read that is not valid in the @ref character_encoding "character encoding" of the reader gives
+/** @par Example:
+    @code{.py}
+string encoding_errors = sr.getEncodingErrors();
+    @endcode
+
+    @return one of the @ref encoding_errors_constants: \c "raise", \c "latin1", or \c "keep"; see
+    @ref encoding_errors
+
+    @see StreamReader::setEncodingErrors()
+
+    @since %Qore 3.0
+ */
+string StreamReader::getEncodingErrors() [flags=CONSTANT] {
+    return new QoreStringNode(q_encoding_errors_name(sr->getEncodingErrors()));
 }
 
 //! Returns the @ref InputStream for the StreamReader.
@@ -96,15 +151,20 @@ string str = sr.read(len);
 
     @return a @ref string value or @ref nothing if there is no more data available in the stream
 
-    @throw STREAM-ENCODING-ERROR this exception is thrown if invalid character data is detected on the stream; this exception is not thrown when \a limit is negative, in such cases the input data is not verified
+    @throw INVALID-ENCODING the text read is not valid in the @ref character_encoding "character encoding" (an
+    invalid byte sequence or a character cut off by the end of the data) and the @ref encoding_errors
+    "encoding_errors" option is \c "raise" (the default); see @ref encoding_errors
     @throw ENCODING-BYTE-ORDER-ERROR the text is in a form of UTF-16 or UTF-32 and the start of the text read is in the other byte order than the encoding; see @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()"
 
     @note
     - a short read (a string returned with fewer characters than requested) indicates that there is no more data left in the stream
     - other stream read errors could be thrown here depending on the underlying @ref InputStream implementation
-    - text in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP", \c "IBM930") is read in the shift state left by the characters read before it, so a number of characters can be read at a time; each string returned is valid on its own (it starts and ends in the initial shift state, so its bytes can differ from the bytes read), and no bytes after the characters returned are read; once characters have been read, lines and all of the remaining text are read in the same shift state; the shift state is reset when the encoding is changed; \c STREAM-ENCODING-ERROR is also raised in such an encoding if the data ends in the middle of a character or shift sequence
+    - text in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP", \c "IBM930") is read in the shift state left by the characters read before it, so a number of characters can be read at a time; each string returned is valid on its own (it starts and ends in the initial shift state, so its bytes can differ from the bytes read), and no bytes after the characters returned are read; once characters have been read, lines and all of the remaining text are read in the same shift state; the shift state is reset when the encoding is changed; \c INVALID-ENCODING is also raised in such an encoding if the data ends in the middle of a character or shift sequence
+    - the text read is checked with the @ref encoding_errors "encoding_errors" option of the reader, also when all of the data is read; with \c "latin1" or \c "keep", a byte that does not start a valid character is read as a character of its own
 
-    @since %Qore 3.0 text in a stateful @ref character_encoding "character encoding" can be read a number of characters at a time
+    @since
+    - %Qore 3.0 text in a stateful @ref character_encoding "character encoding" can be read a number of characters at a time
+    - %Qore 3.0 the text read is checked with the @ref encoding_errors "encoding_errors" option, also when all of the data is read; \c INVALID-ENCODING is raised where \c STREAM-ENCODING-ERROR was raised before
  */
 *string StreamReader::readString(int limit = -1) [flags=NAMED_ARGS] {
     return sr->readString(limit, xsink);
@@ -123,14 +183,18 @@ string line = sr.readLine("\n");
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the \a line_separator argument has a different @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
     @throw ENCODING-BYTE-ORDER-ERROR the text is in a form of UTF-16 or UTF-32 and the start of the text read is in the other byte order than the encoding; see @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()"
-    @throw STREAM-ENCODING-ERROR the text is in a stateful @ref character_encoding "character encoding", characters were read with StreamReader::readString() before, and the text has an invalid byte sequence or ends in the middle of a character or shift sequence
+    @throw INVALID-ENCODING the line read is not valid in the @ref character_encoding "character encoding" (an
+    invalid byte sequence or a character cut off by the end of the data) and the @ref encoding_errors
+    "encoding_errors" option is \c "raise" (the default); see @ref encoding_errors
 
     @note
     - other stream read errors could be thrown here depending on the underlying @ref InputStream implementation
     - after characters of text in a stateful @ref character_encoding "character encoding" have been read with StreamReader::readString(), the line is read in the shift state left by them, and the line returned starts and ends in the initial shift state
     - when the end of line is detected automatically in text in a character encoding that is not ASCII-compatible, the character after a carriage return is read to find a line feed; if it is not one, it is kept in the reader as the start of the next read, so the @ref InputStream is then ahead of the reader by that character (a @ref Qore::BufferedStreamReader "BufferedStreamReader" keeps it in its buffer)
 
-    @since %Qore 3.0 the end of line is detected automatically in text in a character encoding that is not ASCII-compatible
+    @since
+    - %Qore 3.0 the end of line is detected automatically in text in a character encoding that is not ASCII-compatible
+    - %Qore 3.0 the line read is checked with the @ref encoding_errors "encoding_errors" option
  */
 *string StreamReader::readLine(*string line_separator, bool trim_line = True) [flags=NAMED_ARGS] {
     return sr->readLine(line_separator, trim_line, xsink);

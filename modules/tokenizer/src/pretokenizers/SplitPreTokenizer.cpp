@@ -12,6 +12,7 @@
 #include "utils/qore_helpers.h"
 
 #include <cctype>
+#include <cstdio>
 
 namespace QoreTokenizer {
 
@@ -158,10 +159,19 @@ std::vector<PreToken> SplitPreTokenizer::pretokenize(const std::string& text) co
 
     while (offset <= subject_len) {
         int rc = pcre2_match(re, subject, subject_len, offset, 0, md, nullptr);
-        if (rc < 0) {
-            // PCRE2_ERROR_NOMATCH (no further matches) or a hard error (e.g. bad
-            // UTF-8): stop; any remaining text is emitted as the trailing segment.
+        if (rc == PCRE2_ERROR_NOMATCH) {
+            // no further matches: any remaining text is emitted as the trailing segment
             break;
+        }
+        if (rc < 0) {
+            // an error (ex: text that is not valid UTF-8, or a match limit) is raised; the text is never cut
+            // silently at the error
+            PCRE2_UCHAR buf[256];
+            pcre2_get_error_message(rc, buf, sizeof(buf));
+            char desc[512];
+            snprintf(desc, sizeof(desc), "Split pre-tokenizer: regular expression match error at byte offset %zu "
+                "of the text: %s", static_cast<size_t>(offset), reinterpret_cast<const char*>(buf));
+            throw PreTokenizerError("PRETOKENIZER-MATCH-ERROR", desc);
         }
         PCRE2_SIZE* ov = pcre2_get_ovector_pointer(md);
         size_t match_start = ov[0];

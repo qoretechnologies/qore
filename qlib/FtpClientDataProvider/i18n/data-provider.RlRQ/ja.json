@@ -63,6 +63,18 @@
           "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
           "message": "`text` = `True` の場合に使用する文字列エンコーディング（デフォルト: `UTF-8`）"
         },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "エンコーディングエラー"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "文字エンコーディングとして有効でないテキストの扱い"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What text that is not valid in its character encoding gives if `text` = `True`: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` returns the text as `ISO-8859-1`, and `keep` returns it in the encoding without a check",
+          "message": "`text` = `True` の場合に、文字エンコーディングとして有効でないテキストの扱い。`raise`（デフォルト）は `INVALID-ENCODING` エラーを発生させ、`latin1` はテキストを `ISO-8859-1` として返し、`keep` はチェックせずにそのエンコーディングで返します"
+        },
         "app.RlRQ.action.c2VuZC1maWxl.display_name": {
           "source": "Send File With FTP",
           "message": "FTP でファイルを送信"
