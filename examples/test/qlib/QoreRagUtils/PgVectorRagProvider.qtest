@@ -596,7 +596,8 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         assertEq("b", groups[0].value);
         assertEq(2, groups[0].count);
         assertEq(2026-11-03T10:00:00, groups[0].last_write);
-        assertEq(("b", NOTHING, "a"), map $1.value, groups);
+        # records without the key sort last among the groups of the same count
+        assertEq(("b", "a", NOTHING), map $1.value, groups);
         assertEq((), store.summarizeBy("k", {"payload_eq": {"scope": "none"}}));
 
         assertEq(2, store.deleteByFilter({"payload_eq": {"k": "b"}}));
