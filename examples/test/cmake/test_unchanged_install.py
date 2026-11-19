@@ -224,6 +224,8 @@ class UnchangedInstallTest(unittest.TestCase):
         body = (f"set(QORE_BUILD_AOT_MODULES {'ON' if aot else 'OFF'})\n"
                 # the install tests stage the built .qmods themselves, so qcc never runs
                 'set(QORE_QCC_EXECUTABLE "${CMAKE_COMMAND}")\n'
+                # and so the qmods are not checked against their dependencies (qore#6598)
+                "set(QORE_QMOD_SOURCE_CHECK OFF)\n"
                 "set(QORE_AOT_LINK_SOURCE_MODULES OFF)\n"
                 "set(QORE_GENERATE_JAVA_BINDINGS OFF)\n"
                 "set(DOXYGEN_FOUND FALSE)\n"

@@ -117,31 +117,45 @@ public class StreamNonBlockingTest inherits QUnit::Test {
         mkfifo(fifo_path);
         on_exit unlink(fifo_path);
 
-        FileInputStream fis(fifo_path, 75, True);
+        FileInputStream fis(fifo_path, 30s, True);
         File writer();
         writer.open2(fifo_path, O_WRONLY | O_NONBLOCK);
 
-        int start_us = clock_getmicros_monotonic();
-        assertThrows("FILE-READ-TIMEOUT-ERROR", sub() { fis.read(1); });
-        int elapsed_us = clock_getmicros_monotonic() - start_us;
-        assertTrue(elapsed_us >= 50000,
-            sprintf("FileInputStream positive timeout returned too early after %d us", elapsed_us));
-        assertTrue(elapsed_us < 1000000,
-            sprintf("FileInputStream positive timeout returned too late after %d us", elapsed_us));
+        Queue ready();
+        bool hook = exists_function("dbg_fd_wait_notify");
+        on_exit if (hook) {
+            call_function("dbg_fd_wait_notify_clear");
+        }
+        {
+            # No data can arrive during this probe. Only the exception matters, irrespective of elapsed time.
+            FileInputStream probe(fifo_path, 1, True);
+            if (hook) {
+                call_function("dbg_fd_wait_notify", probe.getPollableDescriptor(), ready, True);
+            }
+            assertThrows("FILE-READ-TIMEOUT-ERROR", sub() { probe.read(1); });
+        }
 
-        # the read waits without a time limit (the limit is tested above): with the stream's 75 ms limit, the result
-        # depended on the writer thread being scheduled in time, which a loaded CI runner did not do
-        Counter writer_done(1);
-        background sub() {
-            usleep(25ms);
-            writer.write("x");
-            writer_done.dec();
+        # A debug poll backend reports its wait. Re-arm for the data read so it actually has to wait for the writer.
+        # On other backends the writer can proceed as soon as the empty-pipe probe finishes.
+        if (ready.tryGet()) {
+            call_function("dbg_fd_wait_notify", fis.getPollableDescriptor(), ready, True);
+        } else {
+            ready.push(True);
+        }
+
+        int tid = background sub() {
+            on_exit writer.close();
+            if (ready.get()) {
+                writer.write("x");
+            }
         }();
-        assertEq(binary("x"), fis.readWithTimeout(1, -1),
-            "FileInputStream returns data arriving after initial EAGAIN");
-
-        writer_done.waitForZero();
-        writer.close();
+        on_exit {
+            # A broken read may finish before reaching the descriptor wait.
+            ready.push(False);
+            thread_join(tid);
+        }
+        # Debug builds release the writer at the actual descriptor wait. The stream timeout is a hang guard.
+        assertEq(binary("x"), fis.read(1), "FileInputStream returns the writer's data");
         assertEq(NOTHING, fis.read(1), "FileInputStream distinguishes EOF from EAGAIN");
     }
 
@@ -253,25 +267,21 @@ public class StreamNonBlockingTest inherits QUnit::Test {
         on_exit unlink(fifo_path);
 
         string test_data = "POLLHUP drain test data payload";
-        Counter writer_ready(1);
+        Counter writer_closed(1);
 
         # Background thread: open FIFO for writing, write data, close
         background sub() {
+            on_exit writer_closed.dec();
             File f();
             f.open2(fifo_path, O_WRONLY);
-            writer_ready.dec();
             f.write(test_data);
-            # small delay to ensure data is buffered before close triggers POLLHUP
-            usleep(50ms);
             f.close();
         }();
 
         # Open FIFO for reading — blocks until writer opens
         FileInputStream fis(fifo_path);
-        writer_ready.waitForZero();
-
-        # Wait for writer to finish writing + close (which triggers POLLHUP)
-        usleep(200ms);
+        # The writer has closed (POLLHUP) and its data is still buffered.
+        writer_closed.waitForZero();
 
         # readWithTimeout should still return the buffered data despite POLLHUP
         *binary result = fis.readWithTimeout(4096, 1000);

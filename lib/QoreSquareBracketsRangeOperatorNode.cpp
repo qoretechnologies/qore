@@ -33,6 +33,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreSquareBracketsRangeOperatorNode::op_str("x[m..n] operator expression");
 
@@ -93,7 +94,7 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
     bool plugin_range = false;
     if (!(parse_context.pflag & PF_FOR_ASSIGNMENT)) {
         QorePluginResolvedOperationInfo plugin_op;
-        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        ExceptionSink* parse_xsink = parse_context.pgm ? qore_program_ops(parse_context.pgm).getParseExceptionSink() : nullptr;
         int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, typeInfo0, nullptr, "slice",
             QorePluginHelperAbi::CallValueList, plugin_op, parse_xsink);
         if (plugin_rc < 0 && !err) {

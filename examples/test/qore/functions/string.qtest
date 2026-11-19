@@ -59,6 +59,15 @@ public class StringTest inherits QUnit::Test {
         assertEq("asdfä", trunc_str("asdfäzxcv", 6));
         assertEq("asdfäz", trunc_str("asdfäzxcv", 7));
         assertEq("asdfäzx", trunc_str("asdfäzxcv", 8));
+        # the whole string within the length, also with NUL bytes, which are kept (qore#6604)
+        assertEq("asdfäzxcv", trunc_str("asdfäzxcv", 10));
+        assertEq("asdfäzxcv", trunc_str("asdfäzxcv", 100));
+        string nul = binary_to_string(<6100620063>, "UTF-8");
+        assertEq(<6100620063>, binary(trunc_str(nul, 100)));
+        assertEq(<610062>, binary(trunc_str(nul, 3)));
+        string u16 = binary_to_string(<610062006300>, "UTF-16LE");
+        assertEq(<610062006300>, binary(trunc_str(u16, 100)));
+        assertEq(<61006200>, binary(trunc_str(u16, 5)));
 
         assertEq(195, ord("à"));
     }

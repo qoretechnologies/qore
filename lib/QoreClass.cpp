@@ -45,6 +45,7 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -1050,6 +1051,9 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
                 if (!m) {
                     m = new QoreMethod(qc.cls, new NormalUserMethod(qc.cls, i->first.c_str()), false);
                     qc.hm[m->getName()] = m;
+                    // the method of the class also has the variants that the parent classes define: the concrete
+                    // variants of the class that declares the abstract variant are found through it (issue #6161)
+                    scl->parseAddAncestors(m);
                 }
                 qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
                 continue;
@@ -1101,6 +1105,9 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
                 if (!m) {
                     m = new QoreMethod(qc.cls, new NormalUserMethod(qc.cls, i->first.c_str()), false);
                     qc.hm[m->getName()] = m;
+                    // the method of the class also has the variants that the parent classes define: the concrete
+                    // variants of the class that declares the abstract variant are found through it (issue #6161)
+                    scl->addAncestors(m);
                 }
                 qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
                 continue;
@@ -1363,6 +1370,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         deref_source_program(old.deref_source_program),
         from_module(old.from_module),
         lang(old.lang) {
+    // the bare references option of the declaration (issue #3286)
+    parse_abr = old.parse_abr;
     hierarchy_initialized = old.hierarchy_initialized;
     system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
 
@@ -1504,6 +1513,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
                 || (ns && ns->getProgram() != old.spgm.load()))),
         from_module(old.from_module),
         lang(old.lang) {
+    // the bare references option of the declaration (issue #3286)
+    parse_abr = old.parse_abr;
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");
     // the copy is committed: a later parse must not write its parse state (issue #6106)
     hierarchy_initialized = old.hierarchy_initialized;
@@ -1964,6 +1975,207 @@ static void inherit_builtin_member_gates(qore_class_private& cls, const qore_cla
     }
 }
 
+// the class with an accessible constant with the name that "Class::name" or the unscoped name finds, as
+// qore_class_private::parseFindConstantValueIntern() does, without initializing any constant; \a top is true when the
+// name is used in this class: then its private:internal constants and parent classes are visible
+const qore_class_private* qore_class_private::parseFindConstantOwnerNoInit(const char* cname, bool top) const {
+    std::vector<const qore_class_private*> seen;
+    return parseFindConstantOwnerNoInit(cname, top, seen);
+}
+
+const qore_class_private* qore_class_private::parseFindConstantOwnerNoInit(const char* cname, bool top,
+        std::vector<const qore_class_private*>& seen) const {
+    // a class reached again through another path of a diamond gives the same result (the first path wins)
+    if (!top) {
+        if (std::find(seen.begin(), seen.end(), this) != seen.end()) {
+            return nullptr;
+        }
+        seen.push_back(this);
+    }
+    const ConstantEntry* ce = constlist.findEntry(cname);
+    if (ce && (top || ce->getAccess() < Internal)) {
+        return this;
+    }
+    if (scl && scl->valid) {
+        for (auto& i : *scl) {
+            if (!i->sclass || (i->access >= Internal && !top)) {
+                continue;
+            }
+            if (const qore_class_private* owner = i->sclass->priv->parseFindConstantOwnerNoInit(cname, false,
+                    seen)) {
+                return owner;
+            }
+        }
+    }
+    return nullptr;
+}
+
+// the kinds of declaration with the name that are visible in this class
+qore_class_private::name_kinds_t qore_class_private::parseGetNameKinds(const char* n) const {
+    name_kinds_t rv;
+    if (parse_abr) {
+        ClassAccess access = Public;
+        const qore_class_private* mqc = nullptr;
+        if (parseFindMemberNoInit(n, mqc, access, true)) {
+            rv.member = mqc ? mqc : this;
+        }
+    }
+    rv.constant = parseFindConstantOwnerNoInit(n, true);
+    ClassAccess access = Public;
+    const QoreClass* vqc = nullptr;
+    if (parseFindStaticVar(n, vqc, access) && vqc) {
+        rv.var = vqc->priv;
+    }
+    return rv;
+}
+
+// adds the names of the constants, members and static variables of the class and its parent classes
+void qore_class_private::parseGetHierarchyNames(std::set<std::string>& names,
+        std::vector<const qore_class_private*>& seen) const {
+    if (std::find(seen.begin(), seen.end(), this) != seen.end()) {
+        return;
+    }
+    seen.push_back(this);
+    ConstConstantListIterator cli(constlist);
+    while (cli.next()) {
+        names.insert(cli.getName());
+    }
+    for (auto& i : members.getList()) {
+        names.insert(i.first);
+    }
+    for (auto& i : vars.member_list) {
+        names.insert(i.first);
+    }
+    if (scl && scl->valid) {
+        for (auto& i : *scl) {
+            if (i->sclass) {
+                i->sclass->priv->parseGetHierarchyNames(names, seen);
+            }
+        }
+    }
+}
+
+// issue #3286: the language-traps warning for a name that is a constant and a member or static variable in the class
+// hierarchy; an unscoped name in the class refers to a member (with bare references), then to a constant, then to a
+// static variable (see qore_root_ns_private::parseResolveBarewordIntern()), and a class-scoped name to a constant
+// before a static variable; the warning is raised in the class that introduces the clash: the class that declares
+// one of them, or that inherits them from different parent classes
+void qore_class_private::parseCheckNameKindClashes(QoreProgram* pgm) {
+    if (!pgm || !pgm->checkWarning(QP_WARN_LANGUAGE_TRAPS)) {
+        return;
+    }
+
+    // the names declared in the class, and, with more than one parent class, the names of the hierarchy
+    std::set<std::string> names;
+    {
+        ConstantListIterator cli(constlist);
+        while (cli.next()) {
+            names.insert(cli.getName());
+        }
+    }
+    for (auto& i : members.getList()) {
+        names.insert(i.first);
+    }
+    for (auto& i : vars.member_list) {
+        names.insert(i.first);
+    }
+    // the inherited names too when the parents can combine them differently: more than one parent, or a parent
+    // declared with another bare references option
+    bool inherited_names = false;
+    if (scl && scl->valid) {
+        inherited_names = scl->size() > 1;
+        for (auto& i : *scl) {
+            if (i->sclass && i->sclass->priv->parse_abr != parse_abr) {
+                inherited_names = true;
+                break;
+            }
+        }
+    }
+    if (inherited_names) {
+        std::vector<const qore_class_private*> seen;
+        for (auto& i : *scl) {
+            if (i->sclass) {
+                i->sclass->priv->parseGetHierarchyNames(names, seen);
+            }
+        }
+    }
+
+    for (auto& n : names) {
+        name_kinds_t k = parseGetNameKinds(n.c_str());
+        // a constant and a member or static variable
+        if (!k.constant || k.count() < 2) {
+            continue;
+        }
+        // the location of the clashing declaration of this class, if it has one
+        const QoreProgramLocation* wloc = nullptr;
+        bool own = false;
+        if (k.constant == this) {
+            own = true;
+            const ConstantEntry* ce = constlist.findEntry(n.c_str());
+            wloc = ce ? ce->loc : nullptr;
+        } else if (k.member == this) {
+            own = true;
+            const QoreMemberInfo* mi = members.find(n.c_str());
+            wloc = mi ? mi->loc : nullptr;
+        } else if (k.var == this) {
+            own = true;
+            const QoreVarInfo* vi = vars.find(n.c_str());
+            wloc = vi ? vi->loc : nullptr;
+        }
+        if (!own) {
+            // inherited: reported in the parent class that has the same clash already
+            bool in_parent = false;
+            for (auto& i : *scl) {
+                if (i->sclass && i->sclass->priv->parseGetNameKinds(n.c_str()) == k) {
+                    in_parent = true;
+                    break;
+                }
+            }
+            if (in_parent) {
+                continue;
+            }
+        }
+
+        std::string cpath = cls->getNamespacePath();
+        auto decl = [&n](const char* kind, const qore_class_private* owner) -> std::string {
+            return std::string("the ") + kind + " '" + owner->cls->getNamespacePath() + "::" + n + "'";
+        };
+        std::string winner, hidden;
+        if (k.member) {
+            winner = decl("member", k.member);
+        } else {
+            winner = decl("constant", k.constant);
+        }
+        if (k.member && k.constant) {
+            hidden = decl("constant", k.constant) + " (reached as '" + k.constant->cls->getNamespacePath(true) + "::"
+                + n + "')";
+        }
+        if (k.var) {
+            if (!hidden.empty()) {
+                hidden += " and ";
+            }
+            hidden += decl("static variable", k.var);
+            // "Owner::v" used in this class finds a constant of the owner's hierarchy that this class reaches first
+            if (k.var->parseFindConstantOwnerNoInit(n.c_str(), k.var == this)) {
+                // a class-scoped name finds a constant before a static variable too
+                hidden += " (it is not reached by name: a constant with the name is visible in its class as well)";
+            } else {
+                hidden += " (reached as '" + k.var->cls->getNamespacePath(true) + "::" + n + "')";
+            }
+        }
+
+        QoreDiagnosticMetadata metadata("CLASS-CONSTANT-SHADOWS-MEMBER",
+            "in a class, an unscoped name refers to a member, then to a constant, then to a static variable");
+        metadata.addFact("class", cpath.c_str());
+        metadata.addFact("name", n.c_str());
+        metadata.addSuggestion("rename one of the declarations");
+        QoreStringNode* desc = new QoreStringNodeMaker("in class '%s', the name '%s' refers to %s; it does not "
+            "refer to %s", cpath.c_str(), n.c_str(), winner.c_str(), hidden.c_str());
+        qore_program_private::makeParseWarning(pgm, wloc ? *wloc : *loc, QP_WARN_LANGUAGE_TRAPS, "LANGUAGE-TRAP",
+            desc, metadata);
+    }
+}
+
 int qore_class_private::initializeIntern() {
     //printd(5, "qore_class_private::initializeIntern() this: %p %s class: %p scl: %p initialized: %d\n", this, name.c_str(), cls, scl, initialized);
     if (initialized) {
@@ -2125,6 +2337,11 @@ int qore_class_private::initializeIntern() {
                 err = -1;
             }
         }
+    }
+
+    // issue #3286: a constant and a member or static variable with the same name in the class hierarchy
+    if (!sys) {
+        parseCheckNameKindClashes(pgm);
     }
 
     if (has_sig_changes) {
@@ -2663,7 +2880,7 @@ static QORE_INTERN_NOINLINE void qore_release_failed_construction(QoreObject* se
     } else {
         // Preserve partial-construction cleanup: release native private data without executing the destructors
         // of this class or its already-constructed base classes.
-        self->obliterate(xsink);
+        qore_object_ops(self).obliterate(xsink);
     }
 }
 
@@ -5954,7 +6171,7 @@ int qore_class_private::parseCheckClassHierarchyMembers(const char* mname, const
     }
     if (l_mi.access != b_mi.access || l_mi.parseHasTypeInfo() || b_mi.parseHasTypeInfo()) {
         // raise an exception only if parse exceptions are enabled
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             qore_program_private::makeParseException(getProgram(), *l_mi.loc, "PARSE-ERROR",
                 new QoreStringNodeMaker("class '%s' cannot be combined with class '%s' in the same hierarchy because "
                     "member '%s' is accessible from class '%s' from more than one declaration in the hierarchy",
@@ -6025,6 +6242,17 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                     "other: '%s' context access\n", this, name.c_str(), qc.name.c_str(), i.first, privpub(mi->access),
                     privpub(i.second->access));
                 mi->addContextAccess(*i.second);
+                continue;
+            } else if (i.second->access == Inaccessible && mi->access < Internal
+                    && !mi->getClass()->equal(*i.second->getClass())) {
+                // issue #6614: the mirror of the swap above, for the members imported in the other order: the
+                // accessible member imported first is the member of this class, and the hidden member, a
+                // private:internal member of another declaration, which is separate from it, is reached from the
+                // class that declares it, so that the hierarchy is the same whatever the order of its parent classes
+                printd(5, "qore_class_private::parseImportMembers() this: %p keeping '%s' <- '%s::%s' this: '%s' " \
+                    "other: '%s' context access\n", this, name.c_str(), qc.name.c_str(), i.first, privpub(mi->access),
+                    privpub(i.second->access));
+                mi->addContextAccess(*i.second->getClass()->members.find(i.first));
                 continue;
             }
 
@@ -7253,7 +7481,7 @@ void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, Exc
                 if (destructor) {
                     destructor->priv->evalSystemDestructor(self, rc, &de);
                 } else {
-                    self->defaultSystemDestructor(classID, &de);
+                    qore_object_ops(self).defaultSystemDestructor(classID, &de);
                 }
             }
         }
@@ -7269,7 +7497,7 @@ void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, Exc
                 if (destructor) {
                     destructor->priv->evalDestructor(self, rc, &de);
                 } else {
-                    self->defaultSystemDestructor(classID, &de);
+                    qore_object_ops(self).defaultSystemDestructor(classID, &de);
                 }
             }
         }
@@ -7298,7 +7526,7 @@ void qore_class_private::execBaseClassDestructor(QoreObject* self, RuntimeConfig
             if (destructor) {
                 destructor->priv->evalDestructor(self, rc, &de);
             } else {
-                self->defaultSystemDestructor(classID, &de);
+                qore_object_ops(self).defaultSystemDestructor(classID, &de);
             }
         }
     }
@@ -7321,7 +7549,7 @@ void qore_class_private::execBaseClassSystemDestructor(QoreObject* self, Runtime
             if (destructor) {
                 destructor->priv->evalSystemDestructor(self, rc, &de);
             } else {
-                self->defaultSystemDestructor(classID, &de);
+                qore_object_ops(self).defaultSystemDestructor(classID, &de);
             }
         }
     }
@@ -8712,7 +8940,7 @@ int qore_class_private::checkExistingVarMember(const char* dname, const QoreMemb
     // if the var was previously declared public
     if (mi->access != oaccess) {
         // raise an exception only if parse exceptions are enabled
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNode;
             desc->sprintf("class '%s' ", name.c_str());
             desc->concat("cannot declare ");
@@ -8727,7 +8955,7 @@ int qore_class_private::checkExistingVarMember(const char* dname, const QoreMemb
         }
         return -1;
     } else if ((mi && mi->parseHasTypeInfo()) || (omi && omi->parseHasTypeInfo())) {
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNode;
             desc->sprintf("%s %s ", privpub(mi->access), var ? "static variable" : "member");
             desc->sprintf("'%s' was already declared in ", dname);
@@ -10264,7 +10492,7 @@ int UserCopyVariant::parseInit(QoreFunction* f) {
         if (typeInfo) {
             if (QoreTypeInfo::parseReturns(typeInfo, &parent_class) == QTI_NOT_EQUAL) {
                 // raise parse exception if parse exceptions have not been suppressed
-                if (getProgram()->getParseExceptionSink()) {
+                if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                     QoreStringNode* desc = new QoreStringNode("the copy constructor will be passed ");
                     QoreTypeInfo::getThisType(parent_class.getTypeInfo(), *desc);
                     desc->concat(", but the object's parameter was defined expecting ");
@@ -10309,7 +10537,7 @@ void BuiltinCopyVariantBase::evalCopyImpl(LexicalSemanticPolicy policy, const Qo
         }
     }
 
-    old->evalCopyMethodWithPrivateData(thisclass, this, self, ceh.getRuntimeConfig(), xsink);
+    qore_object_ops(old).evalCopyMethodWithPrivateData(thisclass, this, self, ceh.getRuntimeConfig(), xsink);
 }
 
 template <bool Lexical>
@@ -11471,7 +11699,7 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
 
         // throw a type exception only if parse exceptions are enabled
         if (!QoreTypeInfo::parseAccepts(assignmentTypeInfo, argTypeInfo)) {
-            if (getProgram()->getParseExceptionSink()) {
+            if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* desc = new QoreStringNode("initialization expression for ");
                 desc->sprintf("%s member '%s' returns ", privpub(access), name);
                 QoreTypeInfo::getThisType(argTypeInfo, *desc);
@@ -11543,7 +11771,7 @@ int QoreVarInfo::parseInit(const char* name) {
 
         // throw a type exception only if parse exceptions are enabled
         if (!QoreTypeInfo::parseAccepts(assignmentTypeInfo, argTypeInfo)) {
-            if (getProgram()->getParseExceptionSink()) {
+            if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* desc = new QoreStringNode("initialization expression for ");
                 desc->sprintf("%s class static variable '%s' returns ", privpub(access), name);
                 QoreTypeInfo::getThisType(argTypeInfo, *desc);
@@ -11846,6 +12074,7 @@ QoreParseClass::QoreParseClass(const QoreProgramLocation* loc) {
 
     priv = new qore_class_private(this, std::move(name), std::move(path), QDOM_DEFAULT);
     priv->loc = loc;
+    priv->parse_abr = (bool)(parse_get_parse_options() & PO_ALLOW_BARE_REFS);
 }
 
 class qore_parent_class_iterator_private {

@@ -2777,6 +2777,124 @@ MACRO (QORE_QMOD_CACHE_SETUP)
     endif()
 ENDMACRO (QORE_QMOD_CACHE_SETUP)
 
+# The check of the AOT modules of a build against their sources and dependencies (qore#6598)
+#
+# make compares the modification times of the dependencies of a qmod with its own, and the module loader their
+# contents (the fingerprints that qcc writes next to its depfile): a dependency replaced by a file with another
+# content and an older modification time, as an install that keeps the time of the build does (cp -p, cmake
+# --install), and an optional module of a failed %try-module directive that existed but could not be loaded and can
+# be now, make the loader find the qmod out of date while the build does not rebuild it.  So every build runs
+# `qcc --check-module-sources` once, before the qmods are compiled, with every qmod of the project
+# (qore-qmod-source-check); it makes the loader's checks (qore_aot_check_module_sources()) in the environment of the
+# compile and rewrites <qmod>.sources.stamp, on which the qmod depends, only for a qmod that it finds out of date.
+# A qmod that cannot be checked fails the build, which names it and the dependency.  The check needs CMake 3.19
+# (cmake_language(DEFER)) and a qcc that reports it in its version ("Build checks: module-sources").
+
+# Sets _out to TRUE if the qcc command \a _qcc checks the sources of the qmods of the build
+FUNCTION (_QORE_QMOD_SOURCE_CHECK_ENABLED _out _qcc)
+    set(${_out} FALSE PARENT_SCOPE)
+    # a build that knows that its qcc cannot check (a test's stand-in) turns it off
+    if (DEFINED QORE_QMOD_SOURCE_CHECK AND NOT QORE_QMOD_SOURCE_CHECK)
+        return()
+    endif()
+    if (CMAKE_VERSION VERSION_LESS 3.19)
+        get_property(_warned GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_WARNED SET)
+        if (NOT _warned)
+            set_property(GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_WARNED TRUE)
+            message(WARNING "the AOT modules (qmods) of this build are not checked against the contents of their "
+                "dependencies, which needs CMake 3.19 or later (this is ${CMAKE_VERSION}): an incremental build may "
+                "keep a qmod that the module loader finds out of date; set QORE_QMOD_SOURCE_CHECK=OFF to build "
+                "without the check and without this warning")
+        endif()
+        return()
+    endif()
+    # the qcc of this build has it
+    if (TARGET qcc AND "${_qcc}" STREQUAL "$<TARGET_FILE:qcc>")
+        set(${_out} TRUE PARENT_SCOPE)
+        return()
+    endif()
+    get_property(_known GLOBAL PROPERTY "QORE_QCC_SOURCE_CHECK:${_qcc}" SET)
+    if (NOT _known)
+        set(_enabled FALSE)
+        # qcc gets none of the settings of the qmod build cache (QORE_QMOD_CACHE_*), as when the cache runs it
+        execute_process(COMMAND ${CMAKE_COMMAND} -E environment OUTPUT_VARIABLE _environment)
+        string(REGEX MATCHALL "(^|\n)QORE_QMOD_CACHE_[A-Za-z0-9_]*=" _names "${_environment}")
+        set(_unset "")
+        foreach (_name IN LISTS _names)
+            string(REGEX REPLACE "^\n?([^=]*)=$" "\\1" _name "${_name}")
+            list(APPEND _unset "--unset=${_name}")
+        endforeach()
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E env ${_unset} ${QORE_QM_METADATA_ENV} "${_qcc}" --version
+            RESULT_VARIABLE _rc
+            OUTPUT_VARIABLE _version
+            ERROR_QUIET
+            TIMEOUT 120
+        )
+        if (_rc EQUAL 0 AND _version MATCHES "Build checks:[^\n]*module-sources")
+            set(_enabled TRUE)
+        else()
+            # an older qcc: the build cannot check its qmods, which must be visible
+            string(REGEX REPLACE "\n.*" "" _first_line "${_version}")
+            message(WARNING "the qcc of this build ('${_qcc}', ${_first_line}) cannot check the AOT modules (qmods) "
+                "against the contents of their dependencies (it does not report \"Build checks: module-sources\" "
+                "with --version): an incremental build may keep a qmod that the module loader finds out of date; "
+                "set QORE_QMOD_SOURCE_CHECK=OFF to build without the check and without this warning")
+        endif()
+        set_property(GLOBAL PROPERTY "QORE_QCC_SOURCE_CHECK:${_qcc}" ${_enabled})
+    endif()
+    get_property(_enabled GLOBAL PROPERTY "QORE_QCC_SOURCE_CHECK:${_qcc}")
+    set(${_out} ${_enabled} PARENT_SCOPE)
+ENDFUNCTION (_QORE_QMOD_SOURCE_CHECK_ENABLED)
+
+# Adds the qmod \a _qmod of target \a _target to the check; the check target is made at the end of the project's
+# top-level directory, once every qmod is known
+FUNCTION (_QORE_REGISTER_QMOD_SOURCE_CHECK _target _qmod _qcc)
+    get_property(_registered GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_QMODS SET)
+    set_property(GLOBAL APPEND PROPERTY QORE_QMOD_SOURCE_CHECK_QMODS ${_qmod})
+    set_property(GLOBAL APPEND PROPERTY QORE_QMOD_SOURCE_CHECK_TARGETS ${_target})
+    if (NOT _registered)
+        set_property(GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_QCC "${_qcc}")
+        set_property(GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_ENV "${QORE_QM_METADATA_ENV}")
+        set_property(GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_SCRIPT "${QORE_CMAKE_DIR}/QoreQmodSourceCheck.cmake")
+        cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL _qore_qmod_source_check_target)
+    endif()
+ENDFUNCTION (_QORE_REGISTER_QMOD_SOURCE_CHECK)
+
+# Makes the target that checks every qmod of the project once in each build, before the qmods are compiled
+FUNCTION (_qore_qmod_source_check_target)
+    get_property(_qmods GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_QMODS)
+    get_property(_targets GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_TARGETS)
+    get_property(_qcc GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_QCC)
+    get_property(_env GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_ENV)
+    get_property(_script GLOBAL PROPERTY QORE_QMOD_SOURCE_CHECK_SCRIPT)
+    string(REPLACE ";" "|" _env "${_env}")
+    list(REMOVE_DUPLICATES _qmods)
+    set(_list ${CMAKE_BINARY_DIR}/qore-qmod-source-check.list)
+    string(REPLACE ";" "\n" _content "${_qmods}")
+    # rewritten only when it changes
+    file(WRITE ${_list}.in "${_content}\n")
+    configure_file(${_list}.in ${_list} COPYONLY)
+    set(_stamps "")
+    foreach (_qmod IN LISTS _qmods)
+        list(APPEND _stamps ${_qmod}.sources.stamp)
+    endforeach()
+    add_custom_target(qore-qmod-source-check
+        COMMAND ${CMAKE_COMMAND} -DQCC=${_qcc} -DLIST=${_list} -DENV=${_env} -P ${_script}
+        BYPRODUCTS ${_stamps}
+        COMMENT "Checking the sources of the AOT modules"
+        VERBATIM
+    )
+    if (TARGET qcc)
+        add_dependencies(qore-qmod-source-check qcc)
+    endif()
+    foreach (_target IN LISTS _targets)
+        if (TARGET ${_target})
+            add_dependencies(${_target} qore-qmod-source-check)
+        endif()
+    endforeach()
+ENDFUNCTION (_qore_qmod_source_check_target)
+
 # Emit AOT-build rules for a user module producing a .qmod via qcc.
 #
 # Gated on QORE_BUILD_AOT_MODULES; uses the in-tree qcc target when building
@@ -2953,6 +3071,14 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         set(_qmod_try_sources "${_source_root}")
     endif()
     set(_qmod_optional_stamp "")
+    # the stamp that the check of the qmods of the build rewrites when the loader would find the qmod out of date
+    # (_QORE_REGISTER_QMOD_SOURCE_CHECK(), qore#6598)
+    set(_qmod_sources_stamp "")
+    _QORE_QMOD_SOURCE_CHECK_ENABLED(_qmod_source_check "${_qore_qcc_command}")
+    if (_qmod_source_check)
+        set(_qmod_sources_stamp ${_qmod_out}.sources.stamp)
+        _QORE_REGISTER_QMOD_SOURCE_CHECK(${_name}-qmod ${_qmod_out} "${_qore_qcc_command}")
+    endif()
     foreach (_qmod_try_source IN LISTS _qmod_try_sources)
         if (EXISTS "${_qmod_try_source}" AND NOT IS_DIRECTORY "${_qmod_try_source}")
             file(STRINGS "${_qmod_try_source}" _qmod_try_lines LIMIT_COUNT 1
@@ -3079,6 +3205,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
                 ${_qmod_cache_launcher} ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
                 --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
             DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep} ${_qmod_optional_stamp}
+                ${_qmod_sources_stamp}
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
@@ -3143,7 +3270,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qmod_cache_launcher} ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
                 --depfile=${_qmod_dep} --depfile-module-deps=source -o ${_qmod_out}
-            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep} ${_qmod_optional_stamp}
+            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep} ${_qmod_optional_stamp} ${_qmod_sources_stamp}
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"

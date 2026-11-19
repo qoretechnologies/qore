@@ -237,12 +237,51 @@ int qore_list_private::parseInitComplexListInitialization(const QoreProgramLocat
     parse_context.typeInfo = nullptr;
     int err = 0;
     if (!parseInitListInitialization(loc, parse_context, args, new_args, err)) {
-        if (parseCheckComplexListInitialization(loc, vti, parse_context.typeInfo, new_args, "initialize", true)
-            && !err) {
+        if (parseCheckConstructorArgs(loc, vti, parse_context.typeInfo, new_args) && !err) {
             err = -1;
         }
     }
     return err;
+}
+
+QoreStringNode* qore_list_private::getConstructorArgErrorDesc(const QoreTypeInfo* vti, size_t index,
+        const QoreTypeInfo* arg_ti) {
+    return new QoreStringNodeMaker("cannot initialize 'list<%s>': argument %d of type '%s' is not a valid element of "
+        "type '%s'; the constructor's arguments are the list's elements", QoreTypeInfo::getName(vti), (int)index + 1,
+        QoreTypeInfo::getName(arg_ti), QoreTypeInfo::getName(vti));
+}
+
+int qore_list_private::parseCheckConstructorArgs(const QoreProgramLocation* loc, const QoreTypeInfo* vti,
+        const QoreTypeInfo* args_type_info, const QoreValue args) {
+    // the arguments are the elements of the list (issue #6172)
+    switch (args.getType()) {
+        case NT_PARSE_LIST: {
+            const type_vec_t& value_types = args.get<const QoreParseListNode>()->getValueTypes();
+            for (unsigned i = 0, e = value_types.size(); i < e; ++i) {
+                if (!QoreTypeInfo::parseAccepts(vti, value_types[i])) {
+                    SimpleRefHolder<QoreStringNode> desc(getConstructorArgErrorDesc(vti, i, value_types[i]));
+                    parse_error(*loc, "%s", desc->c_str());
+                    return -1;
+                }
+            }
+            return 0;
+        }
+        case NT_LIST: {
+            ConstListIterator i(args.get<const QoreListNode>());
+            while (i.next()) {
+                const QoreTypeInfo* eti = i.getValue().getFullTypeInfo();
+                if (!QoreTypeInfo::parseAccepts(vti, eti)) {
+                    SimpleRefHolder<QoreStringNode> desc(getConstructorArgErrorDesc(vti, i.index(), eti));
+                    parse_error(*loc, "%s", desc->c_str());
+                    return -1;
+                }
+            }
+            return 0;
+        }
+        default:
+            break;
+    }
+    return parseCheckComplexListInitialization(loc, vti, args_type_info, args, "initialize", true);
 }
 
 int qore_list_private::parseInitListInitialization(const QoreProgramLocation* loc, QoreParseContext& parse_context,
@@ -380,7 +419,7 @@ QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, co
         val = a.takeReferencedValue();
     }
 
-    return newComplexListFromValue(typeInfo, val, xsink);
+    return newComplexListFromArgs(typeInfo, val, xsink);
 }
 
 QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, const QoreValue args, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
@@ -395,7 +434,42 @@ QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, co
         val = a.takeReferencedValue();
     }
 
-    return newComplexListFromValue(typeInfo, val, xsink, policy);
+    return newComplexListFromArgs(typeInfo, val, xsink, policy);
+}
+
+QoreListNode* qore_list_private::newComplexListFromArgs(const QoreTypeInfo* typeInfo, QoreValue args,
+        ExceptionSink* xsink) {
+    return newComplexListFromValueImpl<false>(typeInfo, args, xsink, {}, true);
+}
+
+QoreListNode* qore_list_private::newComplexListFromArgs(const QoreTypeInfo* typeInfo, QoreValue args,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    return newComplexListFromValueImpl<true>(typeInfo, args, xsink, policy, true);
+}
+
+template <bool Lexical>
+int qore_list_private::acceptConstructorArg(const QoreTypeInfo* vti, size_t index, QoreValue& arg,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    const QoreTypeInfo* arg_ti = arg.getFullTypeInfo();
+    ExceptionSink arg_xsink;
+    if constexpr (Lexical) {
+        QoreTypeInfo::acceptInputParam(vti, index, nullptr, arg, &arg_xsink, policy);
+    } else {
+        QoreTypeInfo::acceptInputParam(vti, index, nullptr, arg, &arg_xsink);
+    }
+    if (!arg_xsink) {
+        return 0;
+    }
+    // a value of a type that the element type does not accept raises the error that the parse raises for an argument
+    // of such a type (issue #6172); another error (of the conversion of an accepted value) is raised as it is
+    QoreValue err = arg_xsink.getExceptionErr();
+    if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "RUNTIME-TYPE-ERROR")) {
+        arg_xsink.clear();
+        xsink->raiseException("RUNTIME-TYPE-ERROR", getConstructorArgErrorDesc(vti, index, arg_ti));
+        return -1;
+    }
+    xsink->assimilate(arg_xsink);
+    return -1;
 }
 
 QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typeInfo, QoreValue init,
@@ -410,7 +484,7 @@ QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typ
 
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromValueImpl(const QoreTypeInfo* typeInfo, QoreValue init,
-        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        ExceptionSink* xsink, LexicalSemanticPolicy policy, bool ctor_args) {
     ValueHolder holder(init, xsink);
 
     QoreListNode* l;
@@ -444,6 +518,12 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
             }
 
             if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                if (ctor_args) {
+                    if (acceptConstructorArg<Lexical>(vti, i.index(), entry, xsink, policy)) {
+                        return nullptr;
+                    }
+                    continue;
+                }
                 if constexpr (Lexical) {
                     QoreTypeInfo::acceptInputParam(vti, i.index(), nullptr, entry, xsink, policy);
                 } else {
@@ -459,7 +539,12 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
         holder = init = l = new QoreListNode(autoTypeInfo);
     } else {
         const QoreTypeInfo* vti = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
-        if constexpr (Lexical) {
+        if (ctor_args) {
+            // a single argument of the constructor, which is the element of the list
+            if (!QoreTypeInfo::superSetOf(vti, init.getTypeInfo())) {
+                acceptConstructorArg<Lexical>(vti, 0, init, xsink, policy);
+            }
+        } else if constexpr (Lexical) {
             QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink, policy);
         } else {
             QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink);

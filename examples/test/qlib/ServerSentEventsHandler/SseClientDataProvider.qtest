@@ -68,6 +68,15 @@ class FakeSseHandler inherits AbstractHttpRequestHandler {
                 "body": "not found",
             };
         }
+        # the stream of the events test has no events after the third: a reconnect after it is refused, so that the
+        # client's reconnect loop raises no further events until it is stopped
+        if (hdr.path == "events" && hdr."last-event-id" == "3") {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeText},
+                "body": "no more events",
+            };
+        }
         if (hdr.path == "notsse") {
             return <HttpResponseInfo>{
                 "code": 200,
@@ -108,6 +117,42 @@ class TestSseHandler inherits ServerSentEventHandler {
 
     connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
         registered.push(conn);
+    }
+}
+
+#! collects the messages logged
+class QueueAppender inherits LoggerAppenderWithLayout {
+    private {
+        Queue msgs;
+    }
+
+    constructor(Queue msgs) : LoggerAppenderWithLayout("queue", new LoggerLayoutPattern("%m")) {
+        self.msgs = msgs;
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            msgs.push(params);
+        }
+    }
+}
+
+#! a client that reports its destruction
+class LifetimeSseClientIo inherits ServerSentEventClientIo {
+    private {
+        Queue events;
+        #! released when the client is destroyed, which ends the yield closure's wait
+        Counter release;
+    }
+
+    constructor(Queue events, Counter release, hash<auto> opts) : ServerSentEventClientIo(opts) {
+        self.events = events;
+        self.release = release;
+    }
+
+    destructor() {
+        events.push({"destructor": gettid()});
+        release.dec();
     }
 }
 
@@ -203,10 +248,13 @@ public class Main inherits QUnit::Test {
         addTestCase("sync client conversion", \syncClientTest());
         addTestCase("connection data provider", \connectionTest());
         addTestCase("live stream and stop", \stopTest());
+        addTestCase("dropping the last reference to a connected client destroys it", \lastReferenceTest());
+        addTestCase("a failed reconnect is retried up to the retry limit", \reconnectRetriesTest());
         addTestCase("disconnect from the event thread", \eventThreadDisconnectTest());
         addTestCase("connected event before the stream's events", \connectedFirstIoTest());
         addTestCase("legacy client: connected event before the stream's events", \connectedFirstLegacyTest());
         addTestCase("event thread terminating before the start call returns", \threadEndsBeforeStartReturnsTest());
+        addTestCase("start_thread from the thread's capability", \capabilityTest());
         addTestCase("disconnect from an observer before the start call returns",
             \observerDisconnectBeforeStartReturnsTest());
         addTestCase("event thread not started", \threadStartErrorTest());
@@ -231,6 +279,14 @@ public class Main inherits QUnit::Test {
             "reconnect_delay": 1ms,
         });
         ServerSentEventClientDataProvider prov(client);
+        # the reconnect loop is stopped, and the requests it made are drained, also when an assertion fails, so that
+        # the later cases do not see them
+        on_exit {
+            prov.stopEvents();
+            while (handler.requests.size()) {
+                handler.requests.get();
+            }
+        }
         assertTrue(prov.getClient() == client);
         EventObserver observer();
         prov.registerObserver(observer);
@@ -262,6 +318,9 @@ public class Main inherits QUnit::Test {
         assertEq(3, evt.data.id);
         assertEq({"a": 3}, evt.data.data);
         assertEq(EVENT_SSE_CLOSED, observer.next().event_id);
+        # the next reconnect is refused: the loop retries without raising events
+        req = handler.requests.get(30s);
+        assertEq("3", req."last-event-id");
 
         # stopping events ends the reconnect loop
         prov.stopEvents();
@@ -271,10 +330,6 @@ public class Main inherits QUnit::Test {
         assertEq("3", client.getLastEventId());
         assertTrue(client.getConnectionInfo().num_connects >= 2);
         assertEq(-1, client.getConnectionInfo().cid);
-        # drain the requests made by the reconnect loop before it was stopped
-        while (handler.requests.size()) {
-            handler.requests.get();
-        }
     }
 
     #! Request options are sent
@@ -399,6 +454,102 @@ public class Main inherits QUnit::Test {
         while (handler.requests.size()) {
             handler.requests.get();
         }
+    }
+
+    #! the event thread holds the client only by a weak reference: dropping the owner's last reference destroys the
+    #! client, whose destructor stops the thread (qorus#867)
+    lastReferenceTest() {
+        TestSseHandler sse({"logger": new Logger("sse", LoggerLevel::getLevelError())});
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        server.setHandler("sse-handler", "", NOTHING, sse);
+        server.setDefaultHandler("sse-handler", sse);
+        int sse_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        Queue events();
+        # after a read times out, the event thread yields in this closure, which refers to no client, until the client
+        # is destroyed: the reference is dropped while the thread holds none
+        Counter release(1);
+        Queue idle();
+        # the yield waits only once the test has the stream's event, so that the event is read
+        Counter got_data(1);
+        code yielder = sub () {
+            if (got_data.getCount()) {
+                return;
+            }
+            idle.push(gettid());
+            release.waitForZero();
+        };
+        {
+            LifetimeSseClientIo client(events, release, {
+                "url": "sse://localhost:" + sse_port,
+                "data": "json",
+                "timeout": 1000,
+                "yield": yielder,
+            });
+            EventObserver observer();
+            client.registerObserver(observer);
+            client.observersReady();
+            assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+            sse.registered.get(30s);
+            sse.sendAll(<SseMessageInfo>{"id": 1, "data": {"x": 1}});
+            assertEq(EVENT_SSE_DATA, observer.next().event_id, "the event thread delivers the stream's events");
+            got_data.dec();
+            assertEq(Type::Int, idle.get(30s).type(), "and waits for the next one");
+        }
+        assertEq(({"destructor": gettid()},), (map events.get(), xrange(events.size())),
+            "the client was destroyed in the thread that dropped its last reference, which the thread had left");
+    }
+
+    #! the event thread retries a failed reconnect after the reconnect delay until the retry limit
+    reconnectRetriesTest() {
+        TestSseHandler sse({"logger": new Logger("sse", LoggerLevel::getLevelError())});
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        bool stopped;
+        on_exit if (!stopped) {
+            server.stop();
+        }
+        server.setHandler("sse-handler", "", NOTHING, sse);
+        server.setDefaultHandler("sse-handler", sse);
+        int sse_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        Queue log();
+        Logger logger("sse-retry", LoggerLevel::getLevelInfo());
+        QueueAppender appender(log);
+        appender.open();
+        logger.addAppender(appender);
+        ServerSentEventClientIo client({
+            "url": "sse://localhost:" + sse_port,
+            "reconnect": True,
+            "reconnect_delay": 50,
+            "max_reconnect_retries": 2,
+            "logger": logger,
+        });
+        on_exit client.disconnect();
+        EventObserver observer();
+        client.registerObserver(observer);
+        client.observersReady();
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        sse.registered.get(30s);
+
+        # the stream ends and the server is gone: each reconnect fails
+        server.stop();
+        stopped = True;
+        list<string> msgs = ();
+        while (True) {
+            string msg = log.get(60s);
+            msgs += msg;
+            if (msg =~ /giving up/) {
+                break;
+            }
+        }
+        assertEq(2, (select msgs, $1 =~ /^SSE reconnect failed/).size(),
+            "each attempt up to the limit is made: " + (foldl $1 + "\n" + $2, msgs));
+        assertEq(2, (select msgs, $1 =~ /reconnecting in/).size(), "after the reconnect delay");
     }
 
     #! Events on a stream that stays open, and stopping it
@@ -635,6 +786,56 @@ public class Main inherits QUnit::Test {
     # The legacy client raises the connected event after starting its event thread, which waits for it before
     # raising the stream's events.  The server sends an event as soon as the connection is registered, so the event
     # can reach the client while connect() is still running; the order is checked over repeated connections.
+    #! without the option, a client created in a host's capability scope starts its event thread with the host's
+    #! start_thread (qorus#867); for the client and the legacy client
+    capabilityTest() {
+        ImmediateSseHandler sse({"logger": new Logger("sse", LoggerLevel::getLevelError())});
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        server.setHandler("sse-immediate", "", NOTHING, sse);
+        server.setDefaultHandler("sse-immediate", sse);
+        int sse_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        Queue started();
+        hash<auto> caps = {"start_thread": int sub (code<nothing()> c) {
+            started.push(True);
+            return background c();
+        }};
+        hash<auto> opts = {
+            "url": "sse://localhost:" + sse_port,
+            "data": "json",
+        };
+        ServerSentEventClientIo client;
+        ServerSentEventClient legacy;
+        {
+            ThreadCapabilityScope scope(caps);
+            client = new ServerSentEventClientIo(opts);
+            legacy = new ServerSentEventClient(opts);
+        }
+        # the capability is taken when a client is created, so it is used after the scope
+        foreach object c in ((client, legacy)) {
+            OrderObserver observer();
+            c.registerObserver(observer);
+            c.connect();
+            assertEq(0, observer.first_data.waitForZero(30s), sprintf("%s: data received", c.className()));
+            c.disconnect();
+            assertTrue(started.get(30s), sprintf("%s: the event thread was started with the host's start_thread",
+                c.className()));
+        }
+
+        # clients created outside a scope do not use it
+        foreach object c in ((new ServerSentEventClientIo(opts), new ServerSentEventClient(opts))) {
+            OrderObserver observer();
+            c.registerObserver(observer);
+            c.connect();
+            assertEq(0, observer.first_data.waitForZero(30s), sprintf("%s: data received", c.className()));
+            c.disconnect();
+        }
+        assertEq(0, started.size(), "outside a scope the host's start_thread is not used");
+    }
+
     connectedFirstLegacyTest() {
         ImmediateSseHandler sse({"logger": new Logger("sse", LoggerLevel::getLevelError())});
         HttpServer server(<HttpServerOptionInfo>{
