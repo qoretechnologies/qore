@@ -141,8 +141,8 @@
     @par HttpServer Refuses a Request Head That Is Not Valid Text
     The @ref httpserverintro "HttpServer" module answers with \c 400, before any handler sees it, a request whose path,
     query, method or HTTP version is not valid UTF-8 text, whose HTTP/1.x header names have a byte above 0x7f, or whose
-    body is not valid in its encoding; a header value that is not valid UTF-8 is given in ISO-8859-1 (RFC 9110 obs-text),
-    also by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" (issue #6554).
+    body, also chunked or compressed, is not valid in its encoding (@ref httpserver_invalid_text); a header value that
+    is not valid UTF-8 is given in ISO-8859-1, also by @ref Qore::Socket::readHTTPHeader() (issues #6554, #6604).
 
     @par HTTP Clients Check a Response Body's Encoding
     A response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other

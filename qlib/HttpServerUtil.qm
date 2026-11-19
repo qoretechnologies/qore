@@ -154,6 +154,12 @@ module HttpServerUtil {
 
     @section httputil1_6 HttpServerUtil 1.6
     - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
+      reads a chunked request body as bytes and decodes it once, after any decompression, as a body with a
+      \c Content-Length is, and raises \c HTTP-BODY-ENCODING-ERROR, which the server answers with 400, for a body
+      that is not valid text in its encoding; added
+      @ref HttpServer::AbstractHttpRequestHandler::decodeRequestText() "AbstractHttpRequestHandler::decodeRequestText()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+    - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
       does not merge the trailer fields of a chunked request body into the request's header fields; they are given
       apart, and the body is decoded with the request's own header fields
       (<a href="https://github.com/qoretechnologies/qore/issues/6753">issue 6753</a>)
@@ -3077,6 +3083,14 @@ private logChunk(bool send, int size) {
         - \c "hdr": the trailer fields sent after the body, or @ref nothing if there were no trailers
         - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as,
           for example, socket character encoding)
+
+        @note The chunks of an HTTP/1.1 chunked body without a \c Content-Encoding are given as received, as strings
+        in the socket's encoding that are not checked: a chunk can end inside a character, so a chunk is not
+        necessarily valid text by itself.  A stream handler that processes text checks it once the body or each
+        complete character is assembled (for example with
+        @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()"); a body read whole with
+        @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
+        is checked by the server
     */
     private nothing recvImpl(hash<auto> v) {
     }
@@ -4207,6 +4221,40 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         }
     }
 
+    #! Returns a request body received as binary data as text, refusing a body that is not valid in its encoding
+    /** Text is decoded by the rules shared by all HTTP clients and servers (see
+        @ref Qore::decode_http_body() "decode_http_body()") with \a assumed_encoding as the assumed encoding; a body
+        of another type is returned as a string in \a assumed_encoding.  The bytes of the body are not changed.
+
+        Text from outside the server is checked where it enters it, before any handler processes it: a body that is
+        not valid text in its encoding raises \c HTTP-BODY-ENCODING-ERROR, which the
+        @ref HttpServer::HttpServer "HttpServer" answers with HTTP 400 (Bad Request).  The error has a name of its
+        own so that the server answers only this error with 400, and not an \c INVALID-ENCODING error that a handler
+        raises for text of its own.
+
+        @param hdr the request headers; the \c Content-Type is taken from \c "_qore_orig_content_type" if present,
+        else from \c "content-type"
+        @param body the request body, after any content coding has been decoded
+        @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+
+        @return the request body as a string
+
+        @throw HTTP-BODY-ENCODING-ERROR the body is not valid text in its encoding; the server answers this error with
+        HTTP 400 (Bad Request)
+
+        @since HttpServerUtil 1.6
+    */
+    static string decodeRequestText(hash<auto> hdr, binary body, string assumed_encoding) {
+        auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
+        data rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed_encoding);
+        string str = rv.typeCode() == NT_STRING ? rv : body.toString(assumed_encoding);
+        if (!str.isEncodingValid()) {
+            throw "HTTP-BODY-ENCODING-ERROR", sprintf("the request body of %d bytes has an invalid encoding: it is "
+                "not valid text in encoding %s", body.size(), str.encoding());
+        }
+        return str;
+    }
+
     #! Returns the maximum size in bytes of a decompressed request body for this handler
     /** @param listener the listener that received the request; if not given, the listener's limit is taken to be
         @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize"
@@ -4259,7 +4307,14 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     }
 
     #! optionally retrieves and post-processes any message body
-    /** @param s the socket of the request
+    /** A chunked request body is read as binary data and decoded once, after any decompression: text is decoded by
+        the rules shared by all HTTP clients and servers, as a body with a \c Content-Length is (see
+        decodeRequestText(); the encoding of the socket, which the server sets from the \c Content-Type of the
+        request, is the assumed encoding), and a body that is not valid text in its encoding is refused with
+        \c HTTP-BODY-ENCODING-ERROR before the handler processes it.  A compressed body is decoded in the same way
+        when @ref decompress_to_string is set.
+
+        @param s the socket of the request
         @param hdr the request headers
         @param body the request body, if already read
         @param decode if the body should be decompressed according to its content encoding
@@ -4271,16 +4326,22 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @return the request body
 
         @throw HTTP-BODY-TOO-LARGE the decompressed body exceeds the maximum size
+        @throw HTTP-BODY-ENCODING-ERROR the body is not valid text in its encoding; the server answers this error with
+        HTTP 400 (Bad Request)
 
-        @since HttpServerUtil 1.6 added the \a listener and \a trailers parameters
+        @since HttpServerUtil 1.6 added the \a listener and \a trailers parameters; a chunked body and a decompressed
+        body that are not valid text in their encoding are refused
     */
     *data getMessageBody(Socket s, hash<auto> hdr, *data body, bool decode = True,
             *HttpListenerInterface listener, *reference<*hash<auto>> trailers) {
+        # set if the chunked body read here is to be decoded as text, as readHTTPChunkedBody() returned it
+        bool chunked_text;
         if (!body && hdr."transfer-encoding" == "chunked") {
-            hash<auto> chunked = hdr."content-encoding"
-                ? s.readHTTPChunkedBodyBinary(timeout_ms)
-                : s.readHTTPChunkedBody(timeout_ms);
+            # the body is read as bytes and decoded once below: a chunk can end inside a character, and the text is
+            # checked where it enters the server (qore#6604)
+            hash<auto> chunked = s.readHTTPChunkedBodyBinary(timeout_ms);
             body = remove chunked.body;
+            chunked_text = !hdr."content-encoding";
             # the other keys are the trailer fields: they are given to the caller apart and are not merged into the
             # request's header fields, so that they neither replace nor add a header field (RFC 9110 section 6.5,
             # RFC 9112 section 7.1.2); the body is decoded with the request's own header fields (qore#6753)
@@ -4295,10 +4356,10 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
                 getMaxDecodedBodySize(listener));
             if (decompress_to_string) {
-                auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
-                data text = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, s.getEncoding());
-                body = text.typeCode() == NT_STRING ? text : body.toString(s.getEncoding());
+                body = AbstractHttpRequestHandler::decodeRequestText(hdr, body, s.getEncoding());
             }
+        } else if (chunked_text && body.typeCode() == NT_BINARY) {
+            body = AbstractHttpRequestHandler::decodeRequestText(hdr, body, s.getEncoding());
         }
 
         return body;
