@@ -115,6 +115,16 @@ bool ProtobufHelper::hashToMessage(const QoreHashNode* hash, Message* msg, Excep
     return true;
 }
 
+// protobuf strings are UTF-8 (issue #6615)
+static bool getUtf8String(QoreValue val, std::string& rv, ExceptionSink* xsink) {
+    QoreStringValueHelper str(val, QCS_UTF8, xsink);
+    if (*xsink) {
+        return false;
+    }
+    rv.assign(str->c_str(), str->size());
+    return true;
+}
+
 QoreValue ProtobufHelper::fieldToQore(const Message& msg, const FieldDescriptor* field,
         const Reflection* ref, ExceptionSink* xsink) {
     switch (field->cpp_type()) {
@@ -142,7 +152,7 @@ QoreValue ProtobufHelper::fieldToQore(const Message& msg, const FieldDescriptor*
                     return bin.release();
                 }
             }
-            return new QoreStringNode(val);
+            return new QoreStringNode(val, QCS_UTF8);
         }
         case FieldDescriptor::CPPTYPE_ENUM:
             return (int64)ref->GetEnumValue(msg, field);
@@ -199,7 +209,7 @@ QoreValue ProtobufHelper::repeatedElementToQore(const Message& msg,
                     return bin.release();
                 }
             }
-            return new QoreStringNode(val);
+            return new QoreStringNode(val, QCS_UTF8);
         }
         case FieldDescriptor::CPPTYPE_ENUM:
             return (int64)ref->GetRepeatedEnumValue(msg, field, index);
@@ -248,8 +258,11 @@ bool ProtobufHelper::setFieldFromQore(Message* msg, const FieldDescriptor* field
                     ref->SetString(msg, field, std::string());
                 }
             } else {
-                QoreStringValueHelper str(val);
-                ref->SetString(msg, field, std::string(str->c_str(), str->size()));
+                std::string str;
+                if (!getUtf8String(val, str, xsink)) {
+                    return false;
+                }
+                ref->SetString(msg, field, std::move(str));
             }
             return true;
         }
@@ -314,8 +327,11 @@ bool ProtobufHelper::setRepeatedFieldFromList(Message* msg, const FieldDescripto
                         ref->AddString(msg, field, std::string());
                     }
                 } else {
-                    QoreStringValueHelper str(val);
-                    ref->AddString(msg, field, std::string(str->c_str(), str->size()));
+                    std::string str;
+                    if (!getUtf8String(val, str, xsink)) {
+                        return false;
+                    }
+                    ref->AddString(msg, field, std::move(str));
                 }
                 break;
             }
@@ -398,6 +414,13 @@ QoreHashNode* ProtobufHelper::mapFieldToHash(const Message& msg, const FieldDesc
                 xsink)) {
             return nullptr;
         }
+        // a string key is UTF-8, and a hash key is in the default encoding
+        if (key_field->cpp_type() == FieldDescriptor::CPPTYPE_STRING) {
+            if (hash->setKeyValue(QoreString(key_str, QCS_UTF8), val.release(), xsink)) {
+                return nullptr;
+            }
+            continue;
+        }
         if (hash->setKeyValue(key_str.c_str(), val.release(), xsink)) {
             return nullptr;
         }
@@ -420,9 +443,16 @@ bool ProtobufHelper::setMapFieldFromHash(Message* msg, const FieldDescriptor* fi
         // Set key
         const char* key = hi.getKey();
         switch (key_field->cpp_type()) {
-            case FieldDescriptor::CPPTYPE_STRING:
-                entry_ref->SetString(entry, key_field, std::string(key));
+            case FieldDescriptor::CPPTYPE_STRING: {
+                // a hash key is in the default encoding
+                QoreString key_str(key);
+                TempEncodingHelper utf8(key_str, QCS_UTF8, xsink);
+                if (*xsink) {
+                    return false;
+                }
+                entry_ref->SetString(entry, key_field, std::string(utf8->c_str(), utf8->size()));
                 break;
+            }
             case FieldDescriptor::CPPTYPE_INT32:
                 entry_ref->SetInt32(entry, key_field, atoi(key));
                 break;
