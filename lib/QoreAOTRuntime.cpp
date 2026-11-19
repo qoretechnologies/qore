@@ -2659,6 +2659,79 @@ const QoreMethod* qore_aot_find_named_method(const QoreClass* qc, const char* me
     return qcp->runtimeFindCommittedStaticMethodIntern(method_name, access, qcp);
 }
 
+// documented in QoreAOT.h
+std::string qore_aot_object_method_ref_name(const ParseObjectMethodReferenceNode* omr) {
+    const QoreClass* qc = omr->getInheritedMethodClass();
+    if (!qc) {
+        return omr->getMethodName();
+    }
+    std::string rv(1, '\x02');
+    rv += qore_aot_encode_class_ref(qc);
+    rv += '\x01';
+    rv += qore_aot_encode_class_ref(omr->getParseMethod()->getClass());
+    rv += '\x01';
+    rv += omr->getMethodName();
+    return rv;
+}
+
+// documented in QoreAOT.h
+bool qore_aot_decode_object_method_ref(QoreProgram* pgm, const char* ref, const char*& method_name,
+        const QoreClass*& declared_class, const QoreMethod*& method) {
+    declared_class = nullptr;
+    method = nullptr;
+    if (ref[0] != '\x02') {
+        method_name = ref;
+        return true;
+    }
+    const char* sep = strchr(ref + 1, '\x01');
+    const char* end = sep ? strchr(sep + 1, '\x01') : nullptr;
+    if (!end || !end[1]) {
+        return false;
+    }
+    method_name = end + 1;
+    if (!pgm) {
+        return true;
+    }
+    std::string class_ref(ref + 1, sep - ref - 1);
+    const QoreClass* qc = qore_aot_resolve_class_ref(pgm, class_ref.c_str());
+    if (!qc) {
+        return true;
+    }
+    class_ref.assign(sep + 1, end - sep - 1);
+    const QoreClass* method_class = qore_aot_resolve_class_ref(pgm, class_ref.c_str());
+    if (!method_class) {
+        return true;
+    }
+    // the class's own normal method of the name, also while the class is being loaded
+    const QoreMethod* m = method_class->findLocalMethod(method_name);
+    if (!m) {
+        m = qore_class_private::get(*method_class)->parseFindLocalMethod(method_name);
+    }
+    if (m && !m->isStatic()) {
+        declared_class = qc;
+        method = m;
+    }
+    return true;
+}
+
+// documented in QoreAOT.h
+ParseObjectMethodReferenceNode* qore_aot_make_object_method_ref(QoreProgram* pgm, QoreValue target,
+        const char* ref) {
+    const char* method_name;
+    const QoreClass* declared_class;
+    const QoreMethod* method;
+    if (!ref || !qore_aot_decode_object_method_ref(pgm, ref, method_name, declared_class, method) || !*method_name) {
+        target.discard(nullptr);
+        return nullptr;
+    }
+    ParseObjectMethodReferenceNode* rv = new ParseObjectMethodReferenceNode(&loc_builtin, target,
+        strdup(method_name));
+    if (method) {
+        rv->setParseResolution(declared_class, method);
+    }
+    return rv;
+}
+
 static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
     if (!qc || !method_name || !*method_name) {
         return nullptr;
@@ -4565,9 +4638,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                     target.discard(nullptr);
                     has_unsupported = true;
                 } else if (ref1 && *ref1) {
-                    ctx->exprs[i] = toBitsNB(QoreValue(
-                        new ParseObjectMethodReferenceNode(&loc_builtin,
-                            target, strdup(ref1))));
+                    // the method resolved when parsing is restored (qore#6680)
+                    ParseObjectMethodReferenceNode* omr = qore_aot_make_object_method_ref(pgm, target, ref1);
+                    if (omr) {
+                        ctx->exprs[i] = toBitsNB(QoreValue(omr));
+                    } else {
+                        printd(0, "AOT v2: invalid obj method ref name\n");
+                        has_unsupported = true;
+                    }
                 } else {
                     printd(0, "AOT v2: empty obj method ref name\n");
                     target.discard(nullptr);

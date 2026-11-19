@@ -597,11 +597,18 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        qore_rt_exec_on_block_exit_return_hold(), qore_rt_take_handed_over_return() and
 //!        qore_rt_release_handed_over_return(); a ScopeExit outside return cleanups can produce a boolean that
 //!        branches to the handed-over return if a handler returned (#6137, #6552)
+//!      - ReleaseHandedOverReturn (442) can have one operand, the result of a ScopeExit past the inline cap, which it
+//!        only clears; the ScopeExit with flag bit 2 can have a result: whether its handlers handed a value over (#6552)
 //!      - debug IR can encode ReleasePlainLocalRead (opcode 443, Base group, one operand) to release a functional
 //!        operator's source after a plain local read (#5959); the maximum opcode in the AOT header is 443
 //!      - IR functions have their catch-exit depths and catch-cleanup results after their blocks, as (u16 block, u16
 //!        instruction, u32 value) entries, so that a module's debug IR closes its catch blocks as the IR it was made
 //!        from (qore#6733)
+//!      - the method name of an object method reference (OBJ_METHOD_REF_EXPR and EN_OBJ_METH_REF expressions, and the
+//!        name that native code passes to qore_rt_create_object_method_ref_aot()) is
+//!        "\x02<declared class reference>\x01<method class reference>\x01<method name>" for a normal method of a
+//!        parent class that the compiler resolved for the receiver's declared class (qore_aot_object_method_ref_name(),
+//!        qore#6680); an earlier reader would take it for the name of a method that does not exist
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! Old compiled artifacts must be rebuilt for AL's handler and source-release semantics.
@@ -718,6 +725,11 @@ static_assert(QORE_AOT_HANDED_OVER_RETURN_VERSION == QORE_AOT_BATCH_AL_VERSION,
 */
 constexpr uint16_t QORE_AOT_CATCH_TABLES_VERSION = 48;
 static_assert(QORE_AOT_CATCH_TABLES_VERSION == QORE_AOT_BATCH_AL_VERSION,
+    "the format changes of batch AL share one format version (v48)");
+//! First format version whose object method references can give the method resolved for the receiver's declared
+//! class (see v48 above, qore#6680); a reader of an earlier image reads plain method names.
+constexpr uint16_t QORE_AOT_INHERITED_OBJECT_METHOD_REF_VERSION = 48;
+static_assert(QORE_AOT_INHERITED_OBJECT_METHOD_REF_VERSION == QORE_AOT_BATCH_AL_VERSION,
     "the format changes of batch AL share one format version (v48)");
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and

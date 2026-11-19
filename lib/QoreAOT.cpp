@@ -36495,7 +36495,9 @@ class ExprTreeSerializer {
         // Method reference: \obj.method()
         if (auto* mr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_OBJ_METH_REF));
-            writeStr(mr->getMethodName().c_str(), mr->getMethodName().size());
+            // with the method resolved when parsing (qore#6680)
+            std::string ref_name = qore_aot_object_method_ref_name(mr);
+            writeStr(ref_name.c_str(), ref_name.size());
             writeU16(1);
             return serializeValue(mr->getExp());
         }
@@ -38010,7 +38012,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
         id.kind = AOTExprKind::OBJ_METHOD_REF_EXPR;
-        id.ref1 = omr->getMethodName().c_str();
+        // with the method resolved when parsing (qore#6680)
+        id.ref1 = qore_aot_object_method_ref_name(omr);
         id.child_expr = omr->getExp();
         return id;
     }

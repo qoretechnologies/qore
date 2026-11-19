@@ -5200,8 +5200,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     QoreValue obj_val = fromBits(object_bits);
     QoreObject* obj = obj_val.getType() == NT_OBJECT ? obj_val.get<QoreObject>() : nullptr;
     if (!obj) {
-        // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference()
-        return toBits(qore_make_pseudo_method_reference(&loc_builtin, obj_val, method_name, xsink));
+        // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference();
+        // by the method's own name, also when the name has the class references of the "\x01" and "\x02" forms below
+        const char* pseudo_name = method_name;
+        if (method_name[0] == '\x01') {
+            const char* end = strchr(method_name + 1, '\x01');
+            if (!end) {
+                xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "invalid AOT object method reference");
+                return toBits(QoreValue());
+            }
+            pseudo_name = end + 1;
+        } else if (method_name[0] == '\x02') {
+            const QoreClass* declared_class;
+            const QoreMethod* parse_method;
+            if (!qore_aot_decode_object_method_ref(nullptr, method_name, pseudo_name, declared_class, parse_method)) {
+                xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "invalid AOT object method reference");
+                return toBits(QoreValue());
+            }
+        }
+        return toBits(qore_make_pseudo_method_reference(&loc_builtin, obj_val, pseudo_name, xsink));
     }
 
     // a static method of the receiver's declared class: the reference is bound to it, whatever the class of the
@@ -5230,6 +5247,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
         return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, method)));
     }
 
+    // a normal method of a parent class resolved for the receiver's declared class:
+    // "\x02<declared class reference>\x01<method class reference>\x01<method name>" (see
+    // qore_aot_object_method_ref_name()); the classes are resolved only if the method found by name is not accessible
+    // (see below)
+    const char* inherited_ref = nullptr;
+    if (method_name[0] == '\x02') {
+        inherited_ref = method_name;
+        const QoreClass* declared_class;
+        const QoreMethod* parse_method;
+        if (!qore_aot_decode_object_method_ref(nullptr, inherited_ref, method_name, declared_class, parse_method)) {
+            xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "invalid AOT object method reference");
+            return toBits(QoreValue());
+        }
+    }
+
     const QoreClass* obj_class = obj->getClass();
     ClassAccess access = Public;
     const QoreMethod* method = obj_class->findMethod(method_name, access);
@@ -5249,6 +5281,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     }
 
     if (access > Public && !qore_class_private::runtimeCheckPrivateClassAccess(*obj_class)) {
+        // for an object of the declared class, the method resolved for it when parsing, as for a call of the method
+        // and as in ParseObjectMethodReferenceNode::makeReference() (qore#6680)
+        if (inherited_ref) {
+            QoreProgram* pgm = rc_get_current_ref().getProgram();
+            if (!pgm) {
+                pgm = getProgram();
+            }
+            const char* name;
+            const QoreClass* declared_class;
+            const QoreMethod* parse_method;
+            // the declared class can be the copy of a module's class imported into the Program, while the object has
+            // the module's own class, as for a call of the method (qore_rt_same_class())
+            if (pgm && qore_aot_decode_object_method_ref(pgm, inherited_ref, name, declared_class, parse_method)
+                    && parse_method && declared_class->getID() == obj_class->getID()) {
+                return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, parse_method)));
+            }
+        }
         if (method->isPrivate()) {
             xsink->raiseException("ILLEGAL-CALL-REFERENCE",
                 "cannot create a call reference to %s %s::%s() from outside the class",

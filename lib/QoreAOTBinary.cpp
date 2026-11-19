@@ -14616,7 +14616,8 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
     if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::OBJ_METHOD_REF_EXPR));
-        writer.writeStringRef(omr->getMethodName().c_str());
+        // with the method resolved when parsing (qore#6680)
+        writer.writeStringRef(qore_aot_object_method_ref_name(omr).c_str());
         return classifyAndWriteExpr(writer, omr->getExp(), parent_locals, parent_globals,
             const_reverse_map);
     }
