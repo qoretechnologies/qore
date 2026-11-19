@@ -6172,7 +6172,19 @@ group by p.index_name", schema.upr(), name.upr());
     #! Oracle always supports bulk merging
     code getBulkUpsertClosure(hash<auto> example_row, int upsert_strategy = AbstractTable::UpsertAuto,
             *hash<auto> opt) {
-        return getUpsertClosure(example_row, upsert_strategy, opt);
+        code c = getUpsertClosure(example_row, upsert_strategy, opt);
+        if (isBulkUpsertRow(example_row)) {
+            return c;
+        }
+        # a closure made from a hash row takes rows of list values (bulk DML), whose lists are checked first; hash
+        # rows take it directly (issue #6691)
+        code rows = getBulkUpsertRowsClosure(c, True);
+        return int sub (hash<auto> h) {
+            if (h.firstValue().typeCode() == NT_LIST && isBulkUpsertRow(h)) {
+                return rows(h);
+            }
+            return c(h);
+        };
     }
 
     #! Returns a closure for performing upserts
@@ -6180,6 +6192,13 @@ group by p.index_name", schema.upr(), name.upr());
         ignored and a closure using an Oracle merge statement is returned
     */
     code getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
+        # the statements bind the lists of a row of list values (bulk DML) as arrays; the lists are checked first
+        # (issue #6691)
+        return getUpsertRowsClosure(row, getOracleUpsertClosure(row, upsert_strategy, opt), True);
+    }
+
+    #! returns the upsert closure
+    private code getOracleUpsertClosure(hash<auto> row, int upsert_strategy, *hash<auto> opt) {
         # check upsert options
         validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
 

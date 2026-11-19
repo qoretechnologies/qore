@@ -3411,6 +3411,10 @@
     - fixed an upsert closure of @ref sqlutilintro "SqlUtil" kept across a call of
       @ref SqlUtil::AbstractTable::clear() "AbstractTable::clear()", which raised \c OBJECT-ALREADY-DELETED
       (<a href="https://github.com/qoretechnologies/qore/issues/6686">issue 6686</a>); see @ref sqlutilv3_11_0
+    - fixed the upsert of a row of list values (bulk DML) with @ref sqlutilintro "SqlUtil" by
+      \c upsertFromIterator() or an upsert closure made from such a row, which failed with a bind error with every
+      driver but Oracle (<a href="https://github.com/qoretechnologies/qore/issues/6691">issue 6691</a>);
+      see @ref sqlutilv3_11_0
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
