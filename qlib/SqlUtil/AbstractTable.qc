@@ -458,7 +458,9 @@ public class AbstractTable inherits AbstractSqlUtilBase {
               source table. This operation is expensive for large data sets.  The table must have a primary key, and
               each input row must have a plain value (not \c NULL, an operator, a list or an object) of each column
               of the primary key, or
-              \c UPSERT-ERROR is raised; for an input row without one, the rows before it have been upserted (and
+              \c UPSERT-ERROR is raised; a row of list values (bulk DML: its first value is a list) gives the key of
+              each of its rows, whose value of a key column is the element of the column's list, which must be as
+              long as the first value, or the column's value if it is not a list; for an input row without one, the rows before it have been upserted (and
               committed with \c commit_block).
             - \c info_callback: see @ref upsert_info_callback
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
@@ -5183,10 +5185,13 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         hash<string, hash<auto>> pkh;
 
         hash<auto> row = i.getValue();
+        # the primary key values of the rows of the current input row if it is a row of list values (bulk DML), for
+        # "delete_others", checked before the row is upserted (issue #6687)
+        *list<hash<auto>> bulk_keys;
         # the first row is checked before the upsert closure is made from it
         bool first_row = True;
         if (opt.delete_others) {
-            checkDeleteOthersRow(row, pkl);
+            bulk_keys = checkDeleteOthersInputRow(row, pkl);
         }
         code upsert = getUpsertClosure(row, upsert_strategy, opt);
 
@@ -5195,7 +5200,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
             if (first_row) {
                 first_row = False;
             } else if (opt.delete_others) {
-                checkDeleteOthersRow(row, pkl);
+                bulk_keys = checkDeleteOthersInputRow(row, pkl);
             }
             int code = upsert(row);
             ++rh{AbstractTable::UpsertResultMap{code}};
@@ -5212,7 +5217,13 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
 
             # save primary key value in primary key hash if "delete_others" is set
             if (opt.delete_others) {
-                pkh{getDeleteOthersKey(row, pkl)} = row{pkl};
+                if (bulk_keys) {
+                    foreach hash<auto> k in (bulk_keys) {
+                        pkh{getDeleteOthersKey(k, pkl)} = k;
+                    }
+                } else {
+                    pkh{getDeleteOthersKey(row, pkl)} = row{pkl};
+                }
             }
         } while (i.next() && (row = i.getValue()));
 
@@ -5223,9 +5234,45 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         return rh;
     }
 
+    #! checks the primary key values of an input row for the "delete_others" upsert option
+    /** @return NOTHING for a hash row, whose key values are checked with checkDeleteOthersRow(); for a row of list
+        values (bulk DML: its first value is a list), the key values of each of its rows, which are the elements of
+        the lists of the key columns, or a column's value if it is not a list; each is checked with
+        checkDeleteOthersRow() (issue #6687)
+
+        @throw UPSERT-ERROR a key value is missing or not a plain value, or the list of a key column has another
+        length than the first value of a row of list values
+    */
+    private *list<hash<auto>> checkDeleteOthersInputRow(hash<auto> row, list<string> pkl) {
+        if (row.firstValue().typeCode() != NT_LIST) {
+            checkDeleteOthersRow(row, pkl);
+            return;
+        }
+        int size = row.firstValue().size();
+        foreach string col in (pkl) {
+            if (row{col}.typeCode() == NT_LIST && row{col}.size() != size) {
+                throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a value of each column of the "
+                    "primary key (%y) for each row of a row of list values; the list of column %y has %d element%s, "
+                    "the first value %d, in: %y", getDesc(), pkl, col, row{col}.size(),
+                    row{col}.size() == 1 ? "" : "s", size, row);
+            }
+        }
+        list<hash<auto>> rv = ();
+        for (int n = 0; n < size; ++n) {
+            hash<auto> k = map {$1: row{$1}.typeCode() == NT_LIST ? row{$1}[n] : row{$1}}, pkl;
+            checkDeleteOthersRow(k, pkl, row);
+            rv += k;
+        }
+        return rv;
+    }
+
     #! raises UPSERT-ERROR if an input row of an upsert with the "delete_others" option has no plain value of a
     #! column of the primary key
-    private checkDeleteOthersRow(hash<auto> row, list<string> pkl) {
+    /** @param row the key values to check
+        @param pkl the columns of the primary key
+        @param input_row the input row that gives \a row if it is a row of list values, for the error message
+    */
+    private checkDeleteOthersRow(hash<auto> row, list<string> pkl, *hash<auto> input_row) {
         # the row that an input row gives cannot be known without its primary key values: a missing or NULL
         # value (which the database may generate) or an operator
         foreach string col in (pkl) {
@@ -5234,13 +5281,13 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
                 case NT_NULL:
                     throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a value of each column "
                         "of the primary key (%y) in each input row; column %y has no value in: %y", getDesc(),
-                        pkl, col, row);
+                        pkl, col, input_row ?? row);
                 case NT_HASH:
                 case NT_LIST:
                 case NT_OBJECT:
                     throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a plain value of each "
                         "column of the primary key (%y) in each input row; the value of column %y is an "
-                        "operator, a list or an object in: %y", getDesc(), pkl, col, row);
+                        "operator, a list or an object in: %y", getDesc(), pkl, col, input_row ?? row);
             }
         }
     }

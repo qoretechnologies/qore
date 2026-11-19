@@ -604,6 +604,10 @@ module SqlUtil {
       (<a href="https://github.com/qoretechnologies/qore/issues/6676">issue 6676</a>)
     - fixed the select-first upsert, which ignored the \c omit_update option: the omitted columns are neither compared
       nor updated (<a href="https://github.com/qoretechnologies/qore/issues/6683">issue 6683</a>)
+    - fixed the \c delete_others upsert option of @ref SqlUtil::AbstractTable::upsertFromIterator() with rows of list
+      values (bulk DML), which deleted every row of the table, those of the input as well: the key values of each of their
+      rows are input keys
+      (<a href="https://github.com/qoretechnologies/qore/issues/6687">issue 6687</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
