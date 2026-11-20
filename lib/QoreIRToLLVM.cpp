@@ -10108,6 +10108,53 @@ llvm::Value* QoreIRToLLVM::getFastEntryReturnValue(llvm::Module& module, llvm::V
     }
 }
 
+// Enter through the ordinary call binder on this cold edge. The native entry can receive its caller's context,
+// so use the callee's canonical name and standard native symbol to identify its overload in the executing Program.
+bool QoreIRToLLVM::emitAOTDebugFastEntry(llvm::Module& module, llvm::Function& function, const BatchCalleeInfo& callee) {
+    unsigned count = callee.param_kinds.size();
+    llvm::Value* args = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    if (count) {
+        args = builder->CreateAlloca(i64_type, llvm::ConstantInt::get(i32_type, count));
+    }
+    std::string kinds;
+    kinds.reserve(count);
+    for (unsigned i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT debugger entry lowering")) {
+            return false;
+        }
+        auto kind = callee.param_kinds[i];
+        kinds.push_back(static_cast<char>(kind));
+        llvm::Value* raw = function.getArg(i);
+        if (kind == BatchCalleeParamKind::NativeBool) {
+            raw = builder->CreateZExt(raw, i64_type);
+        } else if (kind == BatchCalleeParamKind::NativeFloat) {
+            raw = builder->CreateBitCast(raw, i64_type);
+        }
+        builder->CreateStore(raw, builder->CreateGEP(i64_type, args, llvm::ConstantInt::get(i32_type, i)));
+    }
+    auto standard = module.getOrInsertFunction(callee.name,
+        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+    auto dispatch = module.getOrInsertFunction("qore_rt_debug_aot_fast_function",
+        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+    // Qualify a root function explicitly, so it cannot resolve to a builtin with the same name.
+    std::string identity = callee.call_ref_path;
+    if (identity.find("::") == std::string::npos) {
+        identity.insert(0, "::");
+    }
+    identity = qore_aot_encode_function_ref(std::move(identity),
+        callee.specialization_type_param_instantiation);
+    llvm::Value* boxed = builder->CreateCall(dispatch,
+        {qore_ir_create_global_string_ptr(builder, identity), standard.getCallee(), args,
+         qore_ir_create_global_string_ptr(builder, kinds), llvm::ConstantInt::get(i32_type, count), xsink_arg});
+    llvm::Value* rv = getFastEntryReturnValue(module, boxed);
+    if (rv != boxed) {
+        builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {boxed, xsink_arg});
+    }
+    builder->CreateRet(rv);
+    return true;
+}
+
 llvm::Constant* QoreIRToLLVM::getNothingReturnValue() const {
     if (fast_entry_return_kind == BatchCalleeReturnKind::NativeFloat) {
         return llvm::ConstantFP::get(double_type, 0.0);
@@ -16081,6 +16128,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // check as AST user-code entry.  Some optimized call paths invoke LLVM
     // functions directly and bypass runtime helpers such as qore_rt_call_fast().
     llvm::BasicBlock* stack_overflow_bb = nullptr;
+    llvm::BasicBlock* debug_fast_entry_bb = nullptr;
+    auto* slots_type = llvm::ArrayType::get(ptr_type, 3);
+    llvm::AllocaInst* entry_slots = nullptr;
     if (!func.blocks.empty()) {
         llvm::BasicBlock* first_ir_bb = block_map[func.blocks.front().get()];
         llvm::BasicBlock* stack_check_bb = llvm::BasicBlock::Create(ctx,
@@ -16089,12 +16139,42 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 "stack_overflow", llvm_func, first_ir_bb);
 
         builder->SetInsertPoint(stack_check_bb);
-        auto check_fn = module.getOrInsertFunction("qore_rt_check_stack",
+        const BatchCalleeInfo* debug_callee = nullptr;
+        if (aot_mode && is_fast_entry && batch_callees && func.source_variant) {
+            auto it = batch_callees->find(func.source_variant);
+            if (it != batch_callees->end() && !it->second.call_ref_path.empty()
+                    && it->second.param_kinds.size() + 2 == llvm_func->arg_size()) {
+                debug_callee = &it->second;
+            }
+        }
+        llvm::Value* err;
+        if (debug_callee) {
+            // The stack check, the debugger decision, and the location slots all need this thread's data.
+            entry_slots = builder->CreateAlloca(slots_type, nullptr, "native_entry_slots");
+            auto enter = module.getOrInsertFunction("qore_rt_enter_aot_fast_function",
+                llvm::FunctionType::get(i32_type, {ptr_type, ptr_type}, false));
+            err = builder->CreateCall(enter, {xsink_arg, entry_slots});
+        } else {
+            auto check = module.getOrInsertFunction("qore_rt_check_stack",
                 llvm::FunctionType::get(i32_type, {ptr_type}, false));
-        llvm::Value* err = builder->CreateCall(check_fn, {xsink_arg});
-        llvm::Value* ok = builder->CreateICmpEQ(err,
-                llvm::ConstantInt::get(i32_type, 0));
-        builder->CreateCondBr(ok, first_ir_bb, stack_overflow_bb);
+            err = builder->CreateCall(check, {xsink_arg});
+        }
+        llvm::Value* ok = builder->CreateICmpEQ(err, llvm::ConstantInt::get(i32_type, 0));
+        if (debug_callee) {
+            llvm::BasicBlock* slow = llvm::BasicBlock::Create(ctx, "aot_entry_slow", llvm_func, first_ir_bb);
+            debug_fast_entry_bb = llvm::BasicBlock::Create(ctx, "aot_debug_entry", llvm_func, first_ir_bb);
+            builder->CreateCondBr(ok, first_ir_bb, slow, llvm::MDBuilder(ctx).createBranchWeights(1 << 20, 1));
+            builder->SetInsertPoint(slow);
+            builder->CreateCondBr(builder->CreateICmpSLT(err, llvm::ConstantInt::get(i32_type, 0)),
+                stack_overflow_bb, debug_fast_entry_bb);
+            builder->SetInsertPoint(debug_fast_entry_bb);
+            if (!emitAOTDebugFastEntry(module, *llvm_func, *debug_callee)) {
+                error = "operation cancelled during AOT debugger entry lowering";
+                return false;
+            }
+        } else {
+            builder->CreateCondBr(ok, first_ir_bb, stack_overflow_bb);
+        }
 
         builder->SetInsertPoint(stack_overflow_bb);
         builder->CreateRet(getNothingReturnValue());
@@ -16279,17 +16359,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // the thread's runtime location slots and its data for the frames of native calls, got with one call
     // (QoreNativeEntrySlots)
     {
-        llvm::Type* slots_type = llvm::ArrayType::get(ptr_type, 3);
-        llvm::AllocaInst* slots;
-        {
+        if (!entry_slots) {
             llvm::BasicBlock& entry = llvm_func->getEntryBlock();
             llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
-            slots = ab.CreateAlloca(slots_type, nullptr, "native_entry_slots");
+            entry_slots = ab.CreateAlloca(slots_type, nullptr, "native_entry_slots");
+            builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots",
+                llvm::FunctionType::get(void_type, {ptr_type}, false)), {entry_slots});
         }
-        builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots",
-            llvm::FunctionType::get(void_type, {ptr_type}, false)), {slots});
         auto load_slot = [&](unsigned i, const char* name) -> llvm::Value* {
-            return builder->CreateLoad(ptr_type, builder->CreateConstInBoundsGEP2_32(slots_type, slots, 0, i), name);
+            return builder->CreateLoad(ptr_type, builder->CreateConstInBoundsGEP2_32(slots_type, entry_slots, 0, i), name);
         };
         native_call_thread_data = load_slot(0, "thread_data");
         loc_cache_ptr = load_slot(1, "loc_ptr");
@@ -18560,7 +18638,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
         std::vector<llvm::Instruction*> exit_terms;
         for (llvm::BasicBlock& bb : *llvm_func) {
-            if (&bb == stack_overflow_bb) {
+            if (&bb == stack_overflow_bb || &bb == debug_fast_entry_bb) {
                 continue;
             }
             llvm::Instruction* term = qoreGetTerminator(bb);

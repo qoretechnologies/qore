@@ -1062,6 +1062,10 @@ struct QoreNativeEntrySlots {
 //! Fills the thread's runtime location slots and data for a native function being entered
 void qore_rt_get_native_entry_slots(QoreNativeEntrySlots* slots);
 
+//! Checks a typed AOT entry and initializes its location slots using the same thread data.
+/** Returns -1 on stack exhaustion, 1 to enter the debugger body, or 0 to execute native code. */
+int qore_rt_enter_aot_fast_function(ExceptionSink* xsink, QoreNativeEntrySlots* slots);
+
 //! Pushes the call stack frame of a call that AOT-compiled code makes directly to a callee it names
 /** As qore_rt_push_native_call_frame_aot(), for a call without a call target, such as a call of a known call
     reference: the frame's name is \a call_name, interned on the first call of the site and cached in

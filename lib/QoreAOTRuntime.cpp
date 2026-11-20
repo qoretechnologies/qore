@@ -1074,9 +1074,12 @@ std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode*
     if (!fcr || !fcr->getFunction()) {
         return std::string();
     }
-    std::string name = getAOTFunctionRefBaseName(fcr);
+    return qore_aot_encode_function_ref(getAOTFunctionRefBaseName(fcr), fcr->getExplicitTypeParamInstantiation());
+}
+
+std::string qore_aot_encode_function_ref(std::string name, const QoreTypeParamInstantiation* inst) {
     // the explicit type arguments (\f<T>()) follow the name: "\ntypeargs:N\n<type path>..."
-    if (const QoreTypeParamInstantiation* inst = fcr->getExplicitTypeParamInstantiation()) {
+    if (inst) {
         name += aot_ref_type_arg_marker;
         name += std::to_string(inst->type_args.size());
         for (const QoreTypeInfo* type_arg : inst->type_args) {

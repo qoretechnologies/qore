@@ -63,6 +63,9 @@ extern QoreHashNode* ENV;
 // Forward declaration to avoid circular includes
 class QoreSandboxManager;
 
+// Update the process-wide fast path for prelinked AOT calls when a Program gains or loses its debugger.
+DLLLOCAL void qore_aot_debug_program_change(bool attached);
+
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
@@ -6739,6 +6742,9 @@ public:
 
         if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
             return;
+        if (!dpgm.load(std::memory_order_relaxed)) {
+            qore_aot_debug_program_change(true);
+        }
         dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
         // the IR interpreter no longer inlines the calls of this Program's methods (issue #6473)
         qore_ir_suspend_inline_states(&dpgm);
@@ -6763,7 +6769,9 @@ public:
         assert(n_dpgm==dpgm.load(std::memory_order_relaxed));
         if (!n_dpgm)
             return;
-        dpgm.store(nullptr, std::memory_order_release);
+        if (dpgm.exchange(nullptr, std::memory_order_release)) {
+            qore_aot_debug_program_change(false);
+        }
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {

@@ -168,7 +168,7 @@ public:
 
     QoreIRValue lowerExpression(const QoreValue& expr, std::string& error);
     bool lowerStatement(const AbstractStatement* stmt, std::string& error);
-    bool lowerStatementBlock(const StatementBlock* block, std::string& error);
+    bool lowerStatementBlock(const StatementBlock* block, std::string& error, LocalVar* debug_catch_var = nullptr);
     void setParseContext(QoreParseContext* parse_context);
 
     //! Closes the innermost temp scope with a DiscardTemps instruction that has the active exception handler
