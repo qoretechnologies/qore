@@ -736,8 +736,8 @@ test-cmake-alpine-amd64:
 test-tsan-ubuntu-amd64:
   stage: test
   timeout: 60 minutes
-  needs: [{job: tree-already-tested, optional: true}]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  needs: [resolve-qore-test-base-images, {job: tree-already-tested, optional: true}]
+  image: $QORE_TEST_BASE_UBUNTU_AMD64_IMAGE
   tags:
     - k8s
     - amd64
