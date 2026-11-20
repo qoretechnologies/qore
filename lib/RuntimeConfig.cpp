@@ -371,7 +371,9 @@ RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
     }
 }
 
-RuntimeConfigLocationHelper::~RuntimeConfigLocationHelper() {
+// out of line: inlined into AbstractStatement::exec(), it takes the place of the release of the statement's temporaries
+// there (QoreStatementTempScope::releaseIntern()), which every statement runs
+QORE_INTERN_NOINLINE RuntimeConfigLocationHelper::~RuntimeConfigLocationHelper() {
     rc.setLocation(old_loc);
     rc.setStatement(old_stmt);
     if (restore_po) {
