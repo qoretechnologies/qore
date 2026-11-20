@@ -29,6 +29,8 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_watchdog import HAVE_TIMEOUT, RunnerTree  # noqa: E402
 
+LINUX = os.path.isdir("/proc/self")
+
 
 # the tools that run_tests.sh tries by default
 DEFAULT_TOOLS = ["sample", "lldb"] if sys.platform == "darwin" else ["gdb", "eu-stack"]
@@ -89,8 +91,8 @@ def ptrace_attach_works(tool):
         target.wait()
 
 
-@unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
-class DescendantStacksTest(unittest.TestCase):
+class StacksCase(unittest.TestCase):
+    """What the cases have in common: a run of TEST, and the parts of its output"""
 
     def run_test(self, children=1, jobs=1, scripts=None, harness_limit=120, detached=False, **variables):
         """Runs TEST with the given number of children (detached: adopted by another process); returns the test's output, the children's process IDs, the
@@ -157,6 +159,10 @@ class DescendantStacksTest(unittest.TestCase):
         signal_line = output.find("SIGABRT sent at once")
         self.assertNotEqual(-1, signal_line, output)
         self.assertLess(end, signal_line, output)
+
+
+@unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
+class DescendantStacksTest(StacksCase):
 
     def check_real_tool(self, jobs=1, detached=False):
         tools = [tool for tool in DEFAULT_TOOLS if shutil.which(tool)]
@@ -248,8 +254,10 @@ class DescendantStacksTest(unittest.TestCase):
             children=2, scripts={"blocking-tool": blocks}, harness_limit=60, QORE_TEST_STACK_TOOLS="blocking-tool",
             QORE_TEST_STACK_CAPTURE_WAIT="60", QORE_TEST_STACK_CAPTURE_TOTAL="2")
         pids.sort()
-        # within the 2 s, or 1 s if a second began between the start of the captures and the first one
-        self.assertRegex(self.capture(output, pids[0]), r"blocking-tool did not end within [12]s and was killed")
+        # the whole of the 2 s: the first capture's limit is taken with the clock reading of the end of the total, so a
+        # second that begins in between does not shorten it
+        self.assertIn("*** process %d: blocking-tool did not end within 2s and was killed ***" % pids[0],
+                      self.capture(output, pids[0]))
         self.assertIn("*** process %d: not captured, as the captures have taken their 2s "
                       "(QORE_TEST_STACK_CAPTURE_TOTAL) ***" % pids[1], self.capture(output, pids[1]))
         self.assertEqual(1, len((root / "calls").read_text().splitlines()))
@@ -347,6 +355,27 @@ class DescendantStacksTest(unittest.TestCase):
         self.assertIn("TIMEOUT: test exceeded 3s limit", result.output)
         self.assertNotIn("native call stacks", result.output)
         self.assertNotIn("reporting-tool was run", result.output)
+
+
+@unittest.skipUnless(HAVE_TIMEOUT and LINUX, "the scan of /proc is Linux's")
+class LinuxScanTest(StacksCase):
+    """The limit of the scan of /proc"""
+
+    def test_a_scan_of_proc_that_blocks_is_bounded(self):
+        # A read of /proc/<pid>/environ waits while the process holds the lock of its memory map (D state); the scan
+        # for the test's mark is a stand-in awk that blocks on a latch, which the runner's limit ends
+        real = shutil.which("awk")
+        scripts = {
+            "awk": '#!/bin/sh\nfor arg in "$@"; do case "$arg" in stack_mark=*) read line < "{latch}" ;; esac; done\n'
+                   'exec \'%s\' "$@"\n' % real,
+            "printing-tool": '#!/bin/sh\necho "stacks of $1 from a stand-in"\n',
+        }
+        output, pids, result, elapsed, root = self.run_test(scripts=scripts, QORE_TEST_STACK_TOOLS="printing-tool")
+        self.assertIn("*** the scan of the processes of test", output)
+        self.assertIn("with its mark (/proc/*/environ) did not end within 10s", output)
+        # the child is still found as the test's descendant, and captured
+        self.assertIn("stacks of %d from a stand-in" % pids[0], self.capture(output, pids[0]))
+        self.assertLess(elapsed, LIMIT + 10 + 25, output)
 
 
 if __name__ == "__main__":
