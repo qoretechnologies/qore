@@ -519,6 +519,45 @@ const char* qore_mongo_check_uri_tls_files(const mongoc_uri_t* uri, ExceptionSin
     return nullptr;
 }
 
+const char* qore_mongo_driver_connection_reason(const mongoc_uri_t* uri) {
+    const char* mech = mongoc_uri_get_auth_mechanism(uri);
+    if (!mech) {
+        return nullptr;
+    }
+    if (!strcasecmp(mech, "MONGODB-AWS")) {
+        // with no access key and secret in the URI, libmongoc fetches the credentials over HTTP from the endpoints
+        // that the environment names, or from the container and instance metadata endpoints
+        if (!mongoc_uri_get_username(uri) || !mongoc_uri_get_password(uri)) {
+            return "authMechanism MONGODB-AWS without credentials in the connection string (the driver fetches "
+                "credentials from the environment's endpoints itself)";
+        }
+        return nullptr;
+    }
+    if (!strcasecmp(mech, "MONGODB-OIDC")) {
+        // an ENVIRONMENT makes libmongoc fetch tokens from the token endpoints of the cloud environment itself
+        bson_t props;
+        if (mongoc_uri_get_mechanism_properties(uri, &props)) {
+            bson_iter_t it;
+            bool env = bson_iter_init(&it, &props) && bson_iter_find_case(&it, "ENVIRONMENT");
+            bson_destroy(&props);
+            if (env) {
+                return "authMechanism MONGODB-OIDC with an ENVIRONMENT (the driver fetches tokens from the "
+                    "environment's endpoints itself)";
+            }
+        }
+        return nullptr;
+    }
+    return nullptr;
+}
+
+// the TLS options of libmongoc that mongoc_ssl_opt_t::internal points to: libmongoc's _mongoc_internal_tls_opts_t
+// (mongoc-ssl-private.h, the same layout since libmongoc 1.16, checked for 2.2.2); the module's stream initiator
+// replaces libmongoc's, which sets them from the URI
+struct qore_mongoc_internal_tls_opts {
+    bool tls_disable_certificate_revocation_check;
+    bool tls_disable_ocsp_endpoint_check;
+};
+
 mongoc_stream_t* qore_mongo_stream_initiator(
     const mongoc_uri_t* uri,
     const mongoc_host_list_t* host,
@@ -534,6 +573,24 @@ mongoc_stream_t* qore_mongo_stream_initiator(
 
     // a policy check honors an active policy barrier
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+
+    // the policy of the code that created the client, recorded then (qoretechnologies/qore#6911): it applies as well
+    // as the policy of the code that uses the client, so that a client made by sandboxed code stays governed by its
+    // sandbox when other code uses it
+    ExceptionSink creation_xsink;
+    ReferenceHolder<QoreSandboxManager> creation_policy(user_data
+        ? static_cast<const QoreSandboxCapture*>(user_data)->getPolicyManagerRef() : nullptr, &creation_xsink);
+    bool sandboxed = smh || creation_policy;
+
+    // the driver connects by itself for some authentication mechanisms, through no stream that the module creates and
+    // so with no check of the sandbox: they are refused for sandboxed code before anything else is done
+    if (sandboxed) {
+        if (const char* reason = qore_mongo_driver_connection_reason(uri)) {
+            bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
+                "MongoDB connection denied by sandbox: NETWORK-ACCESS-DENIED: %s", reason);
+            return nullptr;
+        }
+    }
 
     // the TLS files the connection string names are read for each connection on behalf of the calling program, so its
     // sandbox must allow them; they are checked before anything else is done for the connection
@@ -608,11 +665,27 @@ mongoc_stream_t* qore_mongo_stream_initiator(
             if (!smh->checkNetworkAccess(host->host, sa, addrlen, QSEC_NET_TCP, &xsink)) {
                 // Network access denied by sandbox
                 if (xsink) {
+                    // the denial is the error of the connection: it is not left in the local sink, which would
+                    // report it as unhandled
+                    xsink.clear();
                     bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                         "MongoDB connection denied by sandbox: network access restricted");
                     return nullptr;
                 }
                 // Try next address
+                continue;
+            }
+        }
+        // the policy of the code that created the client
+        if (creation_policy) {
+            ExceptionSink xsink;
+            if (!creation_policy->checkNetworkAccess(host->host, sa, addrlen, QSEC_NET_TCP, &xsink)) {
+                if (xsink) {
+                    xsink.clear();
+                    bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
+                        "MongoDB connection denied by sandbox: network access restricted");
+                    return nullptr;
+                }
                 continue;
             }
         }
@@ -655,6 +728,14 @@ mongoc_stream_t* qore_mongo_stream_initiator(
         // ignored
         mongoc_ssl_opt_t ssl_opt = *mongoc_ssl_opt_get_default();
         qore_mongo_apply_uri_tls_opts(uri, ssl_opt);
+        // the revocation options of the URI, which libmongoc's own initiator sets too; for sandboxed code, OCSP
+        // responders are never contacted: the driver connects to the responder that the server's certificate names
+        // by itself, with no check of the sandbox (qoretechnologies/qore#6911); a stapled response is still checked
+        qore_mongoc_internal_tls_opts tls_internal = {
+            mongoc_uri_get_option_as_bool(uri, MONGOC_URI_TLSDISABLECERTIFICATEREVOCATIONCHECK, false),
+            sandboxed || mongoc_uri_get_option_as_bool(uri, MONGOC_URI_TLSDISABLEOCSPENDPOINTCHECK, false),
+        };
+        ssl_opt.internal = &tls_internal;
 
         mongoc_stream_t* tls_stream = mongoc_stream_tls_new_with_hostname(base, host->host, &ssl_opt, 1);
         if (!tls_stream) {
@@ -684,7 +765,9 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     return base;
 }
 
-void qore_mongo_setup_interruptible_streams(mongoc_client_t* client) {
+void qore_mongo_setup_interruptible_streams(mongoc_client_t* client, const QoreSandboxCapture* creation) {
     qore_mongo_set_log_handler();
-    mongoc_client_set_stream_initiator(client, qore_mongo_stream_initiator, nullptr);
+    // the initiator gets the policy of the code that created the client (qoretechnologies/qore#6911)
+    mongoc_client_set_stream_initiator(client, qore_mongo_stream_initiator,
+        const_cast<QoreSandboxCapture*>(creation));
 }
