@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import resource
+import select
 import shutil
 import signal
 import subprocess
@@ -318,11 +319,53 @@ kill -9 $shells
     def child_runs(self, pid, fifo):
         """Returns True if the given process runs and is the child that the hanging test started (its command reads
         the given FIFO): a process that has ended (also a zombie that its new parent has not waited for yet) or that
-        has taken its process ID since does not"""
+        has taken its process ID since does not.  /proc on Linux (BusyBox ps has neither -p nor "command"), ps
+        elsewhere; fails if it cannot tell, so that a check that cannot see the process does not pass"""
+        if os.path.isdir("/proc/self"):
+            try:
+                with open(f"/proc/{pid}/stat") as f:
+                    stat = f.read()
+                with open(f"/proc/{pid}/cmdline", "rb") as f:
+                    cmdline = f.read().replace(b"\0", b" ").decode(errors="replace")
+            except (FileNotFoundError, ProcessLookupError):
+                return False
+            # the state, after the command name in parentheses
+            return stat[stat.rindex(")") + 2:].split()[0] != "Z" and str(fifo) in cmdline
         result = subprocess.run(["ps", "-o", "stat=", "-o", "command=", "-p", str(pid)], capture_output=True,
                                 text=True)
         line = result.stdout.strip()
+        # ps exits with 1 and prints nothing for a process that does not exist
+        if result.returncode not in (0, 1) or result.stderr.strip() or (result.returncode == 0) != bool(line):
+            raise AssertionError("ps cannot tell whether process %d runs: %r" % (pid, result))
         return bool(line) and not line.startswith("Z") and str(fifo) in line
+
+    def child_ends(self, pid, fifo, timeout=10):
+        """Returns True if the child (see child_runs()) has ended or ends within the time given: a SIGKILL that the
+        runner sent before it ended is delivered asynchronously.  Waits for the process's exit event (a pidfd on
+        Linux, a kqueue elsewhere), not for a time"""
+        if not self.child_runs(pid, fifo):
+            return True
+        if hasattr(os, "pidfd_open"):
+            try:
+                fd = os.pidfd_open(pid)
+            except ProcessLookupError:
+                return True
+            try:
+                select.select([fd], [], [], timeout)
+            finally:
+                os.close(fd)
+        else:
+            kq = select.kqueue()
+            try:
+                event = select.kevent(pid, filter=select.KQ_FILTER_PROC, flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                                      fflags=select.KQ_NOTE_EXIT)
+                try:
+                    kq.control([event], 1, timeout)
+                except ProcessLookupError:
+                    return True
+            finally:
+                kq.close()
+        return not self.child_runs(pid, fifo)
 
     def time_limit(self, jobs):
         """A test that exceeds its time limit is ended with every process that it started (#6835): its child, which
@@ -359,7 +402,7 @@ kill -9 $shells
             # the runner ended the child with the test: it is not one that the test left (which would be reported)
             self.assertFalse([line for line in blocks["hang.qtest"] if "left processes running" in line],
                              blocks["hang.qtest"])
-            self.assertFalse(self.child_runs(child, fifo), "the child of the timed-out test %d still runs" % child)
+            self.assertTrue(self.child_ends(child, fifo), "the child of the timed-out test %d still runs" % child)
         finally:
             if child is None and child_file.exists():
                 child = int(child_file.read_text())
