@@ -82,8 +82,15 @@ static *AbstractSshClientIdentityProvider SshUtilRegistry::getClientIdentityProv
 
 //! Returns the registered client identity provider names.
 /** @return the registered provider names
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot list the registry,
+        which is process-wide: the names are those of the entries of other code (see
+        @ref sandbox_process_wide_registries)
 */
 static list<string> SshUtilRegistry::listClientIdentityProviders() {
+    // the names are those of the providers of other tenants, which can name them (qore#6846)
+    if (qore_check_process_wide_registration("list the SSH client identity provider registry", xsink)) {
+        return QoreValue();
+    }
     return SshUtilRegistry::listClientIdentityProviders(xsink);
 }
 
@@ -130,8 +137,15 @@ static *AbstractSshServerHostKeyProvider SshUtilRegistry::getServerHostKeyProvid
 
 //! Returns the registered server host-key provider names.
 /** @return the registered provider names
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot list the registry,
+        which is process-wide: the names are those of the entries of other code (see
+        @ref sandbox_process_wide_registries)
 */
 static list<string> SshUtilRegistry::listServerHostKeyProviders() {
+    // the names are those of the providers of other tenants, which can name them (qore#6846)
+    if (qore_check_process_wide_registration("list the SSH server host key provider registry", xsink)) {
+        return QoreValue();
+    }
     return SshUtilRegistry::listServerHostKeyProviders(xsink);
 }
 
@@ -177,7 +191,14 @@ static *AbstractSshHostKeyStore SshUtilRegistry::getHostKeyStore(string name) {
 
 //! Returns the registered host-key store names.
 /** @return the registered store names
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot list the registry,
+        which is process-wide: the names are those of the entries of other code (see
+        @ref sandbox_process_wide_registries)
 */
 static list<string> SshUtilRegistry::listHostKeyStores() {
+    // the names are those of the providers of other tenants, which can name them (qore#6846)
+    if (qore_check_process_wide_registration("list the SSH host key store registry", xsink)) {
+        return QoreValue();
+    }
     return SshUtilRegistry::listHostKeyStores(xsink);
 }
