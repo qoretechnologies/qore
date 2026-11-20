@@ -1619,13 +1619,34 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.setHandler("xorigin", "/test", NOTHING,
             new FakeAltSvcHandler(443, "otherhost.invalid"));
         server.waitForAsyncIo();
-        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+        # The first request probes QUIC before it tries TCP. Own both transports so that
+        # a QUIC listener from another test cannot answer on our TCP port.
+        Socket udp_guard();
+        on_exit delete udp_guard;
+        hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{
             "node": "127.0.0.1",
-            "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
-        });
-        server.waitForAsyncIo();
+        };
+        hash<auto> info;
+        for (int attempt = 0; ; ++attempt) {
+            udp_guard.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+            opts.service = string(udp_guard.getSocketInfo().port);
+            try {
+                info = server.addListener(opts);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SOCKET-BIND-ERROR" || ex.arg != EADDRINUSE || attempt == 15) {
+                    rethrow;
+                }
+                udp_guard.close();
+            }
+        }
+
+        assertThrows("SOCKET-BIND-ERROR", sub () {
+            Socket competing_listener();
+            competing_listener.bindINET("127.0.0.1", string(info.port), False, AF_INET, SOCK_DGRAM);
+        }, NOTHING, "the origin port is reserved on UDP before protocol selection");
 
         HttpClientIo::HttpClientConnectionManager mgr(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
