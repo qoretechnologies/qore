@@ -102,9 +102,8 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
     @par Functional Domains for Standard Module Sources
-    Under the @ref function_domains "functional domain" rules, calling \c DiscordDataProviderBase::threadWait()
-    requires process control, and source copies of thread-starting standard modules loaded outside the module path
-    require thread control at parse time.
+    Restricted Programs now get a parse error when explicitly loading standard module sources outside the
+    process-wide module path if the source needs a denied @ref function_domains "functional domain".
 
     @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,

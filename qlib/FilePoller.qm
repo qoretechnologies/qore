@@ -115,6 +115,8 @@ module FilePoller {
     the following parse options set:
     - \c PO_NO_THREAD_CONTROL: when loaded from the module path, the poller can start its polling thread
       under the caller's sandbox. It uses the supplied starter, the captured host capability, or its own thread.
+      The eager event provider starts polling in its constructor. The delayed event provider starts polling
+      when its \c observersReady() method is called. In either case, the polling thread counts toward the caller's sandbox thread quota.
     - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
       in its module header, so when it is loaded from the module path, the \c "sleep" option is not required in
       @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()"

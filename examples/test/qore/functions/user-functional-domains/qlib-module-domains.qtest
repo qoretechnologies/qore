@@ -46,8 +46,6 @@ class QlibModuleDomainsTest inherits QUnit::Test {
 
         #! public APIs that perform a restricted operation, with the module that provides them
         const TaggedApis = (
-            ("module": "DiscordDataProvider",
-             "code": "sub f() { DiscordDataProvider::DiscordDataProviderBase::threadWait(1ms); }"),
             ("module": "ProviderIndexUtil", "code": "ProviderIndexUtil::ProviderIndexUtil::setEnvironmentVariable(\"/x\");"),
             ("module": "ProviderIndex", "code": "ProviderIndex::ProviderIndex::createDataProviderIndex();"),
             ("module": "DataProvider", "code": "DataProvider::DataProvider::registerKnownTypes();"),
@@ -153,6 +151,11 @@ printf(\"end\\n\");
                     sprintf("%s sandbox: %y", api.code, sandbox));
                 assertEq(-1, out.find("loaded\n"), api.code);
             }
+        }
+        # Waiting sleeps the current thread under the module's process domain.
+        foreach bool sandbox in ((False, True)) {
+            assertEq("loaded\nend\n", run(InterfaceRestrictions, "DiscordDataProvider",
+                "DiscordDataProvider::DiscordDataProviderBase::threadWait(1ms);", sandbox));
         }
         # A source loaded outside the library path inherits its loader's restrictions.
         string source = tmp.path + "/DiscordWebSocketClient.qm";
