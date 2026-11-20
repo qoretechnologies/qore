@@ -2241,11 +2241,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue MethodCallNode::execPseudoImpl(LexicalSemant
 }
 
 bool MethodCallNode::pseudoAcceptsTypeSlow(qore_type_t t) const {
-    // the classes are compared by their private data, which a Program's copy of a class shares
-    const qore_class_private* qpriv = qore_class_private::get(*qc);
-    const QoreClass* vqc = qore_pseudo_get_class(t);
-    if (qore_class_private::get(*vqc) != qpriv && qpriv != qore_class_private::get(*QC_PSEUDOVALUE)
-            && !vqc->getClass(qc->getID())) {
+    if (!qore_pseudo_class_accepts_type(qc, t)) {
         return false;
     }
     pseudo_accepted_type.store(t, std::memory_order_relaxed);

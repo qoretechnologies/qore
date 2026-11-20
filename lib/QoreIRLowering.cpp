@@ -16082,12 +16082,41 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         if (!pseudo_receiver_has_value) {
             const AbstractQoreNode* receiver = op->getExpression().getInternalNode();
             const QoreDotEvalOperatorNode* receiver_dot = dynamic_cast<const QoreDotEvalOperatorNode*>(receiver);
+            // the return type of a builtin is not enforced: the value of a builtin whose declared type is wrong can
+            // be of another type, which the check finds the method for by name (qore#6813), so only a user variant
+            // resolved at parse time gives a value of its type
             bool not_overridden = receiver_dot
                 ? receiver_dot->getMethodCall() && receiver_dot->getMethodCall()->isPseudo()
-                : receiver && (receiver->getType() == NT_FUNCTION_CALL || receiver->getType() == NT_STATIC_METHOD_CALL);
+                : receiver && (receiver->getType() == NT_FUNCTION_CALL || receiver->getType() == NT_STATIC_METHOD_CALL)
+                    && static_cast<const AbstractFunctionCallNode*>(receiver)->getVariant()
+                    && static_cast<const AbstractFunctionCallNode*>(receiver)->getVariant()->isUser();
             const QoreTypeInfo* receiver_type = m->getSourceType();
             pseudo_receiver_has_value = not_overridden && QoreTypeInfo::hasType(receiver_type)
                 && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING);
+        }
+        // the value of a call whose return type is not enforced can be of another type than the declared one: a
+        // builtin's (function, static method or method of an object), or of a variant that is not resolved at parse
+        // time; the call then finds the method by name, which the check makes before the arguments (qore#6813)
+        if (pseudo_receiver_has_value) {
+            const AbstractQoreNode* receiver = op->getExpression().getInternalNode();
+            const QoreDotEvalOperatorNode* receiver_dot = dynamic_cast<const QoreDotEvalOperatorNode*>(receiver);
+            const AbstractQoreFunctionVariant* receiver_variant = nullptr;
+            bool receiver_is_call = false;
+            if (receiver_dot) {
+                const MethodCallNode* receiver_call = receiver_dot->getMethodCall();
+                // a pseudo-method of the library returns its declared type
+                if (receiver_call && !receiver_call->isPseudo()) {
+                    receiver_is_call = true;
+                    receiver_variant = receiver_call->getVariant();
+                }
+            } else if (receiver && (receiver->getType() == NT_FUNCTION_CALL
+                    || receiver->getType() == NT_STATIC_METHOD_CALL)) {
+                receiver_is_call = true;
+                receiver_variant = static_cast<const AbstractFunctionCallNode*>(receiver)->getVariant();
+            }
+            if (receiver_is_call && (!receiver_variant || !receiver_variant->isUser())) {
+                pseudo_receiver_has_value = false;
+            }
         }
         // a hash whose member of the method's name is a call reference is called through it before any
         // pseudo-method (QoreDotEvalOperatorNode::evalWithBase()), and the reference checks its object before the

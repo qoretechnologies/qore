@@ -22354,12 +22354,12 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     } else {
         // the method that the parse-time resolution found is called only on a value of its class: a value of another
         // type (the value of a builtin whose declared type is wrong) finds the method by name in the pseudo-class of
-        // its type, as a value with no declared type does (qore#6813); the classes are compared by their private data,
-        // which a Program's copy of a class shares
-        const qore_class_private* qpriv = qore_class_private::get(*qc);
+        // its type, as a value with no declared type does (qore#6813), with the predicate of the check of the receiver
+        // before the arguments (qore_pseudo_class_accepts_type()); the pseudo-class of the value's type is the usual
+        // case, compared first (by the private data, which a Program's copy of a class shares)
         const QoreClass* vqc = qore_pseudo_get_class(bt);
-        if (qore_class_private::get(*vqc) != qpriv && qpriv != qore_class_private::get(*QC_PSEUDOVALUE)
-                && !vqc->getClass(qc->getID())) [[unlikely]] {
+        if (qore_class_private::get(*vqc) != qore_class_private::get(*qc)
+                && !qore_pseudo_class_accepts_type(qc, bt)) [[unlikely]] {
             return qore_rt_eval_pseudo_method_by_name(vqc, base, method->getName(), *arg_list, rc, xsink);
         }
     }

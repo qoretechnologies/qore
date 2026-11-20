@@ -102,7 +102,7 @@ class ParseTimeMethodWrongTypeTest inherits QUnit::Test {
     #! Checks that each typed call gives the result of its untyped call, and that the output is the AST interpreter's
     private checkOutput(string mode, string output) {
         hash<string, string> res = parseOutput(output);
-        assertEq(48, res.size(), mode + ": the cases of the output");
+        assertEq(72, res.size(), mode + ": the cases of the output");
         foreach hash<auto> i in (res.pairIterator()) {
             if (i.key =~ /^typed /) {
                 string ukey = "un" + i.key;
