@@ -19536,6 +19536,117 @@ static QoreValue f_dbg_fork_while_parse_scope_active(const QoreListNode* params,
     return ut_wait_child(pid);
 }
 
+//! Debug-only test hook: fork() while another thread holds the lock that constructing an object takes for a class
+/** Another thread holds the data lock of the class of \a obj (see qore_class_private::dataLock()), and releases it
+    when the prepare handlers of fork() reach the class data locks (as dbg_fork_while_handler_held()), so fork()
+    waits for it if a fork handler covers the lock.  The child constructs an object of the class with its handle in
+    the Program \a pgm, a copy for a class that the Program inherited, which takes the lock (refClass(),
+    qore#6732): it runs \a child, which constructs one (the deserialization of an object finds the class in the
+    Program and constructs it with that handle) and exits with the value that it returns (99 if it raised an
+    exception), or without \a child it finds the class \a cname in \a pgm (QoreProgram::findClass()) and constructs
+    an object with QoreClass::execConstructor() and that handle as the object's class, as module-python does, and
+    exits with 0 if it was constructed.  The parent reports a child that has not ended after 60 seconds as hung, and
+    kills it.  DEBUG builds only.
+
+    @return a hash: \c copy: True if the handle that the child uses is a copy, \c hang: True if the child did not end,
+    \c status: its exit status (-1 if it hung or did not exit normally)
+
+    @throw DBG-FORK-ERROR the class was not found, or fork() failed
+*/
+static QoreValue f_dbg_fork_while_class_lock_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    const QoreObject* pobj = get_param_value(params, 1).get<const QoreObject>();
+    QoreStringNodeValueHelper cname(get_param_value(params, 2));
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 3).get<const ResolvedCallReferenceNode>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(pobj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    const qore_class_private* priv = qore_class_private::get(*obj->getClass());
+    const QoreClass* found = pgm->findClass(cname->c_str(), xsink);
+    if (!found) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-FORK-ERROR", "no class '%s' in the Program", cname->c_str());
+        }
+        return QoreValue();
+    }
+    bool is_copy = found != qore_class_private::get(*found)->cls;
+    ForkHoldTest t;
+    t.target = "class_data_locks";
+    // with ThreadSanitizer, the striped leaf locks are not acquired before fork() (QFLM_STRIPED), so the lock is not
+    // held across it either: TSan reports the reset of a lock held by another thread in the child
+    std::thread holder([&t, priv]() {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            priv->dataLock().lock();
+        }
+        std::unique_lock<std::mutex> ul(t.m);
+        t.held = true;
+        t.cv.notify_all();
+        t.cv.wait(ul, [&t] { return t.release; });
+        ul.unlock();
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            priv->dataLock().unlock();
+        }
+    });
+    {
+        std::unique_lock<std::mutex> ul(t.m);
+        t.cv.wait(ul, [&t] { return t.held; });
+    }
+    fork_hold_test = &t;
+    qore_fork_prepare_hook = fork_hold_hook;
+    pid_t pid = fork();
+    if (!pid) {
+        ExceptionSink child_xsink;
+        int status;
+        if (child_code) {
+            ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+            status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        } else {
+            // the object is constructed with the copy, as module-python constructs one
+            ReferenceHolder<QoreObject> o(found->execConstructor(*found, nullptr, true, &child_xsink),
+                &child_xsink);
+            status = child_xsink || !o ? 99 : 0;
+        }
+        child_xsink.clear();
+        _exit(status);
+    }
+    int fork_errno = errno;
+    qore_fork_prepare_hook = nullptr;
+    fork_hold_test = nullptr;
+    {
+        // releases the holder if the prepare handlers did not (no handler covers the lock, or fork() failed)
+        std::lock_guard<std::mutex> lg(t.m);
+        t.release = true;
+        t.cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    // a hang detector, not a timing check: a child that does not wait for the lock ends at once
+    bool hang = true;
+    int status = 0;
+    for (int i = 0; i < 600; ++i) {
+        if (waitpid(pid, &status, WNOHANG) == pid) {
+            hang = false;
+            break;
+        }
+        usleep(100000);
+    }
+    if (hang) {
+        kill(pid, SIGKILL);
+        waitpid(pid, &status, 0);
+    }
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("copy", is_copy, nullptr);
+    h->setKeyValue("hang", hang, nullptr);
+    h->setKeyValue("status", hang ? -1 : (WIFEXITED(status) ? WEXITSTATUS(status) : -1), nullptr);
+    return h;
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -28200,6 +28311,10 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo);
     qns.addBuiltinVariant("dbg_release_parse_start_gate", f_dbg_release_parse_start_gate, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fork_while_class_lock_held", f_dbg_fork_while_class_lock_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 4, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", objectTypeInfo,
+        QORE_PARAM_NO_ARG, "pgm", stringTypeInfo, QORE_PARAM_NO_ARG, "cname", codeOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "child");

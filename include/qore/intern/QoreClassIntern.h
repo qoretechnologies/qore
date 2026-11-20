@@ -3058,6 +3058,23 @@ DLLLOCAL bool qore_module_lifetime_active();
 //! Returns a new number for qore_class_private::allocation_id (never 0)
 DLLLOCAL uint64_t qore_class_next_allocation_id();
 
+//! One lock of the class data per cache line, so that classes hashed to different locks do not share one
+struct alignas(64) QoreClassDataLock {
+    std::mutex m;
+};
+
+//! the number of the class data locks (see qore_class_private::dataLock())
+constexpr size_t QoreClassDataLockCount = 64;
+
+//! the class data locks, which the classes share by address; leaf locks registered with the fork handlers (qore#6732)
+DLLLOCAL extern QoreClassDataLock qore_class_data_locks[QoreClassDataLockCount];
+
+//! Returns the class data lock of the private data of a class at the given address
+DLLLOCAL inline std::mutex& qore_class_data_lock(const void* p) {
+    // the low bits only reflect the allocation granularity
+    return qore_class_data_locks[(reinterpret_cast<uintptr_t>(p) >> 6) % QoreClassDataLockCount].m;
+}
+
 class qore_class_private {
     template <class> friend class QoreTypeOwnerOf;
 public:
@@ -3098,9 +3115,15 @@ public:
     //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
     //! the class (issue #3286)
     bool parse_abr = false;
-    qc_ref_map_t qcrefs;            // QoreClass pointers associated with this private object (besides cls)
+    qc_ref_map_t qcrefs;            // QoreClass pointers associated with this private object (besides cls); guarded by
+                                    // dataLock()
 
-    mutable VRMutex gate;           // for synchronized static methods
+    //! the gate of the synchronized static methods of the class
+    /** Like the other locks of objects that code holds while it runs (see design/fork-handlers.md), it is not covered
+        by the fork handlers: a child created with fork() while another thread runs a synchronized static method of the
+        class cannot call one.  The short sections of the class data use dataLock() instead, which is covered.
+    */
+    mutable VRMutex gate;
 
     hm_method_t hm,                 // "normal" (non-static) method map
         shm;                        // static method map
@@ -3387,7 +3410,7 @@ public:
     mutable std::atomic<bool> multi_path{false};
 
     //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
-    /** Set with released_spgm_id, under gate.asl_lock
+    /** Set with released_spgm_id, under dataLock()
     */
     std::atomic<bool> released_sandboxed{false};
 
@@ -3401,7 +3424,7 @@ public:
     //! the copies of the class (see QoreClass::QoreClass(const QoreClass&)) that hold a reference in var_refs
     /** A copy takes one if the values are still shared (varRef()); a class list entry takes it over when the copy is
         added (QoreClassList), and another holder releases it with the copy (derefClass(), ~QoreClass()); see
-        takeWrapperVarRef().  Guarded by gate.asl_lock.
+        takeWrapperVarRef().  Guarded by dataLock().
     */
     std::set<const QoreClass*> var_ref_wrappers;
 
@@ -3550,8 +3573,17 @@ public:
     }
 
     //! Records that a copy of the class holds a reference in var_refs; see var_ref_wrappers
+    //! Returns the lock of the short sections of the class data (qcrefs, var_ref_wrappers, cls_var_ref, kvmap, spgm)
+    /** One of a fixed set of leaf locks that the classes share by address, which the fork handlers cover, so that a
+        child created with fork() while another thread holds one can still construct objects of the class (qore#6732);
+        the sections it guards take no other lock
+    */
+    DLLLOCAL std::mutex& dataLock() const {
+        return qore_class_data_lock(this);
+    }
+
     DLLLOCAL void addWrapperVarRef(const QoreClass& qc) {
-        AutoLocker al(gate.asl_lock);
+        std::lock_guard<std::mutex> al(dataLock());
         var_ref_wrappers.insert(&qc);
     }
 
@@ -3561,7 +3593,7 @@ public:
         @return true if the wrapper held a reference
     */
     DLLLOCAL bool takeWrapperVarRef(const QoreClass& qc) {
-        AutoLocker al(gate.asl_lock);
+        std::lock_guard<std::mutex> al(dataLock());
         if (&qc == cls) {
             bool rv = cls_var_ref;
             cls_var_ref = false;
@@ -3629,7 +3661,7 @@ public:
         qore_class_private* priv = qc.priv;
         priv->ref();
         if (&qc != priv->cls) {
-            AutoLocker al(priv->gate.asl_lock);
+            std::lock_guard<std::mutex> al(priv->dataLock());
             qc_ref_map_t::iterator i = priv->qcrefs.find(&qc);
             // the handle must be registered; if not, only the private data is referenced
             assert(i != priv->qcrefs.end());
@@ -3653,7 +3685,7 @@ public:
         }
         bool del = false;
         if (&qc != priv->cls) {
-            AutoLocker al(priv->gate.asl_lock);
+            std::lock_guard<std::mutex> al(priv->dataLock());
             qc_ref_map_t::iterator i = priv->qcrefs.find(&qc);
             // the handle must be registered; if not, only the private data reference is released, and the
             // wrapper is reclaimed with the private data (i.e. in deref() below)
@@ -4791,7 +4823,7 @@ public:
         // (see ~qore_class_private())
         kvmap_t kv;
         {
-            AutoLocker al(gate.asl_lock);
+            std::lock_guard<std::mutex> al(dataLock());
             kv.swap(kvmap);
         }
         for (auto& i : kv) {
@@ -4832,7 +4864,7 @@ public:
             bool taken;
             {
                 // see getReferencedSourceProgram()
-                AutoLocker al(gate.asl_lock);
+                std::lock_guard<std::mutex> al(dataLock());
                 released_spgm_id.store(pgm->getProgramId());
                 released_sandboxed.store(qore_program_is_sandboxed(pgm));
                 taken = spgm.compare_exchange_strong(expected, nullptr);
@@ -4849,7 +4881,7 @@ public:
             QoreProgram* p;
             {
                 // see getReferencedSourceProgram()
-                AutoLocker al(gate.asl_lock);
+                std::lock_guard<std::mutex> al(dataLock());
                 p = spgm.load();
                 if (p) {
                     released_spgm_id.store(p->getProgramId());
@@ -4869,17 +4901,18 @@ public:
     /** A builtin class, and a class of a Program without a sandbox manager (system and module code), is trusted.  The
         sandbox manager of the source Program is read when called, so a manager set after the class was parsed counts;
         once the source Program has released the class, the state it had then is used.  Decides the cancellation rule
-        for the class's destructor (see QoreDestructorCancelHelper).
+        for the class's destructor (see QoreDestructorCancelHelper).  Out of line, so that its lock (dataLock()) is not
+        inlined in the callers, such as execDestructor() (qore#6732).
     */
-    DLLLOCAL bool isSandboxedCode() const;
+    DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxedCode() const;
 
     //! Returns a reference to the source Program of the class, or nullptr if it has released the class or is deleted
-    /** spgm is cleared under gate.asl_lock in deleteClassData() before the Program can be freed, so the Program read
+    /** spgm is cleared under dataLock() in deleteClassData() before the Program can be freed, so the Program read
         here under the lock is still allocated; a reference is taken only if it still has one (a Program whose last
         reference has been released is being deleted).  The caller must release the reference with deref().
     */
     DLLLOCAL QoreProgram* getReferencedSourceProgram() const {
-        AutoLocker al(gate.asl_lock);
+        std::lock_guard<std::mutex> al(dataLock());
         QoreProgram* p = spgm.load();
         return p && p->optRef() ? p : nullptr;
     }
@@ -4916,7 +4949,7 @@ public:
         QoreProgram* p;
         {
             // see getReferencedSourceProgram()
-            AutoLocker al(gate.asl_lock);
+            std::lock_guard<std::mutex> al(dataLock());
             p = spgm.load();
             if (p && p->optRef()) {
                 referenced = true;

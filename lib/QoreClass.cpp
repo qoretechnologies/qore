@@ -516,6 +516,44 @@ uint64_t qore_class_next_allocation_id() {
     return seq.fetch_add(1, std::memory_order_relaxed) + 1;
 }
 
+QoreClassDataLock qore_class_data_locks[QoreClassDataLockCount];
+
+namespace {
+//! the fork handler of the class data locks, which are leaf locks never held together (see QoreForkHandlers.h)
+/** Every construction of an object through a copied QoreClass handle (refClass()) takes one, so a child created with
+    fork() while another thread held one could not construct an object of the class (qore#6732)
+*/
+class ClassDataLocksForkHandler : public QoreForkHandler {
+public:
+    ClassDataLocksForkHandler() : QoreForkHandler(QFLR_LEAF, "class_data_locks") {
+    }
+
+    void prepare() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (QoreClassDataLock& l : qore_class_data_locks) {
+                l.m.lock();
+            }
+        }
+    }
+
+    void parent() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (size_t i = QoreClassDataLockCount; i; --i) {
+                qore_class_data_locks[i - 1].m.unlock();
+            }
+        }
+    }
+
+    void child() noexcept override {
+        for (QoreClassDataLock& l : qore_class_data_locks) {
+            new (&l.m) std::mutex();
+        }
+    }
+};
+
+ClassDataLocksForkHandler class_data_locks_fork_handler;
+}
+
 static std::atomic<uint64_t> qore_method_dispatch_epoch{1};
 
 uint64_t qore_get_method_dispatch_epoch() {
@@ -7064,7 +7102,7 @@ QoreClass::QoreClass(const QoreClass& old) : priv(old.priv) {
     bool vars = priv->varRef();
 
     // ensure atomicity when writing to qcrefs
-    AutoLocker al(priv->gate.asl_lock);
+    std::lock_guard<std::mutex> al(priv->dataLock());
     priv->qcrefs[this] = 1;
     if (vars) {
         priv->var_ref_wrappers.insert(this);
@@ -7106,7 +7144,7 @@ QoreClass::~QoreClass() {
     if (priv) {
         {
             // ensure atomicity when writing to qcrefs
-            AutoLocker al(priv->gate.asl_lock);
+            std::lock_guard<std::mutex> al(priv->dataLock());
             qc_ref_map_t::iterator i = priv->qcrefs.find(this);
             if (i != priv->qcrefs.end()) {
                 // a wrapper with outstanding pointer references must not be deleted directly; it must be released
@@ -7888,7 +7926,7 @@ bool qore_class_private::isSandboxedCode() const {
         return qore_program_is_sandboxed(p);
     }
     // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram())
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
     p = spgm.load();
     return p ? qore_program_is_sandboxed(p) : released_sandboxed.load();
 }
@@ -9575,7 +9613,7 @@ qore_type_result_e qore_class_private::runtimeCheckCompatibleClassIntern(const q
 
 QoreValue qore_class_private::setKeyValue(const std::string& key, QoreValue val) {
     // ensure atomicity when reading from or writing to kvmap
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
 
     kvmap_t::iterator i = kvmap.lower_bound(key);
     if (i != kvmap.end() && i->first == key) {
@@ -9589,7 +9627,7 @@ QoreValue qore_class_private::setKeyValue(const std::string& key, QoreValue val)
 
 QoreValue qore_class_private::setKeyValueIfNotSet(const std::string& key, QoreValue val) {
     // ensure atomicity when reading from or writing to kvmap
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
 
     kvmap_t::iterator i = kvmap.lower_bound(key);
     if (i != kvmap.end() && i->first == key) {
@@ -9605,7 +9643,7 @@ QoreValue qore_class_private::setKeyValueIfNotSet(const std::string& key, QoreVa
 
 bool qore_class_private::setKeyValueIfNotSet(const std::string& key, const char* val) {
     // ensure atomicity when reading from or writing to kvmap
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
 
     kvmap_t::iterator i = kvmap.lower_bound(key);
     if (i != kvmap.end() && i->first == key) {
@@ -9621,7 +9659,7 @@ bool qore_class_private::setKeyValueIfNotSet(const std::string& key, const char*
 
 QoreValue qore_class_private::getReferencedKeyValue(const std::string& key) const {
     // ensure atomicity when reading from or writing to kvmap
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
 
     kvmap_t::const_iterator i = kvmap.find(key);
     if (i == kvmap.end()) {
@@ -9632,7 +9670,7 @@ QoreValue qore_class_private::getReferencedKeyValue(const std::string& key) cons
 
 QoreValue qore_class_private::getReferencedKeyValue(const char* key) const {
     // ensure atomicity when reading from or writing to kvmap
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
 
     kvmap_t::const_iterator i = kvmap.find(key);
     if (i == kvmap.end()) {
