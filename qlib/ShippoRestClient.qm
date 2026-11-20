@@ -324,6 +324,9 @@ public class ShippoRestConnection inherits RestClient::RestConnection {
                         "Keep your tokens secure and never share them publicly.",
                 },
             ),
+            # OAuth2 is the first alternative; an API token is the fallback, and a connection with one does not
+            # use the defaulted OAuth2 grant type (qore#6901)
+            "required_options": "oauth2_client_id,oauth2_client_secret|apikey",
         });
     }
 

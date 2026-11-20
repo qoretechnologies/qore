@@ -50,7 +50,7 @@
 %requires json
 
 module RestClient {
-    version = "2.7";
+    version = "2.8";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -173,6 +173,13 @@ printf("%Y\n", ans.body);
 */
 /** @page restclientrelnotes Release Notes
 
+
+    @section restclientv2_8 RestClient v2.8
+    - a connection whose \c required_options offer OAuth2 with a key as the fallback and that is configured with the
+      key does not use its defaulted OAuth2 grant type: it is not reported as down for missing OAuth2 options, does
+      not need authorization, claims no OAuth2 features and creates clients without the OAuth2 options (see
+      @ref RestClient::AbstractRestConnection::usesNonOAuth2Credential() "usesNonOAuth2Credential()";
+      <a href="https://github.com/qoretechnologies/qore/issues/6901">issue 6901</a>)
 
     @section restclientv2_7 RestClient v2.7
     - a response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other
@@ -5123,6 +5130,13 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
             "swagger",
             "validator",
         );
+
+        #! The generic credentials of a REST connection, used with a \c required_options alternative naming none
+        /** @see usesNonOAuth2Credential()
+
+            @since %RestClient 2.8
+        */
+        const list<string> GenericCredentialOptions = ("password", "token");
     }
 
     private {
@@ -5198,8 +5212,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @since RestClient 2.2
     */
     bool needsAuth() {
-        return needs_auth || ((opts.oauth2_grant_type == "authorization_code"
-                || opts.oauth2_grant_type == "implicit")
+        return needs_auth || (hasInteractiveOAuth2Grant()
             && (!opts.token.val() || (opts.oauth2_token_expiry && now_us() > opts.oauth2_token_expiry))
             && (!opts.oauth2_refresh_token.val() || !opts.oauth2_auto_refresh));
     }
@@ -5269,8 +5282,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @since RestClient 2.2
     */
     authFailure() {
-        if (!needs_auth && (opts.oauth2_grant_type == "authorization_code"
-                || opts.oauth2_grant_type == "implicit")) {
+        if (!needs_auth && hasInteractiveOAuth2Grant()) {
             needs_auth = True;
         }
     }
@@ -5280,8 +5292,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @since RestClient 2.2
     */
     authSuccess() {
-        if (needs_auth && (opts.oauth2_grant_type == "authorization_code"
-                || opts.oauth2_grant_type == "implicit")) {
+        if (needs_auth && hasInteractiveOAuth2Grant()) {
             remove needs_auth;
         }
     }
@@ -5657,8 +5668,16 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     }
 
     #! Returns options for creating a new connection
+    /** A connection authenticated by a credential that is not OAuth2 (see @ref usesNonOAuth2Credential()) returns
+        no \c oauth2_* options, so that the client it creates does not run the OAuth2 flow of a defaulted grant type
+        and is not given the OAuth2 options that the grant requires.
+    */
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
-        return real_opts + {
+        hash<auto> rv = real_opts;
+        if (usesNonOAuth2Credential()) {
+            rv -= (select keys rv, $1 =~ /^oauth2_/);
+        }
+        return rv + {
             # Always use the current real_url — real_opts.url is set at construction time
             # and becomes stale for auto_url connections when the URL is updated later
             "url": real_url,
@@ -5744,6 +5763,9 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     /** The grant type is taken from the \c oauth2_grant_type option; connection classes that configure OAuth2
         through options of their own must override this method, or they will report that they do not use OAuth2.
 
+        A connection authenticated by a credential that is not OAuth2 (see @ref usesNonOAuth2Credential()) does not
+        use the grant type of its options, which is usually a default value, and returns @ref nothing.
+
         This is what @ref setFeatures() derives the OAuth2 features from and what @ref getExtendedInfo() publishes,
         so an override keeps the two in agreement.  It does not select the grant used to acquire a token; that is
         driven by the client's own \c oauth2_grant_type option.
@@ -5754,9 +5776,132 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @since %RestClient 2.7
     */
     private *string getOAuth2GrantType() {
-        if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none") {
+        if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none" && !usesNonOAuth2Credential()) {
             return opts.oauth2_grant_type;
         }
+    }
+
+    #! Returns @ref True if the connection is authenticated by a credential that is not OAuth2
+    /** A connection whose \c required_options offer OAuth2 with another credential as the fallback, such as
+        \c "oauth2_client_id,oauth2_client_secret|apikey", usually has a default \c oauth2_grant_type, which a
+        connection configured with only the fallback credential keeps.  If this method returns @ref True, that
+        grant type is not used: the connection is not checked for the options that the grant requires
+        (@ref checkCanConnect()), does not need authorization (@ref needsAuth()), claims no OAuth2 features
+        (@ref getOAuth2GrantType()), and the clients it creates are given no \c oauth2_* options
+        (@ref getConnectionOptions()).
+
+        The default implementation derives the answer from the alternatives of the \c required_options of the
+        connection scheme (an alternative is a set of options separated by \c "|"; \c url is ignored as in the
+        required option check):
+        - an alternative naming an \c oauth2_* option is an OAuth2 alternative; if there is none, or there is no
+          other alternative, this method returns @ref False
+        - another alternative authenticates the connection only if each of its options has a value; its
+          credentials are its options that are \c sensitive in the connection scheme.  An alternative that names
+          no credential, such as \c site in \c "oauth2_client_id,oauth2_client_secret|site", is used with the
+          generic credentials of a REST connection: its credentials are \c password (HTTP basic authentication)
+          and \c token, those of them that have a value; with neither, it does not authenticate the connection
+        - such an alternative is a key, and this method returns @ref True, if one of its credentials is not an
+          option that an OAuth2 connection holds as well: an option of an OAuth2 alternative, an option required by
+          the grant type (with \c username and \c password for the \c password grant), or \c token, which the
+          OAuth2 flow sets to the access token it acquires
+        - an alternative whose credentials are all such options, as \c token in
+          \c "oauth2_client_id,oauth2_client_secret|token", cannot be told from an authorized OAuth2 connection by
+          its options alone; it is a key only if the connection's own options satisfy no OAuth2 alternative and
+          it has neither an \c oauth2_refresh_token nor an \c oauth2_token_expiry, which the OAuth2 flow sets
+          with the token.  An authorized OAuth2 connection therefore keeps its OAuth2 options and its token can be
+          refreshed, also when its client ID and secret are not among its own options
+
+        A key given with the options of an OAuth2 alternative is used, and the OAuth2 options are not.
+
+        Connection classes whose fallback credential is not an alternative of their \c required_options can
+        override this method.
+
+        @since %RestClient 2.8
+    */
+    private bool usesNonOAuth2Credential() {
+        hash<ConnectionSchemeInfo> scheme = getConnectionSchemeInfo();
+        if (!scheme.required_options) {
+            return False;
+        }
+        list<auto> oauth2_alts = ();
+        list<auto> other_alts = ();
+        foreach string alt in (scheme.required_options.split("|")) {
+            # "url" is not an option; the required option check ignores it too
+            *list<auto> names = map $1, alt.split(","), $1 && $1 != "url";
+            if (!names) {
+                continue;
+            }
+            if ((select names, $1 =~ /^oauth2_/)) {
+                push oauth2_alts, names;
+            } else {
+                push other_alts, names;
+            }
+        }
+        if (!oauth2_alts || !other_alts) {
+            return False;
+        }
+
+        # the credentials that an OAuth2 connection can hold as well
+        hash<string, bool> oauth2_names = {"token": True};
+        foreach list<auto> alt in (oauth2_alts) {
+            map oauth2_names{$1} = True, alt;
+        }
+        if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none") {
+            map oauth2_names{$1} = True, RestClient::OAuth2GrantOptions{opts.oauth2_grant_type};
+            if (opts.oauth2_grant_type == "password") {
+                oauth2_names += {"username": True, "password": True};
+            }
+        }
+
+        bool oauth2_given;
+        foreach list<auto> alt in (oauth2_alts) {
+            if (hasOptionValues(alt)) {
+                oauth2_given = True;
+                break;
+            }
+        }
+
+        foreach list<auto> alt in (other_alts) {
+            if (!hasOptionValues(alt)) {
+                continue;
+            }
+            *list<auto> credentials = map $1, alt, scheme.options{$1}.sensitive;
+            if (!credentials) {
+                # an alternative that names no credential, such as a site, is used with the generic credentials
+                # of a REST connection: HTTP basic authentication or a token
+                credentials = map $1, GenericCredentialOptions, hasOptionValues(($1,));
+                if (!credentials) {
+                    continue;
+                }
+            }
+            # a credential that an OAuth2 connection does not hold
+            if ((map $1, credentials, !oauth2_names{$1})) {
+                return True;
+            }
+            # only credentials that an authorized OAuth2 connection holds as well
+            if (!oauth2_given && !opts.oauth2_refresh_token.val() && !opts.oauth2_token_expiry) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns @ref True if each of the given options has a value
+    private bool hasOptionValues(list<auto> names) {
+        foreach string name in (names) {
+            if (!(real_opts{name} ?? opts{name}).val()) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Returns @ref True if the connection uses an OAuth2 grant type with an authorization step
+    /** @since %RestClient 2.8
+    */
+    private bool hasInteractiveOAuth2Grant() {
+        return (opts.oauth2_grant_type == "authorization_code" || opts.oauth2_grant_type == "implicit")
+            && !usesNonOAuth2Credential();
     }
 
     #! Checks if the connection can theoretically communicate, if not, sets the connection as down
@@ -5768,7 +5913,9 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     */
     private checkCanConnect() {
         try {
-            if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none") {
+            # a connection authenticated by another credential does not use the grant type, which is usually a
+            # default value (qore#6901)
+            if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none" && !usesNonOAuth2Credential()) {
                 *list<string> req_opts = RestClient::OAuth2GrantOptions{opts.oauth2_grant_type};
                 if (!req_opts) {
                     throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y is unknown; known grant types: %y",
