@@ -1,0 +1,195 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the runtime locations that JIT and AOT native code store for the destructors of locals
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+%exec-class LocalDestructorLocationModesTest
+
+#! the destructors of locals that an exception releases are located alike in every execution mode (qore#6831, #6832)
+/** When an exception leaves a block or a statement, the destructors of its locals run in the location of the
+    statement that owns them, as in the AST interpreter, which restores the location of the enclosing statement when
+    a statement ends: a local of a nested block at the statement of the block, a local of an \c on_error handler at
+    the statement of the caller, and an object declared in the header of an \c if, \c while, \c for or \c foreach
+    statement at that statement.  The compiled modes (IR, JIT, tiered, qcc executables) located them at the statement
+    that raised the exception.
+
+    The script runs each probe three times, so that tiered execution runs it on every tier, and prints the exceptions
+    of each run with the location of the first frame of their call stacks; its output must be the AST interpreter's in
+    every execution mode, on the IR tier of tiered execution and as qcc executables compiled with -O0 and -O3.
+*/
+class LocalDestructorLocationModesTest inherits QUnit::Test {
+    public {
+        #! the probes; each prints "<probe> <run>: <exception>:<line>-<endline> ..." for every run
+        const Script = '%modern
+class D {
+    private {
+        string label;
+    }
+    constructor(string label) {
+        self.label = label;
+    }
+    destructor() {
+        throw label, "destroy";
+    }
+}
+
+# qore#6831: the locals of an on_error handler and of a block nested in it
+sub handlerLocals() {
+    on_error {
+        D direct("DIRECT");
+        if (True) {
+            D inner("INNER");
+            throw "HANDLER", "oops";
+        }
+    }
+    throw "BODY", "unwind";
+}
+
+# qore#6832: objects declared in the headers of statements
+sub ifHeader() {
+    if (D d = new D("IF")) {
+        throw "BODY", "unwind";
+    }
+}
+
+sub whileHeader() {
+    while (D d = new D("WHILE")) {
+        throw "BODY", "unwind";
+    }
+}
+
+sub forHeader() {
+    for (D d = new D("FOR"); True;) {
+        throw "BODY", "unwind";
+    }
+}
+
+sub foreachHeader() {
+    foreach D d in ((new D("FOREACH"),)) {
+        throw "BODY", "unwind";
+    }
+}
+
+sub probe(string name, code c) {
+    for (int i = 0; i < 3; ++i) {
+        try {
+            c(
+            );
+        } catch (hash<ExceptionInfo> ex) {
+            list<string> l = ();
+            while (True) {
+                push l, sprintf("%s:%d-%d", ex.err, ex.callstack[0].line, ex.callstack[0].endline);
+                if (!ex.next) {
+                    break;
+                }
+                ex = ex.next;
+            }
+            printf("%s %d: %s\n", name, i, l.join(" "));
+        }
+    }
+}
+
+probe("handler", \handlerLocals());
+probe("if", \ifHeader());
+probe("while", \whileHeader());
+probe("for", \forHeader());
+probe("foreach", \foreachHeader());
+';
+
+        #! the AST interpreter's results that the issues give (the lines of the script above)
+        const Pinned = (
+            # the caller's statement for the body's and the handler's exceptions and the handler's local, the nested
+            # if statement for its local
+            "handler 0: BODY:54-55 HANDLER:54-55 INNER:18-21 DIRECT:54-55",
+            # the statement that declares the object
+            "if 0: BODY:54-55 IF:28-30",
+            "while 0: BODY:54-55 WHILE:34-36",
+            "for 0: BODY:54-55 FOR:40-42",
+            "foreach 0: BODY:54-55 FOREACH:46-48",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("LocalDestructorLocationModes", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        addTestCase("the destructors of locals are located alike in every execution mode", \testLocations());
+        set_return_value(main());
+    }
+
+    testLocations() {
+        TmpDir tmp("qore-local-destructor-location-");
+        string path = tmp.path + DirSep + "local-destructor-location.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        string expected = ExecModeHarness::run(sprintf("%s %s -b --enable-debug --exec-mode=ast %s", env, qore_bin,
+            path));
+        # the AST interpreter's results, which every mode must give
+        hash<string, bool> lines = map {$1: True}, expected.split("\n");
+        assertEq((), (select Pinned, !lines{$1}), "pinned AST results: " + expected);
+
+        hash<string, list<string>> wrong();
+        foreach string mode in (ExecModeHarness::ExecModes + ExecModeHarness::IRTierName) {
+            if (mode == "ast") {
+                continue;
+            }
+            bool ir_tier = mode == ExecModeHarness::IRTierName;
+            string cmd = sprintf("%s %s -b --enable-debug --exec-mode=%s %s", env, qore_bin,
+                ir_tier ? "tiered" : mode, path);
+            list<string> diff = differences(expected, ir_tier ? ExecModeHarness::run_ir_tier(cmd)
+                : ExecModeHarness::run(cmd));
+            if (diff) {
+                wrong{mode} = diff;
+            }
+        }
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "local-destructor-location" + opt.lwr();
+            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
+            if (!is_file(exe)) {
+                wrong{"qcc " + opt} = ("compilation failed: " + out,);
+                continue;
+            }
+            list<string> diff = differences(expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)));
+            if (diff) {
+                wrong{"qcc " + opt} = diff;
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    #! returns the lines of the output that differ from the expected output, as "expected -> actual"
+    static list<string> differences(string exp, string actual) {
+        list<string> el = exp.split("\n");
+        list<string> al = actual.split("\n");
+        list<string> rv = ();
+        for (int i = 0; i < max(el.size(), al.size()); ++i) {
+            if (el[i] !== al[i]) {
+                rv += sprintf("%y -> %y", el[i], al[i]);
+            }
+        }
+        return rv;
+    }
+}
