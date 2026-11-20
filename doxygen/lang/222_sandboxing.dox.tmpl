@@ -895,26 +895,18 @@ sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
 
     Server-Side Request Forgery (SSRF) attacks trick applications into making requests to internal
     resources. The @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()" method
-    blocks all private and internal network ranges:
+    blocks every address that is not a public unicast destination: the private, loopback, link-local, shared
+    (carrier-grade NAT), "this network", documentation, benchmarking, multicast and reserved ranges of IPv4 and IPv6
+    (see the method for the list).  An IPv6 address that embeds an IPv4 address (IPv4-mapped or -compatible, NAT64,
+    6to4, Teredo) is judged by the IPv4 address, and the rules apply to the resolved address of each connection when
+    it is made, so a host name that resolves to a blocked address is refused whatever name it has.  A blocked range
+    takes precedence over the sandbox's allowed hosts and ranges.
 
     @code{.py}
 SandboxManager sm();
 
-# Block all private networks (essential for SSRF prevention)
+# Block every non-public address (essential for SSRF prevention)
 sm.blockPrivateNetworks();
-
-# This blocks:
-# - 127.0.0.0/8 (localhost)
-# - 10.0.0.0/8 (RFC 1918 Class A)
-# - 172.16.0.0/12 (RFC 1918 Class B)
-# - 192.168.0.0/16 (RFC 1918 Class C)
-# - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
-# - 0.0.0.0/8, 100.64.0.0/10 (carrier-grade NAT), 224.0.0.0/4 (multicast), 240.0.0.0/4 (reserved, broadcast)
-# - ::1/128 (IPv6 localhost)
-# - fe80::/10 (IPv6 link-local)
-# - fc00::/7 (IPv6 unique local)
-# - ff00::/8 (IPv6 multicast)
-# an IPv6 address that embeds an IPv4 address (IPv4-mapped, NAT64, 6to4) is judged by the IPv4 address
 
 # Allow public internet access
 sm.setNetworkDefaultPolicy(True);
@@ -987,7 +979,9 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()".
 
     A connection is decided by these rules in order, after DNS resolution, for each address:
-    -# an IPv4-mapped IPv6 address (<tt>&#58;&#58;ffff:a.b.c.d</tt>) is checked as the IPv4 address it carries, and an
+    -# an IPv6 address that embeds an IPv4 address (IPv4-mapped, such as <tt>&#58;&#58;ffff:a.b.c.d</tt>,
+       IPv4-compatible, NAT64 with the well-known prefix, 6to4 or Teredo) is checked as the IPv4 address it carries
+       (a denied or allowed IP range also applies to the address as given); an
        unspecified destination address (\c 0.0.0.0 or <tt>::</tt>), which the system connects to the local host, is
        checked as the loopback address
     -# an address in a denied IP range is denied, also for an allowed host name, so a name that resolves to a
@@ -999,7 +993,8 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     A bind is decided by the same rules without host names, except that a system-assigned port (port \c 0) is
     not restricted by allowed ports, and denied IP ranges do not deny a bind to a loopback address (\c 127.0.0.0/8
-    or <tt>::1</tt>, also as an IPv4-mapped address): a socket bound there can only be reached from the local host, which
+    or <tt>::1</tt>, also as an IPv4-mapped address, but not in another form that embeds it): a socket bound there can
+    only be reached from the local host, which
     is less than a bind on all interfaces exposes, so a sandbox that blocks private networks, such as with
     @ref Qore::SandboxManager::blockPrivateNetworks() "SandboxManager::blockPrivateNetworks()", can still run a
     local listener, while connections to loopback addresses stay denied.  Denied ranges still deny a bind to any

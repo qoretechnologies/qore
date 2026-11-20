@@ -960,30 +960,36 @@ nothing SandboxManager::addNetworkAllowedPortRange(int start_port, int end_port,
     sm->network().addAllowedPortRange(start_port, end_port, protocol);
 }
 
-//! Blocks all private/internal networks (SSRF prevention)
+//! Blocks every address that is not a public unicast destination (SSRF prevention)
 /** Blocks the following ranges:
-    - 127.0.0.0/8 (localhost)
-    - 10.0.0.0/8 (RFC 1918 Class A)
-    - 172.16.0.0/12 (RFC 1918 Class B)
-    - 192.168.0.0/16 (RFC 1918 Class C)
-    - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
-    - 0.0.0.0/8 ("this network", which reaches the local host on common platforms; 0.0.0.0 itself is judged as the
-      local host for a connection, and a bind to it is a bind on all interfaces, which the ranges do not decide)
-    - 100.64.0.0/10 (shared address space of carrier-grade NAT)
-    - 224.0.0.0/4 (multicast)
-    - 240.0.0.0/4 (reserved, includes the limited broadcast address 255.255.255.255)
-    - ::1/128 (IPv6 localhost; a connection to the unspecified address :: is judged as one to it)
-    - fe80::/10 (IPv6 link-local)
-    - fc00::/7 (IPv6 unique local, includes fd00:ec2::254 of cloud metadata)
-    - ff00::/8 (IPv6 multicast)
+    - IPv4: 0.0.0.0/8 ("this network", which reaches the local host on common platforms; the unspecified address
+      0.0.0.0 is judged as the loopback address for a connection), 10.0.0.0/8, 172.16.0.0/12
+      and 192.168.0.0/16 (RFC 1918), 100.64.0.0/10 (shared address space, carrier-grade NAT), 127.0.0.0/8
+      (loopback), 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254), 192.0.0.0/24 (IETF protocol
+      assignments), 192.0.2.0/24, 198.51.100.0/24 and 203.0.113.0/24 (documentation), 192.88.99.0/24 (6to4 relay
+      anycast), 198.18.0.0/15 (benchmarking), 224.0.0.0/4 (multicast) and 240.0.0.0/4 (reserved, including the
+      limited broadcast address 255.255.255.255)
+    - IPv6: every address outside the global unicast range 2000::/3 that embeds no IPv4 address, such as the
+      loopback address, unique local (fc00::/7), link-local (fe80::/10), site-local (fec0::/10), multicast
+      (ff00::/8), discard (100::/64) and local-use translation (64:ff9b:1::/48) addresses (the unspecified address
+      is judged as the loopback address for a connection), and in 2000::/3 the IETF protocol assignments
+      (2001::/23 but Teredo) and the documentation ranges (2001:db8::/32 and 3fff::/20)
 
-    An IPv6 address that embeds an IPv4 address (an IPv4-mapped address, an address of the NAT64 well-known prefix
-    64:ff9b::/96, or a 6to4 address of 2002::/16) is judged by its IPv4 address, for these ranges and every other rule
+    An IPv6 address that embeds an IPv4 address is judged by the IPv4 address, for every rule of the sandbox: an
+    IPv4-mapped or IPv4-compatible address, an address of the well-known NAT64 prefix (64:ff9b::/96), a 6to4
+    address (2002::/16), and a Teredo address (2001::/32, by the client address that it carries).  A denied or
+    allowed range of the sandbox applies to the address as given as well as to the IPv4 address that it embeds, so a
+    range on an IPv6 translation prefix keeps its effect.  An address of a network-specific NAT64 prefix cannot be
+    recognized, and is judged as an IPv6 address.
+
+    The rules apply to the resolved address of every connection that the sandbox governs, when it is made, and a
+    denied range takes precedence over the sandbox's allowed hosts and ranges.
 
     @note This is essential for SSRF prevention in web applications.
 
     @note The ranges deny connections and binds to their addresses, except a bind to a loopback address, which can
-    only be reached from the local host; see @ref sandboxing
+    only be reached from the local host; a bind to the unspecified address (0.0.0.0 or ::), which binds every
+    interface, is not denied by them; see @ref sandboxing
 
     @par Example:
     @code{.py}
