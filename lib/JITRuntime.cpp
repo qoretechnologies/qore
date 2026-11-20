@@ -71,6 +71,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <vector>
 #include <optional>
 #include <set>
 #include <string>
@@ -184,6 +185,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_invoke_expr", reinterpret_cast<void*>(&qore_rt_invoke_expr) },
     { "qore_rt_make_string", reinterpret_cast<void*>(&qore_rt_make_string) },
     { "qore_rt_make_string_len", reinterpret_cast<void*>(&qore_rt_make_string_len) },
+    { "qore_rt_aot_key", reinterpret_cast<void*>(&qore_rt_aot_key) },
     { "qore_rt_make_ascii_string_len", reinterpret_cast<void*>(&qore_rt_make_ascii_string_len) },
     { "qore_rt_backquote", reinterpret_cast<void*>(&qore_rt_backquote) },
     { "qore_rt_backquote_throwing", reinterpret_cast<void*>(&qore_rt_backquote_throwing) },
@@ -1678,6 +1680,52 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_string(const char* str) {
     QoreStringNode* s = new QoreStringNode(str);
     QoreValue v(s);
     return toBits(v);
+}
+
+// the keys converted by qore_rt_aot_key(), owned for the lifetime of the process: the slot of an image keeps a pointer
+// to its key
+static std::mutex qore_aot_key_lock;
+static std::vector<std::unique_ptr<char[]>> qore_aot_keys;
+
+extern "C" DLLEXPORT const char* qore_rt_aot_key(QoreAotKeySlot* slot, ExceptionSink* xsink) {
+    if (__atomic_load_n(&slot->state, __ATOMIC_ACQUIRE)) {
+        return slot->key;
+    }
+    const char* key;
+    size_t len;
+    std::unique_ptr<char[]> converted;
+    if (QCS_DEFAULT == QCS_UTF8) {
+        key = slot->src;
+        len = static_cast<size_t>(slot->src_len);
+    } else {
+        // converted as the interpreted modes convert the key of a hash access to the process encoding
+        QoreString utf8(slot->src, static_cast<size_t>(slot->src_len), QCS_UTF8);
+        // compiled code gives no sink: a key that the process encoding cannot represent names no key of a hash in
+        // that encoding, so its UTF-8 bytes, which match none, are returned
+        ExceptionSink local_xsink;
+        TempEncodingHelper str(utf8, QCS_DEFAULT, xsink ? xsink : &local_xsink);
+        if (!str) {
+            local_xsink.clear();
+            // not cached: each use tries again, as the interpreted modes convert at each use
+            return slot->src;
+        }
+        len = str->size();
+        converted.reset(new char[len + 1]);
+        memcpy(converted.get(), str->c_str(), len);
+        converted[len] = '\0';
+        key = converted.get();
+    }
+    std::lock_guard<std::mutex> guard(qore_aot_key_lock);
+    if (!__atomic_load_n(&slot->state, __ATOMIC_ACQUIRE)) {
+        slot->key = key;
+        slot->hash64 = XXH64(key, len, 0);
+        slot->hash32 = XXH32(key, len, 0);
+        if (converted) {
+            qore_aot_keys.push_back(std::move(converted));
+        }
+        __atomic_store_n(&slot->state, 1, __ATOMIC_RELEASE);
+    }
+    return slot->key;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_string_len(const char* str, uint64_t len) {
@@ -20691,6 +20739,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx
 #include "qore/intern/QoreRegexNMatchOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/xxhash.h"
 
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand(int32_t opcode, uint64_t expr_bits, uint64_t operand_bits,
