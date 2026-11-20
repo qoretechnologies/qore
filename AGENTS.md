@@ -156,7 +156,10 @@
   `misc/stdio/stdio-startup.qtest` starts V8, which TSan cannot run; `misc/test-listener-addresses.qtest` does so
   much work in Qore code that it exceeds the 300 second limit of `run_tests.sh` at TSan's slowdown.  The test that
   exceeded it with it now runs in parts (`misc/module-loader/ConcurrentModuleProgramMerge-<n>.qtest`), which have not
-  been measured under TSan.
+  been measured under TSan.  `classes/Datasource/pending-values-lock.qtest` and
+  `classes/Program/program-thread-containers-fork.qtest` fork while other threads hold locks (pending-values-lock
+  with the debug hook of qore#6142, which forks while Datasource locks are held), and under TSan the forked child
+  blocks inside TSan's runtime, with no report; both pass in debug and release builds.
 
 ## Commit & Pull Request Guidelines
 - Commit messages use a short type prefix such as `fix:`, `feat:`, or `refactor:` in a present-tense summary.
