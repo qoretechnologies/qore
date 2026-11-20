@@ -358,6 +358,13 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       "Per-Message Compressed" bit of permessage-deflate, RFC 7692 section 6.1), closes the connection with
       @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002)
       (<a href="https://github.com/qoretechnologies/qore/issues/6781">issue 6781</a>)
+    - a data frame from the server, a continuation frame included, with an RSV bit set that no negotiated extension
+      defines (RFC 6455 section 5.2) closes the connection with
+      @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002) on HTTP/1.1, HTTP/2 and HTTP/3; with an
+      extension negotiated, the RSV bits of continuation frames were not checked, and over HTTP/2 and HTTP/3 none was
+      checked without one; added @ref WebSocketClient::WebSocketClientHcioPollOp::sendRawFrame()
+      "WebSocketClientHcioPollOp::sendRawFrame()" (<a href="https://github.com/qoretechnologies/qore/issues/6810">issue
+      6810</a>)
     - a text message from the server that is not valid UTF-8, also once it is decompressed with permessage-deflate,
       or a close frame whose reason is not valid UTF-8 closes the connection with
       @ref WebSocketUtil::WSCC_InvalidData "WSCC_InvalidData" (1007) before the callback sees it (RFC 6455 section
@@ -7708,6 +7715,19 @@ public class WebSocketClientDataProviderFactory inherits AbstractDataProviderFac
     }
 }
 
+#! returns the RSV bits that the given negotiated extensions define, combined (qore#6810)
+/** @param extensions the negotiated extensions
+
+    @return the RSV bits of the extensions (@ref WebSocketUtil::WS_RSV1 "WS_RSV1" etc.), or 0 if there are none
+*/
+int sub get_extension_rsv_mask(*list<AbstractWebSocketExtension> extensions) {
+    int mask = 0;
+    foreach AbstractWebSocketExtension ext in (extensions) {
+        mask |= ext.getRsvBits();
+    }
+    return mask;
+}
+
 #! Poll operation for non-blocking WebSocket bidirectional I/O
 /** This poll operation manages a WebSocket client connection with:
     - Non-blocking frame reading using buffer-based parsing
@@ -7809,9 +7829,9 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
         self.logger = logger;
         self.raw_callback = raw_callback;
         self.on_poll_complete = on_poll_complete;
-        if (active_extensions) {
-            setHasExtensions(True);
-        }
+        # the RSV bits of the negotiated extensions: another RSV bit on any data frame of a message fails the
+        # connection in C++, which sees the continuation frames whose RSV bits the extensions do not (qore#6810)
+        setExtensionRsvMask(get_extension_rsv_mask(active_extensions));
         if (timeout_ms > 0) {
             setCloseTimeout(timeout_ms);
         }
@@ -7846,9 +7866,9 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
         self.logger = logger;
         self.raw_callback = raw_callback;
         self.on_poll_complete = on_poll_complete;
-        if (active_extensions) {
-            setHasExtensions(True);
-        }
+        # the RSV bits of the negotiated extensions: another RSV bit on any data frame of a message fails the
+        # connection in C++, which sees the continuation frames whose RSV bits the extensions do not (qore#6810)
+        setExtensionRsvMask(get_extension_rsv_mask(active_extensions));
         if (timeout_ms > 0) {
             setCloseTimeout(timeout_ms);
         }
@@ -8247,6 +8267,10 @@ public class WebSocketClientHcioPollOp {
         #! True if extensions are active
         bool has_extensions = False;
 
+        #! The RSV bits of the negotiated extensions (@ref WebSocketUtil::WS_RSV1 "WS_RSV1" etc.); another RSV bit on
+        #! a frame of a data message fails the connection (qore#6810)
+        int extension_rsv_mask = 0;
+
         #! Mutex protecting heartbeat/idle timer state
         Mutex heartbeat_mutex();
 
@@ -8347,6 +8371,7 @@ public class WebSocketClientHcioPollOp {
         self.raw_callback = raw_callback;
         self.on_poll_complete = on_poll_complete;
         self.has_extensions = active_extensions ? True : False;
+        extension_rsv_mask = get_extension_rsv_mask(active_extensions);
         last_recv_activity_ms = clock_get_monotonic_us() / 1000;
 
         # Get connection and stream ID (protocol-agnostic)
@@ -8622,6 +8647,17 @@ public class WebSocketClientHcioPollOp {
             "rsv3": rsv3,
         };
 
+        # the RSV bits of all the frames of the message, which the frame state records, must be those of the
+        # negotiated extensions, also when none is negotiated (RFC 6455 section 5.2, qore#6810); the extensions below
+        # see those of the first frame only
+        int all_rsv_bits = h.rsv_bits ?? ((rsv1 ? WS_RSV1 : 0) | (rsv2 ? WS_RSV2 : 0) | (rsv3 ? WS_RSV3 : 0));
+        if (all_rsv_bits & ~extension_rsv_mask) {
+            logError("RSV bits 0x%x set that no negotiated extension defines", all_rsv_bits & ~extension_rsv_mask);
+            failed_for_error = True;
+            sendClose(WSCC_ProtocolError);
+            return;
+        }
+
         if (has_extensions) {
             int rsv_bits = (rsv1 ? WS_RSV1 : 0)
                 | (rsv2 ? WS_RSV2 : 0)
@@ -8722,6 +8758,27 @@ public class WebSocketClientHcioPollOp {
     #! Sends a raw message (non-blocking)
     sendRaw(data msg, int op, bool fin) {
         queueOutgoingFrame(msg, op, fin);
+    }
+
+    #! Sends a pre-encoded frame as it is: already masked and transformed by the extensions (non-blocking)
+    /** As @ref Qore::WebSocketClientPollOperationBase::sendRawFrame()
+        "WebSocketClientPollOperationBase::sendRawFrame()" for an HTTP/1.1 connection: the frame is sent on the stream with no change, with the RSV bits it has, for
+        example
+
+        @param frame_data the encoded frame, masked with a client mask (RFC 6455 section 5.3)
+
+        @throw WEBSOCKET-CLOSING-ERROR \a frame_data is a data frame, and the close handshake has started or the
+        connection has closed: no data frame may follow a close frame (RFC 6455 section 5.5.1)
+        @throw WEBSOCKET-ERROR the connection was lost
+
+        @since WebSocketClient 2.5
+    */
+    sendRawFrame(binary frame_data) {
+        # a data frame (opcode below that of a close frame) is refused once the close handshake has started
+        if (frame_data.size() && (frame_data[0] & 0x0f) < WSOP_Close) {
+            checkDataSend();
+        }
+        sendStreamFrame(frame_data);
     }
 
     #! Sends a close frame (non-blocking)
@@ -9081,8 +9138,15 @@ public class WebSocketClientHcioPollOp {
                 rsv_bits |= result.rsv_bits;
             }
         }
+        sendStreamFrame(ws_encode_message(msg, op, True, fin, rsv_bits));
+    }
+
+    #! Sends an encoded frame on the stream
+    /** @throw WEBSOCKET-ERROR the connection was lost
+    */
+    private sendStreamFrame(binary frame_data) {
         try {
-            stream.sendData(ws_encode_message(msg, op, True, fin, rsv_bits));
+            stream.sendData(frame_data);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "HTTPCLIENT-STREAM-CLOSED"
                     || ex.err == "HTTPCLIENT-STATE-ERROR"
