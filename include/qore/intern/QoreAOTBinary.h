@@ -2099,9 +2099,11 @@ public:
     }
 
     //! Returns true if \a n bytes at \a ptr are in the section that is read, if any (see QoreAOTSectionBounds)
-    /** If they are not, the read pointer is set to the end of the section and the read is marked as overrun
+    /** If they are not, the read pointer is set to the end of the section and the read is marked as overrun.
+        Keep the inline readers local to the binary that establishes the section bounds: libqore and its tools
+        each have their own qore_aot_read_bounds.
     */
-    static bool readFits(const uint8_t*& ptr, size_t n) {
+    DLLLOCAL static bool readFits(const uint8_t*& ptr, size_t n) {
         const uint8_t* end = qore_aot_read_bounds.end;
         // a read of another buffer while a section is bounded is a reader that sets no bounds of its own
         assert(!end || ptr >= qore_aot_read_bounds.start);
@@ -2114,7 +2116,7 @@ public:
     }
 
     //! Read an unsigned 8-bit integer from a data pointer
-    static uint8_t readU8(const uint8_t*& ptr) {
+    DLLLOCAL static uint8_t readU8(const uint8_t*& ptr) {
         if (!readFits(ptr, 1)) {
             return 0;
         }
@@ -2122,7 +2124,7 @@ public:
     }
 
     //! Read an unsigned 16-bit integer (little-endian) from a data pointer
-    static uint16_t readU16(const uint8_t*& ptr) {
+    DLLLOCAL static uint16_t readU16(const uint8_t*& ptr) {
         if (!readFits(ptr, 2)) {
             return 0;
         }
@@ -2133,7 +2135,7 @@ public:
     }
 
     //! Read an unsigned 32-bit integer (little-endian) from a data pointer
-    static uint32_t readU32(const uint8_t*& ptr) {
+    DLLLOCAL static uint32_t readU32(const uint8_t*& ptr) {
         if (!readFits(ptr, 4)) {
             return 0;
         }
@@ -2146,7 +2148,7 @@ public:
     }
 
     //! Read an unsigned 64-bit integer (little-endian) from a data pointer
-    static uint64_t readU64(const uint8_t*& ptr) {
+    DLLLOCAL static uint64_t readU64(const uint8_t*& ptr) {
         if (!readFits(ptr, 8)) {
             return 0;
         }
@@ -2159,7 +2161,7 @@ public:
     }
 
     //! Read a signed 64-bit integer (little-endian) from a data pointer
-    static int64_t readI64(const uint8_t*& ptr) {
+    DLLLOCAL static int64_t readI64(const uint8_t*& ptr) {
         if (!readFits(ptr, 8)) {
             return 0;
         }
@@ -2174,7 +2176,7 @@ public:
     }
 
     //! Read a 64-bit float (little-endian, IEEE 754) from a data pointer
-    static double readF64(const uint8_t*& ptr) {
+    DLLLOCAL static double readF64(const uint8_t*& ptr) {
         if (!readFits(ptr, 8)) {
             return 0;
         }
@@ -2189,7 +2191,7 @@ public:
     }
 
     //! Read a string reference (offset into string pool) from a data pointer
-    const char* readStringRef(const uint8_t*& ptr) const {
+    DLLLOCAL const char* readStringRef(const uint8_t*& ptr) const {
         uint32_t offset = readU32(ptr);
         return getString(offset);
     }
