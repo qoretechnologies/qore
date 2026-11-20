@@ -275,6 +275,10 @@ log("started listener on %s", lh.desc);
       after a persistent session ended) runs with the thread context of its own handler: it does not see the user
       thread context that another handler, also of another tenant, left on the thread, and that handler gets back its
       own (issue #6847)
+    - the header hash given to the handlers gives the fields of the request under \c "headers" over HTTP/1.1, HTTP/2
+      and HTTP/3; a field whose name is a key of the hash (ex: \c Path, \c Method, \c Body) is given only there and
+      no longer replaces the key, and a request with such a field is answered
+      (<a href="https://github.com/qoretechnologies/qore/issues/6761">issue 6761</a>)
     - the error response for an exception of a request handler (400, 413 or 500) gives the error and its description
       only, without the location of the exception in the server's code, unless debugging is enabled
       (@ref HttpServer::HttpServer::setDebug() "HttpServer::setDebug()"; issue #6780)

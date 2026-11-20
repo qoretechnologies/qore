@@ -1978,6 +1978,12 @@ struct qore_socket_private : public QoreReferenceCounter {
     QoreValue warn_callback_arg{};
     //! argument for the event queue
     QoreValue event_arg{};
+    //! True if the fields of a message read are also given at the top level of the hash of the message
+    /** Deprecated placement, on by default; the fields are always given under \c "headers" (a header) and
+        \c "trailers" (the trailer fields of a chunked body), and a field whose name is a key of the reader
+        (qore_http_is_reserved_field_name()) is never given at the top level (qore#6761, qore#6811)
+    */
+    std::atomic<bool> http_fields_at_top_level{true};
     bool del = false,
         http_exp_chunked_body = false,
         ssl_accept_all_certs = false,
@@ -4299,7 +4305,12 @@ public:
             }
         }
 
-        bool close = convertHeaderToHash(*h, p, flags, info, &http_exp_chunked_body, headers_raw_key);
+        // every header field is given under "headers", and at the top level too unless the placement is turned off
+        // (qore#6761)
+        QoreHashNode* fields = new QoreHashNode(autoTypeInfo);
+        h->setKeyValue("headers", fields, nullptr);
+        bool close = convertHeaderToHash(*h, p, flags, info, &http_exp_chunked_body, headers_raw_key, fields,
+            http_fields_at_top_level.load(std::memory_order_relaxed));
         do_read_http_header(QORE_EVENT_HTTP_MESSAGE_RECEIVED, *h, source);
 
         // process header info
@@ -4441,9 +4452,35 @@ public:
         return true;
     }
 
-    // returns true if the connection should be closed, false if not
+    //! Adds a field value to a hash of fields: a field that is given more than once becomes a list of its values
+    DLLLOCAL static void addHttpField(QoreHashNode& h, const char* name, QoreValue val) {
+        hash_assignment_priv ha(h, name);
+        if (!(*ha).isNothing()) {
+            QoreListNode* l;
+            if ((*ha).getType() == NT_LIST) {
+                l = (*ha).get<QoreListNode>();
+            } else {
+                l = new QoreListNode(autoTypeInfo);
+                l->push(ha.swap(l), nullptr);
+            }
+            l->push(val, nullptr);
+        } else {
+            ha.assign(val, nullptr);
+        }
+    }
+
+    //! Parses the field lines of a header or of the trailer section of a chunked body into a hash
+    /** @param h the hash of the message: the fields are given at its top level if \a top_level is true (deprecated),
+        except a field whose name is a key of the reader (qore_http_is_reserved_field_name()), which is given only in
+        \a fields; without \a fields, every field is given in \a h (a hash of fields only)
+        @param fields if not null, every field is given here (the \c "headers" or \c "trailers" key of the message)
+        @param top_level true to give the fields at the top level of \a h as well
+
+        @return true if the connection should be closed, false if not
+    */
     DLLLOCAL bool convertHeaderToHash(QoreHashNode* h, char* p, int flags = 0, QoreHashNode* info = nullptr,
-            bool* chunked = nullptr, const char* headers_raw_key = "headers-raw") {
+            bool* chunked = nullptr, const char* headers_raw_key = "headers-raw", QoreHashNode* fields = nullptr,
+            bool top_level = true) {
         bool close = !(flags & CHF_HTTP11);
         // socket encoding
         const char* senc = nullptr;
@@ -4547,19 +4584,17 @@ public:
                 val_copy = val->realCopy();
             }
 
-            // see if header exists, and if so make it a list and add value to the list
-            hash_assignment_priv ha(*h, buf);
-            if (!(*ha).isNothing()) {
-                QoreListNode* l;
-                if ((*ha).getType() == NT_LIST) {
-                    l = (*ha).get<QoreListNode>();
-                } else {
-                    l = new QoreListNode(autoTypeInfo);
-                    l->push(ha.swap(l), nullptr);
+            if (!fields) {
+                // a hash of fields only
+                addHttpField(*h, buf, val.release());
+            } else {
+                // a field never replaces a key of the reader (qore#6761, qore#6811)
+                // the value is shared by both hashes; a value is copied when it is changed
+                if (top_level && !qore_http_is_reserved_field_name(buf)) {
+                    addHttpField(*h, buf, val->refSelf());
                 }
-                l->push(val.release(), nullptr);
-            } else // otherwise set header normally
-                ha.assign(val.release(), 0);
+                addHttpField(*fields, buf, val.release());
+            }
 
             // set raw headers if applicable
             if (raw_hdr) {

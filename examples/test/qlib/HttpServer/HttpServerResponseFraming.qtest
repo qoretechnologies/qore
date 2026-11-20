@@ -470,7 +470,7 @@ public class HttpServerResponseFramingTest inherits QUnit::Test {
             resp.framing = "chunked";
             hash<auto> chunked = s.readHTTPChunkedBodyBinary(Timeout);
             resp.body = chunked.body.toString();
-            resp.trailers = chunked - "body";
+            resp.trailers = chunked.trailers ?? {};
         } else if (exists resp."content-length") {
             resp.framing = "content-length";
             int size = resp."content-length".toInt();

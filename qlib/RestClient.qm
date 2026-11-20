@@ -182,6 +182,12 @@ printf("%Y\n", ans.body);
       <a href="https://github.com/qoretechnologies/qore/issues/6901">issue 6901</a>)
 
     @section restclientv2_7 RestClient v2.7
+    - the \c headers of a @ref RestClient::RestResponseInfo "RestResponseInfo" hash are the header fields of the
+      response, without the \c headers and \c trailers sub-hashes that an @ref Qore::HTTPClient "HTTPClient" response
+      now has; RestClient raises \c RESTCLIENT-ERROR for the HTTPClient option \c http_fields_at_top_level set to
+      @ref False and for RestClient::setHttpFieldsAtTopLevel(False), as it reads the fields of a response at its top
+      level (<a href="https://github.com/qoretechnologies/qore/issues/6811">issue 6811</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6869">issue 6869</a>)
     - a response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other
       text and raises \c INVALID-ENCODING when it is of a structured type, as with
       @ref Qore::HTTPClient "HTTPClient", also for streamed and polled responses (see
@@ -1198,6 +1204,13 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
 public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, ConnectionProvider::UpdateOptionsInterface,
         ConnectionProvider::OptionHelper, AbstractRestClient {
     public {
+        #! The description of the error raised when the fields of responses are not to be given at the top level
+        /** @since RestClient 2.7
+        */
+        const HttpFieldsAtTopLevelError = "RestClient does not support giving the fields of a response only under "
+            "\"headers\" (the http_fields_at_top_level option or setHttpFieldsAtTopLevel() set to False) yet, as it "
+            "reads them at the top level of the response; see issue #6869";
+
         #! Data serialization support mapping codes to MIME types and de/serialization functions
         const SupportsCbor =
             exists_function("make_cbor") && exists_function("parse_cbor")
@@ -1651,15 +1664,35 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
 
-        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, the
+        \c http_fields_at_top_level option set to @ref False (issue #6869), etc
 
         @since
         - %RestClient 1.2 the \a send_encoding option was added
         - %RestClient 1.4 the \a validator and \a swagger options were added
     */
+    #! Raises an exception if @a top_level is @ref False, which RestClient does not support yet
+    /** @param top_level must be @ref True: the fields of a response are given at the top level of its hash as well
+
+        @throw RESTCLIENT-ERROR @a top_level is @ref False (issue #6869)
+
+        @since RestClient 2.7
+    */
+    nothing setHttpFieldsAtTopLevel(bool top_level) {
+        if (!top_level) {
+            throw "RESTCLIENT-ERROR", HttpFieldsAtTopLevelError;
+        }
+        HTTPClient::setHttpFieldsAtTopLevel(top_level);
+    }
+
     constructor(*hash<auto> opts, *softbool do_not_connect)
             : HTTPClient(getRestClientHttpClientConstructorOptions(opts)
                 + ((opts.url || !opts.validator) ? NOTHING : {"url": opts.validator.getTargetUrl()})) {
+        # the setting that the HTTPClient constructor applied; RestClient reads the fields of a response at its top
+        # level (issue #6869)
+        if (!getHttpFieldsAtTopLevel()) {
+            throw "RESTCLIENT-ERROR", HttpFieldsAtTopLevelError;
+        }
         # capture caller options verbatim for copyWithUrl() sibling construction
         saved_opts = opts ?? {};
         # set logger, if any
@@ -2515,7 +2548,7 @@ hash<auto> ans = rest.del("/orders/1");
         hash<auto> rv = doValidatedRequest(method, path, body, \info, NOTHING, hdr);
         return <RestResponseInfo>{
             "status_code": rv.status_code,
-            "headers": info."response-headers" ?? rv.hdr ?? (rv - ("body", "status_code")),
+            "headers": info."response-headers" ?? rv.hdr ?? (rv - ("body", "status_code", "headers", "trailers")),
             "body": rv.body,
             "content_type": rv."content-type",
         };
@@ -2680,7 +2713,7 @@ hash<auto> ans = rest.del("/orders/1");
     private hash<RestResponseInfo> makeRestResponse(hash<auto> rv) {
         return <RestResponseInfo>{
             "status_code": rv.status_code,
-            "headers": rv.hdr ?? (rv - ("body", "status_code")),
+            "headers": rv.hdr ?? (rv - ("body", "status_code", "headers", "trailers")),
             "body": rv.body,
             "content_type": RestClient::getSingleHeaderValue(rv."content-type"),
         };
