@@ -275,19 +275,54 @@ class DescendantStacksTest(unittest.TestCase):
         self.assertIn("stacks of %d from a stand-in" % pids[0], stacks)
         self.assertNotIn("no tool could capture", stacks)
 
-    @unittest.skipUnless(os.path.isdir("/proc/self"), "ptrace's restrictions are explained on Linux")
-    def test_an_attach_that_ptrace_does_not_permit_is_explained(self):
-        # a debugger's report of EPERM, as gdb prints it when yama's ptrace_scope or the container forbids the attach
-        scripts = {"denied-tool": '#!/bin/sh\necho "ptrace: Operation not permitted."\nexit 1\n'}
-        output, pids, result, elapsed, root = self.run_test(scripts=scripts, QORE_TEST_STACK_TOOLS="denied-tool")
-        stacks = self.capture(output, pids[0])
-        self.assertIn("*** process %d: denied-tool failed (exit code 1) ***" % pids[0], stacks)
-        try:
-            scope = Path("/proc/sys/kernel/yama/ptrace_scope").read_text().strip()
-        except OSError:
-            scope = "not set"
-        self.assertIn("*** process %d: ptrace is restricted, so its call stacks cannot be captured: "
-                      "kernel.yama.ptrace_scope is %s" % (pids[0], scope), stacks)
+    def test_an_attach_that_the_system_refuses_is_reported_once_and_not_tried_again(self):
+        # Where the system refuses the attach (yama's ptrace_scope or the container on Linux, macOS's rules for lldb),
+        # every tool reported it for every process, each with an error.  Now the first refusal is reported in one line,
+        # no other process or tool is tried, and the test is ended as usual.  The stand-ins are the default tools: on
+        # Linux, gdb reports EPERM as gdb does; on macOS, sample fails and lldb reports its refusal as lldb does.  A
+        # debugger run on a core (no -p; see test_a_capture_that_hangs_is_killed_at_its_limit) does nothing.
+        record = '#!/bin/sh\ncase "$0 $*" in *sample*|*" -p "*) ;; *) exit 0 ;; esac\necho "${{0##*/}} $*" >> "{calls}"\n'
+        if sys.platform == "darwin":
+            scripts = {
+                "sample": record + 'echo "sample cannot examine process $1"\nexit 1\n',
+                "lldb": record + 'echo "error: attach failed: attach failed (Not allowed to attach to process.)"\n'
+                                 'exit 1\n',
+            }
+            refusing = ["sample", "lldb"]
+        else:
+            scripts = {
+                "gdb": record + 'echo "ptrace: Operation not permitted."\nexit 1\n',
+                "eu-stack": record + 'echo "stacks from eu-stack"\n',
+            }
+            refusing = ["gdb"]
+        # the limit of a capture is long, to show that the refusal is not waited for
+        output, pids, result, elapsed, root = self.run_test(children=2, scripts=scripts, harness_limit=60,
+                                                            QORE_TEST_STACK_CAPTURE_WAIT="60")
+        pids.sort()
+        lines = [line for line in output.splitlines() if "ptrace restricted" in line]
+        self.assertEqual(1, len(lines), output)
+        self.assertIn("no stacks captured (processes %d %d)" % tuple(pids), lines[0])
+        if sys.platform == "darwin":
+            self.assertIn("the system does not allow lldb to attach to process %d" % pids[0], lines[0])
+        else:
+            try:
+                scope = Path("/proc/sys/kernel/yama/ptrace_scope").read_text().strip()
+            except OSError:
+                scope = "unset"
+            self.assertIn("*** ptrace restricted: yama ptrace_scope=%s, " % scope, lines[0])
+        # each tool was run once, on the first process only
+        calls = (root / "calls").read_text().splitlines()
+        self.assertEqual(refusing, [call.split()[0] for call in calls], calls)
+        for call in calls:
+            self.assertIn(str(pids[0]), call.split()[1:], calls)
+        self.assertNotIn("native call stacks of process %d" % pids[1], output)
+        self.assertNotIn("stacks from eu-stack", output)
+        self.assertNotIn("failed (exit code 1)", output.split("ptrace restricted")[1])
+        self.assertNotIn("no tool could capture", output)
+        # then the test is ended as usual
+        self.assertLess(output.index("ptrace restricted"), output.index("*** end of the native call stacks"))
+        self.assert_before_signals(output)
+        self.assertLess(elapsed, LIMIT + 25, output)
 
     def test_every_tool_failing_is_reported(self):
         scripts = {"failing-tool": '#!/bin/sh\nexit 3\n'}

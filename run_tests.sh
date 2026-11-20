@@ -1478,11 +1478,13 @@ done
 # is each process left without its stacks.  A debugger that is killed while attached can leave its target stopped (T):
 # the test's process group is killed after the test (and, on Linux, every process with the test's mark), but on macOS a
 # stopped process that left the group is not (as any process that leaves it; see exec_in_test_group()).  A debugger
-# that cannot attach prints why; on Linux, an attach that ptrace does not permit is explained in the log (yama's
-# ptrace_scope lets a process that does not have CAP_SYS_PTRACE, such as a test run as an ordinary user, attach only to
-# its own descendants, and the watchdog's debugger is not an ancestor of the test's processes).  The watchdog reads no
-# event while it captures, so a run interrupted meanwhile ends its test once the captures have ended (see
-# runner_signaled()), within QORE_TEST_STACK_CAPTURE_TOTAL seconds.
+# that cannot attach prints why.  An attach that the system refuses (ptrace's EPERM on Linux: yama's ptrace_scope lets
+# a process that does not have CAP_SYS_PTRACE, such as a test run as an ordinary user, attach only to its own
+# descendants, and the watchdog's debugger is not an ancestor of the test's processes; lldb's refusal on macOS) is
+# reported in one line, and the test's other processes and tools are not tried (see stack_attach_refused()); the test
+# is then signalled as without the captures.  The watchdog reads no event while it captures, so a run interrupted
+# meanwhile ends its test once the captures have ended (see runner_signaled()), within QORE_TEST_STACK_CAPTURE_TOTAL
+# seconds.
 TEST_STACK_CAPTURE_WAIT=${QORE_TEST_STACK_CAPTURE_WAIT:-30}
 TEST_STACK_CAPTURE_TOTAL=${QORE_TEST_STACK_CAPTURE_TOTAL:-120}
 # both are whole numbers of seconds, at least 1: shell arithmetic on anything else (2m, 1.5) is an error that ended the
@@ -1629,22 +1631,37 @@ runs_stack_tool() {
     esac
 }
 
-# Prints why ptrace does not permit the capture of the given process (Linux; see above)
-explain_ptrace_denied() {
-    stack_scope=`cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null`
-    case "$stack_scope" in
-        1)
-            stack_why="kernel.yama.ptrace_scope is 1: without CAP_SYS_PTRACE, a process may attach only to its own"
-            stack_why="$stack_why descendants, and the watchdog's debugger is not an ancestor of process $1"
-            ;;
-        2) stack_why="kernel.yama.ptrace_scope is 2: only a process with CAP_SYS_PTRACE may attach" ;;
-        3) stack_why="kernel.yama.ptrace_scope is 3: no process may attach" ;;
-        *)
-            stack_why="kernel.yama.ptrace_scope is ${stack_scope:-not set}, so the container's seccomp profile or"
-            stack_why="$stack_why missing capabilities (CAP_SYS_PTRACE) forbid it"
-            ;;
-    esac
-    echo "*** process $1: ptrace is restricted, so its call stacks cannot be captured: $stack_why ***"
+# Returns 0 if the given output of a stack tool shows that the system refused to let it attach to the given process,
+# and then prints why, in one line, with the processes given after it, which are not captured (see above): on Linux,
+# ptrace's EPERM ("ptrace: Operation not permitted." from gdb, "Operation not permitted" from eu-stack), which yama's
+# ptrace_scope, or the container's seccomp profile or capabilities, decide for every process alike; on macOS, lldb's
+# "Not allowed to attach to process", which the system decides for the debugger (developer tools access) and for the
+# process (a system binary, or one built with the hardened runtime)
+stack_attach_refused() {
+    stack_refused_out=$1
+    stack_refused_pid=$2
+    shift 2
+    if [ -r /proc/self/stat ]; then
+        grep -q "Operation not permitted" "$stack_refused_out" 2>/dev/null || return 1
+        stack_scope=`cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null`
+        case "$stack_scope" in
+            1)
+                stack_why="without CAP_SYS_PTRACE a process may attach only to its own descendants, and the"
+                stack_why="$stack_why watchdog's debugger is not an ancestor of the test's processes"
+                ;;
+            2) stack_why="only a process with CAP_SYS_PTRACE may attach" ;;
+            3) stack_why="no process may attach" ;;
+            *) stack_why="the container's seccomp profile or missing CAP_SYS_PTRACE forbid the attach" ;;
+        esac
+        echo "*** ptrace restricted: yama ptrace_scope=${stack_scope:-unset}, no stacks captured (processes $*):" \
+            "$stack_why ***"
+    else
+        grep -q "Not allowed to attach to process" "$stack_refused_out" 2>/dev/null || return 1
+        echo "*** ptrace restricted: the system does not allow lldb to attach to process $stack_refused_pid, no" \
+            "stacks captured (processes $*): it allows a debugger to attach only with developer tools access" \
+            "(DevToolsSecurity), and never to a system binary or a program built with the hardened runtime ***"
+    fi
+    return 0
 }
 
 # Prints the native call stacks of every process of the given test process (see above).  It cannot fail the watchdog,
@@ -1671,6 +1688,7 @@ capture_descendant_stacks() {
     # each tool's output goes through a file in the runner's own directory, so that a refused attach can be explained
     stack_out="${TEST_EVENT_DIR:-${TMPDIR:-/tmp}}/stacks.$$"
     stack_end=$((`date +%s` + TEST_STACK_CAPTURE_TOTAL))
+    stack_refused=0
     for pid in $stack_pids; do
         # the time of the first tool is taken before the label, whose commands take time too
         stack_secs=$((stack_end - `date +%s`))
@@ -1724,11 +1742,18 @@ $pid
                     break
                     ;;
             esac
-            echo "*** process $pid: $tool failed (exit code $stack_rc) ***"
-            if [ -r /proc/self/stat ] && grep -q "Operation not permitted" "$stack_out" 2>/dev/null; then
-                explain_ptrace_denied $pid
+            # an attach that the system refuses is refused for the other processes and tools too: one line says so,
+            # and no other is tried, so a test whose stacks cannot be read does not report it for each of them
+            if stack_attach_refused "$stack_out" $pid `printf '%s\n' $stack_pids | awk -v pid=$pid '
+                    $1 == pid { found = 1 } found'`; then
+                stack_refused=1
+                break
             fi
+            echo "*** process $pid: $tool failed (exit code $stack_rc) ***"
         done
+        if [ $stack_refused -eq 1 ]; then
+            break
+        fi
         if [ $stack_done -eq 0 ] && [ -n "$stack_tools" ]; then
             echo "*** process $pid: no tool could capture its call stacks ***"
         fi
