@@ -40,6 +40,16 @@
     *list l = (str =~ x/(?:(\w+):(\w+):)(\w+)/);
     @endcode
 
+    @section qore_regex_result_encoding Character Encoding of Captures and Replacements
+
+    Captures, split pieces and substitution results use the @ref character_encoding "character encoding" of the subject string.
+    This includes named groups and the captures passed to a substitution callback. A replacement is converted to the
+    subject's encoding when necessary. A character that cannot be represented in that encoding raises
+    \c ENCODING-CONVERSION-ERROR. Match offsets and lengths refer to bytes in the UTF-8 text used by the matcher.
+
+    Named group identifiers become ordinary hash keys in the process encoding. A name that cannot be represented
+    in that encoding raises \c ENCODING-CONVERSION-ERROR when the named-group hash is built.
+
     @section qore_regex_nul Embedded NUL Characters in Substitution
 
     Substitution processes the full byte length of patterns, subjects and replacements, including embedded NUL
@@ -205,7 +215,7 @@
     |\\v|\c VT|\c 11|\c 013|\c 0B|vertical tab
     |\\$|\c $|\c 36|\c 044|\c 24|a literal dollar sign character
     |\\\\|\c \\|\c 134|\c 092|\c 5C|a literal backslash character
-    |\\[0-7][0-7][0-7]|-|-|-|-|the ASCII character represented by the octal code
+    |\\[0-7][0-7][0-7]|-|-|-|-|one byte of the result encoding, given in octal (000 through 377)
 
     <b>Case Conversion Escape Codes (since %Qore 3.0)</b>
     |!Escape|!Description

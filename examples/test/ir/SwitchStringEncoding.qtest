@@ -32,6 +32,7 @@ class SwitchStringEncodingTest inherits QUnit::Test {
         addTestCase("execution modes", \executionModes());
         addTestCase("AOT", \aot());
         addTestCase("source and image literal encodings", \sourceLiterals());
+        addTestCase("regex result encodings", \regexEncodings());
         addTestCase("UTF-8 files and stdin", \fileEncoding());
         addTestCase("whole source validation", \wholeSource());
         set_return_value(main());
@@ -52,6 +53,23 @@ class SwitchStringEncodingTest inherits QUnit::Test {
             assertEq(0, status, output);
         }
         return output;
+    }
+
+    regexEncodings() {
+        string probe = get_script_dir() + "/utf8-source-literals/regex-results.q";
+        string expected = "regex encodings passed\n";
+        foreach string charset in ("ISO-8859-1", "UTF-8") {
+            string env = "QORE_CHARSET=" + charset + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ";
+            foreach string mode in ("ast", "ir", "jit", "tiered") {
+                assertEq(expected, run((qore, "-b", "--exec-mode=" + mode, probe), env), mode);
+            }
+            foreach string opt in ("-O0", "-O3") {
+                TmpDir tmp("qore-regex-result-encoding-");
+                string exe = tmp.path + "/probe";
+                run((qcc, opt, "-o", exe, probe), env);
+                assertEq(expected, run((exe, "-b"), env), opt);
+            }
+        }
     }
 
     sourceLiterals() {

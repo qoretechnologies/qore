@@ -876,9 +876,9 @@ const RE_DupNames = PCRE2_DUPNAMES;
 hashdecl Qore::RegexMatchInfo {
     //! Full match text (\c $0)
     string match;
-    //! Byte offset of the match start in the target string
+    //! Byte offset of the match start in the UTF-8 representation of the subject
     int offset;
-    //! Byte length of the match
+    //! Byte length of the match in the UTF-8 representation of the subject
     int length;
     //! Captured groups (\c $1, \c $2, ...); @ref nothing if no capturing groups
     *list<*string> groups;

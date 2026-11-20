@@ -263,7 +263,8 @@ while (i.next()) {
     conversion instead, which uses the display width of the argument.
 
     @ref qore_regex "Regular expression" operators and functions convert UTF-16 strings to \c UTF-8 before
-    matching, so any strings they return are tagged with \c UTF-8 and not with the source encoding.
+    matching. Captures, split pieces and substitution results use the subject's encoding. Match offsets and
+    lengths count bytes in the UTF-8 representation used for matching.
 
     Conversions of UTF-16 strings to numbers, booleans and dates (ex: \c int(), \c float(), \c number(),
     \c boolean(), @ref Qore::parse_boolean() "parse_boolean()", \c date(), the \c softint, \c softfloat,
