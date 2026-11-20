@@ -9640,8 +9640,9 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
                 val = ir_return_value;
             } else if (*xsink) {
                 // a return that an exception raised after it (by the destructor of a local) leaves the value it
-                // returns to be released here, after the locals, as the AST interpreter releases it (#6029)
-                ir_return_value.discard(xsink);
+                // returns to the caller, which releases it after the locals (#6029) and after the extra arguments
+                // ($argv, released below), as the AST interpreter and native code release it (qore#6052)
+                val = ir_return_value;
             } else {
                 if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
                     QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
@@ -10071,9 +10072,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     val = ir_return_value;
                 } else if (*xsink) {
                     // exception raised: propagate; a return that an exception raised after it (by the destructor of a
-                    // local) leaves the value it returns to be released here, after the locals, as the AST interpreter
-                    // releases it (#6029)
-                    ir_return_value.discard(xsink);
+                    // local) leaves the value it returns to the caller, which releases it after the locals (#6029)
+                    // and after the extra arguments ($argv, released below), as the AST interpreter and native code
+                    // release it (qore#6052)
+                    val = ir_return_value;
                 } else {
                     // IR execution failed without raising an exception.  Under %modern
                     // (which is guaranteed on this path — ensureIrExecMode downgrades

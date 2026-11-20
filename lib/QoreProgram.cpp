@@ -5470,7 +5470,7 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
 
 template <bool LexicalInvocation>
 QORE_INTERN_ALWAYS_INLINE QoreValue qore_program_private::callFunctionImpl(const char* name,
-        const QoreListNode* args, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        const QoreListNode* args, ExceptionSink* xsink, LexicalSemanticPolicy policy, bool given_args) {
     SimpleRefHolder<FunctionCallNode> fc;
 
     printd(5, "QoreProgram::callFunction() creating function call to %s()\n", name);
@@ -5503,6 +5503,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue qore_program_private::callFunctionImpl(const
     } else {
         fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), pgm);
     }
+    // a list that the caller gives is a temporary list of evaluated values that the call takes over (qore#6052)
+    if (given_args && args) {
+        fc->setTmpArgs();
+    }
     QoreValue rv = !*xsink ? fc->eval(xsink) : QoreValue();
 
     // let caller delete function arguments if necessary
@@ -5518,6 +5522,10 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 QoreValue qore_program_private::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
     return callFunctionImpl<true>(name, args, xsink, policy);
+}
+
+QoreValue qore_program_private::callFunctionGivenArgs(const char* name, QoreListNode* args, ExceptionSink* xsink) {
+    return callFunctionImpl<false>(name, args, xsink, {}, true);
 }
 
 void QoreProgram::parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {

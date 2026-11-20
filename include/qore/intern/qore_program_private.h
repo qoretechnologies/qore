@@ -5958,9 +5958,15 @@ public:
     DLLLOCAL QoreValue callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
             LexicalSemanticPolicy policy);
 
+    //! Calls a function by name with a temporary list of evaluated arguments that the caller owns
+    /** The call takes the values of the list over, as a direct call takes its evaluated arguments: the ones that the
+        function has no parameter for are moved into its \c argv variable (qore#6052); the caller releases the list
+    */
+    DLLLOCAL QoreValue callFunctionGivenArgs(const char* name, QoreListNode* args, ExceptionSink* xsink);
+
     template <bool LexicalInvocation>
     DLLLOCAL QoreValue callFunctionImpl(const char* name, const QoreListNode* args, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy);
+            LexicalSemanticPolicy policy, bool given_args = false);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;

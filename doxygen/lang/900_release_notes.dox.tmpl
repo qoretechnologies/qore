@@ -3799,6 +3799,10 @@
     - the C++ API's \c QoreProgramContextHelper switches the thread-local data of the Program with the current
       Program; it never creates the data or runs the Program's thread initialization code
       (<a href="https://github.com/qoretechnologies/qore/issues/6537">issue 6537</a>)
+    - @ref Qore::call_function() "call_function()" and @ref Qore::call_function_args() "call_function_args()" give
+      their arguments to the call, which releases the extra arguments with its frame as a direct call does, also when
+      an exception leaves the call after a return statement
+      (<a href="https://github.com/qoretechnologies/qore/issues/6052">issue 6052</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

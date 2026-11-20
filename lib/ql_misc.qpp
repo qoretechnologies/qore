@@ -58,6 +58,27 @@
 #include <ctime>
 #include <vector>
 
+// returns the arguments of call_function() from \a offset to give to the call, or nullptr if there are none
+/* The values are taken from the argument list when nothing else holds it, as a direct call takes its evaluated
+   arguments, so that the called code moves the ones that it has no parameter for into $argv and releases them with its
+   frame (qore#6052); otherwise they are copied
+*/
+static QoreListNode* qore_take_call_function_args(const QoreListNode* args, size_t offset, ExceptionSink* xsink) {
+    size_t n = num_args(args);
+    if (n <= offset) {
+        return nullptr;
+    }
+    if (!args->is_unique()) {
+        return args->copyListFrom(offset);
+    }
+    QoreListNode* rv = new QoreListNode(autoTypeInfo);
+    qore_list_private* lp = qore_list_private::get(*const_cast<QoreListNode*>(args));
+    for (size_t i = offset; i < n; ++i) {
+        rv->push(lp->takeExists(i), xsink);
+    }
+    return rv;
+}
+
 #ifndef WARN_MODULES
 // needed so that the Qore default argument value in sinatures below will match a C++ value
 #define WARN_MODULES QP_WARN_MODULES
@@ -998,13 +1019,13 @@ auto call_function(string name, ...) {
     if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
         return QoreValue();
     }
-    ReferenceHolder<QoreListNode> vargs(xsink);
-    // if there are arguments to pass, create argument list by copying current list
-    if (num_args(args) > 1) {
-        vargs = args->copyListFrom(1);
+    // the arguments are given to the call, as call_function() with a call reference gives them (qore#6052)
+    ReferenceHolder<QoreListNode> vargs(qore_take_call_function_args(args, 1, xsink), xsink);
+    QoreProgram* call_pgm = q_get_runtime_call_program(runtime_cfg);
+    if (!vargs) {
+        return call_pgm->callFunction(name->c_str(), nullptr, xsink);
     }
-
-    return q_get_runtime_call_program(runtime_cfg)->callFunction(name->c_str(), *vargs, xsink);
+    return qore_program_private::get(*call_pgm)->callFunctionGivenArgs(name->c_str(), *vargs, xsink);
 }
 
 //! Calls the given @ref call_reference "call reference" or @ref closure "closure" and returns the result, passing the remaining arguments to the @ref call_reference "call reference" or @ref closure "closure"
@@ -1017,7 +1038,12 @@ auto call_function(string name, ...) {
 auto result = call_function(call_ref, arg1, arg2);
     @endcode
 
-    @note The @ref call_reference "call reference" or @ref closure "closure" called could also throw other exceptions
+    @note
+    - The @ref call_reference "call reference" or @ref closure "closure" called could also throw other exceptions
+    - The arguments are given to the call: the arguments that the code called has no parameter for are moved into its
+      \c argv variable (see @ref implicit_arguments) and released when its frame ends, as for a direct call of the
+      code; when an exception leaves the call after a return statement, they are therefore released before the value
+      returned and before the arguments of the parameters (since %Qore 3.0)
 
     @see
     - call_function_args()
@@ -1027,14 +1053,15 @@ auto result = call_function(call_ref, arg1, arg2);
     - call_object_method_args()
 */
 auto call_function(code callable, ...) {
-    ReferenceHolder<QoreListNode> vargs(xsink);
-    // if there are arguments to pass, create argument list by copying current list
-    if (num_args(args) > 1) {
-        vargs = args->copyListFrom(1);
-    }
+    // the arguments to pass: the call takes them over, and the called code moves the ones that it has no parameter for
+    // into $argv, as a direct call does, so that they are released in the same order (qore#6052)
+    ReferenceHolder<QoreListNode> vargs(qore_take_call_function_args(args, 1, xsink), xsink);
 
     ProgramCallContextHelper pch(callable->getProgram());
-    return callable->invoke(*vargs, xsink);
+    if (!vargs) {
+        return callable->invoke(nullptr, xsink);
+    }
+    return qore_invoke_call_ref_given_args(callable, *vargs, xsink);
 }
 
 //! Returns @ref True if the given code is a closure that the initialization of its library module created
@@ -1152,7 +1179,16 @@ auto call_function_args(string name, *softlist<auto> arguments) [flags=NAMED_ARG
     if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
         return QoreValue();
     }
-    return q_get_runtime_call_program(runtime_cfg)->callFunction(name->c_str(), arguments, xsink);
+    QoreProgram* call_pgm = q_get_runtime_call_program(runtime_cfg);
+    // a list of arguments that nothing else holds is given to the call, as call_function() gives its arguments
+    // (qore#6052)
+    if (arguments && arguments->is_unique() && args->is_unique()
+            && args->retrieveEntry(1).getInternalNode() == arguments) {
+        ReferenceHolder<QoreListNode> vargs(
+            qore_list_private::get(*const_cast<QoreListNode*>(args))->takeExists(1).get<QoreListNode>(), xsink);
+        return qore_program_private::get(*call_pgm)->callFunctionGivenArgs(name->c_str(), *vargs, xsink);
+    }
+    return call_pgm->callFunction(name->c_str(), arguments, xsink);
 }
 
 //! Calls the given @ref call_reference "call reference" or @ref closure "closure" and returns the result, using the optional second argument as a list of arguments to the @ref call_reference "call reference" or @ref closure "closure"
@@ -1165,7 +1201,10 @@ auto call_function_args(string name, *softlist<auto> arguments) [flags=NAMED_ARG
 auto result = call_function_args(call_ref, (arg1, arg2));
     @endcode
 
-    @note The @ref call_reference "call reference" or @ref closure "closure" called could also throw other exceptions
+    @note
+    - The @ref call_reference "call reference" or @ref closure "closure" called could also throw other exceptions
+    - A list of arguments that nothing else holds, such as a list given as a literal, is given to the call, which
+      releases its values as call_function() does (since %Qore 3.0)
 
     @see
     - call_function()
@@ -1176,6 +1215,15 @@ auto result = call_function_args(call_ref, (arg1, arg2));
 */
 auto call_function_args(code callable, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     ProgramCallContextHelper pch(callable->getProgram());
+    // a list of arguments that nothing else holds is taken over by the call, and the called code moves the arguments
+    // that it has no parameter for into $argv, as a direct call does, so that they are released in the same order
+    // (qore#6052)
+    if (arguments && arguments->is_unique() && args->is_unique()
+            && args->retrieveEntry(1).getInternalNode() == arguments) {
+        ReferenceHolder<QoreListNode> vargs(
+            qore_list_private::get(*const_cast<QoreListNode*>(args))->takeExists(1).get<QoreListNode>(), xsink);
+        return qore_invoke_call_ref_given_args(callable, *vargs, xsink);
+    }
     return callable->invoke(arguments, xsink);
 }
 
