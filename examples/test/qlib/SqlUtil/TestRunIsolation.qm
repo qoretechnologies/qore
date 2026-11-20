@@ -274,7 +274,7 @@ public class TestRun {
         cannot be loaded or a variable that is not set raise their own exceptions
     */
     static Datasource openOrFail(string var, *string connstr) {
-        connstr = connstr ?? ENV{var};
+        connstr = connstr ?? getenv(var) ?? ENV{var};
         if (!connstr) {
             throw "DATASOURCE-ERROR", sprintf("%s is not set", var);
         }
