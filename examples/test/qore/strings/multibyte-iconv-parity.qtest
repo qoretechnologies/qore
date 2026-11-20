@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the character functions of multi-byte encodings against the platform's iconv
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+#! The character functions of the multi-byte encodings and the platform's iconv agree (qore#6796)
+/** The input of a conversion from a multi-byte encoding that Qore recognizes by the byte ranges of its characters
+    (Shift_JIS, Big5, GBK, EUC-JP and the other families of charset.cpp) is validated with its character functions
+    before iconv, on every platform.  That is right only if every sequence that a strict iconv decodes is valid for
+    the character functions: otherwise a valid conversion would fail.  A native program checks every byte 0x80 - 0xff
+    and every two-byte sequence whose first byte is 0x80 - 0xff against iconv; with a strict iconv (glibc's, Apple's
+    libiconv) no sequence that iconv decodes may be refused by the character functions, but the byte 0x80 of the Big5
+    encodings, which glibc decodes as U+0080, and which is no character of them (as for the WHATWG Encoding
+    Standard).  The other difference, a
+    sequence that the character functions accept and iconv refuses (an unassigned code point of the encoding), is
+    allowed: its conversion fails with ENCODING-CONVERSION-ERROR, as for an undefined byte of a single-byte encoding.
+    musl's iconv decodes some invalid sequences (ex: Shift_JIS 81 20), which is why the input is validated.
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class MultiByteIconvParityTest
+
+class MultiByteIconvParityTest inherits QUnit::Test {
+    constructor() : QUnit::Test("multi-byte character functions and iconv", "1.0", \ARGV) {
+        addTestCase("every one- and two-byte sequence", \parity());
+        set_return_value(main());
+    }
+
+    parity() {
+        string qore = QORE_ARGV[0];
+        string native = ENV.QORE_MULTIBYTE_ICONV_PARITY_TEST ?? dirname(qore) + "/qore-multibyte-iconv-parity-test";
+        if (!is_file(native)) {
+            testSkip("the native multi-byte iconv parity test executable is not available");
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        list<string> lines = select output.split("\n"), $1.val();
+        *string impl = (lines[0] =~ x/^iconv (\w+)$/)[0];
+        assertTrue(exists impl, "the iconv implementation: " + output);
+        bool strict = impl == "glibc" || impl == "apple";
+        int available = 0;
+        list<string> lenient = ();
+        foreach string line in (lines[1..]) {
+            if (line =~ / unavailable$/) {
+                continue;
+            }
+            *list<*string> m = line =~ x/^(\S+) (\d+) (\d+) (\d+) (\d+) \[([^\]]*)\] \[([^\]]*)\]$/;
+            assertTrue(exists m, "line: " + line);
+            ++available;
+            string enc = m[0];
+            assertEq(32896, m[1].toInt(), enc + ": sequences checked");
+            int iconv_only = m[3].toInt();
+            int iconv_only_80 = m[4].toInt();
+            if (strict) {
+                # every sequence that iconv decodes is valid for the character functions
+                assertEq(0, iconv_only, sprintf("%s: sequences that iconv decodes and the character functions "
+                    "refuse: %s", enc, m[6]));
+                # but the byte 0x80 of the Big5 encodings, which glibc decodes as U+0080: it is no character of them
+                # (as for the WHATWG Encoding Standard), and isEncodingValid() and the conversions refuse it
+                if (iconv_only_80) {
+                    assertTrue(inlist(enc.upr(), ("BIG5", "BIG5-HKSCS", "CP950")),
+                        enc + ": sequences of the byte 0x80");
+                    # 0x80 alone, followed by each ASCII byte, and twice
+                    assertEq(130, iconv_only_80, enc + ": sequences of the byte 0x80");
+                }
+            } else if (iconv_only || iconv_only_80) {
+                lenient += sprintf("%s: %d (%s)", enc, iconv_only + iconv_only_80, m[6]);
+            }
+        }
+        assertGt(0, available, "multi-byte encodings that the platform's iconv has");
+        if (lenient) {
+            # musl: the sequences that iconv decodes are refused by the conversions, as by isEncodingValid()
+            testSkip("the iconv of the platform (" + impl + ") decodes sequences that the character functions refuse; "
+                "the conversions refuse them: " + lenient.join("; "));
+        }
+    }
+}

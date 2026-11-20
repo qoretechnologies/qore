@@ -111,6 +111,7 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         addTestCase("the first error in stateful input", \statefulOrderTest());
         addTestCase("latin1 mode with many invalid bytes", \latin1ManyTest());
         addTestCase("bytes not defined in the source encoding", \undefinedTest());
+        addTestCase("valid input of a multi-byte encoding is converted", \multiByteValidTest());
         set_return_value(main());
     }
 
@@ -505,6 +506,24 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         string high_text = binary_to_string(high, "ISO-8859-1");
         assertEq(binary(convert_encoding(high_text, "UTF-8")), readAll(high, "UTF-8", "UTF-8", 7,
             ENCODING_ERRORS_LATIN1));
+    }
+
+    #! input that the platform's iconv decodes is converted: JOHAB "D9 31" is U+3000, whose trail byte 0x31 is in the
+    #! JOHAB range 0x31 - 0x7e (qore#6796, #6665)
+    multiByteValidTest() {
+        string s = binary_to_string(<41d93142>, "JOHAB");
+        string u;
+        try {
+            u = convert_encoding(s, "UTF-8");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ENCODING-CONVERSION-ERROR" && ex.desc =~ /cannot convert from/) {
+                testSkip("the iconv of the platform has no JOHAB: " + ex.desc);
+            }
+            rethrow;
+        }
+        assertEq("A\u{3000}B", u);
+        assertTrue(s.isEncodingValid());
+        assertEq(3, s.length());
     }
 
     undefinedTest() {
