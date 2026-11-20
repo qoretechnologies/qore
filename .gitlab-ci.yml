@@ -122,6 +122,10 @@ check-fast-routes-core-sanitizers:
     - k8s
     - amd64
   services: []
+  variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
   before_script: []
   script:
     - . test/docker_test/tree-tested-skip.sh
@@ -588,6 +592,9 @@ test-macos:
     - $QORE_QMOD_CACHE_MACOS_RUNNER_TAG
   services: []
   variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
     QORE_TEST_OPTS: '-penable-debug'
     QORE_EXCLUDE_PERF_TESTS: "1"
   before_script:
@@ -625,6 +632,9 @@ test-perf:
     - amd64
   services: []
   variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
     QORE_PERF_TESTS_ONLY: "1"
     QORE_EXCLUDE_PERF_TESTS: ""
   before_script:
@@ -665,6 +675,10 @@ test-cmake-ubuntu-amd64:
     - k8s
     - amd64
   services: []
+  variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
   before_script: []
   script:
     - . test/docker_test/tree-tested-skip.sh
@@ -679,6 +693,10 @@ test-cmake-alpine-amd64:
     - k8s
     - amd64
   services: []
+  variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
   before_script: []
   script:
     - . test/docker_test/tree-tested-skip.sh
@@ -701,6 +719,9 @@ test-tsan-ubuntu-amd64:
   services: []
   before_script: []
   variables:
+    # no MySQL service in this job: the global QORE_DB_CONNSTR_MYSQL names a server that is not there, and a test
+    # fails when a datasource string it is given cannot be connected to (qore#6934)
+    QORE_DB_CONNSTR_MYSQL: ""
     TEST_TIMEOUT: "600"
   script:
     - . test/docker_test/tree-tested-skip.sh
