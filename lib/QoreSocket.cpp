@@ -37,6 +37,7 @@
 #include <cctype>
 #include <climits>
 #include <algorithm>
+#include <typeinfo>
 #include <string_view>
 #include <atomic>
 #include <limits>
@@ -15843,19 +15844,66 @@ bool qore_socket_poll_op_scan_members(AbstractPrivateData* priv_data, RObject& o
     return m && m->scanPollMembers(obj, rsh);
 }
 
+//! returns the SocketPollOperationMembers base of the operation, or nullptr if it has none (qore#6839)
+/** A dynamic_cast across the hierarchy of the operations walks it and compares type names, which would cost every
+    access more than the member storage that the fields save; the offset of the base depends only on the dynamic type
+    of the operation, so the result is cached per type for each thread (binary modules, which can define operations,
+    are not unloaded before the library is cleaned up, so the type_info objects of the cache stay valid)
+*/
+static SocketPollOperationMembers* qore_poll_op_cast_members(const SocketPollOperationBase* op) {
+    struct CastEntry {
+        const std::type_info* type = nullptr;
+        //! the offset of the base, or -1 if the type has none (the base is never at offset -1)
+        ptrdiff_t offset = -1;
+    };
+    static thread_local CastEntry cache[8];
+    static thread_local unsigned next = 0;
+    const std::type_info* type = &typeid(*op);
+    const char* base = reinterpret_cast<const char*>(op);
+    for (const CastEntry& e : cache) {
+        if (e.type == type) {
+            return e.offset < 0 ? nullptr
+                : const_cast<SocketPollOperationMembers*>(
+                    reinterpret_cast<const SocketPollOperationMembers*>(base + e.offset));
+        }
+    }
+    const SocketPollOperationMembers* m = dynamic_cast<const SocketPollOperationMembers*>(op);
+    CastEntry& e = cache[next++ % (sizeof cache / sizeof *cache)];
+    e.type = type;
+    e.offset = m ? reinterpret_cast<const char*>(m) - base : -1;
+    return const_cast<SocketPollOperationMembers*>(m);
+}
+
+//! returns true if the objects of the class keep their socket and goal with their operation (qore#6839)
+/** SocketPollOperation and its subclasses; the other poll operations keep them in the private:internal members of
+    SocketPollOperationBase
+*/
+static bool qore_poll_op_class_keeps_members(const QoreObject* obj) {
+    const QoreClass* cls = obj->getClass();
+    return cls == QC_SOCKETPOLLOPERATION || cls->getClass(CID_SOCKETPOLLOPERATION);
+}
+
 QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xsink) const {
     assert(self);
-    // an operation of qore/SocketPollOperation.h keeps the socket with the operation, the others in the
+    // the operations of a SocketPollOperation object keep the socket with the operation, the others in the
     // private:internal member of SocketPollOperationBase (qore#6839)
-    // (the operation of the object, whose members these are, or an operation that it runs and that shares its
-    // object, whose own members are not set and which therefore reads them through the object)
-    const SocketPollOperationMembers* m = dynamic_cast<const SocketPollOperationMembers*>(this);
-    ValueHolder rv(m ? m->getReferencedPollMember("sock") : QoreValue(), xsink);
-    if (!rv) {
-        rv = qore_poll_op_get_referenced_member(*self, "sock", xsink);
-        if (*xsink) {
-            return nullptr;
+    const QoreObject* self_obj = *self;
+    ValueHolder rv(xsink);
+    if (qore_poll_op_class_keeps_members(self_obj)) {
+        // the operation of the object, whose members these are, or an operation that it runs and that shares its
+        // object, whose own members are not set and which therefore reads them through the object
+        const SocketPollOperationMembers* m = qore_poll_op_cast_members(this);
+        if (m) {
+            rv = m->getReferencedPollMember("sock");
         }
+        if (!rv) {
+            rv = qore_poll_op_get_referenced_member(self_obj, "sock", xsink);
+        }
+    } else {
+        rv = self_obj->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
+    }
+    if (*xsink) {
+        return nullptr;
     }
     QoreValue v = rv->resolveIndirect();
     if (v.getType() != NT_OBJECT) {
@@ -15871,8 +15919,12 @@ QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xs
 //! returns the members of the operation of the object that it keeps with the operation, or nullptr (qore#6839)
 static SocketPollOperationMembers* qore_poll_op_members(const QoreObject* op_obj,
         ReferenceHolder<AbstractPrivateData>& pd, ExceptionSink* xsink) {
+    // only the objects of SocketPollOperation keep them with the operation: the others need no lookup
+    if (!qore_poll_op_class_keeps_members(op_obj)) {
+        return nullptr;
+    }
     pd = op_obj->tryGetReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink);
-    return pd ? dynamic_cast<SocketPollOperationMembers*>(*pd) : nullptr;
+    return pd ? qore_poll_op_cast_members(static_cast<SocketPollOperationBase*>(*pd)) : nullptr;
 }
 
 int qore_poll_op_set_member(QoreObject* op_obj, const char* key, QoreValue val, ExceptionSink* xsink) {
@@ -15911,7 +15963,7 @@ QoreValue qore_poll_op_get_referenced_member(const QoreObject* op_obj, const cha
 }
 
 int qore_poll_op_release_members(QoreObject* self, SocketPollOperationBase* op, ExceptionSink* xsink) {
-    if (SocketPollOperationMembers* m = dynamic_cast<SocketPollOperationMembers*>(op)) {
+    if (SocketPollOperationMembers* m = qore_poll_op_cast_members(op)) {
         // the values are released while the registration is held, so that a value given up is marked on the object
         m->releasePollMembers(xsink);
         if (m->poll_scan_holder) {
