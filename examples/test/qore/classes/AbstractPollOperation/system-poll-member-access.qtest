@@ -94,7 +94,7 @@ string sub t() { S s(\"subclass set\"); return s.getGoal(); }"));
     #! a member with the name of a private:internal member, written from outside the class into the object's main
     #! data, is what an access without a class from C++ code means (debug builds do not assert for it)
     outsideWriteTest() {
-        assertEq(("outside", "system"), run("class S inherits PollPipeline {
+        assertEq(("outside", "system", True), run("class S inherits PollPipeline {
     constructor() : PollPipeline(\"system\") {}
 }
 class A { private:internal { int x = 1; } }
@@ -106,12 +106,14 @@ list<auto> sub t() {
     B b();
     auto ob = b;
     ob.x = 5;
-    # the C++ code of the debug functions reads every member of an object by name without a class
+    # the C++ code of the debug functions reads every member of an object by name without a class: the dump shows
+    # the member written from outside
+    bool dumped = True;
     if (exists_function(\"dbg_node_info\")) {
-        call_function(\"dbg_node_info\", s);
+        dumped = (call_function(\"dbg_node_info\", s) =~ /outside/);
         call_function(\"dbg_node_info\", b);
     }
-    return (o.goal, s.getGoal());
+    return (o.goal, s.getGoal(), dumped);
 }"));
     }
 

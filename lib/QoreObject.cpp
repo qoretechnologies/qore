@@ -2866,8 +2866,9 @@ static bool qore_object_misses_internal_member(const qore_object_private* priv, 
 #endif
 
 void QoreObject::setValue(const char* key, QoreValue val, ExceptionSink* xsink) {
-    // a write without a class must not miss a private:internal member that the class context cannot reach: it would
-    // go to the object's main data, where nothing reads it (qore#6839)
+    // a write without a class must not miss a private:internal member of a system class that the class context cannot
+    // reach and that is not also in the main data: it would go to the object's main data, where nothing reads it
+    // (qore#6839)
 #ifdef DEBUG
     assert(!qore_object_misses_internal_member(priv, key));
 #endif
@@ -2901,8 +2902,8 @@ int64 QoreObject::getMemberAsBigInt(const char* mem, bool& found, ExceptionSink*
 }
 
 QoreValue QoreObject::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
-    // a read without a class must not miss a private:internal member that the class context cannot reach: it would
-    // read the object's main data and give no value (qore#6839)
+    // a read without a class must not miss a private:internal member of a system class that the class context cannot
+    // reach and that is not also in the main data: it would read the object's main data and give no value (qore#6839)
 #ifdef DEBUG
     assert(!qore_object_misses_internal_member(priv, mem));
 #endif
