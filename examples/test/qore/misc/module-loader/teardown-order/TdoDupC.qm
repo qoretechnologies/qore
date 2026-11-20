@@ -1,0 +1,34 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdoDupC.qm - module of teardown-order.qtest: loads TdoDupB at run time; has an optional module
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# its AOT module is stale when TdoOptional is available at run time
+%try-module TdoOptional
+%define TdoNoOptional
+%endtry
+
+module TdoDupC {
+    version = "1.0";
+    desc = "module for the module teardown order tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdoDupC {
+    #! reports the deletion of the module on stdout: the constants of a module Program are released then
+    class Tracker {
+        destructor() {
+            print("TdoDupC deleted\n");
+        }
+    }
+
+    const DeletionTracker = new Tracker();
+
+    #! loads TdoDupB at run time into the Program of this module, which then requires it
+    public sub load() {
+        load_module("TdoDupB");
+    }
+}

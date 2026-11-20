@@ -865,7 +865,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Dir", "openDir", ("subdir", "encoding"));
         assertNamedClassMethodVariantCount("Dir", "removeFile", ("filename",));
 
-        assertNamedConstructorVariantCount("File", ("encoding",));
+        assertNamedConstructorVariantCount("File", ("encoding", "encoding_errors"));
         assertNamedClassMethodVariantCount("File", "open", ("path", "flags", "mode", "encoding"));
         assertNamedClassMethodVariantCount("File", "open2", ("path", "flags", "mode", "encoding"));
         assertNamedClassMethodVariantCount("File", "write", ("data",), 2);
@@ -1801,7 +1801,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("StringInputStream", "read", ("limit",));
         assertNamedConstructorVariantCount("StringOutputStream", ("encoding",));
         assertNamedClassMethodVariantCount("StringOutputStream", "write", ("data",));
-        assertNamedConstructorVariantCount("ReadOnlyFile", ("path", "encoding"));
+        assertNamedConstructorVariantCount("ReadOnlyFile", ("path", "encoding", "encoding_errors"));
         assertNamedClassMethodVariantCount("ReadOnlyFile", "open", ("path", "encoding"));
         assertNamedClassMethodVariantCount("ReadOnlyFile", "read", ("size", "timeout_ms"));
         assertNamedClassMethodVariantCount("ReadOnlyFile", "readBinary", ("size", "timeout_ms"));
@@ -1813,7 +1813,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("ReadOnlyFile", "setEventQueue", ("queue", "argument", "with_data"));
         assertNamedClassMethodVariantCount("ReadOnlyFile", "startPollRead", ("path", "as_string", "max_bytes"));
         assertNamedClassStaticMethodVariantCount("ReadOnlyFile", "readTextFile",
-            ("path", "encoding", "max_file_len"));
+            ("path", "encoding", "max_file_len", "encoding_errors"));
         assertNamedClassStaticMethodVariantCount("ReadOnlyFile", "readBinaryFile", ("path", "max_file_len"));
         foreach string name in (("stat", "lstat", "hstat", "hlstat", "statvfs")) {
             assertNamedClassStaticMethodVariantCount("ReadOnlyFile", name, ("path",));
@@ -1825,7 +1825,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedConstructorVariantCount("FileOutputStream", ("path", "append", "mode", "encoding"));
         assertNamedClassMethodVariantCount("FileOutputStream", "write", ("data",));
         assertNamedConstructorVariantCount("FileLineIterator",
-            ("path", "encoding", "line_separator", "trim_line", "nonblocking_open"));
+            ("path", "encoding", "line_separator", "trim_line", "nonblocking_open", "encoding_errors"));
         assertNamedConstructorVariantCount("Scanner", ("source",));
         assertNamedClassMethodVariantCount("Scanner", "advanceN", ("count",));
         assertNamedClassMethodVariantCount("Scanner", "extractRange", ("byte_offset", "byte_length"));
@@ -1833,11 +1833,12 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Scanner", "peekAt", ("char_offset",));
         assertNamedClassMethodVariantCount("Scanner", "peekByteAt", ("byte_offset",));
         assertNamedClassMethodVariantCount("Scanner", "startsWith", ("literal",));
-        assertNamedConstructorVariantCount("StreamReader", ("input_stream", "encoding"));
+        assertNamedConstructorVariantCount("StreamReader", ("input_stream", "encoding", "encoding_errors"));
         assertNamedClassMethodVariantCount("StreamReader", "readString", ("limit",));
         assertNamedClassMethodVariantCount("StreamReader", "readLine", ("line_separator", "trim_line"));
         assertNamedClassMethodVariantCount("StreamReader", "readBinary", ("limit",));
-        assertNamedConstructorVariantCount("BufferedStreamReader", ("input_stream", "encoding", "buffer_size"));
+        assertNamedConstructorVariantCount("BufferedStreamReader",
+            ("input_stream", "encoding", "buffer_size", "encoding_errors"));
         assertNamedConstructorVariantCount("StreamWriter", ("output_stream", "encoding"));
         assertNamedClassMethodVariantCount("StreamWriter", "print", ("text",));
         assertNamedClassMethodVariantCount("StreamWriter", "vprintf", ("format", "format_args"));
@@ -1864,13 +1865,13 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedConstructorVariantCount("TransformOutputStream", ("output_stream", "transform"));
         assertNamedClassMethodVariantCount("TransformOutputStream", "write", ("data",));
         assertNamedConstructorVariantCount("EncodingConversionInputStream",
-            ("input_stream", "source_encoding", "target_encoding"));
+            ("input_stream", "source_encoding", "target_encoding", "encoding_errors"));
         assertNamedClassMethodVariantCount("EncodingConversionInputStream", "read", ("limit",));
         assertNamedConstructorVariantCount("EncodingConversionOutputStream",
-            ("output_stream", "source_encoding", "target_encoding"));
+            ("output_stream", "source_encoding", "target_encoding", "encoding_errors"));
         assertNamedClassMethodVariantCount("EncodingConversionOutputStream", "write", ("data",));
         assertNamedConstructorVariantCount("InputStreamLineIterator",
-            ("input_stream", "encoding", "line_separator", "trim_line", "buffer_size"));
+            ("input_stream", "encoding", "line_separator", "trim_line", "buffer_size", "encoding_errors"));
         assertNamedConstructorVariantCount("InputStreamLineIterator",
             ("stream_reader", "line_separator", "trim_line"));
         assertNamedConstructorVariantCount("DataLineIterator", ("source", "line_separator", "trim_line"));

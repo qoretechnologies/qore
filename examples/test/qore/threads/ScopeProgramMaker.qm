@@ -1,0 +1,24 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# a user module whose code creates a Program and parses code in it (thread-capability-scope-creator.qtest): the
+# Program inherits PO_IN_MODULE from the module's Program
+
+%modern
+
+module ScopeProgramMaker {
+    version = "1.0";
+    desc = "test module: creates a Program at run time";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ScopeProgramMaker {
+    #! creates a Program with the given code
+    public Program sub make(string src) {
+        Program p(PO_MODERN);
+        p.parse(src, "made by a module");
+        return p;
+    }
+}

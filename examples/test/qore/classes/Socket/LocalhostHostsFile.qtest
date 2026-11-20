@@ -69,6 +69,7 @@ class LocalhostHostsFileTest inherits QUnit::Test {
         addTestCase("a dual-stack server is reachable at every address of localhost", \dualStackTest());
         addTestCase("the system resolver's answer for localhost", \systemResolverTest());
         addTestCase("negative: other names and numeric requests are unchanged", \negativeTest());
+        addTestCase("a name that shares an address with localhost gets the file's addresses only", \sharedAddressTest());
         on_exit {
             map unlink($1), files;
         }
@@ -218,6 +219,26 @@ class LocalhostHostsFileTest inherits QUnit::Test {
         assertEq(("127.0.0.1",), resolve("qore-hosts-probe"), "an ordinary name in the file");
         # and an explicit address family that the file does not give a localhost name still has its loopback address
         assertEq(("127.0.0.1",), resolve("localhost", AF_INET), "IPv4: the loopback address");
+    }
+
+    #! qore#6642: c-ares merges the hosts file entries that share an address, so a name listed only at 127.0.0.1 got
+    #! the ::1 of localhost when localhost is also listed at 127.0.0.1 (the hosts file of the Kubernetes CI runners)
+    sharedAddressTest() {
+        useHostsFile("127.0.0.1\tlocalhost
+::1\tlocalhost ip6-localhost ip6-loopback
+# Entries added by HostAliases.
+127.0.0.1\tpgvector-pgvector\tpgsql
+");
+        on_exit restoreHostsFile();
+        assertEq(("127.0.0.1",), resolve("pgsql"), "a name listed at 127.0.0.1 only");
+        assertEq(("127.0.0.1",), resolve("pgvector-pgvector"), "the first name of the entry");
+        assertEq(("127.0.0.1",), resolve("PGSQL"), "without regard to case");
+        # the file gives the name no IPv6 address, as the system resolver answers
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", \getaddrinfo(), ("pgsql", "0", AF_INET6));
+        # a name listed at ::1 only, which localhost shares
+        assertEq(("::1",), resolve("ip6-localhost"), "a name listed at ::1 only");
+        # localhost keeps both
+        assertEq(("127.0.0.1", "::1"), sort(resolve("localhost")), "localhost");
     }
 
     #! makes the name lookups read a hosts file with the given content; skips the test without the debug hooks

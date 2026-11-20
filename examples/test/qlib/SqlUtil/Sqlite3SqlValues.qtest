@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class Sqlite3SqlValuesTest
+
+#! the values that SqlUtil writes into the SQL of SQLite are read as the values given (issue #6715)
+/** cop_value() and the update operators wrote a date as an ANSI timestamp literal,
+    which SQLite does not accept (a syntax error), and a float with 9 significant digits, which changed it (silently,
+    in an update)
+*/
+class Sqlite3SqlValuesTest inherits QUnit::Test {
+    private {
+        # the datasource of the table of a test case
+        *Datasource ds;
+    }
+
+    constructor() : Test("Sqlite3SqlValues", "1.0", \ARGV) {
+        addTestCase("cop_value()", \copValueTest());
+        addTestCase("update operators", \updateOperatorTest());
+        addTestCase("getSqlValue()", \sqlValueTest());
+        set_return_value(main());
+        if (ds) {
+            ds.rollback();
+        }
+    }
+
+    copValueTest() {
+        AbstractTable t = getTable();
+        float third = 1.0 / 3;
+        foreach auto v in ((2024-01-02T03:04:05.5+01:00, 2024-01-02T00:00:00Z, third, 1.1, 1e300, -2.5e-300, 0.0,
+                "a'b", 7, 1.5n)) {
+            *hash<auto> row = t.selectRow({"columns": ("id", cop_as(cop_value(v), "v"))});
+            # a date is the text that the driver binds for it, as it is read from a column; a number is a numeric
+            # literal, which SQLite reads as a float
+            auto expected = v.typeCode() == NT_DATE ? v.format("IF") : (v.typeCode() == NT_NUMBER ? v.toFloat() : v);
+            assertEq(expected, row.v, sprintf("%y", v));
+        }
+        assertThrows("VALUE-ERROR", "no interval type",
+            sub () { t.selectRow({"columns": ("id", cop_as(cop_value(1D), "v"))}); });
+    }
+
+    updateOperatorTest() {
+        AbstractTable t = getTable();
+        float third = 1.0 / 3;
+        t.update({"f": uop_plus(third)});
+        assertEq(1.0 + third, t.selectRow().f, "uop_plus()");
+        t.update({"f": uop_minus(third)});
+        assertEq(1.0 + third - third, t.selectRow().f, "uop_minus()");
+        t.update({"f": uop_multiply(third)});
+        assertEq((1.0 + third - third) * third, t.selectRow().f, "uop_multiply()");
+        t.update({"f": uop_divide(third)});
+        assertEq((1.0 + third - third) * third / third, t.selectRow().f, "uop_divide()");
+        # SQLite has no interval type: date arithmetic raises an error instead of a syntax error or another value
+        assertThrows("VALUE-ERROR", "no interval type", sub () { t.update({"d": uop_plus(1D)}); });
+        # a float with an integral value is a real: an integer column divided by 2.0 is not divided as integers
+        t.update({"id": 5});
+        t.update({"id": uop_divide(2.0)});
+        assertEq(2.5, t.selectRow().id, "uop_divide() by 2.0");
+        assertEq(2024-01-01T10:00:00+02:00.format("IF"), t.selectRow().d, "the date is not changed");
+    }
+
+    #! the SQL values that getSqlValue() gives
+    sqlValueTest() {
+        AbstractTable t = getTable();
+        assertEq("'" + 2024-05-06T07:08:09.5+02:00.format("IF") + "'", t.getSqlValue(2024-05-06T07:08:09.5+02:00),
+            "a date is the text that the driver binds");
+        # a float is read by SQLite as the same double and as a real (4.107753859749195e-50 is read as another
+        # double by SQLite when it is written with 16 digits)
+        foreach float f in ((1.1, 2.0, -0.0, 1e16, 1.0 / 3, 4.107753859749195e-50, 1e300, -2.5e-300, 123456789.125)) {
+            string lit = t.getSqlValue(f);
+            hash<auto> row = ds.selectRow(sprintf("select %s as v, typeof(%s) as t", lit, lit));
+            assertEq(f, row.v, sprintf("%y read by SQLite (%s)", f, lit));
+            assertEq("real", row.t, sprintf("%y is a real (%s)", f, lit));
+        }
+        assertEq("9e999", t.getSqlValue(1e308 * 10));
+        assertEq("null", t.getSqlValue(@nan@));
+        assertThrows("VALUE-ERROR", "no interval type", \t.getSqlValue(), 1D);
+
+        # op_in() finds a float that SQLite would read otherwise when it is written with fewer digits
+        float f = 4.107753859749195e-50;
+        t.update({"f": f});
+        assertEq(1, t.selectRows({"where": {"f": op_in((f, 1.0))}}).size(), "op_in() of a float");
+    }
+
+    private AbstractTable getTable() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        if (ds) {
+            ds.rollback();
+        }
+        ds = new Datasource("sqlite3:x@:memory:");
+        ds.exec("create table x (id integer, d timestamp, f real)");
+        AbstractTable t = new Table(ds, "x").getTable();
+        t.insert({"id": 1, "d": 2024-01-01T10:00:00+02:00, "f": 1.0});
+        ds.commit();
+        return t;
+    }
+}

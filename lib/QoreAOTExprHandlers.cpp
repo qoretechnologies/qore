@@ -1102,6 +1102,43 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
 // NEW_OBJECT (4)
 // ============================================================================
 
+// Defaults can still be pending during AOT registration. Identify the overload by its declared types and ellipsis.
+static std::string inline_constructor_key(const AbstractQoreFunctionVariant* variant) {
+    return getVariantKey(variant->getSignature()->hasVarargs() ? "..." : "", variant);
+}
+
+std::string qore_aot_inline_constructor_ref(const FunctionCallBase* call, std::string class_ref,
+        const char* deferred_signature) {
+    std::string binding = qore_aot_named_call_arg_prefix(call);
+    if (binding.empty()) {
+        return class_ref;
+    }
+    binding += class_ref;
+    // A name can select a different overload from the same positional values, even for an identity map.
+    if (const AbstractQoreFunctionVariant* variant = call->getVariant()) {
+        binding += '\n';
+        binding += inline_constructor_key(variant);
+    } else if (deferred_signature && *deferred_signature) {
+        binding += '\n';
+        binding += deferred_signature;
+    }
+    return binding;
+}
+
+const AbstractQoreFunctionVariant* qore_aot_find_constructor_variant(const QoreClass* qc, const char* signature) {
+    const QoreMethod* method = qc->getConstructor();
+    if (method) {
+        QoreFunctionIterator i(*qore_method_private::get(*method)->getFunction());
+        while (i.next()) {
+            const AbstractQoreFunctionVariant* variant = i.getVariant();
+            if (inline_constructor_key(variant) == signature) {
+                return variant;
+            }
+        }
+    }
+    return nullptr;
+}
+
 static const AbstractQoreFunctionVariant* resolve_expr_constructor_variant(const QoreClass* qc,
         const QoreListNode* args, const char* class_path, std::string& error) {
     if (args && args->needs_eval()) {
@@ -1159,7 +1196,7 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
         if (qc) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
             std::string class_ref = qore_aot_encode_class_ref(qc);
-            ctx.writer.writeStringRef(class_ref.c_str());
+            ctx.writer.writeStringRef(qore_aot_inline_constructor_ref(vrn, std::move(class_ref)).c_str());
             if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                 ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(vrn->getTypeInfo()).c_str());
             }
@@ -1185,7 +1222,7 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
         }
         if (vrn->isDynamicObjectConstruct()) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
-            ctx.writer.writeStringRef(vrn->getDynamicClassName().c_str());
+            ctx.writer.writeStringRef(qore_aot_inline_constructor_ref(vrn, vrn->getDynamicClassName()).c_str());
             if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                 ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(vrn->getTypeInfo()).c_str());
             }
@@ -1214,7 +1251,7 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
         const QoreClass* qc = no->getClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
-        ctx.writer.writeStringRef(class_ref.c_str());
+        ctx.writer.writeStringRef(qore_aot_inline_constructor_ref(no, std::move(class_ref)).c_str());
         if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
             ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(no->getObjectTypeInfo()).c_str());
         }
@@ -1242,7 +1279,7 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue make_deferred_object_call(AOTExprReadCtx& ctx, const char* class_path,
-        QoreListNode* args_list, const QoreTypeInfo* object_type_info = nullptr) {
+        QoreListNode* args_list, const QoreTypeInfo* object_type_info, const char* signature) {
     if (!class_path || !*class_path) {
         if (args_list) {
             args_list->deref(nullptr);
@@ -1262,14 +1299,17 @@ static QoreValue make_deferred_object_call(AOTExprReadCtx& ctx, const char* clas
     }
 
     ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, class_path, pln, object_type_info, ctx.pgm);
+    if (signature) {
+        socn->aot_constructor_signature = signature;
+    }
     if (pln) {
         socn->resolveParseArgs();
     }
     return QoreValue(socn);
 }
 
-static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
-    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+static QoreValue read_inline_constructor(AOTExprReadCtx& ctx, const char* class_path, bool scoped,
+        const char* signature = nullptr) {
     const QoreTypeInfo* object_type_info = nullptr;
     if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
         const char* object_type_path = ctx.reader.readStringRef(ctx.ptr);
@@ -1281,7 +1321,8 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
             object_type_info = type_resolver.resolveForSignature(object_type_path, type_error,
                 qore_aot_get_type_param_owner());
             if (!object_type_info || !type_error.empty()) {
-                ctx.error = "cannot resolve new-object type path '";
+                ctx.error = scoped ? "cannot resolve scoped-new-object type path '"
+                    : "cannot resolve new-object type path '";
                 ctx.error += object_type_path;
                 ctx.error += "'";
                 if (!type_error.empty()) {
@@ -1315,12 +1356,15 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
-    if (!qc) {
-        return make_deferred_object_call(ctx, class_path, args_list, object_type_info);
+    const AbstractQoreFunctionVariant* variant = qc && signature ? qore_aot_find_constructor_variant(qc, signature)
+        : nullptr;
+    if (!qc || (signature && !variant)) {
+        return make_deferred_object_call(ctx, class_path, args_list, object_type_info, signature);
     }
     std::string variant_err;
-    const AbstractQoreFunctionVariant* variant = resolve_expr_constructor_variant(qc, args_list, class_path,
-        variant_err);
+    if (!variant) {
+        variant = resolve_expr_constructor_variant(qc, args_list, class_path, variant_err);
+    }
     if (!variant_err.empty()) {
         if (args_list) {
             args_list->deref(nullptr);
@@ -1328,11 +1372,64 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
         ctx.error = variant_err;
         return QoreValue();
     }
-    NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list, object_type_info);
-    if (variant) {
-        nocn->setVariant(variant);
+    if (!scoped) {
+        NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list, object_type_info);
+        if (variant) {
+            nocn->setVariant(variant);
+        }
+        return QoreValue(nocn);
     }
-    return QoreValue(nocn);
+    // ScopedObjectCallNode expects QoreParseListNode, not QoreListNode
+    QoreParseListNode* pln = nullptr;
+    if (args_list) {
+        pln = new QoreParseListNode(&loc_builtin);
+        ConstListIterator li(args_list);
+        while (li.next()) {
+            QoreValue v = li.getValue();
+            v.refSelf();
+            pln->add(v, &loc_builtin);
+        }
+        args_list->deref(nullptr);
+    }
+    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, pln, object_type_info);
+    // Convert parse_args to args so evalImpl() doesn't hit the assertion
+    if (pln) {
+        socn->resolveParseArgs();
+    }
+    if (variant) {
+        socn->setVariant(variant);
+    }
+    return QoreValue(socn);
+}
+
+// The class reference of a nested constructor carries the same source-to-parameter binding as an inline
+// function call. Install it on the finished node, including a call whose class resolves only when evaluated.
+static QoreValue read_constructor_call(AOTExprReadCtx& ctx, bool scoped) {
+    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    if (!class_path || *class_path != QORE_AOT_NAMED_CALL_DELIM) {
+        return read_inline_constructor(ctx, class_path, scoped);
+    }
+    std::string ref(class_path);
+    QoreAOTNamedCallArgs named;
+    if (qore_aot_parse_named_call_arg_prefix(ref, named) || !named.has_map || ref.empty()) {
+        ctx.error = "invalid named argument binding in an inline constructor call";
+        return QoreValue();
+    }
+    const char* signature = qore_aot_find_class_ref_end(ref.c_str());
+    if (signature) {
+        ref[signature - ref.c_str()] = '\0';
+        ++signature;
+    }
+    QoreValue rv = read_inline_constructor(ctx, ref.c_str(), scoped, signature);
+    if (!rv.isNothing() && qore_aot_apply_named_call_args(rv, named, ctx.error)) {
+        rv.discard(nullptr);
+        return QoreValue();
+    }
+    return rv;
+}
+
+static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
+    return read_constructor_call(ctx, false);
 }
 
 // ============================================================================
@@ -1730,7 +1827,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // selects the Program without claiming parse ownership, like the CLOSURE_CREATE slot reader in
     // buildContextFromSlotMap(): a module loader can own parsing while waiting for this thread.  The caller keeps the
     // Program alive, and the Program's runtime metadata lock protects the locations, strings, and locals that the
-    // closure signature allocates.
+    // closure signature allocates.  The record is only read and the closure constructed: no code of the Program
+    // runs, so the Program is only made current, not entered (qore#6185).
     QoreProgramContextHelper closure_program_context(ctx.pgm);
 
     // the record is read with its bounds checked: a malformed record, or one that a default that cannot be read
@@ -2108,7 +2206,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     if (closure_selfid) {
         cached_pre_inst->insert(closure_selfid);
     }
-    closure_ir->cached_pre_instantiated = cached_pre_inst;
+    closure_ir->setCachedPreInstantiated(cached_pre_inst);
 
     // Set cached IR on variant
     makeExprDeserializedClosureIRNameUnique(*closure_ir, closure_variant);
@@ -2152,11 +2250,12 @@ static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
     if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
         const QoreMethod* method = scr->getMethod();
-        // the class that the reference names (qore#6285)
+        // the class that the reference names (qore#6285), and the method with the class that declares it
+        // (qore#6679)
         const QoreClass* qc = scr->getScopeClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         ctx.writer.writeStringRef(class_ref.c_str());
-        ctx.writer.writeStringRef(method ? method->getName() : "");
+        ctx.writer.writeStringRef(qore_aot_encode_static_method_ref_target(method, qc).c_str());
         return true;
     }
     if (auto* dscr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
@@ -2328,7 +2427,8 @@ static bool write_expr_obj_method_ref(AOTExprWriteCtx& ctx) {
     }
     if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::OBJ_METHOD_REF_EXPR));
-        ctx.writer.writeStringRef(omr->getMethodName().c_str());
+        // with the method resolved when parsing (qore#6680)
+        ctx.writer.writeStringRef(qore_aot_object_method_ref_name(omr).c_str());
         return classifyAndWriteExpr(ctx.writer, omr->getExp(), ctx.parent_locals,
             ctx.parent_globals, ctx.const_reverse_map);
     }
@@ -2376,6 +2476,63 @@ const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* 
     return nullptr;
 }
 
+std::string qore_aot_encode_static_method_ref_target(const QoreMethod* method, const QoreClass* scope_qc) {
+    if (!method) {
+        return std::string();
+    }
+    std::string rv(method->getName());
+    const QoreClass* decl_qc = method->getClass();
+    if (decl_qc && decl_qc != scope_qc) {
+        rv += "\n";
+        rv += qore_aot_encode_class_ref(decl_qc);
+    }
+    return rv;
+}
+
+std::string qore_aot_static_method_ref_target_name(const char* target) {
+    if (!target) {
+        return std::string();
+    }
+    const char* nl = strchr(target, '\n');
+    return nl ? std::string(target, nl - target) : std::string(target);
+}
+
+const QoreMethod* qore_aot_resolve_static_method_ref_target(QoreProgram* pgm, const QoreClass* scope_qc,
+        const char* target, bool& have_class) {
+    have_class = false;
+    const char* nl = target ? strchr(target, '\n') : nullptr;
+    if (!nl) {
+        return nullptr;
+    }
+    have_class = true;
+    std::string name(target, nl - target);
+    const QoreClass* decl_qc = qore_aot_resolve_class_ref(pgm, nl + 1, false);
+    if (!decl_qc || !scope_qc || name.empty()) {
+        return nullptr;
+    }
+    // the class that declares the method is the named class or one of its parent classes
+    if (decl_qc != scope_qc) {
+        bool priv = false;
+        if (scope_qc->getClass(*decl_qc, priv) != decl_qc) {
+            return nullptr;
+        }
+    }
+    // the method of the class itself, not of one of its parent classes; the compiler checked its access
+    const QoreMethod* method = decl_qc->findLocalStaticMethod(name.c_str());
+    if (!method) {
+        method = decl_qc->findLocalMethod(name.c_str());
+    }
+    // a reference read while the class is being loaded, as in a static member's initial value, whose method is not
+    // committed yet
+    if (!method) {
+        method = qore_aot_find_loading_method(decl_qc, name.c_str(), true);
+        if (method && method->getClass() != decl_qc) {
+            method = nullptr;
+        }
+    }
+    return method;
+}
+
 static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const char* kind,
         bool prefer_static, const QoreClass** class_out = nullptr) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
@@ -2392,6 +2549,22 @@ static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const c
         return nullptr;
     }
 
+    // the method of a static method call reference that the image records with the class that declares it
+    // (qore#6679)
+    if (prefer_static) {
+        bool have_class;
+        const QoreMethod* method = qore_aot_resolve_static_method_ref_target(ctx.pgm, qc, method_name, have_class);
+        if (have_class) {
+            if (!method) {
+                ctx.error = std::string("cannot resolve ") + kind + " method reference '" + class_path + "::"
+                    + qore_aot_static_method_ref_target_name(method_name) + "'";
+            }
+            if (class_out) {
+                *class_out = qc;
+            }
+            return method;
+        }
+    }
     const QoreMethod* method = prefer_static
         ? qc->findStaticMethod(method_name) : qc->findMethod(method_name);
     if (!method) {
@@ -2481,11 +2654,11 @@ static bool write_expr_static_method_ref(AOTExprWriteCtx& ctx) {
     }
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
     const QoreMethod* method = scr->getMethod();
-    // the class that the reference names (qore#6285)
+    // the class that the reference names (qore#6285), and the method with the class that declares it (qore#6679)
     const QoreClass* qc = scr->getScopeClass();
     std::string class_ref = qore_aot_encode_class_ref(qc);
     ctx.writer.writeStringRef(class_ref.c_str());
-    ctx.writer.writeStringRef(method ? method->getName() : "");
+    ctx.writer.writeStringRef(qore_aot_encode_static_method_ref_target(method, qc).c_str());
     return true;
 }
 
@@ -2544,7 +2717,8 @@ static bool write_expr_obj_method_ref_expr(AOTExprWriteCtx& ctx) {
         return false;
     }
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::OBJ_METHOD_REF_EXPR));
-    ctx.writer.writeStringRef(omr->getMethodName().c_str());
+    // with the method resolved when parsing (qore#6680)
+    ctx.writer.writeStringRef(qore_aot_object_method_ref_name(omr).c_str());
     return classifyAndWriteExpr(ctx.writer, omr->getExp(), ctx.parent_locals,
         ctx.parent_globals, ctx.const_reverse_map);
 }
@@ -2564,7 +2738,13 @@ static QoreValue read_expr_obj_method_ref_expr(AOTExprReadCtx& ctx) {
         target.discard(nullptr);
         return QoreValue();
     }
-    return QoreValue(new ParseObjectMethodReferenceNode(&loc_builtin, target, strdup(method_name)));
+    // the method resolved when parsing is restored (qore#6680)
+    ParseObjectMethodReferenceNode* omr = qore_aot_make_object_method_ref(ctx.pgm, target, method_name);
+    if (!omr) {
+        ctx.error = "invalid object method reference name";
+        return QoreValue();
+    }
+    return QoreValue(omr);
 }
 
 // ============================================================================
@@ -2634,7 +2814,8 @@ static bool write_expr_scoped_new_object(AOTExprWriteCtx& ctx) {
             std::string class_ref = socn->oc
                 ? qore_aot_encode_class_ref(socn->oc)
                 : socn->getDynamicClassName();
-            ctx.writer.writeStringRef(class_ref.c_str());
+            ctx.writer.writeStringRef(qore_aot_inline_constructor_ref(socn, std::move(class_ref),
+                    socn->aot_constructor_signature.c_str()).c_str());
             if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                 ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(socn->getObjectTypeInfo()).c_str());
             }
@@ -2663,86 +2844,7 @@ static bool write_expr_scoped_new_object(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
-    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
-    const QoreTypeInfo* object_type_info = nullptr;
-    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
-        const char* object_type_path = ctx.reader.readStringRef(ctx.ptr);
-        if (object_type_path && *object_type_path) {
-            QoreAOTTypeResolver type_resolver(ctx.pgm);
-            std::string type_error;
-            // a type parameter of the generic function that the code is in (B<U> b() in sub f<U>()) is resolved as that
-            // function's, so that the call's type arguments replace it (qore#6261)
-            object_type_info = type_resolver.resolveForSignature(object_type_path, type_error,
-                qore_aot_get_type_param_owner());
-            if (!object_type_info || !type_error.empty()) {
-                ctx.error = "cannot resolve scoped-new-object type path '";
-                ctx.error += object_type_path;
-                ctx.error += "'";
-                if (!type_error.empty()) {
-                    ctx.error += ": ";
-                    ctx.error += type_error;
-                }
-                return QoreValue();
-            }
-        }
-    }
-    uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
-    QoreListNode* args_list = nullptr;
-    if (num_args > 0) {
-        args_list = qore_list_private::newList(true);
-        for (uint8_t j = 0; j < num_args; ++j) {
-            std::string arg_err;
-            QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
-                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
-            if (!arg_err.empty()) {
-                ctx.error = arg_err;
-                args_list->deref(nullptr);
-                return QoreValue();
-            }
-            args_list->push(arg, nullptr);
-        }
-    }
-    if (!class_path || !*class_path) {
-        if (args_list) {
-            args_list->deref(nullptr);
-        }
-        return QoreValue();
-    }
-    const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
-    if (!qc) {
-        return make_deferred_object_call(ctx, class_path, args_list, object_type_info);
-    }
-    std::string variant_err;
-    const AbstractQoreFunctionVariant* variant = resolve_expr_constructor_variant(qc, args_list, class_path,
-        variant_err);
-    if (!variant_err.empty()) {
-        if (args_list) {
-            args_list->deref(nullptr);
-        }
-        ctx.error = variant_err;
-        return QoreValue();
-    }
-    // ScopedObjectCallNode expects QoreParseListNode, not QoreListNode
-    QoreParseListNode* pln = nullptr;
-    if (args_list) {
-        pln = new QoreParseListNode(&loc_builtin);
-        ConstListIterator li(args_list);
-        while (li.next()) {
-            QoreValue v = li.getValue();
-            v.refSelf();
-            pln->add(v, &loc_builtin);
-        }
-        args_list->deref(nullptr);
-    }
-    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, pln, object_type_info);
-    // Convert parse_args to args so evalImpl() doesn't hit the assertion
-    if (pln) {
-        socn->resolveParseArgs();
-    }
-    if (variant) {
-        socn->setVariant(variant);
-    }
-    return QoreValue(socn);
+    return read_constructor_call(ctx, true);
 }
 
 // ============================================================================
@@ -4049,7 +4151,8 @@ static bool write_expr_const_value(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_const_value(AOTExprReadCtx& ctx) {
     std::string value_error;
-    // the Program resolves the hashdecls and types of typed container values (#5895)
+    // the Program resolves the hashdecls and types of typed container values (#5895); reading the value runs no code
+    // of the Program, so it is only made current, not entered (qore#6185)
     QoreValue rv;
     {
         QoreProgramContextHelper value_pch(ctx.pgm);

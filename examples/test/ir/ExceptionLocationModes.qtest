@@ -1,0 +1,860 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the runtime locations that JIT and AOT native code store for exceptions
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+%exec-class ExceptionLocationModesTest
+
+#! the location of an exception is the same in every execution mode and in a qcc executable (qore#6646)
+/** An exception is located at the innermost statement that runs when it is raised (see
+    @ref exception_location): the statement's lines, the lines of a compound statement for its condition, list or
+    update expression and for the release of the locals of its blocks, and the lines of a block statement from its
+    first statement to its closing brace.  The tiered mode and qcc executables located a statement of a block at the
+    lines of the block when the statement started on the block's first line, and the IR interpreter and the JIT at
+    the lines of an expression of the statement; both stored the location only when the line changed.
+
+    The script runs probes that raise exceptions in every kind of statement, in their conditions and other
+    expressions, in called code and in destructors, three times each, so that tiered execution runs them on every
+    tier, and ends with an unhandled exception, whose report gives the location and the call stack.  Its output, with
+    the report, must be the AST interpreter's in every execution mode (with the thresholds of ExecModeHarness, so that
+    tiered and JIT execution compile the code after its first call), on the IR tier of tiered execution, and as qcc
+    executables compiled with -O0 and -O3.
+
+    A second script runs the same kinds of probes in the IR that a qcc executable rebuilds from its image: the IR of
+    closures without native code (\c QORE_DISABLE_AOT_NATIVE_CLOSURES), with their nested on_exit handlers and
+    background helpers, and the debug IR that every function runs while a debugger is attached.  That IR took the
+    location of each instruction, an expression's, before the image recorded the statements of the instructions
+    (QORE_AOT_STATEMENT_LOCATIONS_VERSION).
+
+    The script calls the probes through call references, which are never replaced by a summary of the callee's body;
+    a third case calls them directly, so that a qcc executable replaces the calls that it can with the summaries of
+    their callees, and an exception that a summary raises must be located at the statement that raised it
+    (qore#6673).
+
+    Not probed: the call stack location of the destructor of a function body's local at the end of the function
+    (qore#6672).
+*/
+class ExceptionLocationModesTest inherits QUnit::Test {
+    public {
+        #! the probes: each function raises an exception in a statement of a kind; the script calls it through a call
+        #! reference, which is never replaced by a summary of its body
+        const Script = '%modern
+class D {
+    destructor() {
+        throw "DTOR", "destructor";
+    }
+    int m() { return 1; }
+}
+
+class T {
+    int m(int x) {
+        if (x == 2) {
+            throw "ERR", "raised in m()";
+        }
+        return x;
+    }
+}
+
+class Probes {
+    static int pIf(int x) {
+        if (x > 0) {
+            throw "ERR", "if";
+        }
+        return x;
+    }
+
+    static int pElse(int x) {
+        if (x < 0) {
+            return 1;
+        } else {
+            throw "ERR", "else";
+        }
+    }
+
+    static int pWhile(int x) {
+        while (x > 0) {
+            --x;
+            throw "ERR", "while";
+        }
+        return x;
+    }
+
+    static int pDoWhile(int x) {
+        do {
+            --x;
+        } while (x / (x - x));
+        return x;
+    }
+
+    static int pFor(int x) {
+        for (int i = 0; i < x; ++i) {
+            throw "ERR", "for";
+        }
+        return x;
+    }
+
+    static int pForeach(int x) {
+        foreach int v in (1, 2, x) {
+            if (v == x) {
+                throw "ERR", "foreach";
+            }
+        }
+        return x;
+    }
+
+    static int pSwitch(int x) {
+        switch (x) {
+            case 0:
+                return 0;
+            default:
+                throw "ERR", "switch";
+        }
+    }
+
+    static int pTry(int x) {
+        try {
+            throw "ERR", "try";
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+        return x;
+    }
+
+    static int pCatch(int x) {
+        try {
+            throw "X", "x";
+        } catch (hash<ExceptionInfo> ex) {
+            throw "ERR", "catch";
+        }
+        return x;
+    }
+
+    static int pRethrowArgs(int x) {
+        try {
+            throw "X", "x";
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow "ERR",
+                "rethrow args";
+        }
+    }
+
+    static int pOnExit(int x) {
+        on_exit {
+            throw "ERR", "on_exit";
+        }
+        return x;
+    }
+
+    static int pOnError(int x) {
+        on_error {
+            x += 1;
+        }
+        throw "ERR",
+            "on_error";
+    }
+
+    static int f(int x) {
+        if (x >= 0) {
+            throw "ERR", "f";
+        }
+        return x;
+    }
+
+    static int pMultiLineCall(int x) {
+        int y = x +
+            (x == 2
+                ? Probes::f(x)
+                : Probes::f(x + 1));
+        return y;
+    }
+
+    static int pAssignDiv(int x) {
+        int y =
+            x
+            / (x - x);
+        return y;
+    }
+
+    static int pExprDiv(int x) {
+        x +=
+            x / (x - x);
+        return x;
+    }
+
+    static int pReturnDiv(int x) {
+        return x
+            / (x - x);
+    }
+
+    static int pIfCondDiv(int x) {
+        if (x > 0
+            && (x / (x - x))) {
+            return 1;
+        }
+        return x;
+    }
+
+    static int pWhileCondDiv(int x) {
+        while (x > 0
+            && (x / (x - x))) {
+            --x;
+        }
+        return x;
+    }
+
+    static int pForeachListDiv(int x) {
+        foreach int v in (x,
+            x / (x - x)) {
+            x += v;
+        }
+        return x;
+    }
+
+    static int pForeachIterAssign(int x) {
+        list<auto> l = (1, "a", 3);
+        int t = 0;
+        foreach int v in (l) {
+            t += v;
+        }
+        return t;
+    }
+
+    static int pForUpdateDiv(int x) {
+        for (int i = 0; i < x;
+            i += x / (x - x)) {
+            x += 0;
+        }
+        return x;
+    }
+
+    static int pSwitchDiv(int x) {
+        switch (x
+            / (x - x)) {
+            case 1:
+                return 1;
+        }
+        return x;
+    }
+
+    static int pTypeError(int x) {
+        auto a = "str";
+        int y = 0;
+        y =
+            a;
+        return y;
+    }
+
+    static int pForeachBodyDiv(int x) {
+        foreach int v in (1, 2) {
+            x += v / (v - v);
+        }
+        return x;
+    }
+
+    static int pOneLine(int x) {
+        if (x > 0) { x += 1; throw "ERR", "one line"; }
+        return x;
+    }
+
+    static int pSameLine(int x) {
+        x += 1; if (x > 0) {
+            throw "ERR", "same line";
+        }
+        return x;
+    }
+
+    static int pNestedBlock(int x) {
+        {
+            {
+                throw "ERR", "nested";
+            }
+        }
+        return x;
+    }
+
+    static int pWhileLast(int x) {
+        while (x > 0) {
+            --x;
+            if (x == 0) {
+                throw "ERR", "while last";
+            }
+        }
+        return x;
+    }
+
+    static int pBuiltin(int x) {
+        string s = "abc";
+        return
+            s.toInt() +
+            (new Mutex()).unlock();
+    }
+
+    static int pDtorBlock(int x) {
+        {
+            D d();
+            x += 1;
+        }
+        return x;
+    }
+
+    static int pDtorIf(int x) {
+        if (x > 0) {
+            D d();
+            x += 1;
+        }
+        return x;
+    }
+
+    static int pDtorForeach(int x) {
+        foreach int v in (1, 2) {
+            D d();
+            x += v;
+        }
+        return x;
+    }
+
+    static int pDtorTemp(int x) {
+        x += Probes::mk().m();
+        return x;
+    }
+
+    static D mk() {
+        return new D();
+    }
+
+    static int pAfterCall(int x) {
+        int z = 1;
+        z += Probes::g(x)
+            + x / (x - x);
+        return z;
+    }
+
+    static int g(int x) {
+        int y = x;
+        y += 1;
+        return y;
+    }
+}
+
+class E {
+    destructor() {
+        int i = 0;
+        i += 1;
+    }
+}
+
+class MoreProbes {
+    # handlers that run out of line (a block with on_exit and on_error), before the condition of the loop raises
+    static int pHandlersWhile(int x) {
+        while (x > 0
+            && (x / (x - 3))) {
+            on_exit { x += 0; }
+            on_error { x += 0; }
+            --x;
+        }
+        return x;
+    }
+
+    # handlers that run out of line before the destructor of a local of their block
+    static int pHandlersDtor(int x) {
+        if (x > 0) {
+            on_exit { x += 0; }
+            on_error { x += 0; }
+            D d();
+            x += 1;
+        }
+        return x;
+    }
+
+    # a destructor with statements of its own run in the statement that then raises
+    static int pDtorThenDiv(int x) {
+        return (map $1, (new E(),)).size() + x / (x - x);
+    }
+}
+
+# the reproducer of qore#6646
+sub run() {
+    list<T> l = (new T(), new T());
+    int t = 0;
+    int i = 0;
+    foreach T w in (l) {
+        ++i;
+        t += w.m(i);
+    }
+    printf("%d\n", t);
+}
+
+sub run2() {
+    list<int> l = (1, 2, 3);
+    foreach int v in (l) {
+        if (v == 2) {
+            throw "ERR2", "raised in the loop body";
+        }
+    }
+}
+
+code closure = int sub (int x) {
+    if (x > 0) {
+        return x
+            / (x - x);
+    }
+    return x;
+};
+
+sub show(string name, hash<ExceptionInfo> ex) {
+    printf("%s: %s %s:%d-%d", name, ex.err, basename(ex.file), ex.line, ex.endline);
+    foreach hash<CallStackInfo> cs in (ex.callstack) {
+        printf(" <- %s:%d-%d", cs.function, cs.line, cs.endline);
+    }
+    printf("\n");
+}
+
+hash<string, code> probes = {
+    "if": \Probes::pIf(),
+    "else": \Probes::pElse(),
+    "while": \Probes::pWhile(),
+    "do while": \Probes::pDoWhile(),
+    "for": \Probes::pFor(),
+    "foreach": \Probes::pForeach(),
+    "switch": \Probes::pSwitch(),
+    "try": \Probes::pTry(),
+    "catch": \Probes::pCatch(),
+    "rethrow with arguments": \Probes::pRethrowArgs(),
+    "on_exit": \Probes::pOnExit(),
+    "on_error": \Probes::pOnError(),
+    "multi-line call": \Probes::pMultiLineCall(),
+    "multi-line assignment": \Probes::pAssignDiv(),
+    "multi-line expression": \Probes::pExprDiv(),
+    "multi-line return": \Probes::pReturnDiv(),
+    "if condition": \Probes::pIfCondDiv(),
+    "while condition": \Probes::pWhileCondDiv(),
+    "foreach list": \Probes::pForeachListDiv(),
+    "foreach iteration": \Probes::pForeachIterAssign(),
+    "for update": \Probes::pForUpdateDiv(),
+    "switch expression": \Probes::pSwitchDiv(),
+    "type error": \Probes::pTypeError(),
+    "foreach body": \Probes::pForeachBodyDiv(),
+    "one line": \Probes::pOneLine(),
+    "same line": \Probes::pSameLine(),
+    "nested block": \Probes::pNestedBlock(),
+    "while last": \Probes::pWhileLast(),
+    "builtin": \Probes::pBuiltin(),
+    "destructor at block end": \Probes::pDtorBlock(),
+    "destructor at if end": \Probes::pDtorIf(),
+    "destructor at foreach end": \Probes::pDtorForeach(),
+    "destructor of a temporary": \Probes::pDtorTemp(),
+    "after a call": \Probes::pAfterCall(),
+    "closure": closure,
+    "out-of-line handlers then condition": \MoreProbes::pHandlersWhile(),
+    "out-of-line handlers then destructor": \MoreProbes::pHandlersDtor(),
+    "destructor then division": \MoreProbes::pDtorThenDiv(),
+    "closure then division": \LastProbes::pClosureThenDiv(),
+};
+
+for (int j = 0; j < 3; ++j) {
+    foreach hash<auto> i in (probes.pairIterator()) {
+        try {
+            i.value(j + 2);
+            printf("%s: no exception\n", i.key);
+        } catch (hash<ExceptionInfo> ex) {
+            show(i.key, ex);
+        }
+    }
+    try {
+        run();
+    } catch (hash<ExceptionInfo> ex) {
+        show("run", ex);
+    }
+    try {
+        run2();
+    } catch (hash<ExceptionInfo> ex) {
+        show("run2", ex);
+    }
+}
+run2();
+
+class LastProbes {
+    # a closure with statements of its own called in the statement that then raises
+    static int pClosureThenDiv(int x) {
+        code c = int sub (int a) {
+            int b = a;
+            return b;
+        };
+        return c(x) + x / (x - x);
+    }
+}
+';
+
+        #! probes whose IR a qcc executable rebuilds from its image (see the description of the class); with the
+        #! argument "debug", the script runs them with a debugger attached
+        const AotIrScript = '%modern
+%allow-debugger
+
+class Dbg inherits DebugProgram {
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {}
+    onStep(ProgramControl pgm, int blockStatementId, *int statementId, *int breakpointId, reference flow,
+            reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int statementId, reference rs, reference rts) { rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onException(ProgramControl pgm, int statementId, hash<auto> ex, reference dismiss, reference rs,
+            reference rts) {
+        rs = DebugStep;
+    }
+    onExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+}
+
+sub f(auto v) {
+}
+
+class Probes {
+    # an exception raised by the condition of an if statement is located at the statement
+    static int pIfCond(int x) {
+        if (x > 0
+            && (x / (x - x))) {
+            return 1;
+        }
+        return x;
+    }
+
+    # the same in an on_exit handler nested in another, which run out of line
+    static int pNestedHandler(int x) {
+        {
+            on_exit {
+                {
+                    on_exit {
+                        if (x > 0
+                            && (x / (x - x))) {
+                            x = 1;
+                        }
+                    }
+                    on_error { x += 0; }
+                    x += 1;
+                }
+            }
+            on_error { x += 0; }
+            x += 1;
+        }
+        return x;
+    }
+}
+
+our code closure = int sub (int x) {
+    if (x > 0
+        && (x / (x - x))) {
+        return 1;
+    }
+    return x;
+};
+
+our code nested_closure = int sub (int x) {
+    {
+        on_exit {
+            {
+                on_exit {
+                    if (x > 0
+                        && (x / (x - x))) {
+                        x = 1;
+                    }
+                }
+                on_error { x += 0; }
+                x += 1;
+            }
+        }
+        on_error { x += 0; }
+        x += 1;
+    }
+    return x;
+};
+
+our code bg_closure = sub (int x) {
+    background f(x > 0
+        && (x / (x - x)));
+};
+
+sub show(string name, hash<ExceptionInfo> ex) {
+    printf("%s: %s %d-%d", name, ex.err, ex.line, ex.endline);
+    foreach hash<CallStackInfo> cs in (ex.callstack) {
+        printf(" <- %s:%d-%d", cs.function, cs.line, cs.endline);
+    }
+    printf("\n");
+}
+
+our hash<string, code> probes = {
+    "if condition": \Probes::pIfCond(),
+    "nested handler": \Probes::pNestedHandler(),
+    "closure": closure,
+    "nested handler in a closure": nested_closure,
+};
+
+sub run() {
+    for (int j = 0; j < 3; ++j) {
+        foreach hash<auto> i in (probes.pairIterator()) {
+            try {
+                i.value(j + 2);
+                printf("%s: no exception\n", i.key);
+            } catch (hash<ExceptionInfo> ex) {
+                show(i.key, ex);
+            }
+        }
+    }
+    bg_closure(2);
+}
+
+if (ARGV[0] == "debug") {
+    Dbg d();
+    ProgramControl pc = ProgramControl::getProgram();
+    Counter cnt(1);
+    background sub () {
+        on_exit cnt.dec();
+        d.addProgram(pc);
+        on_exit d.removeProgram(pc);
+        run();
+    }();
+    cnt.waitForZero();
+} else {
+    run();
+}
+';
+
+        #! results that the AST interpreter must give for AotIrScript
+        const AotIrPinned = (
+            "if condition: DIVISION-BY-ZERO 30-33 <- Probes::pIfCond:111-111 <- run:133-133",
+            "nested handler: DIVISION-BY-ZERO 43-46 <- Probes::pNestedHandler:111-111 <- run:133-133",
+            "closure: DIVISION-BY-ZERO 60-63 <- <anonymous closure>:111-111 <- run:133-133",
+            "nested handler in a closure: DIVISION-BY-ZERO 72-75 <- <anonymous closure>:111-111 <- run:133-133",
+            "unhandled QORE System exception thrown in TID 2 in <background operator>() "
+                "(aot-ir-location.qr:88-89 (Qore new-thread code))",
+        );
+
+        #! results that the AST interpreter must give, so that a wrong result of the AST interpreter fails the test
+        const Pinned = (
+            "if: ERR exception-location.qr:21-21 <- Probes::pIf:417-417",
+            "do while: DIVISION-BY-ZERO exception-location.qr:43-45 <- Probes::pDoWhile:417-417",
+            "if condition: DIVISION-BY-ZERO exception-location.qr:150-153 <- Probes::pIfCondDiv:417-417",
+            "foreach iteration: RUNTIME-TYPE-ERROR exception-location.qr:176-178 <- Probes::pForeachIterAssign:"
+                "417-417",
+            "destructor at block end: DTOR exception-location.qr:4-4 <- D::destructor:254-256 "
+                "<- Probes::pDtorBlock:417-417",
+            "destructor at if end: DTOR exception-location.qr:4-4 <- D::destructor:261-264 "
+                "<- Probes::pDtorIf:417-417",
+            "run2: ERR2 exception-location.qr:351-351 <- run2:429-429",
+            "out-of-line handlers then condition: DIVISION-BY-ZERO exception-location.qr:309-314 <- "
+                "MoreProbes::pHandlersWhile:417-417",
+            "closure then division: DIVISION-BY-ZERO exception-location.qr:443-443 <- "
+                "LastProbes::pClosureThenDiv:417-417",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("ExceptionLocationModes", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        addTestCase("exceptions are located alike in every execution mode", \testLocations());
+        addTestCase("exceptions are located alike in the IR of AOT images", \testAotIrLocations());
+        addTestCase("exceptions raised by summaries of directly called probes are located alike",
+            \testDirectCallLocations());
+        set_return_value(main());
+    }
+
+    testLocations() {
+        TmpDir tmp("qore-exception-location-");
+        string path = tmp.path + DirSep + "exception-location.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        string expected = normalize(ExecModeHarness::run(sprintf("%s %s -b --enable-debug --exec-mode=ast %s", env,
+            qore_bin, path)), tmp.path);
+        # the AST interpreter's results, which every mode must give
+        hash<string, bool> lines = map {$1: True}, expected.split("\n");
+        assertEq((), (select Pinned, !lines{$1}), "pinned AST results");
+        # the report of the unhandled exception at the end
+        assertRegex("unhandled QORE User exception thrown in TID 1 in run2\\(\\) \\(exception-location\\.qr:351 ",
+            expected, "unhandled exception report");
+
+        hash<string, list<string>> wrong();
+        foreach string mode in (ExecModeHarness::ExecModes + ExecModeHarness::IRTierName) {
+            if (mode == "ast") {
+                continue;
+            }
+            bool ir_tier = mode == ExecModeHarness::IRTierName;
+            string cmd = sprintf("%s %s -b --enable-debug --exec-mode=%s %s", env, qore_bin,
+                ir_tier ? "tiered" : mode, path);
+            string actual = normalize(ir_tier ? ExecModeHarness::run_ir_tier(cmd) : ExecModeHarness::run(cmd),
+                tmp.path);
+            list<string> diff = differences(expected, actual);
+            if (diff) {
+                wrong{mode} = diff;
+            }
+        }
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "exception-location" + opt.lwr();
+            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
+            if (!is_file(exe)) {
+                wrong{"qcc " + opt} = ("compilation failed: " + out,);
+                continue;
+            }
+            list<string> diff = differences(expected, normalize(ExecModeHarness::run_any(sprintf("%s %s", env,
+                exe)), tmp.path));
+            if (diff) {
+                wrong{"qcc " + opt} = diff;
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    #! the probes called directly, so that a qcc executable can replace a call with the summary of the callee
+    testDirectCallLocations() {
+        TmpDir tmp("qore-exception-location-direct-");
+        string path = tmp.path + DirSep + "exception-location.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(getDirectCallScript());
+        f.close();
+
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        string expected = normalize(ExecModeHarness::run(sprintf("%s %s -b --enable-debug --exec-mode=ast %s", env,
+            qore_bin, path)), tmp.path);
+        hash<string, list<string>> wrong();
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "exception-location" + opt.lwr();
+            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
+            if (!is_file(exe)) {
+                wrong{"qcc " + opt} = ("compilation failed: " + out,);
+                continue;
+            }
+            list<string> diff = differences(expected, normalize(ExecModeHarness::run_any(sprintf("%s %s", env,
+                exe)), tmp.path));
+            if (diff) {
+                wrong{"qcc " + opt} = diff;
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    #! returns the script with a direct call of each probe in place of the loop over the call references
+    static string getDirectCallScript() {
+        const string LoopStart = "    foreach hash<auto> i in (probes.pairIterator()) {\n";
+        const string LoopEnd = "            show(i.key, ex);\n        }\n    }\n";
+        *int start = Script.find(LoopStart);
+        *int end = Script.find(LoopEnd, start);
+        if (start < 0 || end < 0) {
+            throw "TEST-ERROR", "the loop over the probes is not in the script";
+        }
+        string calls;
+        foreach string line in (Script.split("\n")) {
+            *list<*string> m = line =~ x/^    "([^"]+)": ([^,]+),$/;
+            if (!m) {
+                continue;
+            }
+            # a call reference (\\Class::method()) or a variable that holds one
+            string call = m[1] =~ /^\\/ ? regex_subst(m[1].substr(1), "\\(\\)$", "(j + 2)") : m[1] + "(j + 2)";
+            calls += sprintf("    try {\n        %s;\n        printf(\"%%s: no exception\\n\", %y);\n    } catch "
+                "(hash<ExceptionInfo> ex) {\n        show(%y, ex);\n    }\n", call, m[0], m[0]);
+        }
+        # the probes are defined before the loop, so their lines are those of the script
+        return Script.substr(0, start) + calls + Script.substr(end + LoopEnd.size());
+    }
+
+    testAotIrLocations() {
+        TmpDir tmp("qore-exception-location-aot-ir-");
+        string path = tmp.path + DirSep + "aot-ir-location.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(AotIrScript);
+        f.close();
+
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        hash<string, list<string>> wrong();
+        list<string> exes = ();
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "aot-ir-location" + opt.lwr();
+            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
+            if (!is_file(exe)) {
+                wrong{"qcc " + opt} = ("compilation failed: " + out,);
+                continue;
+            }
+            exes += exe;
+        }
+        # without and with a debugger attached
+        foreach string arg in ("", "debug") {
+            string expected = normalize(ExecModeHarness::run(sprintf("%s %s -b --enable-debug --exec-mode=ast %s %s",
+                env, qore_bin, path, arg)), tmp.path);
+            if (!arg) {
+                hash<string, bool> lines = map {$1: True}, expected.split("\n");
+                assertEq((), (select AotIrPinned, !lines{$1}), "pinned AST results");
+            }
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                list<string> diff = differences(expected, normalize(ExecModeHarness::run(sprintf("%s %s -b "
+                    "--enable-debug --exec-mode=%s %s %s", env, qore_bin, mode, path, arg)), tmp.path));
+                if (diff) {
+                    wrong{mode + " " + arg} = diff;
+                }
+            }
+            foreach string exe in (exes) {
+                # with native closures and with the closures' IR from the image
+                foreach string closure_env in ("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1") {
+                    list<string> diff = differences(expected, normalize(ExecModeHarness::run_any(sprintf("%s %s %s "
+                        "%s", env, closure_env, exe, arg)), tmp.path));
+                    if (diff) {
+                        wrong{sprintf("%s %s %s", basename(exe), closure_env, arg)} = diff;
+                    }
+                }
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    #! removes the directory of the script and the time from the output, which the report of an unhandled
+    #! exception gives
+    static string normalize(string output, string dir) {
+        # a qcc executable gives the real path of the script
+        output = replace(output, realpath(dir) + DirSep, "");
+        output = replace(output, dir + DirSep, "");
+        return regex_subst(output, "( thrown in TID [0-9]+) at .*? in ", "$1 in ", RE_Global);
+    }
+
+    #! returns the lines of the output that differ from the expected output, as "expected -> actual"
+    static list<string> differences(string exp, string actual) {
+        list<string> el = exp.split("\n");
+        list<string> al = actual.split("\n");
+        list<string> rv = ();
+        for (int i = 0; i < max(el.size(), al.size()); ++i) {
+            if (el[i] !== al[i]) {
+                rv += sprintf("%y -> %y", el[i], al[i]);
+            }
+        }
+        return rv;
+    }
+}

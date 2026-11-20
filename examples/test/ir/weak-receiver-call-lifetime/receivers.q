@@ -27,6 +27,8 @@ our hash<string, T> g_h;
 
 string sub mark(auto v) { log += "|p" + v; return v; }
 
+string sub q() { log += "|q"; return ""; }
+
 sub put(string n, bool raise = False) { g_h{n} = new T(n, raise); }
 
 sub report(string name) { printf("%s: %s\n", name, log); log = ""; }
@@ -119,6 +121,32 @@ sub closure() {
     T w := g_h.a;
     code c = string sub () { return w.clear(); };
     mark(c());
+    log += "|e";
+}
+
+# a local captured by a closure, which makes the call in an expression that goes on after it returns (qore#6645)
+sub closureStatement() {
+    put("a");
+    T w := g_h.a;
+    code c = sub () { mark(w.clear() + q()); log += "|e"; };
+    c();
+}
+
+# an untyped local captured by a closure, which makes the call in an expression that goes on after it returns
+sub closureStatementUntyped() {
+    put("a");
+    auto w := g_h.a;
+    code c = sub () { mark(w.clear() + q()); log += "|e"; };
+    c();
+}
+
+# a local that a closure assigns with :=, and the function that captures it makes the call (qore#6645)
+sub closureAssigns() {
+    put("a");
+    T w;
+    code c = sub () { w := g_h.a; };
+    c();
+    mark(w.clear() + q());
     log += "|e";
 }
 
@@ -265,6 +293,12 @@ raisingCaller();
 report("raisingCaller");
 closure();
 report("closure");
+closureStatement();
+report("closureStatement");
+closureStatementUntyped();
+report("closureStatementUntyped");
+closureAssigns();
+report("closureAssigns");
 closureLocal();
 report("closureLocal");
 staticArg();

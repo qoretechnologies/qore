@@ -114,9 +114,12 @@ public class FireworksSchema {
         };
     }
     private {
-        static Mutex mutex();
         static hash<string, OpenApi3::OpenApi3Schema> schemas = {};
         static hash<string, RestSchemaActionSet> sets = {};
+    }
+
+    private:internal {
+        static Mutex mutex();
     }
 
     #! Returns every action set in dependency order

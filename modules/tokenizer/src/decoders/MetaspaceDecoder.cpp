@@ -27,7 +27,10 @@ MetaspaceDecoder::MetaspaceDecoder(const QoreHashNode* config, ExceptionSink* xs
         : replacement(DEFAULT_METASPACE) {
     assert(config);
 
-    std::string repl_str = safeGetStringKey(config, "replacement");
+    std::string repl_str = configStringKey(config, "replacement", xsink);
+    if (*xsink) {
+        return;
+    }
     if (!repl_str.empty()) {
         replacement = repl_str;
     }
@@ -35,7 +38,10 @@ MetaspaceDecoder::MetaspaceDecoder(const QoreHashNode* config, ExceptionSink* xs
     // Check if prepend_scheme was explicitly provided in the config
     QoreValue scheme_val = config->getKeyValue("prepend_scheme");
     if (!scheme_val.isNullOrNothing() && scheme_val.getType() == NT_STRING) {
-        std::string scheme_str = safeGetStdString(scheme_val);
+        std::string scheme_str = configString(scheme_val, "configuration value 'prepend_scheme'", xsink);
+        if (*xsink) {
+            return;
+        }
         if (!scheme_str.empty()) {
             prepend_scheme = std::move(scheme_str);
         } else {

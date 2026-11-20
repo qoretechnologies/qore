@@ -23,7 +23,7 @@
     its handler function, in the IR and in the native code.  NestedHandlerLoweringTime.q gives
     the output of the AST interpreter in every execution mode and compiled with qcc, also where an exception runs the
     shared handler functions out of line; without the fix, the child processes take longer than the time limit of the
-    test run.
+    test run.  The qcc runs also bound the number of handler body scans per write analysis (#6647).
 */
 class NestedHandlerLoweringTimeTest inherits QUnit::Test {
     public {
@@ -74,6 +74,7 @@ throw 0x1000 7: \"LEVEL-7\" 0,1,2,3,4,5,6,7,8,9,10,11,core
 throw 0x20001000 7: \"LEVEL-7\" 0,1,2,3,4,5,6,7,8,9,10,11,core
 throw 0x1000 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
 throw 0x20001000 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+handler writes: 35 35
 ";
     }
 
@@ -92,7 +93,9 @@ throw 0x20001000 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(mode + ": handlers nested 16 deep", \modeTest(), (mode,));
         }
-        addTestCase("qcc -O0: handlers nested 16 deep", \aotTest());
+        foreach int opt in ((0, 3)) {
+            addTestCase(sprintf("qcc -O%d: handler output and scan bound", opt), \aotTest(), (opt,));
+        }
         set_return_value(main());
     }
 
@@ -103,13 +106,27 @@ throw 0x20001000 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
         assertEq(Expected, output, mode + ": the output of the AST interpreter");
     }
 
-    aotTest() {
+    aotTest(int opt) {
         TmpDir tmp("qore-nested-handler-lowering-time-");
         string exe = tmp.path + DirSep + "nested-handler-lowering-time";
-        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1", libqore_dir, qcc_bin, exe, script));
+        string out = backquote(sprintf("QORE_IR_OPT_STATS=1 QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1",
+            libqore_dir, qcc_bin, opt, exe, script));
         assertTrue(is_file(exe), "compiled the executable: " + out);
+        # Each collection scans at most one IR function per nesting level in the three deep fixtures.
+        # In handler_writes the nested write to tens keeps its slot when raise gets a slot on the debugger
+        # return path. It shares one body across both paths, alongside the outer handler and the write to units.
+        hash<string, int> handler_count = {"nested_noreturn": 16, "nested_return": 16, "nested_throw": 12,
+            "handler_writes": 3};
+        foreach hash<auto> row in (handler_count.pairIterator()) {
+            list<string> lines = select out.split("\n"), $1.equalPartial("IR-OPT-HANDLER-WRITES: " + row.key);
+            assertTrue(lines.size() > 0, "write analysis ran for " + row.key);
+            foreach string line in (lines) {
+                *list<string> count = regex_extract(line, "scans=([0-9]+)$");
+                assertTrue(count && count[0].toInt() > 0 && count[0].toInt() <= row.value, line);
+            }
+        }
         string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
             libqore_dir, libqore_dir, exe));
-        assertEq(Expected, output, "qcc -O0: the output of the AST interpreter");
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
     }
 }

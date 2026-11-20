@@ -33,6 +33,7 @@
 #include <mongoc/mongoc.h>
 
 #include "QoreMongoStream.h"
+#include "bson_conversion.h"
 
 DLLEXPORT extern qore_classid_t CID_MONGOCLIENT;
 DLLLOCAL extern QoreClass* QC_MONGOCLIENT;
@@ -107,12 +108,11 @@ public:
             xsink->raiseException("MONGODB-CLIENT-ERROR", "failed to list databases: %s", error.message);
             return nullptr;
         }
-        ReferenceHolder<QoreListNode> list(new QoreListNode(stringTypeInfo), xsink);
-        for (int i = 0; names[i]; i++) {
-            list->push(new QoreStringNode(names[i]), xsink);
-        }
+        // the names from the server are UTF-8 text, checked where they enter the program
+        QoreListNode* list = mongo_utf8_string_list(names, "MongoClient::listDatabaseNames()", "database name",
+            xsink);
         bson_strfreev(names);
-        return list.release();
+        return list;
     }
 
     //! Ping the server
@@ -138,7 +138,8 @@ public:
         if (!uri) {
             return nullptr;
         }
-        return new QoreStringNode(mongoc_uri_get_string(uri));
+        // the URI given to the constructor, which was checked and converted to UTF-8
+        return new QoreStringNode(mongoc_uri_get_string(uri), QCS_UTF8);
     }
 
     //! Reference self

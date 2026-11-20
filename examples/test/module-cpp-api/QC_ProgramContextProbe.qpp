@@ -112,6 +112,27 @@ static bool ProgramContextProbe::needsEntryInContext(Program[QoreProgram] progra
     return pgm != getProgram() || qore_program_thread_entry_pending(pgm);
 }
 
+//! Calls a function of a Program that the module made current with QoreProgramContextHelper and then entered
+/** The module makes the Program current with QoreProgramContextHelper, enters it with
+    QoreExternalProgramContextHelper (as qore_program_thread_entry_pending() asks for a Program with thread entry
+    handlers), and calls the function: the function runs with the thread's data in the Program (its thread-local
+    variables), as when it is called from another Program
+
+    @param program the Program
+    @param func the name of the function to call, with no arguments
+
+    @return the value that the function returns
+*/
+static auto ProgramContextProbe::callInContext(Program[QoreProgram] program, string func) {
+    QoreProgram* pgm = *program;
+    QoreProgramContextHelper pch(pgm);
+    QoreExternalProgramContextHelper epch(xsink, pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return pgm->callFunction(func->c_str(), nullptr, xsink);
+}
+
 //! Enters a Program with QoreExternalProgramContextHelper and reports what the entry leaves
 /** With dbg_fail_next_program_entry() armed (debug builds), an allocation fails while the helper enters the Program:
     the std::bad_alloc propagates from the helper's constructor, and the thread must be as it was before the entry

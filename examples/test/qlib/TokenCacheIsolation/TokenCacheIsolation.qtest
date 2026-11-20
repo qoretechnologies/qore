@@ -1,0 +1,254 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the sandbox network and filesystem policies applied to socket connections and file reads
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires json
+%requires AzureAuth
+%requires GcpAuth
+
+%exec-class TokenCacheIsolationTest
+
+#! A token endpoint that issues a new token for every request, named after the endpoint and numbered
+class TokenHandler inherits AbstractHttpRequestHandler {
+    private {
+        string name;
+        Mutex m();
+        int count;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string token;
+        {
+            AutoLock al(m);
+            token = sprintf("%s-%d", name, ++count);
+        }
+        return makeResponse({"Content-Type": MimeTypeJson}, 200,
+            make_json({"access_token": token, "expires_in": 3600, "token_type": "Bearer"}));
+    }
+}
+
+#! the token caches of the cloud credential modules return a token only to a caller that could obtain it (qore#6745)
+/** Two tenants run in Programs with sandboxes of their own: each may connect only to its own token endpoint, and
+    the credential files of one are denied to the other.  A tenant must neither receive a token that the other's
+    secret, credential file or network access obtained, nor place a token that the other then receives.
+*/
+class TokenCacheIsolationTest inherits QUnit::Test {
+    public {
+        const Scope = "https://cognitiveservices.azure.com/.default";
+        const Resource = "https://cognitiveservices.azure.com";
+        const GcpScopes = ("https://www.googleapis.com/auth/cloud-platform",);
+
+        #! the tenants' code: each function returns the token or the exception's code
+        const TenantSource = "%modern
+%requires AzureAuth
+%requires GcpAuth
+string sub call(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub cc(string base_url, string secret, bool force = False) {
+    return call(string sub () { return AzureAuth::getEntraTokenClientCredentials(\"tenant\", \"client\", secret,
+        \"https://cognitiveservices.azure.com/.default\", {\"base_url\": base_url, \"force_refresh\": force}); });
+}
+string sub mi(string endpoint, bool force = False) {
+    return call(string sub () { return AzureAuth::getEntraTokenManagedIdentity(\"https://cognitiveservices.azure.com\",
+        \"client\", {\"imds_endpoint\": endpoint, \"force_refresh\": force}); });
+}
+string sub sa(string path) {
+    return call(string sub () { return GcpAuth::getAccessTokenFromServiceAccountFile(path,
+        (\"https://www.googleapis.com/auth/cloud-platform\",)); });
+}
+string sub au(string path) {
+    return call(string sub () { return GcpAuth::getAccessTokenFromAuthorizedUserFile(path); });
+}
+string sub mds(string endpoint) {
+    return call(string sub () { return GcpAuth::getAccessTokenFromMetadataServer(
+        (\"https://www.googleapis.com/auth/cloud-platform\",), {\"metadata_endpoint\": endpoint}); });
+}
+";
+
+        const TestPrivateKey =
+            "-----BEGIN PRIVATE KEY-----\n"
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDNNJM8mGUmGdzh\n"
+            "Hg7Q8YukWxILdQRkS/4lXLkBKVTrsXnL3lEh7VxYjvgZbnUWh4nlIcGfvSrgMTUg\n"
+            "GnyAhwIxELLU0FoR4G4Tz3wDF7tCsezL3rIfeIqAYR2/d2Uca7G2Jm4lG9LZ97V8\n"
+            "G6dh4uEaqAcW5UvU2/H7Y3CdgTzgrjGYDsKvz76xb6tJp+oDH+lhdQa/wTH7T/Yc\n"
+            "JlF9OmHsdU+OkSt/jh3FdjE+f6vlGfQ1OlGEW1d6obPOLZv+SBcgVcpFTaIvZjFb\n"
+            "RrhRBxBSmTtvr0v6jZsq3R3idkLgkXEcKxsAUTRPHpnvCi+jXp01igZ4aHsB5N/d\n"
+            "p27cExN1AgMBAAECggEAFt8eLgU7+CHj2gRTNn1IXr4SROxBR47vPLNJ4mNwTXot\n"
+            "0qBpxbm9Yt0v+/p4q3pxX22LRsv5wkfh0Y6kfPVnUSxN+H+vCM/3PBrZcvR4Ujk5\n"
+            "0c5gtjV0WghQqGmJ6Cad8AVPkjC1KKkjxIVNxoaaWiNiuw5HxbBhrjxXyTtSWB8z\n"
+            "f87wlR5YjBBabIzKpe0VK2H+11WD6BVgsLBgwbq8nMqFcZRRdtMt4HX/4mInZxr4\n"
+            "vzn6cE5GVPmZ/3y2NA2H4N6tlT3jJ7yT9SbpZG6KRPCv9YDjyJpZ0R+J5GR5LFGc\n"
+            "h4l1+gp4XJpcj5fzKjVZHvtCgT78MTGI1Q/JTnpoAQKBgQDxLNwUOLZj0XJ65JhE\n"
+            "vS6KmlxBTH4f/T+QyiFEC4/SySf2bdmIHFhsKBXOdrkSiTfa3ai0R29lFTNlMQ7N\n"
+            "X8WL2H6OEK/eOWvgB7Hgf3IpIyyy18OQRC1y2gXfm/Gt6tKwYRXkE5kSiSbgaeMI\n"
+            "OqDXC6w+nThEY1GOpc+CGgzdoQKBgQDZyf9R8/u9G/V0nzcMyZcGBl5G0eGm1d2W\n"
+            "BeR3oF0lOu/M3vF8Q3oeSi6KIvWvfsBA9SaQyk4DRYR68Y7d9hJ/iuyEYRHqWJne\n"
+            "+r3WqgvxIvyZS3aQYK4G/sHjGztehrhgK0rdtNGdrxOg9pvk5wwbCQ7K0CGwBcc4\n"
+            "F0p/HW0r1QKBgEYK0bSp3SrLQEZmGW0Yz2nRrl+JKb7gO7d2sIaKHFwLpfWBLDcF\n"
+            "BdoJWeHzJsyJB1cVCgY/0Sw7UnTfRZyDvBhVNNm7BUsJ7tEKvg2cgK4Vcc0/m/F4\n"
+            "S5wEU5LbjjLNcLmYHN3+/Zwy/wHEdmCwbeS6t2dqYS8x2gIVePcdoQAhAoGAEsBV\n"
+            "ZeoOgsBC5lhnXFY3jR4xqjILK63u+sckTQiPCmEM2/W4U+wj7Rs9krhKuyqWfh9I\n"
+            "qSk0Zb6BgnZN+yC/4Ay+rsHFAvzMRnPpKM6smaCqcXAj1cR94aSCNvHzaWoCwJrP\n"
+            "rDg86bgPyT8vJWmuYqzm/3WClBM0bIv5wsahG4kCgYEAh9NLB2OZjN7E3Xn5DAcl\n"
+            "Apl/sPg4PWPdQHfgwSeqkAYrhCq/2YmlBhdQNuq06WfBzAxhKr8X3aXjk+8vJugO\n"
+            "lJUSiIfRcXAcuc6Wt4cAdK4dfQE9G+yLD3GIcOCt7QmDcaXJUgCgVMR8RFx27gpO\n"
+            "EJ+aHjj/4PztpiD8b4O5w7c=\n"
+            "-----END PRIVATE KEY-----\n";
+    }
+
+    private {
+        TmpDir tmp("qore-token-cache-isolation-");
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        HttpServer server_a(<HttpServerOptionInfo>{"logger": logger});
+        HttpServer server_b(<HttpServerOptionInfo>{"logger": logger});
+        int port_a;
+        int port_b;
+        #! tenant B's credential files, in a directory denied to tenant A
+        string b_dir;
+        string sa_path;
+        string au_path;
+        Program tenant_a;
+        Program tenant_b;
+    }
+
+    constructor() : QUnit::Test("token cache isolation", "1.0", \ARGV) {
+        server_a.setDefaultHandler("token", new TokenHandler("a"));
+        port_a = server_a.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        server_b.setDefaultHandler("token", new TokenHandler("b"));
+        port_b = server_b.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        b_dir = tmp.path + "/b";
+        mkdir(b_dir, 0700);
+        sa_path = b_dir + "/sa.json";
+        File f();
+        f.open2(sa_path, O_CREAT | O_EXCL | O_WRONLY, 0600);
+        f.write(make_json({
+            "type": "service_account",
+            "private_key": TestPrivateKey,
+            "client_email": "b@project.iam.gserviceaccount.com",
+            "token_uri": getUrl(port_b) + "/token",
+        }));
+        f.close();
+        au_path = b_dir + "/au.json";
+        f.open2(au_path, O_CREAT | O_EXCL | O_WRONLY, 0600);
+        f.write(make_json({
+            "type": "authorized_user",
+            "client_id": "b-client",
+            "client_secret": "b-client-secret",
+            "refresh_token": "b-refresh-token",
+            "token_uri": getUrl(port_b) + "/token",
+        }));
+        f.close();
+
+        tenant_a = getTenant(port_a, b_dir);
+        tenant_b = getTenant(port_b);
+
+        addTestCase("client credentials: no token without the secret", \clientCredentialsSecretTest());
+        addTestCase("client credentials: no token planted from another endpoint", \clientCredentialsPlantTest());
+        addTestCase("managed identity: no token planted from another endpoint", \managedIdentityPlantTest());
+        addTestCase("managed identity: no token without network access", \managedIdentityAccessTest());
+        addTestCase("service account file: no token without file access", \serviceAccountAccessTest());
+        addTestCase("authorized user file: no token without file access", \authorizedUserAccessTest());
+        addTestCase("metadata server: no token without network access", \metadataServerAccessTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        delete server_a;
+        delete server_b;
+    }
+
+    setUp() {
+        AzureAuth::clearTokenCache();
+        GcpAuth::clearTokenCache();
+    }
+
+    #! B obtains a token with its secret; A, which may reach B's endpoint but has another secret, must get another
+    clientCredentialsSecretTest() {
+        string b_token = tenant_b.callFunction("cc", getUrl(port_b), "b-secret");
+        assertRegex("^b-", b_token);
+        # A may reach B's endpoint here: only the secret differs
+        Program a = getTenant(port_b);
+        string a_token = a.callFunction("cc", getUrl(port_b), "a-secret");
+        assertRegex("^b-", a_token);
+        assertNeq(b_token, a_token);
+    }
+
+    #! A refreshes the token for B's request parameters from its own endpoint; B must still get B's token
+    clientCredentialsPlantTest() {
+        string b_token = tenant_b.callFunction("cc", getUrl(port_b), "b-secret");
+        assertRegex("^a-", tenant_a.callFunction("cc", getUrl(port_a), "a-secret", True));
+        assertEq(b_token, tenant_b.callFunction("cc", getUrl(port_b), "b-secret"));
+    }
+
+    #! A refreshes a managed-identity token from its own endpoint; B must still get B's token
+    managedIdentityPlantTest() {
+        string b_token = tenant_b.callFunction("mi", getUrl(port_b));
+        assertRegex("^b-", b_token);
+        assertRegex("^a-", tenant_a.callFunction("mi", getUrl(port_a), True));
+        assertEq(b_token, tenant_b.callFunction("mi", getUrl(port_b)));
+    }
+
+    #! A may not connect to B's managed-identity endpoint, so it must not get the token that B fetched there
+    managedIdentityAccessTest() {
+        assertRegex("^b-", tenant_b.callFunction("mi", getUrl(port_b)));
+        assertEq("NETWORK-ACCESS-DENIED", tenant_a.callFunction("mi", getUrl(port_b)));
+    }
+
+    #! A may not read B's service-account file, so it must not get the token that B obtained with it
+    serviceAccountAccessTest() {
+        assertRegex("^b-", tenant_b.callFunction("sa", sa_path));
+        assertEq("GCP-AUTH-ERROR", tenant_a.callFunction("sa", sa_path));
+    }
+
+    #! A may not read B's authorized-user file, so it must not get the token that B obtained with it
+    authorizedUserAccessTest() {
+        assertRegex("^b-", tenant_b.callFunction("au", au_path));
+        assertEq("GCP-AUTH-ERROR", tenant_a.callFunction("au", au_path));
+    }
+
+    #! A may not connect to B's metadata server, so it must not get the token that B fetched there
+    metadataServerAccessTest() {
+        assertRegex("^b-", tenant_b.callFunction("mds", getUrl(port_b)));
+        assertEq("NETWORK-ACCESS-DENIED", tenant_a.callFunction("mds", getUrl(port_b)));
+    }
+
+    private static string getUrl(int port) {
+        return "http://localhost:" + port;
+    }
+
+    #! Returns a tenant whose sandbox allows connections only to \a port and denies the files in \a denied_dir
+    private Program getTenant(int port, *string denied_dir) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkAllowedPort(port);
+        sm.setFilesystemDefaultPolicy(True);
+        if (denied_dir) {
+            sm.addFilesystemDeniedPath(denied_dir);
+        }
+        p.setSandboxManager(sm);
+        return p;
+    }
+}

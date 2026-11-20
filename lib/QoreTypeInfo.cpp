@@ -55,6 +55,7 @@
 #include "qore/intern/AbstractIteratorHelper.h"
 #include "qore/QoreIteratorBase.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreBufferNodePrivate.h"
 
 #include <algorithm>
 #include <memory>
@@ -2123,6 +2124,34 @@ static T* qore_new_container_type(const QoreTypeInfo* vti) {
     return ti;
 }
 
+// The type of a reference expression (\x) is the hard reference type of its lvalue, which tells parse-time matching
+// that the expression gives a reference; a container whose value type is derived from it (the literal {"a": \x})
+// holds reference values, whose type at run time is the (soft) reference type of the same lvalue, as is the value
+// type of a declared container type (hash<string, reference<T>>).  Both types are named reference<T>, so a container
+// type is not built on a hard reference type but on the reference type: otherwise the values that have the
+// container's value type would not be the same type, and each would be checked and accepted again when stored or
+// passed (qore#6575).  No container type is cached for a hard reference type, so that only parse time, when the
+// container types of reference expressions are derived, pays for the conversion
+
+//! returns true if the type is a hard reference type (reference<T> or *reference<T> of a reference expression)
+static bool qore_is_complex_hard_reference_type(const QoreTypeInfo* vti) {
+    return !vti->return_vec.empty() && vti->return_vec[0].spec.getTypeSpec() == QTS_COMPLEXHARDREF;
+}
+
+//! returns the container type that \a get returns for the reference type of the hard reference type \a vti; must be
+//! called without the complex type lock; out of line, as only parse time gets here
+static __attribute__((noinline)) const QoreTypeInfo* qore_get_complex_container_type_of_reference(
+        const QoreTypeInfo* (*get)(const QoreTypeInfo*), const QoreTypeInfo* vti) {
+    assert(qore_is_complex_hard_reference_type(vti));
+    const QoreTypeInfo* target = vti->return_vec[0].spec.getComplexReference();
+    assert(target);
+    if (vti->return_vec.size() == 1) {
+        return get(qore_get_complex_reference_type(target));
+    }
+    assert(vti->return_vec.size() == 2 && vti->return_vec[1].spec.match(NT_NOTHING) == QTI_IDENT);
+    return get(qore_get_complex_reference_or_nothing_type(target));
+}
+
 const QoreTypeInfo* qore_get_complex_hash_type(const QoreTypeInfo* vti) {
     if (vti == autoTypeInfo || qore_container_type_too_deep(vti)) {
         return autoHashTypeInfo;
@@ -2131,16 +2160,21 @@ const QoreTypeInfo* qore_get_complex_hash_type(const QoreTypeInfo* vti) {
         return hashTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = ch_map.lower_bound(vti);
-    if (i != ch_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = ch_map.lower_bound(vti);
+        if (i != ch_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexHashTypeInfo* ti = qore_new_container_type<QoreComplexHashTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    ch_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexHashTypeInfo* ti = qore_new_container_type<QoreComplexHashTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            ch_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_hash_type, vti);
 }
 
 const QoreTypeInfo* qore_get_complex_hash_or_nothing_type(const QoreTypeInfo* vti) {
@@ -2151,16 +2185,21 @@ const QoreTypeInfo* qore_get_complex_hash_or_nothing_type(const QoreTypeInfo* vt
         return hashOrNothingTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = chon_map.lower_bound(vti);
-    if (i != chon_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = chon_map.lower_bound(vti);
+        if (i != chon_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexHashOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexHashOrNothingTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    chon_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexHashOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexHashOrNothingTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            chon_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_hash_or_nothing_type, vti);
 }
 
 const QoreTypeInfo* qore_get_complex_list_type(const QoreTypeInfo* vti) {
@@ -2171,16 +2210,21 @@ const QoreTypeInfo* qore_get_complex_list_type(const QoreTypeInfo* vti) {
         return listTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = cl_map.lower_bound(vti);
-    if (i != cl_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = cl_map.lower_bound(vti);
+        if (i != cl_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexListTypeInfo* ti = qore_new_container_type<QoreComplexListTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    cl_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexListTypeInfo* ti = qore_new_container_type<QoreComplexListTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            cl_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_list_type, vti);
 }
 
 const QoreTypeInfo* qore_get_complex_list_or_nothing_type(const QoreTypeInfo* vti) {
@@ -2191,16 +2235,21 @@ const QoreTypeInfo* qore_get_complex_list_or_nothing_type(const QoreTypeInfo* vt
         return listOrNothingTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = clon_map.lower_bound(vti);
-    if (i != clon_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = clon_map.lower_bound(vti);
+        if (i != clon_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexListOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexListOrNothingTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    clon_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexListOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexListOrNothingTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            clon_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_list_or_nothing_type, vti);
 }
 
 static QoreString qore_make_complex_buffer_name(QoreBufferElementType element_type, bool nullable_elements,
@@ -2262,16 +2311,21 @@ const QoreTypeInfo* qore_get_complex_softlist_type(const QoreTypeInfo* vti) {
         return softListTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = csl_map.lower_bound(vti);
-    if (i != csl_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = csl_map.lower_bound(vti);
+        if (i != csl_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexSoftListTypeInfo* ti = qore_new_container_type<QoreComplexSoftListTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    csl_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexSoftListTypeInfo* ti = qore_new_container_type<QoreComplexSoftListTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            csl_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_softlist_type, vti);
 }
 
 const QoreTypeInfo* qore_get_complex_softlist_or_nothing_type(const QoreTypeInfo* vti) {
@@ -2282,16 +2336,22 @@ const QoreTypeInfo* qore_get_complex_softlist_or_nothing_type(const QoreTypeInfo
         return softListOrNothingTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = cslon_map.lower_bound(vti);
-    if (i != cslon_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = cslon_map.lower_bound(vti);
+        if (i != cslon_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexSoftListOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexSoftListOrNothingTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    cslon_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexSoftListOrNothingTypeInfo* ti
+                = qore_new_container_type<QoreComplexSoftListOrNothingTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            cslon_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_softlist_or_nothing_type, vti);
 }
 
 const QoreTypeInfo* qore_get_complex_hard_reference_type(const QoreTypeInfo* vti) {
@@ -3740,11 +3800,26 @@ static QoreString build_complex_code_path(const QoreTypeInfo* returnType, const 
     return name;
 }
 
-// Helper to build accept_vec for typed callable
-static q_accept_vec_t build_complex_code_accept_vec(bool or_nothing) {
+// raises a RUNTIME-TYPE-ERROR if the closure or call reference \a n does not have a signature that the typed
+// callable type \a ti accepts (qore#6660)
+static void qore_complex_code_check_callable(const QoreComplexCodeTypeInfo* ti, QoreValue& n, ExceptionSink* xsink) {
+    if (xsink && !ti->acceptsCallable(n)) {
+        const QoreTypeInfo* vti = n.getTypeInfo();
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "type '%s' expects a callable with a compatible signature, but "
+            "got type '%s'", QoreTypeInfo::getName(ti), QoreTypeInfo::getName(vti));
+    }
+}
+
+// Helper to build accept_vec for typed callable; the specs check the signature of the callable with their map, so
+// that the types of other values do not pay for the check (qore#6660)
+static q_accept_vec_t build_complex_code_accept_vec(const QoreComplexCodeTypeInfo* ti, bool or_nothing) {
     q_accept_vec_t avec;
-    avec.push_back({NT_RUNTIME_CLOSURE, nullptr});
-    avec.push_back({NT_FUNCREF, nullptr});
+    avec.push_back({NT_RUNTIME_CLOSURE, [ti] (QoreValue& n, ExceptionSink* xsink) {
+        qore_complex_code_check_callable(ti, n, xsink);
+    }});
+    avec.push_back({NT_FUNCREF, [ti] (QoreValue& n, ExceptionSink* xsink) {
+        qore_complex_code_check_callable(ti, n, xsink);
+    }});
     if (or_nothing) {
         avec.push_back({NT_NOTHING, nullptr});
         avec.push_back({NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }});
@@ -3763,15 +3838,120 @@ static q_return_vec_t build_complex_code_return_vec(bool or_nothing) {
     return rvec;
 }
 
+//! returns the return type of a typed callable signature, or nullptr for a callable that returns nothing, whose
+//! return type is nullptr in a declared type and the nothing type in the type of a closure (qore#6660)
+static const QoreTypeInfo* qore_code_return_type(const QoreTypeInfo* ret) {
+    return ret == nothingTypeInfo ? nullptr : ret;
+}
+
 QoreComplexCodeTypeInfo::QoreComplexCodeTypeInfo(const QoreTypeInfo* ret_type, type_vec_t&& param_types,
         bool varargs_arg, bool or_nothing_arg)
-        : QoreTypeInfo(build_complex_code_accept_vec(or_nothing_arg),
+        : QoreTypeInfo(build_complex_code_accept_vec(this, or_nothing_arg),
             build_complex_code_return_vec(or_nothing_arg),
             build_complex_code_name(ret_type, param_types, varargs_arg, or_nothing_arg)),
           returnType(ret_type), paramTypes(std::move(param_types)),
           varargs(varargs_arg), orNothing(or_nothing_arg) {
+    complex_code = true;
     // Set path name
     pname = build_complex_code_path(ret_type, paramTypes, varargs, orNothing);
+}
+
+bool QoreComplexCodeTypeInfo::acceptsCallable(const QoreValue& n) const {
+    qore_type_t t = n.getType();
+    if (t != NT_RUNTIME_CLOSURE && t != NT_FUNCREF) {
+        return true;
+    }
+    // a closure is always a resolved call reference
+    const ResolvedCallReferenceNode* cr = t == NT_RUNTIME_CLOSURE
+        ? static_cast<const ResolvedCallReferenceNode*>(n.getInternalNode())
+        : dynamic_cast<const ResolvedCallReferenceNode*>(n.getInternalNode());
+    const QoreFunction* f = cr ? cr->getFunction() : nullptr;
+    if (!f) {
+        return true;
+    }
+    // a call reference to a function with more than one variant calls the variant that its arguments select: it is
+    // accepted if one of them has a compatible signature
+    QoreFunctionIterator i(*f);
+    bool has_variant = false;
+    while (i.next()) {
+        has_variant = true;
+        const AbstractFunctionSignature* sig = i.getVariant()->getSignature();
+        // the common case: the callable has this type
+        if (sig && (sig->getRuntimeCodeTypeInfo() == this || isSignatureCompatible(sig))) {
+            return true;
+        }
+    }
+    return !has_variant;
+}
+
+const QoreTypeInfo* AbstractFunctionSignature::getRuntimeCodeTypeInfo() const {
+    const QoreTypeInfo* ti = runtime_code_type_cache.load(std::memory_order_acquire);
+    if (!ti) {
+        ti = qore_get_complex_code_type_from_signature(this);
+        runtime_code_type_cache.store(ti, std::memory_order_release);
+    }
+    return ti;
+}
+
+bool QoreTypeInfo::complexCodeAcceptsCallable(const QoreValue& n) const {
+    return !complex_code || static_cast<const QoreComplexCodeTypeInfo*>(this)->acceptsCallable(n);
+}
+
+bool QoreTypeInfo::codeAcceptsTypedCallablesUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+    if ((target != codeTypeInfo && target != codeOrNothingTypeInfo) || !source || !source->complex_code) {
+        return false;
+    }
+    return target == codeOrNothingTypeInfo || !static_cast<const QoreComplexCodeTypeInfo*>(source)->isOrNothing();
+}
+
+bool QoreTypeInfo::complexCodeTypesEqual(const QoreTypeInfo* a, const QoreTypeInfo* b) {
+    assert(a->complex_code || b->complex_code);
+    if (!a->complex_code || !b->complex_code) {
+        return false;
+    }
+    const QoreComplexCodeTypeInfo* ca = static_cast<const QoreComplexCodeTypeInfo*>(a);
+    const QoreComplexCodeTypeInfo* cb = static_cast<const QoreComplexCodeTypeInfo*>(b);
+    if (ca->hasVarArgs() != cb->hasVarArgs() || ca->isOrNothing() != cb->isOrNothing()
+            || !equal(qore_code_return_type(ca->getReturnType()), qore_code_return_type(cb->getReturnType()))) {
+        return false;
+    }
+    const type_vec_t& pa = ca->getParamTypes();
+    const type_vec_t& pb = cb->getParamTypes();
+    if (pa.size() != pb.size()) {
+        return false;
+    }
+    for (size_t i = 0, e = pa.size(); i < e; ++i) {
+        if (!equal(pa[i], pb[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! returns true if the typed callable type \a first is a superset of the type \a second, of which at least one is
+//! a typed callable type (qore#6660)
+/** A typed callable type is a superset only of the typed callable types with the same signature (and of their
+    non-NOTHING types, for an or-nothing type): a type does not record which parameters of a callable have default
+    arguments, so the variance check of checkComplexCodeCompatibility() cannot tell whether every value of another
+    signature is accepted, and a superset decides that values are kept unchecked and is the common type of folded
+    values; the type \c code (and \c *code) is a superset of every typed callable type, which its specs give
+*/
+static __attribute__((noinline)) bool qore_complex_code_super_set_of(const QoreTypeInfo* first,
+        const QoreTypeInfo* second) {
+    if (!first->isComplexCode() || !second->isComplexCode()) {
+        return false;
+    }
+    const QoreComplexCodeTypeInfo* cf = static_cast<const QoreComplexCodeTypeInfo*>(first);
+    const QoreComplexCodeTypeInfo* cs = static_cast<const QoreComplexCodeTypeInfo*>(second);
+    if (!cf->isOrNothing() && cs->isOrNothing()) {
+        return false;
+    }
+    if (cf->isOrNothing() != cs->isOrNothing()) {
+        // compare the signatures of *code<sig> and code<sig>
+        return QoreTypeInfo::equal(qore_get_complex_code_type(cf->getReturnType(), cf->getParamTypes(),
+            cf->hasVarArgs(), false), second);
+    }
+    return QoreTypeInfo::complexCodeTypesEqual(first, second);
 }
 
 bool QoreComplexCodeTypeInfo::isSignatureCompatible(const AbstractFunctionSignature* sig) const {
@@ -3782,7 +3962,7 @@ bool QoreComplexCodeTypeInfo::isSignatureCompatible(const AbstractFunctionSignat
     // Check return type compatibility (covariant)
     // The callable's return type must be assignable to our return type
     const QoreTypeInfo* sigReturnType = sig->getReturnTypeInfo();
-    if (returnType) {
+    if (qore_code_return_type(returnType)) {
         // We expect a specific return type - check if the callable's return type is compatible
         // Covariant: the callable can return a more specific type
         if (!QoreTypeInfo::parseAccepts(returnType, sigReturnType)) {
@@ -3800,11 +3980,15 @@ bool QoreComplexCodeTypeInfo::isSignatureCompatible(const AbstractFunctionSignat
     unsigned sigNumParams = sig->numParams();
     size_t ourParamCount = paramTypes.size();
 
-    // Compute minimum required params for the signature (params without defaults)
+    // Compute minimum required params for the signature (params without defaults); a parameter that takes NOTHING
+    // (*int) need not be given either
     unsigned sigMinParams = 0;
     for (unsigned i = 0; i < sigNumParams; ++i) {
         if (!sig->hasDefaultArg(i)) {
-            sigMinParams = i + 1;
+            const QoreTypeInfo* pt = sig->getParamTypeInfo(i);
+            if (QoreTypeInfo::hasType(pt) && !QoreTypeInfo::parseAcceptsReturns(pt, NT_NOTHING)) {
+                sigMinParams = i + 1;
+            }
         }
     }
 
@@ -4093,8 +4277,7 @@ const QoreComplexCodeTypeInfo* QoreTypeInfo::getComplexCodeType(const QoreTypeIn
     if (!ti || !hasType(ti)) {
         return nullptr;
     }
-    // Check if the type is a QoreComplexCodeTypeInfo by attempting a dynamic_cast
-    return dynamic_cast<const QoreComplexCodeTypeInfo*>(ti);
+    return ti->isComplexCode() ? static_cast<const QoreComplexCodeTypeInfo*>(ti) : nullptr;
 }
 
 bool QoreTypeInfo::unionAcceptsExactlyImpl(const QoreValue& n) const {
@@ -4208,7 +4391,7 @@ bool QoreTypeInfo::checkComplexCodeCompatibility(const QoreTypeInfo* target, con
     // Both are typed callables - compare signatures
     // Check return type compatibility (covariant)
     // Source's return type must be assignable to target's return type
-    const QoreTypeInfo* target_ret = target_code->getReturnType();
+    const QoreTypeInfo* target_ret = qore_code_return_type(target_code->getReturnType());
     const QoreTypeInfo* source_ret = source_code->getReturnType();
 
     if (target_ret) {
@@ -4716,7 +4899,8 @@ struct CallArgTypeMatchPolicy : BasePolicy {
         for (auto& t : ti->getAcceptSpecs()) {
             qore_type_result_e rv = t.spec.runtimeAcceptsValueImpl(n, t.exact, fold, *this);
             if (rv != QTI_NOT_EQUAL) {
-                return rv;
+                // a typed callable selects only the callables of compatible signatures (qore#6660)
+                return ti->complexCodeAcceptsCallable(n) ? rv : QTI_NOT_EQUAL;
             }
         }
         // SQL NULL, which no class type accepts, is matched as by the base policy
@@ -5331,7 +5515,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 bool needs_nullable_copy = false;
                 ok = qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy);
                 if (needs_nullable_copy) {
-                    QoreBufferNode* copy = b->copy(true, xsink);
+                    QoreBufferNode* copy = qore_buffer_node_private(b).copy(true, xsink);
                     if (!copy) {
                         return true;
                     }
@@ -5508,6 +5692,27 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
     return false;
 }
 
+// A parameterized class type is built once for each class and type arguments, so that the copy of a generic class in
+// another Program (an imported class) has types of its own: they are the same type if the classes are the same class
+// and the type arguments are the same types (qore#6575)
+static __attribute__((noinline)) bool qore_parameterized_class_types_equal(const QoreParameterizedClassTypeInfo* a,
+        const QoreParameterizedClassTypeInfo* b) {
+    if (a->isOrNothing() != b->isOrNothing() || a->getArgCount() != b->getArgCount()) {
+        return false;
+    }
+    if (!qore_class_private::get(*a->getBaseClass())->equal(*qore_class_private::get(*b->getBaseClass()))) {
+        return false;
+    }
+    const std::vector<const QoreTypeInfo*>& aargs = a->getTypeArgs();
+    const std::vector<const QoreTypeInfo*>& bargs = b->getTypeArgs();
+    for (size_t i = 0, e = aargs.size(); i < e; ++i) {
+        if (!QoreTypeInfo::equal(aargs[i], bargs[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
     if (typespec != other.typespec)
         return false;
@@ -5529,6 +5734,9 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
         case QTS_COMPLEXBUFFER:
             return u.ti == other.u.ti;
         case QTS_PARAMCLASS:
+            return u.ti == other.u.ti || qore_parameterized_class_types_equal(
+                static_cast<const QoreParameterizedClassTypeInfo*>(u.ti),
+                static_cast<const QoreParameterizedClassTypeInfo*>(other.u.ti));
         case QTS_TYPEPARAM:
         case QTS_WILDCARD:
         case QTS_INITIALIZER_FILTER:
@@ -5847,7 +6055,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreValue& n) const {
     for (auto& t : accept_vec) {
         qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact);
         if (rv != QTI_NOT_EQUAL)
-            return rv;
+            return complexCodeAcceptsCallable(n) ? rv : QTI_NOT_EQUAL;
     }
     return QTI_NOT_EQUAL;
 }
@@ -5856,7 +6064,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValueOrFold(const QoreValue& n) c
     for (auto& t : accept_vec) {
         qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
         if (rv != QTI_NOT_EQUAL) {
-            return rv;
+            return complexCodeAcceptsCallable(n) ? rv : QTI_NOT_EQUAL;
         }
     }
     return QTI_NOT_EQUAL;
@@ -5870,7 +6078,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreTypeInfo* ti, con
     for (auto& t : ti->accept_vec) {
         qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, fold, policy);
         if (rv != QTI_NOT_EQUAL) {
-            return rv;
+            return ti->complexCodeAcceptsCallable(n) ? rv : QTI_NOT_EQUAL;
         }
     }
     return ti->acceptsBrokenSoftNull(n, policy) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
@@ -8345,6 +8553,13 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
         max_result = QTI_NOT_EQUAL;
         return QTI_NOT_EQUAL;
     }
+    // a typed callable type accepts the typed callable types whose signatures are compatible with its own; the specs
+    // do not hold the signature (qore#6660)
+    if (__builtin_expect(first->complex_code && second->complex_code, 0)
+            && !checkComplexCodeCompatibility(first, second)) {
+        max_result = QTI_NOT_EQUAL;
+        return QTI_NOT_EQUAL;
+    }
     return first->parseAccepts(second, may_not_match, may_need_filter, max_result, known_initial_assignment);
 }
 
@@ -8403,6 +8618,15 @@ qore_type_result_e QoreTypeInfo::runtimeTypeMatch(const QoreTypeInfo* typeInfo) 
 
     if (typeInfo->return_vec.size() != return_vec.size() || typeInfo->getAcceptVecSize() != getAcceptVecSize()) {
         return QTI_NOT_EQUAL;
+    }
+
+    // two typed callable types match if the signature of the second is compatible with the first's; the specs do not
+    // hold the signature (qore#6660)
+    if (__builtin_expect(complex_code && typeInfo->complex_code, 0)) {
+        if (complexCodeTypesEqual(this, typeInfo)) {
+            return QTI_IDENT;
+        }
+        return checkComplexCodeCompatibility(this, typeInfo) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
     }
 
     // check accept types
@@ -8480,6 +8704,14 @@ bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInf
         return true;
     }
 
+    // two typed callables of different signatures have the type code in common (qore#6660)
+    if (__builtin_expect(ctype->isComplexCode() && ntype->isComplexCode(), 0)) {
+        ctype = static_cast<const QoreComplexCodeTypeInfo*>(ctype)->isOrNothing()
+                || static_cast<const QoreComplexCodeTypeInfo*>(ntype)->isOrNothing()
+            ? codeOrNothingTypeInfo : codeTypeInfo;
+        return true;
+    }
+
     // try to find a common base type
     // if we're dealing with types that return multiple types, then they are not compatible
     if (ctype->return_vec.size() > 1 || ntype->return_vec.size() > 1) {
@@ -8541,17 +8773,51 @@ bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInf
     return false;
 }
 
+//! returns true if the container spec \a target keeps the values of the container spec \a source as they are: a
+//! list or hash of typed callables for a list or hash of code (qore#6660)
+/** Before the signature of a typed callable was part of its type, list<code> and list<code<...>> were the same type,
+    and a container of closures kept the type of its closures where a container of code was expected; called only
+    for specs that are not equal
+*/
+static __attribute__((noinline)) bool qore_spec_keeps_typed_callables(const QoreTypeSpec& target,
+        const QoreTypeSpec& source) {
+    q_typespec_t ts = target.getTypeSpec();
+    if (ts != source.getTypeSpec() || (ts != QTS_COMPLEXLIST && ts != QTS_COMPLEXHASH && ts != QTS_COMPLEXSOFTLIST)) {
+        return false;
+    }
+    const QoreTypeInfo* tv = target.getElementType();
+    if (tv != codeTypeInfo && tv != codeOrNothingTypeInfo) {
+        return false;
+    }
+    const QoreTypeInfo* sv = source.getElementType();
+    if (!sv || !sv->isComplexCode()) {
+        return false;
+    }
+    return tv == codeOrNothingTypeInfo || !static_cast<const QoreComplexCodeTypeInfo*>(sv)->isOrNothing();
+}
+
 bool QoreTypeInfo::superSetOf(const QoreTypeInfo* t) const {
+    if (this == t) {
+        return true;
+    }
     if (getAcceptVecSize() < t->getAcceptVecSize() || return_vec.size() < t->return_vec.size())
         return false;
 
+    // the specs of a typed callable type do not hold its signature (qore#6660); plain code is a superset of every
+    // typed callable type, as its specs give
+    if (__builtin_expect(complex_code, 0)) {
+        return qore_complex_code_super_set_of(this, t);
+    }
+
     for (unsigned i = 0; i < t->getAcceptVecSize(); ++i) {
-        if (t->getAcceptSpec(i).spec != getAcceptSpec(i).spec)
+        if (t->getAcceptSpec(i).spec != getAcceptSpec(i).spec
+                && !qore_spec_keeps_typed_callables(getAcceptSpec(i).spec, t->getAcceptSpec(i).spec))
             return false;
     }
 
     for (unsigned i = 0; i < t->return_vec.size(); ++i) {
-        if (t->return_vec[i].spec != return_vec[i].spec)
+        if (t->return_vec[i].spec != return_vec[i].spec
+                && !qore_spec_keeps_typed_callables(return_vec[i].spec, t->return_vec[i].spec))
             return false;
     }
 

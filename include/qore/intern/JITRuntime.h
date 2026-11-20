@@ -120,6 +120,8 @@ uint64_t qore_rt_mul_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
 //! Add two QoreValues with compound-assignment dynamic dispatch
 uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+void qore_rt_drop_local_string_cache(uint64_t left, uint64_t* entry, uint64_t* current, uint64_t* previous);
 
 //! Subtract two QoreValues with compound-assignment dynamic dispatch
 uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
@@ -128,6 +130,7 @@ uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xs
 uint64_t qore_rt_mul_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
 uint64_t qore_rt_add_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
+uint64_t qore_rt_add_assign_local_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
 uint64_t qore_rt_sub_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
 uint64_t qore_rt_mul_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
@@ -222,6 +225,8 @@ uint64_t qore_rt_make_string(const char* str);
 
 //! Create a QoreStringNode from string bytes and return as NaN-boxed QoreValue.
 uint64_t qore_rt_make_string_len(const char* str, uint64_t len);
+//! As qore_rt_make_string_len() for ASCII text: the string has its ASCII prefix known (qore#6625)
+uint64_t qore_rt_make_ascii_string_len(const char* str, uint64_t len);
 
 //! Execute a backquote command and return stdout as a NaN-boxed string.
 uint64_t qore_rt_backquote(const char* cmd, ExceptionSink* xsink);
@@ -966,10 +971,31 @@ int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink
 //! go to the function that the handler runs for (#6074)
 void qore_rt_exec_on_block_exit_forward(int64_t saved_count, ExceptionSink* xsink);
 
+//! Runs the handlers registered since saved_count in the block cleanups of a return statement past the inline cap of
+//! the lowering (QoreIRScopeExitInstruction::hand_over_return, #6137)
+/** The values that their returns hand over replace the value in \a hold, releasing the value before, and set
+    \a handed to 1; the first releases the values of the \a n_replace slots of \a replace (the value of the return)
+
+    @return 1 if a value was handed over in this call: the caller then clears the slots of the values of \a replace
+*/
+int8_t qore_rt_exec_on_block_exit_return_hold(int64_t saved_count, ExceptionSink* xsink, uint64_t* hold,
+    int8_t* handed, uint64_t* replace, int64_t n_replace);
+
+//! Returns the value in \a hold if \a handed is set, clearing both, or a reference of its own to the borrowed value
+//! \a value_bits otherwise (QoreIROpcode::TakeHandedOverReturn, #6137)
+uint64_t qore_rt_take_handed_over_return(uint64_t* hold, int8_t* handed, uint64_t value_bits);
+
+//! Returns the count of the values handed over to the function that the innermost handler run of the current thread
+//! hands its values to, or 0 (#6552)
+int64_t qore_rt_handler_run_hand_over_count();
+
+//! Releases the value in \a hold if \a handed is set, clearing both (QoreIROpcode::ReleaseHandedOverReturn, #6137)
+void qore_rt_release_handed_over_return(uint64_t* hold, int8_t* handed, ExceptionSink* xsink);
+
 //! Hands the value of a return statement of a handler run out of line to the function that it runs for
 //! (QoreIROpcode::HandlerReturn, #6074)
-/** \a value_bits is borrowed; ignored unless the handler runs while an exception or a thread_exit is pending; see
-    QoreHandlerRunContext
+/** \a value_bits is borrowed; ignored unless the handler runs while an exception or a thread_exit is pending, or in
+    the block cleanups of a return past the inline cap; see QoreHandlerRunContext
 */
 void qore_rt_handler_return(uint64_t value_bits, ExceptionSink* xsink);
 
@@ -1975,6 +2001,14 @@ uint64_t qore_rt_load_local_weak_receiver_aot(QoreAOTContext* ctx, int32_t idx, 
 
 //! Releases the receiver kept by qore_rt_load_local_weak_receiver() when its call returns
 void qore_rt_end_weak_receiver_call(uint64_t* slot, int8_t* owned_flag, ExceptionSink* xsink);
+
+//! Reads the variable of a foreach loop that is the receiver of a method call from its cache
+/** As qore_rt_read_element_local(), except that the object of a weak reference is given a reference, stored in
+    \a slot, and \a owned_out set to 2, which qore_rt_end_weak_receiver_call() releases when the call returns
+    (qore#6594); a reference is read as qore_rt_read_element_local_held() reads it if \a current is not null
+*/
+uint64_t qore_rt_read_element_local_receiver(uint64_t val, uint64_t* slot, int8_t* owned_out, uint64_t* current,
+        uint64_t* previous, uint8_t* held, ExceptionSink* xsink);
 
 //! Loads a weak-assigned local through an AOT context slot, preserving the borrow
 /** @see qore_rt_load_local_weak()

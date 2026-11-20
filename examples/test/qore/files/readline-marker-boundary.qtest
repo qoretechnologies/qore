@@ -1,0 +1,299 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - File reads of regular files through iconv: Shift_JIS, Big5, GBK, GB18030, EUC-JP
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+#! File::readLine() with a marker ends a line only where the marker starts at a character boundary (qore#6648)
+/** In a double-byte encoding whose trail bytes can have the value of an ASCII character (Shift_JIS, Big5, GBK), a
+    marker byte that is the trail byte of a character does not end the line inside that character, as with
+    StreamReader::readLine() and FileLineIterator.
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../EncodingCapability.qm
+
+%exec-class ReadLineMarkerBoundaryTest
+
+class ReadLineMarkerBoundaryTest inherits QUnit::Test {
+    public {
+        #! encodings, a character whose trail byte has the value of a single-byte character, and the characters
+        #! that this byte can be in the encoding, as the marker: the first that iconv converts to and from it
+        /** In Shift_JIS, the byte 0x5c is the yen sign (JIS X 0201) in glibc's and macOS's iconv, which convert it to
+            and from it (the backslash is no character of Shift_JIS in macOS's iconv, and glibc's converts it to 0x5c
+            but reads 0x5c as the yen sign); musl's reads 0x5c as the backslash, and converts the yen sign to it only
+            with a loss
+        */
+        const Cases = (
+            ("Shift_JIS", "ソ", ("¥", "\\")),
+            ("Big5", "功", ("\\",)),
+            ("Big5", "弋", ("|",)),
+            ("GBK", "丂", ("@",)),
+        );
+    }
+
+    private {
+        TmpDir tmp("readline-marker-boundary-");
+        int n = 0;
+        #! the cases whose encoding the iconv of the platform can encode the text and the marker in
+        list<list<string>> cases = ();
+        #! why the other cases are skipped
+        list<string> lacking = ();
+    }
+
+    constructor() : Test("readLine() marker at a character boundary", "1.0", \ARGV) {
+        # File::readLine() and StreamReader::readLine() convert the marker to the encoding of the text, and the test
+        # writes its text in that encoding: the iconv of some platforms (musl's) can decode Big5 but not encode it
+        foreach list<auto> c in (Cases) {
+            *string reason;
+            foreach string marker in (c[2]) {
+                reason = encoding_cannot_convert(c[0], c[1] + marker);
+                if (!reason) {
+                    cases += ((c[0], c[1], marker),);
+                    break;
+                }
+            }
+            if (reason) {
+                lacking += reason;
+            }
+        }
+        addTestCase("the encodings of the platform's iconv", \iconvEncodings());
+        addTestCase("the trail bytes are the markers", \trailBytes());
+        addTestCase("File::readLine() with a marker", \fileReadLine());
+        addTestCase("File::readLine() with a marker of more than one character", \fileReadLineLongMarker());
+        addTestCase("the same lines as StreamReader::readLine() and FileLineIterator", \parity());
+        addTestCase("UTF-16 and ASCII-compatible encodings", \otherEncodings());
+        addTestCase("EUC-KR", \eucKr());
+        foreach string enc in ("GB18030", "EUC-JP") {
+            addTestCase("invalid sequences of characters of more than two bytes: " + enc, \invalidSequences(), (enc,));
+            addTestCase("a valid first byte followed by an invalid byte: " + enc, \validStartInvalidByte(), (enc,));
+        }
+        foreach list<auto> c in ((("GB18030", <9439fc36>, "😀"), ("GB18030", <81308130>, "\u0080"),
+                ("EUC-JP", <8fabb1>, "é"), ("EUC-JP", <8eb1>, "ｱ"))) {
+            addTestCase(sprintf("a valid character of more than two bytes: %s %s", c[0], c[2]), \longCharacter(), c);
+        }
+        set_return_value(main());
+    }
+
+    #! the cases run with the encodings that the iconv of the platform has; the others are skipped with the reason
+    iconvEncodings() {
+        foreach list<string> c in (cases) {
+            assertEq(c[1] + c[2], convert_encoding(convert_encoding(c[1] + c[2], c[0]), "UTF-8"), c[0]);
+        }
+        # every platform has Shift_JIS: its case runs everywhere, so that the marker-boundary cases never pass
+        # without a case
+        assertEq(1, (select cases, $1[0] == "Shift_JIS").size(), "the Shift_JIS case runs: " + lacking.join("; "));
+        if (lacking) {
+            testSkip("the iconv of the platform cannot encode: " + lacking.join("; "));
+        }
+    }
+
+    #! writes the given bytes to a new file and returns its path
+    private string file(binary data) {
+        string path = tmp.path + DirSep + sprintf("f%d", ++n);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        return path;
+    }
+
+    #! returns the text in the given encoding as bytes
+    private static binary bytes(string text, string enc) {
+        return binary(convert_encoding(text, enc));
+    }
+
+    #! returns the lines read with File::readLine() with the given marker
+    private list<string> readLines(string path, string enc, string marker, bool incl = False) {
+        File f(enc);
+        f.open2(path);
+        list<string> rv = ();
+        while (exists (*string line = f.readLine(incl, marker))) {
+            push rv, line;
+        }
+        return rv;
+    }
+
+    #! the test is about characters whose second byte is the marker
+    trailBytes() {
+        foreach list<string> c in (cases) {
+            binary b = bytes(c[1], c[0]);
+            assertEq(2, b.size(), c[0]);
+            assertEq(bytes(c[2], c[0]), b.substr(1), c[0] + " " + c[1]);
+        }
+    }
+
+    fileReadLine() {
+        foreach list<string> c in (cases) {
+            string enc = c[0];
+            string ch = c[1];
+            string marker = c[2];
+            # "a<ch>b<marker>c": the marker byte inside <ch> does not end the line
+            string text = "a" + ch + "b" + marker + "c";
+            string path = file(bytes(text, enc));
+            list<string> lines = readLines(path, enc, marker);
+            assertEq(("a" + ch + "b", "c"), lines, enc + " " + ch);
+            assertEq(enc, lines[0].encoding());
+            # with the marker
+            assertEq(("a" + ch + "b" + marker, "c"), readLines(path, enc, marker, True), enc + " " + ch);
+
+            # the character at the start and at the end of a line, and lines of the character alone
+            text = ch + marker + ch + ch + marker + marker + ch + "x" + ch + marker;
+            path = file(bytes(text, enc));
+            assertEq((ch, ch + ch, "", ch + "x" + ch), readLines(path, enc, marker), enc + " " + ch);
+
+            # a line with no marker
+            path = file(bytes(strmul(ch, 50), enc));
+            assertEq((strmul(ch, 50),), readLines(path, enc, marker), enc + " " + ch);
+        }
+    }
+
+    fileReadLineLongMarker() {
+        foreach list<string> c in (cases) {
+            string enc = c[0];
+            string ch = c[1];
+            string marker = c[2];
+            # a marker of two characters whose bytes appear across a character boundary: <ch> followed by
+            # "<marker><marker>" has the bytes of the marker starting at the trail byte of <ch>
+            string m = marker + marker;
+            string text = "a" + ch + m + "b" + ch + marker + "c" + m + "d";
+            string path = file(bytes(text, enc));
+            assertEq(("a" + ch, "b" + ch + marker + "c", "d"), readLines(path, enc, m), enc + " " + ch);
+            # a marker of characters other than ASCII
+            m = ch + marker;
+            text = "x" + ch + ch + marker + "y" + ch + marker;
+            path = file(bytes(text, enc));
+            assertEq(("x" + ch, "y"), readLines(path, enc, m), enc + " " + ch);
+        }
+    }
+
+    parity() {
+        foreach list<string> c in (cases) {
+            string enc = c[0];
+            string ch = c[1];
+            string marker = c[2];
+            string text = ch + "a" + marker + "b" + ch + ch + marker + ch + marker + "c" + ch;
+            string path = file(bytes(text, enc));
+            list<string> expected = (ch + "a", "b" + ch + ch, ch, "c" + ch);
+            assertEq(expected, readLines(path, enc, marker), enc + " " + ch + " File");
+
+            StreamReader sr(new FileInputStream(path), enc);
+            list<string> sl = ();
+            # the marker is removed (trim)
+            while (exists (*string line = sr.readLine(marker, True))) {
+                push sl, line;
+            }
+            assertEq(expected, sl, enc + " " + ch + " StreamReader");
+
+            list<string> il = ();
+            FileLineIterator i(path, enc, marker);
+            while (i.next()) {
+                push il, i.getValue();
+            }
+            assertEq(expected, il, enc + " " + ch + " FileLineIterator");
+        }
+    }
+
+    #! encodings with no trail bytes of ASCII values are not changed
+    otherEncodings() {
+        # the bytes of "\n" at an odd offset do not end the line: in UTF-16LE, U+0A00 U+0100 is 00 0a 00 01 (0a 00 at
+        # offset 3 after "a"); in UTF-16BE, U+0100 U+0A00 is 01 00 0a 00 (00 0a at offset 3 after "a")
+        foreach list<string> c in ((("UTF-16LE", "a\u0a00\u0100b"), ("UTF-16BE", "a\u0100\u0a00b"))) {
+            binary b = bytes(c[1] + "\nc", c[0]);
+            assertEq(binary(convert_encoding("\n", c[0])), b.substr(3, 2), c[0]);
+            assertEq((c[1], "c"), readLines(file(b), c[0], "\n"), c[0]);
+        }
+        foreach list<auto> c in ((("UTF-8", "a€b\nc", <61e282ac620a63>), ("ISO-8859-1", "aéb\nc", <61e9620a63>))) {
+            list<string> lines = readLines(file(c[2]), c[0], "\n");
+            assertEq((c[1].split("\n")[0], "c"), lines, c[0]);
+        }
+    }
+
+    #! skips the test if Qore cannot read lines of the encoding with a marker on this platform
+    /** The marker is converted to the encoding of the text, and Qore learns the characters of an encoding that it has
+        no built-in support for by encoding sample text: the iconv of some platforms (musl's) can decode EUC-KR and
+        GB18030 but not encode them (issue #6812)
+    */
+    private checkEncoding(string enc, string c) {
+        *string reason = encoding_characters_unknown(enc, c);
+        if (reason) {
+            testSkip(reason);
+        }
+    }
+
+    #! EUC-KR, whose trail bytes are never ASCII
+    eucKr() {
+        checkEncoding("EUC-KR", "가");
+        list<string> lines = readLines(file(<61b0a1620a63>), "EUC-KR", "\n");
+        assertEq(("a가b", "c"), lines);
+    }
+
+    #! an invalid sequence in an encoding with characters of more than two bytes does not hide a marker after it
+    /** A first byte followed by fewer bytes than its character has is incomplete only if the bytes after it can be
+        part of a character; otherwise it is an invalid byte, and the marker after it ends the line (the lines are
+        read with "keep", as they are not valid)
+    */
+    invalidSequences(string enc) {
+        checkEncoding(enc, enc == "GB18030" ? "中" : "日");
+        binary data = enc == "GB18030" ? <81300a410a42> : <8f0a410a42>;
+        list<binary> expected = enc == "GB18030" ? (<81300a>, <410a>, <42>) : (<8f0a>, <410a>, <42>);
+        string path = file(data);
+        File f(enc);
+        f.setEncodingErrors(ENCODING_ERRORS_KEEP);
+        f.open2(path);
+        list<binary> lines = ();
+        while (exists (*string line = f.readLine(True, "\n"))) {
+            push lines, binary(line);
+        }
+        assertEq(expected, lines, enc + " File");
+
+        StreamReader sr(new FileInputStream(path), enc, ENCODING_ERRORS_KEEP);
+        list<binary> sl = ();
+        while (exists (*string line = sr.readLine("\n", False))) {
+            push sl, binary(line);
+        }
+        assertEq(expected, sl, enc + " StreamReader");
+    }
+
+    #! valid characters of more than two bytes before markers
+    /** GB18030 four-byte characters (😀 is 94 39 fc 36, U+0080 81 30 81 30), an EUC-JP three-byte character of JIS X
+        0212 (é is 8f ab b1), which the iconv of some platforms (musl's) does not have, and an EUC-JP half-width kana
+        (ｱ is 8e b1) are whole characters
+    */
+    longCharacter(string enc, binary bytes, string c) {
+        checkEncoding(enc, enc == "GB18030" ? "中" : "日");
+        *string reason = encoding_cannot_convert(enc, c);
+        if (reason) {
+            testSkip(reason);
+        }
+        assertEq(bytes, binary(convert_encoding(c, enc)), enc + " " + c);
+        binary text = binary("a") + bytes + binary("b\n") + bytes + binary("\n") + bytes + bytes;
+        list<string> expected = ("a" + c + "b", c, c + c);
+        string path = file(text);
+        assertEq(expected, readLines(path, enc, "\n"), enc + " " + c + " File");
+        StreamReader sr(new FileInputStream(path), enc);
+        list<string> sl = ();
+        while (exists (*string line = sr.readLine("\n", True))) {
+            push sl, line;
+        }
+        assertEq(expected, sl, enc + " " + c + " StreamReader");
+    }
+
+    #! valid first bytes followed by an invalid byte before markers: the bytes after a valid start are checked as they
+    #! are read, so that the line feed ends the line at offsets 2 and 3
+    validStartInvalidByte(string enc) {
+        checkEncoding(enc, enc == "GB18030" ? "中" : "日");
+        binary data = enc == "GB18030" ? <8130810a41> : <8fa10a41>;
+        list<binary> expected = enc == "GB18030" ? (<8130810a>, <41>) : (<8fa10a>, <41>);
+        File f(enc);
+        f.setEncodingErrors(ENCODING_ERRORS_KEEP);
+        f.open2(file(data));
+        list<binary> lines = ();
+        while (exists (*string line = f.readLine(True, "\n"))) {
+            push lines, binary(line);
+        }
+        assertEq(expected, lines, enc);
+    }
+}

@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the source oracle and the loaded qcc images run in child processes
+# test-platform: macos - debugger stepping through linked AOT code and its deserialized closure IR
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+%exec-class SharedNestedHandlerTest
+
+#! A debugger return before and after the read of raise runs the same serialized inner handler (#6701).
+class SharedNestedHandlerTest inherits QUnit::Test {
+    private {
+        string qore = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore);
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir();
+        string env = "unset QORE_DISABLE_AOT_NATIVE_CLOSURES QORE_DISABLE_AOT_LAZY_CLOSURE_IR; "
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        string stepArgs = " step";
+        string steps;
+        string results;
+    }
+
+    constructor() : Test("AOT shared nested handler", "1.0", \ARGV) {
+        hash<string, int> tags;
+        list<string> lines = ReadOnlyFile::readTextFile(source + "/handler.qi").split("\n");
+        for (int i = 0; i < lines.size(); ++i) {
+            *list<string> tag = lines[i] =~ x/# step (\w+)$/;
+            if (tag) {
+                tags{tag[0]} = i + 1;
+            }
+        }
+        foreach string tag in (("inner", "sibling", "early", "late")) {
+            stepArgs += " " + tags{tag};
+        }
+        foreach string target in (("function", "closure")) {
+            steps += target + " normal 35 35 [early sibling inner]\n"
+                + target + " exception 35 35 [early late sibling inner]\n"
+                + target + " early null 35 [early sibling inner]\n"
+                + target + " late null 35 [early late sibling inner]\n"
+                + target + " unwind \"CLEANUP\" 35 [early sibling inner]\n"
+                + target + " unwind-early \"CLEANUP\" 35 [early sibling inner]\n"
+                + target + " unwind-late \"CLEANUP\" 35 [early late sibling inner]\n";
+            results += target + " normal 35 35 []\n" + target + " exception 35 35 []\n"
+                + target + " unwind \"CLEANUP\" 35 []\n";
+        }
+        addTestCase("source debugger steps", \sourceTest());
+        foreach int opt in ((0, 3)) {
+            addTestCase(sprintf("shared handlers in a loaded -O%d image", opt), \imageTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    sourceTest() {
+        assertEq(steps, ExecModeHarness::run(env + quote(qore) + " -b --exec-mode=ast "
+            + quote(source + "/image.q") + stepArgs));
+    }
+
+    imageTest(int opt) {
+        TmpDir tmp("qore-shared-handler-");
+        string script = tmp.path + "/image.q";
+        string body = tmp.path + "/handler.qi";
+        string exe = tmp.path + "/image";
+        copy_file(source + "/image.q", script);
+        copy_file(source + "/handler.qi", body);
+        int rc;
+        string log = backquote(sprintf("%sQORE_IR_OPT_STATS=1 QORE_AOT_DEBUG_NATIVE_CLOSURES=1 %s -O%d -o %s %s 2>&1",
+            env, quote(qcc), opt, quote(exe), quote(script)), \rc);
+        assertEq(0, rc, log);
+        assertTrue(log.find("compiled native closure '__aot_closure::makeHandler()::") != -1,
+            "the image also has a native closure to disable for the two fallback runs");
+        # Three distinct bodies: the outer handler, its inner handler and the sibling handler. Count both
+        # containing functions so a duplicate in the closure's serialized graph cannot pass unnoticed.
+        foreach string prefix in (("handler_writes:", "__aot_closure::makeHandler()::")) {
+            list<string> counts = select log.split("\n"), $1.equalPartial("IR-OPT-HANDLER-WRITES: " + prefix);
+            assertTrue(counts.size() > 0, prefix + " scanned");
+            foreach string count in (counts) {
+                assertRegex("scans=[1-3]$", count, count);
+            }
+        }
+        assertEq(0, unlink(script));
+        assertEq(0, unlink(body));
+        foreach string mode in (("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 ",
+                "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1 ")) {
+            string run = env + mode + quote(exe) + " -b";
+            assertEq(results, ExecModeHarness::run_any(run + " run"), "handler values " + mode);
+            assertEq(steps, ExecModeHarness::run_any(run + stepArgs), "debugger returns and steps " + mode);
+        }
+    }
+}

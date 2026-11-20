@@ -222,7 +222,8 @@ class Test inherits QUnit::Test {
             assertEq(read(), read({i.key: i.value.default_value}), i.key);
             ++checked;
         }
-        assertEq(2, checked);
+        # encoding, encoding_errors and ignore_empty
+        assertEq(3, checked);
         assertFalse(FixedLengthReadDataProvider::ConstructorOptions.ignore_empty.default_value);
         # the empty line fails by default and is skipped with ignore_empty
         assertEq("FIXED-LENGTH-UTIL-NON-MATCHING-TYPE", read());

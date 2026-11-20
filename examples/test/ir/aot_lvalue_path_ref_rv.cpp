@@ -5,7 +5,7 @@
 // An LValuePath instruction keeps whether its value is used (ref_rv) through the serialized IR of an AOT image
 // (qore#6328): the IR rebuilt from the image (debug IR, closure bodies without native code) makes an unused post
 // increment or decrement copy no old value, and an unused remove or delete release its value in the operation.  An
-// image of an earlier format has no such flag: its instructions use their values, as before.
+// image predating the flag is rejected at load time.
 
 #include <qore/Qore.h>
 #include <qore/QoreAOT.h>
@@ -70,6 +70,8 @@ static bool roundTrip(QoreProgram* pgm, LVUnaryOp op, bool ref_rv) {
     inst->ref_rv = ref_rv;
     inst->result = fn.createValue();
     block->instructions.push_back(std::move(inst));
+    // the instruction is in a function that can run (qore#6468)
+    block->instructions.push_back(std::make_unique<QoreIRReturnInstruction>());
     fn.blocks.push_back(std::move(block));
     QoreAOTBinaryWriter writer;
     writer.feature_flags = QORE_AOT_FEAT_LVPATH_PATTERN;
@@ -99,8 +101,8 @@ static bool roundTrip(QoreProgram* pgm, LVUnaryOp op, bool ref_rv) {
     return true;
 }
 
-//! Reads an LValuePath instruction written in the format before QORE_AOT_LVPATH_REF_RV_VERSION, which has no flag
-static bool earlierFormat(QoreProgram* pgm, LVUnaryOp op) {
+//! Checks refusal of an image containing an LValuePath instruction written before QORE_AOT_LVPATH_REF_RV_VERSION
+static bool earlierFormat(LVUnaryOp op) {
     char label[64];
     snprintf(label, sizeof(label), "format %u, unary op %u", QORE_AOT_LVPATH_REF_RV_VERSION - 1,
         static_cast<unsigned>(op));
@@ -121,7 +123,7 @@ static bool earlierFormat(QoreProgram* pgm, LVUnaryOp op) {
     writer.writeU32(0); // handler-own slots
     writer.writeStringRef("entry");
     writer.writeU8(0); // block flags
-    writer.writeU16(1); // instructions
+    writer.writeU16(2); // instructions: the instruction and a return, so that the function can run (qore#6468)
     writer.writeU16(static_cast<uint16_t>(O::LValuePathUnary));
     writer.writeU8(LValuePathGroup);
     writer.writeU32(1); // result
@@ -137,6 +139,15 @@ static bool earlierFormat(QoreProgram* pgm, LVUnaryOp op) {
     writer.writeU32(0); // source start/end line
     writer.writeU32(0);
     writer.writeStringRef("");
+    writer.writeU16(static_cast<uint16_t>(O::ReturnNothing));
+    writer.writeU8(static_cast<uint8_t>(QoreIRInstGroup::Return));
+    writer.writeU32(0); // no result
+    writer.writeU8(0); // operands
+    writer.writeU16(0xffff); // no exception target
+    writer.writeU8(0); // no value
+    writer.writeU32(0); // source start/end line
+    writer.writeU32(0);
+    writer.writeStringRef("");
     writer.endSection(section);
     QoreAOTBinaryHeader header{};
     header.magic = QORE_AOT_BINARY_MAGIC;
@@ -147,9 +158,11 @@ static bool earlierFormat(QoreProgram* pgm, LVUnaryOp op) {
         fprintf(stderr, "%s: cannot finalize the image\n", label);
         return false;
     }
-    int flag = readFlag(pgm, label, data);
-    if (flag != 1) {
-        fprintf(stderr, "%s: ref_rv read as %d; an instruction of an earlier format uses its value\n", label, flag);
+    QoreAOTBinaryReader reader;
+    std::string error;
+    if (reader.open(data.data(), data.size(), error)
+            || error.find("unsupported binary format version " + std::to_string(version) + " ") == std::string::npos) {
+        fprintf(stderr, "%s: expected an unsupported format error, got '%s'\n", label, error.c_str());
         return false;
     }
     return true;
@@ -166,7 +179,7 @@ int main() {
             ok = roundTrip(pgm, op, ref_rv) && ok;
             ++count;
         }
-        ok = earlierFormat(pgm, op) && ok;
+        ok = earlierFormat(op) && ok;
         ++count;
     }
     qore_destroy_program(pgm);

@@ -1,0 +1,693 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+#! the stream readers check the encoding of the text they read, with the encoding_errors option (qore#6604)
+/** StreamReader, BufferedStreamReader and InputStreamLineIterator raise INVALID-ENCODING for text that is not valid
+    in the encoding of the reader by default ("raise"), tag the whole string read ISO-8859-1 with its bytes with
+    "latin1", and tag it with the encoding of the reader without a check with "keep".
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../EncodingCapability.qm
+
+%exec-class ReaderEncodingErrorsTest
+
+#! an input stream that raises an exception at its first read, then reads the given data
+class ThrowOnceInputStream inherits InputStream {
+    private {
+        BinaryInputStream is;
+        bool thrown;
+    }
+
+    constructor(binary b) {
+        is = new BinaryInputStream(b);
+    }
+
+    *binary read(int limit) {
+        if (!thrown) {
+            thrown = True;
+            throw "STREAM-TEST-ERROR", "the first read fails";
+        }
+        return is.read(limit);
+    }
+
+    int peek() {
+        return is.peek();
+    }
+}
+
+#! an input stream that raises an exception once the given number of bytes has been read, then reads the rest
+class ThrowAfterInputStream inherits InputStream {
+    private {
+        binary data;
+        int offset = 0;
+        int throw_after;
+        bool thrown;
+    }
+
+    constructor(binary data, int throw_after) {
+        self.data = data;
+        self.throw_after = throw_after;
+    }
+
+    *binary read(int limit) {
+        if (!thrown && offset == throw_after) {
+            thrown = True;
+            throw "STREAM-TEST-ERROR", "a read fails";
+        }
+        int end = thrown ? data.size() : throw_after;
+        if (offset >= end) {
+            return;
+        }
+        binary b = data.substr(offset, min(limit, end - offset));
+        offset += b.size();
+        return b;
+    }
+
+    int peek() {
+        return offset < data.size() ? data[offset] : -1;
+    }
+}
+
+class ReaderEncodingErrorsTest inherits QUnit::Test {
+    constructor() : Test("stream reader encoding errors", "1.0", \ARGV) {
+        addTestCase("option values", \optionValues());
+        addTestCase("readString() of all text", \readAll());
+        addTestCase("readString() of characters", \readChars());
+        addTestCase("readLine()", \readLine());
+        addTestCase("buffer boundaries", \bufferBoundaries());
+        addTestCase("UTF-16", \utf16());
+        addTestCase("InputStreamLineIterator", \lineIterator());
+        addTestCase("DataLineIterator", \dataLineIterator());
+        addTestCase("other encodings", \otherEncodings());
+        addTestCase("GBK", \gbk());
+        addTestCase("stateful encodings", \statefulEncodings());
+        addTestCase("stateful encodings: a byte that is not a character", \statefulInvalidBytes());
+        addTestCase("UTF-7", \utf7());
+        addTestCase("byte order marks after the start", \laterByteOrderMarks());
+        addTestCase("exactly the characters requested", \exactCharacters());
+        addTestCase("line numbers after an error", \lineNumbersAfterError());
+        addTestCase("the start of the text after a read of nothing", \startAfterNothingRead());
+        addTestCase("a very large number of characters", \largeCharacterCount());
+        addTestCase("US-ASCII", \usAscii());
+        addTestCase("bytes read before a stream error", \bytesBeforeStreamError());
+        set_return_value(main());
+    }
+
+    #! returns a reader of the given bytes
+    private static StreamReader reader(binary b, string enc = "UTF-8", *string mode, bool buffered = False,
+            int bufsize = 4096) {
+        return buffered
+            ? new BufferedStreamReader(new BinaryInputStream(b), enc, bufsize, mode)
+            : new StreamReader(new BinaryInputStream(b), enc, mode);
+    }
+
+    optionValues() {
+        # positional calls without the option
+        StreamReader sr(new BinaryInputStream(binary("a")), "UTF-8");
+        assertEq("raise", sr.getEncodingErrors());
+        sr.setEncodingErrors(ENCODING_ERRORS_LATIN1);
+        assertEq("latin1", sr.getEncodingErrors());
+        sr.setEncodingErrors();
+        assertEq("raise", sr.getEncodingErrors());
+        assertEq("keep", new StreamReader(new BinaryInputStream(binary()), encoding_errors: "keep")
+            .getEncodingErrors());
+        BufferedStreamReader bsr(new BinaryInputStream(binary("a")), "UTF-8", 16);
+        assertEq("raise", bsr.getEncodingErrors());
+        assertEq("latin1", new BufferedStreamReader(new BinaryInputStream(binary()), NOTHING, 16, "latin1")
+            .getEncodingErrors());
+        InputStreamLineIterator i(new BinaryInputStream(binary("a")), "UTF-8", "\n", True, 16);
+        assertEq("raise", i.getEncodingErrors());
+        assertEq("keep", new InputStreamLineIterator(new BinaryInputStream(binary()), encoding_errors: "keep")
+            .getEncodingErrors());
+        # the iterator on a reader uses the option of the reader
+        sr.setEncodingErrors("keep");
+        assertEq("keep", new InputStreamLineIterator(sr).getEncodingErrors());
+
+        assertThrows("ENCODING-ERRORS-ERROR", "unknown encoding_errors value 'x'", sub () {
+            new StreamReader(new BinaryInputStream(binary()), NOTHING, "x");
+        });
+        assertThrows("ENCODING-ERRORS-ERROR", sub () {
+            new BufferedStreamReader(new BinaryInputStream(binary()), NOTHING, 16, "x");
+        });
+        assertThrows("ENCODING-ERRORS-ERROR", sub () {
+            new InputStreamLineIterator(new BinaryInputStream(binary()), NOTHING, NOTHING, True, 16, "x");
+        });
+        assertThrows("ENCODING-ERRORS-ERROR", \sr.setEncodingErrors(), "Latin1");
+        assertEq("keep", sr.getEncodingErrors());
+    }
+
+    readAll() {
+        foreach bool buffered in (False, True) {
+            string cls = buffered ? "BufferedStreamReader" : "StreamReader";
+            foreach list<auto> c in ((<6162ff63>, 2), (<61c0af>, 1), (<6161eda080>, 2), (<f4908080>, 0),
+                    (<61e282>, 1)) {
+                binary b = c[0];
+                assertThrows("INVALID-ENCODING", sprintf("^%s::readString\\(\\): the text read is not valid UTF-8: "
+                    "invalid byte sequence at byte offset %d$", cls, c[1]),
+                    sub () { reader(b, "UTF-8", NOTHING, buffered).readString(); });
+                string s = reader(b, "UTF-8", "latin1", buffered).readString();
+                assertEq("ISO-8859-1", s.encoding());
+                assertEq(b, binary(s));
+                s = reader(b, "UTF-8", "keep", buffered).readString();
+                assertEq("UTF-8", s.encoding());
+                assertEq(b, binary(s));
+            }
+            assertEq("aé€😀", reader(binary("aé€😀"), "UTF-8", NOTHING, buffered).readString());
+        }
+    }
+
+    readChars() {
+        binary b = <61ff62c3a9>;
+        assertThrows("INVALID-ENCODING", "^StreamReader::readString\\(\\): the text read is not valid UTF-8: invalid "
+            "byte sequence at byte offset 1$", sub () { reader(b).readString(3); });
+        {
+            StreamReader sr = reader(b, "UTF-8", "keep");
+            assertEq(<61ff62>, binary(sr.readString(3)));
+            assertEq("é", sr.readString(1));
+        }
+        {
+            StreamReader sr = reader(b, "UTF-8", "latin1");
+            string s = sr.readString(2);
+            assertEq("ISO-8859-1", s.encoding());
+            assertEq(<61ff>, binary(s));
+            s = sr.readString(2);
+            assertEq("UTF-8", s.encoding());
+            assertEq("bé", s);
+        }
+        # a character cut off by the end of the stream
+        assertThrows("INVALID-ENCODING", "byte offset 1$", sub () { reader(<61e282>).readString(3); });
+        assertEq(<61e282>, binary(reader(<61e282>, "UTF-8", "keep").readString(3)));
+        # STREAM-ENCODING-ERROR is no longer raised
+        try {
+            reader(<ff>).readString(1);
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("INVALID-ENCODING", ex.err);
+        }
+    }
+
+    readLine() {
+        foreach bool buffered in (False, True) {
+            string cls = buffered ? "BufferedStreamReader" : "StreamReader";
+            binary b = <610a62ff630a64e2>;
+            {
+                StreamReader sr = reader(b, "UTF-8", NOTHING, buffered);
+                assertEq("a", sr.readLine());
+                assertThrows("INVALID-ENCODING", sprintf("^%s::readLine\\(\\): the line read is not valid UTF-8: "
+                    "invalid byte sequence at byte offset 1$", cls), \sr.readLine());
+                # the last line ends in a character cut off by the end of the stream
+                assertThrows("INVALID-ENCODING", "byte offset 1$", \sr.readLine());
+                assertEq(NOTHING, sr.readLine());
+            }
+            {
+                StreamReader sr = reader(b, "UTF-8", "latin1", buffered);
+                list<string> l = (sr.readLine(), sr.readLine(NOTHING, False), sr.readLine());
+                assertEq((<61>, <62ff630a>, <64e2>), (map binary($1), l));
+                assertEq(("UTF-8", "ISO-8859-1", "ISO-8859-1"), (map $1.encoding(), l));
+            }
+            {
+                StreamReader sr = reader(b, "UTF-8", "keep", buffered);
+                list<string> l = (sr.readLine(), sr.readLine(), sr.readLine());
+                assertEq((<61>, <62ff63>, <64e2>), (map binary($1), l));
+                assertEq(("UTF-8", "UTF-8", "UTF-8"), (map $1.encoding(), l));
+            }
+            # a line with a marker
+            {
+                StreamReader sr = reader(<61ff7c627c>, "UTF-8", NOTHING, buffered);
+                assertThrows("INVALID-ENCODING", "line read is not valid UTF-8: invalid byte sequence at byte offset "
+                    "1$", \sr.readLine(), "|");
+                assertEq("b", sr.readLine("|"));
+            }
+        }
+    }
+
+    bufferBoundaries() {
+        # characters across the buffer of a buffered reader are whole
+        binary b = binary("abc€d\nxé😀\n");
+        foreach int bufsize in (1, 2, 3, 4, 5, 7) {
+            StreamReader sr = reader(b, "UTF-8", NOTHING, True, bufsize);
+            assertEq(("abc€d", "xé😀"), (sr.readLine(), sr.readLine()), "buffer size " + bufsize);
+            sr = reader(b, "UTF-8", NOTHING, True, bufsize);
+            assertEq("abc€d\nxé😀\n", sr.readString(), "buffer size " + bufsize);
+            sr = reader(b, "UTF-8", NOTHING, True, bufsize);
+            assertEq(("abc€", "d\nxé", "😀\n"), (sr.readString(4), sr.readString(4), sr.readString(4)),
+                "buffer size " + bufsize);
+        }
+        # a character cut off by a line end
+        b = <616263e2820a64>;
+        foreach int bufsize in (1, 4, 16) {
+            StreamReader sr = reader(b, "UTF-8", NOTHING, True, bufsize);
+            assertThrows("INVALID-ENCODING", "byte offset 3$", \sr.readLine(), NOTHING, "buffer size " + bufsize);
+            assertEq("d", sr.readLine());
+        }
+    }
+
+    utf16() {
+        # a surrogate pair is one character
+        StreamReader sr = reader(<3dd800de0a004100>, "UTF-16LE");
+        assertEq("😀", convert_encoding(sr.readLine(), "UTF-8"));
+        assertEq("A", convert_encoding(sr.readString(1), "UTF-8"));
+        # a surrogate pair cut off by the end of the stream
+        foreach bool buffered in (False, True) {
+            assertThrows("INVALID-ENCODING", "the text read is not valid UTF-16LE: invalid byte sequence at byte offset "
+                "2$", sub () { reader(<61003dd8>, "UTF-16LE", NOTHING, buffered).readString(); });
+            assertThrows("INVALID-ENCODING", "the text read is not valid UTF-16LE: invalid byte sequence at byte offset "
+                "2$", sub () { reader(<61003dd8>, "UTF-16LE", NOTHING, buffered).readString(2); });
+            assertEq(<61003dd8>, binary(reader(<61003dd8>, "UTF-16LE", "keep", buffered).readString(2)));
+            assertThrows("INVALID-ENCODING", "the text read is not valid UTF-8: invalid byte sequence at byte offset 1$",
+                sub () { reader(<61e282>, "UTF-8", NOTHING, buffered).readString(2); });
+        }
+        # a code unit cut off by the end of the stream
+        foreach bool buffered in (False, True) {
+            sr = reader(<61000a0062>, "UTF-16LE", NOTHING, buffered);
+            assertEq("a", convert_encoding(sr.readLine(), "UTF-8"));
+            assertThrows("INVALID-ENCODING", "line read is not valid UTF-16LE: invalid byte sequence at byte offset "
+                "0$", \sr.readLine());
+            sr = reader(<61000a0062>, "UTF-16LE", "latin1", buffered);
+            sr.readLine();
+            string s = sr.readLine();
+            assertEq("ISO-8859-1", s.encoding());
+            assertEq(<62>, binary(s));
+            sr = reader(<61000a0062>, "UTF-16LE", "keep", buffered);
+            sr.readLine();
+            s = sr.readLine();
+            assertEq("UTF-16LE", s.encoding());
+            assertEq(<62>, binary(s));
+        }
+        # a byte order mark is removed before the text is checked; the offset is in the text returned
+        assertThrows("INVALID-ENCODING", "^StreamReader::readString\\(\\): the text read is not valid UTF-16LE: "
+            "invalid byte sequence at byte offset 2$", sub () { reader(<fffe610062>, "UTF-16").readString(); });
+        assertEq("ab", convert_encoding(reader(<feff00610062>, "UTF-16").readString(), "UTF-8"));
+        # an unpaired surrogate is a code unit of its own: the characters after it are read from a code unit boundary
+        foreach bool buffered in (False, True) {
+            assertThrows("INVALID-ENCODING", "^\\w+::readString\\(\\): the text read is not valid UTF-16LE: invalid "
+                "byte sequence at byte offset 0$", sub () {
+                    reader(<00dc3dd800de4100>, "UTF-16LE", NOTHING, buffered).readString(2); });
+            sr = reader(<00dc3dd800de4100>, "UTF-16LE", "keep", buffered);
+            assertEq(<00dc3dd800de>, binary(sr.readString(2)));
+            assertEq("A", convert_encoding(sr.readString(1), "UTF-8"));
+        }
+        # the byte order of a byte order mark is kept when the text is tagged ISO-8859-1
+        sr = reader(<fffe00dc4100>, "UTF-16", "latin1");
+        string t = sr.readString(1);
+        assertEq("ISO-8859-1", t.encoding());
+        assertEq(<00dc>, binary(t));
+        assertEq("UTF-16LE", sr.getEncoding());
+        assertEq("A", convert_encoding(sr.readString(1), "UTF-8"));
+        sr = reader(<fffe4100ff>, "UTF-16", "latin1");
+        assertEq("ISO-8859-1", sr.readString(-1).encoding());
+        assertEq("UTF-16LE", sr.getEncoding());
+        # the text after a byte order mark tagged ISO-8859-1
+        string s = reader(<fffe610062>, "UTF-16", "latin1").readString(-1);
+        assertEq("ISO-8859-1", s.encoding());
+        assertEq(<610062>, binary(s));
+    }
+
+    lineIterator() {
+        binary b = <610a62ff0a630a>;
+        {
+            InputStreamLineIterator i(new BinaryInputStream(b), "UTF-8");
+            assertTrue(i.next());
+            assertThrows("INVALID-ENCODING", "^InputStreamLineIterator::next\\(\\): the line read is not valid UTF-8: "
+                "invalid byte sequence at byte offset 1 \\(line 2\\)$", \i.next());
+        }
+        {
+            InputStreamLineIterator i(new BinaryInputStream(b), "UTF-8", encoding_errors: "latin1");
+            list<string> l = map $1, i;
+            assertEq((<61>, <62ff>, <63>), (map binary($1), l));
+            assertEq(("UTF-8", "ISO-8859-1", "UTF-8"), (map $1.encoding(), l));
+        }
+        {
+            InputStreamLineIterator i(new BinaryInputStream(b), "UTF-8", NOTHING, True, 4096, "keep");
+            list<string> l = map $1, i;
+            assertEq((<61>, <62ff>, <63>), (map binary($1), l));
+        }
+        {
+            # the iterator on a reader uses the option of the reader
+            StreamReader sr = reader(b);
+            InputStreamLineIterator i(sr);
+            assertTrue(i.next());
+            assertThrows("INVALID-ENCODING", "\\(line 2\\)$", \i.next());
+            sr = reader(b, "UTF-8", "latin1");
+            i = new InputStreamLineIterator(sr);
+            assertEq(3, (map $1, i).size());
+        }
+    }
+
+    dataLineIterator() {
+        # the lines of a string are not checked
+        string s = binary_to_string(<610a62ff0a63>, "UTF-8");
+        assertEq((<61>, <62ff>, <63>), (map binary($1), new DataLineIterator(s)));
+    }
+
+    otherEncodings() {
+        # Shift_JIS
+        assertThrows("INVALID-ENCODING", "line read is not valid \\S+: invalid byte sequence at byte offset 1$",
+            sub () { reader(<41822730>, "SHIFT_JIS").readLine(); });
+        binary sj = binary(convert_encoding("日本ソ\n表", "SHIFT_JIS"));
+        StreamReader sr = reader(sj, "SHIFT_JIS");
+        assertEq(("日本ソ", "表"), (map convert_encoding($1, "UTF-8"), (sr.readLine(), sr.readLine())));
+        # US-ASCII
+        assertThrows("INVALID-ENCODING", "not valid US-ASCII: invalid byte sequence at byte offset 1$",
+            sub () { reader(<61e9>, "US-ASCII").readLine(); });
+        # single-byte encodings are not checked
+        foreach string mode in ("raise", "latin1", "keep") {
+            string s = reader(<e9ff80>, "ISO-8859-1", mode).readString();
+            assertEq("ISO-8859-1", s.encoding());
+            assertEq(<e9ff80>, binary(s));
+        }
+    }
+
+    #! a byte order mark is only resolved at the start of the text: after it, U+FEFF is a character
+    laterByteOrderMarks() {
+        foreach string enc in ("UTF-16LE", "UTF-16BE", "UTF-32LE", "UTF-32BE", "UCS-2LE", "UCS-2BE") {
+            binary b = binary(convert_encoding("x\n\ufeffy\n", enc));
+            foreach bool buffered in (False, True) {
+                StreamReader sr = reader(b, enc, NOTHING, buffered);
+                assertEq(("x", "\ufeffy"), (map convert_encoding($1, "UTF-8"), (sr.readLine(), sr.readLine())),
+                    enc);
+                sr = reader(b, enc, NOTHING, buffered);
+                assertEq("x\n", convert_encoding(sr.readString(2), "UTF-8"), enc);
+                assertEq("\ufeffy\n", convert_encoding(sr.readString(), "UTF-8"), enc);
+            }
+            InputStreamLineIterator i(new BinaryInputStream(b), enc);
+            assertEq(("x", "\ufeffy"), (map convert_encoding($1, "UTF-8"), i), enc);
+        }
+        # in the generic UTF-16 encoding without a byte order mark (big-endian), a later FF FE is the character U+FFFE
+        binary b = <0078000afffe00410042000a>;
+        foreach bool buffered in (False, True) {
+            StreamReader sr = reader(b, "UTF-16", NOTHING, buffered);
+            assertEq(<0078>, binary(sr.readLine()));
+            string l = sr.readLine();
+            assertEq(<fffe00410042>, binary(l));
+            assertEq("UTF-16", sr.getEncoding());
+        }
+        # a byte order mark at the start is removed and gives the byte order, also when a read raises an exception
+        foreach bool buffered in (False, True) {
+            StreamReader sr = reader(<fffe3dd841000a004300>, "UTF-16", NOTHING, buffered);
+            assertThrows("INVALID-ENCODING", "not valid UTF-16LE: invalid byte sequence at byte offset 0$",
+                \sr.readString(), 2);
+            assertEq("UTF-16LE", sr.getEncoding());
+            # the bytes after the invalid code unit are read next
+            assertEq("A\n", convert_encoding(sr.readString(2), "UTF-8"));
+            assertEq("C", convert_encoding(sr.readString(1), "UTF-8"));
+        }
+    }
+
+    #! a read of a number of characters returns that number of characters; the bytes read after them are read next
+    exactCharacters() {
+        foreach bool buffered in (False, True) {
+            foreach int bufsize in (1, 3, 4096) {
+                string label = sprintf("buffered: %y size: %d", buffered, bufsize);
+                StreamReader sr = reader(<e282414243>, "UTF-8", "keep", buffered, bufsize);
+                assertEq(<e282>, binary(sr.readString(2)), label);
+                assertEq("AB", sr.readString(2), label);
+                assertEq("C", sr.readString(2), label);
+                sr = reader(<3dd841004200>, "UTF-16LE", "keep", buffered, bufsize);
+                assertEq(<3dd8>, binary(sr.readString(1)), label);
+                assertEq("A", convert_encoding(sr.readString(1), "UTF-8"), label);
+                assertEq("B", convert_encoding(sr.readString(1), "UTF-8"), label);
+                sr = reader(<3dd841004200>, "UTF-16LE", "latin1", buffered, bufsize);
+                string s = sr.readString(1);
+                assertEq("ISO-8859-1", s.encoding(), label);
+                assertEq(<3dd8>, binary(s), label);
+                assertEq("A", convert_encoding(sr.readString(1), "UTF-8"), label);
+                # with "raise", the bytes after the invalid code unit are read next
+                sr = reader(<e282414243>, "UTF-8", NOTHING, buffered, bufsize);
+                assertThrows("INVALID-ENCODING", "byte offset 0$", \sr.readString(), 2);
+                assertThrows("INVALID-ENCODING", "byte offset 0$", \sr.readString(), 2);
+                assertEq("AB", sr.readString(2), label);
+            }
+        }
+    }
+
+    #! a read that consumes no bytes leaves the byte order mark at the start of the text to the next read
+    startAfterNothingRead() {
+        foreach bool buffered in (False, True) {
+            StreamReader sr = reader(<fffe41004200>, "UTF-16", NOTHING, buffered);
+            assertEq(NOTHING, sr.readString(0));
+            string s = sr.readString(1);
+            assertEq("UTF-16LE", s.encoding());
+            assertEq("A", convert_encoding(s, "UTF-8"));
+            assertEq("B", convert_encoding(sr.readString(-1), "UTF-8"));
+            binary u32 = binary(convert_encoding("A", "UTF-32LE"));
+            {
+                sr = reader(<fffe0000> + u32, "UTF-32", NOTHING, buffered);
+                assertEq(NOTHING, sr.readString(0));
+                assertEq("A", convert_encoding(sr.readString(-1), "UTF-8"));
+            }
+            # an exception raised by the stream before any byte is read
+            sr = buffered
+                ? new BufferedStreamReader(new ThrowOnceInputStream(<fffe41004200>), "UTF-16", 16)
+                : new StreamReader(new ThrowOnceInputStream(<fffe41004200>), "UTF-16");
+            assertThrows("STREAM-TEST-ERROR", \sr.readString(), 1);
+            s = sr.readString(1);
+            assertEq("UTF-16LE", s.encoding());
+            assertEq("A", convert_encoding(s, "UTF-8"));
+            sr = buffered
+                ? new BufferedStreamReader(new ThrowOnceInputStream(convert_encoding("\ufeffx\ny", "UTF-16LE").toBinary()),
+                    "UTF-16", 16)
+                : new StreamReader(new ThrowOnceInputStream(convert_encoding("\ufeffx\ny", "UTF-16LE").toBinary()),
+                    "UTF-16");
+            assertThrows("STREAM-TEST-ERROR", \sr.readLine());
+            assertEq(("x", "y"), (map convert_encoding($1, "UTF-8"), (sr.readLine(), sr.readLine())));
+        }
+        # an exception raised before a line is read does not count a line
+        InputStreamLineIterator i(new ThrowOnceInputStream(<610a620a>), "UTF-8");
+        assertThrows("STREAM-TEST-ERROR", \i.next());
+        assertEq(0, i.index());
+        assertTrue(i.next());
+        assertEq(("a", 1), (i.getValue(), i.index()));
+        i = new InputStreamLineIterator(new BinaryInputStream(binary(convert_encoding(strmul("hello world\n", 10),
+            "UTF-16BE"))), "UTF-16LE");
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", \i.next());
+        assertEq(0, i.index());
+    }
+
+    #! a very large number of characters reads the data there is, with no allocation for the number
+    largeCharacterCount() {
+        foreach string enc in ("UTF-8", "UTF-16LE", "UTF-32LE", "ISO-8859-1") {
+            binary b = binary(convert_encoding("AB", enc));
+            foreach int n in (4611686018427387904, 2305843009213693952, 9223372036854775807, 1152921504606846976) {
+                foreach bool buffered in (False, True) {
+                    StreamReader sr = reader(b, enc, NOTHING, buffered);
+                    assertEq("AB", convert_encoding(sr.readString(n), "UTF-8"), sprintf("%s %d", enc, n));
+                    assertEq(NOTHING, sr.readString(n));
+                }
+            }
+        }
+    }
+
+    #! US-ASCII is checked byte by byte; the bytes after an invalid byte are read next, as in UTF-8
+    usAscii() {
+        foreach string enc in ("US-ASCII", "UTF-8") {
+            foreach bool buffered in (False, True) {
+                StreamReader sr = reader(<804142>, enc, NOTHING, buffered);
+                assertThrows("INVALID-ENCODING", "not valid " + enc + ": invalid byte sequence at byte offset 0$",
+                    \sr.readString(), 3);
+                assertEq("AB", sr.readString(-1), enc);
+            }
+        }
+    }
+
+    #! the bytes that a read took from the stream before the stream raised an exception are read: the text has
+    #! started, so a byte order mark after them is a character (qore#6604)
+    bytesBeforeStreamError() {
+        foreach int bs in ((0, 1, 3, 4096)) {
+            string label = sprintf("buffer %d", bs);
+            # the stream raises the exception after the first four bytes, whatever reads the reader makes (a stream
+            # that raised at a given read would raise after one byte of the byte order mark or in the middle of a code
+            # unit with a buffered reader with a small buffer, which splits the reads, and the bytes read by the failed
+            # read are lost)
+            InputStream is = new ThrowAfterInputStream(<fffe4100fffe4200>, 4);
+            StreamReader sr = bs ? new BufferedStreamReader(is, "UTF-16", bs) : new StreamReader(is, "UTF-16");
+            assertThrows("STREAM-TEST-ERROR", \sr.readString(), (3), label);
+            *string s = sr.readString(1);
+            assertEq("UTF-16LE", s.encoding(), label + " encoding");
+            assertEq(<fffe>, binary(s), label + " a byte order mark after the start is a character");
+            assertEq("B", convert_encoding(sr.readString(1), "UTF-8"), label + " next");
+
+            # a read of all of the text
+            is = new ThrowAfterInputStream(<fffe4100fffe4200>, 4);
+            sr = bs ? new BufferedStreamReader(is, "UTF-16", bs) : new StreamReader(is, "UTF-16");
+            assertThrows("STREAM-TEST-ERROR", \sr.readString(), (-1), label);
+            assertEq("UTF-16LE", sr.getEncoding(), label + " all");
+            assertEq("\ufeffB", convert_encoding(sr.readString(-1), "UTF-8"), label + " all");
+
+            # a line read
+            is = new ThrowAfterInputStream(<fffe4100fffe42000a00>, 4);
+            sr = bs ? new BufferedStreamReader(is, "UTF-16", bs) : new StreamReader(is, "UTF-16");
+            assertThrows("STREAM-TEST-ERROR", \sr.readLine(), NOTHING, label);
+            assertEq("UTF-16LE", sr.getEncoding(), label + " line");
+            assertEq("\ufeffB", convert_encoding(sr.readLine(), "UTF-8"), label + " line");
+
+            # when only one byte of the byte order mark was read before the exception, the byte order is not known:
+            # the reader stays in the generic encoding (big-endian), and the text after the byte is read in it
+            is = new ThrowAfterInputStream(<fffe4100>, 1);
+            sr = bs ? new BufferedStreamReader(is, "UTF-16", bs) : new StreamReader(is, "UTF-16");
+            assertThrows("STREAM-TEST-ERROR", \sr.readString(), (3), label);
+            assertEq("UTF-16", sr.getEncoding(), label + " one byte");
+            s = sr.readString(1);
+            assertEq("UTF-16", s.encoding(), label + " one byte");
+            assertEq(<fe41>, binary(s), label + " one byte");
+
+            # UTF-32, whose byte order mark has four bytes
+            binary u32 = binary(convert_encoding("A", "UTF-32LE"));
+            {
+                is = new ThrowAfterInputStream(<fffe0000> + u32 + <fffe0000> + binary(convert_encoding("B",
+                    "UTF-32LE")), 8);
+                sr = bs ? new BufferedStreamReader(is, "UTF-32", bs) : new StreamReader(is, "UTF-32");
+                assertThrows("STREAM-TEST-ERROR", \sr.readString(), (3), label);
+                s = sr.readString(1);
+                assertEq("UTF-32LE", s.encoding(), label + " UTF-32");
+                assertEq(<fffe0000>, binary(s), label + " UTF-32");
+                assertEq("B", convert_encoding(sr.readString(1), "UTF-8"), label + " UTF-32");
+            }
+        }
+    }
+
+    #! the line number goes on after a line that raised an exception
+    lineNumbersAfterError() {
+        InputStreamLineIterator i(new BinaryInputStream(<610a62ff0a630a640a>), "UTF-8");
+        assertTrue(i.next());
+        assertEq(("a", 1), (i.getValue(), i.index()));
+        assertThrows("INVALID-ENCODING", "\\(line 2\\)$", \i.next());
+        assertTrue(i.next());
+        assertEq(("c", 3), (i.getValue(), i.index()));
+        assertTrue(i.next());
+        assertEq(("d", 4), (i.getValue(), i.index()));
+        assertFalse(i.next());
+
+        # a stream exception in the middle of a line counts the line (its bytes read before the exception are lost);
+        # one before any byte of a line does not
+        foreach int bs in ((1, 3, 4096)) {
+            string label = sprintf("buffer %d", bs);
+            i = new InputStreamLineIterator(new ThrowAfterInputStream(binary("ab\ncd\nef\n"), 4), "UTF-8", "\n",
+                True, bs);
+            assertTrue(i.next(), label);
+            assertEq(("ab", 1), (i.getValue(), i.index()), label);
+            assertThrows("STREAM-TEST-ERROR", \i.next(), NOTHING, label);
+            assertEq(2, i.index(), label + " after the exception");
+            assertTrue(i.next(), label);
+            assertEq(("d", 3), (i.getValue(), i.index()), label);
+            assertTrue(i.next(), label);
+            assertEq(("ef", 4), (i.getValue(), i.index()), label);
+            assertFalse(i.next(), label);
+
+            i = new InputStreamLineIterator(new ThrowAfterInputStream(binary("ab\ncd\nef\n"), 3), "UTF-8", "\n",
+                True, bs);
+            assertTrue(i.next(), label);
+            assertThrows("STREAM-TEST-ERROR", \i.next(), NOTHING, label + " at the start of a line");
+            assertEq(1, i.index(), label + " no line counted");
+            assertTrue(i.next(), label);
+            assertEq(("cd", 2), (i.getValue(), i.index()), label);
+            assertTrue(i.next(), label);
+            assertEq(("ef", 3), (i.getValue(), i.index()), label);
+        }
+    }
+
+    #! GBK, given by its bytes: the iconv of some platforms (musl's) can decode it but not encode it
+    gbk() {
+        # "中文"
+        binary gbk = <d6d0cec4>;
+        *string reason = encoding_cannot_decode("GBK", gbk, "中文") ?? encoding_characters_unknown("GBK", "中");
+        if (reason) {
+            testSkip(reason);
+        }
+        # a lead byte cut off by the end of the stream
+        StreamReader sr = reader(gbk + <81>, "GBK");
+        assertThrows("INVALID-ENCODING", "byte offset 4$", \sr.readString());
+    }
+
+    #! ISO-2022-JP, which every platform has
+    statefulEncodings() {
+        string enc = "ISO-2022-JP";
+        binary good = binary(convert_encoding("ab 日本\nx\n", enc));
+        StreamReader sr = reader(good, enc);
+        assertEq(("ab 日本", "x"), (map convert_encoding($1, "UTF-8"), (sr.readLine(), sr.readLine())));
+        assertEq("ab 日本\nx\n", convert_encoding(reader(good, enc).readString(), "UTF-8"));
+    }
+
+    #! a byte that is not a character in ISO-2022-JP, if the platform's iconv rejects it
+    statefulInvalidBytes() {
+        string enc = "ISO-2022-JP";
+        StreamReader sr;
+        binary bad = binary(convert_encoding("ab 日本", enc)) + <ff0a>;
+        *string reason = encoding_decodes_invalid(enc, bad);
+        if (reason) {
+            testSkip(reason);
+        }
+        assertThrows("INVALID-ENCODING", "invalid byte sequence", sub () { reader(bad, enc).readLine(); });
+        assertThrows("INVALID-ENCODING", "invalid byte sequence", sub () { reader(bad, enc).readString(); });
+        assertThrows("INVALID-ENCODING", "invalid byte sequence", sub () { reader(bad, enc).readString(10); });
+        string s = reader(bad, enc, "latin1").readLine();
+        assertEq("ISO-8859-1", s.encoding());
+        assertEq(bad.substr(0, s.size()), binary(s));
+        s = reader(bad, enc, "latin1").readString(10);
+        assertEq("ISO-8859-1", s.encoding());
+        assertEq(bad.substr(0, s.size()), binary(s));
+        s = reader(bad, enc, "keep").readLine();
+        assertEq(enc, s.encoding());
+        assertEq(bad.substr(0, bad.size() - 1), binary(s));
+
+        # with "latin1", the whole line that is not valid is returned, and the lines after it are read as before
+        binary lines = <1b244224221b28420a1b244224ff1b28420a410a>;
+        foreach bool buffered in (False, True) {
+            sr = reader(lines, enc, "latin1", buffered);
+            list<string> l = (sr.readLine(), sr.readLine(), sr.readLine());
+            assertEq("あ", convert_encoding(l[0], "UTF-8"));
+            assertEq(<1b244224ff1b2842>, binary(l[1]));
+            assertEq("ISO-8859-1", l[1].encoding());
+            assertEq("A", convert_encoding(l[2], "UTF-8"));
+            assertEq(NOTHING, sr.readLine());
+            # untrimmed
+            sr = reader(lines, enc, "latin1", buffered);
+            sr.readLine();
+            assertEq(<1b244224ff1b28420a>, binary(sr.readLine(NOTHING, False)));
+            # a read of characters returns the bytes up to and including the next line feed
+            sr = reader(lines, enc, "latin1", buffered);
+            sr.readLine();
+            assertEq(<1b244224ff1b28420a>, binary(sr.readString(2)));
+            assertEq("A", convert_encoding(sr.readString(1), "UTF-8"));
+            # the iterators give the line number
+            InputStreamLineIterator i(new BinaryInputStream(lines), enc);
+            assertTrue(i.next());
+            assertThrows("INVALID-ENCODING", "^InputStreamLineIterator::next\\(\\): the line read is not valid "
+                "ISO-2022-JP: invalid byte sequence at byte offset 3 \\(line 2\\)$", \i.next());
+            i = new InputStreamLineIterator(new BinaryInputStream(lines), enc, encoding_errors: "latin1");
+            assertEq(3, (map $1, i).size());
+            # with "raise", the rest of the line is skipped
+            sr = reader(lines, enc, NOTHING, buffered);
+            sr.readLine();
+            assertThrows("INVALID-ENCODING", "^\\w+::readString\\(\\): the text read is not valid ISO-2022-JP: "
+                "invalid byte sequence at byte offset 3$", \sr.readString(), 2);
+            assertEq("A", convert_encoding(sr.readString(1), "UTF-8"));
+            # also for a line read
+            sr = reader(lines, enc, NOTHING, buffered);
+            sr.readLine();
+            assertThrows("INVALID-ENCODING", "byte offset 3$", \sr.readLine());
+            assertEq("A", convert_encoding(sr.readLine(), "UTF-8"));
+        }
+    }
+
+    #! UTF-7, which the iconv of some platforms (musl's) does not have
+    utf7() {
+        string u7 = "UTF-7";
+        *string reason = encoding_cannot_convert(u7, "a");
+        if (reason) {
+            testSkip(reason);
+        }
+        binary b7 = <2b41412d0a2bff0a410a>;
+        StreamReader sr = reader(b7, u7, "latin1");
+        list<string> l = (sr.readLine(), sr.readLine(), sr.readLine());
+        assertEq(<2bff>, binary(l[1]));
+        assertEq("ISO-8859-1", l[1].encoding());
+        assertEq("A", convert_encoding(l[2], "UTF-8"));
+        assertEq(NOTHING, sr.readLine());
+    }
+}

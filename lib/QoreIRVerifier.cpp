@@ -32,6 +32,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRVerifier.h>
 
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -225,6 +226,1585 @@ static std::unordered_set<const QoreIRBasicBlock*> collectBranchTargets(const Qo
         }
     }
     return targets;
+}
+
+namespace {
+//! A node of the graph that verifyModuleIR() computes the dominators of: the instructions of a block from its start or
+//! from an instruction that can raise an exception to the next such instruction (see QoreIRVerifier::verifyModuleIR())
+struct QoreIRVerifyNode {
+    //! the successors of the node
+    std::vector<uint32_t> succ;
+    //! the predecessors of the node
+    std::vector<uint32_t> pred;
+};
+
+//! Returns the exception target of the instruction, if any: the target of the instruction, or that of a throw
+QoreIRBasicBlock* qore_ir_verify_exception_target(const QoreIRInstruction& inst) {
+    if (inst.exception_target) {
+        return inst.exception_target;
+    }
+    if (const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(&inst)) {
+        return throw_inst->exception_target;
+    }
+    return nullptr;
+}
+
+//! Returns true if the instruction is a step of an iterator, whose result (the next element) is defined only on the
+//! edge to its continue target: its done edge leaves from the node before it (see QoreIRVerifier::verifyModuleIR())
+bool qore_ir_verify_is_iterator_step(const QoreIRInstruction& inst) {
+    switch (inst.opcode) {
+        case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
+        case QoreIROpcode::TypedForeachNextInt:
+        case QoreIROpcode::TypedForeachNextFloat:
+        case QoreIROpcode::TypedForeachNextBool:
+        case QoreIROpcode::TypedForeachNextString:
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Returns the name of the opcode of the instruction
+std::string qore_ir_verify_opcode_name(const QoreIRInstruction& inst) {
+    const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(inst.opcode));
+    return oi && oi->name ? oi->name : "<unknown>";
+}
+
+//! The graph of nodes that verifyModuleIR() builds, which the verification of the ownership and of the stacks uses
+struct QoreIRVerifyGraph {
+    const QoreIRFunction& func;
+    const std::unordered_map<const QoreIRBasicBlock*, uint32_t>& block_index;
+    //! whether each block can run
+    const std::vector<uint8_t>& reachable;
+    //! the position of the terminator of each block that can run
+    const std::vector<uint32_t>& block_end;
+    //! the node at which each block that can run is entered
+    const std::vector<uint32_t>& block_entry;
+    //! the node of each instruction, by block
+    const std::vector<std::vector<uint32_t>>& inst_node;
+    uint32_t num_nodes;
+};
+
+//! How an instruction releases a value that it takes (see qore_ir_verify_released_operand())
+enum class QoreIRVerifyRelease : uint8_t {
+    //! no release
+    None,
+    //! a release of what the slot of the value holds, which clears the slot: another such release of the same value
+    //! finds nothing to release, a use of it is refused
+    Slot,
+    //! a release of the object of the value, which the JIT makes through the value that it holds (the interpreter
+    //! clears the slot, qore#6451): no other release or use of the value or of its copies may follow
+    Object,
+};
+
+//! The state of a value at a point of a function, for the ownership checks of verifyModuleIR(): a value that is not
+//! released holds what its definition gave it (0)
+enum QoreIRVerifyValueState : uint8_t {
+    //! the value was released through its own slot (QoreIRVerifyRelease::Slot)
+    QORE_IR_VERIFY_CLEARED = 1,
+    //! the object of the value was released through another value or by a release of the object
+    QORE_IR_VERIFY_FREED = 2,
+};
+
+//! Returns the index of the operand that the instruction releases (the first operand), and how, or -1
+/** Each opcode that releases a value that it takes, or a value that a value of the function holds a reference to, is
+    listed here: the verifier refuses a later use of the value on any path.  An opcode not listed takes its operands
+    as uses only: a new opcode that releases or transfers a value, or that pushes on or pops from a stack of the frame
+    or of the thread (see qore_ir_verify_stack_effect()), must be added to these functions.
+*/
+int qore_ir_verify_released_operand(const QoreIRInstruction& inst, QoreIRVerifyRelease& kind) {
+    switch (inst.opcode) {
+        // the interpreter releases the value only if its frame holds a cleanup entry for it, and clears its slot; the
+        // JIT releases only the reference in the value's cleanup slot, and clears the slot
+        case QoreIROpcode::ReleaseOwnedTemp:
+        // the interpreter and the JIT release the iterator in the value's slot and clear the slot; a copy of the
+        // handle that a phi made still points to the iterator
+        case QoreIROpcode::IteratorRelease:
+            kind = QoreIRVerifyRelease::Slot;
+            return 0;
+        // the JIT releases the object that the value holds in its register (the interpreter clears the slot, see
+        // qore#6451)
+        case QoreIROpcode::ContextDestroy:
+        case QoreIROpcode::RefForeachCleanup:
+        case QoreIROpcode::RefForeachFinalize:
+        case QoreIROpcode::ExceptionResume:
+        // PopImplicitArg is not a release of its operand: it releases the arguments that the thread holds (those that the
+        // push set) and makes the saved ones (its operand) current again without taking the reference of the operand's
+        // slot, which SetImplicitArgv gives the frame and a ReleaseOwnedTemp releases after the pop; a second restore
+        // from the same value, which would release the arguments that the first one restored, is refused by the stack
+        // of the implicit arguments (qore_ir_verify_stack_effect())
+        case QoreIROpcode::Decref:
+        case QoreIROpcode::DecrefNoThrow:
+            kind = QoreIRVerifyRelease::Object;
+            return 0;
+        default:
+            kind = QoreIRVerifyRelease::None;
+            return -1;
+    }
+}
+
+//! Returns the opcodes that may define the container that the instruction changes (its first operand), if the
+//! interpreter or the JIT take the value as a container of that type without a check of its type; nullptr otherwise
+/** The lowering creates the list that it appends to, stores to or sets the length of, the list that it sets as the
+    implicit arguments, and the hash that it sets keys of, with the instruction that creates it, in the same function
+    (QoreIRLowering: map, select, hash map and the implicit arguments of a fold or a call reference): the value is
+    the result of that instruction, never a phi or a value of another kind.
+*/
+const std::vector<QoreIROpcode>* qore_ir_verify_container_definers(QoreIROpcode opcode) {
+    static const std::vector<QoreIROpcode> lists = {QoreIROpcode::CreateEmptyList, QoreIROpcode::CreateSizedList,
+        QoreIROpcode::MakeList};
+    static const std::vector<QoreIROpcode> hashes = {QoreIROpcode::MakeHash};
+    switch (opcode) {
+        // QoreValue::get<QoreListNode>() without a check (the interpreter, qore_rt_list_append(),
+        // qore_rt_set_implicit_argv(), qore_rt_list_set_length_unchecked()), and the stores of the JIT to the entries
+        // of a typed list that it created
+        case QoreIROpcode::ListAppend:
+        case QoreIROpcode::SetImplicitArgv:
+        case QoreIROpcode::ListSetInt:
+        case QoreIROpcode::ListSetFloat:
+        case QoreIROpcode::ListSetValue:
+        case QoreIROpcode::ListSetLength:
+            return &lists;
+        // QoreValue::get<QoreHashNode>() without a check (the interpreter, qore_rt_hash_set_key_value())
+        case QoreIROpcode::HashSetKeyValue:
+        case QoreIROpcode::HashSetKeyValueFold:
+            return &hashes;
+        default:
+            return nullptr;
+    }
+}
+
+//! The stacks that verifyModuleIR() follows: their depths are the same on every path into a point of the function
+enum QoreIRVerifyStack : uint8_t {
+    //! the temp scopes of the frame (PushTempMark), by temp scope id
+    QORE_IR_VERIFY_TEMPS = 0,
+    //! the scopes of the frame (ScopeEnter), by scope id
+    QORE_IR_VERIFY_SCOPES,
+    //! the implicit arguments of the thread (PushImplicitArg, SetImplicitArgv), by the value that saves the previous
+    QORE_IR_VERIFY_ARGS,
+    //! the implicit elements of the thread (PushImplicitElement), by the value that saves the previous
+    QORE_IR_VERIFY_ELEMENTS,
+    //! the contexts of the thread (Context), by the value that holds the context
+    QORE_IR_VERIFY_CONTEXTS,
+    //! the catch blocks of the frame (CatchException), by the number of scopes open when the catch block began: an
+    //! exception that leaves scopes closes the catch blocks begun in them (qore_ir_close_catch_scopes(), qore#6658)
+    QORE_IR_VERIFY_CATCHES,
+    QORE_IR_VERIFY_NUM_STACKS,
+};
+
+//! The names of the stacks, for the errors
+const char* const qore_ir_verify_stack_names[QORE_IR_VERIFY_NUM_STACKS] = {
+    "temp scopes", "scopes", "implicit arguments", "implicit elements", "contexts", "catch blocks",
+};
+
+//! The effect of an instruction on a stack (see qore_ir_verify_stack_effect())
+struct QoreIRVerifyStackEffect {
+    //! the stack, or QORE_IR_VERIFY_NUM_STACKS for none
+    QoreIRVerifyStack stack = QORE_IR_VERIFY_NUM_STACKS;
+    //! true for a push, false for a pop
+    bool push = false;
+    //! the id that is pushed, or that the innermost entry must have for a pop
+    uint32_t id = 0;
+    //! a pop that leaves the entry on the stack (a trim of the handlers of a scope)
+    bool keep = false;
+};
+
+//! Returns the effect of the instruction on the stacks that verifyModuleIR() follows
+/** The interpreter and the JIT pair each pop with the innermost entry of its stack: a context and an implicit
+    argument with the thread's innermost one (a context destroyed out of order leaves the thread's stack on a freed
+    context), a temp scope and a scope with the frame's innermost one (the JIT releases the temporaries registered
+    after the mark of a temp scope each time that its end runs, those held in registers without clearing them).  A
+    pop that is not of the innermost entry is refused, and so is a pop that can run twice for one push.
+*/
+QoreIRVerifyStackEffect qore_ir_verify_stack_effect(const QoreIRInstruction& inst) {
+    QoreIRVerifyStackEffect e;
+    switch (inst.opcode) {
+        case QoreIROpcode::PushTempMark:
+            e.stack = QORE_IR_VERIFY_TEMPS;
+            e.push = true;
+            e.id = inst.temp_scope_id;
+            break;
+        case QoreIROpcode::DiscardTemps:
+        case QoreIROpcode::DiscardTempsKeep:
+        case QoreIROpcode::UnwindTemps:
+            e.stack = QORE_IR_VERIFY_TEMPS;
+            e.id = inst.temp_scope_id;
+            break;
+        case QoreIROpcode::ScopeEnter:
+            if (const auto* enter = qore_ir_inst_cast<const QoreIRScopeEnterInstruction*>(&inst)) {
+                e.stack = QORE_IR_VERIFY_SCOPES;
+                e.push = true;
+                e.id = enter->scope_id;
+            }
+            break;
+        case QoreIROpcode::ScopeExit:
+            if (const auto* exit = qore_ir_inst_cast<const QoreIRScopeExitInstruction*>(&inst)) {
+                e.stack = QORE_IR_VERIFY_SCOPES;
+                e.id = exit->scope_id;
+                e.keep = exit->trim;
+            }
+            break;
+        case QoreIROpcode::PushImplicitArg:
+        case QoreIROpcode::SetImplicitArgv:
+            e.stack = QORE_IR_VERIFY_ARGS;
+            e.push = true;
+            e.id = inst.result.id;
+            break;
+        case QoreIROpcode::PopImplicitArg:
+            e.stack = QORE_IR_VERIFY_ARGS;
+            e.id = inst.operands.empty() ? 0 : inst.operands[0].id;
+            break;
+        case QoreIROpcode::PushImplicitElement:
+            e.stack = QORE_IR_VERIFY_ELEMENTS;
+            e.push = true;
+            e.id = inst.result.id;
+            break;
+        case QoreIROpcode::PopImplicitElement:
+            e.stack = QORE_IR_VERIFY_ELEMENTS;
+            e.id = inst.operands.empty() ? 0 : inst.operands[0].id;
+            break;
+        case QoreIROpcode::Context:
+            e.stack = QORE_IR_VERIFY_CONTEXTS;
+            e.push = true;
+            e.id = inst.result.id;
+            break;
+        case QoreIROpcode::ContextDestroy:
+            e.stack = QORE_IR_VERIFY_CONTEXTS;
+            e.id = inst.operands.empty() ? 0 : inst.operands[0].id;
+            break;
+        default:
+            break;
+    }
+    return e;
+}
+
+//! Returns true if the instruction pops a stack of the thread on its exception edge, which the verifier does not model:
+//! the lowering gives none of them an exception target (see QoreIRVerifyOwnership::apply())
+bool qore_ir_verify_pop_without_exception_edge(const QoreIRInstruction& inst) {
+    switch (inst.opcode) {
+        case QoreIROpcode::PopImplicitArg:
+        case QoreIROpcode::PopImplicitElement:
+        case QoreIROpcode::ContextDestroy:
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! The state of the values and of the stacks at a point of a function (see qore_ir_verify_ownership())
+struct QoreIRVerifyState {
+    //! whether a path reaches the point
+    bool reached = false;
+    //! the values that are released (QoreIRVerifyValueState), sorted by value id; the others are not
+    std::vector<std::pair<uint32_t, uint8_t>> released;
+    //! the entries of each stack, innermost last
+    std::vector<uint32_t> stacks[QORE_IR_VERIFY_NUM_STACKS];
+    //! whether the entries of each stack are known: not on a path from an exception edge until it meets a path of
+    //! the normal control flow (see QoreIRVerifyOwnership::verify())
+    bool known[QORE_IR_VERIFY_NUM_STACKS] = {true, true, true, true, true, true};
+
+    //! closes the catch blocks begun in the scopes that an exception left, with \a scopes scopes left open (the
+    //! interpreter's LandingPad and ScopeExit, qore_ir_close_catch_scopes())
+    void closeCatches(size_t scopes) {
+        if (!known[QORE_IR_VERIFY_CATCHES]) {
+            return;
+        }
+        std::vector<uint32_t>& catches = stacks[QORE_IR_VERIFY_CATCHES];
+        while (!catches.empty() && catches.back() > scopes) {
+            catches.pop_back();
+        }
+    }
+
+    uint8_t get(uint32_t id) const {
+        auto i = std::lower_bound(released.begin(), released.end(), std::make_pair(id, uint8_t(0)));
+        return i != released.end() && i->first == id ? i->second : 0;
+    }
+
+    //! raises the state of the value to the state given
+    void raise(uint32_t id, uint8_t state) {
+        auto i = std::lower_bound(released.begin(), released.end(), std::make_pair(id, uint8_t(0)));
+        if (i != released.end() && i->first == id) {
+            i->second = std::max(i->second, state);
+        } else {
+            released.insert(i, {id, state});
+        }
+    }
+
+    //! the value is defined: it holds what its definition gave it
+    void define(uint32_t id) {
+        auto i = std::lower_bound(released.begin(), released.end(), std::make_pair(id, uint8_t(0)));
+        if (i != released.end() && i->first == id) {
+            released.erase(i);
+        }
+    }
+};
+
+//! Verifies the ownership of the values and the stacks of the frame and of the thread (see
+//! QoreIRVerifier::verifyModuleIR()), as a forward dataflow over the graph of nodes of the function
+class QoreIRVerifyOwnership {
+public:
+    QoreIRVerifyOwnership(const QoreIRVerifyGraph& g, std::string& error) : g(g), error(error) {
+    }
+
+    bool verify();
+
+private:
+    //! how an edge between blocks leaves its node
+    enum EdgeKind : uint8_t {
+        //! from the end of the last node of the block: a successor of its terminator
+        EdgeNormal,
+        //! from the node before an instruction that raises an exception, to its handler
+        EdgeException,
+        //! from the node before a step of an iterator, to its done target
+        EdgeDone,
+    };
+
+    struct Edge {
+        uint32_t to_block;
+        EdgeKind kind;
+        //! the instruction that raises the exception or the step (EdgeException, EdgeDone)
+        const QoreIRInstruction* inst;
+        uint32_t pos;
+    };
+
+    const QoreIRVerifyGraph& g;
+    std::string& error;
+    size_t check_count = 0;
+    //! the block, and the range of instructions, of each node
+    std::vector<uint32_t> node_block, node_begin, node_end;
+    //! the edges between blocks that leave each node
+    std::vector<std::vector<Edge>> edges;
+    //! the handles of objects and their copies by phis: the members of the group of each handle in a group of more
+    //! than one value (see groupOf())
+    std::unordered_map<uint32_t, uint32_t> group_root;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> group_members;
+
+    bool cancelled() {
+        if (!(++check_count % 1000) && qore_check_cancel(nullptr, "AOT IR verification")) {
+            error = "AOT IR verification cancelled";
+            return true;
+        }
+        return false;
+    }
+
+    std::string where(uint32_t b, size_t pos) const {
+        return " (block " + std::to_string(b) + ", instruction " + std::to_string(pos) + ")";
+    }
+
+    void buildNodes();
+    void buildGroups();
+
+    //! releases the value: its own slot (QoreIRVerifyRelease::Slot) or its object, and the object of the other values
+    //! of its group
+    void release(QoreIRVerifyState& s, uint32_t id, QoreIRVerifyRelease kind) const {
+        s.raise(id, kind == QoreIRVerifyRelease::Slot ? QORE_IR_VERIFY_CLEARED : QORE_IR_VERIFY_FREED);
+        auto r = group_root.find(id);
+        if (r == group_root.end()) {
+            return;
+        }
+        for (uint32_t m : group_members.at(r->second)) {
+            if (m != id) {
+                s.raise(m, QORE_IR_VERIFY_FREED);
+            }
+        }
+    }
+
+    //! checks a use of a value (or a release of the given kind) in the state
+    bool checkUse(const QoreIRVerifyState& s, uint32_t id, const QoreIRInstruction& inst, uint32_t b, size_t pos,
+            QoreIRVerifyRelease kind = QoreIRVerifyRelease::None);
+
+    //! applies an instruction to the state on the path that continues after it, or on its exception or done edge
+    bool apply(QoreIRVerifyState& s, const QoreIRInstruction& inst, uint32_t b, size_t pos, EdgeKind mode);
+
+    //! returns the position of the first instruction of the block that is not a phi
+    uint32_t firstNonPhi(uint32_t b) const {
+        const auto& insts = g.func.blocks[b]->instructions;
+        uint32_t pos = 0;
+        while (pos < g.block_end[b] && insts[pos]->opcode == QoreIROpcode::Phi) {
+            ++pos;
+        }
+        return pos;
+    }
+
+    //! applies the stack effect of the instruction
+    bool applyStack(QoreIRVerifyState& s, const QoreIRInstruction& inst, uint32_t b, size_t pos);
+
+    //! merges the state of an edge into the state of the entry of the block
+    bool join(QoreIRVerifyState& to, const QoreIRVerifyState& from, uint32_t from_block, uint32_t to_block,
+            bool& changed);
+    //! follows the paths of the exceptions with the stacks that each raise point has (qore#6658)
+    bool verifyExceptionPaths(const std::vector<QoreIRVerifyState>& in);
+};
+
+void QoreIRVerifyOwnership::buildNodes() {
+    node_block.assign(g.num_nodes, 0);
+    node_begin.assign(g.num_nodes, 0);
+    node_end.assign(g.num_nodes, 0);
+    edges.assign(g.num_nodes, {});
+    const size_t num_blocks = g.func.blocks.size();
+    for (uint32_t b = 0; b < num_blocks; ++b) {
+        if (!g.reachable[b]) {
+            continue;
+        }
+        node_block[g.block_entry[b]] = b;
+        const auto& insts = g.func.blocks[b]->instructions;
+        for (uint32_t pos = 0; pos <= g.block_end[b]; ++pos) {
+            uint32_t n = g.inst_node[b][pos];
+            if (!node_end[n]) {
+                node_block[n] = b;
+                node_begin[n] = pos;
+            }
+            node_end[n] = pos + 1;
+            if (QoreIRBasicBlock* target = qore_ir_verify_exception_target(*insts[pos])) {
+                edges[n - 1].push_back({g.block_index.at(target), EdgeException, insts[pos].get(), pos});
+            }
+        }
+        const QoreIRInstruction& last = *insts[g.block_end[b]];
+        uint32_t last_node = g.inst_node[b][g.block_end[b]];
+        if (const auto* next = qore_ir_verify_is_iterator_step(last)
+                ? qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(&last) : nullptr) {
+            edges[last_node].push_back({g.block_index.at(next->continue_target), EdgeNormal, &last, g.block_end[b]});
+            edges[last_node - 1].push_back({g.block_index.at(next->done_target), EdgeDone, &last, g.block_end[b]});
+        } else {
+            qore_ir_visit_successors(last, [&](QoreIRBasicBlock* target) {
+                edges[last_node].push_back({g.block_index.at(target), EdgeNormal, &last, g.block_end[b]});
+            });
+        }
+    }
+}
+
+void QoreIRVerifyOwnership::buildGroups() {
+    // the handles of the objects that the interpreter and the JIT release through a value that holds their address
+    // (see qore_aot_ir_handle_definers() in the reader), and the phis that copy them: a group of values that hold the
+    // address of the same object
+    std::unordered_set<uint32_t> handles;
+    std::vector<const QoreIRPhiInstruction*> phis;
+    for (uint32_t b = 0; b < g.func.blocks.size(); ++b) {
+        if (!g.reachable[b]) {
+            continue;
+        }
+        const auto& insts = g.func.blocks[b]->instructions;
+        for (uint32_t pos = 0; pos <= g.block_end[b]; ++pos) {
+            const QoreIRInstruction& inst = *insts[pos];
+            switch (inst.opcode) {
+                case QoreIROpcode::IteratorCreate:
+                case QoreIROpcode::IteratorCreateIterate:
+                case QoreIROpcode::IteratorCreateSelectors:
+                case QoreIROpcode::IteratorCreateSource:
+                case QoreIROpcode::IteratorCreateReverse:
+                case QoreIROpcode::Context:
+                case QoreIROpcode::RefForeachInit:
+                case QoreIROpcode::ExceptionSuspend:
+                    if (inst.result.isValid()) {
+                        handles.insert(inst.result.id);
+                    }
+                    break;
+                case QoreIROpcode::Phi:
+                    if (inst.result.isValid()) {
+                        phis.push_back(static_cast<const QoreIRPhiInstruction*>(&inst));
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    if (handles.empty() || phis.empty()) {
+        return;
+    }
+    // union-find of the phis with their incoming values that are phis or handles, in one pass: a group holds the
+    // address of an object if it has a handle; a value of another kind (a constant merged with a handle) is not a
+    // member, and does not join two groups
+    std::unordered_set<uint32_t> phi_ids;
+    for (const QoreIRPhiInstruction* phi : phis) {
+        phi_ids.insert(phi->result.id);
+    }
+    std::unordered_map<uint32_t, uint32_t> parent;
+    std::function<uint32_t(uint32_t)> find = [&](uint32_t id) -> uint32_t {
+        auto i = parent.find(id);
+        if (i == parent.end()) {
+            return id;
+        }
+        uint32_t root = id;
+        while (true) {
+            auto j = parent.find(root);
+            if (j == parent.end() || j->second == root) {
+                break;
+            }
+            root = j->second;
+        }
+        // path compression
+        while (id != root) {
+            uint32_t next = parent[id];
+            parent[id] = root;
+            id = next;
+        }
+        return root;
+    };
+    for (const QoreIRPhiInstruction* phi : phis) {
+        if (cancelled()) {
+            return;
+        }
+        parent.emplace(phi->result.id, phi->result.id);
+        for (const QoreIRPhiIncoming& in : phi->incoming) {
+            if (!in.value.isValid() || (!phi_ids.count(in.value.id) && !handles.count(in.value.id))) {
+                continue;
+            }
+            parent.emplace(in.value.id, in.value.id);
+            uint32_t a = find(phi->result.id), c = find(in.value.id);
+            if (a != c) {
+                parent[a] = c;
+            }
+        }
+    }
+    // the groups with a handle
+    std::unordered_set<uint32_t> handle_roots;
+    for (const auto& i : parent) {
+        if (handles.count(i.first)) {
+            handle_roots.insert(find(i.first));
+        }
+    }
+    for (const auto& i : parent) {
+        uint32_t root = find(i.first);
+        if (handle_roots.count(root)) {
+            group_root[i.first] = root;
+            group_members[root].push_back(i.first);
+        }
+    }
+}
+
+bool QoreIRVerifyOwnership::checkUse(const QoreIRVerifyState& s, uint32_t id, const QoreIRInstruction& inst,
+        uint32_t b, size_t pos, QoreIRVerifyRelease kind) {
+    uint8_t state = s.get(id);
+    // a release of a slot that a release of the same slot cleared finds nothing to release
+    if (!state || (kind == QoreIRVerifyRelease::Slot && state == QORE_IR_VERIFY_CLEARED)) {
+        return true;
+    }
+    error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + (kind == QoreIRVerifyRelease::None
+        ? " uses value " : " releases value ") + std::to_string(id)
+        + (state == QORE_IR_VERIFY_CLEARED ? ", which is released" : ", whose object is released")
+        + " on a path to it" + where(b, pos);
+    return false;
+}
+
+bool QoreIRVerifyOwnership::applyStack(QoreIRVerifyState& s, const QoreIRInstruction& inst, uint32_t b, size_t pos) {
+    // the two nested temp scopes of a PushTempMarkPair are opened as by two PushTempMarks, the outer one first (the
+    // AOT debug IR stores it as these two instructions; the IR that qcc verifies before it writes it has the pair)
+    if (inst.opcode == QoreIROpcode::PushTempMarkPair) {
+        if (s.known[QORE_IR_VERIFY_TEMPS]) {
+            s.stacks[QORE_IR_VERIFY_TEMPS].push_back(inst.temp_scope_id);
+            s.stacks[QORE_IR_VERIFY_TEMPS].push_back(inst.unwind_inner_temp_scope_id);
+        }
+        return true;
+    }
+    // a catch block begins with its CatchException, which records the scopes open, and ends with a CatchCleanup, which
+    // closes the catch blocks begun since its try statement began (its catch-exit depth, qore#6733) or the innermost one
+    if (inst.opcode == QoreIROpcode::CatchException || inst.opcode == QoreIROpcode::CatchCleanup) {
+        if (!s.known[QORE_IR_VERIFY_CATCHES]) {
+            return true;
+        }
+        std::vector<uint32_t>& catches = s.stacks[QORE_IR_VERIFY_CATCHES];
+        if (inst.opcode == QoreIROpcode::CatchException) {
+            if (!s.known[QORE_IR_VERIFY_SCOPES]) {
+                // the scopes are not known on this path, so the catch blocks are not either
+                catches.clear();
+                s.known[QORE_IR_VERIFY_CATCHES] = false;
+                return true;
+            }
+            catches.push_back(static_cast<uint32_t>(s.stacks[QORE_IR_VERIFY_SCOPES].size()));
+            return true;
+        }
+        auto depth = g.func.catch_exit_depths.find(&inst);
+        if (depth != g.func.catch_exit_depths.end()) {
+            if (depth->second > catches.size()) {
+                error = "malformed IR: a CatchCleanup closes the catch blocks down to " + std::to_string(depth->second)
+                    + ", but fewer are open on a path to it" + where(b, pos);
+                return false;
+            }
+            catches.resize(depth->second);
+            return true;
+        }
+        if (catches.empty()) {
+            error = "malformed IR: a CatchCleanup closes a catch block, but none is open on a path to it"
+                + where(b, pos);
+            return false;
+        }
+        catches.pop_back();
+        return true;
+    }
+    QoreIRVerifyStackEffect e = qore_ir_verify_stack_effect(inst);
+    if (e.stack == QORE_IR_VERIFY_NUM_STACKS) {
+        return true;
+    }
+    if (!s.known[e.stack]) {
+        return true;
+    }
+    std::vector<uint32_t>& st = s.stacks[e.stack];
+    if (e.push) {
+        st.push_back(e.id);
+        return true;
+    }
+    // an implicit element is a value of the thread that a push saves and a pop restores: a pop restores the value from
+    // before the push that it names, so it also closes the elements pushed after that one, as a return out of nested
+    // loops that restores only the element of the outer one does; a pop of an element that is not open (closed
+    // already, as by the handler of a loop on the path of a return out of it, qore#6643) restores an older value
+    if (e.stack == QORE_IR_VERIFY_ELEMENTS && !e.keep) {
+        auto i = std::find(st.rbegin(), st.rend(), e.id);
+        if (i == st.rend()) {
+            error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " restores an implicit element that is not "
+                "open on every path to it" + where(b, pos);
+            return false;
+        }
+        st.resize(st.size() - (i - st.rbegin()) - 1);
+        return true;
+    }
+    if (st.empty() || st.back() != e.id) {
+        error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " closes an entry of the "
+            + qore_ir_verify_stack_names[e.stack] + " that is not the innermost one open on every path to it"
+            + where(b, pos);
+        return false;
+    }
+    if (!e.keep) {
+        st.pop_back();
+    }
+    return true;
+}
+
+bool QoreIRVerifyOwnership::apply(QoreIRVerifyState& s, const QoreIRInstruction& inst, uint32_t b, size_t pos,
+        EdgeKind mode) {
+    if (inst.opcode == QoreIROpcode::Phi) {
+        // the incoming values are checked on the edges into the block (see join())
+        s.define(inst.result.id);
+        return true;
+    }
+    QoreIRVerifyRelease kind;
+    int released = qore_ir_verify_released_operand(inst, kind);
+    const auto* next = qore_ir_verify_is_iterator_step(inst)
+        ? qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(&inst) : nullptr;
+    if (mode == EdgeException && qore_ir_verify_pop_without_exception_edge(inst)) {
+        error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " has an exception target" + where(b, pos);
+        return false;
+    }
+    if (inst.opcode == QoreIROpcode::LandingPad && pos != firstNonPhi(b)) {
+        // a landing pad unwinds the scopes where the paths into its block meet (see verify())
+        error = "malformed IR: a landing pad is not the first instruction of its block" + where(b, pos);
+        return false;
+    }
+    if (mode == EdgeException && !next) {
+        // the effects of the instruction that it has when it raises the exception: a release before the exception,
+        // the end of a temp scope whose temporary's destructor raises it, the end of a scope whose handler raises
+        // it (the interpreter and the JIT close the scope before its handlers run); the uses were checked on its
+        // node, which starts with the state of the edge
+        if (released >= 0 && static_cast<size_t>(released) < inst.operands.size()) {
+            release(s, inst.operands[released].id, kind);
+        }
+        if (inst.opcode == QoreIROpcode::DiscardTemps || inst.opcode == QoreIROpcode::DiscardTempsKeep
+                || inst.opcode == QoreIROpcode::ScopeExit) {
+            if (!applyStack(s, inst, b, pos)) {
+                return false;
+            }
+            // the exception that the handlers of the scope raise closes the catch blocks begun in it
+            if (inst.opcode == QoreIROpcode::ScopeExit && s.known[QORE_IR_VERIFY_SCOPES]) {
+                s.closeCatches(s.stacks[QORE_IR_VERIFY_SCOPES].size());
+            }
+        }
+        return true;
+    }
+    // the uses: the operands and the values in fields of the instruction (qore_ir_visit_value_operands() visits the
+    // operands first), but the released operand, and the ids of an lvalue path
+    size_t index = 0;
+    bool ok = true;
+    qore_ir_visit_value_operands(inst, [&](QoreIRValue v) {
+        size_t i = index++;
+        if (ok && v.isValid() && static_cast<int>(i) != released) {
+            ok = checkUse(s, v.id, inst, b, pos);
+        }
+    });
+    if (!ok) {
+        return false;
+    }
+    if (const auto* path = qore_ir_inst_cast<const QoreIRLValuePathInstruction*>(&inst)) {
+        for (const LVPathStep& step : path->path) {
+            if (step.operand_idx && step.operand_idx != UINT32_MAX && !checkUse(s, step.operand_idx, inst, b, pos)) {
+                return false;
+            }
+            for (uint32_t id : step.slice_operand_ids) {
+                if (id && id != UINT32_MAX && !checkUse(s, id, inst, b, pos)) {
+                    return false;
+                }
+            }
+        }
+    }
+    if (released >= 0 && static_cast<size_t>(released) < inst.operands.size()) {
+        uint32_t id = inst.operands[released].id;
+        if (!checkUse(s, id, inst, b, pos, kind)) {
+            return false;
+        }
+        release(s, id, kind);
+    }
+    if (next) {
+        // a step releases the values that the loop derived from the previous element, which only clears their slots
+        for (const QoreIRValue& v : next->release_values) {
+            if (v.isValid()) {
+                if (!checkUse(s, v.id, inst, b, pos, QoreIRVerifyRelease::Slot)) {
+                    return false;
+                }
+                release(s, v.id, QoreIRVerifyRelease::Slot);
+            }
+        }
+        if (mode != EdgeNormal) {
+            // the done edge, or an exception: a step of an iterator (other than of a list of selectors, which keeps
+            // its iterator) releases the iterator and clears its slot, which a copy of the handle still points to
+            if (inst.opcode == QoreIROpcode::IteratorNext && next->iterator.isValid()) {
+                release(s, next->iterator.id, QoreIRVerifyRelease::Slot);
+            }
+            return true;
+        }
+    }
+    if (!applyStack(s, inst, b, pos)) {
+        return false;
+    }
+    if (inst.result.isValid()) {
+        s.define(inst.result.id);
+    }
+    return true;
+}
+
+bool QoreIRVerifyOwnership::join(QoreIRVerifyState& to, const QoreIRVerifyState& from, uint32_t from_block,
+        uint32_t to_block, bool& changed) {
+    // the incoming values of the phis of the block for the edge
+    const QoreIRBasicBlock* pred = g.func.blocks[from_block].get();
+    const auto& insts = g.func.blocks[to_block]->instructions;
+    for (size_t pos = 0; pos <= g.block_end[to_block]; ++pos) {
+        const auto* phi = qore_ir_inst_cast<const QoreIRPhiInstruction*>(insts[pos].get());
+        if (!phi) {
+            break;
+        }
+        for (const QoreIRPhiIncoming& in : phi->incoming) {
+            if (in.block == pred && in.value.isValid() && !checkUse(from, in.value.id, *phi, to_block, pos)) {
+                return false;
+            }
+        }
+    }
+    changed = false;
+    if (!to.reached) {
+        to = from;
+        changed = true;
+        return true;
+    }
+    for (unsigned i = 0; i < QORE_IR_VERIFY_NUM_STACKS; ++i) {
+        if (!from.known[i]) {
+            continue;
+        }
+        if (!to.known[i]) {
+            to.stacks[i] = from.stacks[i];
+            to.known[i] = true;
+            changed = true;
+            continue;
+        }
+        if (to.stacks[i] != from.stacks[i]) {
+            error = "malformed IR: the " + std::string(qore_ir_verify_stack_names[i]) + " open differ on the paths "
+                "into block " + std::to_string(to_block) + " (from block " + std::to_string(from_block) + ")";
+            return false;
+        }
+    }
+    for (const auto& r : from.released) {
+        uint8_t old = to.get(r.first);
+        if (r.second > old) {
+            to.raise(r.first, r.second);
+            changed = true;
+        }
+    }
+    return true;
+}
+
+bool QoreIRVerifyOwnership::verify() {
+    buildNodes();
+    buildGroups();
+    const QoreIRFunction& func = g.func;
+    std::vector<QoreIRVerifyState> in(g.num_nodes);
+    std::vector<uint8_t> queued(g.num_nodes, 0);
+    std::vector<uint32_t> work;
+    uint32_t root = g.block_entry[0];
+    in[root].reached = true;
+    work.push_back(root);
+    queued[root] = 1;
+    // the landing pad at the start of a block unwinds the scopes of the frame to its depth (as the interpreter's
+    // LandingPad does) before the paths into the block meet
+    auto landingPadDepth = [&](uint32_t b) -> size_t {
+        for (const auto& inst : func.blocks[b]->instructions) {
+            if (inst->opcode == QoreIROpcode::Phi) {
+                continue;
+            }
+            if (const auto* lp = qore_ir_inst_cast<const QoreIRLandingPadInstruction*>(inst.get())) {
+                return lp->scope_depth;
+            }
+            break;
+        }
+        return SIZE_MAX;
+    };
+    while (!work.empty()) {
+        if (cancelled()) {
+            return false;
+        }
+        uint32_t n = work.back();
+        work.pop_back();
+        queued[n] = 0;
+        uint32_t b = node_block[n];
+        const auto& insts = func.blocks[b]->instructions;
+        QoreIRVerifyState s = in[n];
+        // the nodes of the block after its entry have the previous node as their only predecessor: the block is
+        // walked from its entry, and only the entries of the blocks keep a state
+        // the edges that leave the node before an instruction that raises an exception or before a step take the
+        // state at the end of the node
+        auto follow = [&](const QoreIRVerifyState& state, uint32_t to_block) -> bool {
+            QoreIRVerifyState es = state;
+            size_t depth = landingPadDepth(to_block);
+            if (depth != SIZE_MAX && es.known[QORE_IR_VERIFY_SCOPES]) {
+                std::vector<uint32_t>& scopes = es.stacks[QORE_IR_VERIFY_SCOPES];
+                if (scopes.size() < depth) {
+                    error = "malformed IR: the landing pad of block " + std::to_string(to_block) + " unwinds to "
+                        + std::to_string(depth) + " scopes, but fewer are open on a path into it (from block "
+                        + std::to_string(b) + ")";
+                    return false;
+                }
+                scopes.resize(depth);
+                es.closeCatches(depth);
+            }
+            uint32_t to = g.block_entry[to_block];
+            bool changed;
+            if (!join(in[to], es, b, to_block, changed)) {
+                return false;
+            }
+            if (changed && !queued[to]) {
+                queued[to] = 1;
+                work.push_back(to);
+            }
+            return true;
+        };
+        for (;; ++n) {
+            for (uint32_t pos = node_begin[n]; pos < node_end[n]; ++pos) {
+                if (!apply(s, *insts[pos], b, pos, EdgeNormal)) {
+                    return false;
+                }
+            }
+            for (const Edge& e : edges[n]) {
+                if (e.kind == EdgeNormal) {
+                    if (!follow(s, e.to_block)) {
+                        return false;
+                    }
+                    continue;
+                }
+                QoreIRVerifyState es = s;
+                es.reached = true;
+                if (!apply(es, *e.inst, b, e.pos, e.kind)) {
+                    return false;
+                }
+                if (e.kind == EdgeException) {
+                    // the entries that an exception leaves open are not known from IR read from a module: the
+                    // temp scopes that it leaves are those opened after the temp scope of its handler, which the IR
+                    // does not give (the temp scope ids are not written), and the lowering leaves the instructions
+                    // of a return out of a loop with the handler of the loop's element, which closes again the
+                    // scope and the implicit element that the return closed (qore#6643); the stacks are checked on
+                    // the paths of the normal control flow, and on the paths from an exception edge once they meet
+                    // one.  A landing pad unwinds the scopes to its depth: they are known after it (see follow())
+                    for (unsigned i = 0; i < QORE_IR_VERIFY_NUM_STACKS; ++i) {
+                        if (i != QORE_IR_VERIFY_SCOPES || landingPadDepth(e.to_block) == SIZE_MAX) {
+                            es.stacks[i].clear();
+                            es.known[i] = false;
+                        }
+                    }
+                }
+                if (!follow(es, e.to_block)) {
+                    return false;
+                }
+            }
+            // the next node of the block
+            if (!(n + 1 < g.num_nodes && node_end[n] <= g.block_end[b] && node_block[n + 1] == b
+                    && n + 1 != g.block_entry[b])) {
+                break;
+            }
+        }
+    }
+    return verifyExceptionPaths(in);
+}
+
+//! Follows the paths of the exceptions with the stacks that each raise point has (qore#6658)
+/** The dataflow of verify() leaves the stacks of a path from an exception edge unknown until it meets a path of the
+    normal control flow, as the handler blocks are entered from raise points with different stacks (deeper scopes, an
+    implicit element pushed or not): a state per block cannot hold them.  Each raise point in a block that a normal
+    path reaches (whose stacks are known) is followed here with its own stacks through the blocks that only exceptions
+    reach (their landing pads, their pops and scope exits, the branches between them), up to a block that a normal
+    path reaches, whose stacks must then be those of the path: a handler that closes again a scope or an implicit
+    element that the path has closed (qore#6643) is refused at its instruction, and so is a path that meets the normal
+    control flow with other stacks.  The temp scopes are not followed: an exception drains them to the temp scope of
+    its handler, which IR read from a module does not give.  Each block is walked once for each set of stacks that
+    reaches it, which are few in lowered code (one per nesting of the raise points that share a handler).
+*/
+bool QoreIRVerifyOwnership::verifyExceptionPaths(const std::vector<QoreIRVerifyState>& in) {
+    const QoreIRFunction& func = g.func;
+    struct Item {
+        uint32_t block;
+        QoreIRVerifyState state;
+        //! the raise point that the path comes from
+        uint32_t from_block;
+        uint32_t from_pos;
+    };
+    std::vector<Item> work;
+    std::unordered_set<std::string> seen;
+    auto key = [](uint32_t b, const QoreIRVerifyState& st) -> std::string {
+        std::string k = std::to_string(b);
+        for (unsigned i = 0; i < QORE_IR_VERIFY_NUM_STACKS; ++i) {
+            k += st.known[i] ? '|' : '?';
+            for (uint32_t id : st.stacks[i]) {
+                k += std::to_string(id);
+                k += ',';
+            }
+        }
+        return k;
+    };
+    auto normalBlock = [&](uint32_t b) -> bool {
+        const QoreIRVerifyState& st = in[g.block_entry[b]];
+        return st.reached && st.known[QORE_IR_VERIFY_SCOPES];
+    };
+    // the state of an exception edge: the stacks are those of the raise point, but the temp scopes, which the
+    // exception drains to its handler's
+    auto exceptionState = [&](const QoreIRVerifyState& at, const QoreIRInstruction& inst, uint32_t b,
+            uint32_t pos, QoreIRVerifyState& es) -> bool {
+        es = at;
+        es.reached = true;
+        if (!apply(es, inst, b, pos, EdgeException)) {
+            return false;
+        }
+        es.stacks[QORE_IR_VERIFY_TEMPS].clear();
+        es.known[QORE_IR_VERIFY_TEMPS] = false;
+        return true;
+    };
+    auto prefix = [&](uint32_t from_block, uint32_t from_pos) {
+        error = "on the path of the exception of block " + std::to_string(from_block) + ", instruction "
+            + std::to_string(from_pos) + ": " + error;
+    };
+    // walks the nodes of a block from its entry with the state, calling raise() for each exception edge and edge()
+    // for each other edge
+    auto walk = [&](uint32_t b, QoreIRVerifyState s, auto&& raise, auto&& edge) -> bool {
+        for (uint32_t n = g.block_entry[b];; ++n) {
+            const auto& insts = func.blocks[b]->instructions;
+            for (uint32_t pos = node_begin[n]; pos < node_end[n]; ++pos) {
+                if (!apply(s, *insts[pos], b, pos, EdgeNormal)) {
+                    return false;
+                }
+            }
+            for (const Edge& e : edges[n]) {
+                if (e.kind == EdgeException) {
+                    if (!raise(s, e)) {
+                        return false;
+                    }
+                    continue;
+                }
+                QoreIRVerifyState es = s;
+                if (e.kind == EdgeDone && !apply(es, *e.inst, b, e.pos, EdgeDone)) {
+                    return false;
+                }
+                if (!edge(es, e)) {
+                    return false;
+                }
+            }
+            if (!(n + 1 < g.num_nodes && node_end[n] <= g.block_end[b] && node_block[n + 1] == b
+                    && n + 1 != g.block_entry[b])) {
+                break;
+            }
+        }
+        return true;
+    };
+    // the raise points of the blocks that a normal path reaches
+    for (uint32_t b = 0; b < func.blocks.size(); ++b) {
+        if (!g.reachable[b] || !normalBlock(b)) {
+            continue;
+        }
+        bool ok = walk(b, in[g.block_entry[b]], [&](const QoreIRVerifyState& s, const Edge& e) -> bool {
+            QoreIRVerifyState es;
+            if (!exceptionState(s, *e.inst, b, e.pos, es)) {
+                return false;
+            }
+            work.push_back({e.to_block, std::move(es), b, e.pos});
+            return true;
+        }, [](const QoreIRVerifyState&, const Edge&) -> bool {
+            return true;
+        });
+        if (!ok) {
+            return false;
+        }
+    }
+    while (!work.empty()) {
+        if (cancelled()) {
+            return false;
+        }
+        Item item = std::move(work.back());
+        work.pop_back();
+        uint32_t b = item.block;
+        QoreIRVerifyState s = std::move(item.state);
+        // the landing pad at the start of the block unwinds the scopes to its depth
+        for (const auto& inst : func.blocks[b]->instructions) {
+            if (inst->opcode == QoreIROpcode::Phi) {
+                continue;
+            }
+            if (const auto* lp = qore_ir_inst_cast<const QoreIRLandingPadInstruction*>(inst.get())) {
+                std::vector<uint32_t>& scopes = s.stacks[QORE_IR_VERIFY_SCOPES];
+                if (s.known[QORE_IR_VERIFY_SCOPES] && scopes.size() < lp->scope_depth) {
+                    error = "malformed IR: the landing pad of block " + std::to_string(b) + " unwinds to "
+                        + std::to_string(lp->scope_depth) + " scopes, but fewer are open on the path";
+                    prefix(item.from_block, item.from_pos);
+                    return false;
+                }
+                if (scopes.size() > lp->scope_depth) {
+                    scopes.resize(lp->scope_depth);
+                }
+                s.closeCatches(lp->scope_depth);
+            }
+            break;
+        }
+        if (normalBlock(b)) {
+            // the path meets the normal control flow: its stacks must be those of the block
+            const QoreIRVerifyState& ns = in[g.block_entry[b]];
+            for (unsigned i = 0; i < QORE_IR_VERIFY_NUM_STACKS; ++i) {
+                if (i == QORE_IR_VERIFY_TEMPS || !s.known[i] || !ns.known[i]) {
+                    continue;
+                }
+                if (s.stacks[i] != ns.stacks[i]) {
+                    error = "malformed IR: the " + std::string(qore_ir_verify_stack_names[i]) + " open differ from "
+                        "those of the normal paths into block " + std::to_string(b);
+                    prefix(item.from_block, item.from_pos);
+                    return false;
+                }
+            }
+            continue;
+        }
+        if (!seen.insert(key(b, s)).second) {
+            continue;
+        }
+        uint32_t from_block = item.from_block, from_pos = item.from_pos;
+        bool ok = walk(b, std::move(s), [&](const QoreIRVerifyState& at, const Edge& e) -> bool {
+            QoreIRVerifyState es;
+            if (!exceptionState(at, *e.inst, b, e.pos, es)) {
+                prefix(from_block, from_pos);
+                return false;
+            }
+            // a raise point of a handler block: its exception continues the path
+            work.push_back({e.to_block, std::move(es), from_block, from_pos});
+            return true;
+        }, [&](const QoreIRVerifyState& at, const Edge& e) -> bool {
+            work.push_back({e.to_block, at, from_block, from_pos});
+            return true;
+        });
+        if (!ok) {
+            if (error.find("on the path of the exception") == std::string::npos) {
+                prefix(from_block, from_pos);
+            }
+            return false;
+        }
+    }
+    return true;
+}
+}
+
+bool QoreIRVerifier::verifyModuleIR(const QoreIRFunction& func, std::string& error) {
+    const size_t num_blocks = func.blocks.size();
+    if (!num_blocks || !func.blocks[0]) {
+        error = "malformed IR: the function has no entry block";
+        return false;
+    }
+    size_t check_count = 0;
+    auto cancelled = [&]() -> bool {
+        if (!(++check_count % 1000) && qore_check_cancel(nullptr, "AOT IR verification")) {
+            error = "AOT IR verification cancelled";
+            return true;
+        }
+        return false;
+    };
+    std::unordered_map<const QoreIRBasicBlock*, uint32_t> block_index;
+    block_index.reserve(num_blocks);
+    for (size_t i = 0; i < num_blocks; ++i) {
+        if (!func.blocks[i] || !block_index.emplace(func.blocks[i].get(), static_cast<uint32_t>(i)).second) {
+            error = "malformed IR: block " + std::to_string(i) + " is missing or appears more than once";
+            return false;
+        }
+    }
+    auto where = [&](uint32_t b, size_t pos) -> std::string {
+        return " (block " + std::to_string(b) + ", instruction " + std::to_string(pos) + ")";
+    };
+    // the index of a block that an instruction refers to; the reader refuses an index beyond the blocks, a block of
+    // another function is refused here
+    auto targetIndex = [&](const QoreIRBasicBlock* target, uint32_t b, size_t pos, uint32_t& idx) -> bool {
+        auto it = block_index.find(target);
+        if (it == block_index.end()) {
+            error = "malformed IR: a branch target is not a block of the function" + where(b, pos);
+            return false;
+        }
+        idx = it->second;
+        return true;
+    };
+
+    // the blocks that can run, and their structure: not empty, the phis first, the only terminator at the end
+    std::vector<uint8_t> reachable(num_blocks, 0);
+    std::vector<uint32_t> work = {0};
+    reachable[0] = 1;
+    // the position of the terminator of each block that can run, which ends it
+    std::vector<uint32_t> block_end(num_blocks, 0);
+    while (!work.empty()) {
+        if (cancelled()) {
+            return false;
+        }
+        uint32_t b = work.back();
+        work.pop_back();
+        const QoreIRBasicBlock& block = *func.blocks[b];
+        const auto& insts = block.instructions;
+        if (insts.empty()) {
+            error = "malformed IR: block " + std::to_string(b) + " has no instructions";
+            return false;
+        }
+        // the block runs to its first terminator; the instructions after it never run, as the interpreter and the
+        // JIT leave the block at the terminator (the lowering leaves code after a throw or a return in its block),
+        // and are not checked: their values are not defined for the instructions that run
+        size_t end_pos = insts.size();
+        for (size_t pos = 0; pos < insts.size(); ++pos) {
+            const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(insts[pos]->opcode));
+            if (oi && oi->is_terminator) {
+                end_pos = pos;
+                break;
+            }
+        }
+        if (end_pos == insts.size()) {
+            error = "malformed IR: block " + std::to_string(b) + " has no terminator";
+            return false;
+        }
+        block_end[b] = static_cast<uint32_t>(end_pos);
+        bool phis = true;
+        for (size_t pos = 0; pos <= end_pos; ++pos) {
+            const QoreIRInstruction& inst = *insts[pos];
+            bool terminator = pos == end_pos;
+            // a simulated error, which the lowering does not give and which continues in its block as no other
+            // terminator does
+            if (inst.opcode == QoreIROpcode::InvokeSimError) {
+                error = "malformed IR: InvokeSimError is not valid in IR read from a module" + where(b, pos);
+                return false;
+            }
+            if (inst.opcode == QoreIROpcode::Phi) {
+                if (!phis) {
+                    error = "malformed IR: a phi follows another instruction" + where(b, pos);
+                    return false;
+                }
+                const auto* phi = qore_ir_inst_cast<const QoreIRPhiInstruction*>(&inst);
+                if (!phi || static_cast<uint8_t>(phi->value_kind) > static_cast<uint8_t>(QoreIRPhiValueKind::NativeBool)) {
+                    error = "malformed IR: a phi has an invalid value kind" + where(b, pos);
+                    return false;
+                }
+            } else {
+                phis = false;
+            }
+            bool ok = true;
+            auto add = [&](QoreIRBasicBlock* target) {
+                uint32_t idx;
+                if (!ok || !target) {
+                    return;
+                }
+                if (!targetIndex(target, b, pos, idx)) {
+                    ok = false;
+                    return;
+                }
+                if (!reachable[idx]) {
+                    reachable[idx] = 1;
+                    work.push_back(idx);
+                }
+            };
+            if (QoreIRBasicBlock* target = qore_ir_verify_exception_target(inst)) {
+                add(target);
+            }
+            if (terminator) {
+                qore_ir_visit_successors(inst, add);
+            }
+            if (!ok) {
+                return false;
+            }
+        }
+    }
+
+    // the nodes: each block that can run starts with an empty node, the point at which it is entered; each instruction
+    // that can raise an exception starts a node, and its exception edge leaves from the node before it, at which the
+    // values defined by it and after it are not defined yet; a step of an iterator starts a node too, for its done
+    // edge, on which its element is not defined
+    std::vector<uint32_t> block_entry(num_blocks, UINT32_MAX);
+    // the node of each instruction, by block
+    std::vector<std::vector<uint32_t>> inst_node(num_blocks);
+    std::vector<QoreIRVerifyNode> nodes;
+    for (uint32_t b = 0; b < num_blocks; ++b) {
+        if (!reachable[b]) {
+            continue;
+        }
+        const auto& insts = func.blocks[b]->instructions;
+        block_entry[b] = static_cast<uint32_t>(nodes.size());
+        nodes.emplace_back();
+        uint32_t current = block_entry[b];
+        inst_node[b].resize(block_end[b] + 1);
+        for (size_t pos = 0; pos <= block_end[b]; ++pos) {
+            if (pos == 0 || qore_ir_verify_exception_target(*insts[pos]) || qore_ir_verify_is_iterator_step(*insts[pos])) {
+                uint32_t next = static_cast<uint32_t>(nodes.size());
+                nodes.emplace_back();
+                nodes[current].succ.push_back(next);
+                current = next;
+            }
+            inst_node[b][pos] = current;
+        }
+    }
+    // the edges between blocks: from the last node of a block to its successors (from the node before a step of an
+    // iterator to its done target), and from the node before an instruction that can raise an exception to its
+    // exception target; the nodes from which each block reaches each of its successors are kept for the phis
+    std::unordered_map<uint64_t, std::vector<uint32_t>> edge_nodes;
+    std::vector<std::vector<uint32_t>> block_preds(num_blocks);
+    auto edge = [&](uint32_t from, uint32_t from_block, uint32_t to_block) {
+        nodes[from].succ.push_back(block_entry[to_block]);
+        std::vector<uint32_t>& en = edge_nodes[(static_cast<uint64_t>(from_block) << 32) | to_block];
+        if (en.empty()) {
+            block_preds[to_block].push_back(from_block);
+        }
+        en.push_back(from);
+    };
+    for (uint32_t b = 0; b < num_blocks; ++b) {
+        if (!reachable[b]) {
+            continue;
+        }
+        const auto& insts = func.blocks[b]->instructions;
+        for (size_t pos = 0; pos <= block_end[b]; ++pos) {
+            if (QoreIRBasicBlock* target = qore_ir_verify_exception_target(*insts[pos])) {
+                uint32_t node = inst_node[b][pos];
+                // the node before the instruction: the entry node of the block for the first instruction
+                edge(node - 1, b, block_index[target]);
+            }
+        }
+        const QoreIRInstruction& last = *insts[block_end[b]];
+        if (const auto* next = qore_ir_verify_is_iterator_step(last)
+                ? qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(&last) : nullptr) {
+            edge(inst_node[b].back(), b, block_index[next->continue_target]);
+            edge(inst_node[b].back() - 1, b, block_index[next->done_target]);
+        } else {
+            qore_ir_visit_successors(last, [&](QoreIRBasicBlock* target) {
+                edge(inst_node[b].back(), b, block_index[target]);
+            });
+        }
+    }
+    const uint32_t num_nodes = static_cast<uint32_t>(nodes.size());
+    for (uint32_t n = 0; n < num_nodes; ++n) {
+        for (uint32_t s : nodes[n].succ) {
+            nodes[s].pred.push_back(n);
+        }
+    }
+
+    // the dominators (Cooper, Harvey and Kennedy, "A Simple, Fast Dominance Algorithm"), in reverse postorder from the
+    // entry node of the entry block
+    std::vector<uint32_t> rpo_number(num_nodes, UINT32_MAX);
+    std::vector<uint32_t> order;
+    order.reserve(num_nodes);
+    {
+        std::vector<uint8_t> visited(num_nodes, 0);
+        std::vector<std::pair<uint32_t, size_t>> stack = {{block_entry[0], 0}};
+        visited[block_entry[0]] = 1;
+        while (!stack.empty()) {
+            auto& top = stack.back();
+            if (top.second < nodes[top.first].succ.size()) {
+                uint32_t s = nodes[top.first].succ[top.second++];
+                if (!visited[s]) {
+                    visited[s] = 1;
+                    stack.push_back({s, 0});
+                }
+            } else {
+                order.push_back(top.first);
+                stack.pop_back();
+            }
+        }
+        std::reverse(order.begin(), order.end());
+        for (uint32_t i = 0; i < order.size(); ++i) {
+            rpo_number[order[i]] = i;
+        }
+    }
+    std::vector<uint32_t> idom(num_nodes, UINT32_MAX);
+    const uint32_t root = block_entry[0];
+    idom[root] = root;
+    auto intersect = [&](uint32_t a, uint32_t b) {
+        while (a != b) {
+            while (rpo_number[a] > rpo_number[b]) {
+                a = idom[a];
+            }
+            while (rpo_number[b] > rpo_number[a]) {
+                b = idom[b];
+            }
+        }
+        return a;
+    };
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (uint32_t i = 1; i < order.size(); ++i) {
+            if (cancelled()) {
+                return false;
+            }
+            uint32_t n = order[i];
+            uint32_t new_idom = UINT32_MAX;
+            for (uint32_t p : nodes[n].pred) {
+                if (idom[p] == UINT32_MAX) {
+                    continue;
+                }
+                new_idom = new_idom == UINT32_MAX ? p : intersect(p, new_idom);
+            }
+            if (new_idom != idom[n]) {
+                idom[n] = new_idom;
+                changed = true;
+            }
+        }
+    }
+    // the preorder and postorder numbers of the dominator tree, for constant-time dominance queries
+    std::vector<uint32_t> dom_pre(num_nodes, 0), dom_post(num_nodes, 0);
+    {
+        std::vector<std::vector<uint32_t>> children(num_nodes);
+        for (uint32_t n : order) {
+            if (n != root) {
+                children[idom[n]].push_back(n);
+            }
+        }
+        uint32_t counter = 0;
+        std::vector<std::pair<uint32_t, size_t>> stack = {{root, 0}};
+        dom_pre[root] = counter++;
+        while (!stack.empty()) {
+            auto& top = stack.back();
+            if (top.second < children[top.first].size()) {
+                uint32_t c = children[top.first][top.second++];
+                dom_pre[c] = counter++;
+                stack.push_back({c, 0});
+            } else {
+                dom_post[top.first] = counter++;
+                stack.pop_back();
+            }
+        }
+    }
+    auto dominates = [&](uint32_t a, uint32_t b) {
+        return dom_pre[a] <= dom_pre[b] && dom_post[b] <= dom_post[a];
+    };
+
+    // the definitions of the values: their block and position; the reader has checked that each is defined once
+    struct Def {
+        uint32_t block;
+        uint32_t pos;
+    };
+    std::unordered_map<uint32_t, Def> defs;
+    // the containers that the function changes (see qore_ir_verify_container_definers())
+    std::unordered_set<uint32_t> changed_containers;
+    for (uint32_t b = 0; b < num_blocks; ++b) {
+        if (!reachable[b]) {
+            continue;
+        }
+        const auto& insts = func.blocks[b]->instructions;
+        for (size_t pos = 0; pos <= block_end[b]; ++pos) {
+            if (insts[pos]->result.isValid()) {
+                defs[insts[pos]->result.id] = {b, static_cast<uint32_t>(pos)};
+            }
+            if (qore_ir_verify_container_definers(insts[pos]->opcode) && !insts[pos]->operands.empty()) {
+                changed_containers.insert(insts[pos]->operands[0].id);
+            }
+        }
+    }
+    // a value is available at an instruction (pos < SIZE_MAX) or at the end of a node of a block if its definition
+    // dominates it
+    auto definedBefore = [&](uint32_t id, uint32_t node, uint32_t b, size_t pos) -> bool {
+        auto it = defs.find(id);
+        if (it == defs.end()) {
+            return false;
+        }
+        const Def& d = it->second;
+        uint32_t def_node = inst_node[d.block][d.pos];
+        if (def_node == node) {
+            return d.block == b && d.pos < pos;
+        }
+        return dominates(def_node, node);
+    };
+    auto useError = [&](uint32_t id, const QoreIRInstruction& inst, uint32_t b, size_t pos) {
+        error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " uses value " + std::to_string(id)
+            + (defs.count(id) ? ", which is not defined on every path to it" : ", which no instruction that can run "
+                "defines") + where(b, pos);
+    };
+
+    for (uint32_t b = 0; b < num_blocks; ++b) {
+        if (!reachable[b]) {
+            continue;
+        }
+        const auto& insts = func.blocks[b]->instructions;
+        for (size_t pos = 0; pos <= block_end[b]; ++pos) {
+            if (cancelled()) {
+                return false;
+            }
+            const QoreIRInstruction& inst = *insts[pos];
+            uint32_t node = inst_node[b][pos];
+            if (const auto* phi = qore_ir_inst_cast<const QoreIRPhiInstruction*>(&inst)) {
+                // each predecessor that can run has an incoming value
+                for (uint32_t p : block_preds[b]) {
+                    bool found = false;
+                    for (const QoreIRPhiIncoming& in : phi->incoming) {
+                        if (in.block == func.blocks[p].get()) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        error = "malformed IR: a phi has no incoming value from its predecessor block "
+                            + std::to_string(p) + where(b, pos);
+                        return false;
+                    }
+                }
+                // the incoming value of a predecessor is available at the end of each edge from it to this block
+                for (const QoreIRPhiIncoming& in : phi->incoming) {
+                    auto pit = block_index.find(in.block);
+                    if (pit == block_index.end()) {
+                        error = "malformed IR: a phi has an incoming value from a block of no function" + where(b, pos);
+                        return false;
+                    }
+                    uint32_t p = pit->second;
+                    auto eit = edge_nodes.find((static_cast<uint64_t>(p) << 32) | b);
+                    if (eit == edge_nodes.end()) {
+                        // an incoming value of a block that is not a predecessor is never taken, but the JIT refuses
+                        // it: it is refused here too, unless the block cannot run
+                        if (reachable[p]) {
+                            error = "malformed IR: a phi has an incoming value from block " + std::to_string(p)
+                                + ", which is not a predecessor of its block" + where(b, pos);
+                            return false;
+                        }
+                        continue;
+                    }
+                    for (uint32_t en : eit->second) {
+                        if (!in.value.isValid() || !definedBefore(in.value.id, en, p, SIZE_MAX)) {
+                            error = "malformed IR: a phi has incoming value " + std::to_string(in.value.id)
+                                + " from block " + std::to_string(p) + ", which is not defined at the end of that "
+                                "block" + where(b, pos);
+                            return false;
+                        }
+                    }
+                }
+                continue;
+            }
+            bool ok = true;
+            auto use = [&](uint32_t id) {
+                if (ok && id && id != UINT32_MAX && !definedBefore(id, node, b, pos)) {
+                    useError(id, inst, b, pos);
+                    ok = false;
+                }
+            };
+            // the temporary that ReleaseOwnedTemp releases (its first operand) is lowered on the paths that leave
+            // its statement, also on those on which it has not been created: on such a path the interpreter finds no
+            // cleanup entry for it and the JIT finds no reference in its slot (cleared at the entry of the function
+            // and by each release), so the release does nothing.  It must still be defined by an instruction that
+            // can run; its other operand, and the operands of every other instruction, must be defined on every path
+            // to their use.  That a released value is not used again is verified with the ownership of the values
+            // a value that is released if the frame holds it, on a path on which it may not have been defined
+            auto releasedMaybe = [&](uint32_t id) -> bool {
+                auto it = defs.find(id);
+                if (it == defs.end()) {
+                    error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " releases value "
+                        + std::to_string(id) + ", which no instruction that can run defines" + where(b, pos);
+                    return false;
+                }
+                return true;
+            };
+            size_t first_operand = 0;
+            if (inst.opcode == QoreIROpcode::ReleaseOwnedTemp && !inst.operands.empty()) {
+                if (!releasedMaybe(inst.operands[0].id)) {
+                    return false;
+                }
+                first_operand = 1;
+            }
+            for (size_t i = first_operand; i < inst.operands.size(); ++i) {
+                if (inst.operands[i].isValid()) {
+                    use(inst.operands[i].id);
+                }
+            }
+            // the values that the instruction holds in fields of its own (qore_ir_visit_value_operands() visits the
+            // operands first)
+            size_t index = 0;
+            qore_ir_visit_value_operands(inst, [&](QoreIRValue v) {
+                if (index++ >= inst.operands.size() && v.isValid()) {
+                    use(v.id);
+                }
+            });
+            if (const auto* next = qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(&inst);
+                    next && inst.opcode != QoreIROpcode::IteratorNext && inst.opcode != QoreIROpcode::IteratorNextSelectors
+                    && (inst.operands.size() != 3 || next->iterator.id != inst.operands[0].id
+                        || next->index.id != inst.operands[1].id || next->limit.id != inst.operands[2].id)) {
+                // the interpreter and the JIT read the list, the index and the limit of a step of a typed foreach from
+                // fields of its own, which are its operands
+                error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " has a list, index or limit that is not "
+                    "its operand" + where(b, pos);
+                return false;
+            }
+            if (const auto* next = qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(&inst)) {
+                // the values that a step of an iterator releases are those that the loop derived from the previous
+                // element, which the first step has not defined yet: they are released as ReleaseOwnedTemp releases
+                // its temporary (above), by the interpreter and by the JIT alike
+                for (const QoreIRValue& v : next->release_values) {
+                    if (v.isValid() && !releasedMaybe(v.id)) {
+                        return false;
+                    }
+                }
+            } else if (const auto* path = qore_ir_inst_cast<const QoreIRLValuePathInstruction*>(&inst)) {
+                for (const LVPathStep& step : path->path) {
+                    use(step.operand_idx);
+                    for (uint32_t id : step.slice_operand_ids) {
+                        use(id);
+                    }
+                }
+            }
+            if (!ok) {
+                return false;
+            }
+            // the container that the instruction changes is one that the function creates, of the type that the
+            // interpreter and the JIT take it as without a check
+            if (const std::vector<QoreIROpcode>* definers = qore_ir_verify_container_definers(inst.opcode)) {
+                auto it = inst.operands.empty() ? defs.end() : defs.find(inst.operands[0].id);
+                const QoreIRInstruction* def = it == defs.end() ? nullptr
+                    : func.blocks[it->second.block]->instructions[it->second.pos].get();
+                if (!def || std::find(definers->begin(), definers->end(), def->opcode) == definers->end()) {
+                    error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " changes a container that is not "
+                        "created by an instruction that creates its type" + where(b, pos);
+                    return false;
+                }
+            }
+            // the JIT reads the entries of the list of these instructions through the address of its entries, which
+            // it takes once (with the list's size, see QoreIRToLLVM::getDirectListReadBound()): the list is one that
+            // the function does not change, which could move its entries (the lowering reads the source of a map, a
+            // select or a foreach, and changes only the list that it creates for the result)
+            if (!changed_containers.empty()) {
+                QoreIRValue read_list;
+                switch (inst.opcode) {
+                    case QoreIROpcode::ListGetInt:
+                    case QoreIROpcode::ListGetFloat:
+                    case QoreIROpcode::ListGetValueNoRefUnchecked:
+                        read_list = inst.operands.empty() ? QoreIRValue() : inst.operands[0];
+                        break;
+                    case QoreIROpcode::TypedForeachNextInt:
+                    case QoreIROpcode::TypedForeachNextFloat:
+                    case QoreIROpcode::TypedForeachNextBool:
+                    case QoreIROpcode::TypedForeachNextString:
+                        read_list = static_cast<const QoreIRIteratorNextInstruction&>(inst).iterator;
+                        break;
+                    default:
+                        break;
+                }
+                if (read_list.isValid() && changed_containers.count(read_list.id)) {
+                    error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " reads the entries of a list that "
+                        "the function changes" + where(b, pos);
+                    return false;
+                }
+            }
+        }
+    }
+
+    // the ownership of the values and the stacks of the frame and of the thread
+    QoreIRVerifyGraph graph{func, block_index, reachable, block_end, block_entry, inst_node, num_nodes};
+    return QoreIRVerifyOwnership(graph, error).verify();
 }
 
 //! Checks the paths of the debugger's flow requests at the step events of a function (QoreIRDebugFlowTargets)
@@ -2242,14 +3822,21 @@ bool QoreIRFunction::collectHandlerLocals(std::unordered_set<const void*>& local
 
 bool QoreIRFunction::collectOnBlockExitLocals(const QoreIROnBlockExitInstruction& obe,
         std::unordered_set<const void*>& locals) {
+    const StatementBlock* code = obe.stmt ? obe.stmt->getCode() : nullptr;
+    if (obe.handler_ir) {
+        return obe.handler_ir->collectHandlerBodyLocals(code, locals);
+    }
     bool unknown_node_found = false;
-    std::unordered_set<const QoreIRFunction*> visited_handlers;
-    if (obe.stmt) {
-        collectLocalsFromStatementBlock(obe.stmt->getCode(), locals, unknown_node_found);
-    }
-    if (obe.handler_ir && visited_handlers.insert(obe.handler_ir.get()).second) {
-        collectLocalsFromIRFunction(*obe.handler_ir, locals, unknown_node_found, visited_handlers);
-    }
+    collectLocalsFromStatementBlock(code, locals, unknown_node_found);
+    return !unknown_node_found;
+}
+
+bool QoreIRFunction::collectHandlerBodyLocals(const StatementBlock* code,
+        std::unordered_set<const void*>& locals) const {
+    bool unknown_node_found = false;
+    collectLocalsFromStatementBlock(code, locals, unknown_node_found);
+    std::unordered_set<const QoreIRFunction*> visited_handlers{this};
+    collectLocalsFromIRFunction(*this, locals, unknown_node_found, visited_handlers);
     return !unknown_node_found;
 }
 
@@ -2903,8 +4490,14 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     // first appears, but a later run of this pass keeps the slots of an earlier one (next_local_slot then starts
     // after all of them)
     uint32_t seen_slots = 0;
+    has_generic_add_assign = false;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
+            inst->auto_local_string_append = false;
+            if (inst->opcode == QoreIROpcode::AddAssignAny || (inst->opcode == QoreIROpcode::Invoke
+                    && static_cast<const QoreIRInvokeInstruction&>(*inst).invoke_opcode == QoreIROpcode::AddAssignAny)) {
+                has_generic_add_assign = true;
+            }
             const uint32_t slots_before = seen_slots;
             if (inst->result.isValid() && inst->result.id > max_vid) {
                 max_vid = inst->result.id;
@@ -3078,7 +4671,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
         block->has_phi_nodes = false;
         for (const auto& inst : block->instructions) {
             // Cache line number: -1 if no location, otherwise store start_line
-            // This avoids two pointer dereferences per instruction in the line-change gate
+            // This avoids two pointer dereferences per instruction in the debugger's line tests
             inst->cached_start_line = inst->loc ? static_cast<int32_t>(inst->loc->start_line) : -1;
 
             if (inst->opcode == QoreIROpcode::Phi) {
@@ -3241,6 +4834,10 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             }
         }
     }
+    // Includes functions and handlers read from stripped AOT images.
+    if (has_generic_add_assign && !defer_release_check_prune) {
+        qore_ir_mark_auto_string_appends(*this);
+    }
 }
 #endif // QORE_IR_TAKE_OVER_UNIT
 
@@ -3255,6 +4852,8 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     every local (qore#6004)
 */
 struct QoreIRUnrecordedWrites {
+    //! Handler bodies entered by this collection (reported by QORE_IR_OPT_STATS).
+    size_t handler_scans = 0;
     //! the locals written
     std::unordered_set<const void*> locals;
     //! true if any local can be written
@@ -3262,6 +4861,18 @@ struct QoreIRUnrecordedWrites {
 
     DLLLOCAL bool writes(const void* key) const {
         return any || locals.count(key);
+    }
+
+    //! Collects root references and the writes of reachable handlers.
+    DLLLOCAL void collect(const QoreIRFunction& ir_func) {
+        addReferences(ir_func);
+        if (!any) {
+            std::unordered_set<const QoreIRFunction*> visited;
+            addHandlerWrites(ir_func, false, visited);
+        }
+        if (handler_scans && q_env_is_set("QORE_IR_OPT_STATS")) {
+            fprintf(stderr, "IR-OPT-HANDLER-WRITES: %s: scans=%zu\n", ir_func.getDisplayName().c_str(), handler_scans);
+        }
     }
 
     //! adds the locals that \a ir_func creates a reference to
@@ -3289,8 +4900,10 @@ struct QoreIRUnrecordedWrites {
     }
 
     //! adds the writes of the handlers of \a ir_func and of their handlers; \a handler is true if \a ir_func is one
-    DLLLOCAL void addHandlerWrites(const QoreIRFunction& ir_func, bool handler) {
+    DLLLOCAL void addHandlerWrites(const QoreIRFunction& ir_func, bool handler,
+            std::unordered_set<const QoreIRFunction*>& visited) {
         if (handler) {
+            ++handler_scans;
             addReferences(ir_func);
         }
         for (const auto& block : ir_func.blocks) {
@@ -3319,7 +4932,10 @@ struct QoreIRUnrecordedWrites {
                     any = true;
                     return;
                 }
-                addHandlerWrites(*handler_ir, true);
+                // Inline and out-of-line registrations share handler_ir. Its writes enter the union once (#6647).
+                if (visited.insert(handler_ir).second) {
+                    addHandlerWrites(*handler_ir, true, visited);
+                }
             }
         }
     }
@@ -3362,10 +4978,7 @@ bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func, const Local
         if (!writes) {
             if (!unrecorded) {
                 unrecorded.emplace();
-                unrecorded->addReferences(ir_func);
-                if (!unrecorded->any) {
-                    unrecorded->addHandlerWrites(ir_func, false);
-                }
+                unrecorded->collect(ir_func);
             }
             writes = unrecorded->writes(key);
         }
@@ -3461,10 +5074,7 @@ static bool qore_ir_add_handler_ast_locals(const QoreIRFunction& ir_func, std::u
 bool qore_ir_collect_handler_written_locals(const QoreIRFunction& ir_func, std::unordered_set<const void*>& written) {
     QoreIRUnrecordedWrites w;
     // a handler can write a local through a reference that this function created
-    w.addReferences(ir_func);
-    if (!w.any) {
-        w.addHandlerWrites(ir_func, false);
-    }
+    w.collect(ir_func);
     if (w.any) {
         return false;
     }

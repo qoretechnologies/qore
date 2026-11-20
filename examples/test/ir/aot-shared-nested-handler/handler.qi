@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# The same body is compiled in a function and a closure. On the two debugger return paths the nested
+# handler sees the same slot for tens, before and after the parent acquires a slot for raise (#6701).
+int units = 0;
+try {
+    on_exit {
+        on_exit {
+            tens = 3;       # step inner
+            observed = tens * 10 + units;
+        }
+        on_exit {
+            units = 5;      # step sibling
+            throwIfRequested();
+        }
+    }
+    if (raise) {            # step early
+        throw "HANDLER";    # step late
+    }
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err != "HANDLER") {
+        rethrow;
+    }
+}
+return tens * 10 + units;

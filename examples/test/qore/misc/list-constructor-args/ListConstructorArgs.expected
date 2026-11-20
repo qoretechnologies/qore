@@ -1,0 +1,27 @@
+parse: a list as the argument: PARSE-EXCEPTION: cannot initialize 'list<hash<P>>': argument 1 of type 'list<hash<P>>' is not a valid element of type 'hash<P>'; the constructor's arguments are the list's elements
+parse: an argument of another type: PARSE-EXCEPTION: cannot initialize 'list<int>': argument 2 of type 'string' is not a valid element of type 'int'; the constructor's arguments are the list's elements
+parse: new with a list as the argument: PARSE-EXCEPTION: cannot initialize 'list<int>': argument 1 of type 'list<int>' is not a valid element of type 'int'; the constructor's arguments are the list's elements
+round 0
+run time: a list as the argument: RUNTIME-TYPE-ERROR: cannot initialize 'list<hash<P>>': argument 1 of type 'list<hash<P>>' is not a valid element of type 'hash<P>'; the constructor's arguments are the list's elements
+run time: an argument of another type: RUNTIME-TYPE-ERROR: cannot initialize 'list<int>': argument 2 of type 'string' is not a valid element of type 'int'; the constructor's arguments are the list's elements
+run time: new with a list as the argument: RUNTIME-TYPE-ERROR: cannot initialize 'list<int>': argument 1 of type 'list<int>' is not a valid element of type 'int'; the constructor's arguments are the list's elements
+elements as the arguments: [{a: 1}, {a: 2}] list<hash<P>>
+one element: [{a: 1}] list<hash<P>>
+assignment of a list: [{a: 1}] list<hash<P>>
+elements known at run time: [3, 4] list<int>
+round 1
+run time: a list as the argument: RUNTIME-TYPE-ERROR: cannot initialize 'list<hash<P>>': argument 1 of type 'list<hash<P>>' is not a valid element of type 'hash<P>'; the constructor's arguments are the list's elements
+run time: an argument of another type: RUNTIME-TYPE-ERROR: cannot initialize 'list<int>': argument 2 of type 'string' is not a valid element of type 'int'; the constructor's arguments are the list's elements
+run time: new with a list as the argument: RUNTIME-TYPE-ERROR: cannot initialize 'list<int>': argument 1 of type 'list<int>' is not a valid element of type 'int'; the constructor's arguments are the list's elements
+elements as the arguments: [{a: 1}, {a: 2}] list<hash<P>>
+one element: [{a: 1}] list<hash<P>>
+assignment of a list: [{a: 1}] list<hash<P>>
+elements known at run time: [3, 4] list<int>
+round 2
+run time: a list as the argument: RUNTIME-TYPE-ERROR: cannot initialize 'list<hash<P>>': argument 1 of type 'list<hash<P>>' is not a valid element of type 'hash<P>'; the constructor's arguments are the list's elements
+run time: an argument of another type: RUNTIME-TYPE-ERROR: cannot initialize 'list<int>': argument 2 of type 'string' is not a valid element of type 'int'; the constructor's arguments are the list's elements
+run time: new with a list as the argument: RUNTIME-TYPE-ERROR: cannot initialize 'list<int>': argument 1 of type 'list<int>' is not a valid element of type 'int'; the constructor's arguments are the list's elements
+elements as the arguments: [{a: 1}, {a: 2}] list<hash<P>>
+one element: [{a: 1}] list<hash<P>>
+assignment of a list: [{a: 1}] list<hash<P>>
+elements known at run time: [3, 4] list<int>

@@ -1,0 +1,27 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdoRunA.qm - module of teardown-order.qtest: requires TdoRunC; it has no optional module, so its AOT module stays
+# current; its name sorts before the other modules of its cycle
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TdoRunC
+
+module TdoRunA {
+    version = "1.0";
+    desc = "module for the module teardown order tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdoRunA {
+    #! reports the deletion of the module on stdout: the constants of a module Program are released then
+    class Tracker {
+        destructor() {
+            print("TdoRunA deleted\n");
+        }
+    }
+
+    const DeletionTracker = new Tracker();
+}

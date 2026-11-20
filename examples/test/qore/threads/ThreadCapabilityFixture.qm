@@ -1,0 +1,104 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Module code that looks up the capabilities of its thread, as a module that starts threads for its callers does
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+/** @section threadcapabilityfixtureintro Introduction
+    Module code that uses the capabilities a host sets for the code it runs (Qore::Thread::ThreadCapabilityScope):
+    it starts threads and wraps calls with the host's implementations, as a module does for a caller that gives no
+    \c start_thread or \c call_wrapper option (qorus#867).
+*/
+module ThreadCapabilityFixture {
+    version = "1.0";
+    desc = "Thread capability scope test fixture: module code that looks up its thread's capabilities";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ThreadCapabilityFixture {
+    #! the code of a capability of the current thread, as module code sees it
+    public *code sub lookup(string name) {
+        return get_thread_capability(name);
+    }
+
+    #! the names of the current thread's capabilities, as module code sees them
+    public *list<string> sub names() {
+        *hash<auto> caps = get_thread_capabilities();
+        return caps ? sort(keys caps) : NOTHING;
+    }
+
+    #! starts a thread with the host's start_thread capability; the thread pushes \a value on \a q
+    /** @return the TID of the thread
+    */
+    public int sub startThread(Queue q, auto value) {
+        *code start_thread = get_thread_capability("start_thread");
+        if (!start_thread) {
+            throw "NO-CAPABILITY", "the thread has no start_thread capability";
+        }
+        return call_function(start_thread, sub () { q.push(value); });
+    }
+
+    #! returns the value of \a c run with the host's call_wrapper capability, through a closure of the module
+    public auto sub wrap(code c) {
+        *code call_wrapper = get_thread_capability("call_wrapper");
+        if (!call_wrapper) {
+            throw "NO-CAPABILITY", "the thread has no call_wrapper capability";
+        }
+        return call_function(call_wrapper, auto sub () { return call_function(c); });
+    }
+
+    #! calls \a c back: module code between its caller and the callback
+    public auto sub callBack(code c) {
+        return call_function(c);
+    }
+
+    #! passes \a c itself to the host's call_wrapper capability, which runs only code that may control threads
+    public auto sub wrapDirect(code c) {
+        *code call_wrapper = get_thread_capability("call_wrapper");
+        if (!call_wrapper) {
+            throw "NO-CAPABILITY", "the thread has no call_wrapper capability";
+        }
+        return call_function(call_wrapper, c);
+    }
+
+    #! keeps the start_thread capability of the thread that creates it, as a module object keeps a start_thread option
+    public class Holder {
+        private {
+            *code start_thread;
+        }
+
+        constructor() {
+            start_thread = get_thread_capability("start_thread");
+        }
+
+        #! starts a thread with the kept capability; the thread pushes \a value on \a q
+        int start(Queue q, auto value) {
+            if (!start_thread) {
+                throw "NO-CAPABILITY", "the object has no start_thread capability";
+            }
+            return call_function(start_thread, sub () { q.push(value); });
+        }
+    }
+}

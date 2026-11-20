@@ -73,7 +73,9 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
     private {
         #! Data provider subtype info
         static hash<string, *hash<string, hash<DataProviderOptionInfo>>> subtype_info = {};
+    }
 
+    private:internal {
         #! Data provider subtype lock
         static Mutex subtype_lck();
     }

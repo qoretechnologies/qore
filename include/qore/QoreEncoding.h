@@ -154,7 +154,12 @@ public:
         @param p a pointer to the character data to check
         @param valid_len the number of valid bytes at the start of the character pointer
 
-        @return 0=invalid, positive = number of bytes needed to represent the character (and all are present), negative numbers = number of additional bytes needed to perform the check
+        @return 0=invalid, positive = number of bytes needed to represent the character (and all are present),
+        negative numbers = minus the number of bytes that the character needs, when \a valid_len bytes are a valid
+        start of it; UTF-8 is checked as RFC 3629 defines it (no overlong forms, surrogates or code points above
+        U+10FFFF; since %Qore 3.0), and UTF-16 with paired surrogates only (a high surrogate followed by a low
+        surrogate; since %Qore 3.0), where one byte of a little-endian code unit gives -2, as only its second byte
+        says whether it is a surrogate
     */
     DLLEXPORT qore_offset_t getCharLen(const char* p, size_t valid_len) const;
 
@@ -250,6 +255,45 @@ public:
 
 DLLEXPORT size_t q_get_byte_len(const QoreEncoding* enc, const char* p, const char* end, size_t c, ExceptionSink* xsink);
 DLLEXPORT qore_offset_t q_get_char_len(const QoreEncoding* enc, const char* p, size_t valid_len, ExceptionSink* xsink);
+
+//! Returns the byte offset of the first byte sequence that is not valid in the given encoding, or -1 if the text is
+//! valid
+/** The check of the text readers of %Qore (see @ref encoding_errors): UTF-8 is checked as RFC 3629 defines it (a
+    surrogate, an overlong form or a code point above U+10FFFF is not valid), the other multi-byte encodings with their
+    character functions, US-ASCII byte by byte, a stateful encoding with a conversion; a single-byte encoding has no
+    invalid bytes; in an encoding without a byte order (the generic \c UTF-16, or a Unicode encoding created on the
+    fly such as \c UTF-32), a byte order mark at the start gives the byte order of the text, as when it is converted,
+    and text without one is checked in the encoding's own byte order (big-endian for \c UTF-16)
+
+    @param enc the encoding of the text
+    @param p the text
+    @param len the size of the text in bytes
+
+    @return the byte offset of the first byte sequence that is not valid, also of a character cut off by the end of
+    the text, or -1 if the text is valid
+
+    @since %Qore 3.0
+*/
+DLLEXPORT qore_offset_t q_get_invalid_text_offset(const QoreEncoding* enc, const char* p, size_t len);
+
+//! Raises an \c INVALID-ENCODING exception if the given text is not valid in its encoding
+/** The text is checked as q_get_invalid_text_offset() checks it, for input that has to be valid text where it enters
+    the program (ex: the strings of a parser); the description of the exception is
+    <tt>"<where>: the <what> is not valid <encoding>: invalid byte sequence at byte offset <offset>"</tt>
+
+    @param enc the encoding of the text
+    @param p the text
+    @param len the size of the text in bytes
+    @param where the function or method that checks the text, for the exception (ex: \c "parse_json()")
+    @param what what the text is, for the exception (ex: \c "JSON text")
+    @param xsink for the \c INVALID-ENCODING exception
+
+    @return 0 if the text is valid, -1 if an exception was raised
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int q_check_text_encoding(const QoreEncoding* enc, const char* p, size_t len, const char* where,
+        const char* what, ExceptionSink* xsink);
 
 //! the QoreEncodingManager object
 DLLEXPORT extern QoreEncodingManager QEM;

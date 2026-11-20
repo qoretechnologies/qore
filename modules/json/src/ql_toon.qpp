@@ -2262,6 +2262,8 @@ DataFrame::DataFrame df(rows);
     @throw TOON-PARSE-ERROR syntax error parsing the TOON string (with line and
     column where available), the maximum nesting depth was exceeded, or a key has a NUL character, which a hash key
     cannot hold
+    @throw INVALID-ENCODING the TOON string is not valid in its encoding; the description has the byte offset of the
+    first invalid byte sequence (since json 3.0)
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
     @note
@@ -2308,6 +2310,11 @@ auto parse_toon(string toon_str, *hash<auto> options) [flags=RET_VALUE_ONLY,NAME
         }
     }
 
+    // the text is valid in its encoding where it enters the program (qore#6604)
+    if (q_check_text_encoding(toon_str->getEncoding(), toon_str->c_str(), toon_str->size(), "parse_toon()",
+            "TOON text", xsink)) {
+        return QoreValue();
+    }
     // TOON documents are always UTF-8 (TOON spec §1.2, §18.2); transcode the
     // input to UTF-8 before parsing so that non-UTF-8 source strings produce
     // correctly-encoded results

@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of calls of abstract method variants
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class AbstractMixedVariantsTest
+
+#! Regression test for issue #6161: an abstract variant implemented by another parent class is called when the
+#! class that declares it also has a concrete variant of the method
+/** A call of an abstract variant of a method of a parent class that another parent class implements raised
+    RUNTIME-OVERLOAD-ERROR ("no variant matching '::Base::v(integer)' can be found") in every execution mode and in
+    programs compiled with qcc when the class that declares the variant also has a concrete variant of the method: the
+    call was bound at parse time to the method of the declaring class, whose concrete variants were the only ones
+    considered at run time.  A call of the concrete variant whose variant is resolved at run time failed in the same
+    way: the method that the class of the object gets for the implementation did not have the variants of its parent
+    classes.  In programs compiled with qcc, the class of the object did not get that method at all, as the abstract
+    signatures of the variants read from the image were empty, so that the concrete variant replaced the abstract one.
+
+    AbstractMixedVariants.q makes these calls; its output must be the one in AbstractMixedVariants.expected in every
+    execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+*/
+class AbstractMixedVariantsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/AbstractMixedVariants.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/AbstractMixedVariants.expected");
+    }
+
+    constructor() : QUnit::Test("abstract variant implemented by another parent beside a concrete variant", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/abstract-mixed-variants";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

@@ -50,6 +50,7 @@
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #if defined(__linux__) && defined(HAVE_IO_URING)
 #include "qore/intern/QoreIoUring.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #endif
 
 #include <cerrno>
@@ -1482,7 +1483,7 @@ parse(code, filename);
         if (!wsink.isException())
             return QoreValue();
 
-        QoreException* e = wsink.catchException();
+        QoreException* e = qore_exception_sink_ops(wsink).catchException();
         return e->makeExceptionObjectAndDelete(xsink);
     }
 
@@ -3460,7 +3461,7 @@ load_module("mysql");
     QMM.runTimeLoadModule(*xsink, wsink, name->c_str(), q_get_runtime_call_program(runtime_cfg), nullptr, QMLO_NONE,
         warning_mask);
     if (!*xsink && wsink) {
-        return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+        return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
     }
     return QoreValue();
 }
@@ -3754,6 +3755,10 @@ string decoded_url = decode_url(encoded_url);
     - encode_uri_request()
     - decode_uri_request() for a similar function that provides AJAX-compatible URI decoding for the URI query component
 
+    @throw URL-ENCODING-ERROR the percent encoding is not valid, or the decoded string is not valid UTF-8 (ex: from
+    \c "%C0%AF", a lone \c "%80" or a surrogate), which is refused so that text decoded from outside the program is
+    valid text
+
     @since %Qore 3.0 the whole string is decoded; previously a string was cut at its first NUL character
 */
 string decode_url(string url) [flags=CONSTANT,NAMED_ARGS] {
@@ -3834,6 +3839,10 @@ string decoded_uri = decode_uri_request("path/to/something%20else?query=1%2b1+%2
     - encode_uri_request()
     - encode_url()
     - decode_url()
+
+    @throw URL-ENCODING-ERROR the percent encoding is not valid, or the decoded string is not valid UTF-8 (ex: from
+    \c "%C0%AF", a lone \c "%80" or a surrogate), which is refused so that text decoded from outside the program is
+    valid text
 
     @since
     - %Qore 0.8.12

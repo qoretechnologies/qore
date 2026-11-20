@@ -142,6 +142,10 @@ module FixedLengthUtil {
 
 
     @section fixedlengthutil_v1_7 Version 1.7
+    - the iterators and the read data provider take the \c "encoding_errors" option, which says what a line that is
+      not valid in its encoding gives: \c "raise" (the default) raises \c INVALID-ENCODING, \c "latin1" reads it as
+      \c ISO-8859-1, \c "keep" keeps it without a check (see @ref fixedlengthglobals and @ref encoding_errors)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
     - \c "int", \c "float" and \c "number" field values are validated: a value that is not a number of the field's
       type (ex: \c "12abc", read as \c 12 before) raises \c FIELD-VALUE-ERROR when read and \c FIELD-INPUT-ERROR when
       written, and \c "int" fields are read in their number format; see @ref fixedlengthnumericvalues
@@ -206,6 +210,11 @@ module FixedLengthUtil {
     Valid options are:
     - \c "date_format": the default date format for \c "date" fields (see @ref date_formatting "date formatting" for the value in this case)
     - \c "encoding": the output encoding for strings parsed or returned
+    - \c "encoding_errors": for the iterators, what text read that is not valid in its encoding gives, one of the
+      @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING, \c "latin1" reads the
+      invalid line as \c ISO-8859-1 with its bytes, \c "keep" keeps it in the encoding without a check (a line that
+      is not valid then raises \c INVALID-ENCODING when its fields are taken); see @ref encoding_errors
+      (@since %FixedLengthUtil 1.7)
     - \c "eol": the end of line characters for parsing or generation
     - \c "file_flags": additional writer @ref file_open_constants; @ref Qore::O_WRONLY | @ref Qore::O_CREAT are used by default. Use eg. @ref Qore::O_EXCL to ensure not to overwrite the target or @ref Qore::O_TRUNC to replace any existing file
     - \c "ignore_empty": if @ref True "True" then ignore empty lines

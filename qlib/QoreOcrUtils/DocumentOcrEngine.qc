@@ -196,7 +196,9 @@ public class DocumentOcrEngine {
                 return "WEBP";
             }
             if (data.size() >= 5) {
-                string head = data.substr(0, min(200, data.size())).toString();
+                # the first bytes of any data, which need not be text (and can end inside a character), are read as
+                # ISO-8859-1, where every byte is a character, so that the markup tests can match them (qore#6554)
+                string head = binary_to_string(data.substr(0, min(200, data.size())), "ISO-8859-1");
                 if (head =~ /<svg\b/i || head =~ /<!DOCTYPE\s+svg/i) {
                     return "SVG";
                 }

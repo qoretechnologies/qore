@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - qcc compilation and loading of source-stripped modules
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
@@ -19,8 +20,8 @@ class AOTConstructorClassContextTest inherits QUnit::Test {
         string timeout_prefix = timeoutPrefix(90);
     }
     constructor() : Test("AOT constructor lexical class context", "1.0", \ARGV) {
-        addTestCase("Private overloads and access denial agree in all source modes", \source());
-        addTestCase("Private overloads and exception cleanup agree in compiled modules", \compiled());
+        addTestCase("Constructor access and named argument binding agree in all source modes", \source());
+        addTestCase("Constructor access and named argument binding agree in compiled modules", \compiled());
         set_return_value(main());
     }
     private static string quote(string value) {
@@ -95,7 +96,7 @@ class AOTConstructorClassContextTest inherits QUnit::Test {
     }
     private {
         const string ExpectedLine = "7:3:4\n3:9\ndenied\ndenied\ndenied\nrecovered:5\n";
-        const string Expected = ExpectedLine + ExpectedLine + ExpectedLine + "child:3\n";
+        const string Expected = ExpectedLine + ExpectedLine + ExpectedLine + "child:3\ntrim\nencoding\nnamed:1\npayload:7\n";
         const string Module = "%modern
 module ConstructorContextFixture {
     version = \"1.0\";
@@ -104,6 +105,53 @@ module ConstructorContextFixture {
     license = \"MIT\";
 }
 public namespace ConstructorContextFixture {
+    public class Lines {
+        public {
+            InputStreamLineIterator it;
+        }
+        constructor(InputStreamLineIterator it) {
+            self.it = it;
+        }
+    }
+    bool sub keepSeparator() {
+        printf(\"trim\\n\");
+        return False;
+    }
+    string sub lineEncoding() {
+        printf(\"encoding\\n\");
+        return \"UTF-8\";
+    }
+    public class NamedLines inherits Lines {
+        constructor(InputStream input) : Lines(new Qore::InputStreamLineIterator(input,
+                trim_line: keepSeparator(), encoding: lineEncoding())) {
+        }
+    }
+    int sub nextValue(int n) {
+        return n + 1;
+    }
+    public class Choice {
+        public {
+            string selected;
+        }
+        constructor(int count) {
+            selected = \"count\";
+        }
+        constructor(auto payload, int tail = nextValue(6)) {
+            selected = sprintf(\"payload:%d\", tail);
+        }
+    }
+    public class ChoiceBase {
+        public {
+            Choice value;
+        }
+        constructor(Choice value) {
+            self.value = value;
+        }
+    }
+    public class NamedChoice inherits ChoiceBase {
+        constructor() : ChoiceBase(new Choice(payload: 7)) {
+        }
+    }
     public final class Node inherits Qore::Serializable {
         public {
             int count;
@@ -201,6 +249,10 @@ if (warnings) {
     throw \"TEST-FAILURE\", \"unexpected child parse warnings\", warnings;
 }
 printf(\"child:%d\\n\", child.callFunction(\"childCount\"));
+NamedLines lines(new BinaryInputStream(binary(\"a\\nb\\n\")));
+printf(\"named:%d\\n\", lines.it.next() && lines.it.getValue() == \"a\\n\");
+NamedChoice choice();
+printf(\"%s\\n\", choice.value.selected);
 ";
     }
 }

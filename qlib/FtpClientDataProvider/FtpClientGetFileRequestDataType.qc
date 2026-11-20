@@ -42,6 +42,14 @@ public class FtpClientGetFileRequestDataType inherits HashDataType {
                 "desc": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
                 "default_value": "UTF-8",
             },
+            "encoding_errors": {
+                "type": StringType,
+                "short_desc": "What text that is not valid in its character encoding gives",
+                "desc": "What text that is not valid in its character encoding gives if `text` = `True`: `raise` "
+                    "(the default) raises an `INVALID-ENCODING` error, `latin1` returns the text as `ISO-8859-1`, "
+                    "and `keep` returns it in the encoding without a check",
+                "default_value": ENCODING_ERRORS_RAISE,
+            },
         };
     }
 

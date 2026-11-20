@@ -79,11 +79,15 @@ class HashdeclPlusInheritedTest inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
 
         foreach string mode in (ExecModeHarness::ExecModes) {
-            addTestCase(mode, sub () { modeTest(mode); });
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase(mode, sub () { modeTest(mode_value); });
         }
         addTestCase(ExecModeHarness::IRTierName, \irTierTest());
         foreach string opt in ("-O0", "-O3") {
-            addTestCase("AOT " + opt, sub () { aotTest(opt); });
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string opt_value = opt;
+            addTestCase("AOT " + opt, sub () { aotTest(opt_value); });
         }
         set_return_value(main());
     }

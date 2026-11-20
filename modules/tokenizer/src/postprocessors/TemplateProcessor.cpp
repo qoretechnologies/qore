@@ -41,7 +41,10 @@ std::vector<TemplatePiece> TemplateProcessor::parseTemplate(const QoreListNode* 
             const QoreHashNode* seq_hash = safeGetHash(seq_val);
             piece.type = TemplatePiece::SEQUENCE;
 
-            std::string id_str = safeGetStringKey(seq_hash, "id");
+            std::string id_str = configString(seq_hash->getKeyValue("id"), "template Sequence id", xsink);
+            if (*xsink) {
+                return pieces;
+            }
             if (!id_str.empty()) {
                 piece.id = id_str;
             }
@@ -61,7 +64,10 @@ std::vector<TemplatePiece> TemplateProcessor::parseTemplate(const QoreListNode* 
             const QoreHashNode* st_hash = safeGetHash(st_val);
             piece.type = TemplatePiece::SPECIAL_TOKEN;
 
-            std::string id_str = safeGetStringKey(st_hash, "id");
+            std::string id_str = configString(st_hash->getKeyValue("id"), "template SpecialToken id", xsink);
+            if (*xsink) {
+                return pieces;
+            }
             if (!id_str.empty()) {
                 piece.id = id_str;
             }
@@ -105,7 +111,11 @@ TemplateProcessor::TemplateProcessor(const QoreHashNode* config, ExceptionSink* 
     if (st_hash) {
         ConstHashIterator it(st_hash);
         while (it.next()) {
-            std::string key = it.getKey();
+            // the key is in the default encoding, and the special token is UTF-8 text, as the template ids are
+            std::string key;
+            if (configKey(it.getKey(), "special token", key, xsink)) {
+                return;
+            }
             const QoreHashNode* st_info = safeGetHash(it.get());
             if (!st_info) {
                 continue;
@@ -123,7 +133,10 @@ TemplateProcessor::TemplateProcessor(const QoreHashNode* config, ExceptionSink* 
             const QoreListNode* tokens_list = safeGetListKey(st_info, "tokens");
             if (tokens_list) {
                 for (size_t i = 0; i < tokens_list->size(); ++i) {
-                    std::string tok = safeGetStdString(tokens_list->retrieveEntry(i));
+                    std::string tok = configString(tokens_list->retrieveEntry(i), "special token", xsink);
+                    if (*xsink) {
+                        return;
+                    }
                     if (!tok.empty()) {
                         info.tokens.push_back(std::move(tok));
                     }
@@ -308,8 +321,9 @@ EncodingResult TemplateProcessor::processWithOffsets(
 
 // --- BertProcessor ---
 
-static void readSpecialToken(const QoreHashNode* config, const char* key,
-        const char* default_token, std::string& token_str, int& token_id) {
+// returns 0 for OK, -1 if an exception was raised
+static int readSpecialToken(const QoreHashNode* config, const char* key,
+        const char* default_token, std::string& token_str, int& token_id, ExceptionSink* xsink) {
     token_str = default_token;
     token_id = -1;
 
@@ -317,7 +331,11 @@ static void readSpecialToken(const QoreHashNode* config, const char* key,
     if (val.getType() == NT_HASH) {
         const QoreHashNode* h = safeGetHash(val);
         if (h) {
-            std::string content = safeGetStringKey(h, "content");
+            QoreStringMaker what("configuration value '%s' content", key);
+            std::string content = configString(h->getKeyValue("content"), what.c_str(), xsink);
+            if (*xsink) {
+                return -1;
+            }
             if (!content.empty()) {
                 token_str = content;
             }
@@ -330,13 +348,18 @@ static void readSpecialToken(const QoreHashNode* config, const char* key,
         // [token_string, id] tuple
         const QoreListNode* tuple = safeGetList(val);
         if (tuple && tuple->size() >= 2) {
-            std::string tok = safeGetStdString(tuple->retrieveEntry(0));
+            QoreStringMaker what("configuration value '%s' token", key);
+            std::string tok = configString(tuple->retrieveEntry(0), what.c_str(), xsink);
+            if (*xsink) {
+                return -1;
+            }
             if (!tok.empty()) {
                 token_str = std::move(tok);
             }
             token_id = (int)tuple->retrieveEntry(1).getAsBigInt();
         }
     }
+    return 0;
 }
 
 BertProcessor::BertProcessor(const QoreHashNode* config, ExceptionSink* xsink) {
@@ -345,8 +368,10 @@ BertProcessor::BertProcessor(const QoreHashNode* config, ExceptionSink* xsink) {
     std::string cls_token, sep_token;
     int cls_id, sep_id;
 
-    readSpecialToken(config, "cls", "[CLS]", cls_token, cls_id);
-    readSpecialToken(config, "sep", "[SEP]", sep_token, sep_id);
+    if (readSpecialToken(config, "cls", "[CLS]", cls_token, cls_id, xsink)
+            || readSpecialToken(config, "sep", "[SEP]", sep_token, sep_id, xsink)) {
+        return;
+    }
 
     // Set up special tokens map
     if (cls_id >= 0) {
@@ -381,8 +406,10 @@ RobertaProcessor::RobertaProcessor(const QoreHashNode* config, ExceptionSink* xs
     std::string cls_token, sep_token;
     int cls_id, sep_id;
 
-    readSpecialToken(config, "cls", "<s>", cls_token, cls_id);
-    readSpecialToken(config, "sep", "</s>", sep_token, sep_id);
+    if (readSpecialToken(config, "cls", "<s>", cls_token, cls_id, xsink)
+            || readSpecialToken(config, "sep", "</s>", sep_token, sep_id, xsink)) {
+        return;
+    }
 
     // Set up special tokens map
     if (cls_id >= 0) {

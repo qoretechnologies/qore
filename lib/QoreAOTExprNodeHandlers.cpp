@@ -1865,8 +1865,13 @@ static QoreValue read_node_EN_OBJ_METH_REF(AOTExprNodeReadCtx& ctx) {
     if (num_children >= 1) {
         target = ctx.recurse(ctx);
     }
-    return QoreValue(new ParseObjectMethodReferenceNode(&loc_builtin,
-        target, strdup(method_name.c_str())));
+    // the method resolved when parsing is restored (qore#6680)
+    ParseObjectMethodReferenceNode* omr = qore_aot_make_object_method_ref(ctx.pgm, target, method_name.c_str());
+    if (!omr) {
+        ctx.failed = true;
+        return QoreValue();
+    }
+    return QoreValue(omr);
 }
 
 static QoreValue read_node_EN_SELF_METH_REF(AOTExprNodeReadCtx& ctx) {
@@ -1897,7 +1902,15 @@ static QoreValue read_node_EN_STATIC_METH_REF(AOTExprNodeReadCtx& ctx) {
     if (xsink.isException()) {
         xsink.clear();
     }
+    // the method that the image records with the class that declares it (qore#6679)
+    bool have_class = false;
     if (qc) {
+        if (const QoreMethod* m = qore_aot_resolve_static_method_ref_target(ctx.pgm, qc, method_name.c_str(),
+                have_class)) {
+            return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m, qc));
+        }
+    }
+    if (qc && !have_class) {
         const QoreMethod* m = qc->findStaticMethod(method_name.c_str());
         if (!m) {
             m = qc->findMethod(method_name.c_str());

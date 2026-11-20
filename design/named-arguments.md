@@ -230,6 +230,12 @@ like positional calls, and reordered/sparse named calls preserve source-order
 and default semantics even when their lowering is not bit-identical to a
 hand-written positional call.
 
+An AOT module stores base-constructor argument expressions as expression trees.
+For a nested named constructor call, the inline class reference carries the
+source-to-parameter map and the signature selected by the binder. Loading the
+module restores both. This preserves source-order evaluation even across
+omitted defaults, and preserves an overload selected by its parameter names.
+
 ## Overload Resolution
 
 Parameter names are variant-specific, so binding runs per candidate ahead of

@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires ../../QoreBuildTree.qm
 %requires FsUtil
 
 %exec-class FrameCheckStackTest
@@ -131,6 +132,8 @@ public class FrameCheckStackTest inherits QUnit::Test {
         if (target) {
             push args, target[0];
         }
+        # a sanitizer build of libqore needs the same sanitizer in the fixture (qore#6587)
+        args += QoreBuildTree::sanitizer_flags(libdir);
         int status;
         string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
         assertEq(0, status, output);

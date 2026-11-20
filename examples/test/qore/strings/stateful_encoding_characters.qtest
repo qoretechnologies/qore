@@ -12,6 +12,7 @@
 %requires QUnit
 %requires FsUtil
 %requires Util
+%requires ../../EncodingCapability.qm
 
 %exec-class StatefulEncodingCharacterTest
 
@@ -49,21 +50,17 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
         addTestCase("reading text from streams and files", \testReading());
         addTestCase("reading characters across shift sequences", \testCharacterReads());
         addTestCase("reading invalid and truncated text by its characters", \testInvalidCharacterReads());
+        addTestCase("reading a byte that is not a character", \testInvalidByteReads());
         addTestCase("scanning", \testScanner());
-        addTestCase("encodings that are not ASCII-compatible", \testNonAsciiCompatible());
+        foreach string enc in ("UTF-16LE", "UTF-16BE", "IBM037") {
+            addTestCase("an encoding that is not ASCII-compatible: " + enc, \testNonAsciiCompatible(), (enc,));
+        }
         set_return_value(main());
     }
 
     #! returns the reason that iconv cannot convert the text of the given encoding on this platform, if any
     private static *string getUnavailableReason(string enc) {
-        try {
-            string s = convert_encoding(Encodings{enc}, enc);
-            if (convert_encoding(s, "UTF-8") != Encodings{enc}) {
-                return sprintf("the iconv library does not convert the test text to %s and back unchanged", enc);
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            return sprintf("the iconv library cannot convert the test text to %s: %s: %s", enc, ex.err, ex.desc);
-        }
+        return encoding_cannot_convert(enc, Encodings{enc});
     }
 
     #! the stateful encodings that iconv supports on this platform, with their text in UTF-8
@@ -626,25 +623,23 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
 
     #! text that cannot be decoded is an error, and a character cut off by the end of the data is not returned
     testInvalidCharacterReads() {
+        # ISO-2022-JP, which every platform has
         string enc = "ISO-2022-JP";
-        if (!representable("ab 日本", enc)) {
-            testSkip(enc + " is not supported here");
-        }
         binary b = binary(convert_encoding("ab 日本", enc));
         # the data ends after the first byte of "本"
         binary cut = b.substr(0, charOffset(b, enc, 5, "ab 日本") - 1);
-        assertThrows("STREAM-ENCODING-ERROR", "incomplete character", sub () {
+        assertThrows("INVALID-ENCODING", "invalid byte sequence at byte offset", sub () {
             new StreamReader(new BinaryInputStream(cut), enc).readString(10);
         });
         {
             StreamReader sr(new BinaryInputStream(cut), enc);
             assertEq("ab 日", utf8(sr.readString(4)), "the complete characters before the cut");
-            assertThrows("STREAM-ENCODING-ERROR", "incomplete character", \sr.readString(), 1);
+            assertThrows("INVALID-ENCODING", "invalid byte sequence at byte offset", \sr.readString(), 1);
         }
         {
             StreamReader sr(new BinaryInputStream(cut), enc);
             assertEq("ab", utf8(sr.readString(2)));
-            assertThrows("STREAM-ENCODING-ERROR", "incomplete character", \sr.readLine());
+            assertThrows("INVALID-ENCODING", "invalid byte sequence at byte offset", \sr.readLine());
         }
         string path = tmp_location() + DirSep + sprintf("stateful-cut-%d", getpid());
         on_exit unlink(path);
@@ -656,28 +651,28 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
         {
             ReadOnlyFile f(path, enc);
             assertEq(("a", "b", " ", "日"), (map utf8(f.getchar()), xrange(4)));
-            assertThrows("STREAM-ENCODING-ERROR", "incomplete character", \f.getchar());
+            assertThrows("INVALID-ENCODING", "invalid byte sequence at byte offset", \f.getchar());
         }
-        assertThrows("STREAM-ENCODING-ERROR", "incomplete character", sub () {
+        assertThrows("INVALID-ENCODING", "invalid byte sequence at byte offset", sub () {
             new ReadOnlyFile(path, enc).read(10);
         });
+    }
 
-        # a byte that is not a character in ISO-2022-JP
-        binary bad = b + <ff> + binary(convert_encoding("x", enc));
-        # the text in UTF-8, if the platform's iconv accepts the byte
-        *string text;
-        try {
-            text = convert_encoding(binary_to_string(bad, enc), "UTF-8");
-        } catch (hash<ExceptionInfo> ex) {
+    #! a byte that is not a character in ISO-2022-JP is an error, if the platform's iconv refuses it
+    testInvalidByteReads() {
+        # ISO-2022-JP, which every platform has
+        string enc = "ISO-2022-JP";
+        binary bad = binary(convert_encoding("ab 日本", enc)) + <ff> + binary(convert_encoding("x", enc));
+        *string reason = encoding_decodes_invalid(enc, bad);
+        if (reason) {
+            testSkip(reason);
         }
-        if (!exists text) {
-            assertThrows("STREAM-ENCODING-ERROR", "invalid byte sequence", sub () {
-                new StreamReader(new BinaryInputStream(bad), enc).readString(10);
-            });
-            StreamReader sr(new BinaryInputStream(bad), enc);
-            assertEq("ab 日本", utf8(sr.readString(5)), "the characters before the invalid byte");
-            assertThrows("STREAM-ENCODING-ERROR", "invalid byte sequence", \sr.readString(), 1);
-        }
+        assertThrows("INVALID-ENCODING", "invalid byte sequence", sub () {
+            new StreamReader(new BinaryInputStream(bad), enc).readString(10);
+        });
+        StreamReader sr(new BinaryInputStream(bad), enc);
+        assertEq("ab 日本", utf8(sr.readString(5)), "the characters before the invalid byte");
+        assertThrows("INVALID-ENCODING", "invalid byte sequence", \sr.readString(), 1);
     }
 
     testScanner() {
@@ -697,15 +692,17 @@ class StatefulEncodingCharacterTest inherits QUnit::Test {
     }
 
     #! encodings that are not ASCII-compatible, but not stateful, for functions that handled them byte by byte
-    testNonAsciiCompatible() {
-        foreach string enc in ("UTF-16LE", "UTF-16BE", "IBM037") {
-            string text = "a.b (é) 1+1 <x>";
-            string s;
-            try {
-                s = convert_encoding(text, enc);
-            } catch (hash<ExceptionInfo> ex) {
-                continue;
+    testNonAsciiCompatible(string enc) {
+        string text = "a.b (é) 1+1 <x>";
+        # EBCDIC (IBM037) is missing from the iconv of some platforms (musl's); every platform has UTF-16
+        if (enc == "IBM037") {
+            *string reason = encoding_cannot_convert(enc, text);
+            if (reason) {
+                testSkip(reason);
             }
+        }
+        {
+            string s = convert_encoding(text, enc);
             assertEq(regex_escape(text), utf8(regex_escape(s)), enc + ": regex_escape()");
             assertEq(text.regexEscape(), utf8(s.regexEscape()), enc + ": <string>::regexEscape()");
             assertEq(html_encode(text), utf8(html_encode(s)), enc + ": html_encode()");

@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes and in qcc executables
+# test-platform: macos - the static method call references of qcc executables' metadata and native code
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class StaticMethodRefTargetTest
+
+#! A static method call reference calls the method that the parser resolved in every mode
+/** The references of refs.q name a class that inherits a static method of the same name from more than one parent
+    class, from code that has different access to those classes: directly, as the initial value of a member and of a
+    static member, as a default argument value, and in the class itself; and object method references through an
+    object of the class, to a static and to a normal method.  Compiled code records both kinds with a class
+    reference after the method's name, in different forms (qore#6679, qore#6680).  The output, the class of the
+    method that each reference calls, is compared with the AST in the ir, jit and tiered modes, on the IR tier of
+    the tiered mode, and in executables made by qcc at -O0 and -O3.
+*/
+class StaticMethodRefTargetTest inherits QUnit::Test {
+    public {
+        #! the execution modes compared with the AST
+        const Modes = ("ir", "jit", "tiered");
+
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+
+        #! the environment of a run in which every function is compiled at its first call
+        const CompileEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+    }
+
+    constructor() : QUnit::Test("StaticMethodRefTargetTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("a static method call reference calls the method that the parser resolved", \refTest());
+        set_return_value(main());
+    }
+
+    #! Returns the output of the script \a path in \a mode
+    private string runMode(string path, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s -b --enable-debug "
+            "--exec-mode=%s %s", lib_env, CompileEnv, qore_bin, mode, path));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    refTest() {
+        TmpDir dir("qore-static-method-ref-target-");
+        string src = join_paths(dir.path, "refs.q");
+        copy_file(get_script_dir() + "/refs.q", src);
+        string expected = runMode(src, "ast");
+        # a reference made outside the class calls the method of the public parent class
+        assertRegex("(?m)^member: B$", expected, "the AST calls the method that the parser resolved");
+        assertRegex("(?m)^default argument: B$", expected, "the AST calls the method that the parser resolved");
+        # object method references, to a static and to a normal method, which compiled code records in another form
+        assertRegex("(?m)^object static member: B$", expected, "the AST calls the method that the parser resolved");
+        assertRegex("(?m)^object normal member: B$", expected, "the AST calls the method that the parser resolved");
+        foreach string mode in (Modes) {
+            assertEq(expected, runMode(src, mode), mode);
+        }
+        assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug --exec-mode=tiered %s",
+            lib_env, qore_bin, src)), "IR tier");
+        foreach string opt in (OptLevels) {
+            string exe = join_paths(dir.path, "refs" + opt);
+            int rc;
+            string output = backquote(sprintf("%s %s %s -o %s %s 2>&1", lib_env, qcc_bin, opt, exe, src), \rc);
+            assertEq(0, rc, sprintf("qcc %s: exit status (output: %s)", opt, output.substr(-2000)));
+            # -b must be the first argument of a compiled program
+            string out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+            assertEq(0, rc, sprintf("qcc %s executable: exit status (output: %y)", opt, out));
+            assertEq(expected, out, "qcc " + opt);
+        }
+    }
+}
