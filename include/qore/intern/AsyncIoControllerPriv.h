@@ -168,8 +168,9 @@ struct AsyncIoDeferredRelease {
     //! (QoreSandboxContext::module_cleanup_delegate): release() then runs with the delegation, wherever it runs (a
     //! callback worker, a synchronous caller, the thread that ends a debug hold), as releasing them can run the
     //! destructors of objects of module classes, which enter the Programs of the modules (see
-    //! qore_close_module_programs())
-    bool module_cleanup_delegate = false;
+    //! qore_close_module_programs()); counted until the references are released (QoreModuleCleanupWorkFlag), as the
+    //! module cleanup waits for their release (qore#6928)
+    QoreModuleCleanupWorkFlag module_cleanup_delegate;
 
     //! Returns True if no references are held
     DLLLOCAL bool empty() const {
@@ -675,7 +676,7 @@ private:
     DLLLOCAL bool dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item);
 
     //! re-queues the items held
-    friend void qore_dbg_release_held_module_cleanup_work(const char* by);
+    friend void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold);
 #endif
 
     //! Releases every reference held by a work item that will never be dispatched
@@ -1255,8 +1256,10 @@ private:
         //! True if the thread that created the command is the module cleanup or runs work that it handed over
         /** An operation that the command cancels is then canceled for the cleanup: what the operation runs after
             that is part of the cleanup (see doCancelIntern() and qore_close_module_programs())
+            Counted until the command is destroyed, after it has been processed (QoreModuleCleanupWorkFlag): the module
+            cleanup waits for it, and for the work that it hands over in turn (qore#6928)
         */
-        bool module_cleanup_delegate = commandModuleCleanupDelegation();
+        QoreModuleCleanupWorkFlag module_cleanup_delegate{commandModuleCleanupDelegation()};
         std::string key;                //!< For Cancel / ContinuePollResult / SubmitOp: the cache key
         //! For Cancel: if set, only the operation of this object is canceled (another operation can have taken the key)
         /** Compared by address only; the canceling thread holds a reference to the object until the command has been

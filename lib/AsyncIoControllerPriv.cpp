@@ -1298,34 +1298,53 @@ void AsyncIoControllerPriv::dbgHoldModuleCleanupWork(bool hold) {
 //! Holds @a item if it is an onComplete() that the module cleanup hands over while the test hook holds them
 /** Takes over the item and returns true if it is held
 */
+//! true while the current thread re-queues the items held, which are not held again
+static thread_local bool dbg_requeue_held_module_cleanup_work = false;
+
 bool QoreCallDispatcher::dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item) {
     AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
-    if (!state.hold.load(std::memory_order_acquire) || item.type != DT_ON_COMPLETE
+    if (dbg_requeue_held_module_cleanup_work || !state.hold.load(std::memory_order_acquire)
+            || item.type != DT_ON_COMPLETE
             || !async_io_module_cleanup_delegate(item.sandbox_ctx)) {
         return false;
     }
-    AutoLocker al(state.lock);
-    if (!state.hold.load(std::memory_order_relaxed)) {
-        return false;
+    {
+        AutoLocker al(state.lock);
+        if (!state.hold.load(std::memory_order_relaxed)) {
+            return false;
+        }
+        state.held.emplace_back(this, std::move(item));
     }
-    state.held.emplace_back(this, std::move(item));
+    // the module cleanup releases it when it waits for its work
+    qore_dbg_module_cleanup_work_held();
     return true;
 }
 
-void qore_dbg_release_held_module_cleanup_work(const char* by) {
+void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold) {
     AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
     std::vector<std::pair<QoreCallDispatcher*, QoreCallDispatcher::AsyncWorkItem>> held;
     {
         AutoLocker al(state.lock);
-        // the hold ends: the work that the cleanup hands over from now on is queued
-        if (!state.hold.load(std::memory_order_relaxed) && state.held.empty()) {
-            return;
+        if (end_hold) {
+            // the work that the cleanup hands over from now on is queued
+            state.hold.store(false, std::memory_order_release);
         }
-        state.hold.store(false, std::memory_order_release);
         held.swap(state.held);
+    }
+    if (held.empty()) {
+        return;
     }
     fprintf(stderr, "held module cleanup work: %zu released (%s)\n", held.size(), by);
     fflush(stderr);
+    // the items are queued, not held again, also if one of the calls throws
+    struct RequeueHelper {
+        RequeueHelper() {
+            dbg_requeue_held_module_cleanup_work = true;
+        }
+        ~RequeueHelper() {
+            dbg_requeue_held_module_cleanup_work = false;
+        }
+    } requeue_helper;
     for (auto& i : held) {
         i.first->enqueue(std::move(i.second));
     }

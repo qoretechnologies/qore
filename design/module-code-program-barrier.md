@@ -247,7 +247,18 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
   module's Program and reported `PROGRAM-ERROR` on stderr at every exit (qore#6510,
   `examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest`).  An operation that ends on its own after the close,
   without the cleanup canceling it, is still refused, as is one that another thread canceled in its step before the
-  cleanup stops the I/O thread (its deferred cancel is completed then with the context it had)
+  cleanup stops the I/O thread (its deferred cancel is completed then with the context it had).
+  The cleanup waits for that work before it goes on with the next module (qore#6928): the cancel is processed on an
+  I/O thread and the operation's `onComplete()` runs on a callback worker, with the references of the operation
+  (whose release ran the manager's destructor), so under load it ran after the HttpClientIo module's Program had
+  passed its teardown barrier (`AsyncIoControllerPriv::cancelByProgram()`, a point in time) and been deleted, and
+  `PROGRAM-ERROR` was printed.  The work is counted while it exists (`QoreModuleCleanupWorkFlag`: the commands that the
+  cleanup and its delegates create, the operation's context that `applyModuleCleanupCancel()` creates, which its work
+  items share, and the deferred releases with the flag), and `qore_module_cleanup_drain_work()` waits until the count
+  is zero after Phase 0, after the data of each module is cleared in Phase 1 and after each module is deleted in
+  Phase 2.  A debug build's `dbg_async_io_hold_module_cleanup_work()` hook holds the `onComplete()` items until the
+  cleanup releases them, when it waits for its work (or else after the user modules have been deleted), which makes
+  the race deterministic (`ModuleCleanupCancel.qtest`, hold cases)
 - in turn, such work of a thread that runs such work
 
 The destructors that the cleanup runs (of the objects in the module Programs' data in Phase 1, and of the objects in

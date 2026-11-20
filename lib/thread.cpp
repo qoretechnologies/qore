@@ -5437,6 +5437,75 @@ void qore_close_module_programs() {
     module_programs_closed_tid.store(q_gettid(), std::memory_order_seq_cst);
 }
 
+namespace {
+//! the work that the module cleanup has handed over and that has not ended (qore#6928)
+struct QoreModuleCleanupWork {
+    QoreThreadLock lock;
+    QoreCondition cond;
+    //! the number of pieces of work counted (see QoreModuleCleanupWorkFlag)
+    size_t count = 0;
+#ifdef DEBUG
+    //! true if the dbg_async_io_hold_module_cleanup_work() test hook has held work that the cleanup must release
+    bool dbg_held = false;
+#endif
+
+    //! Returns the state, which is never destroyed: work can end in a thread that runs after static destruction
+    static QoreModuleCleanupWork& get() {
+        static QoreModuleCleanupWork* state = new QoreModuleCleanupWork;
+        return *state;
+    }
+};
+}
+
+void qore_module_cleanup_work_begin() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    ++work.count;
+}
+
+void qore_module_cleanup_work_end() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    assert(work.count);
+    if (!--work.count) {
+        work.cond.broadcast();
+    }
+}
+
+#ifdef DEBUG
+void qore_dbg_module_cleanup_work_held() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    work.dbg_held = true;
+    work.cond.broadcast();
+}
+#endif
+
+void qore_module_cleanup_drain_work() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    SafeLocker sl(work.lock);
+#ifdef DEBUG
+    // the work that the test hook holds, also while the cleanup waits, runs now (see
+    // dbg_async_io_hold_module_cleanup_work())
+    work.dbg_held = true;
+#endif
+    while (true) {
+#ifdef DEBUG
+        if (work.dbg_held) {
+            work.dbg_held = false;
+            sl.unlock();
+            qore_dbg_release_held_module_cleanup_work("the module cleanup waits for its work", false);
+            sl.lock();
+            continue;
+        }
+#endif
+        if (!work.count) {
+            break;
+        }
+        work.cond.wait(work.lock);
+    }
+}
+
 bool qore_module_cleanup_delegation() {
     // the load pairs with the store of qore_close_module_programs(): the thread that runs the cleanup made it, and a
     // thread running work that it handed over was started or given the work after it
@@ -7196,7 +7265,7 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
 }
 
 QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate)
-        : module_cleanup_delegate(module_cleanup_delegate) {
+        : module_cleanup_delegate(module_cleanup_delegate), module_cleanup_work(module_cleanup_delegate) {
     if (!src) {
         return;
     }
