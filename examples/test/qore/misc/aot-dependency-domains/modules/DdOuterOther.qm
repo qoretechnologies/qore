@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares a domain other than locale control and requires a
+# module that uses locale control, whose restriction it does not remove (qore#6351)
+
+%modern
+
+module DdOuterOther {
+    version = "1.0";
+    desc = "a module that declares the process control domain";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "PROCESS_CONTROL";
+}
+
+%requires DdInner
+
+public namespace DdOuterOther {
+    public string sub run() {
+        return DdInner::run();
+    }
+}

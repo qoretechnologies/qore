@@ -228,5 +228,35 @@ The AST interpreter gives a parameter these arguments with no other reference, s
   does not cache the IR of a closure, so a call that gives a closure an argument does not call its native code
   directly (`qore_ir_native_closure_call_eligible()`).
 
+The untyped variable of a foreach loop is assigned each element as it is, so it can hold a reference given by an
+element, and it reads as the referenced lvalue too (issue #6441). Native code keeps such an IR-only variable as an
+element local (`QoreIRToLLVM::loadLocalCacheValue()`), whose read through the reference owned its value and never
+released it, so the object was leaked: the read now holds the value in the slots of its read site
+(`qore_rt_read_element_local_held()`), released and given to calls as the slots of `emitReferenceLocalRead()` are. The
+helper also sets a flag of the frame (`element_read_held_flag`), and the end of a statement releases these slots behind
+one test of the flag, so that a frame that never reads a reference through such a variable pays one load and one branch
+per statement. Only a variable that an element or a store that can be a reference is assigned to
+(`QoreIRFunction::reference_element_locals`, `reference_store_locals`) has these slots: the variable of a loop over a
+list of ints reads its cache as before. The IR interpreter gives such a read to a call that can take an argument over
+(issue #6538): the interpreter's analysis of the function makes it a consumed argument
+(`qore_ir_element_read_given_to_call()` in `buildValueUseCounts()`), decided from static facts, so the call's
+instruction has `QORE_IR_GIVES_CALL_ARGS | QORE_IR_GIVES_CALL_TEMPS` before the function runs and the IR is not
+changed afterwards: a method that writes the referenced variable and its parameter destroys the object at the write,
+as in the AST interpreter, in every frame and thread.  A call known to take nothing over is not given the read and is
+made as before, with no test of its arguments (`qore_ir_call_known_to_take_no_arg_over()`): a function, a static
+method, or a method of a final class or a final variant (the method and class that the parser resolved, also when
+the call is dispatched by name at run time) whose single variant's IR shows that no parameter takes its argument over (a
+callee that has not run yet is lowered then, without promoting its tier, as the batch compilation of native code
+lowers its callees), or a builtin variant, whose argument list holds its arguments until it returns.  Anything else (an
+overridable method, a call reference, a closure, a callee that cannot be lowered) is given the read.
+`QoreIRInterpreter::execute()` is the same machine code as on develop.  A call that is given the read runs the code of
+a call that may give, whether or not the variable holds a reference: the test of every giving call
+(`hasConsumedCallArgs()`, +68 instructions per call of an overridable `c.m(r)` over a list of ints in ir and tiered,
+callgrind against develop 97f6f3f552), and for a read that owns its value, an object read from the variable's slot,
+the given call path (+732 per call of an overridable `c.m(r)` over a list of objects in ir).  Native
+code makes a call that may give such a read in both forms and makes the call that gives nothing when no slot holds its
+value (`emitGivenOrPlainCall()`, also for method calls), and releases a slot after the call only if it holds the value,
+tested inline. A typed variable is never assigned a reference.
+
 The value of a cast is not one of them: the AST interpreter holds a temporary operand of a cast until the statement
 ends (issue #5712), and so do the other modes.

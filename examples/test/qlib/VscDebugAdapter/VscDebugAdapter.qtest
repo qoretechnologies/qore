@@ -867,10 +867,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "columnsStartAt1": True, "pathFormat": "path"});
         assertTrue(r.success, r.message);
         # the adapter sends no stopped event before a program is launched
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         assertThrows("DAP-ERROR", "^no stopped event from the adapter within <time: 2 seconds>; the messages received "
             "and not taken: .*; stray output: .*; adapter stderr: ", \dap.waitForEvent(), ("stopped", 2s));
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         assertTrue(elapsed >= 2s, sprintf("%y", elapsed));
         assertTrue(elapsed < 30s, sprintf("%y", elapsed));
         # the adapter is still running: the wait ended at the deadline, not at the end of the adapter's output
@@ -2122,12 +2122,21 @@ print('exit code: %d' % p.wait(30))
 
     # the IDE is told why the debug server cannot be reached
     noServerTest() {
-        # a port that is bound but does not accept connections
+        # a port that is bound but does not accept connections; the address is the IPv4 loopback address, not
+        # "localhost", whose addresses and their order depend on the resolver: on macOS a connection to the IPv6
+        # loopback address, where the port is not bound, is refused, while one to a port that is bound and does not
+        # listen gets no answer (qore#6542)
         Socket sock();
-        sock.bind("localhost:0");
+        sock.bind("127.0.0.1:0");
         int port = sock.getSocketInfo().port;
 
-        Process proc = startAdapter(("-a", sprintf("ws://localhost:%d", port)));
+        # on macOS the connection only ends when a timeout expires: the transport's connect timeout ends it with its own
+        # error (HTTP1-CONNECT-TIMEOUT) only if all its attempts end within the time that the connect request may take
+        # (the WebSocketClient's I/O timeout, 15 seconds by default); otherwise the request's wait ends first with the
+        # generic HTTPCLIENT-TIMEOUT.  A connect timeout error is retried (HttpClientIo's DefaultMaxRequestRetries, 3),
+        # so (3 + 1) * 2 s = 8 s must stay below 15 s; without -c the connect timeout is 30 seconds
+        # (HttpClientIo::DefaultConnectTimeout)
+        Process proc = startAdapter(("-c", "2000", "-a", sprintf("ws://127.0.0.1:%d", port)));
         on_exit if (proc.running()) {
             proc.terminate();
         }
@@ -2135,14 +2144,18 @@ print('exit code: %d' % p.wait(30))
         hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
             "columnsStartAt1": True, "pathFormat": "path"});
         assertFalse(r.success);
-        assertRegex(sprintf("^DEBUG-CONNECT-ERROR: cannot connect to the debug server at ws://localhost:%d: ", port),
+        assertRegex(sprintf("^DEBUG-CONNECT-ERROR: cannot connect to the debug server at ws://127.0.0.1:%d: ", port),
             r.message);
         # the error of the connection is given: Linux refuses a connection to a port that is bound but does not
-        # listen, while on macOS the connection times out, or, when many processes connect at the same time, the
-        # connection is accepted by the system and then reset as the adapter writes its request, which is reported as
-        # a broken pipe: in each case the connection fails
-        assertRegex("(SOCKET-CONNECT-ERROR: error in connect\\(\\) \\(target: localhost:[0-9]+\\): "
-            + "(Connection refused|Operation timed out)|Broken pipe)", r.message);
+        # listen; macOS does not answer it (the system ends it only after net.inet.tcp.keepinit, 75 seconds), so the
+        # transport's connect timeout ends it
+        if (PlatformOS == "Darwin") {
+            assertRegex("HTTP1-CONNECT-TIMEOUT: connection to 127\\.0\\.0\\.1:[0-9]+ was not established within the "
+                "connect timeout \\(2000 ms\\)", r.message);
+        } else {
+            assertRegex("SOCKET-CONNECT-ERROR: error in connect\\(\\) \\(target: 127\\.0\\.0\\.1:[0-9]+\\): "
+                "Connection refused", r.message);
+        }
         proc.closeStdin();
         assertTrue(proc.wait(30s), "the adapter ends");
         assertEq(0, proc.exitCode());

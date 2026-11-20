@@ -539,9 +539,15 @@ public string sub decode_mime_filename(string filename) {
     - Leading/trailing whitespace
     - Leading dots (to prevent hidden files)
 
+    A name that is not valid in its encoding, or that is empty after sanitization, gives \c "attachment".
+
     @since MailMessage 1.5
 */
 public string sub sanitize_filename(string filename) {
+    # a name that is not valid in its encoding cannot be sanitized; the default name is given (qore#6553)
+    if (!filename.isEncodingValid()) {
+        return "attachment";
+    }
     # Remove control characters, path separators, and other unsafe characters
     # Using regex substitution to reliably handle UTF-8 multibyte characters
     string result = filename;

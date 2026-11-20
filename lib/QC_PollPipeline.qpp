@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_PollPipeline.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/qore_socket_private.h"
@@ -42,6 +43,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/ql_crypto.h"
 #include "qore/intern/QoreRegex.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/WebSocketFrameCodec.h"
 
 /** @cond INTERNAL */
@@ -313,6 +315,22 @@ PollPipelinePriv::~PollPipelinePriv() {
     if (current_op || sock_obj || result_action) {
         ExceptionSink xsink;
         cleanup(&xsink);
+    }
+}
+
+void PollPipelinePriv::deref(ExceptionSink* xsink) {
+    // an async I/O controller that holds the pipeline can still continue it after the destructor of its object
+    if (ROdereference()) {
+        cleanup(xsink);
+        delete this;
+    }
+}
+
+void PollPipelinePriv::deref() {
+    if (ROdereference()) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+        delete this;
     }
 }
 
@@ -690,6 +708,18 @@ int PollPipelinePriv::addSetContextValue(const char* key, const char* value) {
     });
 }
 
+int PollPipelinePriv::addSetContextValue(const char* key, const QoreString& value) {
+    std::string k(key);
+    std::string val(value.c_str(), value.size());
+    const QoreEncoding* enc = value.getEncoding();
+    return addTransform([k, val, enc](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+        ctx.extra->setKeyValue(k.c_str(), new QoreStringNode(val.data(), val.size(), enc), xsink);
+    });
+}
+
 int PollPipelinePriv::addSetContextBinary(const char* key, BinaryNode* data) {
     std::string k(key);
     // Take ownership of the caller's ref and keep it alive for the transform
@@ -893,36 +923,47 @@ int PollPipelinePriv::addRequireContextKey(const char* key, const char* err_code
 
 int PollPipelinePriv::addCheckRegex(const char* source_key, const char* pattern, size_t pattern_len,
         const char* result_key, ExceptionSink* xsink) {
-    // a value that is not valid UTF-8 (ex: a server reply with a Latin-1 byte) is matched with its invalid byte
-    // sequences never part of a match; without PCRE2_MATCH_INVALID_UTF (PCRE2 before 10.34) it is matched bytewise
-#ifdef PCRE2_MATCH_INVALID_UTF
-    uint32_t opts = PCRE2_UTF | PCRE2_MATCH_INVALID_UTF;
-#else
-    uint32_t opts = 0;
-#endif
-    int errorcode;
-    PCRE2_SIZE eo;
-    pcre2_code* code = pcre2_compile(reinterpret_cast<PCRE2_SPTR8>(pattern), pattern_len, opts, &errorcode, &eo,
-        nullptr);
-    if (!code) {
-        PCRE2_UCHAR buffer[qore_pcre2_errorbuf_size];
-        pcre2_get_error_message(errorcode, buffer, sizeof(buffer));
-        xsink->raiseException("REGEX-COMPILATION-ERROR", "Regular expression compilation failed at %lu ('%s'): %s",
-            static_cast<unsigned long>(eo), pattern, reinterpret_cast<const char*>(buffer));
+    auto compile = [&] (uint32_t opts) -> std::shared_ptr<pcre2_code> {
+        int errorcode;
+        PCRE2_SIZE eo;
+        pcre2_code* code = pcre2_compile(reinterpret_cast<PCRE2_SPTR8>(pattern), pattern_len, opts, &errorcode, &eo,
+            nullptr);
+        if (!code) {
+            PCRE2_UCHAR buffer[qore_pcre2_errorbuf_size];
+            pcre2_get_error_message(errorcode, buffer, sizeof(buffer));
+            xsink->raiseException("REGEX-COMPILATION-ERROR", "Regular expression compilation failed at %lu ('%s'): %s",
+                static_cast<unsigned long>(eo), pattern, reinterpret_cast<const char*>(buffer));
+            return std::shared_ptr<pcre2_code>();
+        }
+        return std::shared_ptr<pcre2_code>(code, pcre2_code_free);
+    };
+    // a string is text in its encoding: one that is not valid in it raises INVALID-ENCODING, as every regular
+    // expression match does (qore#6554)
+    std::shared_ptr<pcre2_code> re = compile(PCRE2_UTF | PCRE2_NEVER_BACKSLASH_C);
+    if (!re) {
         return -1;
     }
-    std::shared_ptr<pcre2_code> re(code, pcre2_code_free);
+    // binary data has no encoding: it is matched as UTF-8 with its invalid byte sequences never part of a match;
+    // without PCRE2_MATCH_INVALID_UTF (PCRE2 before 10.34) it is matched bytewise
+#ifdef PCRE2_MATCH_INVALID_UTF
+    std::shared_ptr<pcre2_code> re_bin = compile(PCRE2_UTF | PCRE2_MATCH_INVALID_UTF);
+#else
+    std::shared_ptr<pcre2_code> re_bin = compile(0);
+#endif
+    if (!re_bin) {
+        return -1;
+    }
     std::string src(source_key);
     std::string res(result_key);
-    return addTransform([src, re, res](Context& ctx, ExceptionSink* xsink) {
+    return addTransform([src, re, re_bin, res](Context& ctx, ExceptionSink* xsink) {
         if (!ctx.extra) {
             ctx.extra = new QoreHashNode(autoTypeInfo);
         }
         QoreValue v = ctx.extra->getKeyValue(src.c_str());
         const char* subject = nullptr;
         size_t len = 0;
-        // a string in another encoding is matched in UTF-8; a string tagged UTF-8 is matched as it is, even if it
-        // is not valid UTF-8
+        const pcre2_code* code = re.get();
+        // a string in another encoding is matched in UTF-8
         TempEncodingHelper str;
         if (v.getType() == NT_STRING) {
             const QoreStringNode* s = v.get<const QoreStringNode>();
@@ -940,15 +981,16 @@ int PollPipelinePriv::addCheckRegex(const char* source_key, const char* pattern,
             const BinaryNode* b = v.get<const BinaryNode>();
             subject = static_cast<const char*>(b->getPtr());
             len = b->size();
+            code = re_bin.get();
         }
         bool found = false;
         if (subject) {
-            pcre2_match_data* md = pcre2_match_data_create_from_pattern(re.get(), nullptr);
+            pcre2_match_data* md = pcre2_match_data_create_from_pattern(code, nullptr);
             ON_BLOCK_EXIT(pcre2_match_data_free, md);
-            int rc = qore_pcre2_match(re.get(), reinterpret_cast<PCRE2_SPTR8>(subject), len, 0, 0, md);
+            int rc = qore_pcre2_match(code, reinterpret_cast<PCRE2_SPTR8>(subject), len, 0, 0, md);
             if (rc > 0) {
                 found = true;
-            } else if (qore_pcre2_check_match_error(rc, xsink)) {
+            } else if (qore_pcre2_check_match_error(rc, xsink, subject, len)) {
                 return;
             }
         }
@@ -1310,7 +1352,11 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                     *desc_str ? desc_str->c_str() : "step failed", xsink);
                 // Propagate the original exception to the caller
                 xsink->assimilate(poll_xsink);
-                return nullptr;
+                // a step can return its poll info with an exception (one raised after the hash was made, such as
+                // for the socket member of an operation whose object was deleted): it is returned with the exception,
+                // so that the caller releases it where it releases the poll info of a step (the async I/O controller
+                // releases it off its I/O thread)
+                return poll_info;
             }
 
             if (poll_info) {
@@ -1378,6 +1424,13 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                         ctx.extra->setKeyValue(step.target.c_str(), code, xsink);
                         if (*xsink) {
                             return nullptr;
+                        }
+
+                        // a reply that is not valid in its encoding (ex: a Latin-1 host name in an SMTP reply) is
+                        // tagged ISO-8859-1, as obs-text is: its bytes are kept, and it is valid text that can be
+                        // matched (qore#6554)
+                        if (ctx.line_accum && !qore_string_encoding_valid(*ctx.line_accum)) {
+                            ctx.line_accum->setEncoding(QCS_ISO_8859_1);
                         }
 
                         // Store accumulated text in ctx.extra[text_key]
@@ -2263,7 +2316,9 @@ PollPipeline::constructor(*string goal) [flags=NAMED_ARGS] {
 /** Releases all internal references.
 */
 PollPipeline::destructor() {
-    priv->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 
@@ -2546,7 +2601,8 @@ int PollPipeline::addSendFromContext(string context_key) [dom=NETWORK; flags=NAM
     Used for SMTP, POP3, and similar line-oriented protocols.
 
     @param code_key the context extra key for the numeric reply code
-    @param text_key the context extra key for the accumulated response text
+    @param text_key the context extra key for the accumulated response text; a reply that is not valid in its
+    encoding is stored in ISO-8859-1 with its bytes unchanged
     @param error_code the exception error code for error responses
     @return the step index
 
@@ -2682,7 +2738,8 @@ int PollPipeline::addRecvImapResponse(string tag_key, string resp_key, string er
     @since %Qore 3.0
 */
 int PollPipeline::addSetContextValue(string context_key, string value) [flags=NAMED_ARGS] {
-    return priv->addSetContextValue(context_key->c_str(), value->c_str());
+    // the string is stored with its encoding and all of its bytes
+    return priv->addSetContextValue(context_key->c_str(), *value);
 }
 
 //! Adds a transform step that sets binary data in the context extra hash
@@ -2837,8 +2894,10 @@ int PollPipeline::addContextOr(string result_key, string key_a, string key_b) [f
     @param result_key the context extra key for the boolean result
     @return the step index
 
-    A value that is not valid UTF-8 (ex: a binary value, or a server reply with a Latin-1 byte) is matched too: its
-    invalid byte sequences are never part of a match, so a pattern of ASCII characters matches as it would bytewise.
+    A binary value is matched with its byte sequences that are not valid UTF-8 never part of a match, so a pattern of
+    ASCII characters matches as it would bytewise.  A reply read by addRecvLineResponse() that is not valid in its
+    encoding (ex: one with a Latin-1 byte) is stored in ISO-8859-1, so it can be matched.  Matching any other string
+    that is not valid in its encoding raises \c INVALID-ENCODING when the step runs.
 
     @throw REGEX-COMPILATION-ERROR the pattern cannot be compiled, or it contains a NUL character
 

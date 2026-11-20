@@ -551,6 +551,20 @@ public class ProviderIndexUtil {
         static hash<string, hash<string, bool>> action_restored = {};
     }
 
+    private:internal {
+        #! The capability that reads the files of the configured index for code that a sandbox governs, or
+        #! @ref NOTHING
+        /** Created when the module is loaded; see initIndexFileReader().  Kept where no subclass can read it.
+        */
+        static *code index_file_reader = ProviderIndexUtil::initIndexFileReader();
+
+%ifdef QoreDebug
+        #! For tests (debug builds only): called by the capability with the path of an index file after it was
+        #! checked and before it is opened; see setIndexFileOpenTestHook()
+        static *code index_file_open_test_hook;
+%endif
+    }
+
     #! Enters or leaves index build mode
     /** A process building the data provider index loads every provider it indexes, so it never needs the published
         index; reading it would only load the provider modules it lists and hold its metadata in memory while the
@@ -1820,7 +1834,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         checkDataIndex();
 
         if (exists (*string mod = index.factorymap{factory})) {
-            return tryLoadModule(mod);
+            return ProviderIndexUtil::loadIndexModule(mod);
         }
         return False;
     }
@@ -1836,7 +1850,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         if (*hash<string, bool> h = index.appmap{app}) {
             bool loaded = False;
             foreach string mod in (keys h) {
-                if (tryLoadModule(mod) && !loaded) {
+                if (ProviderIndexUtil::loadIndexModule(mod) && !loaded) {
                     loaded = True;
                 }
             }
@@ -1856,7 +1870,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         if (*hash<string, bool> h = index.schememap{scheme}) {
             bool loaded = False;
             foreach string mod in (keys h) {
-                if (tryLoadModule(mod) && !loaded) {
+                if (ProviderIndexUtil::loadIndexModule(mod) && !loaded) {
                     loaded = True;
                 }
             }
@@ -1870,7 +1884,17 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @return @ref True if the module was loaded, @ref False if it was not
     */
-    static bool tryLoadModule(string mod) [dom=PROCESS_CONTROL] {
+    static bool tryLoadModule(string mod) [dom=PROCESS_CONTROL,FILESYSTEM] {
+        return ProviderIndexUtil::loadIndexModule(mod);
+    }
+
+    #! Loads a module that the data provider index names, for a lookup that the module's caller makes
+    /** Does not declare the \c PROCESS_CONTROL domain as tryLoadModule() does, which loads any module or path that it
+        is given: a lookup (DataProvider::getFactory(), an application or connection scheme lookup) loads only the
+        modules that the index names for what is looked up, also for code that is restricted from the domain
+        (qore#6337)
+    */
+    private:internal static bool loadIndexModule(string mod) {
         # check local cache first to avoid acquiring the global module lock
         if (loaded_module_cache{mod}) {
             return True;
@@ -1973,6 +1997,15 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         m.lock();
         on_exit m.unlock();
+        # an index that code that a sandbox governs could not read is not kept for the process: its sandbox may have
+        # refused it the files, as when the module has no capability to read them for it (see
+        # initIndexFileReader()); the next reader reads the index again
+        if (!build && index_read_error && SandboxManager::isSandboxed()) {
+            initializing = False;
+            remove initializing_tid;
+            init_cond.broadcast();
+            return;
+        }
         installIndexState(state);
         initializing = False;
         remove initializing_tid;
@@ -2536,7 +2569,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @throw PROVIDER-INDEX-ERROR the file does not match its size or digest, or is not a hash of apps
     */
     static private hash<auto> readActionSummaryFile(string path, hash<auto> info) {
-        binary data = ReadOnlyFile::readBinaryFile(path);
+        binary data = readIndexFileBinary(path);
         if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
             throw "PROVIDER-INDEX-ERROR", "the file does not match the size and digest recorded in the metadata "
                 "cache manifest";
@@ -2684,7 +2717,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @see writeDataProviderIndexByApp()
     */
     static hash<ProviderIndexInfo> writeDataProviderIndex(*hash<DataProviderIndexInfo> h, date delta,
-            hash<auto> summary, *bool write_canonical_yaml) {
+            hash<auto> summary, *bool write_canonical_yaml) [dom=PROCESS_CONTROL,FILESYSTEM] {
         *hash<string, hash<string, hash<auto>>> actioninfomap = h.actioninfomap;
         hash<auto> maps = h ? (h - ("actioninfomap", "top_actioninfomap")) : {};
         return writeDataProviderIndexByApp(maps, keys actioninfomap, *hash<string, hash<auto>> sub (string app) {
@@ -2739,7 +2772,8 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         @since ProviderIndexUtil 1.2
     */
     static hash<ProviderIndexInfo> writeDataProviderIndexByApp(hash<auto> maps0, *list<string> action_apps,
-            code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml) {
+            code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml)
+            [dom=PROCESS_CONTROL,FILESYSTEM] {
         # a caller's literal may be narrowed (e.g. hash<string, hash<string, string>>), and adding the altmap member
         # would throw
         hash<auto!> maps = maps0;
@@ -3400,7 +3434,7 @@ if (info) {
         @since ProviderIndexUtil 1.2
     */
     static *hash<SerializedDataProviderIndexInfo> readSerializedDataProviderIndex(string dir,
-            *code<nothing(string, *hash<auto>, *hash<auto>)> per_app) {
+            *code<nothing(string, *hash<auto>, *hash<auto>)> per_app) [dom=FILESYSTEM] {
         return readSerializedIndexIntern(dir, True, per_app);
     }
 
@@ -3415,7 +3449,7 @@ if (info) {
 
         @since ProviderIndexUtil 1.2
     */
-    static *hash<SerializedDataProviderIndexInfo> getSerializedDataProviderIndexSource(string dir) {
+    static *hash<SerializedDataProviderIndexInfo> getSerializedDataProviderIndexSource(string dir) [dom=FILESYSTEM] {
         return readSerializedIndexIntern(dir, False);
     }
 
@@ -3454,7 +3488,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @since ProviderIndexUtil 1.2
     */
-    static *string dumpIndexYaml(*string dir, *string app, *string output_path) {
+    static *string dumpIndexYaml(*string dir, *string app, *string output_path) [dom=FILESYSTEM] {
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read the data provider metadata";
 %else
@@ -3928,11 +3962,11 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         *string routing_sha256;
         try {
             routing_path = getIndexPath("routing");
-            routing_stat = hstat(routing_path);
+            routing_stat = statIndexFile(routing_path);
             if (!routing_stat) {
                 return;
             }
-            binary data = ReadOnlyFile::readBinaryFile(routing_path);
+            binary data = readIndexFileBinary(routing_path);
             routing = parseRoutingIndex(data);
             routing_sha256 = digest("sha256", data).toHex();
         } catch (hash<ExceptionInfo> ex) {
@@ -3950,7 +3984,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         bool canonical = isCanonicalRoutingIndex(routing);
         try {
             string data_path = getIndexPath("data");
-            *hash<StatInfo> data_stat = hstat(data_path);
+            *hash<StatInfo> data_stat = statIndexFile(data_path);
             if (data_stat) {
                 if (canonical) {
                     # the canonical index can be large (hundreds of megabytes), so its digest is verified only if
@@ -3959,7 +3993,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                     # or the files have been copied; reading it as binary data does not copy it into a string
                     if (routing.data_size != data_stat.size || data_stat.mtime > routing_stat.mtime) {
                         if (routing.data_sha256
-                                != digest("sha256", ReadOnlyFile::readBinaryFile(data_path)).toHex()) {
+                                != digest("sha256", readIndexFileBinary(data_path)).toHex()) {
                             # a canonical index file written after the routing index is the current index
                             return;
                         }
@@ -4072,7 +4106,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             return;
         }
         try {
-            if (!hstat(getIndexPath("data"))) {
+            if (!statIndexFile(getIndexPath("data"))) {
                 return;
             }
             *hash<auto> index = readIndex("data");
@@ -4179,7 +4213,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         string err;
         try {
             path = getMetadataCachePath(sha256, version);
-            binary data = ReadOnlyFile::readBinaryFile(path);
+            binary data = readIndexFileBinary(path);
             if (digest("sha256", data).toHex() != sha256) {
                 err = sprintf("the metadata cache manifest %y does not match the digest recorded in the routing "
                     "index", path);
@@ -4215,7 +4249,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         *string path;
         try {
             path = getMetadataCacheChunkPath(app, info.sha256, version);
-            binary data = ReadOnlyFile::readBinaryFile(path);
+            binary data = readIndexFileBinary(path);
             if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
                 setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the metadata of app %y in %y does not match the "
                     "size and digest recorded in the metadata cache manifest", app, path));
@@ -4240,7 +4274,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         *string path;
         try {
             path = getMetadataCacheChunkPath("", info.sha256, version, dir);
-            binary data = ReadOnlyFile::readBinaryFile(path);
+            binary data = readIndexFileBinary(path);
             if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
                 setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the data provider factory info in %y does not "
                     "match the size and digest recorded in the metadata cache manifest", path));
@@ -4296,7 +4330,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         *string path;
         try {
             path = getMetadataCacheChunkPath("", info.sha256, version, dir);
-            binary data = ReadOnlyFile::readBinaryFile(path);
+            binary data = readIndexFileBinary(path);
             if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
                 setIndexReadError("PROVIDER-INDEX-ERROR", sprintf("the data provider failures in %y do not match the "
                     "size and digest recorded in the metadata cache manifest", path));
@@ -4714,14 +4748,14 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             if (type == "data") {
                 # the canonical index file is parsed in full, which takes several times its size in memory
                 int max = getMaxCanonicalIndexSize();
-                *hash<StatInfo> info = hstat(path);
+                *hash<StatInfo> info = statIndexFile(path);
                 if (info && info.size > max) {
                     throw "PROVIDER-INDEX-TOO-LARGE", sprintf("the canonical data provider index %y is %d bytes, "
                         "which is larger than the limit of %d bytes (set with the %s environment variable); it is "
                         "not read", path, info.size, max, ProviderIndexMaxCanonicalSizeEnvVar);
                 }
             }
-            *hash<auto> rv = parse_yaml(File::readTextFile(path));
+            *hash<auto> rv = parse_yaml(readIndexFileText(path));
             if (type == "data") {
                 clearIndexReadError();
             }
@@ -4750,6 +4784,208 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 }
             }
         }
+    }
+
+%ifdef QoreDebug
+    #! Sets a hook that the capability that reads the index for sandboxed code calls before it opens an index file
+    /** For tests (debug builds only): the hook is called with the path of an index file after the file was checked
+        and before it is opened
+
+        @param hook the hook, or @ref NOTHING to remove it
+
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL, or a sandbox
+        governs it
+    */
+    static setIndexFileOpenTestHook(*code hook) [dom=PROCESS_CONTROL] {
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot set an index test hook from a context with restricted process control";
+        }
+        # test hooks are for trusted test code only
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the index test hooks";
+        }
+        index_file_open_test_hook = hook;
+    }
+%endif
+
+    #! Creates the capability that reads the files of the configured index for code that a sandbox governs
+    /** The index is the module's configuration, published in the directory that the process configured (with the
+        @ref ProviderIndexEnvVar environment variable), and what is read from it is the index of the whole process:
+        code that a sandbox governs reads it with the module's access, so that a sandbox that refuses its code file
+        system access neither hides the index from that code nor leaves an empty index for the process when that
+        code reads it first.  The capability reads only the configured index directory and the index files in it
+        (see isConfiguredIndexPath()), and follows no symbolic link (see indexFileOp()); the sandbox still governs
+        every other file access, including an index directory that the caller names itself.  Only the files' data is read with it: the index is parsed, and its
+        metadata restored, by the caller's code.
+
+        Called when the module is loaded, in the context of the code loading it.  The capability can only be created
+        by code that no sandbox governs and that may use the \c UNCONTROLLED_API domain (the module calls the method
+        by name, so that it can be loaded by any Program): from the module path, the module is initialized with no
+        sandbox provenance, also when sandboxed code loads it first.  When it is loaded first by code restricted with
+        @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", or by sandboxed code by path, there is no
+        capability: a sandboxed reader then reads the index with its own access, and a read that fails is not kept
+        for the process (see checkDataIndex()).
+
+        @return the capability, or @ref NOTHING if it cannot be created
+    */
+    private:internal static *code initIndexFileReader() {
+        try {
+            return call_static_method("SandboxManager", "createSystemPolicyCall",
+                \ProviderIndexUtil::indexFileOp());
+        } catch (hash<ExceptionInfo> ex) {
+            # no capability: sandboxed readers read the index with their own access
+        }
+    }
+
+    #! Performs a file operation on the configured index directory or an index file in it; see initIndexFileReader()
+    /** Symbolic links are not followed: the configured index directory and the index file must not be symbolic
+        links, and the file read must be a regular file, the same file that was checked before it was opened.
+
+        @param op \c "stat" (returns the file's @ref Qore::StatInfo "StatInfo" or @ref NOTHING if it does not exist),
+        \c "binary" (returns its contents as binary data), or \c "text" (returns its contents as a string)
+        @param path the path of the configured index directory, or of an index file in it
+
+        @throw PROVIDER-INDEX-ERROR the path is not the configured index directory or an index file in it, the
+        directory or the file is a symbolic link, the file is not a regular file or was replaced while it was
+        opened, or the operation is unknown
+        @throw FILE-OPEN2-ERROR the file does not exist (with \c ENOENT as the exception argument)
+    */
+    private:internal static auto indexFileOp(string op, string path) {
+        if (op != "stat" && op != "binary" && op != "text") {
+            throw "PROVIDER-INDEX-ERROR", sprintf("unknown index file operation %y", op);
+        }
+        # the capability's arguments are given by its caller: they are checked here
+        *string name = ProviderIndexUtil::getConfiguredIndexName(path);
+        if (!exists name) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("%y is not the configured data provider index directory or a file "
+                "of its index", path);
+        }
+        string dir = ProviderIndexUtil::getConfiguredIndexDir();
+        *hash<StatInfo> dir_info = hlstat(dir);
+        if (dir_info.type == "SYMBOLIC-LINK") {
+            throw "PROVIDER-INDEX-ERROR", sprintf("the configured data provider index directory %y is a symbolic "
+                "link; it is not read for code that a sandbox governs", dir);
+        }
+        if (name == "") {
+            if (op != "stat") {
+                throw "PROVIDER-INDEX-ERROR", sprintf("%y is a directory", path);
+            }
+            return dir_info;
+        }
+        if (!dir_info) {
+            if (op == "stat") {
+                return;
+            }
+            throw "FILE-OPEN2-ERROR", sprintf("%y: no such file or directory", path), ENOENT;
+        }
+        # the file is accessed in the directory as it resolves now, so that it is the file checked below
+        string file = realpath(dir) + DirSep + name;
+        *hash<StatInfo> info = hlstat(file);
+        if (info.type == "SYMBOLIC-LINK") {
+            throw "PROVIDER-INDEX-ERROR", sprintf("the data provider index file %y is a symbolic link; it is not read "
+                "for code that a sandbox governs", path);
+        }
+        if (op == "stat") {
+            return info;
+        }
+        if (!info) {
+            throw "FILE-OPEN2-ERROR", sprintf("%y: no such file or directory", path), ENOENT;
+        }
+        if (info.type != "REGULAR") {
+            throw "PROVIDER-INDEX-ERROR", sprintf("the data provider index file %y is not a regular file (type %y); "
+                "it is not read for code that a sandbox governs", path, info.type);
+        }
+%ifdef QoreDebug
+        if (*code hook = index_file_open_test_hook) {
+            hook(file);
+        }
+%endif
+        ReadOnlyFile f(file);
+        # the file opened must be the regular file checked above, not one that replaced it since
+        hash<StatInfo> opened = f.hstat();
+        if (opened.type != "REGULAR" || opened.dev != info.dev || opened.inode != info.inode) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("the data provider index file %y was replaced while it was "
+                "opened; it is not read for code that a sandbox governs", path);
+        }
+        if (op == "binary") {
+            return f.readBinary(-1) ?? binary();
+        }
+        return f.read(-1) ?? "";
+    }
+
+    #! Returns the configured index directory, normalized, or @ref NOTHING if none is configured
+    /** Decided from the configuration alone, without any file system access
+    */
+    private:internal static *string getConfiguredIndexDir() {
+        *string dir = ENV{ProviderIndexEnvVar};
+        if (!dir.val()) {
+            return;
+        }
+        dir =~ s/[\/\\]+$//;
+        return normalize_dir(dir);
+    }
+
+    #! Returns the name of the index file that the path names directly in the configured index directory
+    /** Decided from the path alone, without any file system access
+
+        @return the file name, an empty string if the path is the configured index directory itself, or
+        @ref NOTHING if it is neither
+    */
+    private:internal static *string getConfiguredIndexName(string path) {
+        *string dir = ProviderIndexUtil::getConfiguredIndexDir();
+        if (!exists dir) {
+            return;
+        }
+        if (path == dir) {
+            return "";
+        }
+        string prefix = dir + DirSep;
+        if (!path.equalPartial(prefix)) {
+            return;
+        }
+        # a file name of the index, with no directory separator
+        string name = path.substr(prefix.size());
+        if (name =~ /^qore-[-A-Za-z0-9_.]+\.(yaml|msgpack)$/) {
+            return name;
+        }
+    }
+
+    #! Returns @ref True if the path is the configured index directory, or an index file directly in it
+    /** Decided from the path alone, without any file system access
+    */
+    private:internal static bool isConfiguredIndexPath(string path) {
+        return exists ProviderIndexUtil::getConfiguredIndexName(path);
+    }
+
+    #! Returns the capability if a file access to the given path uses the module's access instead of the caller's
+    private:internal static *code getIndexFileReader(string path) {
+        if (index_file_reader && SandboxManager::isSandboxed() && ProviderIndexUtil::isConfiguredIndexPath(path)) {
+            return index_file_reader;
+        }
+    }
+
+    #! Returns the status of a file of the configured index, as hstat() does; see initIndexFileReader()
+    static private *hash<StatInfo> statIndexFile(string path) {
+        if (*code reader = ProviderIndexUtil::getIndexFileReader(path)) {
+            return reader("stat", path);
+        }
+        return hstat(path);
+    }
+
+    #! Returns the contents of a file of the configured index as binary data; see initIndexFileReader()
+    static private binary readIndexFileBinary(string path) {
+        if (*code reader = ProviderIndexUtil::getIndexFileReader(path)) {
+            return reader("binary", path);
+        }
+        return ReadOnlyFile::readBinaryFile(path);
+    }
+
+    #! Returns the contents of a file of the configured index as a string; see initIndexFileReader()
+    static private string readIndexFileText(string path) {
+        if (*code reader = ProviderIndexUtil::getIndexFileReader(path)) {
+            return reader("text", path);
+        }
+        return File::readTextFile(path);
     }
 
     #! Returns the index path for the given type
@@ -4783,7 +5019,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Sets the environment variable
-    static setEnvironmentVariable(string dir) [dom=PROCESS_CONTROL] {
+    static setEnvironmentVariable(string dir) [dom=PROCESS_CONTROL,FILESYSTEM] {
         setenv(ProviderIndexEnvVar, dir);
         ENV{ProviderIndexEnvVar} = dir;
     }
@@ -4810,7 +5046,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         }
         dir =~ s/[\/\\]+$//;
         dir = normalize_dir(dir);
-        *hash<StatInfo> info = hstat(dir);
+        *hash<StatInfo> info = statIndexFile(dir);
         if (!info) {
             try {
                 # NOTE: the directory must be created with the execute bit set, otherwise it cannot be traversed,
@@ -4886,7 +5122,9 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             logger.logArgs(level, fmt, args);
         } else if (level.getValue() >= LoggerLevel::LevelError.getValue()) {
             # ensure errors are never silently dropped when the logger is not yet configured
-            stderr.printf("ProviderIndexUtil %s: %s\n", level.getStr(), vsprintf(fmt, args));
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.printf("ProviderIndexUtil %s: %s\n", level.getStr(), vsprintf(fmt, args));
+            }
         }
     }
 }

@@ -1,0 +1,20 @@
+public, outside: 1
+private, outside: ! METHOD-DOES-NOT-EXIST
+private ref, outside: ! METHOD-DOES-NOT-EXIST
+internal, outside: ! METHOD-DOES-NOT-EXIST
+private, outside, by name: ! METHOD-DOES-NOT-EXIST
+private, outside, by name with args: ! METHOD-DOES-NOT-EXIST
+private, outside, call reference: ! OBJECT-METHOD-REFERENCE-ERROR
+private, outside, child object: ! METHOD-DOES-NOT-EXIST
+internal, outside, child object: ! METHOD-DOES-NOT-EXIST
+own: [1, 2, 7, 3]
+other object of the class: [1, 2, 7, 3]
+closure made inside: [2, 7, 3]
+reference made inside: 2
+by name inside: ! METHOD-DOES-NOT-EXIST
+child, private: [2, 7]
+child, internal: ! METHOD-DOES-NOT-EXIST
+child, other: [1, 2, 7, 3]
+stranger, private: ! METHOD-DOES-NOT-EXIST
+stranger, internal: ! METHOD-DOES-NOT-EXIST
+stranger, by name: ! METHOD-DOES-NOT-EXIST

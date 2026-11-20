@@ -180,6 +180,7 @@ class HttpClientEventsTest inherits QUnit::Test {
         addTestCase("redirects", \redirectTest());
         addTestCase("poll API", \pollApiTest());
         addTestCase("protocols", \protocolTest());
+        addTestCase("HTTP/3 response before registration", \http3EarlyResponseTest());
         addTestCase("chunks delivered whole", \wholeChunkTest());
         addTestCase("chunk terminator", \chunkTerminatorTest());
         set_return_value(main());
@@ -236,6 +237,9 @@ class HttpClientEventsTest inherits QUnit::Test {
     }
 
     #! Returns every event waiting on the queue
+    /** The events of a request are queued before the call that made the request returns, so a drain after the call
+        returns them all: a drain checks that contract, which a wait for the events would hide.
+    */
     static list<hash<auto>> drainEvents(Queue events) {
         list<hash<auto>> rv();
         while (events.size()) {
@@ -583,6 +587,65 @@ class HttpClientEventsTest inherits QUnit::Test {
             assertEq((ServerBody.size(),), (map $1.len, eventsOfType(ev, EVENT_HTTP_CONTENT_LENGTH)), protocol);
         }
     }
+    #! The response header of an HTTP/3 request is reported before the call returns, also when the response arrives
+    #! before the request is registered on its connection
+    /** The debug hold points hold the thread that submits the request before it registers the request, with the I/O
+        thread of the connection woken to send it, until the I/O thread has received the response and kept it for the
+        registration; the registration then completes the request.
+    */
+    http3EarlyResponseTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_http_hold_at())");
+        }
+        Queue events();
+        HTTPClient hc({
+            "url": quic_url,
+            "http_version": "3.0",
+            "ssl_verify_cert": False,
+            "accept_all_certs": True,
+            "timeout": 30s,
+        });
+        hc.setEventQueue(events);
+
+        # the submitting thread is held before the registration; the I/O thread reports that it kept the response
+        Counter held(1);
+        Counter release(1);
+        Counter buffered(1);
+        on_exit call_function("dbg_http_hold_clear");
+        # a held thread is released if the test fails before it releases it
+        on_exit {
+            if (release.getCount()) {
+                release.dec();
+            }
+        }
+        call_function("dbg_http_hold_at", "h3-register", held, release);
+        call_function("dbg_http_hold_at", "h3-response-buffered", buffered, new Counter(0));
+        Queue result();
+        background sub () {
+            try {
+                result.push({"body": hc.get("/plain", IdentityHeaders)});
+            } catch (hash<ExceptionInfo> ex) {
+                result.push({"err": ex.err, "desc": ex.desc});
+            }
+        }();
+        # only the hold points decrement the Counters: the bounds only report a hang
+        assertEq(0, held.waitForZero(30s), "the request reached the registration");
+        assertEq(0, buffered.waitForZero(30s), "the response arrived before the registration");
+        release.dec();
+        hash<auto> r = result.get(30s);
+        assertEq(NOTHING, r.err, sprintf("%s: %s", r.err, r.desc));
+        assertEq(ServerBody, r.body);
+
+        list<hash<auto>> ev = drainEvents(events);
+        assertEq(("GET /plain HTTP/1.1",), (map $1.message, eventsOfType(ev, EVENT_HTTP_SEND_MESSAGE)));
+        list<hash<auto>> received = eventsOfType(ev, EVENT_HTTP_MESSAGE_RECEIVED);
+        assertEq(1, received.size());
+        assertEq(200, received[0].headers.status_code);
+        assertEq((ServerBody.size(),), (map $1.len, eventsOfType(ev, EVENT_HTTP_CONTENT_LENGTH)));
+        # the request is reported before the response header
+        assertTrue(indexOfEvent(ev, EVENT_HTTP_SEND_MESSAGE) < indexOfEvent(ev, EVENT_HTTP_MESSAGE_RECEIVED));
+    }
+
     #! A chunk larger than the pieces a body is received in is delivered whole: once to a receive callback, and in
     #! its chunk events
     wholeChunkTest() {

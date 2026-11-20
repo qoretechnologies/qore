@@ -37,6 +37,7 @@
 #include "qore/SocketPollOperationBase.h"
 #include "qore/QoreSocketObject.h"
 #include "qore/intern/QoreConsumeHook.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <memory>
 #include <unordered_map>
@@ -371,7 +372,7 @@ public:
         @param xsink exception sink
     */
     DLLLOCAL void watchResponseSend(int32_t stream_id, ExceptionSink* xsink) {
-        sock->watchHttp2ResponseSend(stream_id, xsink);
+        qore_socket_object_private(sock).watchHttp2ResponseSend(stream_id, xsink);
     }
 
     //! Drains all registered stream queues after a read poll cycle
@@ -405,6 +406,26 @@ public:
     //! Releases all internal references
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 
@@ -422,7 +443,7 @@ private:
 
     //! Returns true if a drain was started and is complete; called on the I/O thread at the end of a read cycle
     DLLLOCAL bool isDrainComplete() const {
-        return drain_requested.load(std::memory_order_acquire) && sock && sock->isHttp2DrainComplete();
+        return drain_requested.load(std::memory_order_acquire) && sock && qore_socket_object_private(sock).isHttp2DrainComplete();
     }
     bool headers_only;                          //!< dispatch on HEADERS before END_STREAM
     mutable bool request_pending;               //!< set by continuePoll, cleared by getOutput

@@ -121,6 +121,11 @@ protected:
 public:
     DLLLOCAL ParseObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_exp, char* n_method);
 
+    //! Returns the expression of the object
+    DLLLOCAL QoreValue getExpression() const {
+        return exp;
+    }
+
     //! Creates the copy of a background expression, with the object expression taken when the thread starts
     /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
     */
@@ -155,6 +160,29 @@ public:
     //! through an object is bound (qore#5990), otherwise nullptr
     DLLLOCAL const QoreClass* getStaticBoundClass() const {
         return qc && m && m->isStatic() ? qc : nullptr;
+    }
+
+    //! Returns the declared class of the receiver if the method resolved for it when parsing is a normal method of
+    //! one of its parent classes, otherwise nullptr
+    /** For an object of the declared class, a reference refers to that method, as a call does, also when a lookup of
+        the name in the class at run time finds a method of another parent class that is not accessible there
+        (qore#6680)
+    */
+    DLLLOCAL const QoreClass* getInheritedMethodClass() const {
+        return qc && m && !m->isStatic() && m->getClass() != qc ? qc : nullptr;
+    }
+
+    //! Returns the method resolved when parsing for the declared class of the receiver, or nullptr
+    DLLLOCAL const QoreMethod* getParseMethod() const {
+        return m;
+    }
+
+    //! Restores the declared class of the receiver and the method resolved for it when parsing on a node read from
+    //! an AOT image, before the node is used (see qore_aot_make_object_method_ref())
+    DLLLOCAL void setParseResolution(const QoreClass* n_qc, const QoreMethod* n_m) {
+        assert(!qc && !m && n_qc && n_m);
+        qc = n_qc;
+        m = n_m;
     }
 
     //! Returns a reference to the method of the object that the object expression gave

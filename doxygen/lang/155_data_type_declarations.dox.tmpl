@@ -432,7 +432,8 @@ list sub foo(list l = ("foo", "bar")) {
     |\c list|@ref list "list"&lt;<em>@ref data_type_declarations "type"</em>&gt;|@ref list "list"&lt;<em>@ref data_type_declarations "type"</em>&gt;|Restricts values to lists with the given declared value type; use @ref cast "cast<>(...)" to convert values to this type at runtime.
 
     The list type supports one type argument in angle brackets to specify the value
-    type.  This results in a list where the values must always be of the declared type.  See the
+    type.  This results in a list where the values must always be of the declared type (see
+    @ref list_holes).  See the
     following example for more information.
 
     @par Examples
@@ -468,6 +469,32 @@ list<auto> l1 = (2, 3);
 # prints "list<int>"
 printf("%y\n", l1.fullType());
     @endcode
+
+    @anchor list_holes
+    @par Typed Lists Without Holes
+    A list whose value type does not accept @ref nothing (ex: <tt>list&lt;int&gt;</tt>, <tt>list&lt;float&gt;</tt>)
+    never holds @ref nothing, which a hole would be; this is the type of the list at run time, so it also applies to a
+    list of integers held by an \c auto or <tt>list&lt;auto&gt;</tt> lvalue, whose type is <tt>list&lt;int&gt;</tt>:
+    - an assignment past the end of the list that would leave elements without a value (ex:
+      <tt>list&lt;int&gt; l = (1,); l[3] = 4;</tt>, or <tt>auto l = (1, 2); l[5] = 3;</tt>) raises a
+      \c RUNTIME-TYPE-ERROR exception; an assignment at the end of the list (<tt>l[1] = 4</tt>) extends it
+    - @ref delete "delete" and @ref remove "remove" of an element, which assign @ref nothing to it, make the list a
+      list whose value type accepts @ref nothing (<tt>list&lt;*int&gt;</tt> for a <tt>list&lt;int&gt;</tt>) if the
+      declared type of the lvalue that holds it allows it (no type, \c auto, \c any, \c list,
+      <tt>list&lt;auto&gt;</tt>, <tt>list&lt;*int&gt;</tt>), and raise a \c RUNTIME-TYPE-ERROR exception if the declared
+      type requires the value type (ex: a variable, member, parameter or hash value declared as
+      <tt>list&lt;int&gt;</tt>); @ref splice "splice", @ref extract "extract" and delete or remove of a range or a
+      list of indices remove elements from the list instead
+    - for delete and remove, a typed reference that names the list or a container holding it decides as well (a
+      <tt>reference&lt;list&lt;int&gt;&gt;</tt> parameter raises the exception also when the variable it names is
+      \c auto); typed lists and hashes between the list and an lvalue whose declared type allows it get the widened
+      element or value type (ex: an \c auto variable holding a <tt>list&lt;list&lt;int&gt;&gt;</tt> holds a
+      <tt>list&lt;list&lt;*int&gt;&gt;</tt> afterwards), but a container reached through a
+      @ref weak_assignment_operator "weak reference" is shared and keeps its type, so that the declared type of the
+      list's own lvalue decides
+
+    A list whose value type accepts @ref nothing (ex: <tt>list&lt;*int&gt;</tt>, or an untyped list) is extended with
+    @ref nothing values up to the index of an assignment past its end.
 
     @note Complex list, @ref softlist_complex_type "softlist", @ref hash_complex_type "hash" and
     @ref reference_complex_type "reference" types can be nested up to 64 levels deep.  A type that would be nested
@@ -1142,7 +1169,8 @@ softlist sub foo(softlist l) {
     |\c softlist|all data types|@ref list|Accepts all data types; @ref nothing is returned as an empty list; a list is returned with its elements processed by the subtype declaration, and any other type is returned as the first element of a new list, also processed by the subtype declaration
 
     The softlist type supports one type argument in angle brackets to specify the value
-    type.  This results in a list where the values must always be of the declared type.  See the
+    type.  This results in a list where the values must always be of the declared type (see
+    @ref list_holes).  See the
     following example for more information.
 
     @par Examples
@@ -1227,6 +1255,14 @@ sub foo(code c) {
     - <b>Return types</b> are covariant: the assigned closure can return a more specific type than declared
     - <b>Parameter types</b> are contravariant: the assigned closure can accept more general types than declared
 
+    The signature is checked wherever a value is stored or passed: in variables, parameters, return values, members
+    and the elements of typed lists and hashes.  A mismatch that is known at parse time is a parse error; otherwise
+    the closure or call reference is checked at run time, and one with an incompatible signature raises a
+    \c RUNTIME-TYPE-ERROR exception.  A call reference to a function or method with several variants is accepted if
+    one of its variants is compatible.  The plain \c code type accepts every closure and call reference.  Two
+    typed callable types are the same type only if their signatures are the same, so variants of a function or
+    method may differ in the signature of a typed callable parameter alone.
+
     @par Examples
     @code{.py}
 # Basic typed callable with return and parameter types
@@ -1277,7 +1313,9 @@ code<int(int)> tripler = getMultiplier(3);
 int result = tripler(5);  # returns 15
     @endcode
 
-    @note Closures with default parameters can be assigned to typed callables expecting fewer parameters, as long as the required parameters match.
+    @note Closures with default parameters, or with parameters that accept \c NOTHING, can be assigned to typed
+    callables expecting fewer parameters, as long as the required parameters match; a typed callable with the return
+    type \c nothing accepts a callable with any return type.
 
     @note A typed callable signature declares parameter <i>types</i> only; parameter names are not part of the type and may not be given in the signature.
 
@@ -2100,8 +2138,22 @@ union<int, string> sub getValue(bool useInt) {
     @endcode
 
     @par Member Order
-    Union member order is preserved. When a value matches multiple member types, the first matching
-    member in the source declaration is chosen.
+    Union member order is preserved.  A value whose own type is the type of a member is accepted as it is, whatever
+    the order of the members: a scalar value (ex: an \c int for <tt>union\<float, int\></tt>, a string for
+    <tt>union\<softint, string\></tt>, a date for <tt>union\<softstring, date\></tt>; a member of a soft type or of
+    another type of the value's base type keeps it too, as an int for <tt>union\<float, softint\></tt> or
+    <tt>union\<float, timeout\></tt>, and so does a member of a union that is a member, such as a typedef of a union),
+    an @ref enums "enum" value (also of an enum that a module declares) for a union of the enum, and a list or a hash
+    whose type is the type of a member, or for a list or hash member with no element type (ex: a hash for
+    <tt>union\<softlist\<auto\>, hash\<auto\>\></tt>, a \c list<int> for
+    <tt>union\<list\<float\>, list\<int\>\></tt>).  A value whose type is not the type of a member is converted
+    by the first member in the source declaration that accepts it (ex: an \c int for
+    <tt>union\<float, number\></tt> becomes a \c float, a \c list<int> for
+    <tt>union\<list\<float\>, list\<number\>\></tt> becomes a \c list<float>, and a value of a type that a soft
+    member converts, such as a string for <tt>union\<softint, softfloat\></tt>, is converted by the first soft
+    member).  A @ref cast "cast" to a union follows the same rule: <tt>cast\<union\<float, int\>\>(1)</tt> gives the
+    \c int \c 1, and
+    <tt>cast\<union\<int, float\>\>(1.5)</tt> the \c float \c 1.5.
 
     @par Or-Nothing Unions
     The or-nothing modifier allows the union to also accept NOTHING:

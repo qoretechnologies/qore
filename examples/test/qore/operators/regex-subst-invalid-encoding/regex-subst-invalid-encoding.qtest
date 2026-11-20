@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class RegexSubstInvalidEncodingTest
+
+#! a regular expression substitution fails closed on a subject that is not valid UTF-8 (qore#6553)
+/** A substitution gives a transformed copy of its subject; a subject tagged as UTF-8 with invalid byte sequences
+    cannot be matched, and was given back unchanged as if nothing in it had matched, so an escaping substitution (such
+    as doubling quotes for an SQL literal) let it through unescaped.  Such a substitution now raises INVALID-ENCODING.
+*/
+class RegexSubstInvalidEncodingTest inherits QUnit::Test {
+    constructor() : Test("regex substitution of invalid strings", "1.0", \ARGV) {
+        addTestCase("substitution operator", \substOperator());
+        addTestCase("regex_subst()", \substFunction());
+        addTestCase("valid strings are unaffected", \validStrings());
+        addTestCase("invalid bytes after a match", \invalidAfterMatch());
+        addTestCase("other encodings", \otherEncodings());
+        addTestCase("byte-matching patterns", \byteMatch());
+        set_return_value(main());
+    }
+
+    #! returns a string tagged as UTF-8 whose bytes are not valid UTF-8, with a quote after the invalid byte
+    private static string invalid() {
+        return binary_to_string(parse_hex_string("61ff27"), "UTF-8");
+    }
+
+    substOperator() {
+        string s = invalid();
+        assertThrows("INVALID-ENCODING", sub () { s =~ s/'/''/g; });
+        # the subject is left as it was
+        assertEq(parse_hex_string("61ff27"), binary(s));
+        string t = invalid();
+        assertThrows("INVALID-ENCODING", sub () { t =~ s/a/b/; });
+        assertEq(parse_hex_string("61ff27"), binary(t));
+        # the invalid byte sequence is reported at its offset
+        try {
+            string u = invalid();
+            u =~ s/x/y/g;
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("INVALID-ENCODING", ex.err);
+            assertRegex("offset 1", ex.desc);
+        }
+    }
+
+    substFunction() {
+        assertThrows("INVALID-ENCODING", \regex_subst(), (invalid(), "'", "''", RE_Global));
+        assertThrows("INVALID-ENCODING", sub () {
+            string r = regex_subst(invalid(), "'", string sub (hash<RegexMatchInfo> m) { return "''"; }, RE_Global);
+        });
+        # the RegexSubst class
+        RegexSubst rs("'", "''", RE_Global);
+        assertThrows("INVALID-ENCODING", \rs.subst(), (invalid(),));
+        assertEq("a''b", rs.subst("a'b"));
+    }
+
+    #! the whole subject is checked by the first match, also when the invalid bytes follow a match
+    invalidAfterMatch() {
+        string s = binary_to_string(parse_hex_string("27616161ff"), "UTF-8");
+        assertThrows("INVALID-ENCODING", "offset 4", sub () { s =~ s/'/''/g; });
+        assertThrows("INVALID-ENCODING", "offset 4", \regex_subst(), (s, "'", "''"));
+    }
+
+    #! a string in another encoding that is not valid in it cannot be converted to UTF-8 to be matched
+    otherEncodings() {
+        string sj = binary_to_string(parse_hex_string("8227ff"), "SHIFT_JIS");
+        assertThrows("ENCODING-CONVERSION-ERROR", sub () { sj =~ s/'/''/g; });
+    }
+
+    #! a byte-matching pattern, which can match a part of a character and give a string that is not valid UTF-8, is
+    #! refused when it is compiled (qore#6554), in every form
+    byteMatch() {
+        assertThrows("REGEX-COMPILATION-ERROR", \regex_subst(), ("éa", "\\C", "Z"));
+        assertThrows("REGEX-COMPILATION-ERROR", \regex_subst(), ("éa", "\\C", "Z", RE_Global));
+        assertThrows("REGEX-COMPILATION-ERROR", \regex(), ("éa", "\\C"));
+        assertThrows("REGEX-COMPILATION-ERROR", sub () {
+            string r = regex_subst("éa", "\\C", string sub (hash<RegexMatchInfo> m) { return "Z"; }, RE_Global);
+        });
+    }
+
+    validStrings() {
+        string s = "a'b'c";
+        s =~ s/'/''/g;
+        assertEq("a''b''c", s);
+        assertEq("a''b", regex_subst("a'b", "'", "''", RE_Global));
+        string e = "";
+        e =~ s/'/''/g;
+        assertEq("", e);
+        # a string in another encoding is converted to UTF-8 to be matched
+        string l = binary_to_string(parse_hex_string("e927"), "ISO-8859-1");
+        l =~ s/'/''/g;
+        assertEq("é''", l);
+    }
+
+}

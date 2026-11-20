@@ -2324,7 +2324,8 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
         if (*req_path) {
             // the parse lookup reads the parse options of the current Program, which is not set on a thread that
             // loads a compiled program, and can be another Program; the options of the target Program apply
-            // (qore#6026)
+            // (qore#6026); a lookup, which runs no code of the Program, so the Program is only made current, not
+            // entered (qore#6185)
             QoreProgramContextHelper pch(pgm);
             qc = qore_root_ns_private::parseFindClass(*pp->RootNS, &loc_builtin, req_path);
         }
@@ -2656,6 +2657,79 @@ const QoreMethod* qore_aot_find_named_method(const QoreClass* qc, const char* me
     }
     ClassAccess access = Public;
     return qcp->runtimeFindCommittedStaticMethodIntern(method_name, access, qcp);
+}
+
+// documented in QoreAOT.h
+std::string qore_aot_object_method_ref_name(const ParseObjectMethodReferenceNode* omr) {
+    const QoreClass* qc = omr->getInheritedMethodClass();
+    if (!qc) {
+        return omr->getMethodName();
+    }
+    std::string rv(1, '\x02');
+    rv += qore_aot_encode_class_ref(qc);
+    rv += '\x01';
+    rv += qore_aot_encode_class_ref(omr->getParseMethod()->getClass());
+    rv += '\x01';
+    rv += omr->getMethodName();
+    return rv;
+}
+
+// documented in QoreAOT.h
+bool qore_aot_decode_object_method_ref(QoreProgram* pgm, const char* ref, const char*& method_name,
+        const QoreClass*& declared_class, const QoreMethod*& method) {
+    declared_class = nullptr;
+    method = nullptr;
+    if (ref[0] != '\x02') {
+        method_name = ref;
+        return true;
+    }
+    const char* sep = strchr(ref + 1, '\x01');
+    const char* end = sep ? strchr(sep + 1, '\x01') : nullptr;
+    if (!end || !end[1]) {
+        return false;
+    }
+    method_name = end + 1;
+    if (!pgm) {
+        return true;
+    }
+    std::string class_ref(ref + 1, sep - ref - 1);
+    const QoreClass* qc = qore_aot_resolve_class_ref(pgm, class_ref.c_str());
+    if (!qc) {
+        return true;
+    }
+    class_ref.assign(sep + 1, end - sep - 1);
+    const QoreClass* method_class = qore_aot_resolve_class_ref(pgm, class_ref.c_str());
+    if (!method_class) {
+        return true;
+    }
+    // the class's own normal method of the name, also while the class is being loaded
+    const QoreMethod* m = method_class->findLocalMethod(method_name);
+    if (!m) {
+        m = qore_class_private::get(*method_class)->parseFindLocalMethod(method_name);
+    }
+    if (m && !m->isStatic()) {
+        declared_class = qc;
+        method = m;
+    }
+    return true;
+}
+
+// documented in QoreAOT.h
+ParseObjectMethodReferenceNode* qore_aot_make_object_method_ref(QoreProgram* pgm, QoreValue target,
+        const char* ref) {
+    const char* method_name;
+    const QoreClass* declared_class;
+    const QoreMethod* method;
+    if (!ref || !qore_aot_decode_object_method_ref(pgm, ref, method_name, declared_class, method) || !*method_name) {
+        target.discard(nullptr);
+        return nullptr;
+    }
+    ParseObjectMethodReferenceNode* rv = new ParseObjectMethodReferenceNode(&loc_builtin, target,
+        strdup(method_name));
+    if (method) {
+        rv->setParseResolution(declared_class, method);
+    }
+    return rv;
 }
 
 static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
@@ -3165,10 +3239,13 @@ struct QoreAOTDebugMetadata {
             metadata.insert(metadata.end(), section_data, section_data + sec->size);
         }
         assert(metadata.size() == compact_size);
+        // the copy has the header of the metadata, so it has a checksum of its own (qore#6451)
+        qore_aot_seal_metadata(metadata);
 
         auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
         std::string open_error;
-        if (retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), open_error)) {
+        // the copy is made from metadata that the reader of the module checked against its checksum (qore#6451)
+        if (retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), open_error, false)) {
             this->reader = std::move(retained_reader);
         }
     }
@@ -3179,8 +3256,10 @@ struct QoreAOTDebugMetadata {
             return reader.get();
         }
         auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
+        // the metadata, or a copy of it, was checked against its checksum by the reader of the module, whose
+        // load it belongs to (qore#6451)
         if (!retained_reader->open(borrowed_data ? borrowed_data : metadata.data(),
-                borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error)) {
+                borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error, false)) {
             return nullptr;
         }
         // Force retained sections to decode before publishing the reader for
@@ -4559,9 +4638,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                     target.discard(nullptr);
                     has_unsupported = true;
                 } else if (ref1 && *ref1) {
-                    ctx->exprs[i] = toBitsNB(QoreValue(
-                        new ParseObjectMethodReferenceNode(&loc_builtin,
-                            target, strdup(ref1))));
+                    // the method resolved when parsing is restored (qore#6680)
+                    ParseObjectMethodReferenceNode* omr = qore_aot_make_object_method_ref(pgm, target, ref1);
+                    if (omr) {
+                        ctx->exprs[i] = toBitsNB(QoreValue(omr));
+                    } else {
+                        printd(0, "AOT v2: invalid obj method ref name\n");
+                        has_unsupported = true;
+                    }
                 } else {
                     printd(0, "AOT v2: empty obj method ref name\n");
                     target.discard(nullptr);
@@ -5963,6 +6047,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // run while the global AOT init lock is held, and taking a Program parse lock here can invert lock
                 // order with another loader thread that already holds the Program parse lock and is waiting for AOT
                 // init.
+                // The record is only read and the closure constructed: no code of the Program runs, so the Program is
+                // only made current, not entered (qore#6185).
                 QoreProgramContextHelper closure_pch(pgm);
 
                 // Read flags
@@ -6402,7 +6488,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::CONST_VALUE: {
                 std::string value_error;
-                // the Program resolves the hashdecls and types of typed container values (#5895)
+                // the Program resolves the hashdecls and types of typed container values (#5895); reading the value
+                // runs no code of the Program, so it is only made current, not entered (qore#6185)
                 QoreValue value;
                 {
                     QoreProgramContextHelper value_pch(pgm);
@@ -7167,8 +7254,136 @@ static QoreAOTContext* buildContextFromSlotMap(
 
 // ---- IR Function Deserialization (Phase 5) ----
 
+//! Returns the target that an instruction read from an AOT module always branches to and does not have, or nullptr
+/** The interpreter and the JIT take the targets of a branch, a conditional branch, a switch, an iterator step and the
+    blocks of the incoming values of a phi without a check (qore#6468)
+*/
+static const char* qore_aot_ir_missing_target(const QoreIRInstruction& inst) {
+    if (auto* br = qore_ir_inst_cast<const QoreIRBranchInstruction*>(&inst)) {
+        return br->target ? nullptr : "branch target";
+    }
+    if (auto* brif = qore_ir_inst_cast<const QoreIRBranchIfInstruction*>(&inst)) {
+        return brif->true_target && brif->false_target ? nullptr : "conditional branch target";
+    }
+    if (auto* fused = qore_ir_inst_cast<const QoreIRBranchIfLtLocalIntInstruction*>(&inst)) {
+        return fused->true_target && fused->false_target ? nullptr : "conditional branch target";
+    }
+    if (auto* next = qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(&inst)) {
+        return next->done_target && next->continue_target ? nullptr : "iterator step target";
+    }
+    if (auto* phi = qore_ir_inst_cast<const QoreIRPhiInstruction*>(&inst)) {
+        for (const QoreIRPhiIncoming& in : phi->incoming) {
+            if (!in.block) {
+                return "block for an incoming value of a phi";
+            }
+        }
+        return nullptr;
+    }
+    if (auto* sw = qore_ir_inst_cast<const QoreIRSwitchIntInstruction*>(&inst)) {
+        if (!sw->default_target) {
+            return "switch default target";
+        }
+        for (const QoreIRSwitchCase& c : sw->cases) {
+            if (!c.target) {
+                return "switch case target";
+            }
+        }
+        return nullptr;
+    }
+    if (auto* sw = qore_ir_inst_cast<const QoreIRSwitchStringInstruction*>(&inst)) {
+        if (!sw->default_target) {
+            return "switch default target";
+        }
+        for (const QoreIRSwitchStringCase& c : sw->cases) {
+            if (!c.target) {
+                return "switch case target";
+            }
+        }
+        return nullptr;
+    }
+    return nullptr;
+}
+
 //! Deserialize a single IR instruction from binary data
 /** @return the deserialized instruction, or nullptr on error */
+//! The statement location table of an IR function being read (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
+struct QoreAOTStmtLocReadTable {
+    //! the locations of the table, by index
+    std::vector<const QoreProgramLocation*> entries;
+    //! the runtime location of the instruction read last
+    const QoreProgramLocation* prev = nullptr;
+};
+
+//! Reads the runtime location of an IR instruction written by qore_aot_write_stmt_loc() (see QoreAOTStmtLocTag)
+/** @param inst the instruction, whose own location (QoreIRInstruction::loc) is taken for a new entry with the same
+    lines and file, so that no location is made for it
+    @param inst_file the file of the instruction's own location as read from the string pool of the image, which
+    gives a string once: a new entry in the same file has the same pointer, and takes the file of the instruction's
+    location, which is interned in the Program already, without comparing or interning the string again
+    @return false if the location is malformed, with \a error set
+*/
+static bool qore_aot_read_stmt_loc(const QoreAOTBinaryReader& reader, const uint8_t*& ptr, QoreProgram* pgm,
+        QoreIRFunction* owner_func, QoreAOTStmtLocReadTable& table, QoreIRInstruction& inst, const char* inst_file,
+        std::string& error) {
+    uint8_t tag = QoreAOTBinaryReader::readU8(ptr);
+    switch (static_cast<QoreAOTStmtLocTag>(tag)) {
+        case QoreAOTStmtLocTag::None:
+            table.prev = nullptr;
+            break;
+        case QoreAOTStmtLocTag::Previous:
+            if (!table.prev) {
+                error = "malformed IR: an instruction has the runtime location of an instruction before it that has "
+                    "none";
+                return false;
+            }
+            break;
+        case QoreAOTStmtLocTag::Entry: {
+            uint32_t index = QoreAOTBinaryReader::readU32(ptr);
+            if (index >= table.entries.size()) {
+                error = "malformed IR: runtime location " + std::to_string(index) + " is beyond the "
+                    + std::to_string(table.entries.size()) + " location(s) of the function";
+                return false;
+            }
+            table.prev = table.entries[index];
+            break;
+        }
+        case QoreAOTStmtLocTag::New: {
+            int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+            int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+            const char* file = reader.readStringRef(ptr);
+            if (start_line <= 0) {
+                error = "malformed IR: a runtime location has no line";
+                return false;
+            }
+            const QoreProgramLocation* loc = nullptr;
+            const bool inst_file_same = inst.loc && file == inst_file;
+            // deserializeIRFunction() reads every instruction for the function that owns its locations
+            assert(owner_func);
+            if (inst_file_same && inst.loc->start_line == start_line && inst.loc->end_line == end_line) {
+                loc = inst.loc;
+            } else {
+                // the file is interned in the Program, as the instruction's own (see deserializeIRInstruction())
+                const char* interned_file = inst_file_same
+                    ? inst.loc->getFile()
+                    : (file && pgm)
+                        ? qore_program_private::get(*pgm)->addRuntimeString(file)
+                        : (file ? file : "");
+                auto* new_loc = new QoreProgramLocation(interned_file, start_line, end_line);
+                owner_func->owned_locations.push_back(new_loc);
+                loc = new_loc;
+            }
+            table.entries.push_back(loc);
+            table.prev = loc;
+            break;
+        }
+        default:
+            error = "malformed IR: invalid runtime location tag " + std::to_string(tag);
+            return false;
+    }
+    inst.stmt_loc = table.prev;
+    return true;
+}
+
 static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end,
@@ -7182,7 +7397,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         std::string& error,
         LocalVar** parent_locals_arr,
         int num_parent_locals,
-        const std::vector<LocalVar*>* enclosing_body_locals) {
+        const std::vector<LocalVar*>* enclosing_body_locals,
+        QoreAOTStmtLocReadTable* stmt_locs) {
     auto need = [&ptr, end, &error](size_t bytes, const char* field) -> bool {
         if (end < ptr || static_cast<size_t>(end - ptr) < bytes) {
             error = "truncated instruction while reading ";
@@ -7249,8 +7465,13 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         return nullptr;
     }
     uint16_t exc_target_idx = QoreAOTBinaryReader::readU16(ptr);
-    QoreIRBasicBlock* exc_target = (exc_target_idx != 0xFFFF && exc_target_idx < blocks.size())
-        ? blocks[exc_target_idx].get() : nullptr;
+    // an index beyond the blocks of the function is refused, not read as no handler (qore#6468)
+    if (exc_target_idx != 0xFFFF && exc_target_idx >= blocks.size()) {
+        error = "malformed IR: exception target block index " + std::to_string(exc_target_idx)
+            + " is beyond the " + std::to_string(blocks.size()) + " block(s) of the function";
+        return nullptr;
+    }
+    QoreIRBasicBlock* exc_target = exc_target_idx != 0xFFFF ? blocks[exc_target_idx].get() : nullptr;
 
     std::unique_ptr<QoreIRInstruction> inst;
 
@@ -7282,6 +7503,19 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     rctx.num_parent_locals = num_parent_locals;
     rctx.enclosing_body_locals = enclosing_body_locals;
     inst = ginfo->read_fn(opcode_raw, exc_target, operands, result_id, rctx);
+    // a block index beyond the blocks of the function, and a missing target of an instruction that always branches
+    // to it, are refused: the interpreter takes such a target without a check (qore#6468)
+    if (inst && rctx.bad_block_index) {
+        error = "malformed IR: a block index is beyond the " + std::to_string(blocks.size())
+            + " block(s) of the function";
+        inst.reset();
+    } else if (inst) {
+        const char* missing = qore_aot_ir_missing_target(*inst);
+        if (missing) {
+            error = std::string("malformed IR: the instruction has no ") + missing;
+            inst.reset();
+        }
+    }
     if (!inst) {
         const OpcodeInfo* oi = getOpcodeInfo(opcode_raw);
         error = std::string("opcode ") + (oi && oi->name ? oi->name : "<unknown>")
@@ -7319,6 +7553,11 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         auto* loc = new QoreProgramLocation(interned_file, start_line, end_line);
         owner_func->owned_locations.push_back(loc);
         inst->loc = loc;
+    }
+    // the runtime location (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646); an earlier image has none, and the
+    // function takes the instructions' own (qore_ir_set_deserialized_statement_locations())
+    if (stmt_locs && !qore_aot_read_stmt_loc(reader, ptr, pgm, owner_func, *stmt_locs, *inst, loc_file, error)) {
+        return nullptr;
     }
 
     return inst;
@@ -7544,6 +7783,65 @@ static bool qore_aot_check_ir_value_ids(const QoreIRFunction& func, std::string&
         }
     }
     return true;
+}
+
+// documented in QoreAOTBinary.h
+bool qore_aot_read_ir_catch_tables(const uint8_t*& ptr, const uint8_t* end, QoreIRFunction& func,
+        std::string& error) {
+    // the instruction at each written position: a PushTempMarkPair is written as two instructions, the first of which
+    // stands for it (the reader makes two PushTempMarks of them)
+    size_t total = 0;
+    for (const auto& block : func.blocks) {
+        total += block->instructions.size();
+    }
+    auto readTable = [&](std::unordered_map<const QoreIRInstruction*, uint32_t>& table, const char* what) -> bool {
+        uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+        if (count > total) {
+            error = std::string("the ") + what + " table has more entries than the function has instructions";
+            return false;
+        }
+        for (uint32_t i = 0; i < count; ++i) {
+            uint16_t block = QoreAOTBinaryReader::readU16(ptr);
+            uint16_t inst = QoreAOTBinaryReader::readU16(ptr);
+            uint32_t value = QoreAOTBinaryReader::readU32(ptr);
+            if (block >= func.blocks.size() || inst >= func.blocks[block]->instructions.size()) {
+                error = std::string("an entry of the ") + what + " table is beyond the instructions of the function";
+                return false;
+            }
+            if (!table.emplace(func.blocks[block]->instructions[inst].get(), value).second) {
+                error = std::string("the ") + what + " table gives an instruction twice";
+                return false;
+            }
+        }
+        return true;
+    };
+    return readTable(func.catch_exit_depths, "catch-exit depth")
+        && readTable(func.catch_cleanup_results, "catch-cleanup result");
+}
+
+//! Sets the runtime locations of the instructions of IR deserialized from an image of a format before
+//! QORE_AOT_STATEMENT_LOCATIONS_VERSION (QoreIRInstruction::stmt_loc)
+/** The IR of such an image does not record the statements of its instructions: each instruction takes its own
+    location, the location of the instruction before it in its block where both have the same lines, so that the
+    runtime location is stored when the lines change (qore#6646)
+*/
+static void qore_ir_set_deserialized_statement_locations(QoreIRFunction& func) {
+    for (auto& block : func.blocks) {
+        const QoreProgramLocation* prev = nullptr;
+        for (auto& inst : block->instructions) {
+            const QoreProgramLocation* loc = inst->loc;
+            if (!loc) {
+                continue;
+            }
+            if (prev && prev->start_line == loc->start_line && prev->end_line == loc->end_line
+                    && prev->getFile() == loc->getFile()) {
+                inst->stmt_loc = prev;
+            } else {
+                inst->stmt_loc = loc;
+                prev = loc;
+            }
+        }
+    }
 }
 
 std::unique_ptr<QoreIRFunction> deserializeIRFunction(
@@ -8102,7 +8400,10 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         func->blocks.push_back(std::make_unique<QoreIRBasicBlock>(""));
     }
 
-    // 6. Read blocks and instructions
+    // 6. Read blocks and instructions, with the statement location table of the function
+    // (QORE_AOT_STATEMENT_LOCATIONS_VERSION): the IR functions read in its instructions have tables of their own
+    const bool has_stmt_locs = reader.getHeader().version >= QORE_AOT_STATEMENT_LOCATIONS_VERSION;
+    QoreAOTStmtLocReadTable stmt_locs;
     // the trace setting is copied (a concurrent change to the environment could free the string getenv() returns);
     // with QORE_DISABLE_AOT_IR_TRACE_CACHE, it is read again for each instruction
     const bool disable_trace_cache = q_env_is_set("QORE_DISABLE_AOT_IR_TRACE_CACHE");
@@ -8113,9 +8414,16 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             return nullptr;
         }
         const char* block_name = reader.readStringRef(ptr);
-        // bit 0: is_loop_header; bits 1-3: loop_cancel (see serializeIRFunction())
+        // bit 0: is_loop_header; bits 1-3: loop_cancel; bit 4 (from format version QORE_AOT_DEBUG_FLOW_VERSION):
+        // debug_flow (see serializeIRFunction())
         uint8_t block_flags = QoreAOTBinaryReader::readU8(ptr);
-        uint8_t loop_cancel = static_cast<uint8_t>(block_flags >> 1);
+        const bool debug_flow_flags = reader.getHeader().version >= QORE_AOT_DEBUG_FLOW_VERSION;
+        uint8_t loop_cancel = static_cast<uint8_t>(debug_flow_flags ? (block_flags >> 1) & 0x7 : block_flags >> 1);
+        if (debug_flow_flags && (block_flags & ~0x1f)) {
+            error = "invalid flags " + std::to_string(block_flags) + " of block " + std::to_string(i)
+                + " of function " + func->name;
+            return nullptr;
+        }
         if (loop_cancel > QORE_IR_LOOP_CANCEL_MAX) {
             error = "invalid loop cancellation kind " + std::to_string(loop_cancel) + " in block "
                 + std::to_string(i) + " of function " + func->name;
@@ -8126,6 +8434,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         func->blocks[i]->name = block_name ? block_name : "";
         func->blocks[i]->is_loop_header = (block_flags & 1) != 0;
         func->blocks[i]->loop_cancel = static_cast<QoreIRLoopCancel>(loop_cancel);
+        func->blocks[i]->debug_flow = debug_flow_flags && (block_flags & 0x10);
 
         for (int j = 0; j < num_insts; ++j) {
             if (checkCancel()) {
@@ -8152,7 +8461,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             }
             auto inst = deserializeIRInstruction(reader, ptr, end, func->blocks, local_map,
                 func.get(), &slot_to_local, *effectiveReadExpr, pgm, local_owner_pgm, error,
-                parent_locals_arr, num_parent_locals, enclosing_body_locals);
+                parent_locals_arr, num_parent_locals, enclosing_body_locals,
+                has_stmt_locs ? &stmt_locs : nullptr);
             if (!inst) {
                 error = "failed to deserialize instruction " + std::to_string(j)
                     + " in block " + std::to_string(i)
@@ -8191,6 +8501,14 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         }
     }
 
+    // the catch-exit depths and catch-cleanup results of the function (qore#6733); a module of an earlier format has
+    // none
+    if (reader.getHeader().version >= QORE_AOT_CATCH_TABLES_VERSION
+            && !qore_aot_read_ir_catch_tables(ptr, end, *func, error)) {
+        error = "malformed IR function '" + func->name + "': " + error;
+        return nullptr;
+    }
+
     // a read past the end of the IR gave 0: the function is not used (qore#6265)
     if (ir_bounds.overrun()) {
         error = "truncated IR function";
@@ -8200,6 +8518,14 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     if (!qore_aot_check_ir_value_ids(*func, error)) {
         error = "malformed IR function '" + func->name + "': " + error;
         return nullptr;
+    }
+    // the control flow and the SSA form that the interpreter and the JIT take from the IR without a check (qore#6468)
+    if (!QoreIRVerifier::verifyModuleIR(*func, error)) {
+        error = "AOT IR verification failed in '" + func->name + "': " + error;
+        return nullptr;
+    }
+    if (!has_stmt_locs) {
+        qore_ir_set_deserialized_statement_locations(*func);
     }
     return func;
 }
@@ -8491,7 +8817,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
         ir.ast_visible_body_locals = ir.all_body_locals;
     }
 
-    delete ir.cached_pre_instantiated;
+    // the set replaces the previous one (setCachedPreInstantiated())
     auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
     std::unordered_set<const void*> body_local_set;
     for (LocalVar* lv : ir.all_body_locals) {
@@ -8507,7 +8833,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
             cached_pre_inst->insert(lv);
         }
     }
-    ir.cached_pre_instantiated = cached_pre_inst;
+    ir.setCachedPreInstantiated(cached_pre_inst);
 }
 
 //! Re-lower a user function variant to IR and build an AOT context.
@@ -9843,8 +10169,9 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
         std::string& error, bool ignore, bool ignore_after_header) {
     std::string zone;
     bool after_module_header;
+    bool trusted_only;
     std::string read_error;
-    if (!readTimeZone(reader, zone, after_module_header, read_error)) {
+    if (!readTimeZone(reader, zone, after_module_header, trusted_only, read_error)) {
         error = "AOT time zone metadata read error";
         if (label && *label) {
             error += " in ";
@@ -9858,6 +10185,11 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
     }
     // a directive after the header of a module is checked against the restrictions that the header's domains leave
     if (after_module_header ? ignore_after_header : ignore) {
+        return true;
+    }
+    // a directive that the module's own restriction disallowed when it was compiled applies only to a load of the
+    // module as library code, where the locale control domain that the header declares removes it (qore#6352)
+    if (trusted_only && !qore_module_load_is_trusted()) {
         return true;
     }
     qore_program_private* pp = qore_program_private::get(*pgm);
@@ -10688,6 +11020,28 @@ static QoreStringNode* aotThreadStackInitError(const AOTThreadStackError& e, con
     return err;
 }
 
+// the functional domains that the module metadata record of the AOT module whose initialization runs in this thread
+// declares, if set (see QoreAOTModuleExpectedDomainsHelper; qore#6351)
+static thread_local std::string aot_module_init_expected_module;
+static thread_local int64 aot_module_init_expected_domains = 0;
+static thread_local bool aot_module_init_expected_set = false;
+
+QoreAOTModuleExpectedDomainsHelper::QoreAOTModuleExpectedDomainsHelper(const char* module, int64 domains)
+        : old_domains(aot_module_init_expected_domains), old_set(aot_module_init_expected_set) {
+    // the new name is copied before anything is changed: a failed allocation changes nothing
+    std::string new_module(module);
+    old_module.swap(aot_module_init_expected_module);
+    aot_module_init_expected_module.swap(new_module);
+    aot_module_init_expected_domains = domains;
+    aot_module_init_expected_set = true;
+}
+
+QoreAOTModuleExpectedDomainsHelper::~QoreAOTModuleExpectedDomainsHelper() {
+    aot_module_init_expected_module.swap(old_module);
+    aot_module_init_expected_domains = old_domains;
+    aot_module_init_expected_set = old_set;
+}
+
 QoreAOTModuleInitLoaderHelper::QoreAOTModuleInitLoaderHelper(QoreProgram* loader)
         : old_loader(aot_module_init_loader_pgm) {
     aot_module_init_loader_pgm = loader;
@@ -10739,6 +11093,8 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
     // an AOT module initialized as library code (see QoreModuleInitSandboxBarrierHelper) has a library Program
     if (qore_module_init_library()) {
         local_priv->library_module = true;
+        // the closures that its initialization creates can run as deferred module initialization (qore#6337)
+        qore_module_init_set_program(local_pgm);
     }
 
     // the lists are those of the Program loading the module when the module loader names it, as for the inherited
@@ -14406,10 +14762,10 @@ static int executeInitFunctions(
         return nullptr;
     };
 
-    // ProgramRuntimeParseContextHelper can set td->current_pgm without setting
-    // td->tlpd. Init functions that construct objects need td->tlpd for
-    // thread_instantiate_lvar() (for example SelfInstantiatorHelper in
-    // initMembers), so keep the bridge for nested parse-context callers.
+    // A thread can have td->current_pgm without td->tlpd (a binary module's initialization, before any entry; a
+    // switch of the current Program to one where the thread has no data yet, which does not create it: qore#6537).
+    // Init functions that construct objects need td->tlpd for
+    // thread_instantiate_lvar() (for example SelfInstantiatorHelper in initMembers), so keep the bridge.
     thread_ensure_local_program_data();
 
     // only the debug log reads it
@@ -15426,6 +15782,20 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
+        // the module loader relieved the module's dependencies with the domains that its metadata record declares
+        // (qore#6351): they must be those of its header; checked once, by the module's own initialization
+        if (aot_module_init_expected_set && mod_name && aot_module_init_expected_module == mod_name) {
+            aot_module_init_expected_set = false;
+            if (own_dom != aot_module_init_expected_domains) {
+                QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): "
+                    "the module metadata record declares the functional domains 0x%llx, but the module declares "
+                    "0x%llx in its header; the module is damaged: rebuild it", mod_name,
+                    module_context_desc.c_str(), static_cast<unsigned long long>(aot_module_init_expected_domains),
+                    static_cast<unsigned long long>(own_dom));
+                local_pgm->waitForTerminationAndDeref(nullptr);
+                return err;
+            }
+        }
         if (own_dom) {
             int64 removed = qore_program_private::setModuleOwnDomains(*local_pgm, own_dom,
                 qore_module_load_is_trusted());
@@ -15858,7 +16228,7 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
             "with a statically registered module is invalid: %s", record ? error.c_str() : "it is missing");
     } else {
         QMM.registerAOTStaticModuleIntern(xsink, tpgm, reinterpret_cast<qore_binary_module_desc_t>(desc_fn), path,
-            &info);
+            info);
     }
     if (xsink) {
         xsink.handleExceptions();
@@ -15867,7 +16237,7 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
 
 // Phase 4 slice 10d: script-context register path.  Called by the
 // glue object that qcc emits for `qcc -o binary *.qo` (slice 10d).
-// Differs from qore_aot_register_into_program / qore_aot_module_init_v3:
+// Differs from qore_aot_register_into_program_v2() / qore_aot_module_init_v3:
 //
 //   * NO shadow module program created.  Metadata is deserialized
 //     straight into the caller's @p tpgm via

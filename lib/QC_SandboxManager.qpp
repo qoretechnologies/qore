@@ -565,8 +565,10 @@ bool SandboxManager::restricts() {
     them (the default); for a combination of the sandboxes of several callers, @ref True only if every member allows
     them
 
-    A module that refuses an operation that only an unrestricted caller may use should refuse it if and only if the
-    governing sandbox does not trust its code and restricts something; see @ref sandbox_restricts.
+    A module that refuses an operation that only an unrestricted caller may use (one that runs code or does I/O that
+    %Qore does not see) should refuse it unless the governing sandbox trusts its code, whatever the sandbox restricts:
+    a sandbox that allows all I/O but does not trust its code keeps that code from such operations, as
+    setUncontrolledApiPolicy() describes; see @ref sandbox_restricts.
 
     @par Example:
     @code{.py}
@@ -1153,6 +1155,101 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
     return qore_bind_sandbox_call(call, true, xsink);
 }
 
+//! Creates a capability that builds shared state for every caller as trusted code, also for a sandboxed caller
+/** A %Program that code creates, or that code commits code in, keeps the sandbox that governs that code, which then
+    governs the %Program's code wherever it runs (see @ref sandbox_program_capability): this includes trusted code
+    that a sandboxed caller calls.  Trusted infrastructure that builds shared state lazily for whichever caller needs
+    it first, such as a %Program that every caller then uses (a container of mappers, a loaded service, a cached
+    helper), would give that state the first caller's sandbox, its policy and its interrupts and limits, for every
+    later caller.
+
+    The capability returned runs @p call on the caller's thread as a trusted build: the arguments are evaluated by
+    the caller, under the caller's own sandbox, then @p call runs in the %Program that created the capability, under
+    a construction barrier, as the initialization of library code that trusted code loads runs:
+    - a %Program that it creates, or commits code in, keeps no sandbox of the caller: no policy, no interrupts, no
+      limits; it is governed only by the manager that the host gives it (Program::setSandboxManager())
+    - the threads that it starts inherit no sandbox of the caller, and objects that it creates have none of the
+      caller's sandbox as provenance (they have the sandbox of the %Program that created the capability, if it has
+      one)
+    - the caller's filesystem and network policy does not apply to the build itself, nor do the caller's interrupt
+      requests while it runs; the time and stack budgets of the caller's call still count it (a caller with a small
+      budget can make the build fail), but not the threads that it starts, which are not a part of the caller's call
+    - the memory that the build's own code allocates, also in threads that it starts, is shared state charged to no
+      caller; it counts against the memory limit of the %Program that created the capability, if that %Program has a
+      sandbox with one, also when the code of that %Program calls the capability; the caller's own code that the build
+      calls (its callbacks and the methods of its objects) is charged to the caller's memory limit as when the caller
+      calls it directly, also in threads that it starts and in nested builds, as is the code (of any sandbox, the
+      creator's included, which is then not charged to the creator) that the caller's code calls; code of other
+      sandboxes that the build's own code calls is charged to those sandboxes only, not to the %Program that created the
+      capability and not to the caller: the callback must therefore not call code of another sandbox that the caller
+      supplies (a call reference or an object in its arguments), or the caller could keep memory beyond its own limit
+      through that code
+    - shared state that the build creates and that trusted code grows later is charged to the code that grows it, as
+      storage without a charge is; keep it unchanged after the build, or change it only in builds
+    - the sandbox of the %Program that created the capability, if that %Program has one, governs the build, also when
+      the code of that %Program calls the capability
+    - objects and callbacks that the caller (or other sandboxed code) created keep their own provenance: what the
+      build calls of them is governed by their sandbox
+
+    @param call a plain callback (not a bound callback or another capability) of code that no sandbox governs,
+    created outside sandbox execution
+
+    @return a capability for the fixed callback
+
+    @throw SANDBOX-CAPABILITY-ERROR a sandbox governs the creating code, the creating code is sandboxed, or @p call has
+    sandbox provenance, belongs to a sandboxed %Program, or is a bound callback or a capability
+
+    @note
+    - create the capability during trusted startup or module initialization, before any tenant code runs, and keep
+      it where tenant code cannot reach it: a \c private:internal static member (a \c private member is visible to
+      a sandboxed subclass; see design/module-sandboxing-audit-guide.md); a sandboxed caller that gets the capability
+      can build what the callback builds without its own sandbox.  Creating it at startup is a rule of its use, not
+      checked by the method
+    - the callback must build only from trusted metadata (configuration, the host's own sources), and must validate
+      the arguments that it is given (identifiers that it looks up in that metadata): no data of the caller may
+      become code, or the caller's code would run without its sandbox: no source to parse or expression to evaluate,
+      no module name or path to load, no include, no parse define, no class, function or method name resolved at run
+      time, and no callback or object of the caller stored in what it builds
+    - a build that fails (an exception, a caller's time budget that expires) must not leave partial state that later
+      callers use: build into local variables and publish the result only when it is complete
+    - unlike createSystemPolicyCall(), which masks only the policy of the caller for a fixed operation, this capability
+      also detaches what the operation creates from the caller's interrupts and limits
+
+    @par Example:
+    @code{.py}
+class MapperContainers {
+    private:internal {
+        # created when the class's static members are initialized, during trusted startup
+        static code build = SandboxManager::createTrustedBuildCall(\MapperContainers::buildIntern());
+        static hash<string, Program> containers;
+        static Mutex lck();
+    }
+
+    # for whichever caller needs a container first
+    static Program get(string name) {
+        AutoLock al(lck);
+        return containers{name} ?? (containers{name} = build(name));
+    }
+
+    # builds the container from the system's own metadata: the name is only looked up there
+    private:internal static Program buildIntern(string name) {
+        Program p = make_mapper_program(get_mapper_metadata(name));
+        p.setSandboxManager(get_mapper_sandbox(name));
+        return p;
+    }
+}
+    @endcode
+
+    @see
+    - createSystemPolicyCall()
+    - createSystemThreadCall()
+
+    @since %Qore 3.0
+*/
+static code SandboxManager::createTrustedBuildCall(code call) [dom=UNCONTROLLED_API; flags=RET_VALUE_ONLY] {
+    return qore_create_trusted_build_call(call, xsink);
+}
+
 //! Creates a capability that starts a fixed operation in a new thread that no sandbox governs
 /** Trusted infrastructure that does work for sandboxed callers, such as building shared state that every caller then
     uses, cannot do that work on the caller's thread: what it creates there keeps the caller's sandbox (its
@@ -1317,9 +1414,13 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
 
     The calling code is the code of the nearest %Program on the thread's call stack that is not the %Program of a user
     module: the current %Program if it is not a module's, else the %Program that entered the module code, through any
-    number of calls between modules.  The @ref parse_options "parse options" of that %Program decide (for example
+    number of calls between modules; on a thread that module code started, where no such %Program is on the stack,
+    the calling code of the module code that started the thread.  The @ref parse_options "parse options" of that
+    %Program decide (for example
     @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" for @ref Qore::DOM_DATABASE "DOM_DATABASE"), as do the restrictions
-    of a sandboxed caller that the module code runs with; the options of the module's own %Program do not, and neither
+    of a sandboxed caller that the module code runs with, and those of the modules on the way that are not library code
+    (a module loaded by its path, which has the restrictions of the %Program that loaded it first); the options of a
+    library module's own %Program do not, and neither
     does a sandbox that governs the code without restricting the domain (unlike isSandboxed()).
 
     It reveals only whether the calling code is restricted, so it is not restricted itself.

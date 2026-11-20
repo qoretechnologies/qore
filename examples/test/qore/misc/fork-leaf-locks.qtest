@@ -21,6 +21,10 @@ class ForkLeafLocksTest inherits QUnit::Test {
         addTestCase("fork() while another thread holds the lock of the AOT module source hashes",
             \testAotModuleSourceHashes());
         addTestCase("fork() while another thread holds the lock of the exit hooks", \testExitHooks());
+        addTestCase("fork() while another thread holds the lock of the thread start debug hold",
+            \testThreadStartHold());
+        addTestCase("fork() while another thread holds the lock of the thread finish debug hold",
+            \testThreadFinishHold());
         set_return_value(main());
     }
 
@@ -35,6 +39,17 @@ class ForkLeafLocksTest inherits QUnit::Test {
     testExitHooks() {
         # the lock is held while a system thread is reserved; a child that inherited it held would hang at its end
         forkWhileHeld("exit_hooks");
+    }
+
+    testThreadStartHold() {
+        # every thread that started took the lock of the debug hold of a starting thread; a child made while one held
+        # it waited forever for it at its next thread start (qore#6543)
+        forkWhileHeld("dbg_start_hold");
+    }
+
+    testThreadFinishHold() {
+        # every thread that finished took the lock of the debug hold of a finishing thread, as above (qore#6543)
+        forkWhileHeld("dbg_finish_hold");
     }
 
     private forkWhileHeld(string name) {

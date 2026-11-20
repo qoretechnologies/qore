@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-release-build: its release budgets are checked only in a release build, which CI tests in its performance job
 
 /*  Copyright 2026 Qore Technologies, s.r.o.
 
@@ -51,7 +52,13 @@
     they are in sanitizer builds, whose stack redzones make every frame larger.
 
     tools/check-stack-usage.py checks the frames of the same path, function by function, in a release build made with
-    -DQORE_STACK_USAGE_REPORT=ON; this test checks their sum as the recursion uses it, in the build being tested.
+    -DQORE_STACK_USAGE_REPORT=ON; this test checks their sum as the recursion uses it, in the build being tested.  A
+    growth of a frame that is accepted there (a budget raised in tools/stack-usage-budgets.txt, with the bytes per level
+    measured here) raises the budgets here by the same measured bytes per level, so that the two checks stay in step
+    (issue #6540: the growths of #5824 and #6074 were accepted there only, and a growth of 64 bytes of the frame of
+    QoreIRInterpreter::execute within its budget there failed here).  The x86_64 release budgets of the ir recursions
+    are 56 bytes per level over the measured values, less than a growth of 64 bytes of that frame costs.
+    CI checks the release budgets in its performance job (# test-release-build), as the test jobs test a debug build.
 */
 
 public class RecursionFrameBudgetTest inherits QUnit::Test {
@@ -135,25 +142,34 @@ int sub run(string f) {
             images); see the comment at the top
         */
         const Budgets = {
-            # measured: ast 2656, 2464, 2511; ir 4804, 5714, 4750
+            # measured: ast 2639, 2559, 2528; the ir budgets: measured 5053, 6114, 5041 with a frame of
+            # QoreIRInterpreter::execute of 4272 B (develop d1539bd5c1, which includes the growths of #5824, #6074 and
+            # #6627) plus 56 bytes per level: a frame that grows by N bytes costs about N bytes per level (#6451: 64 B,
+            # +62, +63, +68; #6627: 64 B, +66, +62, +66), so a growth of 64 bytes (as #6451's) fails here, and one of 48
+            # bytes (+46..51) does not; the budget of execute() in tools/stack-usage-budgets.txt is 4336 B (64 B over),
+            # so a frame at its budget there fails here: raise both when a growth is accepted (issues #6540, #6609)
             "x86_64-linux-gnu release": {
                 "ast": {"function": 2840, "method": 2640, "static method": 2690},
-                "ir": {"function": 5140, "method": 6110, "static method": 5080},
+                "ir": {"function": 5109, "method": 6170, "static method": 5097},
             },
-            # measured: ast 2639, 2608, 2511; ir 4848, 6223, 4798
+            # measured: ast 2608, 2608, 2559; ir 4987, 6432, 4963 (develop d1539bd5c1 with the fix of #6609: the checks
+            # of #6541 out of line, -48 B of the frame of QoreIRInterpreter::execute; the growth since the calibration
+            # of ba70be95c3, 4848, 6223, 4798, is that of the features of #5824, #6002, #6031 and #6074)
             "x86_64-linux-gnu debug": {
                 "ast": {"function": 2820, "method": 2790, "static method": 2690},
-                "ir": {"function": 5180, "method": 6650, "static method": 5130},
+                "ir": {"function": 5340, "method": 6830, "static method": 5310},
             },
-            # measured: ast 2656, 2464, 2511; ir 4798, 5714, 4755
+            # measured: ast 2656, 2464, 2511; ir 4798, 5714, 4755; the ir budgets are those of x86_64-linux-gnu
+            # release, as musl gives the frames of glibc on this path (see tools/stack-usage-budgets.txt)
             "x86_64-alpine-linux-musl release": {
                 "ast": {"function": 2840, "method": 2640, "static method": 2690},
-                "ir": {"function": 5130, "method": 6110, "static method": 5080},
+                "ir": {"function": 5109, "method": 6170, "static method": 5097},
             },
-            # measured: ast 2639, 2608, 2511; ir 4843, 6223, 4798
+            # measured: ast 2639, 2608, 2511; ir 4843, 6223, 4798 (at the calibration of ba70be95c3); the ir budgets
+            # are those of x86_64-linux-gnu debug, as musl gives the frames of glibc on this path
             "x86_64-alpine-linux-musl debug": {
                 "ast": {"function": 2820, "method": 2790, "static method": 2690},
-                "ir": {"function": 5180, "method": 6650, "static method": 5130},
+                "ir": {"function": 5340, "method": 6830, "static method": 5310},
             },
             # measured: ast 2750, 2606, 2608; ir 4670, 5599, 4639
             "aarch64-linux-gnu release": {
@@ -161,9 +177,10 @@ int sub run(string f) {
                 "ir": {"function": 4990, "method": 5980, "static method": 4960},
             },
             # measured: ast 2641, 2641, 2526; ir 4495, 5991, 4447
+            # ir static method measured: 4766 (CI 66455, AG; develop growth since calibration, not an AG member)
             "aarch64-linux-gnu debug": {
                 "ast": {"function": 2830, "method": 2830, "static method": 2700},
-                "ir": {"function": 4810, "method": 6400, "static method": 4750},
+                "ir": {"function": 4810, "method": 6400, "static method": 5070},
             },
             # measured: ast 2752, 2608, 2608; ir 4686, 5614, 4655
             "aarch64-alpine-linux-musl release": {
@@ -171,9 +188,10 @@ int sub run(string f) {
                 "ir": {"function": 5010, "method": 6000, "static method": 4980},
             },
             # measured: ast 2639, 2641, 2526; ir 4495, 5983, 4447
+            # ir static method measured: 4766 (CI 66455, AG; develop growth since calibration, not an AG member)
             "aarch64-alpine-linux-musl debug": {
                 "ast": {"function": 2820, "method": 2830, "static method": 2700},
-                "ir": {"function": 4810, "method": 6390, "static method": 4750},
+                "ir": {"function": 4810, "method": 6390, "static method": 5070},
             },
         };
     }
@@ -367,9 +385,8 @@ int sub run(string f) {
                 string msg = sprintf("%s %s recursion, %s build: %d bytes per level (budget %d; depth %d with a "
                     "%d KB stack)", m.key, i.key, build_type, i.value.bpl, budget, i.value.large,
                     i.value.size / 1024);
-                if (m_options.verbose || reason) {
-                    printf("%s\n", msg);
-                }
+                # always printed, so that every CI job logs every value (for the calibration of the budgets)
+                printf("%s\n", msg);
                 if (!reason && i.value.bpl > budget) {
                     over += msg;
                 }

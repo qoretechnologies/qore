@@ -781,6 +781,10 @@ public class ImapClientTest inherits QUnit::Test {
 
         assertNothing(ImapResponseParser::parseInternalDate("not a date"), "garbage rejected");
         assertNothing(ImapResponseParser::parseInternalDate(NOTHING), "NOTHING passed through");
+        # a value that is not valid in its encoding cannot be parsed; it is rejected as garbage is (qore#6553)
+        string invalid = binary_to_string(parse_hex_string("31372d4a756c2d3139393620ff"), "UTF-8");
+        assertNothing(ImapResponseParser::parseInternalDate(invalid), "invalid encoding rejected");
+        assertNothing(ImapResponseParser::parseEnvelopeDate(invalid), "invalid envelope date rejected");
 
         date e = ImapResponseParser::parseEnvelopeDate("Wed, 17 Jul 1996 02:23:25 -0700");
         assertEq(1996, e.years(), "envelope year parsed");

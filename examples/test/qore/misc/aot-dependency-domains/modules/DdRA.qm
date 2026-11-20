@@ -1,0 +1,24 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares no domain and restricts locale control itself after
+# its header, before it requires DdRB, which declares the locale control domain: the restriction that DdRA's directive
+# gives DdRB (qore#6406) is lifted by DdRB's header for the inner module that DdRB requires after it (qore#6351)
+
+%modern
+
+module DdRA {
+    version = "1.0";
+    desc = "a module of aot-dependency-domains.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+%no-locale-control
+%requires DdRB
+
+public namespace DdRA {
+    public string sub run() {
+        return DdRB::run();
+    }
+}

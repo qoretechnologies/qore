@@ -140,6 +140,10 @@ typedef std::vector<int> sig_vec_t;
 //! defined for QoreClass::addBuiltinMemberWithAccessors()
 #define _QORE_HAS_BUILTIN_MEMBER_ACCESSORS 1
 
+//! defined for the forms of QoreClass::addMember() and QoreClass::addBuiltinMemberWithAccessors() with an
+//! ExceptionSink* argument, which raise CLASS-MEMBER-ADD-ERROR once code in other threads can reach the class (#6422)
+#define _QORE_HAS_CLASS_MEMBER_ADD_XSINK 1
+
 //! defined for QoreSandboxManager::restricts(), networkRestricts(), filesystemRestricts(), limitsRestrict() and
 //! trustsUncontrolledApis(), and for
 //! the isRestricting() methods of QoreNetworkSecurityManager and QoreFilesystemSecurityManager

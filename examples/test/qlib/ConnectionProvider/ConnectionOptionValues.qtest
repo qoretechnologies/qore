@@ -1,0 +1,306 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClient
+%requires SmtpClient
+%requires TelnetClient
+
+%exec-class ConnectionOptionValuesTest
+
+#! A data provider whose option validation can be called directly
+class OptionCheckingDataProvider inherits AbstractDataProvider {
+    string getName() {
+        return "OptionCheckingDataProvider";
+    }
+
+    *string getDesc() {
+        return "test data provider";
+    }
+
+    hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"type": "OptionCheckingDataProvider"};
+    }
+
+    *hash<auto> check(*hash<string, hash<DataProviderOptionInfo>> option_desc, *hash<auto> options,
+            *string required_options) {
+        return checkOptions("TEST-OPTION-ERROR", option_desc, options, required_options);
+    }
+}
+
+#! Errors of the validation of connection and data provider options name the options, but never contain the values
+#! of options that can hold credentials (issue #6467)
+/** An option value can be a password, an API key or a token, and exception text travels to logs, alerts and REST
+    answers; the errors give the names of the options (and, for an option that is not marked sensitive, a value that
+    is not one of its allowed values)
+*/
+class ConnectionOptionValuesTest inherits QUnit::Test {
+    public {
+        const Secret = "s3cr3t-T0ken-6467";
+        const Secret2 = "s3cr3t-Pw-6467";
+    }
+
+    constructor() : QUnit::Test("ConnectionOptionValues", "1.0") {
+        addTestCase("connection option validation", \connectionOptions());
+        addTestCase("data provider option validation", \dataProviderOptions());
+        addTestCase("client option errors", \clientOptions());
+        addTestCase("hash and list option values", \containerOptions());
+        set_return_value(main());
+    }
+
+    connectionOptions() {
+        # an unknown option
+        hash<ExceptionInfo> ex = getException(sub () {
+            ConnectionSchemeCache::validateConnectionOptions("conn", "http", {"no_such_option": Secret});
+        });
+        checkNoValue(ex, "CONNECTION-OPTION-ERROR", "no_such_option", Secret);
+
+        # a sensitive option with a value of the wrong type
+        ex = getException(sub () {
+            ConnectionSchemeCache::validateConnectionOptions("conn", "http", {"password": binary(Secret)});
+        });
+        checkNoValue(ex, "CONNECTION-OPTION-ERROR", "password", Secret);
+
+        hash<ConnectionSchemeInfo> scheme = getTestScheme();
+
+        # a missing required option: the options given are named
+        ex = getException(sub () {
+            ConnectionSchemeCache::validateConnectionOptions("conn", scheme, {"token": Secret});
+        });
+        checkNoValue(ex, "CONNECTION-OPTION-ERROR", "user", Secret);
+        assertRegex("token", ex.desc, "the options given are named");
+
+        # a sensitive option with a value that is not allowed
+        ex = getException(sub () {
+            ConnectionSchemeCache::validateConnectionOptions("conn", scheme, {"user": "u", "token": "t",
+                "secret_mode": Secret});
+        });
+        checkNoValue(ex, "CONNECTION-OPTION-ERROR", "secret_mode", Secret);
+
+        # a sensitive option with an element value that is not allowed
+        ex = getException(sub () {
+            ConnectionSchemeCache::validateConnectionOptions("conn", scheme, {"user": "u", "token": "t",
+                "secret_list": (Secret,)});
+        });
+        checkNoValue(ex, "CONNECTION-OPTION-ERROR", "secret_list", Secret);
+
+        # a sensitive date option with a string that is not a date
+        ex = getException(sub () {
+            ConnectionSchemeCache::validateConnectionOptions("conn", scheme, {"user": "u", "token": "t",
+                "secret_date": "not a date " + Secret});
+        });
+        checkNoValue(ex, "CONNECTION-OPTION-ERROR", "secret_date", Secret);
+
+        # a date option that is not sensitive: its error still gives the string
+        ex = getException(sub () {
+            ConnectionSchemeCache::validateConnectionOptions("conn", scheme, {"user": "u", "token": Secret,
+                "start": "not a date"});
+        });
+        checkNoValue(ex, "CONNECTION-OPTION-ERROR", "start", Secret);
+        assertRegex("not a date", ex.desc, "the string of an option that is not sensitive");
+
+        # an option that is not sensitive: its error still gives the value that is not allowed
+        ex = getException(sub () {
+            ConnectionSchemeCache::validateConnectionOptions("conn", scheme, {"user": "u", "token": Secret,
+                "mode": "bad-mode"});
+        });
+        checkNoValue(ex, "CONNECTION-OPTION-ERROR", "mode", Secret);
+        assertRegex("bad-mode", ex.desc, "a value that is not allowed of an option that is not sensitive");
+    }
+
+    dataProviderOptions() {
+        OptionCheckingDataProvider dp();
+        hash<string, hash<DataProviderOptionInfo>> desc = {
+            "token": <DataProviderOptionInfo>{
+                "display_name": "Token",
+                "short_desc": "Token",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Token",
+                "sensitive": True,
+                "allowed_values": (<AllowedValueInfo>{"display_name": "x", "short_desc": "x", "desc": "x",
+                    "value": "x"},),
+            },
+            "count": <DataProviderOptionInfo>{
+                "display_name": "Count",
+                "short_desc": "Count",
+                "type": AbstractDataProviderTypeMap."int",
+                "desc": "Count",
+                "sensitive": True,
+            },
+            "user": <DataProviderOptionInfo>{
+                "display_name": "User",
+                "short_desc": "User",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "User",
+            },
+            "mode": <DataProviderOptionInfo>{
+                "display_name": "Mode",
+                "short_desc": "Mode",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Mode",
+                "allowed_values": (<AllowedValueInfo>{"display_name": "x", "short_desc": "x", "desc": "x",
+                    "value": "x"},),
+            },
+        };
+
+        # a sensitive option with a value that is not allowed
+        hash<ExceptionInfo> ex = getException(sub () { dp.check(desc, {"token": Secret}); });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "token", Secret);
+
+        # a sensitive option with a value that its type does not accept
+        ex = getException(sub () { dp.check(desc, {"count": Secret}); });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "count", Secret);
+
+        # a missing required option: the options given are named
+        ex = getException(sub () { dp.check(desc, {"count": 1, "user": Secret}, "token"); });
+        checkNoValue(ex, "TEST-OPTION-ERROR", "token", Secret);
+
+        # an option that is not sensitive: its error still gives the value that is not allowed
+        ex = getException(sub () { dp.check(desc, {"mode": "bad-mode"}); });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "mode", Secret);
+        assertRegex("bad-mode", ex.desc, "a value that is not allowed of an option that is not sensitive");
+    }
+
+    #! The type error of a hash or list option that is not sensitive gives no value: it can hold credentials
+    #! (issue #6504)
+    containerOptions() {
+        HashDataType inner("inner_type");
+        inner.addField(new QoreDataField("auth", "auth", AbstractDataProviderTypeMap."hash"));
+        HashDataType outer("outer_type");
+        outer.addField(new QoreDataField("inner", "inner", inner));
+        outer.addField(new QoreDataField("port", "port", AbstractDataProviderTypeMap."*int"));
+
+        OptionCheckingDataProvider dp();
+        hash<string, hash<DataProviderOptionInfo>> desc = {
+            "conn": <DataProviderOptionInfo>{
+                "display_name": "Connection",
+                "short_desc": "Connection",
+                "type": outer,
+                "desc": "Connection",
+            },
+            "count": <DataProviderOptionInfo>{
+                "display_name": "Count",
+                "short_desc": "Count",
+                "type": AbstractDataProviderTypeMap."int",
+                "desc": "Count",
+            },
+        };
+
+        # a field of a nested hash refuses a credential: the path of the field is given, not the value
+        hash<ExceptionInfo> ex = getException(sub () {
+            dp.check(desc, {"conn": {"inner": {"auth": "Bearer " + Secret}}});
+        });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "conn", Secret);
+        assertRegex("outer_type", ex.desc, "the type is named");
+        assertRegex("inner\\.auth", ex.desc, "the field is named");
+
+        # a field of the outer hash
+        ex = getException(sub () { dp.check(desc, {"conn": {"inner": {"auth": {}}, "port": Secret}}); });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "conn", Secret);
+        assertRegex("\"port\"", ex.desc, "the field is named");
+
+        # a list given for a hash option
+        ex = getException(sub () { dp.check(desc, {"conn": ("Bearer " + Secret,)}); });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "conn", Secret);
+        assertRegex("type \"list\"", ex.desc, "the type of the value is named");
+
+        # a string given for a hash option, such as serialized headers
+        ex = getException(sub () { dp.check(desc, {"conn": "Authorization: Bearer " + Secret}); });
+        checkNoValue(ex, "OPTION-VALUE-ERROR", "conn", Secret);
+
+        # the type error of a scalar value of an option that is not sensitive still gives the value
+        ex = getException(sub () { dp.check(desc, {"count": "not-a-count"}); });
+        assertEq("OPTION-VALUE-ERROR", ex.err);
+        assertRegex("not-a-count", ex.desc, "a scalar value of an option that is not sensitive is given");
+    }
+
+    clientOptions() {
+        # an OAuth2 client secret that is not a string
+        hash<ExceptionInfo> ex = getException(sub () {
+            RestClient rc({"url": "http://localhost:1"}, True);
+            rc.setOAuth2Options({
+                "oauth2_grant_type": "client_credentials",
+                "oauth2_client_id": "id",
+                "oauth2_client_secret": binary(Secret),
+                "oauth2_token_url": "http://localhost:1/token",
+            });
+        });
+        checkNoValue(ex, "OAUTH2-ERROR", "oauth2_client_secret", Secret);
+
+        # a "headers" option string that is not a hash
+        ex = getException(sub () {
+            AbstractRestConnection::processOptions("rest", {"headers": "Bearer " + Secret});
+        });
+        checkNoValue(ex, "REST-CONNECTION-ERROR", "headers", Secret);
+
+        # an OAuth2 login response without a string token
+        ex = getException(sub () {
+            RestClient rc({"url": "http://localhost:1"}, True);
+            rc.gotOAuth2LoginInfo({"token_type": "Bearer", "access_token": binary(Secret), "refresh_token": Secret});
+        });
+        checkNoValue(ex, "REST-LOGIN-ERROR", "access_token", Secret);
+
+        # a user and password in a Telnet URL
+        ex = getException(sub () {
+            new TelnetClient("telnet://user:" + Secret2 + "@localhost:1");
+        });
+        checkNoValue(ex, "INVALID-TARGET", "username", Secret2);
+
+        # a password in a URL without a user
+        ex = getException(sub () {
+            new SmtpClient("smtp://:" + Secret2 + "@localhost:1");
+        });
+        checkNoValue(ex, "SMTPCLIENT-INVALID-AUTHENTICATION", "password", Secret2);
+    }
+
+    #! Returns the exception that the code throws
+    private hash<ExceptionInfo> getException(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", "no exception was thrown";
+    }
+
+    #! Checks that the exception is the expected one, names the option, and contains no secret
+    private checkNoValue(hash<ExceptionInfo> ex, string err, string option, string secret) {
+        assertEq(err, ex.err, sprintf("%s: %s", ex.err, ex.desc));
+        assertRegex(option, ex.desc, "the option is named");
+        string all = sprintf("%s %s %y", ex.err, ex.desc, ex.arg);
+        assertEq(-1, all.find(secret), sprintf("the value is not given: %s", all));
+    }
+
+    #! Returns a connection scheme with sensitive and required options
+    private static hash<ConnectionSchemeInfo> getTestScheme() {
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getSchemeEx("http");
+        hash<AllowedValueInfo> a = <AllowedValueInfo>{"display_name": "a", "short_desc": "a", "desc": "a",
+            "value": "a"};
+        scheme.options = {
+            "user": <ConnectionOptionInfo>{"display_name": "User", "short_desc": "User", "type": "string",
+                "desc": "User"},
+            "token": <ConnectionOptionInfo>{"display_name": "Token", "short_desc": "Token", "type": "string",
+                "desc": "Token", "sensitive": True},
+            "secret_mode": <ConnectionOptionInfo>{"display_name": "Secret mode", "short_desc": "Secret mode",
+                "type": "string", "desc": "Secret mode", "sensitive": True, "allowed_values": (a,)},
+            "secret_list": <ConnectionOptionInfo>{"display_name": "Secret list", "short_desc": "Secret list",
+                "type": "list", "desc": "Secret list", "sensitive": True, "element_allowed_values": (a,)},
+            "mode": <ConnectionOptionInfo>{"display_name": "Mode", "short_desc": "Mode", "type": "string",
+                "desc": "Mode", "allowed_values": (a,)},
+            "secret_date": <ConnectionOptionInfo>{"display_name": "Secret date", "short_desc": "Secret date",
+                "type": "date", "desc": "Secret date", "sensitive": True},
+            "start": <ConnectionOptionInfo>{"display_name": "Start", "short_desc": "Start", "type": "date",
+                "desc": "Start"},
+        };
+        scheme.required_options = "user,token";
+        return scheme;
+    }
+}

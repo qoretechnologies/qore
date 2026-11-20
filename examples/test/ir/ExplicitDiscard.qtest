@@ -26,7 +26,9 @@ class ExplicitDiscardTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("explicit discard execution modes", "1.0", \ARGV) {
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
-            addTestCase(mode, sub () { checkMode(mode); });
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase(mode, sub () { checkMode(mode_value); });
         }
         addTestCase("AOT with source stripped", \checkAot());
         set_return_value(main());

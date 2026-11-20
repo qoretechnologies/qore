@@ -770,6 +770,13 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreScalarCastOperatorNode::castValueToTypeI
         return QoreValue();
     }
 
+    // a cast to a union keeps a value of one of its member types as it is, as the union does when it is assigned the
+    // value; any other value is converted as the cast to the first member converts it (qore#6407)
+    if (typeInfo && (inner.isEnum() ? QoreTypeInfo::unionHasEnumTypeFor(typeInfo, inner)
+            : typeInfo->unionAcceptsExactly(inner, inner.getType()))) {
+        return inner.needsRef() ? inner.refSelf() : inner;
+    }
+
     const QoreTypeInfo* conversionTypeInfo = getConversionTypeInfo(typeInfo, or_nothing);
     if (!conversionTypeInfo) {
         return inner.needsRef() ? inner.refSelf() : inner;

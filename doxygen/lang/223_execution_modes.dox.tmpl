@@ -119,12 +119,14 @@ $ gdb --args qore --exec-mode=jit script.qr
 (gdb) info functions _toplevel
     @endcode
 
-    When debugger semantics require AST execution, tiered dispatch can force
-    affected variants back to AST. JIT-compiled native code additionally emits
+    While a debugger is attached, new calls of code with a parse tree run on the
+    AST interpreter. JIT-compiled native code additionally emits
     statement-boundary debug events, so single-stepping, breakpoints, and line
     coverage also work for a native frame that is already running when a debugger
-    attaches mid-execution. These hooks are emitted only for programs parsed with
-    \c PO_ALLOW_DEBUGGER and remain dormant behind a single atomic check until a
+    attaches mid-execution; such a frame ignores the debugger's return, break and
+    continue requests (see @ref debugger_running_code). These hooks are emitted
+    for all code that is not parsed with @ref no-debugging "%no-debugging"
+    (\c PO_NO_DEBUGGING) and remain dormant behind a single atomic check until a
     debugger is actually attached, so they impose no cost on normal execution.
 
     @subsection jit_optimization_level JIT Optimization Level
@@ -370,6 +372,28 @@ qcc -o app build/aot/*.qo
 cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     @endcode
 
+    @subsection aot_module_trust Trust in AOT-Compiled Modules
+
+    An AOT-compiled module (<tt>.qmod</tt>) and an AOT-compiled executable are native code: loading a module runs
+    the native code of its shared object, with the rights of the process.  A module is therefore trusted as any
+    other native library is, and is installed and loaded only from a source that is trusted; a
+    @ref sandboxing "sandbox" does not govern the native code of a module, and the checks of %Qore cannot make a
+    module from an untrusted source safe.
+
+    Besides its native code, a module holds metadata, which includes the IR (the intermediate representation that
+    the IR interpreter and the JIT run) of code that has no native code of its own (closures and the code that a
+    debugger runs).  The metadata is checked before it is used:
+    - a checksum refuses metadata that was corrupted after it was written, such as in a damaged file; it does not
+      protect a module against deliberate changes, which are made to native code as easily
+    - the reader refuses metadata whose structure is invalid (a read beyond its end, an invalid value or reference)
+    - the reader checks that the objects that the IR uses are created by the IR, and the IR is verified before it
+      runs: its control flow, and that the values that it uses are defined on the paths that reach their use
+
+    IR that fails a check is not run: a module whose metadata fails a check when it is loaded is not loaded
+    (\c MODULE-LOAD-ERROR), and IR that is read when it is first needed (the IR of a closure, or the IR that a
+    debugger runs) raises an exception when it fails a check, without running.  These checks make corrupt or
+    malformed metadata fail safely; they do not make native code from an untrusted source safe.
+
     @subsection aot_source_visibility Source Visibility
 
     \c qcc defaults to stripped source. Use \c --include-source when
@@ -472,7 +496,7 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --batch-script-aggregate=SYM|Also emit runtime aggregate metadata from the committed batch program, avoiding a second parse; requires \c --batch-script-aggregate-output
     |\c --batch-script-aggregate-output=FILE|Output path for the fused batch runtime aggregate
     |\c --batch-script-aggregate-manifest-input=FILE|Record a fused-aggregate manifest input; repeat to match a standalone aggregate rule
-    |\c -l, \c --load=MOD|Load a module into the compile program before parsing
+    |\c -l, \c --load=MOD|Load a module into the compile program before parsing, when compiling a script, an object or an executable (an executable loads it when it starts); not when compiling a module, which uses @ref requires "%requires"; the parse errors and warnings of the module are reported as those of the compiled code, and its warnings are errors with \c -r
     |\c --stub=FILE|Preload declaration-only Qore source supplied by a host
     |\c --define=NAME[=VALUE]|Set a parser define before parsing
     |\c --parse-option=NAME|OR a parse option into the compile program
@@ -493,6 +517,8 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --jobs=N|Parallel backend-codegen threads for the parts of a split module (split-after-opt); default CPU count, throttled by the GNU make jobserver; does not change the output
     |\c -e, \c --entry=FN|Entry function for generated one-shot or link-mode \c main()
     |\c -r, \c --warnings-are-errors|Treat Qore parser warnings as fatal compile errors
+    |\c --diag-format=json|Report the parse errors and warnings of the compiled code as one JSON array on stdout at the end of the run, in the form of <tt>qore --diag-format=json</tt> (also with the environment variable \c QORE_DIAG_FORMAT=json); the other output of the run goes to stderr
+    |\c --code-frames|Report the parse errors and warnings of the compiled code as code frames on stderr (also with the environment variable \c QORE_CODE_FRAMES)
     |\c --dump-info|Inspect embedded AOT metadata without executing code
     |\c --dump-symbols|Include an nm-like symbol table in dump output
     |\c --dump-sections|Include object and AOT section tables in dump output

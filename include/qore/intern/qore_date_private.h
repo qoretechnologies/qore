@@ -180,8 +180,24 @@ enum qore_date_overflow : int {
 #define QORE_DATE_MIN_YEAR (std::numeric_limits<int>::min() + 1)
 #define QORE_DATE_MAX_YEAR (std::numeric_limits<int>::max() - 1)
 
+//! the range of the epoch offset in seconds of an absolute date: from the start of year QORE_DATE_MIN_YEAR to the end
+//! of year QORE_DATE_MAX_YEAR (checked against the calendar in qore_date_private.cpp)
+/** a date in the range has a year that fits an int in every time zone, and its epoch offset plus a UTC offset fits
+    an int64, as the formatting and the broken-down time of a date need (qore#6103, qore#6431)
+*/
+#define QORE_DATE_MAX_EPOCH (static_cast<int64>(67767976201996799LL))
+#define QORE_DATE_MIN_EPOCH (static_cast<int64>(-67768100536348800LL))
+
+//! the range of the epoch offset in seconds whose year in UTC fits an int: from the start of year INT_MIN to the end of
+//! year INT_MAX (checked against the calendar in qore_date_private.cpp)
+/** the date string parser accepts these years (qore#6103); seconds outside this range have no year that a date can
+    hold (qore#6431)
+*/
+#define QORE_DATE_WIDE_MAX_EPOCH (static_cast<int64>(67767976233532799LL))
+#define QORE_DATE_WIDE_MIN_EPOCH (static_cast<int64>(-67768100567971200LL))
+
 //! returns a 128-bit value saturated to the range of int64
-DLLLOCAL static inline int64 qore_date_saturate_int64(__int128 v) {
+static inline int64 qore_date_saturate_int64(__int128 v) {
     if (v > std::numeric_limits<int64>::max()) {
         return std::numeric_limits<int64>::max();
     }
@@ -569,6 +585,36 @@ protected:
         return rv;
     }
 
+    //! returns seconds that no date can hold saturated to the range of an absolute date
+    /** seconds whose year does not fit an int (ex: from a number at the limit of an int64) give the earliest or the
+        latest absolute date, which every time zone formats; a date with such seconds was formatted with an overflowed
+        year and UTC offset (qore#6431)
+    */
+    DLLLOCAL static int64 saturateSeconds(int64 e) {
+        if (__builtin_expect(e > QORE_DATE_WIDE_MAX_EPOCH, 0)) {
+            return QORE_DATE_MAX_EPOCH;
+        }
+        if (__builtin_expect(e < QORE_DATE_WIDE_MIN_EPOCH, 0)) {
+            return QORE_DATE_MIN_EPOCH;
+        }
+        return e;
+    }
+
+    //! returns the seconds plus the carry of the microseconds, saturated as by saturateSeconds(); normalizes \a n_us
+    DLLLOCAL static int64 saturateSeconds(int64 e, int& n_us) {
+        int64 carry = n_us / 1000000;
+        n_us %= 1000000;
+        if (n_us < 0) {
+            n_us += 1000000;
+            --carry;
+        }
+        int64 rv;
+        if (__builtin_expect(__builtin_add_overflow(e, carry, &rv), 0)) {
+            return carry > 0 ? QORE_DATE_MAX_EPOCH : QORE_DATE_MIN_EPOCH;
+        }
+        return saturateSeconds(rv);
+    }
+
     // epoch is set to local time; needs to be converted to UTC
     DLLLOCAL void setLocalIntern(int n_us) {
         // normalize units in case us > 1000000 or < 0
@@ -613,8 +659,8 @@ public:
 
     DLLLOCAL void set(const AbstractQoreZoneInfo* n_zone, int64 n_epoch, int n_us) {
         zone = n_zone;
-        epoch = n_epoch;
-        normalize_units2<int64, int>(epoch, n_us, 1000000);
+        // the seconds that no date can hold, with the carry of the microseconds, are saturated (qore#6431)
+        epoch = saturateSeconds(n_epoch, n_us);
         us = n_us;
     }
 
@@ -622,9 +668,9 @@ public:
     DLLLOCAL void set(double f, const AbstractQoreZoneInfo* n_zone = currentTZ());
 
     DLLLOCAL void setLocal(const AbstractQoreZoneInfo* n_zone, int64 n_epoch, int n_us) {
-        epoch = n_epoch;
+        // the local seconds that no date can hold, with the carry of the microseconds, are saturated (qore#6431)
+        epoch = saturateSeconds(n_epoch, n_us);
         zone = n_zone;
-        normalize_units2<int64, int>(epoch, n_us, 1000000);
         setLocalIntern(n_us);
     }
 
@@ -1958,7 +2004,7 @@ public:
     @return QDO_NONE, QDO_NOT_FINITE if the value is NaN or infinite, or QDO_HOURS if its whole seconds do not fit an
     int64 (and so give more hours than a relative date can hold); the outputs are then not set
 */
-DLLLOCAL static inline int qore_split_float_seconds(double secs, int64& whole, int& us) {
+static inline int qore_split_float_seconds(double secs, int64& whole, int& us) {
     if (__builtin_expect(!std::isfinite(secs), 0)) {
         return QDO_NOT_FINITE;
     }

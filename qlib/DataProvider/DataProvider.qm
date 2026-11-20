@@ -1750,6 +1750,19 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - added @ref DataProvider::EncodingErrorsOptionInfo "EncodingErrorsOptionInfo", the \c encoding_errors option
+      of the data providers that read text (see @ref encoding_errors)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+    - the errors of the validation of data provider options name the options but no longer contain the options
+      provided or the values of options marked \c sensitive, which can be credentials; for an option that is not
+      sensitive, a value that its type or its allowed values refuse is still given
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
+    - the errors of data provider modules that are written to @ref Qore::stderr "stderr" without a logger are left out
+      when the module's code has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising
+      an exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+    - the errors of an option whose value or type is a hash, list or object no longer contain its value, which can
+      hold credentials, such as headers; a type error names the field of a hash type that refused its value
+      (<a href="https://github.com/qoretechnologies/qore/issues/6504">issue 6504</a>)
     - a caller counts as sandboxed for the \c external_io rule only when a sandbox that refuses uncontrolled APIs
       governs it (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"); code that a host governs
       with a sandbox only for its limits or interrupts, and that it allows uncontrolled APIs, may use the
@@ -1800,6 +1813,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       rendered with a template listing all of their arguments, such as \c map: an argument with a list value raised
       \c RUNTIME-OVERLOAD-ERROR, and a missing argument was described with the default value of the first argument
       instead of its own
+    - \c DataProviderBulkRecordIterator::nextImpl(), which is not used, raises \c INVALID-OPERATION instead of
+      falling off its end without a return value (issue #5940)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

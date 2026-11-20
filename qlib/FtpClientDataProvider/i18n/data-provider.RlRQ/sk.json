@@ -63,6 +63,18 @@
           "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
           "message": "Kódovanie reťazca, ktoré sa má použiť, ak `text` = `True` (predvolené: `UTF-8`)"
         },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Chyby kódovania"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Čo dáva text, ktorý nie je platný vo svojom kódovaní znakov"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What text that is not valid in its character encoding gives if `text` = `True`: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` returns the text as `ISO-8859-1`, and `keep` returns it in the encoding without a check",
+          "message": "Čo dáva text, ktorý nie je platný vo svojom kódovaní znakov, ak `text` = `True`: `raise` (predvolené) vyvolá chybu `INVALID-ENCODING`, `latin1` vráti text ako `ISO-8859-1` a `keep` ho vráti v kódovaní bez kontroly"
+        },
         "app.RlRQ.action.c2VuZC1maWxl.display_name": {
           "source": "Send File With FTP",
           "message": "Odoslať súbor cez FTP"

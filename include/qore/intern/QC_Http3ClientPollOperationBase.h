@@ -37,6 +37,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <algorithm>
 #include <atomic>
@@ -344,7 +345,7 @@ public:
     */
     DLLLOCAL void setMaxResponseBodySize(int64_t max_size) {
         if (sock_obj) {
-            sock_obj->setMaxResponseBodySize(max_size);
+            qore_socket_object_private(sock_obj).setMaxResponseBodySize(max_size);
         }
     }
 
@@ -352,7 +353,7 @@ public:
     /** Can be called from any thread
     */
     DLLLOCAL int64_t getDataIdleUs() const {
-        return sock_obj ? sock_obj->getDataIdleUs() : -1;
+        return sock_obj ? qore_socket_object_private(sock_obj).getDataIdleUs() : -1;
     }
 
     DLLLOCAL int64_t getSessionId() const {
@@ -365,7 +366,7 @@ public:
     DLLLOCAL void releaseStream(int64_t stream_id) {
         int64_t sid = session_id.load(std::memory_order_acquire);
         if (sock_obj && sid) {
-            sock_obj->releaseQuicStream(sid, stream_id);
+            qore_socket_object_private(sock_obj).releaseQuicStream(sid, stream_id);
         }
     }
 
@@ -429,13 +430,6 @@ public:
     }
 
     //! Get the socket object (returns a referenced QoreObject*)
-    //! Returns the event sink of the request on a stream with a new reference, or nullptr if it has none
-    /** The sink reports the protocol events of the request to the event queue of the client that issued
-        it; it is attached to the request's completion action, because the connection is shared between
-        requests.  I/O thread only.
-    */
-    DLLLOCAL HttpClientEventSink* getReferencedEventSink(int64_t stream_id) const;
-
     DLLLOCAL QoreObject* getReferencedSocket() const {
         if (self) {
             ExceptionSink xsink;
@@ -466,6 +460,26 @@ public:
 
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
+
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
 
 protected:
     DLLLOCAL const char* getStateImpl() const override;
@@ -611,6 +625,15 @@ private:
     //! Stream IDs between Phase 2 and Phase 3 of submit
     std::unordered_set<std::string> pending_stream_ids;
 
+    //! The response headers of requests that were not registered when their header arrived: stream_id -> headers
+    /** Kept for a request that is still being submitted or registered (the rule of takeResponseAction()), and
+        reported by the thread that claims the request first, before the request's response is dispatched: the
+        registration (registerStream()) or the dispatch of a response on the I/O thread (takeResponseAction()).
+        The response of such a request can be complete before it is registered, so its header is not left for a
+        later read cycle, which would report it after the response, or never.
+    */
+    std::unordered_map<std::string, std::vector<QuicResponseHeaderEvent>> pending_header_events;
+
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
     //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
@@ -669,6 +692,32 @@ private:
     DLLLOCAL AbstractAsyncAction* takeResponseAction(const std::string& sid, QoreHashNode* output, bool& buffered,
             ExceptionSink* xsink);
 
+    //! Reports the response header events of the streams whose header arrived, before their responses are dispatched
+    /** Takes every response header recorded by the QUIC session: the header of a registered request is reported to
+        the request's event sink, and the header of a request that is still being submitted or registered is kept in
+        @ref pending_header_events until the request is claimed.  Called by the I/O thread before it dispatches the
+        completed responses of a read cycle.
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int reportResponseHeaderEvents(QuicSession& session, ExceptionSink* xsink);
+
+    //! Reports the response headers kept for a request in @ref pending_header_events and removes them
+    /** Called with @ref stream_lock held by the thread that claims the request: the registration or the dispatch of
+        a response, so that the header is reported before the response completes the request.  Reporting only queues
+        the event (see HttpClientEventSink) and runs no Qore code.
+
+        @param sid the stream ID
+        @param action the request's action, whose event sink receives the events
+    */
+    DLLLOCAL void reportPendingHeaderEventsLocked(const std::string& sid, AbstractAsyncAction* action);
+
+    //! Reports one response header event to an event sink
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int reportResponseHeaderEvent(HttpClientEventSink& sink, const QuicResponseHeaderEvent& event,
+            ExceptionSink* xsink);
+
     //! Records the error of the operation and closes it
     /** @param err the error code
         @param desc the error description
@@ -686,5 +735,12 @@ private:
 };
 
 DLLLOCAL QoreClass* initHttp3ClientPollOperationBaseClass(QoreNamespace& qorens);
+
+//! Holds a reference to an HTTP/3 client poll operation taken by a reader of its connection
+/** The connection releases the operation in a teardown that can run at any time, so a reader takes a reference of its
+    own; a reader holds it while it runs in the connection's method (under its method guard, or under a lock of the
+    caller), so its release must not run the operation's cleanup in the reader's thread
+*/
+typedef QorePollOpOffThreadRef<Http3ClientPollOperationPriv> Http3PollOperationReaderRef;
 
 #endif // _QORE_CLASS_HTTP3CLIENTPOLLOPERATIONBASE_H

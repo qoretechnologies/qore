@@ -445,6 +445,16 @@ public class DpqlTokenizer {
         return "";
     }
 
+    #! Returns a character of the input for a test of an ASCII character class
+    /** The tokenizer reads the input byte by byte; a byte of a multi-byte character is not text on its own,
+        and a regular expression raises an exception for it (qore#6554).  It is given as an empty string,
+        which, as the byte did before, matches no class, negated or not (ex: \c [^a-z]), so the result of
+        every test is unchanged
+    */
+    private:internal static *string asc(*string c) {
+        return (exists c && !c.isDataAscii()) ? "" : c;
+    }
+
     #! Peeks at the next identifier value after the current peeked token, skipping whitespace
     /** Scans the raw input without consuming tokens to check what identifier follows.
         Used by the parser for multi-keyword lookahead (e.g., "not in", "not between").
@@ -701,7 +711,7 @@ public class DpqlTokenizer {
         # / is division after a value, regex otherwise
         if (c == "/") {
             string prev = prevNonWhitespaceChar();
-            if (prev =~ /[a-zA-Z0-9_"'\)\]\}]/) {
+            if (asc(prev) =~ /[a-zA-Z0-9_"'\)\]\}]/) {
                 in_field_ref_context = False;
                 advance();
                 return makeToken(DPQL_TOK_OP_DIVIDE, "/", start_line, start_column);
@@ -710,14 +720,14 @@ public class DpqlTokenizer {
         }
 
         # Date literal (YYYY-MM-DD with optional time)
-        if (c =~ /[0-9]/ && looksLikeDateLiteral()) {
+        if (asc(c) =~ /[0-9]/ && looksLikeDateLiteral()) {
             return scanDateLiteral();
         }
 
         # - is subtraction after a value, negative number prefix otherwise
         if (c == "-") {
             string prev = prevNonWhitespaceChar();
-            if (prev =~ /[a-zA-Z0-9_"'\)\]\}]/) {
+            if (asc(prev) =~ /[a-zA-Z0-9_"'\)\]\}]/) {
                 in_field_ref_context = False;
                 advance();
                 return makeToken(DPQL_TOK_OP_MINUS, "-", start_line, start_column);
@@ -726,7 +736,7 @@ public class DpqlTokenizer {
         }
 
         # Number (including negative)
-        if (c =~ /[0-9]/ || (c == "-" && peekChar() =~ /[0-9]/)) {
+        if (asc(c) =~ /[0-9]/ || (c == "-" && asc(peekChar()) =~ /[0-9]/)) {
             return scanNumber();
         }
 
@@ -817,7 +827,7 @@ public class DpqlTokenizer {
             in_field_ref_context = False;
             string prev = prevNonWhitespaceChar();
             if (looksLikeListLiteral()
-                && (!prev || !(prev =~ /[a-zA-Z0-9_]/ || prev == "@" || prev == "."
+                && (!prev || !(asc(prev) =~ /[a-zA-Z0-9_]/ || prev == "@" || prev == "."
                     || prev == "'" || prev == '"' || prev == ")"))) {
                 return scanListLiteral();
             }
@@ -846,7 +856,7 @@ public class DpqlTokenizer {
         }
 
         # Identifier (function names, keywords, and an accessor's key after a dot, which may be in any script)
-        if (c =~ /[a-zA-Z_]/ || isFieldStartChar(currentCodePoint())) {
+        if (asc(c) =~ /[a-zA-Z_]/ || isFieldStartChar(currentCodePoint())) {
             # Only reset field-ref context if NOT in an accessor chain (i.e., not after a dot)
             # This allows expressions like "@data[0].user.name" to keep context across "user"
             string prev = prevNonWhitespaceChar();
@@ -982,7 +992,7 @@ public class DpqlTokenizer {
         *string c = currentChar();
 
         # Context identifier: letters, digits, underscores, hyphens (for qore-expr etc.)
-        if (c !~ /[a-zA-Z_]/) {
+        if (asc(c) !~ /[a-zA-Z_]/) {
             # the whole character, never one byte of it, so that the message is valid text; a $ followed by a space
             # is a $ on its own
             string next = currentCodePoint() ?? c;
@@ -999,7 +1009,7 @@ public class DpqlTokenizer {
         # Scan context identifier
         while (pos < len) {
             c = currentChar();
-            if (c !~ /[a-zA-Z0-9_\-]/) {
+            if (asc(c) !~ /[a-zA-Z0-9_\-]/) {
                 break;
             }
             value += c;
@@ -1075,7 +1085,7 @@ public class DpqlTokenizer {
             # Unbracketed value: alphanumeric, dots, underscores, *, and ??{...} fallback
             while (pos < len) {
                 c = currentChar();
-                if (c =~ /[a-zA-Z0-9_.*]/) {
+                if (asc(c) =~ /[a-zA-Z0-9_.*]/) {
                     value += c;
                     advance();
                 } else if (c == "?" && peekChar() == "?") {
@@ -1132,7 +1142,7 @@ public class DpqlTokenizer {
             # Scan type identifier: alphanumeric, *, <, >
             while (pos < len) {
                 c = currentChar();
-                if (c =~ /[a-zA-Z0-9_*<>]/) {
+                if (asc(c) =~ /[a-zA-Z0-9_*<>]/) {
                     value += c;
                     advance();
                 } else {
@@ -1204,32 +1214,32 @@ public class DpqlTokenizer {
         }
 
         # Integer part
-        while (pos < len && currentChar() =~ /[0-9]/) {
+        while (pos < len && asc(currentChar()) =~ /[0-9]/) {
             value += currentChar();
             advance();
         }
 
         # Decimal part
-        if (pos < len && currentChar() == "." && peekChar() =~ /[0-9]/) {
+        if (pos < len && currentChar() == "." && asc(peekChar()) =~ /[0-9]/) {
             value += ".";
             advance();
-            while (pos < len && currentChar() =~ /[0-9]/) {
+            while (pos < len && asc(currentChar()) =~ /[0-9]/) {
                 value += currentChar();
                 advance();
             }
         }
 
         # Exponent part (optional)
-        if (pos < len && currentChar() =~ /[eE]/) {
+        if (pos < len && asc(currentChar()) =~ /[eE]/) {
             string exp = currentChar();
             advance();
-            if (pos < len && currentChar() =~ /[+\-]/) {
+            if (pos < len && asc(currentChar()) =~ /[+\-]/) {
                 exp += currentChar();
                 advance();
             }
-            if (pos < len && currentChar() =~ /[0-9]/) {
+            if (pos < len && asc(currentChar()) =~ /[0-9]/) {
                 value += exp;
-                while (pos < len && currentChar() =~ /[0-9]/) {
+                while (pos < len && asc(currentChar()) =~ /[0-9]/) {
                     value += currentChar();
                     advance();
                 }
@@ -1255,14 +1265,14 @@ public class DpqlTokenizer {
 
         while (pos < len) {
             string c = currentChar();
-            if (c =~ /[a-zA-Z0-9_]/) {
+            if (asc(c) =~ /[a-zA-Z0-9_]/) {
                 value += c;
                 advance();
             } else if (input.getByte(pos) >= 0x80 && isFieldChar(currentCodePoint())) {
                 # a letter of another script, read whole
                 value += currentCodePoint();
                 advance(currentCodePointBytes());
-            } else if (c == "-" && pos + 1 < len && chr(input.getByte(pos + 1)) =~ /[a-zA-Z]/) {
+            } else if (c == "-" && pos + 1 < len && asc(chr(input.getByte(pos + 1))) =~ /[a-zA-Z]/) {
                 # Hyphenated identifier: treat '-' followed by a letter as part of the name
                 value += c;
                 advance();
@@ -1300,7 +1310,7 @@ public class DpqlTokenizer {
                 value += c;
                 advance();
                 # Scan optional flags
-                while (pos < len && currentChar() =~ /[gimsxu]/) {
+                while (pos < len && asc(currentChar()) =~ /[gimsxu]/) {
                     value += currentChar();
                     advance();
                 }
@@ -1438,10 +1448,10 @@ public class DpqlTokenizer {
         string word = "";
         while (i < len) {
             string c = chr(input.getByte(i));
-            if (c =~ /[a-zA-Z0-9_]/) {
+            if (asc(c) =~ /[a-zA-Z0-9_]/) {
                 word += c;
                 ++i;
-            } else if (c == "-" && (i + 1) < len && chr(input.getByte(i + 1)) =~ /[a-zA-Z]/) {
+            } else if (c == "-" && (i + 1) < len && asc(chr(input.getByte(i + 1))) =~ /[a-zA-Z]/) {
                 word += c;
                 ++i;
             } else {
@@ -1617,18 +1627,14 @@ public class DpqlTokenizer {
         if (pos + 9 >= len) {
             return False;
         }
-        if (chr(input.getByte(pos)) !~ /[0-9]/ || chr(input.getByte(pos + 1)) !~ /[0-9]/ || chr(input.getByte(pos + 2)) !~ /[0-9]/
-            || chr(input.getByte(pos + 3)) !~ /[0-9]/) {
-            return False;
+        # YYYY-MM-DD
+        foreach int i in (0, 1, 2, 3, 5, 6, 8, 9) {
+            int b = input.getByte(pos + i);
+            if (b < ord("0") || b > ord("9")) {
+                return False;
+            }
         }
-        if (chr(input.getByte(pos + 4)) != "-" || chr(input.getByte(pos + 7)) != "-") {
-            return False;
-        }
-        if (chr(input.getByte(pos + 5)) !~ /[0-9]/ || chr(input.getByte(pos + 6)) !~ /[0-9]/ || chr(input.getByte(pos + 8)) !~ /[0-9]/
-            || chr(input.getByte(pos + 9)) !~ /[0-9]/) {
-            return False;
-        }
-        return True;
+        return chr(input.getByte(pos + 4)) == "-" && chr(input.getByte(pos + 7)) == "-";
     }
 
     #! Scans a date literal in ISO-8601 format
@@ -1645,7 +1651,7 @@ public class DpqlTokenizer {
         }
 
         if (pos < len && (currentChar() == "T" || currentChar() == "t"
-            || (currentChar() == " " && peekChar() =~ /[0-9]/))) {
+            || (currentChar() == " " && asc(peekChar()) =~ /[0-9]/))) {
             value += currentChar();
             advance();
             if (!readDigits(2, \value) || !expectChar(":", \value) || !readDigits(2, \value)) {
@@ -1694,14 +1700,14 @@ public class DpqlTokenizer {
         if (pos + 2 >= len || chr(input.getByte(pos)) != "<") {
             return False;
         }
-        if (chr(input.getByte(pos + 1)) !~ /[0-9A-Fa-f]/) {
+        if (asc(chr(input.getByte(pos + 1))) !~ /[0-9A-Fa-f]/) {
             return False;
         }
         for (int i = pos + 1; i < len; ++i) {
             if (chr(input.getByte(i)) == ">") {
                 return True;
             }
-            if (chr(input.getByte(i)) !~ /[0-9A-Fa-f]/) {
+            if (asc(chr(input.getByte(i))) !~ /[0-9A-Fa-f]/) {
                 return False;
             }
         }
@@ -1728,7 +1734,7 @@ public class DpqlTokenizer {
                 }
                 return makeToken(DPQL_TOK_BINARY, value, start_line, start_column);
             }
-            if (c !~ /[0-9A-Fa-f]/) {
+            if (asc(c) !~ /[0-9A-Fa-f]/) {
                 addError("Binary data is written as hexadecimal digits between < and >, such as <0a1b>.",
                     "DPQL-E012", start_line, start_column, line, column);
                 return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
@@ -1745,7 +1751,7 @@ public class DpqlTokenizer {
 
     private bool readDigits(int count, reference<string> out, *bool allow_more) {
         int read = 0;
-        while (pos < len && currentChar() =~ /[0-9]/ && (read < count || allow_more)) {
+        while (pos < len && asc(currentChar()) =~ /[0-9]/ && (read < count || allow_more)) {
             out += currentChar();
             advance();
             ++read;

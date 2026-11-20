@@ -118,6 +118,25 @@ auto sub nested_throw(int x, int y) {
     return -1;
 }
 
+# Both the nested handler's write to a parameter and its sibling's write to a local survive the block.
+int sub handler_writes(auto tens, bool raise) {
+    int units = 0;
+    try {
+        on_exit {
+            on_exit { tens = 3; }
+        }
+        on_exit { units = 5; }
+        if (raise) {
+            throw "HANDLER-TEST";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "HANDLER-TEST") {
+            rethrow;
+        }
+    }
+    return tens * 10 + units;
+}
+
 sub show(string label, code c) {
     hl = ();
     auto rv;
@@ -137,3 +156,4 @@ foreach int x in ((0, 1 << 0, 1 << 3, (1 << 5) | (1 << 9), 1 << 12)) {
         show(sprintf("throw 0x%x %d", x | (1 << 29), y), auto sub () { return nested_throw(x | (1 << 29), y); });
     }
 }
+printf("handler writes: %d %d\n", handler_writes(0, False), handler_writes(0, True));

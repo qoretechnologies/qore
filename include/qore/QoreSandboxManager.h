@@ -718,10 +718,10 @@ public:
         trust).  The default is @ref false
 
         A binary module that refuses an operation that only an unrestricted caller may use (for example an
-        operation with effects outside the process) should refuse it if and only if
-        <tt>!trustsUncontrolledApis() && restricts()</tt> on the governing manager resolved with
-        QoreSandboxManagerHelper::Policy: a sandbox that restricts nothing, or that trusts its code, does not make the
-        caller untrusted.
+        operation that runs code or does I/O that %Qore does not see) should refuse it unless trustsUncontrolledApis()
+        is true on the governing manager resolved with QoreSandboxManagerHelper::Policy, whatever the sandbox
+        restricts: a sandbox that allows all I/O but does not trust its code keeps that code from such operations (see
+        setUncontrolledApiPolicy()).
 
         @note there is no unreadable state in this predicate; callers that obtain the state another way must treat
         it as not trusting (fail closed)
@@ -1066,7 +1066,12 @@ public:
     QoreSandboxManagerHelper(Purpose purpose);
 
     //! Acquires a ref'd sandbox manager for the given program
-    /** @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
+    /** The manager is the one set with QoreProgram::setSandboxManager().  A program that sandboxed code created, or
+        changed, also keeps the sandbox of that code, which is not returned here: it adds to the sandbox of the code
+        that calls the program, so a module must not install it as the manager of another program, which would govern
+        that program's code alone
+
+        @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
     */
     QoreSandboxManagerHelper(QoreProgram* pgm);
 
@@ -1123,9 +1128,11 @@ DLLEXPORT bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::P
 
     The calling code is the code of the nearest Program on the thread's call stack that is not the Program of a user
     module: the current Program if it is not a module's, else the Program that entered the module code, through any
-    number of calls between modules.  The parse options of that Program decide (for example
+    number of calls between modules; on a thread that module code started, where no such Program is on the stack,
+    the calling code of the module code that started the thread.  The parse options of that Program decide (for example
     \c PO_NO_DATABASE for \c QDOM_DATABASE), as do the restrictions of a sandboxed caller that the module code runs
-    with; the options of the module's own Program do not.
+    with, and those of the modules on the way that are not library code (a module loaded by its path, which has the
+    restrictions of the Program that loaded it first); the options of a library module's own Program do not.
 
     It reveals only whether the calling code is restricted, so it is not restricted itself.
 

@@ -40,6 +40,8 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/xxhash.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -117,7 +119,7 @@ bool qore_is_deferred_runtime_init_exception(ExceptionSink* xsink) {
         return false;
     }
 
-    for (QoreException* ex = xsink->getException(); ex; ex = ex->next) {
+    for (QoreException* ex = qore_exception_sink_ops(xsink).getException(); ex; ex = ex->next) {
         if (qore_is_deferred_runtime_init_err(ex->err)) {
             return true;
         }
@@ -540,6 +542,12 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         //    name.c_str(), val.getFullTypeName(), p, p ? p->name.c_str() : "n/a");
 
         AOTPreloadedSourceSymbolResolutionHelper apssrh;
+        // the exceptions that the initialization raises are those after the last one of the parse sink now: the sink
+        // holds the other exceptions of the parse too
+        const QoreException* prev_tail = nullptr;
+        if (ExceptionSink* psink = qore_program_ops(getProgram()).getParseExceptionSink()) {
+            prev_tail = qore_es_private::get(*psink)->tail;
+        }
         // resolve a deferred explicit declared type here (rather than eagerly in the parser) so that forward
         // references to hashdecls/classes declared later in the same module resolve correctly; the class/namespace
         // parse context pushed above is in scope, matching the behavior of type inference
@@ -562,7 +570,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         if (declaredTypeInfo) {
             const QoreTypeInfo* exprTypeInfo = parse_context.typeInfo;
             qore_type_result_e res = QoreTypeInfo::parseAccepts(declaredTypeInfo, exprTypeInfo);
-            if (res == QTI_NOT_EQUAL && pgm->getParseExceptionSink()) {
+            if (res == QTI_NOT_EQUAL && qore_program_ops(pgm).getParseExceptionSink()) {
                 QoreStringNode* edesc = new QoreStringNodeMaker("constant '%s' declared as ", name.c_str());
                 QoreTypeInfo::getThisType(declaredTypeInfo, *edesc);
                 edesc->concat(", but initializer expression is ");
@@ -578,9 +586,34 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
         // Enrich exception with constant name for better debugging
         if (err) {
-            ExceptionSink* xsink = getProgram()->getParseExceptionSink();
-            if (xsink) {
-                xsink->appendLastDescription(" (while initializing constant '%s')", name.c_str());
+            ExceptionSink* xsink = qore_program_ops(getProgram()).getParseExceptionSink();
+            // the exceptions that the initialization raised (ExceptionSink::appendLastDescription() changes the first
+            // exception of the sink, which can be another one of the parse); none if the sink does not hold the last
+            // exception that it held before any more
+            QoreException* e = xsink ? qore_es_private::get(*xsink)->head : nullptr;
+            if (prev_tail) {
+                while (e && e != prev_tail) {
+                    e = e->next;
+                }
+                if (e) {
+                    e = e->next;
+                }
+            }
+            for (; e; e = e->next) {
+                if (e->desc.getType() == NT_STRING) {
+                    QoreStringNodeHolder desc(e->desc.get<const QoreStringNode>()->copy());
+                    desc->sprintf(" (while initializing constant '%s')", name.c_str());
+                    e->desc.discard(nullptr);
+                    e->desc = desc.release();
+                }
+                // an exception raised outside of user code (ex: by an operator of the initializer folded here,
+                // which runs without a location) is located at the constant, so that it can be reported at its
+                // source (issue #6516)
+                if (e->start_line < 0 && loc) {
+                    e->set(*loc);
+                    e->start_column = loc->start_column;
+                    e->end_column = loc->end_column;
+                }
             }
         }
         assert(!parse_context.lvids);
@@ -596,11 +629,11 @@ int ConstantEntry::parseInit(ClassNs ptr) {
     }
 
     // do not evaluate expression if any parse exceptions have been thrown
-    if (!val.hasNode() || !val.getInternalNode()->needs_eval() || pgm->parseExceptionRaised()) {
+    if (!val.hasNode() || !val.getInternalNode()->needs_eval() || qore_program_ops(pgm).parseExceptionRaised()) {
         if (!QoreTypeInfo::hasType(typeInfo)) {
             // a date has the type of its subtype, as a date literal does (issue #5722)
             typeInfo = QoreTypeInfo::getKnownValueType(val);
-        } else if (explicit_type && val && !val.needsEval() && !pgm->parseExceptionRaised()) {
+        } else if (explicit_type && val && !val.needsEval() && !qore_program_ops(pgm).parseExceptionRaised()) {
             // only fold the value into the declared type when the declared type actually accepts the
             // initializer expression; if the parse-time type check above already raised a PARSE-TYPE-ERROR,
             // running acceptAssignment() here would report a second, redundant RUNTIME-TYPE-ERROR for the
@@ -671,12 +704,12 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
         RuntimeConfig& rc;
         QoreParseOptions old_po;
 
-        DLLLOCAL ConstantInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
+        ConstantInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
                 old_po(rc.getParseOptions()) {
             rc.setParseOptions(po);
         }
 
-        DLLLOCAL ~ConstantInitRcParseOptionsHelper() {
+        ~ConstantInitRcParseOptionsHelper() {
             rc.setParseOptions(old_po);
         }
     } init_rc_po(rc_get_tls_ref(), pwo.parse_options);
@@ -741,6 +774,17 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
         // Enrich exception with constant name for better debugging
         xsink.appendLastDescription(" (while initializing constant '%s')", name.c_str());
         if (runtime_xsink) {
+            // an exception raised outside of user code (ex: by an operator of the initializer, which runs without a
+            // location) is located at the constant, so that it can be reported at its source (issue #6516)
+            if (loc) {
+                for (QoreException* ex = qore_exception_sink_ops(xsink).getException(); ex; ex = ex->next) {
+                    if (ex->start_line < 0) {
+                        ex->set(*loc);
+                        ex->start_column = loc->start_column;
+                        ex->end_column = loc->end_column;
+                    }
+                }
+            }
             runtime_xsink->assimilate(xsink);
         } else {
             qore_program_private::addParseException(getProgram(), xsink, loc);

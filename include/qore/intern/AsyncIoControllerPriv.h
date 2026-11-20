@@ -485,10 +485,30 @@ public:
         indefinitely (OAuth2 refresh / happy-eyeballs via waitForNotifier())
         and is torn down via cancel()/cancelByOwner() + op completion, not via
         this barrier — waiting for it here deadlocks shutdown.
+
+        Called on a worker of this dispatcher (a callback that flushes the callbacks, or a destructor that its
+        release of an object runs, such as that of a server's async I/O controller stopped in a callback), it does
+        not wait for the callback that the worker runs, which ends only when this call has returned (qore#6508).
     */
     DLLLOCAL void waitForIdle();
 
+    //! Waits on idle_cond for waitForIdle(), with the dispatcher's lock held; counted for dbgWaitIdleWaiter() in a
+    //! debug build
+    DLLLOCAL void idleWait() {
 #ifdef DEBUG
+        ++dbg_idle_waiters;
+        dbg_idle_waiter_cond.broadcast();
+#endif
+        idle_cond.wait(m);
+#ifdef DEBUG
+        --dbg_idle_waiters;
+#endif
+    }
+
+#ifdef DEBUG
+    //! Debug-only: the number of release items parked for the given Program (see parked_program_releases)
+    DLLLOCAL size_t dbgParkedReleases(QoreProgram* pgm);
+
     //! Debug-only: waits until no item is queued or being processed, continuePoll() calls included
     /** Unlike waitForIdle(), this waits for continuePoll() calls too, which can block; it is meant for tests that
         need every operation of the controller to have run (see qore_quic_test_advance_clock())
@@ -496,6 +516,13 @@ public:
         @return true if the dispatcher is idle, false if it was not when \a timeout_ms elapsed
     */
     DLLLOCAL bool dbgWaitAllIdle(int timeout_ms);
+
+    //! Debug-only: waits until a thread waits in waitForIdle() for a callback (the wait blocks)
+    /** For tests that must release a callback only once a flush waits for it (qore#6508)
+
+        @return true if a thread waits in waitForIdle(), false if none did when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitIdleWaiter(int timeout_ms);
 
     //! Debug-only: the number of onComplete() calls dispatched so far
     DLLLOCAL int64_t dbgOnCompleteDispatched() const {
@@ -526,7 +553,11 @@ public:
     DLLLOCAL void markProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink);
 
     //! Remove a program from the shutting-down set
-    DLLLOCAL void clearProgramShuttingDown(QoreProgram* pgm);
+    /** Releases the release items of the Program that were parked while it was marked (see enqueue()) first, in the
+        calling thread (the one that cancels the Program's work, before the Program's threads are waited for), each
+        in the Program (its parse options, and counted in its threads), as a worker releases a release item
+    */
+    DLLLOCAL void clearProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink);
 
     //! Wait for in-flight callbacks belonging to a specific program to complete
     /** Unlike waitForIdle() which waits for ALL callbacks, this only waits for
@@ -607,11 +638,21 @@ private:
 #ifdef DEBUG
     //! Debug-only: the number of onComplete() calls dispatched so far (see dbgOnCompleteDispatched())
     std::atomic<int64_t> dbg_on_complete_dispatched{0};
+    //! Debug-only: the number of threads blocked in waitForIdle() (see dbgWaitIdleWaiter())
+    int dbg_idle_waiters = 0;
+    //! Debug-only: signaled when a thread blocks in waitForIdle()
+    QoreCondition dbg_idle_waiter_cond;
 #endif
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
     AsyncIoControllerPriv* ctrl = nullptr;  //!< Owning controller for logging (not ref'd — controller outlives dispatcher)
     std::unordered_set<QoreProgram*> shutting_down_programs;  //!< Programs being destroyed — skip callbacks
+    //! Release items (DT_RELEASE) of Programs being destroyed, released by clearProgramShuttingDown()
+    /** Such an item can run the cleanup of a C++ poll operation, which must run neither in the thread that enqueues
+        it (an I/O thread, a thread in a method of an HTTP connection, a scan of the garbage collector) nor on a worker
+        that can run after the Program's threads were waited for, outside the Program
+    */
+    std::unordered_map<QoreProgram*, std::vector<AsyncWorkItem>> parked_program_releases;
     std::unordered_map<QoreProgram*, int> active_per_program; //!< Per-program in-flight callback count
     QoreCondition pgm_idle_cond;                //!< Signaled when a program's active count reaches zero
     //! Owners being torn down — skip callbacks; nesting depth, not a flag
@@ -895,6 +936,9 @@ public:
     /** For tests of the work of an owner that is shutting down, which cannot otherwise hold the mark at a given point
     */
     DLLLOCAL void dbgSetOwnerShuttingDown(const std::string& owner, bool mark);
+
+    //! Debug-only: waits until a thread waits in a flush of the callbacks (see QoreCallDispatcher::dbgWaitIdleWaiter())
+    DLLLOCAL bool dbgWaitFlushBlocked(int timeout_ms);
 #endif
 
     //! Wakes a socket operation by QoreObject identity
@@ -905,6 +949,55 @@ public:
         @param xsink exception sink
     */
     DLLLOCAL void wakeSocketByObject(QoreObject* sock_obj, ExceptionSink* xsink);
+
+    //! Called by the destructor of the Qore object of a C++ poll operation: the controller cancels the operation
+    /** An explicit \c delete runs the destructor of an operation that a controller still holds and polls; the
+        operation's state is then released only with its last reference (see the deref() of the operation classes),
+        and the controller sees the deletion as a cancellation of the operation:
+        - an operation in the cache of an I/O thread is canceled by a CancelDeletedOp command, which each running
+          I/O thread receives (the operation does not know its thread); it is not waited for
+        - an operation whose submission has not been processed yet is canceled when it is (see attachOp())
+        - an operation that is deleted is not continued again (see isOpDeleted())
+
+        Does not block on the I/O threads and runs no Qore code.
+
+        @param op the C++ poll operation of the object that is being deleted
+    */
+    DLLLOCAL static void opObjectDeleted(SocketPollOperationBase* op);
+
+    //! Registers a submission of a poll operation without a C++ poll operation by its Qore object (qore#6531)
+    /** The deletion of the object (qoreOpObjectDeleted()) cancels the operation with this controller; the
+        registration ends with the operation's cache entry (PollInfo::cleanup()) or the submission that failed
+    */
+    DLLLOCAL void registerQoreOp(const QoreObject* obj);
+
+    //! Ends a registration made by registerQoreOp()
+    DLLLOCAL static void unregisterQoreOp(const QoreObject* obj);
+
+    //! Returns true if the Qore object of a registered poll operation was deleted
+    DLLLOCAL static bool isQoreOpDeleted(const QoreObject* obj);
+
+    //! Called when the Qore object of a poll operation is deleted: a submitted operation without a C++ poll operation
+    //! is canceled (qore#6531)
+    /** Does not wait for the I/O threads and runs no Qore code
+    */
+    DLLLOCAL static void qoreOpObjectDeleted(const QoreObject* obj);
+
+    //! Wakes the I/O thread of the controller that holds the given C++ poll operation; never raises an exception
+    /** See SocketPollOperationBase::wakeIoThread()
+    */
+    DLLLOCAL static void wakeOpIoThread(SocketPollOperationBase* op);
+
+    //! Releases the given (last) reference of a C++ poll operation on a callback worker of the global controller
+    /** Used where releasing the last reference would run the operation's cleanup in a thread that must not run it;
+        released in the calling thread if there is no controller (in a child process created with fork())
+    */
+    DLLLOCAL static void releaseOpOnWorker(SocketPollOperationBase* op);
+
+    //! Returns true if the Qore object of the given C++ poll operation was deleted (see opObjectDeleted())
+    /** Called by an I/O thread before each step of an operation; a single atomic load
+    */
+    DLLLOCAL static bool isOpDeleted(const SocketPollOperationBase* op);
 
     //! Wait for all pending onComplete/abort callbacks to be processed
     /** Call after cancelByOwner() to ensure all cancelled operation callbacks
@@ -1097,6 +1190,11 @@ private:
         CancelTimer,
         ContinuePollResult,  //!< Result from async continuePoll() dispatch
         GetInfo,             //!< Snapshot cache info on the I/O thread
+        //! Cancel the operation of a C++ poll operation whose Qore object was deleted (see opObjectDeleted())
+        CancelDeletedOp,
+        //! Cancel the operation of a poll operation without a C++ poll operation (one implemented in Qore) whose Qore
+        //! object was deleted (see qoreOpObjectDeleted(); qore#6531)
+        CancelDeletedObj,
     };
 
     //! Forward declaration — full definition below (requires PollInfo)
@@ -1137,9 +1235,19 @@ private:
         DLLLOCAL ~CancelCountRef() = default;
     };
 
+    //! Returns true if the current thread is the module cleanup or runs work it handed over
+    /** (qore_module_cleanup_delegation()); taken by each Command when it is created on the requesting thread
+    */
+    DLLLOCAL static bool commandModuleCleanupDelegation();
+
     //! Command queue entry
     struct Command {
         IoCommand cmd = IoCommand::WakeSocket;
+        //! True if the thread that created the command is the module cleanup or runs work that it handed over
+        /** An operation that the command cancels is then canceled for the cleanup: what the operation runs after
+            that is part of the cleanup (see doCancelIntern() and qore_close_module_programs())
+        */
+        bool module_cleanup_delegate = commandModuleCleanupDelegation();
         std::string key;                //!< For Cancel / ContinuePollResult / SubmitOp: the cache key
         //! For Cancel: if set, only the operation of this object is canceled (another operation can have taken the key)
         /** Compared by address only; the canceling thread holds a reference to the object until the command has been
@@ -1221,6 +1329,15 @@ private:
         AsyncIoSandboxContext submit_sandbox_ctx;        //!< For SubmitOp: the submitter's sandbox context
         //! For SubmitOp: the references taken by the synchronous exec() call that waits for the operation, or empty
         std::shared_ptr<AsyncIoSyncRelease> submit_sync_release;
+        //! For CancelDeletedOp: the C++ poll operation whose Qore object was deleted (referenced)
+        /** The reference keeps the address from being reused for another operation until the command is processed
+        */
+        SocketPollOperationBase* cancel_spop_base = nullptr;
+        //! For CancelDeletedObj: the Qore object of the operation whose object was deleted (referenced; qore#6531)
+        QoreObject* deleted_spop_obj = nullptr;
+        //! For SubmitOp: the operation, which has no C++ poll operation, is registered by its Qore object (see
+        //! registerQoreOp())
+        bool submit_qop_registered = false;
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -1254,6 +1371,13 @@ private:
         //! True once the last state event (\c done) has been pushed; it is pushed exactly once
         bool state_end_delivered = false;
         SocketPollOperationBase* spop_base; //!< C++ poll operation (referenced, or nullptr)
+        //! The ID of the attachment of spop_base that this entry made (see attachOp()), or 0
+        /** Only the entry that made the current attachment detaches the operation
+        */
+        uint64_t spop_attach_id = 0;
+        //! true if the operation, which has no C++ poll operation, is registered by its Qore object (see
+        //! registerQoreOp(); qore#6531): the entry unregisters it when it is cleaned up
+        bool qop_registered = false;
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
         //! True once a terminal completion (goal/timeout/cancel/error) has been
@@ -2088,6 +2212,29 @@ private:
     */
     DLLLOCAL void releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink);
 
+    //! Records that the given C++ poll operation is held in a cache of this controller (see opObjectDeleted())
+    /** Called on the I/O thread whose cache takes the operation.
+
+        @return true if the operation's Qore object was deleted: the operation is canceled instead of polled
+    */
+    DLLLOCAL bool attachOp(SocketPollOperationBase* op, QoreObject* sock_obj, uint64_t& attach_id);
+
+    //! Records that the given C++ poll operation is no longer held in a cache of this controller
+    DLLLOCAL static void detachOp(SocketPollOperationBase* op, uint64_t attach_id);
+
+    //! Sends a CancelDeletedOp command for the given C++ poll operation to the running I/O threads
+    /** @param op the operation, referenced by each command
+        @param only_idx if not negative, the command is sent to this I/O thread only
+    */
+    DLLLOCAL void postDeletedOpCancel(SocketPollOperationBase* op, int only_idx = -1);
+
+    //! Sends a CancelDeletedObj command for the given Qore object of a poll operation to the running I/O threads
+    /** @param obj the operation's object, referenced by each command
+        @param only_idx if not negative, the command is sent to this I/O thread only
+    */
+    DLLLOCAL void postDeletedObjCancel(const QoreObject* obj, int only_idx = -1);
+
+
     //! Releases references held by the controller for an operation, off the async I/O thread
     /** As releaseOffIoThread(AsyncIoDeferredRelease&, ExceptionSink*), except that on an I/O thread the references
         of an operation that a synchronous exec() call waits for (@a sync_release is set) go to that caller, which
@@ -2125,6 +2272,13 @@ public:
     */
     DLLLOCAL static int64_t dbgDispatchHeldOffIoThreadReleases(size_t count, int64_t timeout_ms,
         ExceptionSink* xsink);
+
+    //! Debug-only: dispatches the release of a reference to the given object while its Program is marked as being
+    //! destroyed, on the global controller's dispatcher, as an I/O thread can in that window (issue #6464)
+    /** @return a hash: \c parked: the release items of the Program parked after the dispatch; \c after_clear: those
+        left after the mark was cleared, which releases them in the calling thread
+    */
+    DLLLOCAL static QoreHashNode* dbgParkProgramReleaseTest(QoreObject* obj, ExceptionSink* xsink);
 
     //! Debug-only: the points after which a delivery can pause; see dbgPauseAfterDelivery()
     enum DbgPausePoint {
@@ -2166,11 +2320,35 @@ public:
     */
     DLLLOCAL static void dbgHoldTimerCallbacks(bool hold);
 
+    //! Debug-only: makes the next hold of a timer callback fail as if its memory could not be allocated
+    /** Called by the dbg_async_io_fail_next_timer_hold() test hook: the callback is then dispatched as usual, as it is
+        when timer callbacks are not held
+    */
+    DLLLOCAL static void dbgFailNextTimerHold();
+
     //! Debug-only: waits until at least @p count timer callbacks are held; returns false if the wait timed out
     DLLLOCAL static bool dbgWaitHeldTimerCallbacks(size_t count, int64_t timeout_ms);
 
     //! Debug-only: dispatches the timer callbacks held and waits for them to complete; returns their number
     DLLLOCAL static size_t dbgReleaseHeldTimerCallbacks(ExceptionSink* xsink);
+
+    //! Debug-only: holds the results of continuePoll() steps that callback workers send from now on
+    /** Called by the dbg_async_io_hold_step_results() test hook: the operation of a held result stays in its step
+        (continue_poll_in_flight) until the result is released (dbgReleaseHeldStepResults()), so that a test can
+        cancel an operation while its step is in flight, which defers the cancel until the step's result arrives
+        (pending_aborts); with @a hold = false, results are sent again, and the results already held stay held until
+        they are released
+    */
+    DLLLOCAL static void dbgHoldStepResults(bool hold);
+
+    //! Debug-only: waits until at least @p count step results are held; returns false if the wait timed out
+    DLLLOCAL static bool dbgWaitHeldStepResults(size_t count, int64_t timeout_ms);
+
+    //! Debug-only: sends the step results held to their I/O threads and returns their number
+    /** Each result is sent as the worker that made the step would have sent it, with the module cleanup delegation
+        of that worker (Command::module_cleanup_delegate), not of the calling thread
+    */
+    DLLLOCAL static size_t dbgReleaseHeldStepResults(ExceptionSink* xsink);
 
 private:
     //! Debug-only: holds the callback of a fired timer if timer callbacks are held; returns true if it was held
@@ -2178,6 +2356,12 @@ private:
     */
     DLLLOCAL bool dbgHoldTimerCallback(ResolvedCallReferenceNode* code, const std::string& owner,
             AsyncIoSandboxContext& sandbox_ctx, AsyncIoRuntimeOptions& runtime_po);
+
+    //! Debug-only: holds a step result if step results are held; returns true if it was held
+    /** The references of @p new_poll_info and @p ex_hash are taken over when it is held
+    */
+    DLLLOCAL bool dbgHoldStepResult(const std::string& key, uint64_t op_id, int thread_idx,
+            QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state);
 #endif
 
     //! Start the I/O thread (caller must hold lock)
@@ -2211,6 +2395,16 @@ private:
 
     //! Completes the completion of an abandoned command, if any; the caller holds @ref m
     DLLLOCAL void completeAbandonedLocked(Command& cmd);
+
+    //! Makes an operation that the module cleanup cancels part of the cleanup
+    /** If the current thread is the module cleanup or runs work that it handed over (qore_module_cleanup_delegation()),
+        or processes a command that such a thread created (Command::module_cleanup_delegate), the operation gets a
+        copy of its sandbox context with QoreSandboxContext::module_cleanup_delegate set, so that its abort(),
+        onComplete() and the release of its references can enter the Programs of the modules after the cleanup has
+        closed them (qore#6510).  Called by doCancelIntern() and when a cancel waits for the operation's step
+        (pending_aborts); keeps the context if the copy cannot be allocated
+    */
+    DLLLOCAL void applyModuleCleanupCancel(PollInfo& pinfo);
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
@@ -2577,6 +2771,14 @@ private:
     */
     DLLLOCAL void enqueueContinuePollResult(const std::string& key, uint64_t op_id, int thread_idx,
         QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state = nullptr);
+
+    //! Sends the result of a continuePoll() step to the I/O thread; see enqueueContinuePollResult()
+    /** @param module_cleanup_delegate the module cleanup delegation of the thread that made the step (see
+        Command::module_cleanup_delegate)
+    */
+    DLLLOCAL void enqueueContinuePollResultIntern(const std::string& key, uint64_t op_id, int thread_idx,
+        QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state,
+        bool module_cleanup_delegate);
 
     //! Dispatch a stream-data-ready notification from a worker thread
     /** Called by the DT_CONTINUE_POLL worker after getAndClearDataReadyStreams() to

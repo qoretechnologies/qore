@@ -1,0 +1,504 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires DataProvider
+%requires DbDataProvider
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+%requires ./FirebirdTestIsolation.qm
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires JdbcFirebirdSqlUtil
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%try-module jni
+%define NoJni
+%endtry
+
+%exec-class SqlUtilRecursiveQueryTest
+
+#! Tests recursive queries: the "recursive" select option of SqlUtil and search option of DbDataProvider (issue #3544)
+/** The tests run on SQLite and, each in a schema or database of its own, on PostgreSQL, MySQL or MariaDB, Oracle, SQL
+    Server and Firebird (through JDBC) when \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL,
+    \c QORE_DB_CONNSTR_ORACLE, \c QORE_DB_CONNSTR_FREETDS and \c QORE_DB_CONNSTR_JDBC_FIREBIRD are set (an Oracle
+    schema of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS); a MySQL server before 8.0 checks that recursive queries
+    are refused
+*/
+class SqlUtilRecursiveQueryTest inherits QUnit::Test {
+    public {
+        #! the table of a tree of employees
+        const EmpDesc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "manager_id": {"qore_type": "integer"},
+                "name": {"qore_type": "string", "size": 30},
+            },
+            "primary_key": {"name": "pk_rq_emp", "columns": "id"},
+        };
+
+        #! the employees: 1 manages 2 and 3, 2 manages 4, 4 manages 5
+        const EmpRows = (
+            {"id": 1, "manager_id": NULL, "name": "root"},
+            {"id": 2, "manager_id": 1, "name": "a"},
+            {"id": 3, "manager_id": 1, "name": "b"},
+            {"id": 4, "manager_id": 2, "name": "c"},
+            {"id": 5, "manager_id": 4, "name": "d"},
+        );
+
+        #! the table of links between nodes: a chain, and a cycle
+        const LinkDesc = {
+            "columns": {
+                "src": {"qore_type": "integer", "notnull": True},
+                "dst": {"qore_type": "integer", "notnull": True},
+            },
+            "primary_key": {"name": "pk_rq_link", "columns": ("src", "dst")},
+        };
+
+        #! the number of links of the chain: node i links to node i + 1, from 1
+        const ChainLength = 1100;
+
+        #! the nodes of the cycle: 10001 -> 10002 -> 10003 -> 10001
+        const CycleStart = 10001;
+
+        #! the keyword of the WITH clause of a recursive query, by driver
+        const WithSql = {
+            "pgsql": "with recursive ",
+            "mysql": "with recursive ",
+            "oracle": "with ",
+            "freetds": "with ",
+            "jdbc": "with recursive ",
+            "sqlite3": "with recursive ",
+        };
+    }
+
+    private {
+        #! connections by driver (\c "jdbc" is Firebird)
+        hash<string, Datasource> dsh;
+        #! why a database is skipped, by driver
+        hash<string, string> skip = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "freetds": "QORE_DB_CONNSTR_FREETDS is not set",
+            "jdbc": "no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD",
+        };
+    }
+
+    constructor() : Test("SqlUtilRecursiveQuery", "1.0", \ARGV) {
+        addTestCase("SQLite: recursive queries", \sqliteTest());
+        addTestCase("invalid recursive queries", \errorTest());
+        addTestCase("PostgreSQL: recursive queries", sub () { checkDriver("pgsql"); });
+        addTestCase("MySQL: recursive queries", sub () { checkDriver("mysql"); });
+        addTestCase("Oracle: recursive queries", sub () { checkDriver("oracle"); });
+        addTestCase("SQL Server: recursive queries", sub () { checkDriver("freetds"); });
+        addTestCase("Firebird: recursive queries", sub () { checkDriver("jdbc"); });
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        connect("pgsql", ENV.QORE_DB_CONNSTR_PGSQL, *string sub (string connstr) {
+            PgsqlRunSchema::setup(connstr, "SqlUtilRecursiveQuery");
+            return connstr;
+        });
+        connect("mysql", ENV.QORE_DB_CONNSTR_MYSQL, *string sub (string connstr) {
+            return MysqlRunDatabase::getConnectionString(connstr, "SqlUtilRecursiveQuery");
+        });
+        connect("oracle", ENV.QORE_DB_CONNSTR_ORACLE, *string sub (string connstr) {
+            return OracleRunSchema::getConnectionString(connstr, "SqlUtilRecursiveQuery");
+        });
+%ifdef NO_FREETDS
+        skip.freetds = "freetds module unavailable";
+%else
+        connect("freetds", ENV.QORE_DB_CONNSTR_FREETDS, *string sub (string connstr) {
+            return MssqlRunDatabase::getConnectionString(connstr, "SqlUtilRecursiveQuery");
+        });
+%endif
+%ifdef NoJni
+        skip.jdbc = "no jni module";
+%else
+        connect("jdbc", ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD, *string sub (string connstr) {
+            return FirebirdRunDatabase::getConnectionString(connstr, "SqlUtilRecursiveQuery");
+        });
+        if (dsh.jdbc && dsh.jdbc.getDriverRealName() !~ /^firebird/i) {
+            skip.jdbc = "not a Firebird connection";
+            remove dsh.jdbc;
+        }
+%endif
+    }
+
+    globalTearDown() {
+        foreach hash<auto> i in (dsh.pairIterator()) {
+            i.value.rollback();
+        }
+        remove dsh;
+        if (PgsqlRunSchema::getName()) {
+            PgsqlRunSchema::teardown();
+        }
+        MysqlRunDatabase::teardown();
+        OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
+        FirebirdRunDatabase::teardown();
+    }
+
+    #! opens the connection of a driver in the run's own schema or database, or records why it cannot be
+    private connect(string driver, *string connstr, code isolate) {
+        if (!connstr) {
+            return;
+        }
+        try {
+            Datasource ds(isolate(connstr));
+            if (ds.getDriverName() != driver) {
+                skip{driver} = sprintf("the connection uses driver %y", ds.getDriverName());
+                return;
+            }
+            ds.open();
+            dsh{driver} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skip{driver} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        checkRecursive(ds, "sqlite3");
+    }
+
+    #! checks recursive queries on a database
+    private checkDriver(string driver) {
+        if (!dsh{driver}) {
+            testSkip(skip{driver});
+        }
+        Datasource ds = dsh{driver};
+        on_exit {
+            ds.rollback();
+            foreach string table in ("rq_emp", "rq_link") {
+                try {
+                    ds.exec("drop table " + table);
+                    ds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    ds.rollback();
+                }
+            }
+        }
+        checkRecursive(ds, driver);
+    }
+
+    #! creates a table with rows
+    private static AbstractTable createTable(Datasource ds, string name, hash<auto> desc, list<auto> rows) {
+        Table table(ds, desc, name);
+        table.create();
+        # Firebird cannot write to a table in the transaction that creates it
+        ds.commit();
+        AbstractTable t = table.getTable();
+        map t.insert($1), rows;
+        ds.commit();
+        return t;
+    }
+
+    #! returns the select of the subtree of an employee
+    private static hash<auto> subtree(int id, *int max_depth, *string name, *list<string> columns) {
+        hash<auto> rq = {
+            "name": name ?? "tree",
+            "columns": columns ?? ("id", "manager_id", "name"),
+            "anchor": {"columns": ("id", "manager_id", "name"), "where": {"id": id}},
+            "step": {
+                "alias": "e",
+                "columns": ("e.id", "e.manager_id", "e.name"),
+                "join": join_inner_recursive("t", {"manager_id": columns ? columns[0] : "id"}),
+            },
+            "depth": "lvl",
+        };
+        if (exists max_depth) {
+            rq.max_depth = max_depth;
+        }
+        return rq;
+    }
+
+    #! returns the select of the nodes linked from a node
+    private static hash<auto> path(int start, *int max_depth, bool depth = True) {
+        hash<auto> rq = {
+            "name": "path",
+            "columns": ("node",),
+            "anchor": {"columns": (cop_as("src", "node"),), "where": {"src": start}},
+            "step": {
+                "alias": "l",
+                "columns": ("l.dst",),
+                "join": join_inner_recursive("p", {"src": "node"}),
+            },
+        };
+        if (depth) {
+            rq.depth = "d";
+        }
+        if (exists max_depth) {
+            rq.max_depth = max_depth;
+        }
+        return rq;
+    }
+
+    #! returns the rows of a select, with the values of the given columns as integers
+    private static list<hash<auto>> intRows(*list<auto> rows, list<string> ints) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> row in (rows) {
+            foreach string key in (ints) {
+                row{key} = int(row{key});
+            }
+            rv += row;
+        }
+        return rv;
+    }
+
+    #! checks recursive queries on a database
+    private checkRecursive(Datasource ds, string driver) {
+        AbstractTable emp = createTable(ds, "rq_emp", EmpDesc, EmpRows);
+        # a recursive query that the server cannot run is refused
+        if (!emp.supportsRecursiveQueries()) {
+            assertThrows("RECURSIVE-QUERY-ERROR", "recursive queries need MySQL 8.0 or MariaDB 10.2.2",
+                \emp.selectRows(), {"recursive": subtree(1)});
+            return;
+        }
+        bool mariadb = driver == "mysql" && ds.getServerVersion() >= 100000;
+
+        # the subtree of employee 1 to a depth of 2
+        list<auto> rows = intRows(emp.selectRows({"recursive": subtree(1, 2), "columns": ("id", "name", "lvl"),
+            "orderby": ("lvl", "id")}), ("id", "lvl"));
+        assertEq((
+            {"id": 1, "name": "root", "lvl": 0},
+            {"id": 2, "name": "a", "lvl": 1},
+            {"id": 3, "name": "b", "lvl": 1},
+            {"id": 4, "name": "c", "lvl": 2},
+        ), rows, "subtree to depth 2");
+        # the whole subtree of employee 2
+        assertEq((2, 4, 5), map int($1.id), emp.selectRows({"recursive": subtree(2), "columns": "id",
+            "orderby": "id"}), "subtree");
+
+        # the outer select filters, orders and pages the rows of the CTE
+        assertEq((
+            {"id": 2, "lvl": 1},
+            {"id": 3, "lvl": 1},
+        ), intRows(emp.selectRows({"recursive": subtree(1), "columns": ("id", "lvl"), "where": {"lvl": op_ge(1)},
+            "orderby": ("lvl", "id"), "limit": 2}), ("id", "lvl")), "outer where, order by and limit");
+
+        # the SQL starts with the WITH clause, and the values are bound in its order
+        list<auto> args;
+        string sql = emp.getSelectSql({"recursive": subtree(3, 7), "where": {"lvl": op_le(5)}}, \args);
+        assertEq(WithSql{driver}, sql.substr(0, WithSql{driver}.size()), "with clause: " + sql);
+        assertRegex(" union all ", sql);
+        assertEq((3, 7, 5), map int($1), args, "bind order: " + sql);
+        if (driver == "freetds") {
+            assertRegex(" option \\(maxrecursion 7\\)$", sql);
+            assertNRegex("maxrecursion", emp.getSelectSql({"recursive": subtree(3)}), "no MAXRECURSION without "
+                "max_depth");
+        } else if (driver == "mysql") {
+            assertNRegex("SET_VAR|set statement", sql);
+        }
+
+        # the CTE and its columns are quoted when they are reserved words
+        assertEq(({"select": 4, "from": "c"}, {"select": 5, "from": "d"}), map $1{"select", "from"}, intRows(emp.selectRows({
+                "recursive": {
+                    "name": "order",
+                    "columns": ("select", "from"),
+                    "anchor": {"columns": ("id", "name"), "where": {"id": 4}},
+                    "step": {"alias": "e", "columns": ("e.id", "e.name"),
+                        "join": join_inner_recursive("group", {"manager_id": "select"})},
+                },
+                "columns": ("select", "from"),
+                "orderby": "select",
+            }), ("select",)), "reserved words");
+
+        # the record type of a recursive query
+        hash<auto> trq = subtree(1) + {
+            "columns": ("id", "manager_id", "name", "label", "n", "other"),
+        };
+        trq.anchor.columns = ("id", "manager_id", "name", cop_cast("name", "string", 40), cop_value(7),
+            cop_upper("name"));
+        # the anchor and the step give the same types
+        trq.step.columns = ("e.id", "e.manager_id", "e.name", cop_cast("e.name", "string", 40), cop_value(8),
+            cop_upper("e.name"));
+        hash<string, AbstractDataField> rt = emp.getRecursiveQueryRecordType(trq);
+        assertEq(("id", "manager_id", "name", "label", "n", "other", "lvl"), keys rt);
+        assertEq("int", rt.lvl.getType().getName(), "the depth column is an int");
+        assertEq("auto", rt.other.getType().getName(), "an expression of an unknown type");
+        assertRegex("^(int|number)$", rt.id.getType().getBaseTypeName(), "a column of the table");
+        assertEq("string", rt.name.getType().getBaseTypeName(), "a column of the table");
+        assertEq("string", rt.label.getType().getBaseTypeName(), "a cast");
+        assertRegex("^(int|number)$", rt.n.getType().getBaseTypeName(), "an integer value");
+        assertEq(5, emp.selectRows({"recursive": trq}).size(), "the rows of the typed query");
+
+        # iterators and statements
+        int count = 0;
+        map ++count, emp.getRowIterator({"recursive": subtree(1)});
+        assertEq(5, count, "row iterator");
+        {
+            AbstractSQLStatement stmt = emp.getStatement({"recursive": subtree(4), "orderby": "id"});
+            on_exit stmt.rollback();
+            list<auto> ids;
+            while (stmt.next()) {
+                ids += int(stmt.fetchRow().id);
+            }
+            assertEq((4, 5), ids, "statement");
+        }
+
+        # the search of a data provider returns the rows of the CTE
+        {
+            DbDataProvider db(ds);
+            AbstractDataProvider dp = db.getChildProviderEx("rq_emp");
+            hash<auto> opts = {"recursive": subtree(1), "orderby": ("id",)};
+            list<auto> found;
+            AbstractDataProviderRecordIterator i = dp.searchRecords({"lvl": op_ge(2)}, opts);
+            while (i.next()) {
+                found += int(i.getValue().id);
+            }
+            assertEq((4, 5), found, "search iterator");
+            assertEq("int", i.getRecordType().lvl.getType().getName(), "iterator record type");
+            # the record type of the provider for the search options is that of the records returned
+            hash<string, AbstractDataField> drt = dp.getRecordType(opts);
+            assertEq(("id", "manager_id", "name", "lvl"), keys drt, "search record type");
+            assertEq("int", drt.lvl.getType().getName(), "search record type: depth");
+            assertEq(keys drt, keys dp.getRecordTypeWithOptions(NOTHING, opts), "search record type with options");
+            assertEq(keys drt, keys dp.getSoftRecordType(opts), "soft search record type");
+            # without the recursive search option, the record type is the table's
+            assertEq(("id", "manager_id", "name"), keys dp.getRecordType({"orderby": ("id",)}), "table record type");
+            assertEq(keys dp.getRecordType(), keys dp.getRecordType({"orderby": ("id",)}), "search options ignored");
+            assertFalse(dp.recordRequiresSearchOptions(), "the record type of the table needs no search options");
+            # a plain search condition names the columns of the CTE
+            found = ();
+            i = dp.searchRecords({"lvl": 2}, opts);
+            while (i.next()) {
+                found += int(i.getValue().id);
+            }
+            assertEq((4,), found, "search by a column of the CTE");
+        }
+
+        # links: a chain and a cycle
+        list<hash<auto>> links = ();
+        foreach int i in (xrange(1, ChainLength)) {
+            links += {"src": i, "dst": i + 1};
+        }
+        links += ({"src": CycleStart, "dst": CycleStart + 1}, {"src": CycleStart + 1, "dst": CycleStart + 2},
+            {"src": CycleStart + 2, "dst": CycleStart});
+        AbstractTable link = createTable(ds, "rq_link", LinkDesc, links);
+
+        # UNION without ALL ends a walk of a cycle where the database supports it
+        hash<auto> walk = path(CycleStart, NOTHING, False) + {"union": "distinct"};
+        if (inlist(driver, ("oracle", "freetds", "jdbc"))) {
+            assertThrows("RECURSIVE-QUERY-ERROR", "needs UNION ALL", \link.selectRows(), {"recursive": walk});
+        } else {
+            assertEq((CycleStart, CycleStart + 1, CycleStart + 2), map int($1.node), link.selectRows({
+                "recursive": walk, "orderby": "node"}), "union distinct");
+        }
+
+        # a max_depth above the default recursion limit of the database raises it for the statement
+        int deep = driver == "freetds" ? 150 : (driver == "jdbc" ? 1023 : 1000);
+        assertEq(deep + 1, link.selectRows({"recursive": path(1, deep)}).size(), sprintf("max_depth %d", deep));
+        if (driver == "mysql") {
+            assertEq(1051, link.selectRows({"recursive": path(1, 1050)}).size(), "max_depth 1050");
+            string dsql = link.getSelectSql({"recursive": path(1, 1050)});
+            if (mariadb) {
+                assertRegex("^set statement max_recursive_iterations = 1050 for with recursive ", dsql);
+            } else {
+                # the hint is given after the main SELECT keyword, after the WITH clause
+                assertRegex("\\) select /\\*\\+ SET_VAR\\(cte_max_recursion_depth = 1051\\) \\*/ ", dsql);
+            }
+        } else if (driver == "jdbc") {
+            assertThrows("RECURSIVE-QUERY-ERROR", "at most 1023", \link.selectRows(), {"recursive": path(1, 1024)});
+        }
+
+        # without max_depth, a database with a recursion limit ends a walk of a cycle at it
+        switch (driver) {
+            case "freetds":
+                # the driver reports the server's error as TDS-EXEC-ERROR or TDS-SERVER-ERROR
+                checkError(sub () { link.selectRows({"recursive": path(CycleStart)}); }, "^TDS-",
+                    "maximum recursion 100 has been exhausted", "SQL Server limit");
+                break;
+            case "jdbc":
+                assertThrows("JNI-ERROR", "Too many concurrent executions", \link.selectRows(),
+                    {"recursive": path(CycleStart)});
+                break;
+            case "oracle":
+                # Oracle finds the cycle when a row repeats: the query has no depth column
+                assertThrows("DBI:ORACLE:OCI-ERROR", "ORA-32044", \link.selectRows(),
+                    {"recursive": path(CycleStart, NOTHING, False)});
+                break;
+            case "mysql": {
+                if (mariadb) {
+                    # MariaDB ends the query without an error, with the rows of max_recursive_iterations iterations
+                    assertEq(1001, link.selectRows({"recursive": path(CycleStart)}).size(), "MariaDB limit");
+                    break;
+                }
+                # MySQL ends the query with error 3636 while the rows are fetched; the mysql driver raises it since
+                # issue #6497 was fixed
+                checkError(sub () { link.selectRows({"recursive": path(CycleStart)}); }, "^DBI:MYSQL:FETCH-ERROR$",
+                    "Recursive query aborted after 1001 iterations", "MySQL limit");
+                break;
+            }
+        }
+        ds.rollback();
+    }
+
+    #! checks that the code raises an error with a code and a description that match the given regular expressions
+    private checkError(code c, string err, string desc, string label) {
+        try {
+            c();
+            fail(label + ": no error");
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex(err, ex.err, label + ": error");
+            assertRegex(desc, ex.desc, label + ": description");
+        }
+    }
+
+    #! invalid recursive queries
+    errorTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        AbstractTable emp = createTable(ds, "rq_emp", EmpDesc, EmpRows);
+
+        list<auto> errors = (
+            ({"recursive": subtree(1) + {"bad": 1}}, "unknown key"),
+            ({"recursive": subtree(1) - "columns"}, "\"columns\" key"),
+            ({"recursive": subtree(1) + {"columns": ("id", "id", "name")}}, "more than once"),
+            ({"recursive": subtree(1) + {"columns": ("id", "manager_id")}}, "list of 2 column"),
+            ({"recursive": subtree(1) + {"name": "a.b"}}, "cannot have a \".\""),
+            ({"recursive": subtree(1) + {"depth": "id"}}, "also a column"),
+            ({"recursive": subtree(1) - "depth" + {"max_depth": 2}}, "needs the \"depth\" key"),
+            ({"recursive": subtree(1, -1)}, "not negative"),
+            ({"recursive": subtree(1) + {"union": "any"}}, "\"all\" or \"distinct\""),
+            ({"recursive": subtree(1) + {"step": {"columns": ("id", "manager_id", "name")}}}, "does not join"),
+            ({"recursive": subtree(1) + {"anchor": {"columns": ("id", "manager_id", "name"), "orderby": "id"}}},
+                "cannot have the \"orderby\""),
+            ({"recursive": subtree(1), "forupdate": True}, "\"forupdate\" select option cannot be combined"),
+            ({"recursive": subtree(1), "superquery": {"columns": "id"}}, "\"superquery\" select option cannot be"),
+            ({"columns": "id", "superquery": {"recursive": subtree(1)}}, "not in a superquery"),
+            ({"columns": "id", "union": {"recursive": subtree(1)}}, "cannot be a recursive query"),
+            ({"where": {"id": op_in_select("rq_emp", {"recursive": subtree(1), "columns": "id"})}},
+                "a subquery cannot be a recursive query"),
+        );
+        foreach list<auto> e in (errors) {
+            assertThrows("RECURSIVE-QUERY-ERROR", e[1], \emp.selectRows(), e[0]);
+        }
+        # insert-select and create-as-select: see SqlUtilRecursiveInsertCreate.qtest (issue #6495)
+    }
+}

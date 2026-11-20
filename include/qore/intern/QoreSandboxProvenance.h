@@ -5,6 +5,7 @@
 #define _QORE_SANDBOX_PROVENANCE_H
 
 #include <qore/QoreSandboxManager.h>
+#include <qore/QoreParseOptions.h>
 #include <vector>
 
 class AbstractQoreNode;
@@ -20,14 +21,34 @@ public:
     DLLLOCAL static const std::vector<QoreSandboxManager*>* members(const QoreSandboxManager* manager);
 };
 
-//! Captures provenance, returning nullptr when no sandbox governs execution.
-DLLLOCAL QoreSandboxContext* qore_capture_sandbox_provenance();
+class QoreProgram;
+
+//! Captures provenance, returning nullptr when no sandbox governs execution and no origin is recorded.
+/** @param code_pgm the Program whose code an object created now runs (its class's), or nullptr: if it is a library
+    module's, the functional-domain restrictions of the creating code are recorded too (qore#6520)
+*/
+DLLLOCAL QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm = nullptr);
+//! Records the functional-domain restrictions of the code that creates a call reference to library module code
+/** Called by the constructor of each run-time call reference class once the reference is complete (qore#6520); does
+    nothing if \a code_pgm, the Program whose code the reference runs, is not a library module's (or is nullptr) or
+    if the creating code has no restrictions
+*/
+DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm);
+//! Returns the Program whose code a closure runs: the Program that defines it (qore#6520)
+DLLLOCAL const QoreProgram* qore_closure_code_program(const ResolvedCallReferenceNode* closure);
+//! Returns the functional-domain restrictions of the code that creates an object or call reference now (qore#6520)
+DLLLOCAL QoreParseOptions qore_creation_origin_restrictions();
 //! Captures a runtime call reference without changing the public subclass layout.
 DLLLOCAL void qore_capture_call_reference_provenance(const ResolvedCallReferenceNode* ref);
 DLLLOCAL void qore_release_call_reference_provenance(const ResolvedCallReferenceNode* ref);
 //! Returns a referenced context, or nullptr.
 DLLLOCAL QoreSandboxContext* qore_get_call_reference_provenance(const ResolvedCallReferenceNode* ref);
 DLLLOCAL ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNode* callback, bool trusted,
+    ExceptionSink* xsink);
+//! Creates a capability that runs a fixed callback as a trusted build (see SandboxManager::createTrustedBuildCall())
+/** Raises SANDBOX-CAPABILITY-ERROR and returns nullptr if the creation is refused
+*/
+DLLLOCAL ResolvedCallReferenceNode* qore_create_trusted_build_call(const ResolvedCallReferenceNode* callback,
     ExceptionSink* xsink);
 //! Creates a capability that starts a fixed callback in a new thread that no sandbox governs
 /** See SandboxManager::createSystemThreadCall(); raises SANDBOX-CAPABILITY-ERROR and returns nullptr if the creation is

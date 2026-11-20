@@ -15,6 +15,7 @@
 %requires HttpServer
 %requires HttpClientIo
 %requires RestClientIo
+%requires ../../../RefusedQuicPort.qm
 
 %exec-class HttpClientTlsVerifyTest
 
@@ -720,25 +721,39 @@ WKEuKQ7xuGuAiIESuSDBsSg=
     }
 
     #! An HTTP/3 connection failure that is not a TLS error remains a connection error that is retried
+    /** Nothing receives datagrams on the port, so each attempt fails without reaching a server: by the ICMP "port
+        unreachable" (after the grace period, which the DEBUG-only hook sets to 0), or by the handshake timeout when
+        the attempt does not end by the refusal before the connect timeout, as on a busy host (qore#6519); either is
+        a connection error, and the number of connections, with and without a retry, shows that it is retried.  The
+        request timeout leaves room for two handshake timeouts.
+    */
     http3ConnectFailureTest() {
-        # nothing receives datagrams on this port
-        string url = sprintf("https://127.0.0.1:%d", get_free_port("127.0.0.1"));
+        # the system refuses the datagrams on this port, which the test holds (issue #6461)
+        RefusedUdpPort refused();
+        on_exit refused.close();
+        string url = sprintf("https://127.0.0.1:%d", refused.port);
         foreach string api in (Apis) {
-            RecordingManager mgr = http3Manager({"accept_all_certs": True, "connect_timeout": 5s,
-                "max_request_retries": 1});
-            on_exit mgr.closeAll();
-            try {
-                http3Get(mgr, url, api);
-                fail(api + ": no exception raised");
-            } catch (hash<ExceptionInfo> ex) {
-                assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, api + ": " + ex.desc);
-                assertRegex("^QUIC-", ex.arg.err, api);
-                if (inlist("debug", get_feature_list())) {
-                    # the refusal ended the attempt after the grace period set by the test hook
-                    assertRegex("did not recover within 0 ms", ex.desc, api + ": " + ex.desc);
+            foreach int retries in (0, 1) {
+                string msg = sprintf("%s retries=%d", api, retries);
+                RecordingManager mgr = http3Manager({"accept_all_certs": True, "connect_timeout": 5s,
+                    "request_timeout": 30s, "max_request_retries": retries});
+                on_exit mgr.closeAll();
+                try {
+                    http3Get(mgr, url, api);
+                    fail(msg + ": no exception raised");
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, msg + ": " + ex.desc);
+                    # an error of a connection that never reached a server
+                    assertTrue(HttpClientIo::HttpClientConnectionManager::H3UnreachedErrors{ex.arg.err},
+                        msg + ": " + ex.desc);
+                    if (ex.arg.err == "QUIC-CONNECT-REFUSED" && inlist("debug", get_feature_list())) {
+                        # the refusal ended the attempt after the grace period set by the test hook
+                        assertRegex("did not recover within 0 ms", ex.desc, msg + ": " + ex.desc);
+                    }
                 }
+                # each attempt is a connection of its own
+                assertEq(retries + 1, mgr.getConnections().size(), msg);
             }
-            assertEq(2, mgr.getConnections().size(), api + ": one retry");
         }
     }
 
@@ -823,12 +838,12 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             case "REST async": {
                 RestClientIo rest({"url": url, "data": "text"}, mgr);
                 on_exit rest.close();
-                return rest.restGetAsync("/").get(25s).body;
+                return rest.restGetAsync("/").get(35s).body;
             }
             case "HTTP":
                 return mgr.request(url, "GET", "/").body;
             case "HTTP async":
-                return mgr.requestAsync(url, "GET", "/").get(25s).body;
+                return mgr.requestAsync(url, "GET", "/").get(35s).body;
         }
         throw "TEST-ERROR", sprintf("unknown API %y", api);
     }

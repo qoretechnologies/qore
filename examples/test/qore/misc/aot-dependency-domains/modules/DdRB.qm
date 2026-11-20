@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module required by DdRA, which restricts locale control, that declares the
+# locale control domain and requires a module that uses it after its header (qore#6351, qore#6406)
+
+%modern
+
+module DdRB {
+    version = "1.0";
+    desc = "a module of aot-dependency-domains.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%requires DdInner
+
+public namespace DdRB {
+    public string sub run() {
+        return DdInner::run();
+    }
+}

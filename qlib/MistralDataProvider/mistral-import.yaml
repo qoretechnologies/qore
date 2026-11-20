@@ -1,7 +1,15 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 documents:
 - name: Mistral API
-  source: https://raw.githubusercontent.com/mistralai/platform-docs-public/2e094f7bbe1395de4a738a3483def3573143d973/openapi.yaml
+  # The official document is https://docs.mistral.ai/openapi.yaml, the "Download OpenAPI Spec" link of the API
+  # reference (https://docs.mistral.ai/api/).  It has no versioned or commit-pinned URL (the SDKs take it from the
+  # Speakeasy registry, and the former mistralai/platform-docs-public repository is gone; qore#6190), so the exact
+  # downloaded document is kept here and the import reads it, which makes the import reproducible byte for byte; the
+  # provenance in MistralSchema.qc records source_url with the document's digest, size and import date.  To refresh
+  # it, download the document again over this file (fetched 2026-11-17 16:36 UTC: 1548910 bytes, sha-256
+  # 7652f1307b3bc6cb7a10526c28788a430246f641cb9785a9f1b7b0dd912cdfae) and rerun the import.
+  source: mistral-openapi-source.yaml
+  source_url: https://docs.mistral.ai/openapi.yaml
   output: mistral-openapi.json
   manifest: MistralDataProvider:MistralManifest::Manifest
   provenance: MistralSchema.qc
@@ -25,3 +33,190 @@ documents:
     rename_paths:
       /v1/connectors/{connector_id_or_name}#idOrName: /v1/connectors/{connector_id_or_name}
       /v1/connectors/{connector_id}#id: /v1/connectors/{connector_id_or_name}
+  - reason: 'The text/event-stream response of POST /v1/audio/speech declares its event types under a local
+      $defs but refers to them as #/$defs/..., which in an OpenAPI 3.1 document without $id resolves against
+      the document root, where no $defs exist, so the references dangle (qore#6190, document fetched 2026-11-17).
+      The generate-speech action does not stream (its stream option is ignored) and returns the JSON response;
+      drop the streaming response, keeping application/json. Source: https://docs.mistral.ai/openapi.yaml'
+    replace_values:
+    - pointer: '#/paths/~1v1~1audio~1speech/post/responses/200/content'
+      expected:
+        application/json:
+          schema:
+            type: object
+            properties:
+              audio_data:
+                type: string
+                title: Audio Data
+                description: Base64 encoded audio data
+            title: SpeechResponse
+            required:
+            - audio_data
+            additionalProperties: false
+        text/event-stream:
+          schema:
+            type: object
+            properties:
+              event:
+                $ref: '#/$defs/SpeechStreamEventTypes'
+              data:
+                oneOf:
+                - $ref: '#/components/schemas/SpeechStreamAudioDelta'
+                - $ref: '#/components/schemas/SpeechStreamDone'
+                discriminator:
+                  propertyName: type
+                  mapping:
+                    speech.audio.delta: '#/components/schemas/SpeechStreamAudioDelta'
+                    speech.audio.done: '#/components/schemas/SpeechStreamDone'
+                title: Data
+            $defs:
+              CompletionTokensDetails:
+                type: object
+                properties:
+                  reasoning_tokens:
+                    anyOf:
+                    - type: integer
+                    - type: 'null'
+                    title: Reasoning Tokens
+                title: CompletionTokensDetails
+                additionalProperties: false
+                description: 'Token usage details for the completion.
+
+
+                  ``reasoning_tokens`` is ``None`` when the provider did not report a count.
+
+                  Preserve that distinction instead of inventing a measured zero: ``0`` means
+
+                  "reasoning off, confirmed by the provider", ``None`` means "unknown".'
+              MessageTokens:
+                type: object
+                properties:
+                  role:
+                    $ref: '#/$defs/Roles'
+                  total_tokens:
+                    anyOf:
+                    - type: integer
+                    - type: 'null'
+                    title: Total Tokens
+                  settings_tokens:
+                    anyOf:
+                    - type: integer
+                    - type: 'null'
+                    title: Settings Tokens
+                  truncated:
+                    type: boolean
+                    title: Truncated
+                    default: false
+                  usage_count:
+                    type: integer
+                    title: Usage Count
+                    default: 1
+                title: MessageTokens
+                required:
+                - role
+                additionalProperties: false
+                description: Information on a single message included in a tokenized prompt as part of an
+                  InstructRequest.
+              PromptTokensDetails:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/$defs/MessageTokens'
+                    title: Messages
+                  cached_tokens:
+                    type: integer
+                    title: Cached Tokens
+                    default: 0
+                  audio_tokens:
+                    type: integer
+                    title: Audio Tokens
+                    default: 0
+                title: PromptTokensDetails
+                additionalProperties: false
+                description: Token usage details for the prompt.
+              Roles:
+                type: string
+                title: Roles
+                enum:
+                - system
+                - user
+                - assistant
+                - tool
+              SpeechStreamEventTypes:
+                type: string
+                title: SpeechStreamEventTypes
+                enum:
+                - speech.audio.delta
+                - speech.audio.done
+              UsageInfo:
+                type: object
+                properties:
+                  prompt_audio_seconds:
+                    anyOf:
+                    - type: integer
+                    - type: 'null'
+                    title: Prompt Audio Seconds
+                  prompt_tokens:
+                    type: integer
+                    title: Prompt Tokens
+                    default: 0
+                  total_tokens:
+                    type: integer
+                    title: Total Tokens
+                    default: 0
+                  completion_tokens:
+                    anyOf:
+                    - type: integer
+                    - type: 'null'
+                    title: Completion Tokens
+                    default: 0
+                  request_count:
+                    anyOf:
+                    - type: integer
+                    - type: 'null'
+                    title: Request Count
+                  prompt_tokens_details:
+                    anyOf:
+                    - $ref: '#/$defs/PromptTokensDetails'
+                    - type: 'null'
+                  completion_tokens_details:
+                    anyOf:
+                    - $ref: '#/$defs/CompletionTokensDetails'
+                    - type: 'null'
+                  service_tier:
+                    anyOf:
+                    - type: string
+                    - type: 'null'
+                    title: Service Tier
+                    description: 'The service tier at which the request was processed: standard or priority.'
+                  prompt_token_details:
+                    anyOf:
+                    - $ref: '#/$defs/PromptTokensDetails'
+                    - type: 'null'
+                  num_cached_tokens:
+                    anyOf:
+                    - type: integer
+                    - type: 'null'
+                    title: Num Cached Tokens
+                title: UsageInfo
+                additionalProperties: false
+            title: SpeechStreamEvents
+            required:
+            - event
+            - data
+            additionalProperties: false
+      replacement:
+        application/json:
+          schema:
+            type: object
+            properties:
+              audio_data:
+                type: string
+                title: Audio Data
+                description: Base64 encoded audio data
+            title: SpeechResponse
+            required:
+            - audio_data
+            additionalProperties: false

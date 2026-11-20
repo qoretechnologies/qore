@@ -60,6 +60,8 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 // pending (ngtcp2_conn_get_expiry2() == UINT64_MAX), QORE_QUIC_NO_TIMER_POLL_MS.  Per RFC 9002, ACK-only packets are
 // not loss-detected, so the peer's retransmission timer drives recovery then.
 #include "qore/intern/QuicPollTimeout.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/qore_string_private.h"
 
 //! Maximum packets to process per continuePoll() call for QUIC client connections.
 /** Prevents a single connection from monopolizing the shared I/O thread when
@@ -762,11 +764,12 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
     ReferenceHolder<QoreHashNode> headers(new QoreHashNode(autoTypeInfo), nullptr);
     for (const auto& hdr : cached_stream->headers) {
         if (hdr.second.size() == 1) {
-            headers->setKeyValue(hdr.first.c_str(), new QoreStringNode(hdr.second[0]), nullptr);
+            headers->setKeyValue(hdr.first.c_str(), qore_http_field_value_string(hdr.second[0].data(),
+                hdr.second[0].size()), nullptr);
         } else {
             ReferenceHolder<QoreListNode> values(new QoreListNode(autoTypeInfo), nullptr);
             for (const auto& v : hdr.second) {
-                values->push(new QoreStringNode(v), nullptr);
+                values->push(qore_http_field_value_string(v.data(), v.size()), nullptr);
             }
             headers->setKeyValue(hdr.first.c_str(), values.release(), nullptr);
         }
@@ -1804,7 +1807,8 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
     ReferenceHolder<QoreHashNode> headers(new QoreHashNode(autoTypeInfo), nullptr);
     for (const auto& hdr : cached_stream_->stream->headers) {
         if (hdr.second.size() == 1) {
-            headers->setKeyValue(hdr.first.c_str(), new QoreStringNode(hdr.second[0]), nullptr);
+            headers->setKeyValue(hdr.first.c_str(), qore_http_field_value_string(hdr.second[0].data(),
+                hdr.second[0].size()), nullptr);
         } else if (hdr.first == "cookie") {
             // RFC 9114 section 4.2.1: concatenate cookie values with "; "
             QoreStringNode* combined = new QoreStringNode;
@@ -1814,12 +1818,13 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
                 }
                 combined->concat(hdr.second[i]);
             }
+            qore_http_field_value_check(combined);
             headers->setKeyValue("cookie", combined, nullptr);
         } else if (hdr.first == "set-cookie") {
             // set-cookie must not be combined (RFC 7230 section 3.2.2)
             ReferenceHolder<QoreListNode> values(new QoreListNode(autoTypeInfo), nullptr);
             for (const auto& v : hdr.second) {
-                values->push(new QoreStringNode(v), nullptr);
+                values->push(qore_http_field_value_string(v.data(), v.size()), nullptr);
             }
             headers->setKeyValue("set-cookie", values.release(), nullptr);
         } else {
@@ -1831,13 +1836,15 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
                 }
                 combined->concat(hdr.second[i]);
             }
+            qore_http_field_value_check(combined);
             headers->setKeyValue(hdr.first.c_str(), combined, nullptr);
         }
     }
     // RFC 9220: Add :protocol to headers hash (parallel to HTTP/2 for handler compatibility)
     if (!cached_stream_->stream->connect_protocol.empty()) {
-        headers->setKeyValue(":protocol",
-            new QoreStringNode(cached_stream_->stream->connect_protocol), nullptr);
+        // obs-text is given in ISO-8859-1 (qore#6554)
+        const std::string& proto = cached_stream_->stream->connect_protocol;
+        headers->setKeyValue(":protocol", qore_http_field_value_string(proto.data(), proto.size()), nullptr);
     }
     h->setKeyValue("headers", headers.release(), nullptr);
 
@@ -3144,7 +3151,7 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(E
     auto cancel_stream = [&]() {
         sock->priv->m.unlock();
         ExceptionSink cancel_xsink;
-        sock->cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
+        qore_socket_object_private(sock).cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
         cancel_xsink.clear();
         sock->priv->m.lock();
     };

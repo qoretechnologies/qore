@@ -1,0 +1,7 @@
+own restriction before the header: Asia/Tokyo
+own restriction after the header: Europe/Prague
+own restriction before and after the header: Europe/Prague
+own restriction, another domain declared: Europe/Prague
+own restriction again in a conditional on a parse option: Europe/Prague
+own restriction again in a conditional on a define of the loading code: Europe/Prague
+own restriction before the header, not library code: Europe/Prague

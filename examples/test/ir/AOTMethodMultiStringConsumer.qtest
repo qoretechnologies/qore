@@ -41,18 +41,18 @@ final class StringFactory {
         string static_value =
             StringFactory::makeStatic(\"Dvo\\u0159\\u00e1k-\", \"value\");
         string instance_value = makeInstance(\"left-\", \"value\");
-        return static_value.size() * 100 + static_value.length()
-            + instance_value.size() * 100 + instance_value.length();
+        return static_value.size() * 100 + static_value.strlen()
+            + instance_value.size() * 100 + instance_value.strlen();
     }
 
     int argumentConsumers(string left, string right) {
         string static_value =
             StringFactory::makeStatic(left, right);
         int result =
-            static_value.size() * 100 + static_value.length() * 10;
+            static_value.size() * 100 + static_value.strlen() * 10;
         string instance_value = makeInstance(right, left);
         return result + instance_value.size() * 100
-            + instance_value.length() * 10;
+            + instance_value.strlen() * 10;
     }
 }
 
@@ -63,7 +63,7 @@ class OverridableStringFactory {
 
     int consumeValue() {
         string value = makeValue();
-        return value.size() + value.length();
+        return value.size() + value.strlen();
     }
 }
 
@@ -77,7 +77,7 @@ bool sub missingGuard() {
     string missing;
     try {
         string value = StringFactory::makeStatic(missing, \"tail\");
-        return value.size() + value.length() == 0;
+        return value.size() + value.strlen() == 0;
     } catch (hash<auto> ex) {
         return ex.err == \"RUNTIME-OVERLOAD-ERROR\"
             || ex.err == \"RUNTIME-TYPE-ERROR\";
@@ -88,7 +88,7 @@ bool sub encodingGuard() {
     try {
         string value = StringFactory::makeStatic(
             convert_encoding(\"ascii\", \"US-ASCII\"), \"\\u00df\");
-        return value.size() + value.length() == 0;
+        return value.size() + value.strlen() == 0;
     } catch (hash<auto> ex) {
         return ex.err == \"ENCODING-CONVERSION-ERROR\";
     }
@@ -97,7 +97,7 @@ bool sub encodingGuard() {
 int sub effectfulConsumers() {
     producer_effects = 0;
     string value = StringFactory::makeEffectful(\"left\", \"right\");
-    return producer_effects * 100 + value.size() + value.length();
+    return producer_effects * 100 + value.size() + value.strlen();
 }
 
 StringFactory factory();
@@ -118,7 +118,7 @@ source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "2422:440:True:True:118:20\n";
+string expected = "2424:440:True:True:118:20\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = ExecModeHarness::run(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",

@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./MssqlTestIsolation.qm
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class MssqlYearOperatorsTest
+
+#! the column operators cop_year(), cop_year_month(), cop_year_day() and cop_year_hour() on SQL Server (issue #6582)
+/** they used the literal column name \c dt instead of the column given to them; runs when
+    \c QORE_DB_CONNSTR_FREETDS is set for a SQL Server database
+*/
+class MssqlYearOperatorsTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+        string skip = "QORE_DB_CONNSTR_FREETDS is not set";
+    }
+
+    constructor() : Test("MssqlYearOperators", "1.0", \ARGV) {
+        addTestCase("year operators", \yearTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoFreetds
+        if (!ENV.QORE_DB_CONNSTR_FREETDS) {
+            return;
+        }
+        try {
+            Datasource d(MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "MssqlYearOperators"));
+            d.open();
+            ds = d;
+        } catch (hash<ExceptionInfo> ex) {
+            skip = sprintf("cannot connect to SQL Server: %s: %s", ex.err, ex.desc);
+        }
+%else
+        skip = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+            delete ds;
+        }
+        MssqlRunDatabase::teardown();
+    }
+
+    yearTest() {
+        if (!ds) {
+            testSkip(skip);
+        }
+        on_exit ds.rollback();
+        AbstractTable t = new Table(ds, "year_ops_6582").getTable();
+        t.addColumn("id", {"qore_type": Type::Int}, False);
+        # the column is not named "dt"
+        t.addColumn("ts", {"qore_type": Type::Date}, False);
+        t.create();
+        t.insert({"id": 1, "ts": 2026-11-18T13:45:12});
+
+        hash<auto> row = t.selectRow({"columns": (
+            cop_as(cop_year("ts"), "y"),
+            cop_as(cop_year_month("ts"), "ym"),
+            cop_as(cop_year_day("ts"), "yd"),
+            cop_as(cop_year_hour("ts"), "yh"),
+        )});
+        assertEq({"y": "2026", "ym": "2026-11", "yd": "2026-11-18", "yh": "2026-11-18 13"}, row);
+
+        # an expression of a column
+        row = t.selectRow({"columns": (cop_as(cop_year(cop_coalesce("ts", "ts")), "y"),)});
+        assertEq({"y": "2026"}, row);
+    }
+}

@@ -32,6 +32,7 @@
 #include "qore/intern/TryStatement.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 TryStatement::TryStatement(const QoreProgramLocation* loc, StatementBlock* t, StatementBlock* c, char* p,
         const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, const QoreProgramLocation* vloc)
@@ -83,7 +84,7 @@ bool qore_catch_thread_exit(ExceptionSink* xsink) {
     // the catch block would not run while the thread is exiting (StatementBlock::execIntern()), so the exception is
     // only caught and deleted, as execImpl() below does
     if (xsink->isException()) {
-        xsink->catchException()->del(xsink);
+        qore_exception_sink_ops(xsink).catchException()->del(xsink);
     }
     return true;
 }
@@ -101,7 +102,7 @@ int TryStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     // handler) interrupted is released, and the code continues as if the return had not completed
     qore_try_release_interrupted_return(trv, xsink);
 
-    QoreException* except = xsink->catchException();
+    QoreException* except = qore_exception_sink_ops(xsink).catchException();
     if (except) {
         printd(5, "TryStatement::execImpl() entering catch handler, e=%p\n", except);
 
@@ -140,7 +141,7 @@ int TryStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exception
     // a return that an exception interrupted gives no value (see above)
     qore_try_release_interrupted_return(trv, xsink);
 
-    QoreException* except = xsink->catchException();
+    QoreException* except = qore_exception_sink_ops(xsink).catchException();
     if (except) {
         printd(5, "TryStatement::execImpl() entering catch handler, e=%p\n", except);
 
@@ -239,12 +240,6 @@ int TryStatement::parseInitImpl(QoreParseContext& parse_context) {
     }
 
     return err;
-}
-
-bool TryStatement::hasFinalReturn() const {
-    // this works because try and rethrow both return true for hasFinalReturn
-    // because throwing an exception trumpts any return statement
-    return try_block && try_block->hasFinalReturn() && catch_block && catch_block->hasFinalReturn();
 }
 
 void TryStatement::parseCommit(QoreProgram* pgm) {

@@ -63,6 +63,18 @@
           "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
           "message": "La codificación de cadenas que se usará si `text` = `True` (por defecto: `UTF-8`)"
         },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Errores de codificación"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Lo que produce el texto que no es válido en su codificación de caracteres"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What text that is not valid in its character encoding gives if `text` = `True`: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` returns the text as `ISO-8859-1`, and `keep` returns it in the encoding without a check",
+          "message": "Lo que produce el texto que no es válido en su codificación de caracteres si `text` = `True`: `raise` (el valor predeterminado) genera un error `INVALID-ENCODING`, `latin1` devuelve el texto como `ISO-8859-1`, y `keep` lo devuelve en la codificación sin comprobación"
+        },
         "app.RlRQ.action.c2VuZC1maWxl.display_name": {
           "source": "Send File With FTP",
           "message": "Enviar archivo con FTP"

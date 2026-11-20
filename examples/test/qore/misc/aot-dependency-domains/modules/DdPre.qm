@@ -1,0 +1,22 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain in its header and requires
+# a module that uses it before the header, where the restriction of the loading code still applies (qore#6351)
+
+%modern
+%requires DdInner
+
+module DdPre {
+    version = "1.0";
+    desc = "a module that requires a module before its header";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+public namespace DdPre {
+    public string sub run() {
+        return DdInner::run();
+    }
+}

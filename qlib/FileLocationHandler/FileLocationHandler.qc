@@ -146,6 +146,20 @@ public hashdecl FileResourceResult {
 
 #! The abstract file location handler class
 public class AbstractFileLocationHandler {
+    public {
+        #! The \c encoding_errors read option of the handlers that read text
+        /** See @ref filelocationhandler_encoding_errors
+
+            @since FileLocationHandler 3.0
+        */
+        const EncodingErrorsOption = <FileHandlerOptionInfo>{
+            "type": "string",
+            "default_value": ENCODING_ERRORS_RAISE,
+            "desc": "what text read that is not valid in its encoding gives: `raise` (the default) raises "
+                "`INVALID-ENCODING`, `latin1` returns it as `ISO-8859-1`, `keep` returns it without a check (read)",
+        };
+    }
+
     #! Retrieves a text file from the given location
     /** @param scheme the scheme being used
         @param location the location string without the scheme or options
@@ -304,6 +318,61 @@ public class AbstractFileLocationHandler {
     */
     bool isBound() {
         return isBoundImpl();
+    }
+
+    #! Checks text read in its encoding with the given encoding_errors option
+    /** Text read in memory, such as the text of a file received over the network and tagged with its encoding, is
+        checked here as the text readers of %Qore check the text they read (see @ref encoding_errors): a
+        single-byte encoding has no invalid bytes, and the message and byte offset of an \c INVALID-ENCODING error
+        are those of a @ref Qore::StreamReader "StreamReader"
+
+        @param text the text read, tagged with its encoding
+        @param encoding_errors one of the @ref encoding_errors_constants: \c "raise" (the default) raises
+        \c INVALID-ENCODING, \c "latin1" returns text that is not valid tagged \c ISO-8859-1 with its bytes,
+        \c "keep" returns \a text without a check
+        @param desc a description of the text for the message of an \c INVALID-ENCODING error, such as the location
+        it was read from (without credentials)
+
+        @return \a text, or with \c "latin1" \a text tagged \c ISO-8859-1 if it is not valid in its encoding
+
+        @throw INVALID-ENCODING \a text is not valid in its encoding and \a encoding_errors is \c "raise"
+        @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
+
+        @since FileLocationHandler 3.0
+    */
+    static string checkTextEncoding(string text, *string encoding_errors, string desc) {
+        switch (encoding_errors ?? ENCODING_ERRORS_RAISE) {
+            case ENCODING_ERRORS_KEEP:
+                return text;
+            case ENCODING_ERRORS_RAISE:
+            case ENCODING_ERRORS_LATIN1:
+                break;
+            default:
+                # the message of the core readers
+                throw "ENCODING-ERRORS-ERROR", sprintf("unknown encoding_errors value '%s'; expecting one of: "
+                    "'raise', 'latin1', 'keep'", encoding_errors);
+        }
+        if (text.isEncodingValid()) {
+            return text;
+        }
+        # the text is checked by the reader that checks the text read from a file or a stream, which gives the
+        # offset of the invalid sequence and does not check a single-byte encoding
+        try {
+            StreamReader reader(new BinaryInputStream(binary(text)), text.encoding());
+            reader.readString(-1);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "INVALID-ENCODING") {
+                rethrow;
+            }
+            if (encoding_errors == ENCODING_ERRORS_LATIN1) {
+                return force_encoding(text, "ISO-8859-1");
+            }
+            # the text was not read by the reader: its method is left out of the message
+            string msg = ex.desc;
+            msg =~ s/^StreamReader::readString\(\): //;
+            throw ex.err, sprintf("%s: %s", desc, msg), ex.arg;
+        }
+        return text;
     }
 
     #! Returns a string tagged with the given encoding, if any
@@ -1281,7 +1350,10 @@ getHandlerNames
                 try {
                     load_module(handler);
                 } catch (hash<ExceptionInfo> ex) {
-                    stderr.printf("error loading FileLocationHandler module %y: %s\n", handler, get_exception_string(ex));
+                    if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                        stderr.printf("error loading FileLocationHandler module %y: %s\n", handler,
+                            get_exception_string(ex));
+                    }
                 }
             }
         }

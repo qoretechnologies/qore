@@ -34,6 +34,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreException.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #include <algorithm>
 #include <chrono>
@@ -96,7 +97,7 @@ ProgramThreadOutcome program_thread_get_outcome(const ExceptionSink& xsink, bool
     }
     // the first exception is the one that ended the thread's code; any others were raised while it propagated
     ExceptionSink& sink = const_cast<ExceptionSink&>(xsink);
-    QoreException* e = sink.getException();
+    QoreException* e = qore_exception_sink_ops(sink).getException();
     if (!e) {
         return xsink.isThreadExit() ? ProgramThreadOutcome::EXITED : ProgramThreadOutcome::COMPLETED;
     }
@@ -120,14 +121,14 @@ int64 program_thread_new_id() {
 
 int64 program_thread_count_exceptions(ExceptionSink& xsink) {
     int64 rv = 0;
-    for (QoreException* e = xsink.getException(); e; e = e->next) {
+    for (QoreException* e = qore_exception_sink_ops(xsink).getException(); e; e = e->next) {
         ++rv;
     }
     return rv;
 }
 
 QoreHashNode* program_thread_event_error(ExceptionSink& xsink, int64 index) {
-    QoreException* e = xsink.getException();
+    QoreException* e = qore_exception_sink_ops(xsink).getException();
     for (int64 i = 0; e && i < index; ++i) {
         e = e->next;
     }

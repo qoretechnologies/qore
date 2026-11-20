@@ -1,0 +1,21 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that loads the inner module when it runs, with the restrictions it
+# was loaded with; DdPrB requires it before DdPrD does (qore#6351)
+
+%modern
+
+module DdPrEx {
+    version = "1.0";
+    desc = "a module that loads the inner module at run time";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DdPrEx {
+    public string sub run() {
+        load_module("DdInner");
+        return call_function("DdInner::run");
+    }
+}

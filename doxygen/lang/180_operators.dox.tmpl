@@ -306,7 +306,11 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     |<em>@ref expressions "buffer_expression"</em>|If the expression evaluates to a buffer, then the <em>@ref expressions "index_expression"</em> will be used to return the given typed element(s) from the buffer.
     |<em>@ref expressions "index_expression"</em>|If the expression does not evaluate to a list or to an integer it is converted to an integer. Then the value(s) of the given element(s) are returned according to the type of the first expression (as listed above; elements start at position 0). If @ref negative-offsets "%negative-offsets" is enabled, negative integer indexes and explicit negative range endpoints are first resolved against the container size. If the expression is in the range form (e.g. [1..3], [2..], [-2..]) then the dereference operator supports @ref op_functional "lazy functional evaluation".
 
-    This operator does not throw any exceptions; if the first expression does not evaluate to either a list, string, binary, or buffer, then no value (@ref nothing) is returned.
+    If the first expression does not evaluate to either a list, string, binary, or buffer, then no value (@ref nothing) is returned.
+
+    <b>Exceptions Thrown by []</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the string is not valid in its encoding: its characters cannot be found, and no partial result is returned
 
     @note a slice (several values or a range between the square brackets, or a list given by an expression) is not an
     lvalue: it can be the whole lvalue of the @ref remove "remove" and @ref delete "delete" operators, and using it
@@ -535,7 +539,7 @@ list<int> l1 = new list<int>(2);
 
     @par Synopsis
     The delete operator deletes the contents of an lvalue. If the delete operator is called on an object, the object will be destroyed unconditionally. The delete operator does not return any value.\n<br>
-    When called on a hash key, the key is removed from the hash entirely; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n<br>
+    When called on a hash key, the key is removed from the hash entirely; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change); a list whose value type does not accept @ref nothing (ex: <tt>list&lt;int&gt;</tt>) becomes a list whose value type accepts it (<tt>list&lt;*int&gt;</tt>), or, if the declared type of the lvalue holding the list requires its value type, a \c RUNTIME-TYPE-ERROR exception is raised (see @ref list_holes; use @ref splice "splice" or @ref extract "extract" to remove elements from such a list).\n<br>
     The delete operator will delete multiple keys from a hash (i.e. delete a slice from a hash) when called on a hash dereferenced by a list of strings, giving the keys to delete (see example below).\n<br>
     The delete operator will also remove characters from strings, bytes from binary objects, and elements from lists as well.\n<br>
     @anchor remove_selector_list A list of selectors in square brackets (more than one selector, any of which can be an index range, ex: <tt>delete x[0, 2..3]</tt>) selects nothing from a value that is not a list, a string or a binary object: the selectors are evaluated in order and nothing is deleted; a single index on such a value deletes the value as a whole.\n<br>
@@ -563,14 +567,18 @@ delete bin[2..4,10,12];
 delete l[2,5..7,8];
     @endcode
 
-    This operator does not throw any exceptions, however exceptions could be thrown in an object's destructor method when deleted by this operator.
+    <b>Exceptions Thrown by delete</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|characters are deleted from a string that is not valid in its encoding: its characters cannot be found, and the string is not changed
+
+    Exceptions could also be thrown in an object's destructor method when deleted by this operator.
 
     <hr>
     @subsection remove Remove Operator (remove)
 
     @par Synopsis
     The remove operator removes a value from a data structure, or, in the case the operand of the remove operator is a simple value, the value itself is removed from the variable and returned. The remove operator returns the value removed from the \a lvalue.\n<br>
-    When called on a hash key, the key is removed from the hash entirely, and the value returned is the value of the key removed from the hash; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n<br>
+    When called on a hash key, the key is removed from the hash entirely, and the value returned is the value of the key removed from the hash; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change); a list whose value type does not accept @ref nothing (ex: <tt>list&lt;int&gt;</tt>) becomes a list whose value type accepts it (<tt>list&lt;*int&gt;</tt>), or, if the declared type of the lvalue holding the list requires its value type, a \c RUNTIME-TYPE-ERROR exception is raised (see @ref list_holes; use @ref splice "splice" or @ref extract "extract" to remove elements from such a list).\n<br>
     The remove operator will remove and return a slice from a hash when called on a hash dereferenced by a list of strings, giving the keys to remove (see example below).\n<br>
     The remove operator will also remove characters from strings, bytes from binary objects, and elements from lists as well; when removing invalid or non-existant indices from strings and binary objects, no data is written to the output value, however in the case of a list lvalue, @ref nothing is written to the output list in these cases.  In case the same index is referenced multiple times, the value is repeated in the output value.\n<br>
     A list of selectors in square brackets (ex: <tt>remove x[0, 2..3]</tt>) selects nothing from a value that is not a list, a string or a binary object: the selectors are evaluated in order, nothing is removed and the value returned is @ref nothing; a single index on such a value removes the value as a whole (see @ref remove_selector_list).\n<br>
@@ -598,7 +606,11 @@ binary nbin = remove bin[2..4,10,12];
 list nlist = remove l[2,5..7,8];
     @endcode
 
-    This operator does not throw any exceptions, however exception could be thrown in an object's destructor if it goes out of scope due to the action of this operator.
+    <b>Exceptions Thrown by remove</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|characters are removed from a string that is not valid in its encoding: its characters cannot be found, and the string is not changed
+
+    Exceptions could also be thrown in an object's destructor if it goes out of scope due to the action of this operator.
 
     <hr>
     @subsection cast Cast Operator (cast<>())
@@ -1354,10 +1366,8 @@ sub legacy() {
     |!Argument|!Processing
     |\a expression @ref list_type "list"|Returns the number of elements in the list
     |\a expression @ref hash_type "hash"|Returns the number of keys in the hash
-    |\a expression @ref string_type "string"|Returns the number of characters in the string (which may be different than the number of bytes for multi-byte character encodings such as \c UTF-8
+    |\a expression @ref string_type "string"|Returns the number of characters in the string (which may be different than the number of bytes for multi-byte character encodings such as \c UTF-8); raises \c INVALID-ENCODING if the string is not valid in its encoding
     |\a expression @ref binary_type "binary"|Returns the number of bytes in the binary object
-
-    This operator does not throw any exceptions.
 
     @see @ref <value>::size()
 
@@ -2018,7 +2028,10 @@ if (url =~ m{https?://[\w.]+/\w+})
     |!Argument|!Processing
     |@ref string_type "string"|This operator returns @ref True "True" if the regular expression in \a regex matches the string in \a expression.
 
-    This operator does not throw any exceptions.
+    <b>Exceptions Thrown by =~</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the string is not valid in its encoding: such a string cannot be matched, and the operator does not take it as one that does not match, so that a check that rejects matching strings cannot accept it; see @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" to test a string without an exception
+    |\c ENCODING-CONVERSION-ERROR|the string is not in UTF-8 and cannot be converted to it
 
     <hr>
     @subsection regex_no_match_operator Regular Expression No Match Operator (!~)
@@ -2043,7 +2056,10 @@ if (str !~ /hello/)
     |!Argument|!Processing
     |@ref string_type "string"|This operator returns @ref True "True" if the regular expression in \a regex does not match the string in \a expression.
 
-    This operator does not throw any exceptions.
+    <b>Exceptions Thrown by !~</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the string is not valid in its encoding: such a string cannot be matched, and the operator does not take it as one that does not match, so that a check that rejects matching strings cannot accept it; see @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" to test a string without an exception
+    |\c ENCODING-CONVERSION-ERROR|the string is not in UTF-8 and cannot be converted to it
 
     <hr>
     @subsection regex_subst_operator Regular Expression Substitution Operator
@@ -2073,7 +2089,12 @@ str =~ s{http://old\.example\.com}{https://new.example.com}g;
     |!Argument|!Processing
     |@ref string_type "string"|This operator substitutes text in the \a lvalue string if the regular expression matches. Subpattern backreferences are supported in \a target_string, <tt>$1</tt>=first subpattern, <tt>$2</tt>=second subpattern, etc..
 
-    This operator does not throw any exceptions.
+    <b>Exceptions Thrown by =~ s///</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the \a lvalue string is not valid in its encoding: such a string cannot be matched, and the operator does not leave it unchanged as if nothing in it matched, so that a substitution that escapes or removes text cannot let it through unprocessed; the \a lvalue is not changed
+    |\c ENCODING-CONVERSION-ERROR|the \a lvalue string is not in UTF-8 and cannot be converted to it
+    |\c REGEX-SUBST-ERROR|infinite recursion detected: an empty pattern matched with the global option
+    |\c REGEX-ERROR|the regular expression engine gave up before it could determine a result (match, depth or heap limit)
 
     <hr>
     @subsection regex_extract_operator Regular Expression Pattern Extraction Operator
@@ -2099,7 +2120,10 @@ list =~ x/(.*)\.(.*)/;
     |!Argument|!Processing
     |@ref string_type "string"|This operator extracts strings from \a string based on patterns enclosed in parentheses in the regular expression.
 
-    This operator does not throw any exceptions.
+    <b>Exceptions Thrown by =~ x//</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the string is not valid in its encoding: such a string cannot be matched, and the operator does not take it as one that does not match, so that a check that rejects matching strings cannot accept it; see @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" to test a string without an exception
+    |\c ENCODING-CONVERSION-ERROR|the string is not in UTF-8 and cannot be converted to it
 
     <hr>
     @subsection transliteration_operator Transliteration Operator
@@ -2506,6 +2530,11 @@ if (x || y)
     closures that capture the weak reference.  A weak reference held by a hash, a list or an object member reads as
     its target, also when the target is an object that has been destroyed: \c exists returns @ref True for the
     destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.\n<br>
+    A method called through a weak reference keeps its object until the call returns, as any method call does
+    (see @ref running_call_receiver "object scope"): if the method releases the last strong reference to its own
+    object, the object is destroyed when the method returns, or, for a weak reference read from a hash, a list, a
+    member of an object or of the current object, a global variable or a static class variable, at the end of the
+    statement, as any temporary value is.\n<br>
     When the rvalue is a variable (a local variable, a parameter, a global variable, a variable captured by a closure
     or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
     program or another variable, the variable first gets a copy of its own, so that the weak reference designates the
@@ -2621,9 +2650,19 @@ if (x || y)
     union with no value is therefore assigned the value of the \a expression, which the union must accept, or
     \c RUNTIME-TYPE-ERROR is raised; ex:
     - <tt>*union&lt;int, float&gt; u; u += 2.5;</tt> gives \c 2.5
-    - <tt>*union&lt;float, int&gt; u; u += 2;</tt> gives \c 2.0
+    - <tt>*union&lt;float, int&gt; u; u += 2;</tt> gives \c 2 (the union keeps a value of a member type as it is: see
+      @ref union_type "union types")
     - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u += 2;</tt> gives \c 2
     - <tt>*union&lt;int, float&gt; u; u += 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
+
+    @note An int in a union \a lvalue and a float or number \a expression are added as the
+    @ref plus_operator "+ operator" adds them when a member of the union has the type of the result (ex: \c float or
+    \c softfloat for a float, \c number for a number), and the union keeps the result:
+    <tt>union&lt;float, int&gt; u = 1; u += 0.5;</tt> gives \c 1.5; otherwise the \a expression is added as an int,
+    as for an int \a lvalue: <tt>union&lt;int, string&gt; u = 1; u += 0.5;</tt> and
+    <tt>union&lt;int, float&gt; u = 1; u += 2.5n;</tt> give \c 1 and \c 3 (a union with no value is assigned the
+    \a expression instead, which the union must accept, as above); the same applies to the
+    @ref minus_equals_operator "-= operator"
 
     <hr>
     @subsection minus_equals_operator Minus Equals Operator (-=)
@@ -2664,6 +2703,11 @@ if (x || y)
     - <tt>*union&lt;int, float&gt; u; u -= 2.5;</tt> gives \c -2.5
     - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u -= 2;</tt> gives \c -2
     - <tt>*union&lt;int, float&gt; u; u -= 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
+
+    @note An int in a union \a lvalue and a float or number \a expression are subtracted as the
+    @ref minus_operator "- operator" subtracts them when a member of the union has the type of the result, and as an
+    int otherwise (see @ref compound_assignment_union_nothing "+="): <tt>union&lt;float, int&gt; u = 1; u -= 0.5;</tt>
+    gives \c 0.5, and <tt>union&lt;int, string&gt; u = 1; u -= 0.5;</tt> gives \c 1
 
     <hr>
     @subsection and_equals_operator And Equals Operator (&=)

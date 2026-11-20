@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes and in qcc executables
+# test-platform: macos - the lifetime of method call receivers in the JIT code and the native code of qcc executables
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class WeakReceiverCallLifetimeTest
+
+#! The receiver of a running method call is kept until the call returns in every mode, also one read through a weak
+#! reference
+/** A method called through a local assigned with a weak reference (:=) that removes the last strong reference to its
+    own object: the AST interpreter keeps the object until the call returns, and the destructor runs then; the IR
+    interpreter, the JIT and qcc executables destroyed it at the removal, and the method's next member read raised
+    OBJECT-ALREADY-DELETED (qore#6590).
+
+    The functions of receivers.q make such calls through typed and untyped locals, in and out of a try block, with a
+    temporary argument, in a chain, in a loop, from a closure that captures the local (also in an expression that goes
+    on after the call returns) and in the function that does (also when a closure assigns it; qore#6645), with a
+    method that raises (with and without a handler in the function), with a receiver whose destructor raises (also
+    with a method that raises), and in a function that qcc outlines; also a static method given the object as an
+    argument, a method that keeps the object, and a call on an object that was deleted before it.  Their destructors
+    log the order of the releases.  The output is compared with the AST in the ir, jit and tiered modes, on the IR
+    tier of the tiered mode, and in executables made by qcc at -O0 and -O3, with and without function outlining.
+*/
+class WeakReceiverCallLifetimeTest inherits QUnit::Test {
+    public {
+        #! the execution modes compared with the AST
+        const Modes = ("ir", "jit", "tiered");
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+        #! the environment of a run in which every function is compiled at its first call
+        const CompileEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1";
+        #! the environment of qcc that outlines the regions of small functions, or none
+        const OutlineEnv = {
+            "outlined": "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=40 QORE_AOT_OUTLINE_FN_MIN_BLOCKS=5 "
+                "QORE_AOT_OUTLINE_FN_TARGET_INSTS=30",
+            "not outlined": "QORE_AOT_OUTLINE_FN=0",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+    }
+
+    constructor() : QUnit::Test("WeakReceiverCallLifetimeTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("the receiver of a call through a weak local lives until the call returns", \receiverTest());
+        set_return_value(main());
+    }
+
+    #! Returns the output of the script \a path in \a mode
+    private string runMode(string path, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s -b --enable-debug "
+            "--exec-mode=%s %s", lib_env, CompileEnv, qore_bin, mode, path));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    #! Compiles \a src with qcc to \a out with the options \a opts in the environment \a env; returns its output
+    private string compile(string src, string out, string opts, string env) {
+        int rc;
+        string output = backquote(sprintf("%s %s %s %s -o %s %s 2>&1", lib_env, env, qcc_bin, opts, out, src), \rc);
+        assertEq(0, rc, sprintf("qcc %s %s: exit status (output: %s)", opts, src, output.substr(-2000)));
+        return output;
+    }
+
+    #! Returns the output of the executable \a exe
+    private string runExe(string exe) {
+        int rc;
+        # -b must be the first argument of a compiled program
+        string out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+        assertEq(0, rc, sprintf("%s: exit status (output: %y)", exe, out));
+        return out;
+    }
+
+    receiverTest() {
+        TmpDir dir("qore-weak-receiver-call-lifetime-");
+        string src = join_paths(dir.path, "receivers.q");
+        copy_file(get_script_dir() + "/receivers.q", src);
+        string expected = runMode(src, "ast");
+        # the method's member read after the removal works, and the destructor runs when the call returns, before
+        # the result is used
+        assertRegex("(?m)^typed: \\|m~a\\|pa\\|e$", expected, "the AST keeps the receiver until the call returns");
+        assertRegex("(?m)^raising: \\|ra~a\\|cERR\\|e$", expected,
+            "the AST releases the receiver of a call that raises");
+        # a closure's call through the weak local it captures, in an expression that goes on after the call returns
+        # (qore#6645)
+        assertRegex("(?m)^closureStatement: \\|m~a\\|q\\|pa\\|e$", expected,
+            "the AST releases the receiver of a closure's call when the call returns");
+        assertRegex("(?m)^closureAssigns: \\|m~a\\|q\\|pa\\|e$", expected,
+            "the AST releases the receiver of a call through a local that a closure assigns when the call returns");
+        foreach string mode in (Modes) {
+            assertEq(expected, runMode(src, mode), mode);
+        }
+        # the IR tier: every function runs on the IR tier of the tiered mode
+        assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug --exec-mode=tiered %s",
+            lib_env, qore_bin, src)), "IR tier");
+        foreach string opt in (OptLevels) {
+            foreach hash<auto> i in (OutlineEnv.pairIterator()) {
+                string exe = join_paths(dir.path, "receivers" + opt + (i.key == "outlined" ? "-outlined" : ""));
+                string output = compile(src, exe, opt, i.value);
+                if (i.key == "outlined") {
+                    assertRegex("AOT-OUTLINE-FN: .* outlined [0-9]+ regions", output, "qcc " + opt + " outlines");
+                }
+                assertEq(expected, runExe(exe), sprintf("qcc %s %s", opt, i.key));
+            }
+        }
+    }
+}

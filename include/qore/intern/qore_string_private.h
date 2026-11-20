@@ -38,8 +38,17 @@
 #include "qore/intern/qore_encoding_private.h"
 
 #include <atomic>
+#include <memory>
+#include <string>
 #include <utility>
 #include <vector>
+
+//! frees memory allocated with malloc() (a deleter of std::unique_ptr with no state)
+struct QoreFreeDeleter {
+    DLLLOCAL void operator()(void* p) const {
+        free(p);
+    }
+};
 
 class QoreRegexBase;
 class QoreRegexSubst;
@@ -187,6 +196,20 @@ public:
     DLLLOCAL void resetOwnedAsciiPrefix() {
         assert(!view_parent);
         view_offset = 0;
+    }
+
+    //! Sets the ASCII prefix cache of a new string that owns its storage and holds only ASCII text
+    /** For a string made from text known to be ASCII, such as a string literal, so that its first use does not scan
+        it (qore#6625); no other thread can read the string yet
+    */
+    DLLLOCAL void setOwnedAsciiText() {
+        assert(!view_parent);
+#ifndef NDEBUG
+        for (size_t i = 0; i < len; ++i) {
+            assert(static_cast<unsigned char>(buffer[i]) < 0x80);
+        }
+#endif
+        view_offset = len;
     }
 
     //! Lowers the ASCII prefix cache of a string that owns its storage to at most the given byte offset
@@ -337,7 +360,79 @@ public:
     }
 
     //! Raises the exception that QoreEncoding raises for text that is not valid in the encoding of the string
-    DLLLOCAL void raiseInvalidEncoding(ExceptionSink* xsink) const;
+    DLLLOCAL QORE_INTERN_COLD QORE_INTERN_NOINLINE void raiseInvalidEncoding(ExceptionSink* xsink) const;
+
+    //! Counts characters for language operations, raising INVALID-ENCODING for malformed text
+    DLLLOCAL static size_t characterCount(const QoreString& str, ExceptionSink* xsink);
+
+    //! Returns the number of characters of a string in a multi-byte encoding, counting each byte that does not start
+    //! a complete character as one character
+    /** The count of a string that is not valid in its encoding, for QoreString::length(), which cannot raise an
+        exception: it is not less than the number of characters of its valid text (qore#6597); in an encoding made
+        of units of more than one byte (UTF-16), each such unit counts as one character
+
+        @param b the bytes of the string: effective_buf()
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE size_t getLengthCountingInvalidBytes(const char* b) const;
+
+    //! Raises \c INVALID-ENCODING if the string is not valid in its encoding
+    /** For an operation that gives a transformed copy of a string: one that walks its characters stops at the first
+        byte sequence that is not valid in the encoding, and must not give a partial result instead (qore#6595).
+
+        The validity is that of qore_string_encoding_valid(): strict (RFC 3629) in UTF-8, as for regular expressions.
+        A string in a single-byte encoding is not checked, as each byte is a character.  A string in UTF-8 whose cached
+        ASCII prefix covers it is valid without a scan, and the scan of another one starts at the end of its ASCII
+        prefix.
+
+        @param str the string to check
+        @param func the name of the operation, for the exception's description
+        @param what the string's role, for the exception's description (ex: \c "subject", \c "replacement")
+        @param xsink for the exception
+
+        @return 0 if the string is valid, -1 if an \c INVALID-ENCODING exception was raised
+    */
+    DLLLOCAL static int checkValidEncoding(const QoreString& str, const char* func, const char* what,
+            ExceptionSink* xsink) {
+        const qore_string_private* p = str.priv;
+        if (p->getEncoding() == QCS_UTF8 ? p->getAsciiPrefix() == p->len
+            : !p->getEncoding()->isMultiByte() && !p->isStateful()) {
+            return 0;
+        }
+        return checkValidEncodingIntern(str, func, what, xsink);
+    }
+
+    //! Returns the number of characters of a string, raising \c INVALID-ENCODING if it is not valid in its encoding
+    /** QoreString::length() cannot raise an exception, and stops counting at the first byte sequence that is not
+        valid in the encoding; an operation that resolves character offsets against the length must not take that
+        count for the length of the string, or it leaves out the characters after it (qore#6595)
+
+        @param str the string
+        @param op the name of the operation, for the exception's description
+        @param xsink for the exception
+
+        @return the number of characters, or -1 if an \c INVALID-ENCODING exception was raised
+    */
+    DLLLOCAL static int64 getCheckedLength(const QoreString& str, const char* op, ExceptionSink* xsink) {
+        const qore_string_private* p = str.priv;
+        if (p->getEncoding() == QCS_UTF8) {
+            if (p->getAsciiPrefix() == p->len) {
+                return static_cast<int64>(p->len);
+            }
+            return getCheckedUtf8Length(str, op, xsink);
+        }
+        if (checkValidEncoding(str, op, "subject", xsink)) {
+            return -1;
+        }
+        return static_cast<int64>(str.length());
+    }
+
+    //! The UTF-8 part of getCheckedLength(): checks the string and counts its characters
+    DLLLOCAL static QORE_INTERN_NOINLINE int64 getCheckedUtf8Length(const QoreString& str, const char* op,
+            ExceptionSink* xsink);
+
+    //! The out-of-line part of checkValidEncoding(): scans the string
+    DLLLOCAL static QORE_INTERN_NOINLINE int checkValidEncodingIntern(const QoreString& str, const char* func,
+            const char* what, ExceptionSink* xsink);
 
     DLLLOCAL qore_string_private() {
     }
@@ -408,6 +503,34 @@ public:
             ExceptionSink* xsink) const;
     DLLLOCAL int compute_substr_range(qore_offset_t offset, qore_offset_t length, size_t& byte_offset,
             size_t& byte_len, ExceptionSink* xsink) const;
+
+    //! returns the byte offset of \a p in the string's text, or -1 if it does not point into it
+    /** The text can move when the string changes; a source that is part of the target's text (including a view) is
+        located again at its offset after the buffer changes, or copied first
+    */
+    DLLLOCAL qore_offset_t ownDataOffset(const char* p) const {
+        if (view_parent) {
+            return ownDataOffsetViewPath(p);
+        }
+        // one unsigned comparison: a pointer before the buffer gives a difference larger than any length
+        uintptr_t d = reinterpret_cast<uintptr_t>(p) - reinterpret_cast<uintptr_t>(buffer);
+        return d < len ? static_cast<qore_offset_t>(d) : -1;
+    }
+
+    //! returns true if \a src is \a target or its text is part of the text of \a target
+    DLLLOCAL static bool isOwnSource(const qore_string_private& target, const qore_string_private& src) {
+        return &target == &src || (src.len && target.ownDataOffset(src.effective_buf()) >= 0);
+    }
+
+    //! appends a null-terminated source that is part of the string's text
+    DLLLOCAL void concatOwnText(const char* str);
+
+    //! the view path of ownDataOffset(): the text is in the parent's buffer
+    DLLLOCAL qore_offset_t ownDataOffsetViewPath(const char* p) const;
+
+    //! grows the string to hold \a i bytes (check_char()) and returns where \a src is then: in the moved text if it
+    //! was part of it, else \a src (out of line: the slow path of the operations that append a source)
+    DLLLOCAL const char* growKeepingSource(size_t i, const char* src);
 
     DLLLOCAL void check_char(size_t i) {
         if (view_parent) {
@@ -1158,7 +1281,10 @@ public:
     DLLLOCAL void concat_intern(const char* p, size_t plen) {
         assert(p);
         assert(plen);
-        check_char(len + plen);
+        // only growth or a view moves the text (the test is the one that check_char() makes)
+        if (view_parent || len + plen >= allocated) {
+            p = growKeepingSource(len + plen, p);
+        }
         memcpy(ownedBuffer() + len, p, plen);
         len += plen;
         ownedBuffer()[len] = '\0';
@@ -1347,6 +1473,12 @@ public:
     }
 
     DLLLOCAL void concat(const char *str) {
+        // a source that is part of the string is appended with its size, as the string grows while it is read (out
+        // of line, so that this function stays small enough to be inlined)
+        if (str && ownDataOffset(str) >= 0) {
+            concatOwnText(str);
+            return;
+        }
         // if it's not a null string
         if (str) {
             size_t i = 0;
@@ -1376,58 +1508,53 @@ public:
         nothing is appended if the output cannot be formatted, such as an output longer than INT_MAX characters
     */
     DLLLOCAL int vsprintf(const char *fmt, va_list args, bool* failed = nullptr) {
-        mutableBuffer();
-        size_t fmtlen = ::strlen(fmt);
-        // ensure minimum space is free
-        if ((allocated - len - fmtlen) < MIN_SPRINTF_BUFSIZE) {
-            allocated += fmtlen + MIN_SPRINTF_BUFSIZE;
-            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            // resize buffer
-            ownedBuffer() = (char*)realloc(ownedBuffer(), allocated * sizeof(char));
-            sb.sync(allocated);
-        }
-        // set free buffer size
-        qore_offset_t free = allocated - len;
-
-        // copy formatted string to buffer
-        int i = ::vsnprintf(ownedBuffer() + len, free, fmt, args);
-
+        // the arguments may be part of the string's text: it is formatted separately before the string is changed
+        char sbuf[256];
+        va_list args2;
+        va_copy(args2, args);
+        int i = ::vsnprintf(sbuf, sizeof(sbuf), fmt, args);
+        std::unique_ptr<char, QoreFreeDeleter> big;
+        const char* out = sbuf;
 #ifdef HPUX
-        // vsnprintf failed but didn't tell us how big the buffer should be
-        if (i < 0) {
-            //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " ownedBuffer()=%p fmtlen=" QSD
-            //    " (new=i+%d = %d)\n", i, allocated, len, ownedBuffer(), fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
-            // resize buffer
-            allocated += STR_CLASS_EXTRA;
-            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            ownedBuffer() = (char*)realloc(ownedBuffer(), sizeof(char) * allocated);
-            sb.sync(allocated);
-            *(ownedBuffer() + len) = '\0';
-            return -1;
+        // vsnprintf() fails without giving the size needed: the buffer is doubled until it is large enough
+        size_t big_size = sizeof(sbuf);
+        while (i < 0 && big_size < (static_cast<size_t>(1) << 30)) {
+            big_size *= 2;
+            big.reset(static_cast<char*>(malloc(big_size)));
+            if (!big) {
+                i = -1;
+                break;
+            }
+            va_list args3;
+            va_copy(args3, args2);
+            i = ::vsnprintf(big.get(), big_size, fmt, args3);
+            va_end(args3);
+            out = big.get();
         }
 #else
+        if (i >= static_cast<int>(sizeof(sbuf))) {
+            big.reset(static_cast<char*>(malloc(static_cast<size_t>(i) + 1)));
+            // a buffer that cannot be allocated fails the call as an output that cannot be formatted
+            i = big ? ::vsnprintf(big.get(), static_cast<size_t>(i) + 1, fmt, args2) : -1;
+            out = big.get();
+        }
+#endif
+        va_end(args2);
         if (i < 0) {
             // the output cannot be formatted: nothing is appended, and repeating the call cannot change that
-            *(ownedBuffer() + len) = '\0';
+            mutableBuffer();
+            if (ownedBuffer()) {
+                *(ownedBuffer() + len) = '\0';
+            }
             if (failed) {
                 *failed = true;
             }
             return 0;
         }
-        if (i >= free) {
-            //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " ownedBuffer()=%p fmtlen=" QSD
-            //    " (new=i+%d = %d)\n", i, allocated, len, ownedBuffer(), fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
-            // resize buffer
-            allocated = len + i + STR_CLASS_EXTRA;
-            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            ownedBuffer() = (char*)realloc(ownedBuffer(), sizeof(char) * allocated);
-            sb.sync(allocated);
-            *(ownedBuffer() + len) = '\0';
-            return -1;
-        }
-#endif
-
+        check_char(len + i);
+        memcpy(ownedBuffer() + len, out, i);
         len += i;
+        ownedBuffer()[len] = '\0';
         return 0;
     }
 
@@ -1483,11 +1610,15 @@ public:
             const char* p = src;
             char* targ_end = targ.ownedBuffer() + len;
             const char* end = src + len;
+            // an encoding made of units of more than one byte (UTF-16) reverses a unit that does not start a
+            // character as a character of its own, so that the text after it is read in whole units, as length()
+            // counts it; a byte is reversed on its own where a whole unit does not remain (qore#6604)
+            const size_t unit = getEncoding()->getMinCharWidth();
             while (p < end) {
                 bool invalid;
-                int bl = getEncoding()->getByteLen(p, end, 1, invalid);
+                size_t bl = getEncoding()->getByteLen(p, end, 1, invalid);
                 if (invalid) {
-                    bl = 1;
+                    bl = unit > 1 && static_cast<size_t>(end - p) >= unit ? unit : 1;
                 }
                 targ_end -= bl;
                 if (targ_end < targ.ownedBuffer()) {
@@ -1737,5 +1868,78 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
     @param len the length of the string in bytes
 */
 DLLLOCAL bool qore_string_get_as_bool(const char* str, size_t len);
+
+//! Returns true if the string is valid in its encoding; never raises an exception
+/** A UTF-8 string is checked strictly (RFC 3629: no overlong forms, surrogates, values above U+10FFFF or unexpected
+    continuation bytes; see IconvHelper::validUtf8Prefix()), as the regular expression engine checks it; ASCII text in
+    an ASCII-compatible encoding that is not stateful is valid; any other string is valid if it can be converted to
+    UTF-8 (so a string with a byte that its encoding does not define, or with text in an encoding that iconv cannot
+    convert, is not valid).  O(n) in the size of the string; no exception is raised or cleared (qore#6554).
+*/
+DLLLOCAL bool qore_string_encoding_valid(const QoreString& str);
+
+//! Returns a new string for an HTTP field value (a header or trailer value)
+/** The value is in the default encoding, or in ISO-8859-1 with its bytes unchanged if it is not valid in it: a field
+    value with bytes that are not valid UTF-8 is obs-text (RFC 9110 section 5.5), which is valid text in ISO-8859-1
+    (qore#6554)
+*/
+DLLLOCAL QoreStringNode* qore_http_field_value_string(const char* p, size_t len);
+
+//! Gives an HTTP field value made by concatenation in ISO-8859-1 if it is not valid in its encoding (qore#6554)
+DLLLOCAL void qore_http_field_value_check(QoreStringNode* str);
+
+//! Returns true if an HTTP request target (a path with an optional query) is text that the HTTP server accepts
+/** A target with a raw byte above 0x7f or a raw NUL is not accepted (the normal path decides, in the encoding of the
+    socket); otherwise the path and the query are decoded with the decoder of decode_url(), as \c HttpServer decodes
+    them, and each must decode to valid UTF-8; the decoded path must not have a NUL character (qore#6554).  No exception is left in an
+    exception sink; O(n), with no allocation for a target without \c "%" and bytes above 0x7f.
+*/
+DLLLOCAL bool qore_http_target_text_valid(const char* p, size_t len);
+
+
+//! a source for a QoreString operation: a copy if the source is part of the string's text, which the operation moves
+class QoreStringOwnSource {
+public:
+    //! a source of \a n bytes
+    DLLLOCAL QoreStringOwnSource(const qore_string_private& str, const char* p, size_t n) : ptr(p) {
+        if (p && n && str.ownDataOffset(p) >= 0) {
+            copyIntern(p, n);
+        }
+    }
+
+    //! a null-terminated source
+    DLLLOCAL QoreStringOwnSource(const qore_string_private& str, const char* p) : ptr(p) {
+        if (p && str.ownDataOffset(p) >= 0) {
+            copyIntern(p, ::strlen(p));
+        }
+    }
+
+    DLLLOCAL const char* get() const {
+        return ptr;
+    }
+
+    //! returns false if the source had to be copied and the copy could not be made (the operation then fails)
+    DLLLOCAL bool ok() const {
+        return !failed;
+    }
+
+private:
+    std::unique_ptr<char, QoreFreeDeleter> copy;
+    const char* ptr;
+    bool failed = false;
+
+    //! copies the source with a terminator
+    DLLLOCAL void copyIntern(const char* p, size_t n) {
+        copy.reset(static_cast<char*>(malloc(n + 1)));
+        if (!copy) {
+            ptr = nullptr;
+            failed = true;
+            return;
+        }
+        memcpy(copy.get(), p, n);
+        copy.get()[n] = '\0';
+        ptr = copy.get();
+    }
+};
 
 #endif

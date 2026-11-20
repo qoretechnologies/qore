@@ -345,6 +345,7 @@ void QoreIRBuilder::setFunction(QoreIRFunction* n_func) {
     temp_scope_id_stack.clear();
     exception_temp_scope_id = 0;
     exception_temp_scope_id_stack.clear();
+    stmt_loc = nullptr;
 }
 
 void QoreIRBuilder::setBlock(QoreIRBasicBlock* n_block) {
@@ -457,7 +458,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstString(const std::string& valu
     inst->loc = loc;
     inst->result = func->createValue();
     inst->constant.kind = QoreIRConstant::Kind::String;
-    inst->constant.string_value = value;
+    inst->constant.setStringValue(value);
     QoreIRValueFacts facts;
     facts.type_info = stringTypeInfo;
     facts.assigned_state = QoreIRAssignedState::Assigned;
@@ -1674,6 +1675,21 @@ QoreIRInstruction* QoreIRBuilder::createPushTempMark(const QoreProgramLocation* 
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createNestedPushTempMark(const QoreProgramLocation* loc) {
+    QoreIRInstruction* mark = block && !block->instructions.empty() ? block->instructions.back().get() : nullptr;
+    if (!mark || mark->opcode != QoreIROpcode::PushTempMark || temp_scope_id_stack.empty()
+            || mark->temp_scope_id != temp_scope_id_stack.back() || mark->temp_scope_id != exception_temp_scope_id) {
+        return createPushTempMark(loc);
+    }
+    // the mark's temp_scope_id stays the outer scope's; the inner scope is opened as createPushTempMark() opens it
+    mark->opcode = QoreIROpcode::PushTempMarkPair;
+    mark->unwind_inner_temp_scope_id = next_temp_scope_id++;
+    temp_scope_id_stack.push_back(mark->unwind_inner_temp_scope_id);
+    exception_temp_scope_id_stack.push_back(exception_temp_scope_id);
+    exception_temp_scope_id = mark->unwind_inner_temp_scope_id;
+    return mark;
+}
+
 void QoreIRBuilder::createUnwindTemps(size_t from_depth, size_t to_depth, const QoreProgramLocation* loc) {
     assert(from_depth <= temp_scope_id_stack.size());
     assert(to_depth <= from_depth);
@@ -1789,6 +1805,26 @@ QoreIRInstruction* QoreIRBuilder::createHandlerReturn(QoreIRValue value, const Q
     auto inst = append<QoreIRInstruction>(QoreIROpcode::HandlerReturn);
     if (value.isValid()) {
         inst->operands.push_back(value);
+    }
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createTakeHandedOverReturn(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::TakeHandedOverReturn);
+    if (value.isValid()) {
+        inst->operands.push_back(value);
+    }
+    // a reference of its own to a value of any type, the value that a handler handed over or the operand
+    inst->result = func->createValue();
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createReleaseHandedOverReturn(const QoreProgramLocation* loc, QoreIRValue result) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseHandedOverReturn);
+    if (result.isValid()) {
+        inst->operands.push_back(result);
     }
     inst->loc = loc;
     return inst;
@@ -2199,6 +2235,30 @@ QoreIRSwitchCaseMatchInstruction* QoreIRBuilder::createSwitchCaseMatch(const Cas
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
+}
+
+// documented in QoreIR.h
+const QoreIRBasicBlock* QoreIRDebugFlowTargets::qore_ir_debug_flow_entry_path(const QoreIRBasicBlock* entry) {
+    // an entry block has one Br to its path (see QoreIRLowering::setDebugFlowTargets())
+    if (entry->instructions.size() != 1 || entry->instructions.front()->opcode != QoreIROpcode::Br) {
+        return entry;
+    }
+    return static_cast<const QoreIRBranchInstruction*>(entry->instructions.front().get())->target;
+}
+
+//! the request that the handler running in the thread ended with (#6201)
+static thread_local int qore_ir_handler_flow_rc = 0;
+
+// documented in QoreIR.h
+void qore_ir_set_handler_flow(int rc) {
+    qore_ir_handler_flow_rc = rc;
+}
+
+// documented in QoreIR.h
+int qore_ir_take_handler_flow() {
+    int rc = qore_ir_handler_flow_rc;
+    qore_ir_handler_flow_rc = 0;
+    return rc;
 }
 
 // documented in QoreIRBuilder.h

@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - debugger attach in a frame of JIT native code and the native calls made after it
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DebuggerNativeCalleeStepsTest
+
+#! The step events of the calls that native code makes after a debugger attaches in a frame of it (#6289), and the exit
+#! events of the native frames that were running when it attached (#6602)
+/** With a debugger attached, a call runs on the AST tier (UserVariantBase::evalTiered()), which makes the function
+    entry event and the step event of the function's block before those of its statements.  A frame of JIT native code
+    that is running when the debugger attaches goes on as native code; a call that it made of a function compiled in
+    its batch module (qore_rt_call_fast_with_target()) or of itself (qore_rt_call_self_recursive()) ran the callee's
+    native code, which makes only the step events of its statements: the entry and block events of the callee were
+    missing.  NativeCalleeSteps.q attaches the debugger in a call made by a loop and in a recursive call, with the
+    thresholds that make its functions native code at once in the jit modes; its output is that of the AST
+    interpreter in every execution mode.
+
+    A frame of native code that was running when the debugger attached made no function exit event (#6602): it now
+    makes it with its result when it returns into the C++ code that called it, and with no value when it ends with an
+    exception, at the next event of the debugger, as the interpreters make it then.  The cases: the exits of callee(),
+    loop() and outer() with their results; a frame that ends with an exception, whose exit, and that of a frame of the
+    interpreter that ends with an exception while frames of the attach are pending, is made once with no value; and a
+    frame whose native return follows that of another Program in the same thread, which must not take its event.
+*/
+class DebuggerNativeCalleeStepsTest inherits QUnit::Test {
+    public {
+        #! the output of NativeCalleeSteps.q with the AST interpreter (exits as "x<line>=<result>")
+        const Expected = "callee called again: 210 [62, 63, \"x59=42\", \"b70\", 70, \"e59\", \"b59\", 59, 62, 63, "
+            "\"x59=42\", \"b70\", 70, \"e59\", \"b59\", 59, 62, 63, \"x59=42\", 72, \"e53\", \"b53\", 53, "
+            "\"b54\", 54]\n"
+            "recursive call: 4 [81, 85, \"e78\", \"b78\", 78, 81, 85, \"e78\", \"b78\", 78, 81, \"b82\", 82, "
+            "\"e53\", \"b53\", 53, \"b54\", 54]\n"
+            "exits of the frames running at the attach: 127 [62, 63, \"x59=42\", \"b92\", 92, \"e59\", \"b59\", 59, "
+            "62, 63, \"x59=42\", 94, \"x90=126\", 100, \"x99=127\", 168, \"e53\", \"b53\", 53, \"b54\", 54]\n"
+            "exception: 20 [108, 109, \"b110\", 110, \"x105=null\", \"b122\", 122, \"b119\", 119, \"b120\", 120, "
+            "\"e105\", \"b105\", 105, 108, 109, \"b110\", 110, \"x105=null\", \"b122\", 122, 125, \"x117=20\", 170, "
+            "\"e53\", \"b53\", 53, \"b54\", 54]\n"
+            "return of another Program: 84 [139, \"x136=42\", \"b146\", 146, \"e136\", \"b136\", 136, 139, "
+            "\"x136=42\", 148, \"x144=84\", 172, \"e53\", \"b53\", 53, \"b54\", 54]\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("DebuggerNativeCalleeStepsTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the step events of native calls after a debugger attaches", \modeTest(), (mode,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 "
+            "QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s", libqore_dir,
+            libqore_dir, qore_bin, mode, get_script_dir() + "/NativeCalleeSteps.q"));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+}

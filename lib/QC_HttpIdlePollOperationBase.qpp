@@ -37,6 +37,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/PollStateCloseHook.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 /** @cond INTERNAL */
 
@@ -82,7 +83,7 @@ QoreHashNode* HttpIdlePollOperationPriv::continuePoll(ExceptionSink* xsink) {
     // Check for data, EOF, or fatal errors via the central async-safe idle
     // probe.  This handles TLS connections with SSL_peek(), so TLS
     // post-handshake records do not look like application data forever.
-    int idle_rc = sock_obj->checkIdleDataForAsyncPoll(xsink, true);
+    int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(xsink, true);
     if (*xsink || idle_rc < 0) {
         finish(IdleState::CLOSED, "error");
         sock_obj->closeIo(xsink);
@@ -212,7 +213,9 @@ HttpIdlePollOperationBase::constructor(Socket[QoreSocketObject] socket, timeout 
 /** Releases all internal references.
 */
 HttpIdlePollOperationBase::destructor() {
-    priv->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 

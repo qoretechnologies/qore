@@ -47,6 +47,7 @@
 #include "qore/intern/ql_debug.h"
 
 #include "qore/intern/ModuleInfo.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 extern QoreModuleManager QMM;
 
 // records the Program whose code creates an independent Program: it inherits no code or namespaces from that code,
@@ -1233,7 +1234,13 @@ const PO_ALLOW_DEBUGGER = PO_ALLOW_DEBUGGER;
 //! Allows a Program to be parsed multiple times (for REPL functionality)
 /** This option enables incremental parsing using parsePending()/parseCommit() cycles.
     When set, parse() can be called multiple times on the same Program object,
-    with each parse cycle adding to the existing definitions.
+    with each parse cycle adding to the existing definitions.\n
+    A run of the Program (@ref Qore::Program::run() "Program::run()") executes the top-level statements that no run
+    has executed yet, once each, also when several threads run the Program at the same time: each run takes the next
+    statement before it executes it, so the statements of runs in different threads can execute at the same time.  A
+    statement that raises an exception is not executed again; the run ends with the exception, and the next run
+    executes the statements after it, unless they are skipped with
+    @ref Qore::Program::skipPendingStatements() "Program::skipPendingStatements()".
 
     @note Parsing is only allowed when no threads are active in the Program.
 
@@ -1569,7 +1576,16 @@ const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
     not refused, also when the thread that holds the lock waits for the parse lock of a third Program itself.  Some
     internal waits for the parse lock (of binary modules, for example) can neither be refused nor ended; when such a
     wait closes a cycle, a wait of a parse action in the cycle is refused instead (unless all of them wait in code
-    run with cancellation deferred by @ref Qore::defer_thread_cancel() "defer_thread_cancel()").
+    run with cancellation deferred by @ref Qore::defer_thread_cancel() "defer_thread_cancel()").\n
+    Code that runs in a Program and parses code in it (for example, creates an
+    @ref Qore::Expression "Expression" of the Program) takes the parse lock of the Program like a parse action in
+    another thread: it waits while another thread holds it.  Only the thread that holds the parse lock (the code
+    that a commit runs) parses without waiting.  A thread that an initializer starts and that parses code in the
+    Program therefore waits until the commit ends: when the initializer waits for that thread, neither can go on, and
+    as the thread that holds the lock does not wait for a parse lock, the wait is not refused as one that closes a
+    cycle; it can only be ended with @ref Qore::cancel_thread() "cancel_thread()" or
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()".  The same applies when the
+    thread runs in another Program and parses code in this one.
 
     @ref parse_options "Parse option constants" can be used to limit the capabilities of a Program object. These options should be
     binary-OR'ed together and passed to the Program object's constructor. Also see @ref command_line_processing for equivalent
@@ -1843,7 +1859,7 @@ while (wh) {
         if (!wsink.isException())
             return QoreValue();
 
-        QoreException *e = wsink.catchException();
+        QoreException *e = qore_exception_sink_ops(wsink).catchException();
         return e->makeExceptionObjectAndDelete(xsink);
     }
 
@@ -1903,7 +1919,7 @@ pgm.parseCommit();
         if (!wsink.isException())
             return QoreValue();
 
-        QoreException *e = wsink.catchException();
+        QoreException *e = qore_exception_sink_ops(wsink).catchException();
         return e->makeExceptionObjectAndDelete(xsink);
     }
 
@@ -1974,7 +1990,7 @@ while (exists wh) {
     if (!wsink.isException())
         return QoreValue();
 
-    QoreException *e = wsink.catchException();
+    QoreException *e = qore_exception_sink_ops(wsink).catchException();
     return e->makeExceptionObjectAndDelete(xsink);
 }
 
@@ -2021,7 +2037,11 @@ bool Program::parseDiagnosticsCollected() [flags=RET_VALUE_ONLY] {
 //! Returns the structured parse diagnostics (errors and warnings) collected during the last parse action
 /** Structured diagnostic collection must be enabled with @ref Qore::Program::setParseDiagnosticsCollected()
     before parsing; if it is not enabled, or if no diagnostics were raised, an empty list is returned.  The
-    diagnostics are returned in the order in which they were raised.
+    diagnostics are returned in the order in which they were raised.\n
+    An exception raised in the parse action without a parse error (for example in the initialization of a constant,
+    by a module command, or by a parse directive) is an error diagnostic too, with its code and description and at
+    its location (the location of the constant for an exception that the initialization of a constant raises without
+    one); an exception raised before the parse action starts (ex: a sandbox restriction refusing the parse) is not.
 
     @return a list of @ref ParseDiagnosticInfo hashes, one per parse error or warning collected
 
@@ -2276,6 +2296,38 @@ pgm.run();
  */
 auto Program::run() {
     return p->run(xsink);
+}
+
+//! Skips the top-level statements that no run has executed yet: later runs do not execute them
+/** With @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", a run executes the top-level statements that no run has
+    executed yet; when a statement raises an exception, the run ends, and the next run executes the statements after
+    it.  A caller that treats the code of a parse as one unit (such as an interactive REPL, which runs the code of each
+    input) calls this method after such a run, so that the statements of the parse after the one that raised the
+    exception are not executed by the run of the next parse.
+
+    @return the number of statements skipped; 0 without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", where a run
+    executes all of the statements
+
+    @par Example:
+    @code{.py}
+try {
+    pgm.run();
+} catch (hash<ExceptionInfo> ex) {
+    pgm.skipPendingStatements();
+    rethrow;
+}
+    @endcode
+
+    @note Code that is parsed but not committed yet is not affected; the method waits for a parse in progress in
+    another thread to end
+
+    @throw PROGRAM-ERROR the Program was deleted while the method waited for a parse in another thread to end, or the
+    wait would close a cycle of threads waiting for the parse locks of Programs (see @ref Qore::Program "Program")
+
+    @since %Qore 3.0
+ */
+int Program::skipPendingStatements() {
+    return qore_program_private::skipPendingStatements(*p, xsink);
 }
 
 //! Imports a function into the program object's space; any calls to the imported function will run with the parent Program object's permissions
@@ -2972,6 +3024,12 @@ pgm.setSandboxManager(sm);
 
     @note Once set, the sandbox manager restricts filesystem and network access for code
     running in this program.
+    @note A %Program that sandboxed code created, or committed code in, keeps the sandbox of that code (see
+    @ref sandbox_program_capability): the manager set here governs the %Program's code together with that sandbox,
+    so it can only add restrictions to it, and removing the manager does not remove that sandbox.  A manager that
+    code a sandbox governs sets (also trusted code that sandboxed code calls) adds to the sandbox of the code that calls
+    the %Program instead of governing its code alone, so sandboxed code cannot loosen its own calls into a %Program
+    by giving it a laxer manager
 
     @throw SANDBOX-ACCESS-ERROR the code of a sandboxed %Program, or of a %Program that restricts a functional domain,
     cannot replace the sandbox manager of a %Program that has one; it can only give one to a %Program that has none,
@@ -2984,15 +3042,20 @@ nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_ma
    // by replacing its manager with a laxer one; giving a manager to a Program that has none only adds restrictions
    // (issue #5659).  A composition of the old and new managers is not stored instead: the old manager would no
    // longer be the one that its owner's limits, interrupt requests and configuration changes act on
-   if (qore_calling_code_is_untrusted()) {
-       QoreSandboxManagerHelper current(p);
-       if (current && current.get() != *sandbox_manager) {
-           return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
-               "are restricted, cannot replace the sandbox manager of a Program");
-       }
+   // (the sandbox of the code that created the Program is not replaced either, see Program::getSandboxManager(), so
+   // giving the Program a manager of its own only adds restrictions to it); the check and the change are made under
+   // the Program's sandbox lock, so that concurrent setters cannot interleave
+   //
+   // a manager that code a sandbox governs sets (also trusted code that sandboxed code calls) adds to the sandbox of
+   // the Program's callers instead of governing the Program's code alone: a Program's own manager otherwise ends the
+   // lookup of the sandbox, so a laxer manager given to a Program that sandboxed code holds would govern that code's
+   // own calls into it (see qore_program_private::own_manager_additive)
+   // the Program takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
+   if (qore_program_private::get(*p)->setOwnSandboxManager(*sandbox_manager, qore_caller_is_sandboxed(),
+           qore_calling_code_is_untrusted())) {
+       return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
+           "are restricted, cannot replace the sandbox manager of a Program");
    }
-   // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
-   p->setSandboxManager(*sandbox_manager);
 }
 
 //! Returns the sandbox manager set on this %Program, if any
@@ -3007,14 +3070,14 @@ if (sm) {
     @endcode
 
     @note NOTHING does not mean that the code of the %Program is not sandboxed: a %Program that sandboxed code
-    creates has no manager of its own, but its code is governed by the sandbox of its callers, and, as the
-    %Program object keeps the sandbox that it was created in, by that sandbox when its code is called through the
-    object (Program::callFunction(), Program::getCallReference() and the like), also by trusted code
+    creates, or commits code in, has no manager of its own, but it keeps the sandbox of that code, which governs its
+    code wherever it runs, also when trusted code calls it (see @ref sandbox_program_capability); this method returns
+    only the manager set with setSandboxManager()
 
     @since Qore 3.0
  */
 *SandboxManager Program::getSandboxManager() [flags=CONSTANT] {
-   QoreSandboxManager* sm = qore_program_private::get(*p)->getSandboxManagerRef();
+   QoreSandboxManager* sm = qore_program_private::get(*p)->getOwnSandboxManagerRef();
    if (!sm) {
        return QoreValue();
    }
@@ -3270,7 +3333,7 @@ pgm.loadModule("mysql");
     ExceptionSink wsink;
     QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, nullptr, QMLO_NONE, warning_mask);
     if (!*xsink && wsink) {
-        return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+        return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
     }
     return QoreValue();
 }
@@ -3362,7 +3425,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
     ExceptionSink wsink;
     QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, program, QMLO_INJECT, warning_mask);
     if (!*xsink && wsink) {
-        return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+        return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
     }
     return QoreValue();
 }
@@ -3474,7 +3537,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
         //p->unregisterQoreObject(self, xsink);
         self->doDelete(xsink);
         if (!*xsink && wsink) {
-            return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+            return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
         }
     }
     return QoreValue();
@@ -3579,7 +3642,7 @@ Program::loadApplyToPrivateUserModule(
         //p->unregisterQoreObject(self, xsink);
         self->doDelete(xsink);
         if (!*xsink && wsink) {
-            return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+            return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
         }
     }
     return QoreValue();
@@ -4180,6 +4243,8 @@ code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_AR
     if (*xsink) {
         return QoreValue();
     }
+    // the identifier is only resolved, which runs no code of the Program, so it is only made current, not entered
+    // (qore#6185)
     QoreProgramContextHelper pch(p);
     // the identifier is resolved in the Program, not as a method of the Program object, which is the stack object
     // of this method (issue #5863)

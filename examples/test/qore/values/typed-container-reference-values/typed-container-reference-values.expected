@@ -1,0 +1,36 @@
+values param: list<reference<*object<T>>> [object<T> x, object<T> x]
+hash_values param: list<reference<*object<T>>> [object<T> x, object<T> x]
+values declared: list<reference<*object<T>>> [object<T> x]
+values nested: list<reference<*object<T>>> [object<T> x]
+values list element: list<reference<*object<T>>> [object<T> x]
+values closure: list<reference<*object<T>>> [object<T> x]
+values background: list<reference<*object<T>>> [object<T> x]
+write through: old NOTHING
+write through: g_p w
+values untyped: list<auto> [object<T> x]
+plus: hash<auto> {a: object<T> x, b: 1}
+slice: hash<string, reference<*object<T>>> {a: object<T> x}
+firstValue: object<T> object<T> x
+lastValue: object<T> object<T> x
+map pairs: list<reference<*object<T>>> [object<T> x]
+HashIterator: object<T> object<T> x
+HashPairIterator: object<T> object<T> x
+HashReverseIterator: object<T> object<T> x
+list: list<reference<*object<T>>> [object<T> x]
+list plus: list<reference<*object<T>>> [object<T> x, object<T> x]
+list range: list<reference<*object<T>>> [object<T> x]
+list reverse: list<reference<*object<T>>> [object<T> x]
+list map: list<reference<*object<T>>> [object<T> x]
+list select: list<reference<*object<T>>> [object<T> x]
+ListIterator: object<T> object<T> x
+list splice push: list<reference<*object<T>>> [object<T> x, object<T> x, object<T> x]
+list extract: list<reference<*object<T>>> [object<T> x]
+values variable: list<reference<*object<T>>> [object<T> x]
+values objects: list<object<T>> [object<T> y]
+values closures: list<code> [closure]
+values lists: list<list<int>> [[1, 2]]
+values softint: list<softint> [1]
+TreeMap reference getAll: hash<string, reference<*object<T>>> {a: object<T> x}
+TreeMap object getAll: hash<string, object<T>> {a: object<T> z}
+TreeMap closure getAll: hash<string, code> {a: closure}
+TreeMap untyped getAll: hash<auto> {a: {x: 1}}

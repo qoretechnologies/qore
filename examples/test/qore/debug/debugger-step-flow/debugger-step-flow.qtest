@@ -1,0 +1,855 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation of the debugger's step hooks and of their exits from native frames
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DebuggerStepFlowTest
+
+#! A debugger that requests a flow at a step event gets the flow of the AST interpreter in a call that starts while it
+#! is attached, in every execution mode, and in a frame that was running when it attached, the flow documented for the
+#! tier of the frame (debugger_running_code)
+/** StepFlowDebugger.q calls a function of StepFlowTarget.q in a Program that does not allow a debugger, once to compile
+    it to native code with JIT and tiered execution, and then with a debugger in its own Program that the function
+    attaches while it runs (through ProgramControl::resolveProgramId()): the function then runs as native code with
+    JIT and tiered execution, with the IR interpreter with IR execution and on the IR tier of tiered execution, and
+    with the AST interpreter with AST execution.  The debugger steps, and requests a flow at a step event of a
+    statement or of a block.
+
+    The expectations below are those of the AST interpreter.  Code lowered from the parse tree has no paths for the
+    requests (#6201, design/debug-flow-edges.md "Which code has paths"): a frame that was running when the debugger
+    attached ignores them as native code, and the IR interpreter takes a return (the frame returns without a value)
+    and ignores a break or a continue; the step events are still reported, so that an ignored request gives the run
+    without the request.  A call that starts while the debugger is attached runs on the AST interpreter in every
+    execution mode, and takes every request: the calls of each kind that the frame makes after the attach, and with
+    \c again, the next call of the function, which also checks that the function runs without being compiled again
+    after the debugger detached.  SpinFlowDebugger.q attaches the debugger from another thread while a loop runs.
+
+    The rest of this description is the behaviour of the AST interpreter.
+
+    With the AST interpreter, a return (DebugFlowReturn) at a step event returns from the function at once, without a
+    value: the statement does not run, and the handlers of the blocks that the return leaves run as for a return.  A
+    function whose return type does not accept no value raises the error of a function without a return statement.
+    Native code ignored the request (issue #6200).
+
+    A break or a continue (DebugFlowBreak, DebugFlowContinue) at a step event is a break or a continue statement
+    placed before the statement: the blocks that it leaves run their handlers and release their locals, and the
+    innermost loop ends or starts its next iteration (a switch statement ends at a break); with no loop (or switch) to
+    take it, the function returns without a value.  The IR interpreter ran the statement and did not leave a loop whose
+    condition is a fused comparison, and native code ignored the request (issues #6200 and #6201).  A float local that
+    the IR keeps in a native register has its value of the step event after the loop.
+
+    A request at a step event of a handler ends the handler, and the block takes the request of its last handler run,
+    as with the AST interpreter (StatementBlock::execIntern()): with a handler lowered inline in the code of the
+    block's exit and with handlers that run out of line; a return is kept when a handler that runs after it completes
+    normally, as a return statement in a handler is (#6677).  A return requested while a return leaves the function, a
+    thread_exit or an exception raised by a handler or a destructor while it does, are taken as with the AST
+    interpreter.
+
+    A return requested in a callee that native code calls directly, whose code never returns no value, returns no
+    value to its caller as with the AST interpreter: the native code of the caller does not rely on the callee's
+    return facts (that its value is not NOTHING, or of a type) there, unless the callee's declared return type
+    requires a value, where the return raises the error of a missing return value (#6201).
+*/
+class DebuggerStepFlowTest inherits QUnit::Test {
+    public {
+        #! the requests and the result, the values logged and the step events of the AST interpreter
+        /** - \c function: the function of StepFlowTarget.q called
+            - \c flow: the flow that the debugger requests, or \c none for none
+            - \c tag: the tag of the line of the statement or block of the request
+            - \c hit: the request is made at the hit-th step event of the statement or block
+            - \c block: the request is made at the step event of the block that starts on the line, not of the
+              statement
+            - \c result: the value that the function returned, or the exception that it raised
+            - \c log: the values that the function logged while the debugger was attached
+            - \c steps: the step events of the debugger: the line of a statement, or "b" and the line of a block
+            - \c flow2, \c tag2, \c hit2: a second request, at the hit2-th step event of the statement after the
+              first request
+            - \c handler: the case of a request in a handler, or of a request while a return leaves the function
+            - \c facts: the function calls a callee whose return facts (a value that is not NOTHING, its type, the
+              shape of a hash) the native code of the function relies on, and the request is made in the callee
+              (#6201)
+            - \c promoted: the function has locals that the IR keeps in native registers (SSA promotion), which the
+              run checks with the optimization statistics of the IR (QORE_IR_OPT_STATS)
+            - \c calls: the function calls code of StepFlowTarget.q while the debugger is attached, which runs on the
+              AST tier then, as every call with a debugger attached does (UserVariantBase::evalTiered()), so that it
+              is not run on the IR tier only (ExecModeHarness::run_ir_tier())
+            - \c native, \c ir: the result, log and steps of a frame that was running when the debugger attached as
+              native code (JIT and tiered execution) or in the IR interpreter (IR execution and the IR tier of tiered
+              execution), where they are not those of an ignored request (the run without the request) or, for a
+              return in the IR interpreter, of the AST interpreter (#6201)
+            - \c inline_callee: the callee of a call path case that the IR interpreter ran inline in the frame that
+              was running at attach before the debugger attached: the call stack at the request has the callee's
+              \c function, and the frame of the request has the callee's \c local, in every mode; the call is made
+              by the call path once the debugger is attached, with a frame of its own (#6473)
+            - \c again: the function is called again with the debugger attached, which takes the request as the AST
+              interpreter in every mode (#6201); the value is the result of that call
+        */
+        const Cases = (
+            {"function": "for_loop", "flow": "return", "tag": "for_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17),
+                "again": "null",
+            },
+            {"function": "for_loop", "flow": "return", "tag": "for_body", "hit": 2, "block": True,
+                "result": "null",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, 18, "b14"),
+            },
+            {"function": "while_loop", "flow": "return", "tag": "while_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (32, 33, 34, "b29", 29, 32),
+            },
+            {"function": "foreach_loop", "flow": "return", "tag": "foreach_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (63, 64, "b60", 60, 63),
+            },
+            {"function": "foreach_strings", "flow": "return", "tag": "foreach_strings_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (226, 227, "b223", 223, 226),
+            },
+            {"function": "nested_loops", "flow": "return", "tag": "nested_inner", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (77, "b78", 78, 79, "b78", 78),
+            },
+            {"function": "try_in_loop", "flow": "return", "tag": "try_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (94, "b95", 95, 96, "b91", 91, 94, "b95", 95),
+            },
+            {"function": "catch_in_loop", "flow": "return", "tag": "catch_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (240, "b241", 241, "b243", 243, 244, "b237", 237, 240, "b241", 241, "b243", 243),
+            },
+            {"function": "switch_in_loop", "flow": "return", "tag": "switch_case", "hit": 1, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (112, "b118", 118, 120, "b109", 109, 112, "b114", 114),
+            },
+            {"function": "locals_changed", "flow": "return", "tag": "locals_after", "hit": 2, "block": False,
+                "result": "null",
+                "log": (),
+                "steps": (134, 135, 136, "b131", 131, 134, 135, 136),
+            },
+            {"function": "handlers_in_loop", "flow": "return", "tag": "handlers_first", "hit": 2, "block": False,
+                "result": "null",
+                "log": ("success0", "exit0", "success1", "exit1", "success2", "exit2", "success3", "exit3"),
+                "steps": (149, 150, 151, 152, 153, "b150", 150, "b149", 149, "b146", 146, 149, 150, 151, 152, "b150",
+                    150, "b149", 149),
+            },
+            {"function": "object_local", "flow": "return", "tag": "object_first", "hit": 2, "block": False,
+                "calls": True,
+                "result": "null",
+                "log": ("destroy t0", "destroy t1", "destroy t2", "destroy t3", "destroy outer"),
+                "steps": (210, "b193", 193, 194, 211, 212, "b198", 198, "b207", 207, 210, "b193", 193, 194, 211,
+                    "b198", 198, "b198", 198),
+            },
+            {"function": "no_loop", "flow": "return", "tag": "no_loop_stmt", "hit": 1, "block": False,
+                "result": "null",
+                "log": ("success", "exit"),
+                "steps": (163, 164, 165, 166, "b165", 165, "b164", 164),
+            },
+            {"function": "int_return", "flow": "return", "tag": "int_first", "hit": 2, "block": False,
+                "result": "RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value instead: block "
+                    + "missing return statement",
+                "log": (),
+                "steps": (178, 179, "b175", 175, 178),
+            },
+            # the function that requested the flow returns, and its caller, also native code, goes on
+            {"function": "caller", "flow": "return", "tag": "callee_first", "hit": 2, "block": False,
+                "result": "6",
+                "log": ("callee=null",),
+                "steps": (258, 259, "b255", 255, 258, 267, 268, 269, 270),
+            },
+            {"function": "for_loop", "flow": "break", "tag": "for_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, 20),
+                "again": "11",
+            },
+            {"function": "for_loop", "flow": "break", "tag": "for_second", "hit": 2, "block": False,
+                "result": "43",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, 18, 20),
+            },
+            {"function": "for_loop", "flow": "continue", "tag": "for_first", "hit": 2, "block": False,
+                "result": "44",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, "b14", 14, 17, 18, 20),
+                "again": "44",
+            },
+            {"function": "for_loop", "flow": "break", "tag": "for_body", "hit": 2, "block": True,
+                "result": "44",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, 18, "b14", 20),
+            },
+            {"function": "for_loop", "flow": "continue", "tag": "for_body", "hit": 2, "block": True,
+                "result": "44",
+                "log": (),
+                "steps": (17, 18, "b14", 14, 17, 18, "b14", 20),
+            },
+            {"function": "while_loop", "flow": "break", "tag": "while_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": (),
+                "steps": (32, 33, 34, "b29", 29, 32, 36),
+            },
+            {"function": "while_call_loop", "flow": "break", "tag": "while_call_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": ("cond0", "cond1", "cond2", "cond3"),
+                "steps": (48, 49, 50, "b45", 45, 48, 52),
+            },
+            {"function": "foreach_loop", "flow": "break", "tag": "foreach_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": (),
+                "steps": (63, 64, "b60", 60, 63, 66),
+            },
+            {"function": "foreach_strings", "flow": "break", "tag": "foreach_strings_first", "hit": 2, "block": False,
+                "result": "\"s0,s1,s2,\"",
+                "log": (),
+                "steps": (226, 227, "b223", 223, 226, 229),
+            },
+            {"function": "nested_loops", "flow": "break", "tag": "nested_inner", "hit": 2, "block": False,
+                "result": "5143",
+                "log": (),
+                "steps": (77, "b78", 78, 79, "b78", 78, 81, "b74", 74, 77, "b78", 78, 79, "b78", 78, 79, "b78", 78, 79,
+                    81, "b74", 74, 77, "b78", 78, 79, "b78", 78, 79, "b78", 78, 79, 81, 83),
+            },
+            {"function": "nested_loops", "flow": "continue", "tag": "nested_inner", "hit": 2, "block": False,
+                "result": "5154",
+                "log": (),
+                "steps": (77, "b78", 78, 79, "b78", 78, "b78", 78, 79, 81, "b74", 74, 77, "b78", 78, 79, "b78", 78, 79,
+                    "b78", 78, 79, 81, "b74", 74, 77, "b78", 78, 79, "b78", 78, 79, "b78", 78, 79, 81, 83),
+            },
+            {"function": "nested_loops", "flow": "break", "tag": "nested_outer", "hit": 2, "block": False,
+                "result": "3132",
+                "log": (),
+                "steps": (77, "b78", 78, 79, "b78", 78, 79, "b78", 78, 79, 81, "b74", 74, 77, "b78", 78, 79, "b78", 78,
+                    79, "b78", 78, 79, 81, 83),
+            },
+            {"function": "try_in_loop", "flow": "break", "tag": "try_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": (),
+                "steps": (94, "b95", 95, 96, "b91", 91, 94, "b95", 95, 101),
+            },
+            {"function": "catch_in_loop", "flow": "break", "tag": "catch_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": (),
+                "steps": (240, "b241", 241, "b243", 243, 244, "b237", 237, 240, "b241", 241, "b243", 243, 247),
+            },
+            {"function": "switch_in_loop", "flow": "break", "tag": "switch_case", "hit": 1, "block": False,
+                "result": "54",
+                "log": (),
+                "steps": (112, "b118", 118, 120, "b109", 109, 112, "b114", 114, 120, "b109", 109, 112, "b118", 118,
+                    120, 122),
+            },
+            {"function": "locals_changed", "flow": "break", "tag": "locals_after", "hit": 2, "block": False,
+                "result": "12.0",
+                "log": (),
+                "steps": (134, 135, 136, "b131", 131, 134, 135, 136, 138),
+            },
+            {"function": "locals_changed", "flow": "continue", "tag": "locals_after", "hit": 2, "block": False,
+                "result": "21.5",
+                "log": (),
+                "steps": (134, 135, 136, "b131", 131, 134, 135, 136, "b131", 131, 134, 135, 136, 138),
+            },
+            {"function": "handlers_in_loop", "flow": "break", "tag": "handlers_first", "hit": 2, "block": False,
+                "result": "33",
+                "log": ("success0", "exit0", "success1", "exit1", "success2", "exit2", "success3", "exit3"),
+                "steps": (149, 150, 151, 152, 153, "b150", 150, "b149", 149, "b146", 146, 149, 150, 151, 152, "b150",
+                    150, "b149", 149, 155),
+            },
+            {"function": "object_local", "flow": "break", "tag": "object_first", "hit": 2, "block": False,
+                "calls": True,
+                "result": "33",
+                "log": ("destroy t0", "destroy t1", "destroy t2", "destroy t3", "destroy outer"),
+                "steps": (210, "b193", 193, 194, 211, 212, "b198", 198, "b207", 207, 210, "b193", 193, 194, 211,
+                    "b198", 198, 214),
+            },
+            {"function": "no_loop", "flow": "break", "tag": "no_loop_stmt", "hit": 1, "block": False,
+                "result": "null",
+                "log": ("success", "exit"),
+                "steps": (163, 164, 165, 166, "b165", 165, "b164", 164),
+            },
+            {"function": "handler_flow", "flow": "break", "tag": "handler_flow_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "44",
+                "log": ("exit0", "exit2-0", "exit1", "exit2-1", "exit2", "exit2-2"),
+                "steps": (282, 286, 287, "b283", 283, 284, "b279", 279, 282, 286, 287, "b283", 283, 289),
+                "again": "22",
+            },
+            {"function": "handler_flow", "flow": "continue", "tag": "handler_flow_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "55",
+                "log": ("exit0", "exit2-0", "exit1", "exit2-1", "exit2", "exit2-2", "exit4", "exit2-4"),
+                "steps": (282, 286, 287, "b283", 283, 284, "b279", 279, 282, 286, 287, "b283", 283, "b279", 279, 282,
+                    286, 287, "b283", 283, 284, 289),
+            },
+            {"function": "handler_flow", "flow": "return", "tag": "handler_flow_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "null",
+                "log": ("exit0", "exit2-0", "exit1", "exit2-1", "exit2", "exit2-2"),
+                "steps": (282, 286, 287, "b283", 283, 284, "b279", 279, 282, 286, 287, "b283", 283),
+            },
+            {"function": "handler_two", "flow": "break", "tag": "handler_two_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "55",
+                "log": ("second0", "second2-0", "first0", "second1", "second2-1", "first1", "second2", "second2-2",
+                    "first2", "first3", "second4", "second2-4", "first4"),
+                "steps": (300, 301, 305, 306, "b302", 302, 303, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302",
+                    302, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302", 302, 303, "b300", 300, 308),
+            },
+            # a return requested in a handler returns from the function, also when the handler that runs after it
+            # completes normally (#6677)
+            {"function": "handler_two", "flow": "return", "tag": "handler_two_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "null",
+                "log": ("second0", "second2-0", "first0", "second1", "second2-1", "first1", "second2", "second2-2",
+                    "first2", "first3"),
+                "steps": (300, 301, 305, 306, "b302", 302, 303, "b300", 300, "b297", 297, 300, 301, 305, 306, "b302",
+                    302, "b300", 300),
+            },
+            {"function": "handler_mixed", "flow": "break", "tag": "handler_mixed_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "44",
+                "log": ("mixed0", "mixed2-0", "mixed1", "mixed2-1", "mixed2", "mixed2-2"),
+                "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322, 328),
+            },
+            {"function": "handler_mixed", "flow": "continue", "tag": "handler_mixed_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "55",
+                "log": ("mixed0", "mixed2-0", "mixed1", "mixed2-1", "mixed2", "mixed2-2", "mixed4", "mixed2-4"),
+                "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322, "b317",
+                    317, 320, 321, 325, 326, "b322", 322, 323, 328),
+            },
+            # the IR interpreter: the return in a handler that runs in a frame of its own ends the handler
+            {"function": "handler_mixed", "flow": "return", "tag": "handler_mixed_body", "hit": 2, "block": False,
+                "handler": True,
+                "result": "null",
+                "log": ("mixed0", "mixed2-0", "mixed1", "mixed2-1", "mixed2", "mixed2-2"),
+                "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322),
+                "ir": {
+                    "result": "55",
+                    "log": ("mixed0", "mixed2-0", "mixed1", "mixed2-1", "mixed2", "mixed2-2", "mixed4", "mixed2-4"),
+                    "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322,
+                    "b317", 317, 320, 321, 325, 326, "b322", 322, 323, 328),
+                },
+                "again": "null",
+            },
+            {"function": "return_twice", "flow": "return", "tag": "return_twice_first", "hit": 2, "block": False,
+                "flow2": "return", "tag2": "return_twice_handler", "hit2": 1,
+                "handler": True,
+                "result": "null",
+                "log": ("exit0", "exit2-0", "exit1", "exit2-1", "exit2", "exit2-2", "exit3"),
+                "steps": (339, 343, 344, "b340", 340, 341, "b336", 336, 339, 343, "b340", 340, 341),
+            },
+            {"function": "return_thread_exit", "flow": "return", "tag": "return_thread_exit_first",
+                "hit": 2, "block": False,
+                "handler": True,
+                "result": "no result: the thread of the call ended",
+                "log": ("exit0", "exit1", "exit2", "exit3"),
+                "steps": (360, 366, 367, "b361", 361, 362, "b357", 357, 360, 366, "b361", 361, 362, "b363", 363),
+            },
+            {"function": "return_dtor_exit", "flow": "return", "tag": "return_dtor_exit_first",
+                "hit": 2, "block": False,
+                "handler": True, "calls": True,
+                "result": "no result: the thread of the call ended",
+                "log": ("destroy",),
+                "steps": (397, 398, 399, "b394", 394, 397, "b379", 379, 398, "b382", 382, 383),
+            },
+            # the IR interpreter: the return unwinds the frame, and the exception that the handler raises then leaves
+            # the function instead of going to the catch block of the try statement that the return leaves
+            {"function": "return_throw_in_try", "flow": "return", "tag": "return_throw_first", "hit": 2, "block": False,
+                "handler": True,
+                "result": "44",
+                "log": ("caught HANDLER-ERR",),
+                "steps": (412, "b413", 413, 418, 419, "b414", 414, "b409", 409, 412, "b413", 413, 418, "b414", 414,
+                    "b415", 415, "b421", 421, "b409", 409, 412, "b413", 413, 418, 419, "b414", 414, 424),
+                "ir": {
+                    "result": "HANDLER-ERR: x",
+                    "log": (),
+                    "steps": (412, "b413", 413, 418, 419, "b414", 414, "b409", 409, 412, "b413", 413, 418, "b414",
+                    414, "b415", 415),
+                },
+                "again": "null",
+            },
+            {"function": "promoted_float", "flow": "break", "tag": "promoted_float_total", "hit": 2, "block": False,
+                "promoted": True,
+                "result": "\"f=3.0 total=1\"",
+                "log": (),
+                "steps": (432, 433, 434, "b435", 435, 436, "b435", 435, 436, 439),
+            },
+            # the return facts of a callee that the native code of the caller relies on (#6201)
+            {"function": "facts_argument", "flow": "return", "tag": "facts_string_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "16",
+                "log": ("RUNTIME-OVERLOAD-ERROR",),
+                "steps": (451, "b494", 494, 496, "b497", 497),
+            },
+            {"function": "facts_value", "flow": "return", "tag": "facts_string_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "[4, 4, 0, 4, 4]",
+                "log": ("\"abcd\"", "\"abcd\"", "null", "\"abcd\"", "\"abcd\""),
+                "steps": (451, 508, 509, 510, "b511", 511),
+            },
+            # native code: the caller calls the callee directly as native code (a callee of its JIT batch), which
+            # ignores the request and makes no event for the callee's block on its next calls (#6289)
+            {"function": "facts_typed_caller", "flow": "return", "tag": "facts_typed_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "RUNTIME-TYPE-ERROR: <block return> expects type 'string', but got no value instead: "
+                    + "block missing return statement",
+                "log": (),
+                "steps": (460, "b519", 519),
+                "native": {
+                    "result": "20",
+                    "log": (),
+                    "steps": (460, 461, "b522", 522, 457, 460, 461, "b522", 522, 457, 460, 461, 524, "b519", 519),
+                },
+            },
+            # native code: the caller calls the callee directly as native code (a callee of its JIT batch), which
+            # ignores the request and makes no event for the callee's block on its next calls (#6289)
+            {"function": "facts_int_caller", "flow": "return", "tag": "facts_int_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "RUNTIME-TYPE-ERROR: <block return> expects type 'int', but got no value instead: "
+                    + "block missing return statement",
+                "log": (),
+                "steps": (469, "b529", 529),
+                "native": {
+                    "result": "210",
+                    "log": (),
+                    "steps": (469, 470, "b532", 532, 466, 469, 470, "b532", 532, 466, 469, 470, 534, "b529", 529),
+                },
+            },
+            {"function": "facts_projection", "flow": "return", "tag": "facts_hash_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "[1, 1, null, 1, 1]",
+                "log": (),
+                "steps": (478, 542, "b543", 543),
+            },
+            # the IR interpreter ignores the break, and the function then calls code of StepFlowTarget.q
+            {"function": "facts_argument", "flow": "break", "tag": "facts_string_first", "hit": 1, "block": False,
+                "facts": True, "calls": True,
+                "result": "16",
+                "log": ("RUNTIME-OVERLOAD-ERROR",),
+                "steps": (451, "b494", 494, 496, "b497", 497),
+            },
+            {"function": "facts_value", "flow": "continue", "tag": "facts_string_first", "hit": 1, "block": False,
+                "facts": True,
+                "result": "[4, 4, 0, 4, 4]",
+                "log": ("\"abcd\"", "\"abcd\"", "null", "\"abcd\"", "\"abcd\""),
+                "steps": (451, 508, 509, 510, "b511", 511),
+            },
+            # an immediately called closure, whose return facts let the native code of the caller leave out the check
+            # of the argument of a callee's fast entry (#6201)
+            {"function": "facts_closure_caller", "flow": "return", "tag": "facts_closure_first", "hit": 1,
+                "block": False, "facts": True, "calls": True,
+                "result": "172",
+                "log": ("RUNTIME-OVERLOAD-ERROR",),
+                "steps": (587, "b593", 593, "b583", 583, 590, "b591", 591, "b584", 584, 587, 588, "b576", 576, "b583",
+                    583, 590, "b591", 591, "b584", 584, 587, 588, "b576", 576, 596, "b580", 580),
+            },
+            # no request: a debugger attached in a call that raises an exception gets the events of the handlers that
+            # the exception runs in the caller (#6201)
+            {"function": "attach_throw_caller", "flow": "none", "tag": "attach_throw_first", "hit": 1, "block": False,
+                "result": "ATTACH-THROW: ",
+                "log": (),
+                "steps": (556, 557, "b558", 558, "b564", 564),
+            },
+            # a continue in while loops
+            {"function": "while_loop", "flow": "continue", "tag": "while_first", "hit": 2, "block": False,
+                "again": "55",
+                "result": "55",
+                "log": (),
+                "steps": (32, 33, 34, "b29", 29, 32, "b29", 29, 32, 33, 34, "b29", 29, 32, 33, 34, 36),
+            },
+            {"function": "while_call_loop", "flow": "continue", "tag": "while_call_first", "hit": 2, "block": False,
+                "result": "55",
+                "log": ("cond0", "cond1", "cond2", "cond3", "cond3", "cond4", "cond5"),
+                "steps": (48, 49, 50, "b45", 45, 48, "b45", 45, 48, 49, 50, "b45", 45, 48, 49, 50, 52),
+            },
+            # the calls of each kind that a frame running when the debugger attached makes after the attach, which
+            # start with the debugger attached and take the request as with the AST interpreter (#6201); a function
+            # that the native code of the frame calls directly (a callee of its JIT batch) runs as native code,
+            # which ignores the request and makes no event for the callee's block (#6289); a method or static method
+            # that the IR interpreter ran inline before the attach is called by the call path then (#6473)
+            {"function": "callpath_function_caller", "flow": "return", "tag": "callpath_function", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (634, "b614", 614, "b631", 631, 634, "b614", 614, 615, "b631", 631, 634, "b614", 614, 615,
+                    636, "b629", 629),
+                "native": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (634, 614, 615, "b631", 631, 634, 614, 615, "b631", 631, 634, 614, 615, 636, "b629",
+                    629),
+                },
+            },
+            {"function": "callpath_function_caller", "flow": "break", "tag": "callpath_function", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (634, "b614", 614, "b631", 631, 634, "b614", 614, 615, "b631", 631, 634, "b614", 614, 615,
+                    636, "b629", 629),
+                "native": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (634, 614, 615, "b631", 631, 634, 614, 615, "b631", 631, 634, 614, 615, 636, "b629",
+                    629),
+                },
+            },
+            {"function": "callpath_method_caller", "flow": "return", "tag": "callpath_method", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::m", "local": "v"},
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (646, "b603", 603, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604,
+                    648, "b640", 640),
+            },
+            {"function": "callpath_method_caller", "flow": "break", "tag": "callpath_method", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::m", "local": "v"},
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (646, "b603", 603, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604,
+                    648, "b640", 640),
+            },
+            {"function": "callpath_method_caller", "flow": "continue", "tag": "callpath_method", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::m", "local": "v"},
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (646, "b603", 603, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604,
+                    648, "b640", 640),
+            },
+            {"function": "callpath_static_caller", "flow": "return", "tag": "callpath_static", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::s", "local": "v"},
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (657, "b608", 608, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609,
+                    659, "b652", 652),
+            },
+            {"function": "callpath_static_caller", "flow": "break", "tag": "callpath_static", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::s", "local": "v"},
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (657, "b608", 608, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609,
+                    659, "b652", 652),
+            },
+            {"function": "callpath_static_caller", "flow": "continue", "tag": "callpath_static", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::s", "local": "v"},
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (657, "b608", 608, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609,
+                    659, "b652", 652),
+            },
+            {"function": "callpath_closure_caller", "flow": "return", "tag": "callpath_closure", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (672, "b665", 665, "b669", 669, 672, "b665", 665, 666, "b669", 669, 672, "b665", 665, 666,
+                    674, "b663", 663),
+            },
+            {"function": "callpath_closure_caller", "flow": "break", "tag": "callpath_closure", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (672, "b665", 665, "b669", 669, 672, "b665", 665, 666, "b669", 669, 672, "b665", 665, 666,
+                    674, "b663", 663),
+            },
+            {"function": "callpath_ref_caller", "flow": "return", "tag": "callpath_ref", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (684, "b619", 619, "b681", 681, 684, "b619", 619, 620, "b681", 681, 684, "b619", 619, 620,
+                    686, "b678", 678),
+            },
+            {"function": "callpath_ref_caller", "flow": "break", "tag": "callpath_ref", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (684, "b619", 619, "b681", 681, 684, "b619", 619, 620, "b681", 681, 684, "b619", 619, 620,
+                    686, "b678", 678),
+            },
+            {"function": "callpath_leaf_caller", "flow": "return", "tag": "callpath_leaf", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (695, "b625", 625, "b692", 692, 695, "b625", 625, "b692", 692, 695, "b625", 625, 697,
+                    "b690", 690),
+                "native": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (695, 625, "b692", 692, 695, 625, "b692", 692, 695, 625, 697, "b690", 690),
+                },
+            },
+            {"function": "callpath_leaf_caller", "flow": "break", "tag": "callpath_leaf", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (695, "b625", 625, "b692", 692, 695, "b625", 625, "b692", 692, 695, "b625", 625, 697,
+                    "b690", 690),
+                "native": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (695, 625, "b692", 692, 695, 625, "b692", 692, 695, 625, 697, "b690", 690),
+                },
+            },
+        );
+    }
+
+    private {
+        string qore_bin;
+        #! the lines of the tags of StepFlowTarget.q
+        hash<string, int> tags;
+        #! the output line of StepFlowDebugger.q of each function without a request (see getNoRequest())
+        hash<string, string> no_request;
+    }
+
+    constructor() : QUnit::Test("DebuggerStepFlow", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        tags = getTags();
+        addTestCase("a return at a step event", \testReturn());
+        addTestCase("a break at a step event", \testBreak());
+        addTestCase("a continue at a step event", \testContinue());
+        addTestCase("a request in a handler and the requests of a return", \testHandler());
+        addTestCase("a return in a callee whose return facts its native caller relies on", \testReturnFacts());
+        addTestCase("the events of the handlers run by an exception after a debugger attached", \testNoRequest());
+        addTestCase("the calls of each kind that a frame makes after it attached a debugger", \testCallPaths());
+        addTestCase("a debugger attached by another thread while a loop runs", \testSpin());
+        set_return_value(main());
+    }
+
+    #! returns the 1-based line numbers of the lines of StepFlowTarget.q tagged "### <tag>"
+    private static hash<string, int> getTags() {
+        hash<string, int> ret = {};
+        list<string> lines = ReadOnlyFile::readTextFile(get_script_dir() + "/StepFlowTarget.q").split("\n");
+        for (int i = 0; i < lines.size(); ++i) {
+            *list<*string> tag = lines[i] =~ x/### ([a-z_]+)$/;
+            if (tag) {
+                ret{tag[0]} = i + 1;
+            }
+        }
+        return ret;
+    }
+
+    #! returns the output line of StepFlowDebugger.q expected for a case
+    private static string getExpected(hash<auto> c) {
+        return sprintf("RESULT:%s LOG:%y STEPS:%y", c.result, c.log, c.steps);
+    }
+
+    #! returns the output line of StepFlowDebugger.q
+    private static string getOutput(string out) {
+        *list<*string> line = out =~ x/^(RESULT:.*)$/m;
+        return line ? line[0] : out;
+    }
+
+    #! returns the output line of StepFlowDebugger.q expected for a case in a frame that was running when the
+    #! debugger attached, as native code (\a tier "native") or in the IR interpreter (\a tier "ir") (#6201)
+    private string getRunningExpected(hash<auto> c, string tier) {
+        # a pinned result
+        if (c{tier}) {
+            return getExpected(c + c{tier});
+        }
+        # a call that starts after the debugger attached, and the IR interpreter's return, take the request as the
+        # AST interpreter does
+        if (c.flow == "none" || c.call_path || (tier == "ir" && c.flow == "return")) {
+            return getExpected(c);
+        }
+        # an ignored request: the run without it
+        return getNoRequest(c);
+    }
+
+    #! returns the output line of StepFlowDebugger.q of the function of a case without a request, with the AST
+    #! interpreter
+    private string getNoRequest(hash<auto> c) {
+        if (!no_request{c.function}) {
+            string dir = get_script_dir();
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=ast %s/StepFlowDebugger.q %s/StepFlowTarget.q %s none %d 1 -", qore_bin, dir, dir,
+                c.function, tags{c.tag}));
+            no_request{c.function} = getOutput(r.out);
+        }
+        return no_request{c.function};
+    }
+
+    #! runs a case in every execution mode and compares the results with those of the AST interpreter, or with those
+    #! documented for a frame that was running when the debugger attached (#6201)
+    private checkCase(hash<auto> c) {
+        string dir = get_script_dir();
+        string args = sprintf("%s/StepFlowDebugger.q %s/StepFlowTarget.q %s %s %d %d %s", dir, dir, c.function,
+            c.flow, tags{c.tag}, c.hit, c.block ? "block" : "-");
+        string what = sprintf("%s %s at %s#%d%s", c.function, c.flow, c.tag, c.hit, c.block ? " (block)" : "");
+        # a second request, after the first one
+        if (c.flow2) {
+            args += sprintf(" %s %d %d", c.flow2, tags{c.tag2}, c.hit2);
+            what += sprintf(", %s at %s#%d", c.flow2, c.tag2, c.hit2);
+        }
+        string ir_args = args;
+        if (c.again) {
+            args += " again";
+        }
+        # the calls that start with the debugger attached, as with the AST interpreter
+        *string again_ast;
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string expected = mode == "ast"
+                ? getExpected(c)
+                : getRunningExpected(c, mode == "ir" ? "ir" : "native");
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=%s %s", qore_bin, mode, args), NOTHING, c.promoted
+                ? ExecModeHarness::TraceEnv + " QORE_IR_OPT_STATS=1" : NOTHING);
+            ExecModeHarness::check_native(r);
+            assertEq(expected, getOutput(r.out), sprintf("%s: %s", what, mode));
+            if (c.again) {
+                *list<*string> again = r.out =~ x/^(AGAIN-RESULT:.*)$/m;
+                *list<*string> detached = r.out =~ x/^DETACHED-RESULT:(.*) COMPILED:(.*)$/m;
+                string again_line = again[0] ?? r.out;
+                if (mode == "ast") {
+                    again_ast = again_line;
+                    assertEq(c.again, (again_line =~ x/^AGAIN-RESULT:(.*) LOG:/)[0], sprintf("%s: %s: next call",
+                        what, mode));
+                } else {
+                    assertEq(again_ast, again_line, sprintf("%s: %s: next call", what, mode));
+                }
+                # the code runs as before the debugger attached, without being compiled again
+                assertEq((getNoRequest(c) =~ x/^RESULT:(.*) LOG:/)[0], detached[0], sprintf("%s: %s: after the "
+                    "debugger detached", what, mode));
+                if (detached[1] != "-") {
+                    assertEq("0", detached[1], sprintf("%s: %s: functions compiled after the debugger attached", what,
+                        mode));
+                }
+                # the function is compiled to native code once in the run (QORE_JIT_TIMING trace), also without
+                # library debugging: never again after the debugger attached or detached
+                if (mode == "jit" || mode == "tiered") {
+                    string name = "'" + c.function + "@";
+                    assertEq(1, (select r.trace, ExecModeHarness::is_native_compilation($1) && $1.find(name) >= 0)
+                        .size(), sprintf("%s: %s: compilations of %s()", what, mode, c.function));
+                }
+            }
+            # the frame and call stack at the request in a callee that the IR interpreter ran inline before the
+            # debugger attached (#6473)
+            if (c.inline_callee) {
+                *list<*string> req = r.out =~ x/^REQUEST-STACK:(.*) FRAME:(.*)$/m;
+                assertTrue((req[0] ?? "").find("\"" + c.inline_callee.function + "\"") >= 0,
+                    sprintf("%s: %s: %s() is on the call stack: %s", what, mode, c.inline_callee.function, req[0]));
+                bool has_local = (req[1] ?? "").find("\"" + c.inline_callee.local + "\"") >= 0;
+                assertTrue(has_local, sprintf("%s: %s: the callee's frame: %s", what, mode, req[1]));
+            }
+            # the locals that the IR keeps in native registers in the function (SSA promotion)
+            if (c.promoted && mode != "ast") {
+                *list<*string> stats = regex_extract(r.stderr, "IR-OPT: " + c.function
+                    + ": .* native-local-loads=([0-9]+)");
+                assertGt(0, (stats[0] ?? "0").toInt(), sprintf("%s: %s: promoted loads", what, mode));
+            }
+            # the function runs as native code when the debugger attaches with JIT and tiered execution
+            if (mode == "jit" || mode == "tiered") {
+                string name = "'" + c.function + "@";
+                assertTrue((select r.trace, ExecModeHarness::is_native_compilation($1) && $1.find(name) >= 0)
+                    ? True : False, sprintf("%s: %s: %s() was compiled to native code", what, mode, c.function));
+            }
+        }
+        # tiered execution on the IR tier
+        if (c.calls) {
+            return;
+        }
+        assertEq(getRunningExpected(c, "ir"), getOutput(ExecModeHarness::run_ir_tier(sprintf("%s --enable-debug "
+            "--exec-mode=tiered %s", qore_bin, ir_args))), sprintf("%s: %s", what, ExecModeHarness::IRTierName));
+    }
+
+    #! a debugger that another thread attaches while a loop runs (#6201)
+    /** The loop runs as native code with JIT and tiered execution, which ignores the break, and with the IR
+        interpreter with IR execution, which ignores it too: its float and int locals then grow together, until the
+        debugger stops the loop; with the AST interpreter, the break before the second statement leaves the float one
+        step ahead.  The next call, with the debugger attached, takes the break in every mode.
+    */
+    testSpin() {
+        string dir = get_script_dir();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=%s %s/SpinFlowDebugger.q %s/StepFlowTarget.q %d", qore_bin, mode, dir, dir,
+                tags.spin_total));
+            ExecModeHarness::check_native(r);
+            *list<*string> m = r.out =~ x/^RUNNING:f=([0-9.]+) total=([0-9]+) AGAIN:(.*)$/m;
+            if (!m) {
+                fail(sprintf("%s: unexpected output: %y", mode, r.out));
+                continue;
+            }
+            float f = m[0].toFloat();
+            int total = m[1].toInt();
+            assertEq(mode == "ast" ? 1.5 * (total + 1) : 1.5 * total, f, sprintf("%s: running loop: f=%y total=%y",
+                mode, f, total));
+            assertEq("f=3.0 total=1", m[2], sprintf("%s: next call", mode));
+        }
+    }
+
+    testReturn() {
+        foreach hash<auto> c in (Cases) {
+            if (c.flow == "return" && !c.handler && !c.facts && !c.call_path) {
+                checkCase(c);
+            }
+        }
+    }
+
+    testBreak() {
+        foreach hash<auto> c in (Cases) {
+            if (c.flow == "break" && !c.handler && !c.facts && !c.call_path) {
+                checkCase(c);
+            }
+        }
+    }
+
+    testContinue() {
+        foreach hash<auto> c in (Cases) {
+            if (c.flow == "continue" && !c.handler && !c.facts && !c.call_path) {
+                checkCase(c);
+            }
+        }
+    }
+
+    testHandler() {
+        foreach hash<auto> c in (Cases) {
+            if (c.handler) {
+                checkCase(c);
+            }
+        }
+    }
+
+    testNoRequest() {
+        foreach hash<auto> c in (Cases) {
+            if (c.flow == "none") {
+                checkCase(c);
+            }
+        }
+    }
+
+    testCallPaths() {
+        foreach hash<auto> c in (Cases) {
+            if (c.call_path) {
+                checkCase(c);
+            }
+        }
+    }
+
+    testReturnFacts() {
+        foreach hash<auto> c in (Cases) {
+            if (c.facts) {
+                checkCase(c);
+            }
+        }
+    }
+}

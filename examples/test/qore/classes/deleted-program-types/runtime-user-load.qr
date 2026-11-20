@@ -1,0 +1,11 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Uses RuntimeUserLoadAot (compiled by deleted-program-types.qtest into a directory of the module path), which loads
+# the user module RuntimeUserLoaded from its own Program at run time, and ends; see deleted-program-types.qtest.
+
+%modern
+
+%requires RuntimeUserLoadAot
+
+print(runtime_user_load() + "\n");

@@ -72,6 +72,21 @@ const QDF_STATIC_CLASS_VARS = QDF_STATIC_CLASS_VARS;
 
 //! Deserialize static class vars and merge hashes; implies QDF_STATIC_CLASS_VARS
 const QDF_MERGE_STATIC_CLASS_VARS = QDF_MERGE_STATIC_CLASS_VARS;
+
+//! Register the character encoding of a string in binary serialized data that %Qore does not know
+/** By default, the encoding name of a string in binary serialized data must select an encoding that %Qore knows
+    already (by its name or an alias, in any case) or a standard character set, as
+    @ref Qore::get_known_encoding() "get_known_encoding()" selects them; any other name raises a
+    \c DESERIALIZATION-ERROR exception, as each new name would register an encoding for the life of the process, so
+    that data from an untrusted source could make the registry of encodings grow without limit.
+
+    With this flag, such a name registers a new encoding, as %Qore 2.2 and earlier did; use it only for data
+    from a trusted source, for example to read back strings in a custom encoding that the same application
+    serialized.
+
+    @since %Qore 3.0
+*/
+const QDF_REGISTER_ENCODINGS = QDF_REGISTER_ENCODINGS;
 ///@}
 
 //! serialization information
@@ -367,7 +382,8 @@ hash<SerializationInfo> h = Serializable::deserializeToData(stream);
     @return the intermediate SerializationInfo hash value represented by the serialization stream
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
-    reference to an unknown class or @ref hashdecl
+    reference to an unknown class or @ref hashdecl, or a string in the data has a character encoding that %Qore
+    does not know (see @ref Qore::QDF_REGISTER_ENCODINGS "QDF_REGISTER_ENCODINGS")
  */
 static hash<SerializationInfo> Serializable::deserializeToData(InputStream[InputStream] input_stream,
         *int flags) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -386,7 +402,8 @@ hash<SerializationInfo> h = Serializable::deserializeToData(b);
     @return the intermediate SerializationInfo hash value represented by the input data
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
-    reference to an unknown class or @ref hashdecl
+    reference to an unknown class or @ref hashdecl, or a string in the data has a character encoding that %Qore
+    does not know (see @ref Qore::QDF_REGISTER_ENCODINGS "QDF_REGISTER_ENCODINGS")
  */
 static hash<SerializationInfo> Serializable::deserializeToData(binary binary_data,
         *int flags) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -407,7 +424,8 @@ auto val = Serializable::deserialize(stream);
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl, or a hash key in the data has a NUL character, which a hash key
-    cannot hold
+    cannot hold, or a string in the data has a character encoding that %Qore does not know (see
+    @ref Qore::QDF_REGISTER_ENCODINGS "QDF_REGISTER_ENCODINGS")
     @throw HASH-KEY-ERROR a name in the data of an object that the object uses as a hash key, such as a column
     name of a @ref Qore::ColumnarResult "ColumnarResult", has a NUL character
  */
@@ -428,7 +446,8 @@ auto val = Serializable::deserialize(bin);    @endcode
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl, or a hash key in the data has a NUL character, which a hash key
-    cannot hold
+    cannot hold, or a string in the data has a character encoding that %Qore does not know (see
+    @ref Qore::QDF_REGISTER_ENCODINGS "QDF_REGISTER_ENCODINGS")
     @throw HASH-KEY-ERROR a name in the data of an object that the object uses as a hash key, such as a column
     name of a @ref Qore::ColumnarResult "ColumnarResult", has a NUL character
  */
@@ -450,7 +469,8 @@ auto val = Serializable::deserialize(bin);
 
     @throw DESERIALIZATION-ERROR the data cannot be deserialized due to an error in the serialization format or a
     reference to an unknown class or @ref hashdecl, or a hash key in the data has a NUL character, which a hash key
-    cannot hold
+    cannot hold, or a string in the data has a character encoding that %Qore does not know (see
+    @ref Qore::QDF_REGISTER_ENCODINGS "QDF_REGISTER_ENCODINGS")
     @throw HASH-KEY-ERROR a name in the data of an object that the object uses as a hash key, such as a column
     name of a @ref Qore::ColumnarResult "ColumnarResult", has a NUL character
 

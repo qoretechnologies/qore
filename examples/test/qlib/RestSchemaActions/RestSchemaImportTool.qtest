@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs tools/rest-schema-import.qr in a child process without an execution mode
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires json
+%requires ../../TestInterpreter.qm
+
+%exec-class RestSchemaImportToolTest
+
+#! tests tools/rest-schema-import.qr with an import spec whose source document is a local file (qore#6190)
+/** The paths of an import spec are relative to the spec, but a local \c source was read relative to the working
+    directory of the import.  A source document that cannot be pinned by a URL (Mistral's) is kept next to its spec,
+    so the import must read it from there wherever it is run, and the provenance record must name it as the spec does,
+    not with a path that depends on where the import was run; a spec's \c source_url names the URL such a vendored
+    source was downloaded from, and the provenance records that URL instead.
+*/
+class RestSchemaImportToolTest inherits QUnit::Test {
+    public {
+        #! a minimal source document with one operation
+        const Source = {
+            "openapi": "3.0.3",
+            "info": {"title": "Import tool test", "version": "1.2.3"},
+            "paths": {
+                "/items": {
+                    "get": {
+                        "operationId": "list_items",
+                        "responses": {"200": {"description": "the items"}},
+                    },
+                },
+            },
+        };
+
+        #! the provenance record before the import
+        const ProvenanceSource = "class TestSchema {
+    public {
+        const Provenance = {
+            \"source_url\": \"https://example.com/old.yaml\",
+            \"source_sha256\": \"0\",
+            \"source_size\": 0,
+            \"imported\": 2000-01-01,
+            \"source_paths\": 0,
+            \"source_operations\": 0,
+            \"source_schemas\": 0,
+            \"source_webhooks\": 0,
+            \"api_version\": \"0\",
+        };
+    }
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string tool;
+        string module_dir;
+    }
+
+    constructor() : QUnit::Test("rest-schema-import.qr local source", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        tool = normalize_dir(get_script_dir() + "/../../../../tools/rest-schema-import.qr");
+        module_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+        addTestCase("a local source is read relative to the spec", \localSourceTest());
+        addTestCase("the provenance records the upstream URL of a vendored source", \sourceUrlTest());
+        addTestCase("a source_url that is not a URL is rejected", \badSourceUrlTest());
+        set_return_value(main());
+    }
+
+    #! writes \a content to the file \a path
+    private static writeFile(string path, string content) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(content);
+        f.close();
+    }
+
+    #! quotes \a arg for the shell
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! writes a spec with a local source and the given extra document keys into \a tmp, and imports it
+    /** @return the exit status and output of the import, which runs in the directory above the spec, where no
+        source document exists
+    */
+    private hash<auto> importLocalSource(TmpDir tmp, string extra = "") {
+        string spec_dir = tmp.path + "/spec";
+        mkdir(spec_dir);
+        writeFile(spec_dir + "/source.json", make_json(Source));
+        writeFile(spec_dir + "/TestSchema.qc", ProvenanceSource);
+        writeFile(spec_dir + "/import.yaml", "documents:
+- name: Test
+  source: source.json
+  output: test-openapi.json
+  op:
+  - GET /items
+  provenance: TestSchema.qc
+  json: true
+" + extra);
+        # the repository's modules come first; the runner's module directories (binary modules) stay available
+        string modules = module_dir + (ENV.QORE_MODULE_DIR.val() ? ":" + ENV.QORE_MODULE_DIR : "");
+        string cmd = sprintf("cd %s && QORE_MODULE_DIR=%s %s %s --spec spec/import.yaml 2>&1", shellQuote(tmp.path),
+            shellQuote(modules), shellQuote(qore_bin), shellQuote(tool));
+        int status;
+        string output = backquote(cmd, \status);
+        return {"status": status, "output": output};
+    }
+
+    #! imports a spec whose source is a file beside it, from another working directory
+    private localSourceTest() {
+        TmpDir tmp("rest-schema-import-tool-");
+        hash<auto> res = importLocalSource(tmp);
+        assertEq(0, res.status, "the import succeeds: " + res.output);
+        string spec_dir = tmp.path + "/spec";
+        assertTrue(is_file(spec_dir + "/test-openapi.json"), "the pruned document is written beside the spec");
+        hash<auto> pruned = parse_json(File::readTextFile(spec_dir + "/test-openapi.json"));
+        assertEq(("/items",), keys pruned.paths, "the pruned document has the selected operation");
+
+        string source = make_json(Source);
+        string prov = File::readTextFile(spec_dir + "/TestSchema.qc");
+        assertRegex("\"source_url\": \"source\\.json\",", prov, "the provenance names the source as the spec does");
+        assertRegex(sprintf("\"source_sha256\": \"%s\",", source.toSHA256()), prov,
+            "the provenance has the source's digest");
+        assertRegex(sprintf("\"source_size\": %d,", source.size()), prov, "the provenance has the source's size");
+        assertEq(-1, prov.find(tmp.path), "the provenance has no path of the directory of the import");
+    }
+
+    #! a vendored source with the URL it was downloaded from
+    private sourceUrlTest() {
+        TmpDir tmp("rest-schema-import-tool-");
+        hash<auto> res = importLocalSource(tmp, "  source_url: https://example.com/api/openapi.yaml\n");
+        assertEq(0, res.status, "the import succeeds: " + res.output);
+        string source = make_json(Source);
+        string prov = File::readTextFile(tmp.path + "/spec/TestSchema.qc");
+        assertRegex("\"source_url\": \"https://example\\.com/api/openapi\\.yaml\",", prov,
+            "the provenance records the upstream URL");
+        assertRegex(sprintf("\"source_sha256\": \"%s\",", source.toSHA256()), prov,
+            "the digest is that of the vendored document");
+    }
+
+    #! a source_url must be a URL
+    private badSourceUrlTest() {
+        TmpDir tmp("rest-schema-import-tool-");
+        hash<auto> res = importLocalSource(tmp, "  source_url: openapi.yaml\n");
+        assertNeq(0, res.status, "the import fails: " + res.output);
+        assertRegex("\"source_url\".*must be the URL", res.output);
+        assertRegex("\"source_url\": \"https://example\\.com/old\\.yaml\",",
+            File::readTextFile(tmp.path + "/spec/TestSchema.qc"), "the provenance is unchanged");
+        assertFalse(is_file(tmp.path + "/spec/test-openapi.json"), "nothing is imported");
+    }
+}

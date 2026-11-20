@@ -128,10 +128,10 @@ public namespace MetaMod {
     }
 
     #! compiles MetaMod.qm to a qmod in the artifact directory and returns its path
-    private string compileMeta(string name = "MetaMod.qmod") {
+    private string compileMeta(string name = "MetaMod.qmod", string opts = "") {
         string qmod = art_dir + "/" + name;
-        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s %s", env, src_dir, qcc_bin, qmod,
-            src_dir + "/MetaMod.qm"));
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m %s-o %s %s", env, src_dir, qcc_bin,
+            opts ? opts + " " : "", qmod, src_dir + "/MetaMod.qm"));
         assertTrue(is_file(qmod), "compiled " + name + ": " + out);
         return qmod;
     }
@@ -218,6 +218,28 @@ public namespace MetaMod {
         BinaryInputStream input(data.substr(offset, 4));
         StreamReader r(input);
         return r.readu4LSB();
+    }
+
+    #! returns the offset of the declared functional domains in the version 4 record at the given offset of a binary
+    /** they follow the module name, the five lists of names and the list of dependency restrictions (each a name, four
+        words of options and a word of flags)
+    */
+    private static int declaredDomainsOffset(binary data, int offset) {
+        int pos = offset + 12;
+        pos += 4 + getLe32(data, pos);
+        for (int l = 0; l < 5; ++l) {
+            int n = getLe32(data, pos);
+            pos += 4;
+            for (int i = 0; i < n; ++i) {
+                pos += 4 + getLe32(data, pos);
+            }
+        }
+        int n = getLe32(data, pos);
+        pos += 4;
+        for (int i = 0; i < n; ++i) {
+            pos += 4 + getLe32(data, pos) + 20;
+        }
+        return pos;
     }
 
     #! returns the 32-bit big-endian value at the given offset of a binary
@@ -315,7 +337,7 @@ public namespace MetaMod {
         assertEq(("MetaDep",), info.compiled_with);
         binary data = readFile(qmod);
         assertEq(RecordMagic, getLe32(data, info.offset), "the record starts with its magic number");
-        assertEq(2, getLe32(data, info.offset + 4), "the record has format version 2");
+        assertEq(4, getLe32(data, info.offset + 4), "the record has format version 4");
         assertEq(info.size - 12, getLe32(data, info.offset + 8), "the record gives the size of its payload");
 
         if (PlatformOS == "Darwin") {
@@ -491,7 +513,10 @@ public namespace MetaMod {
             {"offset": info.offset, "data": le32(0x58414d49), "error": "the record has an invalid magic number "
                 "0x58414d49; the file is damaged"},
             {"offset": info.offset + 4, "data": le32(1), "error": "the record has format version 1, but this Qore "
-                "runtime reads version 2; rebuild the module with the qcc of this Qore installation"},
+                "runtime reads version 4; rebuild the module with the qcc of this Qore installation"},
+            # a record of the previous version (a qcc of AOT format version 44, before the declared domains)
+            {"offset": info.offset + 4, "data": le32(3), "error": "the record has format version 3, but this Qore "
+                "runtime reads version 4; rebuild the module with the qcc of this Qore installation"},
             {"offset": info.offset + 8, "data": le32(info.size - 11), "error": "the record gives a size of "
                 + (info.size - 11) + " bytes, but holds " + (info.size - 12) + "; the file is damaged"},
             {"offset": info.offset + 12, "data": le32(0), "error": "the record has an invalid module name; the "
@@ -499,6 +524,12 @@ public namespace MetaMod {
             # the dependency count follows the module name
             {"offset": info.offset + 16 + "MetaMod".size(), "data": le32(1000), "error": "the record has an invalid "
                 "dependency list; the file is damaged"},
+            # the declared and the restricted functional domains hold only functional domains (qore#6351): bit 63
+            # is none
+            {"offset": declaredDomainsOffset(orig, info.offset) + 4, "data": le32(0x80000000), "error": "the record "
+                "declares unknown functional domain bits; the file is damaged"},
+            {"offset": info.offset + info.size - 4, "data": le32(0x80000000), "error": "the record restricts unknown "
+                "functional domain bits; the file is damaged"},
         );
         foreach hash<auto> c in (cases) {
             string label = "damage " + $#;
@@ -508,6 +539,23 @@ public namespace MetaMod {
                 "offset 0x%x\\): ", info.offset) + quoteRegex(c.error), \moduleInfo(), qmod);
             assertRefused(qmod, "cannot load binary module '.*MetaMod\\.qmod': its AOT module metadata \\(.*\\): "
                 + quoteRegex(c.error), label);
+        }
+
+        # a record that declares a functional domain that the module's header does not declare (qore#6351): the
+        # record is valid, but the module's initialization refuses the module
+        write(qmod, orig);
+        assertEq(0, getLe32(orig, declaredDomainsOffset(orig, info.offset)), "MetaMod declares no domain");
+        # QDOM_LOCALE_CONTROL
+        patch(qmod, declaredDomainsOffset(orig, info.offset), le32(0x1000000));
+        if (PlatformOS == "Darwin") {
+            signAdHoc(qmod, "declared domains");
+        }
+        {
+            int rc;
+            string out = loadMeta(\rc);
+            assertNeq(0, rc, "declared domains: the module was not loaded: " + out);
+            assertRegex("the module metadata record declares the functional domains 0x1000000, but the module "
+                "declares 0x0 in its header; the module is damaged", out, "declared domains");
         }
 
         # a module whose metadata names another module
@@ -588,8 +636,14 @@ public namespace MetaMod {
     #! a module compiled by a newer qcc, whose IR may use opcodes that this runtime does not know, is refused with an
     #! error that asks for a newer Qore (qore#5911 added opcodes 432-437)
     newerOpcodeTest() {
+        # the checksum of the patched metadata is set again with qore-aot-reseal, which handles uncompressed metadata
+        # (qore#6451)
+        string reseal_bin = ENV.QORE_AOT_RESEAL ?? dirname(qore_bin) + "/qore-aot-reseal";
+        if (!is_file(reseal_bin)) {
+            testSkip("qore-aot-reseal is not available at " + reseal_bin);
+        }
         TmpDir tmp = initDirs();
-        string qmod = compileMeta();
+        string qmod = compileMeta("MetaMod.qmod", "--aot-metadata-compression=none");
         binary orig = readFile(qmod);
         # the header of the module's QORD code: the magic "QORD", the format version (u16 at offset 4) and the highest
         # IR opcode ID that the code may use (u16 at offset 28)
@@ -598,6 +652,9 @@ public namespace MetaMod {
         int max_opcode = getLe32(orig, qord + 28) & 0xffff;
         assertTrue(max_opcode > 0, "the QORD header gives the highest opcode ID");
         patch(qmod, qord + 28, le32(max_opcode + 1).substr(0, 2));
+        int reseal_rc;
+        string reseal_out = backquote(sprintf("%s %s 2>&1", reseal_bin, qmod), \reseal_rc);
+        assertEq(0, reseal_rc, "the checksum of the patched metadata is set again: " + reseal_out);
         if (PlatformOS == "Darwin") {
             signAdHoc(qmod, "module with newer opcodes");
         }

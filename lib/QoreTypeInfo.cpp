@@ -55,6 +55,7 @@
 #include "qore/intern/AbstractIteratorHelper.h"
 #include "qore/QoreIteratorBase.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreBufferNodePrivate.h"
 
 #include <algorithm>
 #include <memory>
@@ -715,6 +716,20 @@ void init_qore_types() {
 
 //! derived types removed from the caches because a type they refer to was destroyed; deleted at library cleanup
 static std::vector<QoreTypeInfo*> retired_derived_types;
+//! the retirement epoch of each element of retired_derived_types (see qore_type_retire_epoch), guarded by ctl
+static std::vector<uint64_t> retired_derived_type_epochs;
+
+std::atomic<uint64_t> qore_type_retire_epoch{1};
+
+//! Adds a retired item and its epoch; an exception (from an allocation) leaves both vectors as they were
+template <typename T>
+static void push_retired(std::vector<T*>& items, std::vector<uint64_t>& epochs, T* item, uint64_t epoch) {
+    if (epochs.size() == epochs.capacity()) {
+        epochs.reserve(epochs.empty() ? 16 : epochs.size() * 2);
+    }
+    items.push_back(item);
+    epochs.push_back(epoch);
+}
 
 namespace {
 //! The registry of the generic caches by the types that their keys name (issue #5765)
@@ -915,11 +930,16 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
     //
     // There is deliberately no qore_check_cancel() in these loops: this runs in the destructor of the type's
     // owner, and stopping part way would leave entries keyed by an address about to be freed
+    // the epoch of the derived types retired here: the first one retired increments it (see qore_type_retire_epoch)
+    uint64_t epoch = 0;
     bool removed;
     do {
         removed = false;
         auto retire = [&](QoreTypeInfo* ti) {
-            retired_derived_types.push_back(ti);
+            if (!epoch) {
+                epoch = qore_type_retire_epoch.fetch_add(1, std::memory_order_seq_cst) + 1;
+            }
+            push_retired(retired_derived_types, retired_derived_type_epochs, ti, epoch);
             dead.insert(ti);
             removed = true;
         };
@@ -995,6 +1015,8 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
 //! The class, hashdecl and enum declarations retired and not freed yet (issue #5790; see QoreTypeOwner), guarded by
 //! ctl
 static std::vector<QoreTypeOwner*> retired_type_owners;
+//! the retirement epoch of each element of retired_type_owners (see qore_type_retire_epoch), guarded by ctl
+static std::vector<uint64_t> retired_type_owner_epochs;
 //! true once library cleanup frees the retired declarations: no declaration is retired anymore
 /** Read without the lock first: a Program held at static scope can be deleted by a static destructor after library
     cleanup, when the containers above can already have been destroyed
@@ -1284,11 +1306,11 @@ struct QoreTypeOwnerReleaseQueue {
 //! Marks the queue of the thread active while it is drained, also if a release throws
 class QoreTypeOwnerReleaseQueueHelper {
 public:
-    DLLLOCAL QoreTypeOwnerReleaseQueueHelper(QoreTypeOwnerReleaseQueue& q) : q(q) {
+    QoreTypeOwnerReleaseQueueHelper(QoreTypeOwnerReleaseQueue& q) : q(q) {
         q.active = true;
     }
 
-    DLLLOCAL ~QoreTypeOwnerReleaseQueueHelper() {
+    ~QoreTypeOwnerReleaseQueueHelper() {
         q.active = false;
     }
 
@@ -1377,7 +1399,8 @@ bool qore_type_owner_released(QoreTypeOwner* owner) {
         owner->type_owner_retired = true;
         // no other thread frees it while it is retired without the lock
         owner->type_owner_retiring = true;
-        retired_type_owners.push_back(owner);
+        push_retired(retired_type_owners, retired_type_owner_epochs, owner,
+            qore_type_retire_epoch.fetch_add(1, std::memory_order_seq_cst) + 1);
         // a retired declaration that keeps its members keeps what they name until library cleanup, without
         // references, which would keep them whole: they are retired when they are released; marked now, while the
         // lock decides them
@@ -1603,6 +1626,36 @@ size_t qore_retired_type_owner_count() {
     return retired_type_owners.size();
 }
 
+void qore_type_retirement_info(QoreTypeRetirementInfo& info) {
+    info = QoreTypeRetirementInfo();
+    std::vector<uint64_t> owner_epochs, derived_epochs;
+    {
+        AutoLocker al(ctl);
+        owner_epochs = retired_type_owner_epochs;
+        derived_epochs = retired_derived_type_epochs;
+    }
+    // the threads are scanned after the items are read: a thread that entered Qore code since then published an epoch
+    // after theirs, which cannot read them (see qore_type_retire_epoch)
+    info.min_active_epoch = qore_type_retirement_scan(0, nullptr);
+    info.epoch = qore_type_retire_epoch.load(std::memory_order_seq_cst);
+    auto count = [&info](const std::vector<uint64_t>& epochs, size_t& pending, size_t& freeable) {
+        pending = epochs.size();
+        for (uint64_t e : epochs) {
+            if (!info.oldest_pending_epoch || e < info.oldest_pending_epoch) {
+                info.oldest_pending_epoch = e;
+            }
+            if (e > info.newest_pending_epoch) {
+                info.newest_pending_epoch = e;
+            }
+            if (!info.min_active_epoch || info.min_active_epoch >= e) {
+                ++freeable;
+            }
+        }
+    };
+    count(owner_epochs, info.pending_declarations, info.freeable_declarations);
+    count(derived_epochs, info.pending_derived_types, info.freeable_derived_types);
+}
+
 size_t qore_type_owner_group_count() {
     AutoLocker al(ctl);
     return type_owner_groups.size();
@@ -1754,6 +1807,7 @@ void delete_qore_types() {
             AutoLocker al(ctl);
             type_owner_cleanup.store(true, std::memory_order_release);
             owners.swap(retired_type_owners);
+            retired_type_owner_epochs.clear();
             // the groups not collected yet are dissolved, and the holds of their members released below
             for (QoreTypeOwnerGroup* g : type_owner_groups) {
                 for (QoreTypeOwner* m : g->members) {
@@ -1867,6 +1921,7 @@ void delete_qore_types() {
     for (QoreTypeInfo* i : retired_derived_types)
         delete i;
     retired_derived_types.clear();
+    retired_derived_type_epochs.clear();
 }
 
 void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo) {
@@ -2069,6 +2124,34 @@ static T* qore_new_container_type(const QoreTypeInfo* vti) {
     return ti;
 }
 
+// The type of a reference expression (\x) is the hard reference type of its lvalue, which tells parse-time matching
+// that the expression gives a reference; a container whose value type is derived from it (the literal {"a": \x})
+// holds reference values, whose type at run time is the (soft) reference type of the same lvalue, as is the value
+// type of a declared container type (hash<string, reference<T>>).  Both types are named reference<T>, so a container
+// type is not built on a hard reference type but on the reference type: otherwise the values that have the
+// container's value type would not be the same type, and each would be checked and accepted again when stored or
+// passed (qore#6575).  No container type is cached for a hard reference type, so that only parse time, when the
+// container types of reference expressions are derived, pays for the conversion
+
+//! returns true if the type is a hard reference type (reference<T> or *reference<T> of a reference expression)
+static bool qore_is_complex_hard_reference_type(const QoreTypeInfo* vti) {
+    return !vti->return_vec.empty() && vti->return_vec[0].spec.getTypeSpec() == QTS_COMPLEXHARDREF;
+}
+
+//! returns the container type that \a get returns for the reference type of the hard reference type \a vti; must be
+//! called without the complex type lock; out of line, as only parse time gets here
+static __attribute__((noinline)) const QoreTypeInfo* qore_get_complex_container_type_of_reference(
+        const QoreTypeInfo* (*get)(const QoreTypeInfo*), const QoreTypeInfo* vti) {
+    assert(qore_is_complex_hard_reference_type(vti));
+    const QoreTypeInfo* target = vti->return_vec[0].spec.getComplexReference();
+    assert(target);
+    if (vti->return_vec.size() == 1) {
+        return get(qore_get_complex_reference_type(target));
+    }
+    assert(vti->return_vec.size() == 2 && vti->return_vec[1].spec.match(NT_NOTHING) == QTI_IDENT);
+    return get(qore_get_complex_reference_or_nothing_type(target));
+}
+
 const QoreTypeInfo* qore_get_complex_hash_type(const QoreTypeInfo* vti) {
     if (vti == autoTypeInfo || qore_container_type_too_deep(vti)) {
         return autoHashTypeInfo;
@@ -2077,16 +2160,21 @@ const QoreTypeInfo* qore_get_complex_hash_type(const QoreTypeInfo* vti) {
         return hashTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = ch_map.lower_bound(vti);
-    if (i != ch_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = ch_map.lower_bound(vti);
+        if (i != ch_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexHashTypeInfo* ti = qore_new_container_type<QoreComplexHashTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    ch_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexHashTypeInfo* ti = qore_new_container_type<QoreComplexHashTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            ch_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_hash_type, vti);
 }
 
 const QoreTypeInfo* qore_get_complex_hash_or_nothing_type(const QoreTypeInfo* vti) {
@@ -2097,16 +2185,21 @@ const QoreTypeInfo* qore_get_complex_hash_or_nothing_type(const QoreTypeInfo* vt
         return hashOrNothingTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = chon_map.lower_bound(vti);
-    if (i != chon_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = chon_map.lower_bound(vti);
+        if (i != chon_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexHashOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexHashOrNothingTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    chon_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexHashOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexHashOrNothingTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            chon_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_hash_or_nothing_type, vti);
 }
 
 const QoreTypeInfo* qore_get_complex_list_type(const QoreTypeInfo* vti) {
@@ -2117,16 +2210,21 @@ const QoreTypeInfo* qore_get_complex_list_type(const QoreTypeInfo* vti) {
         return listTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = cl_map.lower_bound(vti);
-    if (i != cl_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = cl_map.lower_bound(vti);
+        if (i != cl_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexListTypeInfo* ti = qore_new_container_type<QoreComplexListTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    cl_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexListTypeInfo* ti = qore_new_container_type<QoreComplexListTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            cl_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_list_type, vti);
 }
 
 const QoreTypeInfo* qore_get_complex_list_or_nothing_type(const QoreTypeInfo* vti) {
@@ -2137,16 +2235,21 @@ const QoreTypeInfo* qore_get_complex_list_or_nothing_type(const QoreTypeInfo* vt
         return listOrNothingTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = clon_map.lower_bound(vti);
-    if (i != clon_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = clon_map.lower_bound(vti);
+        if (i != clon_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexListOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexListOrNothingTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    clon_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexListOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexListOrNothingTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            clon_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_list_or_nothing_type, vti);
 }
 
 static QoreString qore_make_complex_buffer_name(QoreBufferElementType element_type, bool nullable_elements,
@@ -2208,16 +2311,21 @@ const QoreTypeInfo* qore_get_complex_softlist_type(const QoreTypeInfo* vti) {
         return softListTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = csl_map.lower_bound(vti);
-    if (i != csl_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = csl_map.lower_bound(vti);
+        if (i != csl_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexSoftListTypeInfo* ti = qore_new_container_type<QoreComplexSoftListTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    csl_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexSoftListTypeInfo* ti = qore_new_container_type<QoreComplexSoftListTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            csl_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_softlist_type, vti);
 }
 
 const QoreTypeInfo* qore_get_complex_softlist_or_nothing_type(const QoreTypeInfo* vti) {
@@ -2228,16 +2336,22 @@ const QoreTypeInfo* qore_get_complex_softlist_or_nothing_type(const QoreTypeInfo
         return softListOrNothingTypeInfo;
     }
 
-    AutoLocker al(ctl);
+    {
+        AutoLocker al(ctl);
 
-    tmap_t::iterator i = cslon_map.lower_bound(vti);
-    if (i != cslon_map.end() && i->first == vti)
-        return i->second;
+        tmap_t::iterator i = cslon_map.lower_bound(vti);
+        if (i != cslon_map.end() && i->first == vti)
+            return i->second;
 
-    QoreComplexSoftListOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexSoftListOrNothingTypeInfo>(vti);
-    derived_type_keys.insert(vti);
-    cslon_map.insert(i, tmap_t::value_type(vti, ti));
-    return ti;
+        if (__builtin_expect(!qore_is_complex_hard_reference_type(vti), 1)) {
+            QoreComplexSoftListOrNothingTypeInfo* ti
+                = qore_new_container_type<QoreComplexSoftListOrNothingTypeInfo>(vti);
+            derived_type_keys.insert(vti);
+            cslon_map.insert(i, tmap_t::value_type(vti, ti));
+            return ti;
+        }
+    }
+    return qore_get_complex_container_type_of_reference(qore_get_complex_softlist_or_nothing_type, vti);
 }
 
 const QoreTypeInfo* qore_get_complex_hard_reference_type(const QoreTypeInfo* vti) {
@@ -2896,6 +3010,36 @@ QoreExternalTypeDeclRefs::~QoreExternalTypeDeclRefs() {
     delete priv;
 }
 
+QoreTypeDeclRefs::~QoreTypeDeclRefs() {
+    delete priv;
+}
+
+void QoreTypeDeclRefs::add(const type_vec_t& types) {
+    std::unique_ptr<qore_type_decl_refs_private> p(priv);
+    priv = nullptr;
+    {
+        // under the type lock, as for QoreExternalTypeDeclRefs
+        AutoLocker al(ctl);
+        for (const QoreTypeInfo* ti : types) {
+            qore_type_decl_refs_private::add(p, ti, 0);
+        }
+    }
+    priv = p.release();
+}
+
+void QoreTypeDeclRefs::add(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return;
+    }
+    std::unique_ptr<qore_type_decl_refs_private> p(priv);
+    priv = nullptr;
+    {
+        AutoLocker al(ctl);
+        qore_type_decl_refs_private::add(p, ti, 0);
+    }
+    priv = p.release();
+}
+
 const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti) {
     return qore_type_contains_type_parameter(ti)
         ? qore_substitute_type_params(ti, qore_get_current_receiver_type_info())
@@ -3110,45 +3254,9 @@ static QoreString build_union_name(const type_vec_t& member_types, bool or_nothi
     return name;
 }
 
-const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_nothing) {
-    // Handle edge cases
-    if (member_types.empty()) {
-        return autoTypeInfo;  // empty union accepts anything
-    }
-
-    // Normalize the key for consistent cache lookup
-    type_vec_t key = normalize_union_key(member_types);
-
-    // a union of one type, also after its duplicates are removed (ex: union<int, int>), is that type, as an AOT image
-    // that writes the union without the duplicates reads it back (qore#5858)
-    if (key.size() == 1) {
-        const QoreTypeInfo* ti = key[0];
-        if (or_nothing) {
-            const QoreTypeInfo* orn = qore_get_or_nothing_type(ti);
-            return orn ? orn : ti;
-        }
-        return ti;
-    }
-
-    // Check if any member already accepts NOTHING, if so, or_nothing is already covered
-    bool has_nothing = false;
-    for (const QoreTypeInfo* ti : key) {
-        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
-            has_nothing = true;
-            break;
-        }
-    }
-
-    // Use appropriate cache
-    union_map_t& cache = (or_nothing && !has_nothing) ? union_on_map : union_map;
-
-    AutoLocker al(ctl);
-
-    union_map_t::iterator i = cache.find(key);
-    if (i != cache.end()) {
-        return i->second;
-    }
-
+//! makes a union type of the members given (see qore_get_union_type())
+static QoreUnionTypeInfo* qore_make_union_type(const type_vec_t& key, bool or_nothing, bool has_nothing,
+        const type_vec_t& value_types) {
     // Build accept and return vectors from all member types
     q_accept_vec_t accept_vec;
     q_return_vec_t return_vec;
@@ -3202,9 +3310,66 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     // Create the union type
     QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name, key,
         or_nothing || has_nothing);
-    noteDerivedTypeKeys(nullptr, key);
-    cache[key] = ti;
+    ti->initExactMembers(value_types);
     return ti;
+}
+
+const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_nothing) {
+    // Handle edge cases
+    if (member_types.empty()) {
+        return autoTypeInfo;  // empty union accepts anything
+    }
+
+    // Normalize the key for consistent cache lookup
+    type_vec_t key = normalize_union_key(member_types);
+
+    // a union of one type, also after its duplicates are removed (ex: union<int, int>), is that type, as an AOT image
+    // that writes the union without the duplicates reads it back (qore#5858)
+    if (key.size() == 1) {
+        const QoreTypeInfo* ti = key[0];
+        if (or_nothing) {
+            const QoreTypeInfo* orn = qore_get_or_nothing_type(ti);
+            return orn ? orn : ti;
+        }
+        return ti;
+    }
+
+    // Check if any member already accepts NOTHING, if so, or_nothing is already covered
+    bool has_nothing = false;
+    for (const QoreTypeInfo* ti : key) {
+        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
+            has_nothing = true;
+            break;
+        }
+    }
+
+    // Use appropriate cache
+    union_map_t& cache = (or_nothing && !has_nothing) ? union_on_map : union_map;
+
+    // the value types of the members, which a value of the union is accepted as (qore#6407), are taken outside the
+    // lock, as get_value_type() takes it to make a type, and only for a union that is not made yet (a generic call
+    // looks the union up for each call); the union is then looked up again, as another thread can have made it
+    type_vec_t value_types;
+    while (true) {
+        {
+            AutoLocker al(ctl);
+            union_map_t::iterator i = cache.find(key);
+            if (i != cache.end()) {
+                return i->second;
+            }
+            if (!value_types.empty()) {
+                QoreUnionTypeInfo* ti = qore_make_union_type(key, or_nothing, has_nothing, value_types);
+                noteDerivedTypeKeys(nullptr, key);
+                cache[key] = ti;
+                return ti;
+            }
+        }
+        value_types.reserve(key.size());
+        for (const QoreTypeInfo* ti : key) {
+            // a union member (also an or-nothing union, whose value type is not a union) gives its exact members
+            value_types.push_back(dynamic_cast<const QoreUnionTypeInfo*>(ti) ? ti : get_value_type(ti));
+        }
+    }
 }
 
 const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types) {
@@ -3635,11 +3800,26 @@ static QoreString build_complex_code_path(const QoreTypeInfo* returnType, const 
     return name;
 }
 
-// Helper to build accept_vec for typed callable
-static q_accept_vec_t build_complex_code_accept_vec(bool or_nothing) {
+// raises a RUNTIME-TYPE-ERROR if the closure or call reference \a n does not have a signature that the typed
+// callable type \a ti accepts (qore#6660)
+static void qore_complex_code_check_callable(const QoreComplexCodeTypeInfo* ti, QoreValue& n, ExceptionSink* xsink) {
+    if (xsink && !ti->acceptsCallable(n)) {
+        const QoreTypeInfo* vti = n.getTypeInfo();
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "type '%s' expects a callable with a compatible signature, but "
+            "got type '%s'", QoreTypeInfo::getName(ti), QoreTypeInfo::getName(vti));
+    }
+}
+
+// Helper to build accept_vec for typed callable; the specs check the signature of the callable with their map, so
+// that the types of other values do not pay for the check (qore#6660)
+static q_accept_vec_t build_complex_code_accept_vec(const QoreComplexCodeTypeInfo* ti, bool or_nothing) {
     q_accept_vec_t avec;
-    avec.push_back({NT_RUNTIME_CLOSURE, nullptr});
-    avec.push_back({NT_FUNCREF, nullptr});
+    avec.push_back({NT_RUNTIME_CLOSURE, [ti] (QoreValue& n, ExceptionSink* xsink) {
+        qore_complex_code_check_callable(ti, n, xsink);
+    }});
+    avec.push_back({NT_FUNCREF, [ti] (QoreValue& n, ExceptionSink* xsink) {
+        qore_complex_code_check_callable(ti, n, xsink);
+    }});
     if (or_nothing) {
         avec.push_back({NT_NOTHING, nullptr});
         avec.push_back({NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }});
@@ -3658,15 +3838,120 @@ static q_return_vec_t build_complex_code_return_vec(bool or_nothing) {
     return rvec;
 }
 
+//! returns the return type of a typed callable signature, or nullptr for a callable that returns nothing, whose
+//! return type is nullptr in a declared type and the nothing type in the type of a closure (qore#6660)
+static const QoreTypeInfo* qore_code_return_type(const QoreTypeInfo* ret) {
+    return ret == nothingTypeInfo ? nullptr : ret;
+}
+
 QoreComplexCodeTypeInfo::QoreComplexCodeTypeInfo(const QoreTypeInfo* ret_type, type_vec_t&& param_types,
         bool varargs_arg, bool or_nothing_arg)
-        : QoreTypeInfo(build_complex_code_accept_vec(or_nothing_arg),
+        : QoreTypeInfo(build_complex_code_accept_vec(this, or_nothing_arg),
             build_complex_code_return_vec(or_nothing_arg),
             build_complex_code_name(ret_type, param_types, varargs_arg, or_nothing_arg)),
           returnType(ret_type), paramTypes(std::move(param_types)),
           varargs(varargs_arg), orNothing(or_nothing_arg) {
+    complex_code = true;
     // Set path name
     pname = build_complex_code_path(ret_type, paramTypes, varargs, orNothing);
+}
+
+bool QoreComplexCodeTypeInfo::acceptsCallable(const QoreValue& n) const {
+    qore_type_t t = n.getType();
+    if (t != NT_RUNTIME_CLOSURE && t != NT_FUNCREF) {
+        return true;
+    }
+    // a closure is always a resolved call reference
+    const ResolvedCallReferenceNode* cr = t == NT_RUNTIME_CLOSURE
+        ? static_cast<const ResolvedCallReferenceNode*>(n.getInternalNode())
+        : dynamic_cast<const ResolvedCallReferenceNode*>(n.getInternalNode());
+    const QoreFunction* f = cr ? cr->getFunction() : nullptr;
+    if (!f) {
+        return true;
+    }
+    // a call reference to a function with more than one variant calls the variant that its arguments select: it is
+    // accepted if one of them has a compatible signature
+    QoreFunctionIterator i(*f);
+    bool has_variant = false;
+    while (i.next()) {
+        has_variant = true;
+        const AbstractFunctionSignature* sig = i.getVariant()->getSignature();
+        // the common case: the callable has this type
+        if (sig && (sig->getRuntimeCodeTypeInfo() == this || isSignatureCompatible(sig))) {
+            return true;
+        }
+    }
+    return !has_variant;
+}
+
+const QoreTypeInfo* AbstractFunctionSignature::getRuntimeCodeTypeInfo() const {
+    const QoreTypeInfo* ti = runtime_code_type_cache.load(std::memory_order_acquire);
+    if (!ti) {
+        ti = qore_get_complex_code_type_from_signature(this);
+        runtime_code_type_cache.store(ti, std::memory_order_release);
+    }
+    return ti;
+}
+
+bool QoreTypeInfo::complexCodeAcceptsCallable(const QoreValue& n) const {
+    return !complex_code || static_cast<const QoreComplexCodeTypeInfo*>(this)->acceptsCallable(n);
+}
+
+bool QoreTypeInfo::codeAcceptsTypedCallablesUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+    if ((target != codeTypeInfo && target != codeOrNothingTypeInfo) || !source || !source->complex_code) {
+        return false;
+    }
+    return target == codeOrNothingTypeInfo || !static_cast<const QoreComplexCodeTypeInfo*>(source)->isOrNothing();
+}
+
+bool QoreTypeInfo::complexCodeTypesEqual(const QoreTypeInfo* a, const QoreTypeInfo* b) {
+    assert(a->complex_code || b->complex_code);
+    if (!a->complex_code || !b->complex_code) {
+        return false;
+    }
+    const QoreComplexCodeTypeInfo* ca = static_cast<const QoreComplexCodeTypeInfo*>(a);
+    const QoreComplexCodeTypeInfo* cb = static_cast<const QoreComplexCodeTypeInfo*>(b);
+    if (ca->hasVarArgs() != cb->hasVarArgs() || ca->isOrNothing() != cb->isOrNothing()
+            || !equal(qore_code_return_type(ca->getReturnType()), qore_code_return_type(cb->getReturnType()))) {
+        return false;
+    }
+    const type_vec_t& pa = ca->getParamTypes();
+    const type_vec_t& pb = cb->getParamTypes();
+    if (pa.size() != pb.size()) {
+        return false;
+    }
+    for (size_t i = 0, e = pa.size(); i < e; ++i) {
+        if (!equal(pa[i], pb[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! returns true if the typed callable type \a first is a superset of the type \a second, of which at least one is
+//! a typed callable type (qore#6660)
+/** A typed callable type is a superset only of the typed callable types with the same signature (and of their
+    non-NOTHING types, for an or-nothing type): a type does not record which parameters of a callable have default
+    arguments, so the variance check of checkComplexCodeCompatibility() cannot tell whether every value of another
+    signature is accepted, and a superset decides that values are kept unchecked and is the common type of folded
+    values; the type \c code (and \c *code) is a superset of every typed callable type, which its specs give
+*/
+static __attribute__((noinline)) bool qore_complex_code_super_set_of(const QoreTypeInfo* first,
+        const QoreTypeInfo* second) {
+    if (!first->isComplexCode() || !second->isComplexCode()) {
+        return false;
+    }
+    const QoreComplexCodeTypeInfo* cf = static_cast<const QoreComplexCodeTypeInfo*>(first);
+    const QoreComplexCodeTypeInfo* cs = static_cast<const QoreComplexCodeTypeInfo*>(second);
+    if (!cf->isOrNothing() && cs->isOrNothing()) {
+        return false;
+    }
+    if (cf->isOrNothing() != cs->isOrNothing()) {
+        // compare the signatures of *code<sig> and code<sig>
+        return QoreTypeInfo::equal(qore_get_complex_code_type(cf->getReturnType(), cf->getParamTypes(),
+            cf->hasVarArgs(), false), second);
+    }
+    return QoreTypeInfo::complexCodeTypesEqual(first, second);
 }
 
 bool QoreComplexCodeTypeInfo::isSignatureCompatible(const AbstractFunctionSignature* sig) const {
@@ -3677,7 +3962,7 @@ bool QoreComplexCodeTypeInfo::isSignatureCompatible(const AbstractFunctionSignat
     // Check return type compatibility (covariant)
     // The callable's return type must be assignable to our return type
     const QoreTypeInfo* sigReturnType = sig->getReturnTypeInfo();
-    if (returnType) {
+    if (qore_code_return_type(returnType)) {
         // We expect a specific return type - check if the callable's return type is compatible
         // Covariant: the callable can return a more specific type
         if (!QoreTypeInfo::parseAccepts(returnType, sigReturnType)) {
@@ -3695,11 +3980,15 @@ bool QoreComplexCodeTypeInfo::isSignatureCompatible(const AbstractFunctionSignat
     unsigned sigNumParams = sig->numParams();
     size_t ourParamCount = paramTypes.size();
 
-    // Compute minimum required params for the signature (params without defaults)
+    // Compute minimum required params for the signature (params without defaults); a parameter that takes NOTHING
+    // (*int) need not be given either
     unsigned sigMinParams = 0;
     for (unsigned i = 0; i < sigNumParams; ++i) {
         if (!sig->hasDefaultArg(i)) {
-            sigMinParams = i + 1;
+            const QoreTypeInfo* pt = sig->getParamTypeInfo(i);
+            if (QoreTypeInfo::hasType(pt) && !QoreTypeInfo::parseAcceptsReturns(pt, NT_NOTHING)) {
+                sigMinParams = i + 1;
+            }
         }
     }
 
@@ -3988,8 +4277,90 @@ const QoreComplexCodeTypeInfo* QoreTypeInfo::getComplexCodeType(const QoreTypeIn
     if (!ti || !hasType(ti)) {
         return nullptr;
     }
-    // Check if the type is a QoreComplexCodeTypeInfo by attempting a dynamic_cast
-    return dynamic_cast<const QoreComplexCodeTypeInfo*>(ti);
+    return ti->isComplexCode() ? static_cast<const QoreComplexCodeTypeInfo*>(ti) : nullptr;
+}
+
+bool QoreTypeInfo::unionAcceptsExactlyImpl(const QoreValue& n) const {
+    // only a union sets the mask
+    return static_cast<const QoreUnionTypeInfo*>(this)->hasExactMember(n);
+}
+
+//! returns true if a member type keeps a value of the scalar base type \a t as it is (qore#6407)
+/** The plain type (ex: int), a soft type of the base type (ex: softint) and a type of the base type that converts
+    other values (ex: timeout) accept a value of the base type without converting it; a date type with a subtype does
+    not keep a date of the other subtype
+*/
+static bool qore_union_member_keeps_scalar(const QoreTypeInfo* vt, qore_type_t t) {
+    switch (t) {
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_STRING:
+        case NT_BOOLEAN:
+        case NT_BINARY:
+            break;
+        case NT_DATE:
+            if (QoreTypeInfo::getDateSubtype(vt)) {
+                return false;
+            }
+            break;
+        default:
+            return false;
+    }
+    for (const QoreAcceptSpec& a : vt->getAcceptSpecs()) {
+        if (!a.map && a.spec.isRuntimeBaseType(t)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void QoreUnionTypeInfo::initExactMembers(const type_vec_t& value_types) {
+    for (const QoreTypeInfo* vt : value_types) {
+        if (!hasType(vt) || vt == autoTypeInfo || vt == autoNoNarrowTypeInfo || vt == anyTypeInfo) {
+            continue;
+        }
+        // a member that is a union (ex: a typedef of a union) gives its own exact members, so that the result does
+        // not depend on where the nested union is in the union
+        if (const QoreUnionTypeInfo* nested = dynamic_cast<const QoreUnionTypeInfo*>(vt)) {
+            exact_members.insert(exact_members.end(), nested->exact_members.begin(), nested->exact_members.end());
+            union_exact_mask |= nested->union_exact_mask;
+            union_scalar_mask |= nested->union_scalar_mask;
+            continue;
+        }
+        if (vt->return_vec.size() != 1) {
+            continue;
+        }
+        // an enum value is kept by an enum type with qore_type_info_has_enum_spec_for() (qore#6277)
+        if (vt->return_vec[0].spec.getEnum()) {
+            continue;
+        }
+        qore_type_t t = vt->return_vec[0].spec.getType();
+        if (t < 0 || t >= 64) {
+            continue;
+        }
+        exact_members.push_back(vt);
+        union_exact_mask |= (1ull << t);
+        if (qore_union_member_keeps_scalar(vt, t)) {
+            union_scalar_mask |= (1ull << t);
+        }
+    }
+}
+
+bool QoreUnionTypeInfo::hasExactMember(const QoreValue& n) const {
+    // an enum value is kept by an enum type of the union with qore_type_info_has_enum_spec_for() (qore#6277)
+    if (n.isEnum()) {
+        return false;
+    }
+    const QoreTypeInfo* vt = n.getFullTypeInfo();
+    for (const QoreTypeInfo* m : exact_members) {
+        // a list or hash member with no element type keeps any list or hash as it is
+        if (m == vt || ((m == autoHashTypeInfo || m == hashTypeInfo) && n.getType() == NT_HASH)
+                || ((m == autoListTypeInfo || m == listTypeInfo) && n.getType() == NT_LIST)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 const QoreUnionTypeInfo* QoreTypeInfo::getUnionType(const QoreTypeInfo* ti) {
@@ -4020,7 +4391,7 @@ bool QoreTypeInfo::checkComplexCodeCompatibility(const QoreTypeInfo* target, con
     // Both are typed callables - compare signatures
     // Check return type compatibility (covariant)
     // Source's return type must be assignable to target's return type
-    const QoreTypeInfo* target_ret = target_code->getReturnType();
+    const QoreTypeInfo* target_ret = qore_code_return_type(target_code->getReturnType());
     const QoreTypeInfo* source_ret = source_code->getReturnType();
 
     if (target_ret) {
@@ -4528,7 +4899,8 @@ struct CallArgTypeMatchPolicy : BasePolicy {
         for (auto& t : ti->getAcceptSpecs()) {
             qore_type_result_e rv = t.spec.runtimeAcceptsValueImpl(n, t.exact, fold, *this);
             if (rv != QTI_NOT_EQUAL) {
-                return rv;
+                // a typed callable selects only the callables of compatible signatures (qore#6660)
+                return ti->complexCodeAcceptsCallable(n) ? rv : QTI_NOT_EQUAL;
             }
         }
         // SQL NULL, which no class type accepts, is matched as by the base policy
@@ -4956,6 +5328,10 @@ static bool qore_type_info_has_enum_spec_for(const QoreTypeInfo& typeInfo, const
     return false;
 }
 
+bool QoreTypeInfo::unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& n) {
+    return n.isEnum() && getUnionType(ti) && qore_type_info_has_enum_spec_for(*ti, n);
+}
+
 template <typename FilterPolicy>
 bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
@@ -5053,6 +5429,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     ok = true;
                     break;
                 }
+                // a union with a member of the hash's own type keeps it as it is (qore#6407)
+                if (typeInfo.unionAcceptsExactly(n, NT_HASH)) {
+                    return true;
+                }
                 QoreHashNode* h = n.get<QoreHashNode>();
                 bool err = false;
                 ok = acceptInputComplexHashImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, h,
@@ -5081,6 +5461,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 if (is_auto_vti(u.ti)) {
                     ok = true;
                     break;
+                }
+                // a union with a member of the list's own type keeps it as it is (qore#6407)
+                if (typeInfo.unionAcceptsExactly(n, NT_LIST)) {
+                    return true;
                 }
                 QoreListNode* l = n.get<QoreListNode>();
                 bool err = false;
@@ -5113,6 +5497,11 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                         && qore_type_info_has_enum_spec_for(typeInfo, n)) {
                     break;
                 }
+                // a union with a member of the value's own type keeps it as it is, which a soft list would wrap in a
+                // list (qore#6407)
+                if (typeInfo.unionAcceptsExactly(n, n.getType())) {
+                    return true;
+                }
                 // see if value matches
                 if (policy.value(u.ti, n, true) > 0) {
                     ok = true;
@@ -5126,7 +5515,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 bool needs_nullable_copy = false;
                 ok = qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy);
                 if (needs_nullable_copy) {
-                    QoreBufferNode* copy = b->copy(true, xsink);
+                    QoreBufferNode* copy = qore_buffer_node_private(b).copy(true, xsink);
                     if (!copy) {
                         return true;
                     }
@@ -5283,6 +5672,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
     if (ok) {
         assert(!priv_error);
         if (accept.map) {
+            // a union with a member of the value's own type keeps the value as it is (qore#6407)
+            if (typeInfo.unionAcceptsExactly(n, typespec == QTS_TYPE && u.t != NT_ALL ? u.t : n.getType())) {
+                return true;
+            }
             policy.map(accept, n, xsink);
             if (xsink && *xsink) {
                 xsink->appendLastDescription(" (while converting types for type '%s')",
@@ -5297,6 +5690,27 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         return true;
     }
     return false;
+}
+
+// A parameterized class type is built once for each class and type arguments, so that the copy of a generic class in
+// another Program (an imported class) has types of its own: they are the same type if the classes are the same class
+// and the type arguments are the same types (qore#6575)
+static __attribute__((noinline)) bool qore_parameterized_class_types_equal(const QoreParameterizedClassTypeInfo* a,
+        const QoreParameterizedClassTypeInfo* b) {
+    if (a->isOrNothing() != b->isOrNothing() || a->getArgCount() != b->getArgCount()) {
+        return false;
+    }
+    if (!qore_class_private::get(*a->getBaseClass())->equal(*qore_class_private::get(*b->getBaseClass()))) {
+        return false;
+    }
+    const std::vector<const QoreTypeInfo*>& aargs = a->getTypeArgs();
+    const std::vector<const QoreTypeInfo*>& bargs = b->getTypeArgs();
+    for (size_t i = 0, e = aargs.size(); i < e; ++i) {
+        if (!QoreTypeInfo::equal(aargs[i], bargs[i])) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
@@ -5320,6 +5734,9 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
         case QTS_COMPLEXBUFFER:
             return u.ti == other.u.ti;
         case QTS_PARAMCLASS:
+            return u.ti == other.u.ti || qore_parameterized_class_types_equal(
+                static_cast<const QoreParameterizedClassTypeInfo*>(u.ti),
+                static_cast<const QoreParameterizedClassTypeInfo*>(other.u.ti));
         case QTS_TYPEPARAM:
         case QTS_WILDCARD:
         case QTS_INITIALIZER_FILTER:
@@ -5638,7 +6055,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreValue& n) const {
     for (auto& t : accept_vec) {
         qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact);
         if (rv != QTI_NOT_EQUAL)
-            return rv;
+            return complexCodeAcceptsCallable(n) ? rv : QTI_NOT_EQUAL;
     }
     return QTI_NOT_EQUAL;
 }
@@ -5647,7 +6064,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValueOrFold(const QoreValue& n) c
     for (auto& t : accept_vec) {
         qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
         if (rv != QTI_NOT_EQUAL) {
-            return rv;
+            return complexCodeAcceptsCallable(n) ? rv : QTI_NOT_EQUAL;
         }
     }
     return QTI_NOT_EQUAL;
@@ -5661,7 +6078,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreTypeInfo* ti, con
     for (auto& t : ti->accept_vec) {
         qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, fold, policy);
         if (rv != QTI_NOT_EQUAL) {
-            return rv;
+            return ti->complexCodeAcceptsCallable(n) ? rv : QTI_NOT_EQUAL;
         }
     }
     return ti->acceptsBrokenSoftNull(n, policy) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
@@ -8136,6 +8553,13 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
         max_result = QTI_NOT_EQUAL;
         return QTI_NOT_EQUAL;
     }
+    // a typed callable type accepts the typed callable types whose signatures are compatible with its own; the specs
+    // do not hold the signature (qore#6660)
+    if (__builtin_expect(first->complex_code && second->complex_code, 0)
+            && !checkComplexCodeCompatibility(first, second)) {
+        max_result = QTI_NOT_EQUAL;
+        return QTI_NOT_EQUAL;
+    }
     return first->parseAccepts(second, may_not_match, may_need_filter, max_result, known_initial_assignment);
 }
 
@@ -8194,6 +8618,15 @@ qore_type_result_e QoreTypeInfo::runtimeTypeMatch(const QoreTypeInfo* typeInfo) 
 
     if (typeInfo->return_vec.size() != return_vec.size() || typeInfo->getAcceptVecSize() != getAcceptVecSize()) {
         return QTI_NOT_EQUAL;
+    }
+
+    // two typed callable types match if the signature of the second is compatible with the first's; the specs do not
+    // hold the signature (qore#6660)
+    if (__builtin_expect(complex_code && typeInfo->complex_code, 0)) {
+        if (complexCodeTypesEqual(this, typeInfo)) {
+            return QTI_IDENT;
+        }
+        return checkComplexCodeCompatibility(this, typeInfo) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
     }
 
     // check accept types
@@ -8271,6 +8704,14 @@ bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInf
         return true;
     }
 
+    // two typed callables of different signatures have the type code in common (qore#6660)
+    if (__builtin_expect(ctype->isComplexCode() && ntype->isComplexCode(), 0)) {
+        ctype = static_cast<const QoreComplexCodeTypeInfo*>(ctype)->isOrNothing()
+                || static_cast<const QoreComplexCodeTypeInfo*>(ntype)->isOrNothing()
+            ? codeOrNothingTypeInfo : codeTypeInfo;
+        return true;
+    }
+
     // try to find a common base type
     // if we're dealing with types that return multiple types, then they are not compatible
     if (ctype->return_vec.size() > 1 || ntype->return_vec.size() > 1) {
@@ -8332,17 +8773,51 @@ bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInf
     return false;
 }
 
+//! returns true if the container spec \a target keeps the values of the container spec \a source as they are: a
+//! list or hash of typed callables for a list or hash of code (qore#6660)
+/** Before the signature of a typed callable was part of its type, list<code> and list<code<...>> were the same type,
+    and a container of closures kept the type of its closures where a container of code was expected; called only
+    for specs that are not equal
+*/
+static __attribute__((noinline)) bool qore_spec_keeps_typed_callables(const QoreTypeSpec& target,
+        const QoreTypeSpec& source) {
+    q_typespec_t ts = target.getTypeSpec();
+    if (ts != source.getTypeSpec() || (ts != QTS_COMPLEXLIST && ts != QTS_COMPLEXHASH && ts != QTS_COMPLEXSOFTLIST)) {
+        return false;
+    }
+    const QoreTypeInfo* tv = target.getElementType();
+    if (tv != codeTypeInfo && tv != codeOrNothingTypeInfo) {
+        return false;
+    }
+    const QoreTypeInfo* sv = source.getElementType();
+    if (!sv || !sv->isComplexCode()) {
+        return false;
+    }
+    return tv == codeOrNothingTypeInfo || !static_cast<const QoreComplexCodeTypeInfo*>(sv)->isOrNothing();
+}
+
 bool QoreTypeInfo::superSetOf(const QoreTypeInfo* t) const {
+    if (this == t) {
+        return true;
+    }
     if (getAcceptVecSize() < t->getAcceptVecSize() || return_vec.size() < t->return_vec.size())
         return false;
 
+    // the specs of a typed callable type do not hold its signature (qore#6660); plain code is a superset of every
+    // typed callable type, as its specs give
+    if (__builtin_expect(complex_code, 0)) {
+        return qore_complex_code_super_set_of(this, t);
+    }
+
     for (unsigned i = 0; i < t->getAcceptVecSize(); ++i) {
-        if (t->getAcceptSpec(i).spec != getAcceptSpec(i).spec)
+        if (t->getAcceptSpec(i).spec != getAcceptSpec(i).spec
+                && !qore_spec_keeps_typed_callables(getAcceptSpec(i).spec, t->getAcceptSpec(i).spec))
             return false;
     }
 
     for (unsigned i = 0; i < t->return_vec.size(); ++i) {
-        if (t->return_vec[i].spec != return_vec[i].spec)
+        if (t->return_vec[i].spec != return_vec[i].spec
+                && !qore_spec_keeps_typed_callables(return_vec[i].spec, t->return_vec[i].spec))
             return false;
     }
 

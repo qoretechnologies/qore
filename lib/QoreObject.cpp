@@ -53,6 +53,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHashKeyHelper.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -153,7 +154,11 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
         in_destructor(false),
         recursive_ref_found(false),
         obj(n_obj) {
-    std::unique_ptr<QoreSandboxContext> provenance(qore_capture_sandbox_provenance());
+    // an object of a class of library module code records the restrictions of the code that creates it (qore#6520):
+    // the class's source Program, read inline (the namespace's Program only for a class without one)
+    QoreProgram* code_pgm = qore_class_private::get(*oc)->spgm.load(std::memory_order_acquire);
+    std::unique_ptr<QoreSandboxContext> provenance(qore_capture_sandbox_provenance(code_pgm ? code_pgm
+        : oc->getProgram()));
     //printd(5, "qore_object_private::qore_object_private() this: %p obj: %p '%s'\n", this, obj, oc->getName());
 #ifdef QORE_DEBUG_OBJ_REFS
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
@@ -608,10 +613,11 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
             // pending_stream_registrations for ref'd queue_obj / notifier_obj
             // QoreObject pointers that live in C++ containers invisible to
             // the normal data/cdmap walk.  See design/dgc.md Pattern B.
-            ReferenceHolder<Http2ClientPollOperationPriv> h2pop(
+            // the reference can be the last one if the object is deleted meanwhile: its release, which runs the
+            // operation's cleanup, is not made in the scan
+            QorePollOpOffThreadRef<Http2ClientPollOperationPriv> h2pop(
                 reinterpret_cast<Http2ClientPollOperationPriv*>(
-                    getScanPrivateData(CID_HTTP2CLIENTPOLLOPERATIONBASE)),
-                &xsink);
+                    getScanPrivateData(CID_HTTP2CLIENTPOLLOPERATIONBASE)));
             if (*h2pop && (*h2pop)->scanMembers(*this, rsh)) {
                 return true;
             }
@@ -2271,8 +2277,8 @@ const char *QoreObject::getSurfaceClassName() const {
     return getSurfaceClass()->getName();
 }
 
-int QoreObject::getStatus() const {
-    return priv->status;
+int qore_object_ops::getStatusImpl(QoreObject* b) {
+    return b->priv->status;
 }
 
 bool QoreObject::isValid() const {
@@ -2299,19 +2305,16 @@ void QoreObject::tDeref() {
     priv->tDeref();
 }
 
-QoreValue QoreObject::evalBuiltinMethodWithPrivateData(const QoreMethod& method,
-        const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc,
-        ExceptionSink* xsink) {
-    return priv->evalBuiltinMethodWithPrivateData(method, meth, args, rc, xsink);
+QoreValue qore_object_ops::evalBuiltinMethodWithPrivateDataImpl(QoreObject* b, const QoreMethod& method, const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return b->priv->evalBuiltinMethodWithPrivateData(method, meth, args, rc, xsink);
 }
 
-void QoreObject::evalCopyMethodWithPrivateData(const QoreClass &thisclass, const BuiltinCopyVariantBase* meth,
-        QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) {
+void qore_object_ops::evalCopyMethodWithPrivateDataImpl(QoreObject* b, const QoreClass &thisclass, const BuiltinCopyVariantBase* meth, QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) {
     // get referenced object
-    AbstractPrivateData* pd = getReferencedPrivateData(thisclass.getID(), xsink);
+    AbstractPrivateData* pd = b->getReferencedPrivateData(thisclass.getID(), xsink);
 
     if (pd) {
-        meth->evalImpl(thisclass, self, this, pd, rc, xsink);
+        meth->evalImpl(thisclass, self, b, pd, rc, xsink);
         pd->deref(xsink);
         return;
     }
@@ -2583,8 +2586,8 @@ void QoreObject::customDeref(ExceptionSink* xsink) {
 }
 
 // this method is called when there is an exception in a constructor and the object should be deleted
-void QoreObject::obliterate(ExceptionSink* xsink) {
-    priv->obliterate(xsink);
+void qore_object_ops::obliterateImpl(QoreObject* b, ExceptionSink* xsink) {
+    b->priv->obliterate(xsink);
 }
 
 // unlocking the lock is managed with the AutoVLock object
@@ -2762,8 +2765,8 @@ QoreListNode* QoreObject::getMemberList(ExceptionSink* xsink) const {
     return priv->data->getKeys();
 }
 
-QoreHashNode* QoreObject::getSlice(const QoreListNode* value_list, ExceptionSink* xsink) const {
-    return priv->getSlice(value_list, xsink);
+QoreHashNode* qore_object_ops::getSliceImpl(QoreObject* b, const QoreListNode* value_list, ExceptionSink* xsink) {
+    return b->priv->getSlice(value_list, xsink);
 }
 
 void QoreObject::setValue(const char* key, QoreValue val, ExceptionSink* xsink) {
@@ -2905,12 +2908,12 @@ void QoreObject::setPrivate(qore_classid_t key, AbstractPrivateData* pd) {
     priv->setPrivate(key, pd);
 }
 
-void QoreObject::addPrivateDataToString(QoreString* str, ExceptionSink* xsink) const {
+void qore_object_ops::addPrivateDataToStringImpl(QoreObject* b, QoreString* str, ExceptionSink* xsink) {
     str->concat('(');
-    QoreSafeVarRWReadLocker sl(priv->rml);
+    QoreSafeVarRWReadLocker sl(b->priv->rml);
 
-    if (priv->status == OS_OK && priv->privateData) {
-        priv->privateData->addToString(str);
+    if (b->priv->status == OS_OK && b->priv->privateData) {
+        b->priv->privateData->addToString(str);
         str->terminate(str->strlen() - 2);
     }
     else
@@ -2919,9 +2922,9 @@ void QoreObject::addPrivateDataToString(QoreString* str, ExceptionSink* xsink) c
     str->concat(')');
 }
 
-void QoreObject::defaultSystemDestructor(qore_classid_t classID, ExceptionSink* xsink) {
-    AbstractPrivateData* pd = getAndClearPrivateData(classID, xsink);
-    printd(5, "QoreObject::defaultSystemDestructor() this: %p class: %s private_data: %p\n", this, priv->theclass->getName(), pd);
+void qore_object_ops::defaultSystemDestructorImpl(QoreObject* b, qore_classid_t classID, ExceptionSink* xsink) {
+    AbstractPrivateData* pd = b->getAndClearPrivateData(classID, xsink);
+    printd(5, "QoreObject::defaultSystemDestructor() this: %p class: %s private_data: %p\n", b, b->priv->theclass->getName(), pd);
     if (pd)
         pd->deref(xsink);
 }
@@ -3025,7 +3028,7 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
     str.sprintf("class %s: ", priv->theclass->getName());
 
     if (foff != FMT_NONE) {
-        addPrivateDataToString(&str, xsink);
+        qore_object_ops(this).addPrivateDataToString(&str, xsink);
         if (*xsink)
             return -1;
 
@@ -3111,12 +3114,12 @@ QoreValue QoreObject::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     return QoreValue();
 }
 
-bool QoreObject::hasMemberNotification() const {
-    return priv->theclass->hasMemberNotification();
+bool qore_object_ops::hasMemberNotificationImpl(QoreObject* b) {
+    return b->priv->theclass->hasMemberNotification();
 }
 
-void QoreObject::execMemberNotification(const char* member, ExceptionSink* xsink) {
-    qore_class_private::get(*priv->theclass)->execMemberNotification(this, member, xsink);
+void qore_object_ops::execMemberNotificationImpl(QoreObject* b, const char* member, ExceptionSink* xsink) {
+    qore_class_private::get(*b->priv->theclass)->execMemberNotification(b, member, xsink);
 }
 
 bool QoreObject::getAsBoolImpl() const {
@@ -3124,15 +3127,15 @@ bool QoreObject::getAsBoolImpl() const {
     if (qore_get_native_semantic_policy().strictBoolean())
         return false;
 
-    return getAsBoolDefault();
+    return qore_object_ops(this).getAsBoolDefault();
 }
 
-bool QoreObject::getAsBoolDefault() const {
-    QoreSafeVarRWReadLocker sl(priv->rml);
-    return priv->status != OS_DELETED;
+bool qore_object_ops::getAsBoolDefaultImpl(QoreObject* b) {
+    QoreSafeVarRWReadLocker sl(b->priv->rml);
+    return b->priv->status != OS_DELETED;
 }
 
-int QoreObject::parseInit(QoreValue& val, QoreParseContext& parse_context) {
-    parse_context.typeInfo = priv->theclass->getTypeInfo();
+int qore_object_ops::parseInitImpl(QoreObject* b, QoreValue& val, QoreParseContext& parse_context) {
+    parse_context.typeInfo = b->priv->theclass->getTypeInfo();
     return 0;
 }

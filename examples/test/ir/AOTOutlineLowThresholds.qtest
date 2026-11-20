@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc executables and in children that run the AST
+# test-platform: macos - the AOT code generation and linking of qcc executables with outlined function-body helpers
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+
+%exec-class AOTOutlineLowThresholdsTest
+
+#! qcc compiles the functions that the outliner considers with the outliner's thresholds forced low (qore#6560)
+/** A function over the outliner's thresholds (\c QORE_AOT_OUTLINE_FN_MIN_INSTS and \c QORE_AOT_OUTLINE_FN_MIN_BLOCKS)
+    is optimized without loop-invariant code motion, so the constants of a loop stay in it, and the scalar
+    common-expression elimination carried a constant of the body of a \c foreach loop to the latch of the loop
+    (its increment of the element index), which is laid out before the blocks of the body that end in it: the native
+    code generator, which lowers the blocks in layout order, had no value for it ("missing LLVM value for IR value"),
+    with or without outlining.
+
+    The outliner also outlined a region that created a closure capturing both a local of the region and a local that
+    the coordinator shares with it, and the closure could not find the coordinator's local when it ran ("local
+    variable ... is not instantiated in the current context"); such a region is no longer outlined.
+
+    This test compiles the function of the issue and functions with the same faults found by compiling the test
+    scripts with the thresholds forced as low as they go, at -O0 and -O3 with several region sizes, and checks that
+    the executables print what the AST prints.
+*/
+class AOTOutlineLowThresholdsTest inherits QUnit::Test {
+    public {
+        #! the region sizes forced
+        const Targets = (4, 8, 16, 32);
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+
+        #! the scripts compiled
+        const Scripts = {
+            # the function of the issue: a while loop nested in a foreach loop
+            "issue": "%modern
+our auto g_o;
+string sub gn(auto a) { return sprintf(\"%y\", a); }
+sub clr() { g_o = NOTHING; }
+sub l4(list<auto> l) { foreach auto r in (l) { int i = 0; while (i++ < 4) { printf(\"l4 %s %s\\n\", gn(r), gn(r)); if (i == 2) clr(); } } printf(\"l4 after\\n\"); }
+g_o = 1; l4((\\g_o,));
+",
+            # the constant of a comparison after a try statement in a foreach loop (examples/test/qore/statements/
+            # foreach-iterator-release)
+            "foreach-try-if": "%modern
+int sub raise_selector() { throw \"SELECTOR-ERROR\", \"x\"; }
+auto sub suspend_return(auto x) {
+    list<int> m = (10, 11, 12, 13);
+    foreach int i in (xrange(3)) {
+        try {
+            remove m[0, raise_selector()];
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != \"SELECTOR-ERROR\") {
+                rethrow;
+            }
+        }
+        if (i == 1) {
+            return x + m.size();
+        }
+    }
+}
+printf(\"%y\\n\", suspend_return(5));
+",
+            # closures created in a nested loop that capture a local of the loop and locals of the function
+            # (examples/test/qore/classes/ThreadPool)
+            "closure-capture": "%modern
+sub t() {
+    int n = 0;
+    Mutex m();
+    list<code> l = ();
+    for (int round = 0; round < 3; ++round) {
+        Counter done(2);
+        for (int i = 0; i < 2; ++i) {
+            l += sub () { m.lock(); on_exit m.unlock(); ++n; done.dec(); };
+        }
+    }
+    map $1(), l;
+    printf(\"%d\\n\", n);
+}
+t();
+",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+    }
+
+    constructor() : QUnit::Test("AOTOutlineLowThresholdsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("loops with the outliner's thresholds forced low", \testLowThresholds());
+        set_return_value(main());
+    }
+
+    #! Writes \a code to \a path
+    private static writeFile(string path, string code) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(code);
+        f.close();
+    }
+
+    testLowThresholds() {
+        TmpDir dir("qore-aot-outline-low-");
+        foreach hash<auto> i in (Scripts.pairIterator()) {
+            string src = join_paths(dir.path, i.key + ".q");
+            writeFile(src, i.value);
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=ast %s",
+                qore_bin, src));
+            assertEq(0, r.rc, sprintf("%s: AST exit status (output: %y)", i.key, r.out));
+            string expected = r.stdout;
+            assertTrue(expected.size() > 0, sprintf("%s: the AST prints something", i.key));
+            foreach string opt in (OptLevels) {
+                foreach int target in (Targets) {
+                    string what = sprintf("%s %s target %d", i.key, opt, target);
+                    string exe = join_paths(dir.path, sprintf("%s%s-%d", i.key, opt, target));
+                    int rc;
+                    string out = backquote(sprintf("%s QORE_AOT_OUTLINE_FN_MIN_INSTS=1 QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 "
+                        "QORE_AOT_OUTLINE_FN_TARGET_INSTS=%d %s %s -o %s %s 2>&1", lib_env, target, qcc_bin, opt, exe,
+                        src), \rc);
+                    assertEq(0, rc, sprintf("%s: qcc exit status (output: %s)", what, out.substr(-2000)));
+                    if (rc) {
+                        continue;
+                    }
+                    # -b must be the first argument of a compiled program
+                    out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+                    assertEq(0, rc, sprintf("%s: exit status (output: %y)", what, out));
+                    assertEq(expected, out, what);
+                }
+            }
+        }
+    }
+}

@@ -1540,6 +1540,9 @@ public class DataProviderActionCatalog {
             "SANDBOX-MEMORY-LIMIT": True,
             "SANDBOX-ERROR": True,
             "STACK-LIMIT-EXCEEDED": True,
+            # the reader's restrictions refused a registration that it ran: the registration belongs to the next
+            # reader (qore#6337)
+            "INVALID-FUNCTION-ACCESS": True,
         };
 
         #! Valid file API write formats
@@ -3325,8 +3328,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             DataProviderActionCatalog::reportInitializationFailure("action", app.name,
                 AbstractDataProvider::GenericApiCallActionName, ex);
             # log but do not fail the surrounding registration
-            stderr.printf("DataProviderActionCatalog: failed to auto-register generic API call action for "
-                "app %y: %s: %s\n", app.name, ex.err, ex.desc);
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.printf("DataProviderActionCatalog: failed to auto-register generic API call action for "
+                    "app %y: %s: %s\n", app.name, ex.err, ex.desc);
+            }
         }
     }
 
@@ -3348,20 +3353,19 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @since DataProvider 3.5
     */
     private:internal static loadGenericApiCallBuilder(hash<DataProviderAppInfo> app) {
-        int sp = ImplicitModuleTransaction::savepoint();
         try {
-            load_module(GenericApiCallBuilderModule);
-            ImplicitModuleTransaction::commit(sp);
+            # any partial registrations from a failed load are rolled back
+            DataProviderModuleLoader::loadModule(GenericApiCallBuilderModule);
         } catch (hash<ExceptionInfo> ex) {
-            # roll back any partial registrations from the failed load, then warn loudly: a REST app
-            # will silently lack its make-api-call action otherwise
-            ImplicitModuleTransaction::rollback(sp);
+            # warn loudly: a REST app will silently lack its make-api-call action otherwise
             DataProviderActionCatalog::reportInitializationFailure("action", app.name,
                 AbstractDataProvider::GenericApiCallActionName, ex);
-            stderr.printf("DataProviderActionCatalog: REST app %y qualifies for the framework-injected "
-                "%y action, but the builder-provider module %y could not be loaded; the action will be "
-                "missing from this app: %s: %s\n", app.name, AbstractDataProvider::GenericApiCallActionName,
-                GenericApiCallBuilderModule, ex.err, ex.desc);
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.printf("DataProviderActionCatalog: REST app %y qualifies for the framework-injected "
+                    "%y action, but the builder-provider module %y could not be loaded; the action will be "
+                    "missing from this app: %s: %s\n", app.name, AbstractDataProvider::GenericApiCallActionName,
+                    GenericApiCallBuilderModule, ex.err, ex.desc);
+            }
         }
     }
 
@@ -4753,7 +4757,9 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
             throw "FILE-API-ERROR", sprintf("a file API has already been registered for application %y", app);
         }
         app_fileapimap{app} = info;
-        ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::deregisterAppFileApi(app); });
+        # the rollback of a failed module load that a lookup made for code restricted from the domain of
+        # deregisterAppFileApi() removes the registration too (qore#6337)
+        ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::removeAppFileApi(app); });
     }
 
     #! Returns the single-file read/write mapping for an application, if any
@@ -4786,6 +4792,11 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
     */
     static *hash<DataProviderFileApiInfo> deregisterAppFileApi(string app) [dom=PROCESS_CONTROL] {
         DataProviderSandboxState::checkRegistration("file API", app, True);
+        return DataProviderActionCatalog::removeAppFileApi(app);
+    }
+
+    #! Removes the file API registration for an application; the rollback of its registration (qore#6337)
+    private:internal static *hash<DataProviderFileApiInfo> removeAppFileApi(string app) {
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -6434,7 +6445,18 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         registerPendingApp()); this keeps a deferred registration bound if that changes
     */
     private:internal static code makeLazyCall(code init) {
-        return DataProviderActionCatalog::isGoverned() ? SandboxManager::bindCall(init) : init;
+        if (DataProviderActionCatalog::isGoverned()) {
+            return SandboxManager::bindCall(init);
+        }
+        # a closure that the initialization of its library module created runs as deferred module initialization,
+        # also for a reader restricted from the domains of what it registers (qore#6337); the qualification is
+        # tested now and again when it runs
+        if (is_module_init_closure(init)) {
+            # library code, so it can run the closure as deferred module initialization: it is kept only in the
+            # catalog's private state and must never be returned to other code
+            return auto sub () { return call_module_init_closure(init); };
+        }
+        return init;
     }
 
     #! Returns @ref True if an exception ended a lazy registration because its thread was stopped

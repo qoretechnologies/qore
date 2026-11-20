@@ -244,7 +244,8 @@ class PodmanTestWithoutImageTest(unittest.TestCase):
     def test_no_image_store_skips_without_running_podman(self):
         result, output, calls = self.run_qtest()
         self.assertEqual(0, result.returncode, output)
-        self.assertIn("nginx container not available", output)
+        # the global setup skips the test, and its test cases are skipped with its reason (qore#6659)
+        self.assertIn("globalSetUp skipped the test: nginx:alpine image not available locally", output)
         self.assertNotIn("FAIL", output)
         self.assertEqual([], calls, "podman was run on a host without the image: " + output)
 

@@ -182,6 +182,8 @@ module EmpathicBuildingDataProvider {
     @section empathicbuildingdataprovider_relnotes Release Notes
 
     @subsection empathicbuildingdataprovider_v1_2 EmpathicBuildingDataProvider v1.2
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - fixed \c EmpathicBuildingSensorDataProvider::getSensorData() and sensor requests to accept a sensor record
       whose values, or whose measurement values, are all integers, such as a literal
       \c {"last_measurement": {"time": 1700000000123}}; converting the epoch offsets to dates raised
@@ -190,7 +192,9 @@ module EmpathicBuildingDataProvider {
       @ref EmpathicBuildingDataProvider::EmpathicBuildingRestClient "EmpathicBuildingRestClient" describes its login
       request when the login fails; it was left empty
     - the debug message of a failed login or token refresh no longer contains the request body (with the password or the
-      refresh token) and gives the request headers with their credentials redacted
+      refresh token) and gives the request and response headers with their credentials redacted, and the debug
+      message of a REST request gives the client URL with any password masked
+      (<a href="https://github.com/qoretechnologies/qore/issues/6504">issue 6504</a>)
     - migrated to the async multiplexed @ref RestClientIo::RestClientIo "RestClientIo"
       transport (HTTP/1.1/2/3) on the default build path; the \c restclient data provider
       option is widened to @ref RestClient::AbstractRestClient "AbstractRestClient"

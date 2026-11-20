@@ -85,6 +85,11 @@ public:
         semantic_policy = policy;
         semantic_policy_bound = true;
     }
+
+    //! Returns the semantic policy of the statement
+    DLLLOCAL LexicalSemanticPolicy getSemanticPolicy() const {
+        return semantic_policy;
+    }
     struct ParseWarnOptions pwo;
 
     DLLLOCAL AbstractStatement(qore_program_private_base* p);
@@ -150,10 +155,6 @@ public:
         return false;
     }
 
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return false;
-    }
-
     //! Returns false only when this statement provably opens no nested lexical scope with locals
     /** Used to decide whether a block carrying on_exit/on_error handlers has to anchor an
         exception target so the scopes nested inside it can destroy their locals before the
@@ -200,6 +201,7 @@ protected:
     DLLLOCAL QoreBreakpoint* getBreakpoint() const;
 
     friend class QoreBreakpoint;
+    friend class qore_breakpoint_ops;
     DLLLOCAL void assignBreakpoint(QoreBreakpoint *bkpt);
     DLLLOCAL void unassignBreakpoint(QoreBreakpoint *bkpt);
 };

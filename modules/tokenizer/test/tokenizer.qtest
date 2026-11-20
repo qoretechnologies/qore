@@ -53,6 +53,8 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("chat template values are not template text", \chatTemplateInjectionTest());
         addTestCase("configuration loaded while it is read", \concurrentConfigTest());
         addTestCase("added tokens are looked up before the model vocabulary", \addedTokenPrecedenceTest());
+        addTestCase("the input is converted to UTF-8", \inputEncodingTest());
+        addTestCase("a Split match error is raised", \splitMatchErrorTest());
 
         set_return_value(main());
     }
@@ -1096,5 +1098,70 @@ class TokenizerTest inherits QUnit::Test {
         tok.loadConfig({"bos_token": "<sep>", "eos_token": "world"});
         assertEq(2, tok.getBosTokenId(), "loadConfig() finds a special token that is an added token");
         assertEq(5, tok.getEosTokenId(), "loadConfig() finds the added token before the model's token");
+    }
+
+    # issue #6617: the input is converted to UTF-8, whatever its encoding
+    inputEncodingTest() {
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/gpt4-style-split-tokenizer.json");
+        Tokenizer::HFTokenizer split_tok(parse_json(json_str));
+        json_str = ReadOnlyFile::readTextFile(get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer bert_tok(parse_json(json_str));
+
+        string text = "I'm sure they're right; IT'S HÉR'S too, café.";
+        string latin1 = convert_encoding(text, "ISO-8859-1");
+        assertEq("ISO-8859-1", latin1.encoding());
+        # the bytes differ: the test is not comparing the same bytes
+        assertNeq(binary(text), binary(latin1));
+
+        foreach Tokenizer::HFTokenizer tok in ((split_tok, bert_tok)) {
+            hash<auto> expected = tok.encode(text);
+            hash<auto> enc = tok.encode(latin1);
+            assertEq(expected.input_ids, enc.input_ids, "encode()");
+            assertEq(expected.offset_mapping, enc.offset_mapping, "encode(): offsets");
+            assertEq(expected.input_ids, tok.encodeWithOptions(latin1).input_ids, "encodeWithOptions()");
+            assertEq(tok.encodeWithOptions(text, text).input_ids, tok.encodeWithOptions(latin1, latin1).input_ids,
+                "encodeWithOptions(): text pair");
+            assertEq(tok.encodeAdvanced(text, {"text_pair": text}).input_ids,
+                tok.encodeAdvanced(latin1, {"text_pair": latin1}).input_ids, "encodeAdvanced(): text pair");
+            assertEq(expected.input_ids, tok.encodeBatch((latin1,))[0].input_ids, "encodeBatch()");
+            assertEq(tok.encodeForModel(text).input_ids, tok.encodeForModel(latin1).input_ids, "encodeForModel()");
+            assertEq(tok.encodeBatchForModel((text,)).input_ids, tok.encodeBatchForModel((latin1,)).input_ids,
+                "encodeBatchForModel()");
+            assertEq(tok.encodeBatchPairsForModel((text,), (text,)).input_ids,
+                tok.encodeBatchPairsForModel((latin1,), (latin1,)).input_ids, "encodeBatchPairsForModel()");
+            list<string> words = ("HÉR'S", "café");
+            assertEq(tok.encodePreTokenized(words).input_ids,
+                tok.encodePreTokenized(map convert_encoding($1, "ISO-8859-1"), words).input_ids,
+                "encodePreTokenized()");
+
+            # the strings returned are tagged UTF-8
+            string decoded = tok.decode(expected.input_ids);
+            assertEq("UTF-8", decoded.encoding(), "decode()");
+            assertEq("UTF-8", tok.decodeBatch((expected.input_ids,))[0].encoding(), "decodeBatch()");
+            foreach string t in (enc.tokens) {
+                assertEq("UTF-8", t.encoding(), "encode(): tokens");
+            }
+            assertEq("UTF-8", tok.idToToken(expected.input_ids[0]).encoding(), "idToToken()");
+        }
+        # an added token and a token looked up in another encoding
+        Tokenizer::HFTokenizer added_tok = createMinimalWordPiece();
+        assertEq(1, added_tok.addTokens((convert_encoding("café", "ISO-8859-1"),)), "addTokens()");
+        int id = added_tok.tokenToId("café");
+        assertTrue(id >= 0, "tokenToId(): the added token is found in UTF-8");
+        assertEq(id, added_tok.tokenToId(convert_encoding("café", "ISO-8859-1")), "tokenToId()");
+        hash<auto> added_enc = added_tok.encode(convert_encoding("hello café", "ISO-8859-1"));
+        assertEq(id, added_enc.input_ids[-2], "encode(): the added token");
+        assertEq("café", added_enc.tokens[-2], "encode(): the added token's string");
+    }
+
+    # issue #6617: a PCRE2 match error in a Split pre-tokenizer is raised, not taken as the end of the matches
+    splitMatchErrorTest() {
+        Tokenizer::HFTokenizer tok = createSplitWordPiece("Isolated");
+        # a string tagged UTF-8 that is not valid UTF-8 (a lone continuation byte) after a delimiter
+        string bad = binary_to_string(<612d80622d63>, "UTF-8");
+        assertThrows("PRETOKENIZER-MATCH-ERROR", \tok.encode(), bad);
+        # valid text is still split
+        assertEq(("a", "-", "b", "-", "c"), tok.encode("a-b-c").tokens);
     }
 }

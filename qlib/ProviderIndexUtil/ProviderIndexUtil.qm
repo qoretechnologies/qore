@@ -85,6 +85,23 @@ if (!info.reloaded) {
     returns for a published index, so a process can check whether the index has been published again since it read
     it.
 
+    @section providerindexutil_sandbox Sandboxed Readers
+
+    The published index is the module's configuration, and what a process reads from it is used by all its code.
+    Code that a @ref Qore::SandboxManager "SandboxManager" governs reads the files of the configured index (the
+    directory given by @ref ProviderIndexUtil::ProviderIndexEnvVar "ProviderIndexEnvVar" and the index files in it)
+    with the module's access, also when its sandbox refuses it file system access, so it sees the same index as
+    trusted code, and the index it reads first is the index of the process.  Symbolic links are not followed for it:
+    an index directory or an index file that is a symbolic link is not read for sandboxed code.  Its sandbox still
+    governs every other file access, including the index directory given to
+    @ref ProviderIndexUtil::ProviderIndexUtil::readSerializedDataProviderIndex() "ProviderIndexUtil::readSerializedDataProviderIndex()"
+    and the other APIs that take one.  The module reads the files with a system-policy capability
+    (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") that it creates
+    when it is loaded from the module path; a copy of the module loaded first by code restricted with
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", or by sandboxed code by path, has none, and a
+    sandboxed reader then reads the index with its own access; an index that it cannot read is not kept for the
+    process.
+
     @section providerindexutil_summaries Listing and Selecting Indexed Actions
 
     Restoring an indexed action restores the descriptions of its option types and of its data provider info, which
@@ -137,6 +154,9 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
 
 
     @section providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - errors that are written to @ref Qore::stderr "stderr" without a logger are left out when the module's code has no
+      terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
+      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "writeDataProviderIndexByApp()"
       accepts index maps whose values all have the same type, such as an index of factories only
     - added a versioned, app-sharded MessagePack metadata cache with per-shard integrity validation and canonical

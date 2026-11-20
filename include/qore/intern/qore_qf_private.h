@@ -51,6 +51,7 @@
 #include <cstring>
 #include <string>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -126,6 +127,26 @@ private:
     bool zero_poll_pending = true;
 };
 
+struct qore_qf_private;
+
+//! gives the internal code access to the private implementation of a QoreFile without a change of the public header
+/** The pointer is a protected member of QoreFile; a member pointer to it is taken in a class derived from QoreFile,
+    which is never instantiated
+*/
+class QoreFilePrivateAccess : public QoreFile {
+public:
+    //! the type of the member pointer of the private implementation
+    typedef qore_qf_private* QoreFile::* priv_member_t;
+
+    //! returns the member pointer of the private implementation
+    DLLLOCAL static priv_member_t privMember() {
+        return &QoreFilePrivateAccess::priv;
+    }
+
+private:
+    DLLLOCAL QoreFilePrivateAccess() = delete;
+};
+
 struct qore_qf_private {
     int fd = -1;
     bool is_open = false;
@@ -135,6 +156,8 @@ struct qore_qf_private {
     //! object, while the descriptors of the standard streams are never closed
     bool owned_special = false;
     const QoreEncoding* charset;
+    //! what text read that is not valid in the encoding gives (the encoding_errors option; qore#6604)
+    qore_encoding_errors_t encoding_errors = qore_encoding_errors_t::RAISE;
     std::string filename;
     mutable QoreThreadLock m;
     Queue* event_queue = nullptr;
@@ -157,6 +180,37 @@ struct qore_qf_private {
     QoreStatefulTextDecoder decoder;
 
     DLLLOCAL qore_qf_private(const QoreEncoding* cs) : charset(cs) {
+    }
+
+    //! returns the private implementation of the given file
+    DLLLOCAL static qore_qf_private* get(QoreFile& f) {
+        return f.*QoreFilePrivateAccess::privMember();
+    }
+
+    //! returns the private implementation of the given file
+    DLLLOCAL static const qore_qf_private* get(const QoreFile& f) {
+        return f.*QoreFilePrivateAccess::privMember();
+    }
+
+    //! returns true if the file is a regular file, in which bytes read can be given back with lseek(); the lock
+    //! must be held
+    /** lseek() also succeeds without an effect on some devices (ex: /dev/urandom)
+    */
+    DLLLOCAL bool isRegularFile() const {
+        struct stat sbuf;
+        return fd >= 0 && !fstat(fd, &sbuf) && S_ISREG(sbuf.st_mode);
+    }
+
+    //! sets what text read that is not valid in the encoding of the file gives (the encoding_errors option)
+    DLLLOCAL void setEncodingErrors(qore_encoding_errors_t mode) {
+        AutoLocker al(m);
+        encoding_errors = mode;
+    }
+
+    //! returns what text read that is not valid in the encoding of the file gives (the encoding_errors option)
+    DLLLOCAL qore_encoding_errors_t getEncodingErrors() const {
+        AutoLocker al(m);
+        return encoding_errors;
     }
 
     DLLLOCAL ~qore_qf_private() {
@@ -205,14 +259,20 @@ struct qore_qf_private {
         if (&file == this)
             return 0;
 
-        // lock both files
-        AutoLocker al(m);
-        if (checkNonBlock(xsink)) {
-            return -1;
-        }
-
-        AutoLocker al2(file.m);
-        if (file.checkNonBlock(xsink)) {
+        // lock both files in address order, so that redirects between the same two files in opposite directions take
+        // the locks in the same order and cannot deadlock (issue #6567)
+        qore_qf_private* first = std::less<qore_qf_private*>()(this, &file) ? this : &file;
+        qore_qf_private* second = first == this ? &file : this;
+#ifdef DEBUG
+        qore_dbg_file_redirect_lock_wait(first, true);
+#endif
+        AutoLocker al(first->m);
+#ifdef DEBUG
+        qore_dbg_file_redirect_lock_wait(first, false);
+        qore_dbg_file_redirect_locked(first);
+#endif
+        AutoLocker al2(second->m);
+        if (checkNonBlock(xsink) || file.checkNonBlock(xsink)) {
             return -1;
         }
 
@@ -837,23 +897,45 @@ struct qore_qf_private {
         f_read_t my_read = [this, &read_deadline, mname](void* dest, size_t limit, ExceptionSink* read_xsink) {
             return readData(dest, limit, read_deadline, mname, read_xsink);
         };
+        // the encoding and the option are read with the lock held, as they are set with it
+        const QoreEncoding* enc;
+        qore_encoding_errors_t mode;
+        bool regular;
         {
             AutoLocker al(m);
             // characters of text in a stateful encoding are read in the shift state left by the text read before
             // them; the lock serializes the use of the decoder
             if (useDecoder(size > 0)) {
-                return decoder.readChars(charset, size, my_read, xsink);
+                return decoder.readChars(charset, size, my_read, encoding_errors,
+                    {"ReadOnlyFile", mname, "text read", 0}, xsink);
+            }
+            enc = charset;
+            mode = encoding_errors;
+            regular = isRegularFile();
+        }
+        // in a regular file, the bytes read after the characters returned are given back with lseek(); otherwise
+        // they stay with the text returned
+        std::string leftover;
+        QoreStringNode* rv = q_read_string(xsink, size, enc, my_read, mode, "ReadOnlyFile", mname, nullptr, true,
+            regular ? &leftover : nullptr);
+        if (!leftover.empty()) {
+            // the lock is held, so that a concurrent close() cannot make it seek a descriptor reused by then
+            AutoLocker al(m);
+            if (is_open) {
+                lseek(fd, -static_cast<off_t>(leftover.size()), SEEK_CUR);
             }
         }
-        return q_read_string(xsink, size, charset, my_read);
+        return rv;
     }
 
     //! returns true if text is read with the decoder; the lock must be held
     /** @param char_read true for a read of a number of characters, which needs the decoder in a stateful encoding;
-        other reads of text need it once the decoder has been used, as the text continues in its shift state
+        other reads of text need it once the decoder has been used, as the text continues in its shift state, and
+        when the text is checked (the encoding_errors option is not \c "keep"), as the decoder checks it
     */
     DLLLOCAL bool useDecoder(bool char_read) const {
-        return qore_encoding_private::isStateful(charset) && (char_read || decoder.active());
+        return qore_encoding_private::isStateful(charset)
+            && (char_read || decoder.active() || encoding_errors != qore_encoding_errors_t::KEEP);
     }
 
     //! returns a function object that reads bytes from the file for the decoder; the lock must be held
@@ -879,13 +961,17 @@ struct qore_qf_private {
     DLLLOCAL int readDecoderLine(const std::string& eol, QoreString& str, bool incl_eol, ExceptionSink* xsink) {
         // a terminal is not read past a carriage return
         SimpleRefHolder<QoreStringNode> line(decoder.readLine(charset, eol, !incl_eol, !isatty(fd),
-            getDecoderReadFunc(), xsink));
+            getDecoderReadFunc(), encoding_errors, {"ReadOnlyFile", "readLine", "line read", 0}, xsink));
         if (!line) {
             return -1;
         }
-        // the line is in the encoding of the file, as \a str
-        assert(line->getEncoding() == str.getEncoding());
+        // the line is in the encoding of the file, as \a str, or tagged ISO-8859-1 if it is not valid in it and the
+        // encoding_errors option is "latin1"
+        assert(line->getEncoding() == str.getEncoding() || line->getEncoding() == QCS_ISO_8859_1);
         str.concat(line->c_str(), line->size());
+        if (line->getEncoding() != str.getEncoding()) {
+            str.setEncoding(line->getEncoding());
+        }
         return 0;
     }
 
@@ -897,7 +983,8 @@ struct qore_qf_private {
     //! reads one character of text in a stateful encoding; the lock must be held
     DLLLOCAL QoreStringNode* readDecoderChar(ExceptionSink* xsink) {
         assert(qore_encoding_private::isStateful(charset));
-        return decoder.readChars(charset, 1, getDecoderReadFunc(), xsink);
+        return decoder.readChars(charset, 1, getDecoderReadFunc(), encoding_errors,
+            {"ReadOnlyFile", "getchar", "character read", 0}, xsink);
     }
 
     DLLLOCAL char* readBlock(qore_offset_t &size, int timeout_ms, const char* mname, ExceptionSink* xsink) {
@@ -1079,9 +1166,14 @@ struct qore_qf_private {
                 if (!eol_utf8) {
                     return nullptr;
                 }
+                // the decoder checks the text
                 rc = readDecoderLine(std::string(eol_utf8->c_str(), eol_utf8->size()), **str, incl_eol, xsink);
             } else {
                 rc = readUntilMarker(marker, **str, incl_eol, std::string(), xsink);
+                if (!rc && !*xsink && q_check_read_text(**str, encoding_errors, "ReadOnlyFile", "readLine",
+                        "line read", xsink)) {
+                    return nullptr;
+                }
             }
         }
         if (*xsink) {
@@ -1090,6 +1182,7 @@ struct qore_qf_private {
         return rc == -1 ? nullptr : str.release();
     }
 
+    //! reads a line; the text read is checked with the encoding_errors option only if \a xsink is given
     DLLLOCAL int readLine(QoreString& str, bool incl_eol = true, ExceptionSink* xsink = nullptr) {
         str.clear();
 
@@ -1099,8 +1192,19 @@ struct qore_qf_private {
         if (!is_open)
             return -2;
 
-        // text in a stateful encoding that continues the text read with the decoder is read with it
-        if (useDecoder(false)) {
+        int rc = readLineIntern(str, incl_eol, xsink);
+        if (xsink && !rc && !*xsink && !useDecoder(false)
+            && q_check_read_text(str, encoding_errors, "ReadOnlyFile", "readLine", "line read", xsink)) {
+            return -1;
+        }
+        return rc;
+    }
+
+    //! reads a line; the lock must be held
+    DLLLOCAL int readLineIntern(QoreString& str, bool incl_eol, ExceptionSink* xsink) {
+        // text in a stateful encoding that continues the text read with the decoder is read with it, and also any
+        // text in it that is checked; without an exception sink, text is not checked
+        if (xsink ? useDecoder(false) : (qore_encoding_private::isStateful(charset) && decoder.active())) {
             if (xsink) {
                 return readDecoderLine(std::string(), str, incl_eol, xsink);
             }
@@ -1201,6 +1305,10 @@ struct qore_qf_private {
             }
         }
 
+        if (xsink && !rc && !*xsink
+            && q_check_read_text(str, encoding_errors, "ReadOnlyFile", "readUntil", "text read", xsink)) {
+            return -1;
+        }
         return rc;
     }
 
@@ -1283,6 +1391,10 @@ struct qore_qf_private {
             }
         }
 
+        if (xsink && !rc && !*xsink
+            && q_check_read_text(str, encoding_errors, "ReadOnlyFile", "readUntil", "text read", xsink)) {
+            return -1;
+        }
         return rc;
     }
 

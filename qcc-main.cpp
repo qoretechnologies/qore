@@ -42,6 +42,8 @@
 #include "qore/intern/QoreModuleSourceFingerprints.h"
 
 #include <algorithm>
+#include <functional>
+#include <string_view>
 #include <cctype>
 #include <cstdio>
 #include <cstdint>
@@ -681,7 +683,8 @@ static std::vector<std::string> script_lib_dirs;
 // matches `qore -l <mod>` CLI convention.  Types from these modules
 // become visible to the parser so sources that reference them
 // without %requires directives compile cleanly.  Repeatable;
-// loaded in declaration order via MM.parseLoadModule.
+// loaded in declaration order (qore_aot_load_required_modules());
+// refused when compiling a module, which uses %requires.
 static std::vector<std::string> load_modules;
 // --stub=<file> declarative-only sources parsed
 // into the compile program before target sources.  The host
@@ -702,6 +705,33 @@ static std::vector<std::string> stub_files;
 // AOT-compiled sources honor the same `%ifdef` / `%ifndef` surface
 // the runtime sees.  Repeatable; applied in declaration order.
 static std::vector<std::string> parse_defines;
+
+//! Sets the parse defines (--define NAME[=VALUE]) on \a pgm before it parses: a define without a value is True, and a
+//! value is read as by qore's -D (QoreProgram::parseCmdLineDefines()); an invalid value is raised in \a xsink
+//! (issue #6564)
+static void qcc_apply_parse_defines(QoreProgram* pgm, ExceptionSink& xsink, ExceptionSink& wsink) {
+    // the last definition of a name counts, in declaration order: a name without a value is True
+    std::map<std::string, std::pair<bool, std::string>> last;
+    for (const std::string& def : parse_defines) {
+        size_t eq = def.find('=');
+        if (eq == std::string::npos) {
+            last[def] = {false, std::string()};
+        } else {
+            last[def.substr(0, eq)] = {true, def.substr(eq + 1)};
+        }
+    }
+    std::map<std::string, std::string> values;
+    for (const auto& [name, val] : last) {
+        if (val.first) {
+            values[name] = val.second;
+        } else {
+            pgm->parseDefine(name.c_str(), QoreValue(true));
+        }
+    }
+    if (!values.empty()) {
+        pgm->parseCmdLineDefines(xsink, wsink, QP_WARN_DEFAULT, values);
+    }
+}
 // --parse-option=NAME OR's a `PO_*` flag into the
 // compile program's parse options.  Mirrors the runtime
 // `qpgm->parseSetParseOptions(QORUS_PARSE_OPTIONS)` pattern Qorus
@@ -743,9 +773,15 @@ static bool include_source = false;
 static const char* metadata_compression = nullptr;
 static bool verbose = false;
 static bool warnings_are_errors = false;
+//! the form of the parse diagnostics: "json" (--diag-format=json), or nullptr (issue #6555)
+static const char* diag_format = nullptr;
+//! true for --code-frames (issue #6555)
+static bool code_frames = false;
 static bool show_help = false;
 static bool show_version = false;
 static bool dump_info = false;
+//! --check-module-sources: whether the sources of AOT modules of a build have changed since they were compiled
+static bool check_module_sources = false;
 static bool dump_symbols = false;
 static bool dump_sections = false;
 static bool dump_index_json = false;
@@ -1206,7 +1242,9 @@ static void print_usage(const char* prog) {
     printf("  -l, --load=MOD         Load Qore module MOD into the compile program\n"
            "                         before parsing sources.  Use when sources reference\n"
            "                         types from external modules without %%requires\n"
-           "                         directives (the host loads the module at runtime).\n"
+           "                         directives (the host, or an executable when it\n"
+           "                         starts, loads the module at runtime).  Not for a\n"
+           "                         module, which uses %%requires.\n"
            "                         May be repeated; modules load in declaration order.\n"
            "                         Matches `qore -l <mod>` CLI convention.\n");
     printf("      --stub=FILE        Preload a declarative Qore source file into the\n"
@@ -1406,6 +1444,12 @@ static void print_usage(const char* prog) {
            "                         `.qo` link mode.\n");
     printf("  -r, --warnings-are-errors\n"
            "                         Treat Qore parser warnings as fatal compile errors\n");
+    printf("      --diag-format=json Report the parse errors and warnings of the compiled\n"
+           "                         code as one JSON array on stdout at the end of the run\n"
+           "                         (also QORE_DIAG_FORMAT=json); by default each is one\n"
+           "                         line on stderr: FILE:LINE[:COL]: error|warning: CODE: MSG\n");
+    printf("      --code-frames      Report the parse errors and warnings of the compiled\n"
+           "                         code as code frames on stderr (also QORE_CODE_FRAMES)\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
@@ -1415,6 +1459,12 @@ static void print_usage(const char* prog) {
     printf("      --dump-symbols     Include an nm-like symbol table view\n");
     printf("      --dump-sections    Include object and AOT section tables\n");
     printf("      --dump-index-json  Emit build-consumable AOT symbol-index JSON\n");
+    printf("      --check-module-sources <qmod|@list-file>...\n"
+           "                         For the build of AOT modules: rewrite <qmod>.sources.stamp\n"
+           "                         for each module that the module loader would find out of\n"
+           "                         date (a source or dependency of its depfile with another\n"
+           "                         content, or an optional module that is available now);\n"
+           "                         fails if a module cannot be checked\n");
     printf("\n");
     printf("Examples:\n");
     printf("  %s script.qr                   # Compile to 'script' executable\n", prog);
@@ -1440,6 +1490,8 @@ static void print_version() {
     printf("qcc (Qore Code Compiler) v%s\n", QCC_VERSION);
     printf("Using Qore library v%s\n", qore_version_string);
     printf("AOT runtime identity: %s\n", qore_aot_runtime_identity);
+    // the build checks the AOT modules with this qcc (QoreMacros.cmake, qore#6598)
+    printf("Build checks: module-sources\n");
     printf("Built with LLVM for JIT/AOT compilation\n");
 #ifdef QORE_QCC_TEST_HOOKS
     // the tests that need them skip without them (see QORE_QCC_TEST_HOOKS in CMakeLists.txt)
@@ -1449,7 +1501,7 @@ static void print_version() {
 
 static bool qccHandleWarnings(ExceptionSink& wsink) {
     bool has_warnings = wsink.isException();
-    wsink.handleWarnings();
+    qore_aot_report_parse_diagnostics(wsink, true);
     if (!has_warnings || !warnings_are_errors) {
         return false;
     }
@@ -1519,6 +1571,9 @@ static struct option long_options[] = {
     {"body-contract-stamp", required_argument, nullptr, 0x129},
     {"file-prefix-map", required_argument, nullptr, 0x12a},
     {"declaration-contract-stamp", required_argument, nullptr, 0x12b},
+    {"diag-format",       required_argument, nullptr, 0x12c},
+    {"code-frames",       no_argument,       nullptr, 0x12d},
+    {"check-module-sources", no_argument, nullptr, 0x12e},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1626,6 +1681,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x105:  // --dump-info
                 dump_info = true;
+                break;
+            case 0x12e:  // --check-module-sources
+                check_module_sources = true;
                 break;
             case 0x106:  // --dump-symbols
                 dump_symbols = true;
@@ -1763,6 +1821,16 @@ static int parse_options_cmdline(int argc, char** argv) {
             case 'e':
                 entry_fn = optarg;
                 break;
+            case 0x12c:  // --diag-format
+                if (strcmp(optarg, "json")) {
+                    fprintf(stderr, "error: invalid --diag-format '%s' (must be 'json')\n", optarg);
+                    return 1;
+                }
+                diag_format = optarg;
+                break;
+            case 0x12d:  // --code-frames
+                code_frames = true;
+                break;
             case 'r':
                 warnings_are_errors = true;
                 break;
@@ -1850,126 +1918,22 @@ static uint16_t read_u16_le(const uint8_t* p) {
         | (static_cast<uint16_t>(p[1]) << 8);
 }
 
-static uint32_t read_u32_le(const uint8_t* p) {
-    return static_cast<uint32_t>(p[0])
-        | (static_cast<uint32_t>(p[1]) << 8)
-        | (static_cast<uint32_t>(p[2]) << 16)
-        | (static_cast<uint32_t>(p[3]) << 24);
-}
-
+//! Returns the length of the encoded AOT metadata at \a data, with its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION)
 static bool find_aot_metadata_length(const uint8_t* data, size_t avail, size_t& len) {
-    len = 0;
-    if (avail < QORE_AOT_HEADER_SIZE) {
+    // the length of the encoded metadata, without its checksum (libqore, which the reader uses as well)
+    if (!qore_aot_encoded_metadata_length(data, avail, len)) {
         return false;
     }
-    if (read_u32_le(data) != QORE_AOT_BINARY_MAGIC) {
-        return false;
+    if (read_u16_le(data + 4) >= QORE_AOT_METADATA_CHECKSUM_VERSION) {
+        // the checksum follows the metadata (qore#6451)
+        if (len + QORE_AOT_METADATA_CHECKSUM_SIZE > avail) {
+            return false;
+        }
+        len += QORE_AOT_METADATA_CHECKSUM_SIZE;
     }
-    uint16_t version = read_u16_le(data + 4);
-    if (version == 0 || version > QORE_AOT_BINARY_VERSION) {
-        return false;
-    }
-
-    uint8_t compression = data[34];
-    if (compression == QORE_AOT_COMPRESSION_NONE
-            || compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
-        uint32_t section_count = read_u32_le(data + 16);
-        if (section_count > 100000) {
-            return false;
-        }
-        constexpr size_t section_header_size = 12;
-        size_t section_dir_size = static_cast<size_t>(section_count) * section_header_size;
-        size_t string_pool_size_pos = QORE_AOT_HEADER_SIZE + section_dir_size;
-        if (string_pool_size_pos + 4 > avail) {
-            return false;
-        }
-        uint32_t string_pool_size = read_u32_le(data + string_pool_size_pos);
-        size_t data_area_offset = string_pool_size_pos + 4 + string_pool_size;
-        if (data_area_offset > avail) {
-            return false;
-        }
-
-        uint64_t data_area_size = 0;
-        const uint8_t* sec = data + QORE_AOT_HEADER_SIZE;
-        for (uint32_t i = 0; i < section_count; ++i, sec += section_header_size) {
-            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT metadata-length scan")) {
-                return false;
-            }
-            uint32_t offset = read_u32_le(sec + 4);
-            uint32_t size = read_u32_le(sec + 8);
-            uint64_t end = static_cast<uint64_t>(offset) + size;
-            if (end > data_area_size) {
-                data_area_size = end;
-            }
-        }
-        uint64_t total = static_cast<uint64_t>(data_area_offset) + data_area_size;
-        if (total > avail) {
-            return false;
-        }
-        len = static_cast<size_t>(total);
-        return true;
-    }
-
-    if (compression == QORE_AOT_COMPRESSION_ZLIB) {
-        if (avail < QORE_AOT_HEADER_SIZE + 4) {
-            return false;
-        }
-        uint32_t uncompressed_size = read_u32_le(data + QORE_AOT_HEADER_SIZE);
-        if (uncompressed_size > 100 * 1024 * 1024) {
-            return false;
-        }
-        if (uncompressed_size == 0) {
-            len = QORE_AOT_HEADER_SIZE + 4;
-            return true;
-        }
-
-        std::vector<uint8_t> out(uncompressed_size);
-        z_stream strm{};
-        int rc = inflateInit(&strm);
-        if (rc != Z_OK) {
-            return false;
-        }
-        strm.next_in = const_cast<Bytef*>(data + QORE_AOT_HEADER_SIZE + 4);
-        strm.avail_in = static_cast<uInt>(std::min<size_t>(
-            avail - QORE_AOT_HEADER_SIZE - 4, std::numeric_limits<uInt>::max()));
-        strm.next_out = out.data();
-        strm.avail_out = static_cast<uInt>(std::min<uint32_t>(
-            uncompressed_size, std::numeric_limits<uInt>::max()));
-        rc = inflate(&strm, Z_FINISH);
-        bool ok = rc == Z_STREAM_END && strm.total_out == uncompressed_size;
-        size_t consumed = static_cast<size_t>(strm.total_in);
-        inflateEnd(&strm);
-        if (!ok) {
-            return false;
-        }
-        len = QORE_AOT_HEADER_SIZE + 4 + consumed;
-        return len <= avail;
-    }
-
-    if (compression == QORE_AOT_COMPRESSION_ZSTD) {
-        if (avail < QORE_AOT_HEADER_SIZE + 4) {
-            return false;
-        }
-        uint32_t uncompressed_size = read_u32_le(data + QORE_AOT_HEADER_SIZE);
-        if (uncompressed_size > 100 * 1024 * 1024) {
-            return false;
-        }
-        if (!uncompressed_size) {
-            len = QORE_AOT_HEADER_SIZE + 4;
-            return true;
-        }
-        const uint8_t* frame = data + QORE_AOT_HEADER_SIZE + 4;
-        size_t frame_size = ZSTD_findFrameCompressedSize(frame,
-            avail - QORE_AOT_HEADER_SIZE - 4);
-        if (ZSTD_isError(frame_size)) {
-            return false;
-        }
-        len = QORE_AOT_HEADER_SIZE + 4 + frame_size;
-        return len <= avail;
-    }
-
-    return false;
+    return true;
 }
+
 
 static const char* aot_section_type_name(uint16_t type) {
     switch (static_cast<QoreAOTSectionType>(type)) {
@@ -2027,10 +1991,19 @@ static bool add_aot_metadata_blob(std::vector<AOTDumpMetadataBlob>& blobs,
     }
     QoreAOTBinaryReader reader;
     std::string error;
+    std::string key;
     if (!reader.open(bytes.data(), static_cast<uint32_t>(bytes.size()), error)) {
-        return false;
+        // bytes that only look like a header are skipped; metadata that does not match its checksum was changed
+        // after it was written: it is kept, so that its reader reports it (qore#6451)
+        if (!reader.checksumMismatch()) {
+            return false;
+        }
+        std::string_view view(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        key = "checksum mismatch " + std::to_string(bytes.size()) + " "
+            + std::to_string(std::hash<std::string_view>()(view));
+    } else {
+        key = aot_metadata_key(reader, bytes.size());
     }
-    std::string key = aot_metadata_key(reader, bytes.size());
     if (!seen.insert(key).second) {
         return true;
     }
@@ -4141,8 +4114,9 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
     printf("    kind:%s%s\n",
         (hdr.flags & QORE_AOT_FLAG_IS_MODULE) ? " module" : "",
         (hdr.flags & QORE_AOT_FLAG_HAS_TOPLEVEL) ? " toplevel" : "");
-    printf("    format: %u (current %u)%s\n", hdr.version, QORE_AOT_BINARY_VERSION,
-        hdr.version == QORE_AOT_BINARY_VERSION ? "" : " MISMATCH");
+    printf("    format: %u (current %u)%s%s\n", hdr.version, QORE_AOT_BINARY_VERSION,
+        hdr.version == QORE_AOT_BINARY_VERSION ? "" : " MISMATCH",
+        (hdr.flags & QORE_AOT_FLAG_METADATA_CHECKSUM) ? ", checksum verified" : "");
     printf("    compiled qore: %u.%u.%u (runtime %s)\n",
         hdr.qore_version_major, hdr.qore_version_minor, hdr.qore_version_patch,
         qore_version_string);
@@ -8488,6 +8462,95 @@ static void add_existing_qo_inputs_from_args(std::vector<std::string>& inputs,
     }
 }
 
+//! qcc --check-module-sources: rewrites the sources stamp of each AOT module of a build that the module loader would
+//! find out of date (qore#6598)
+/** The build (QoreMacros.cmake) runs it once before the modules are compiled, with the modules of the build tree in
+    a list file (\c \@file) or as arguments; each module depends on <tt>\<module\>.sources.stamp</tt>, which is
+    rewritten only for a module that qore_aot_check_module_sources() finds out of date, so that the build compiles it
+    again.  A stamp that does not exist is made with a modification time older than any module, so that it does not
+    make a module out of date by itself.  A module that does not exist is not checked (it is compiled anyway).
+
+    @return 0 if every module was checked; 1 if a module could not be checked, which fails the build (the module and
+    the dependency are named)
+*/
+static int run_check_module_sources(int nargs, char** args) {
+    std::vector<std::string> qmods;
+    for (int i = 0; i < nargs; ++i) {
+        if (args[i][0] != '@') {
+            qmods.emplace_back(args[i]);
+            continue;
+        }
+        std::ifstream list(args[i] + 1);
+        if (!list) {
+            fprintf(stderr, "error: --check-module-sources: cannot read the module list '%s'\n", args[i] + 1);
+            return 1;
+        }
+        std::string line;
+        while (std::getline(list, line)) {
+            if (!line.empty()) {
+                qmods.emplace_back(std::move(line));
+            }
+        }
+        if (list.bad()) {
+            fprintf(stderr, "error: --check-module-sources: cannot read the module list '%s'\n", args[i] + 1);
+            return 1;
+        }
+    }
+
+    int rc = 0;
+    for (size_t i = 0; i < qmods.size(); ++i) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT module source check")) {
+            return 1;
+        }
+        const std::string& qmod = qmods[i];
+        std::string stamp = qmod + ".sources.stamp";
+        struct stat sb;
+        if (stat(stamp.c_str(), &sb)) {
+            FILE* f = fopen(stamp.c_str(), "w");
+            if (!f) {
+                fprintf(stderr, "error: --check-module-sources: cannot write '%s': %s\n", stamp.c_str(),
+                    strerror(errno));
+                rc = 1;
+                continue;
+            }
+            fclose(f);
+            struct utimbuf old_time = {0, 0};
+            if (utime(stamp.c_str(), &old_time)) {
+                fprintf(stderr, "error: --check-module-sources: cannot set the time of '%s': %s\n", stamp.c_str(),
+                    strerror(errno));
+                rc = 1;
+                continue;
+            }
+        }
+        if (stat(qmod.c_str(), &sb)) {
+            continue;
+        }
+        std::string reason, dependency, error;
+        switch (qore_aot_check_module_sources(qmod.c_str(), reason, dependency, error)) {
+            case QoreAOTModuleCheck::CURRENT:
+                break;
+            case QoreAOTModuleCheck::STALE: {
+                printf("qcc: AOT module '%s' is out of date: %s%s%s%s\n", qmod.c_str(), reason.c_str(),
+                    dependency.empty() ? "" : " ('", dependency.c_str(), dependency.empty() ? "" : "')");
+                FILE* f = fopen(stamp.c_str(), "w");
+                if (!f || fprintf(f, "%s: %s\n", reason.c_str(), dependency.c_str()) < 0 || fclose(f)) {
+                    fprintf(stderr, "error: --check-module-sources: cannot write '%s': %s\n", stamp.c_str(),
+                        strerror(errno));
+                    rc = 1;
+                }
+                break;
+            }
+            case QoreAOTModuleCheck::ERROR:
+                fprintf(stderr, "error: cannot check AOT module '%s'%s%s%s: %s\n", qmod.c_str(),
+                    dependency.empty() ? "" : " (dependency '", dependency.c_str(), dependency.empty() ? "" : "')",
+                    error.c_str());
+                rc = 1;
+                break;
+        }
+    }
+    return rc;
+}
+
 //! Prints the AOT module metadata that qcc stores in a section of a qmod's image
 /** The loader reads the same metadata before it maps the module; see QoreAOTModuleFileInfo.
 */
@@ -10031,6 +10094,13 @@ int main(int argc, char** argv) {
     if (metadata_compression) {
         SystemEnvironment::set("QORE_AOT_METADATA_COMPRESSION", metadata_compression, 1);
     }
+    // the form of the parse diagnostics of the compiled code (issue #6555)
+    if (diag_format) {
+        SystemEnvironment::set("QORE_DIAG_FORMAT", diag_format, 1);
+    }
+    if (code_frames) {
+        SystemEnvironment::set("QORE_CODE_FRAMES", "1", 1);
+    }
     // Propagate the CLI flag's value to QORE_AOT_BIG_FN_THRESHOLD so
     // the IR-to-LLVM lowerer picks it up.  Overwrite the env only when
     // the user explicitly passed --big-fn-threshold on the command line;
@@ -10134,6 +10204,17 @@ int main(int argc, char** argv) {
     if (dump_symbols || dump_sections) {
         dump_info = true;
     }
+    if (check_module_sources) {
+        if (optind >= argc) {
+            fprintf(stderr, "error: --check-module-sources requires at least one AOT module path or list file\n");
+            return 1;
+        }
+        qcc_init_qore();
+        int rc = run_check_module_sources(argc - optind, argv + optind);
+        qore_cleanup();
+        return rc;
+    }
+
     if (dump_info) {
         if (optind >= argc) {
             fprintf(stderr, "error: --dump-info requires at least one binary/object path\n");
@@ -10148,6 +10229,41 @@ int main(int argc, char** argv) {
         }
         qore_cleanup();
         return rc;
+    }
+
+    // the diagnostics collected in JSON form are printed when the run ends, also when it fails; in JSON form,
+    // stdout carries only the JSON array: the other output of the run goes to stderr; set up for the modes that
+    // compile code only, after the ones that report something else on stdout (--help, --version, --dump-*) have
+    // returned
+    struct DiagnosticsFlushHelper {
+        FILE* json_out = nullptr;
+
+        ~DiagnosticsFlushHelper() {
+            qore_aot_flush_parse_diagnostics(json_out);
+            if (json_out) {
+                fclose(json_out);
+            }
+        }
+    } diagnostics_flush;
+    {
+        QoreEnvironmentValue df_holder("QORE_DIAG_FORMAT");
+        const char* df = df_holder.c_str();
+        const bool json = df && !strcmp(df, "json");
+        if (json) {
+            fflush(stdout);
+            // not inherited by the processes that qcc starts (the linker)
+            int json_fd = fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, 0);
+            if (json_fd >= 0) {
+                diagnostics_flush.json_out = fdopen(json_fd, "w");
+                if (diagnostics_flush.json_out) {
+                    dup2(STDERR_FILENO, STDOUT_FILENO);
+                    // the other output keeps its order with what is written to stderr
+                    setvbuf(stdout, nullptr, _IOLBF, 0);
+                } else {
+                    close(json_fd);
+                }
+            }
+        }
     }
 
     if ((link_aggregate_symbol || qolink_map_path) && !link_qo) {
@@ -11354,6 +11470,13 @@ int main(int argc, char** argv) {
         }
     }
 
+    // a module states the modules it needs with %requires: -l, which loads modules into the Program of the compiled
+    // code, is refused for it rather than ignored (issue #6585)
+    if (!load_modules.empty() && module_mode) {
+        fprintf(stderr, "error: -l/--load cannot be used when compiling a module; use %%requires in the module\n");
+        return 1;
+    }
+
     // Warn about ignored options
     if (static_link && module_mode) {
         fprintf(stderr, "warning: --static is ignored when compiling modules\n");
@@ -11777,13 +11900,30 @@ int main(int argc, char** argv) {
         // flags; options are never forced, as that would silently change the script's parse semantics.
         // QoreAOT::compile() then rejects code that is not %modern (see qore_parse_options_support_ir()).
         QoreProgram* qpgm = new QoreProgram(compile_po);
+        // its parse diagnostics are kept for the report of the compiler (issue #6555)
+        qore_aot_prepare_compile_program(*qpgm);
         ExceptionSink xsink;
         ExceptionSink wsink;
 
-        qpgm->parseFile(source_file, &xsink, &wsink, QP_WARN_DEFAULT);
-
+        // the parse defines (--define) apply to this parse as to the other compile paths: they were not set for an
+        // executable (issue #6564); then the modules given with -l are loaded before the code is parsed, as in the
+        // other compile modes (issue #6585)
+        qcc_apply_parse_defines(qpgm, xsink, wsink);
         if (xsink.isException()) {
-            xsink.handleExceptions();
+            // an invalid define value is reported below with the parse diagnostics
+        } else if (!load_modules.empty() && !qore_aot_load_required_modules(qpgm, load_modules, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            rc = 1;
+        } else {
+            qpgm->parseFile(source_file, &xsink, &wsink, QP_WARN_DEFAULT);
+        }
+
+        if (rc) {
+            // the module was not loaded
+        } else if (xsink.isException()) {
+            // the warnings of the parse, then its errors, as diagnostics (issue #6555)
+            qore_aot_report_parse_diagnostics(wsink, true);
+            qore_aot_report_parse_diagnostics(xsink, false);
             rc = 1;
         } else if (qccHandleWarnings(wsink)) {
             rc = 1;

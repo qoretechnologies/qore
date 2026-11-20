@@ -98,8 +98,7 @@ list<string> parts = base.splitWithRelease("A+B?+C+D", "+");
             string current = "";
             bool escaped = False;
 
-            for (int i = 0; i < str.size(); i++) {
-                string char = str[i];
+            foreach string char in (str.splitChars()) {
 
                 if (escaped) {
                     # Previous character was release character, so this character is literal
@@ -155,7 +154,7 @@ hash<EdifactSegment> seg = base.parseSegment("BGM+220+PO12345+9");
             }
 
             # Extract tag (first 3 characters)
-            if (segment_str.size() < 3) {
+            if (segment_str.length() < 3) {
                 throw "EDIFACT-PARSE-ERROR", sprintf("segment too short: %y", segment_str);
             }
 
@@ -167,8 +166,8 @@ hash<EdifactSegment> seg = base.parseSegment("BGM+220+PO12345+9");
             }
 
             @debug {
-                if (getenv("QORE_EDIFACT_DEBUG")) {
-                    printf("EdifactBase::parseSegment(): tag=%y len=%d\n", tag, segment_str.size());
+                if (getenv("QORE_EDIFACT_DEBUG") && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    stdout.printf("EdifactBase::parseSegment(): tag=%y len=%d\n", tag, segment_str.size());
                 }
             }
 
@@ -222,8 +221,7 @@ hash<EdifactSegment> seg = base.parseSegment("BGM+220+PO12345+9");
         */
         bool containsUnescaped(string str, string ch) {
             bool escaped = False;
-            for (int i = 0; i < str.size(); i++) {
-                string c = str[i];
+            foreach string c in (str.splitChars()) {
                 if (escaped) {
                     escaped = False;
                     continue;
@@ -287,7 +285,7 @@ string seg = base.generateSegment("BGM", (("220",), ("PO12345",), ("9",)));
             list<string> segments = ();
 
             # Check for UNA segment at the start
-            if (data.size() >= 9 && data.substr(0, 3) == UnaSegmentTag) {
+            if (data.length() >= 9 && data.substr(0, 3) == UnaSegmentTag) {
                 # UNA segment is exactly 9 characters, no terminator
                 string una = data.substr(0, 9);
                 push segments, una;
@@ -301,8 +299,7 @@ string seg = base.generateSegment("BGM", (("220",), ("PO12345",), ("9",)));
             string current = "";
             bool escaped = False;
 
-            for (int i = 0; i < data.size(); i++) {
-                string char = data[i];
+            foreach string char in (data.splitChars()) {
 
                 if (escaped) {
                     current += char;

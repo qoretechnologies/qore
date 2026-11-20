@@ -1,0 +1,195 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./OracleTestIsolation.qm
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%exec-class DeleteOthersBulkRowsTest
+
+#! the delete_others upsert option keeps the rows of an input row of list values (bulk DML) (issue #6687)
+/** the keys of a row of list values were not collected per row, so that the rows of the input were not input keys
+    and were deleted with every other row of the table; runs on Oracle, whose upsert binds the lists of a bulk row as
+    arrays, when \c QORE_DB_CONNSTR_ORACLE is set
+*/
+class DeleteOthersBulkRowsTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+        string skip = "QORE_DB_CONNSTR_ORACLE is not set";
+
+        # the strategies that update an existing row (a select-first upsert upserts the rows of a bulk row one by one,
+        # as it cannot bind arrays in its select: issue #6688)
+        const Strategies = {
+            "auto": AbstractTable::UpsertAuto,
+            "update-first": AbstractTable::UpsertUpdateFirst,
+            "insert-first": AbstractTable::UpsertInsertFirst,
+            "select-first": AbstractTable::UpsertSelectFirst,
+        };
+    }
+
+    constructor() : Test("DeleteOthersBulkRows", "1.0", \ARGV) {
+        addTestCase("Oracle: bulk rows", \oracleTest());
+        addTestCase("Oracle: bulk rows with a composite key", \oracleCompositeTest());
+        addTestCase("Oracle: bulk and hash rows", \oracleMixedTest());
+        addTestCase("Oracle: a bulk row without a key value", \oracleNullKeyTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoOracle
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            try {
+                Datasource d(OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE, "DeleteOthersBulkRows"));
+                d.open();
+                ds = d;
+            } catch (hash<ExceptionInfo> ex) {
+                skip = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+            }
+        }
+%else
+        skip = "no oracle module";
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+            remove ds;
+        }
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            OracleRunSchema::teardown();
+        }
+    }
+
+    oracleTest() {
+        Datasource d = getDs();
+        withTable(d, "dobr_1", "k integer not null, v integer, primary key (k)", sub (AbstractTable t) {
+            foreach hash<auto> st in (Strategies.pairIterator()) {
+                t.del();
+                t.insert({"k": 1, "v": 0});
+                t.insert({"k": 9, "v": 0});
+                *hash<string, int> rh = t.upsertFromIterator(({"k": (1, 2, 3), "v": (10, 20, 30)},).iterator(),
+                    st.value, {"delete_others": True});
+                assertEq({1: 10, 2: 20, 3: 30}, getRows(t), st.key + ": the input rows remain");
+                assertEq(1, rh.deleted, st.key + ": the other row is deleted");
+                # the same input again deletes nothing
+                rh = t.upsertFromIterator(({"k": (1, 2, 3), "v": (11, 21, 31)},).iterator(), st.value,
+                    {"delete_others": True});
+                assertEq(NOTHING, rh.deleted, st.key + ": nothing more is deleted");
+                assertEq({1: 11, 2: 21, 3: 31}, getRows(t), st.key + ": the rows are updated");
+                d.rollback();
+            }
+        });
+    }
+
+    oracleCompositeTest() {
+        Datasource d = getDs();
+        withTable(d, "dobr_2", "k integer not null, s varchar2(10) not null, v integer, primary key (k, s)",
+                sub (AbstractTable t) {
+            foreach hash<auto> st in (Strategies.pairIterator()) {
+                t.del();
+                t.insert({"k": 1, "s": "a", "v": 0});
+                t.insert({"k": 1, "s": "b", "v": 0});
+                t.insert({"k": 2, "s": "b", "v": 0});
+                # a key column with one value for every row of the bulk row; the first value is a list of a column
+                # that is not in the key in the second upsert below
+                *hash<string, int> rh = t.upsertFromIterator(({"k": (1, 2), "s": "a", "v": (10, 20)},).iterator(),
+                    st.value, {"delete_others": True});
+                list<hash<auto>> rows = map ("k": $1.k.toInt(), "s": $1.s, "v": $1.v.toInt()),
+                    t.selectRows({"orderby": ("k", "s")});
+                assertEq(({"k": 1, "s": "a", "v": 10}, {"k": 2, "s": "a", "v": 20}), rows, st.key);
+                assertEq(2, rh.deleted, st.key + ": the other rows are deleted");
+                # both key columns are scalar, the first value is a list: the key of each row is the same
+                rh = t.upsertFromIterator(({"v": (30, 31), "k": 1, "s": "a"},).iterator(), st.value,
+                    {"delete_others": True});
+                rows = map ("k": $1.k.toInt(), "s": $1.s, "v": $1.v.toInt()), t.selectRows({"orderby": ("k", "s")});
+                assertEq(({"k": 1, "s": "a", "v": 31},), rows, st.key + ": scalar key values");
+                assertEq(1, rh.deleted, st.key + ": scalar key values: the other row is deleted");
+                d.rollback();
+            }
+        });
+    }
+
+    oracleMixedTest() {
+        Datasource d = getDs();
+        withTable(d, "dobr_3", "k integer not null, v integer, primary key (k)", sub (AbstractTable t) {
+            foreach hash<auto> st in (Strategies.pairIterator()) {
+                t.del();
+                t.insert({"k": 9, "v": 0});
+                # a hash row, a bulk row, a hash row
+                *hash<string, int> rh = t.upsertFromIterator(({"k": 1, "v": 10}, {"k": (2, 3), "v": (20, 30)},
+                    {"k": 4, "v": 40}).iterator(), st.value, {"delete_others": True});
+                assertEq({1: 10, 2: 20, 3: 30, 4: 40}, getRows(t), st.key + ": hash row first");
+                assertEq(1, rh.deleted, st.key + ": hash row first: deleted");
+                # a bulk row first
+                t.insert({"k": 9, "v": 0});
+                rh = t.upsertFromIterator(({"k": (1, 2), "v": (11, 21)}, {"k": 3, "v": 31}).iterator(), st.value,
+                    {"delete_others": True});
+                assertEq({1: 11, 2: 21, 3: 31}, getRows(t), st.key + ": bulk row first");
+                assertEq(2, rh.deleted, st.key + ": bulk row first: deleted");
+                d.rollback();
+            }
+        });
+    }
+
+    oracleNullKeyTest() {
+        Datasource d = getDs();
+        withTable(d, "dobr_4", "k integer, v integer, constraint dobr_4_pk primary key (k)", sub (AbstractTable t) {
+            t.insert({"k": 9, "v": 0});
+            d.commit();
+            # a row of the bulk row without a key value is raised before anything is changed
+            assertThrows("UPSERT-ERROR", "column \"k\" has no value",
+                sub () { t.upsertFromIterator(({"k": (1, NULL), "v": (10, 20)},).iterator(), AbstractTable::UpsertAuto,
+                    {"delete_others": True}); });
+            d.rollback();
+            assertEq({9: 0}, getRows(t), "nothing is changed");
+            # in a later input row too, before that row is upserted
+            assertThrows("UPSERT-ERROR", "column \"k\" has no value",
+                sub () { t.upsertFromIterator(({"k": 1, "v": 10}, {"k": (2, NULL), "v": (20, 30)}).iterator(),
+                    AbstractTable::UpsertAuto, {"delete_others": True}); });
+            # the first row was upserted, the bulk row not, and nothing was deleted
+            assertEq({1: 10, 9: 0}, getRows(t), "a later bulk row: the rows before it are upserted");
+            d.rollback();
+            # a key list of another length than the first value is raised before anything is changed, with the input
+            # row
+            assertThrows("UPSERT-ERROR", "the list of column \"k\" has 1 element, the first value 2, in: "
+                "\\{v: \\[10, 20\\], k: \\[3\\]\\}", sub () {
+                t.upsertFromIterator(({"v": (10, 20), "k": (3,)},).iterator(), AbstractTable::UpsertAuto,
+                    {"delete_others": True});
+            });
+            assertEq({9: 0}, getRows(t), "a key list of another length: nothing is changed");
+            d.rollback();
+        });
+    }
+
+    private Datasource getDs() {
+        if (!ds) {
+            testSkip(skip);
+        }
+        return ds;
+    }
+
+    private hash<auto> getRows(AbstractTable t) {
+        return map {$1.k.toString(): $1.v.toInt()}, t.selectRows({"orderby": "k"});
+    }
+
+    private withTable(Datasource d, string name, string def, code test) {
+        d.exec(sprintf("create table %s (%s)", name, def));
+        d.commit();
+        on_exit {
+            d.rollback();
+            d.exec("drop table " + name);
+            d.commit();
+        }
+        test(new Table(d, name).getTable());
+    }
+}

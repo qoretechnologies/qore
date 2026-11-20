@@ -99,34 +99,62 @@ class DeletedProgramTypesTest inherits QUnit::Test {
 
         addTestCase("values with types of a deleted Program are usable in every mode", \testModes());
         foreach string mode in (ExecModes) {
-            addTestCase("the declarations kept are bounded: " + mode, sub () { testBounded(mode); });
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase("the declarations kept are bounded: " + mode, sub () { testBounded(mode_value); });
         }
         addTestCase("a reflection type of a retired declaration leaves it retired", \testReflection());
         foreach string mode in (ExecModes) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
             addTestCase("the declarations of module Programs are freed in order at the end: " + mode,
-                sub () { testModuleTeardown(mode); });
+                sub () { testModuleTeardown(mode_value); });
         }
         foreach string mode in (ExecModes) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
             foreach string script in (("module-cycles.qr", "module-cycles-httpserver.qr")) {
+                # a local of the loop's body: each closure keeps its own value (qore#6636)
+                string script_value = script;
                 addTestCase("declarations that keep each other after their Program is deleted are freed at the end: "
-                    + script + ": " + mode, sub () { testModuleCycles(mode, script); });
+                    + script + ": " + mode, sub () { testModuleCycles(mode_value, script_value); });
             }
         }
         foreach string mode in (ExecModes) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
             addTestCase("declarations that are still referenced are not garbage at the end: " + mode,
-                sub () { testSurvivors(mode); });
+                sub () { testSurvivors(mode_value); });
         }
         foreach string mode in (ExecModes) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
             addTestCase("a module that loads a native module at run time is deleted first: " + mode,
-                sub () { testRuntimeLoad(mode); });
+                sub () { testRuntimeLoad(mode_value); });
         }
         foreach string mode in (("ast", "jit")) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
             addTestCase("modules that load each other and a native module at run time are deleted first: " + mode,
-                sub () { testRuntimeLoadCycle(mode); });
+                sub () { testRuntimeLoadCycle(mode_value); });
         }
         foreach string mode in (ExecModes) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
             addTestCase("a cycle of AOT and user modules through a run time load is deleted: " + mode,
-                sub () { testRuntimeCycleUserModules(mode); });
+                sub () { testRuntimeCycleUserModules(mode_value); });
+        }
+        foreach string mode in (ExecModes) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase("a user module that an AOT module loads at run time and its native module are deleted "
+                + "after it: " + mode, sub () { testRuntimeUserLoad(mode_value); });
+        }
+        foreach string mode in (ExecModes) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase("a native module required by a user module in a cycle with an AOT module is deleted after "
+                + "them: " + mode, sub () { testRuntimeUserCycle(mode_value); });
         }
         set_return_value(main());
     }
@@ -282,6 +310,30 @@ class DeletedProgramTypesTest inherits QUnit::Test {
     testRuntimeCycleUserModules(string mode) {
         runRuntimeLoad(mode, ("RuntimeCycleUtil", "RuntimeCycleClient"), "runtime-cycle-user-modules.qr", "1",
             ("RuntimeCycleServer", "RuntimeCycleFile"));
+    }
+
+    #! A user module that an AOT module loads at run time, and the native module that it requires, are deleted after
+    #! the AOT module (issue #6501)
+    /** RuntimeUserLoadAot loads the source module RuntimeUserLoaded from its own Program, which imports its hashdecl,
+        whose member is of a class of the native module reflection.  The load was not recorded, so the end of the
+        process deleted the user module and then the native module, which no module left required, before the AOT
+        module: the teardown of the AOT module's Program read the freed class type of the hashdecl (a debug build
+        asserts in qore_type_owner_add_name(); seen with ProviderIndexUtil loading TypeScriptActionInterface from
+        source).
+    */
+    testRuntimeUserLoad(string mode) {
+        runRuntimeLoad(mode, ("RuntimeUserLoadAot",), "runtime-user-load.qr", "1", ("RuntimeUserLoaded",));
+    }
+
+    #! A native module that a user module requires is deleted after an AOT module that requires the user module, when
+    #! the user module is deleted first to break a cycle (issue #6501)
+    /** RuntimeUserCycleAot loads the source module RuntimeUserCycleLoaded at run time, which requires it and the native
+        module reflection, as ProviderIndexUtil loads TypeScriptActionInterface, which requires it.  The end of the
+        process breaks the cycle at the user module; the native module, which no module left required then, was
+        deleted next, before the AOT module, whose Program holds the user module's hashdecl naming a class of it.
+    */
+    testRuntimeUserCycle(string mode) {
+        runRuntimeLoad(mode, ("RuntimeUserCycleAot",), "runtime-user-cycle.qr", "1", ("RuntimeUserCycleLoaded",));
     }
 
     #! Runs \a script with the modules \a modules compiled to AOT modules and the source modules \a sources

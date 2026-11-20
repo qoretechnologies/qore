@@ -63,8 +63,6 @@ class QoreSandboxManager;
 */
 #define _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS 1
 
-struct qore_ds_pool_record;
-
 //! The code that chose the connection of a datasource: its creators and the setters of the values that a connect uses
 /** Filled by Datasource::getConnectChoosers() and Datasource::addOptionChooser().  Each entry is the record of a
     piece of code, made when the code created the datasource or set a value; each creation and each value set makes a
@@ -211,17 +209,6 @@ public:
         @since %Qore 0.8.13
     */
     DLLLOCAL Datasource(const Datasource& old, DatasourceStatementHelper* dsh);
-
-    //! creates a connection of a DatasourcePool with the record of the pool; internal only
-    /** The connection's creators are the creators of the pool, not the code that runs when the pool grows (qore#6142)
-
-        @param driver the DBIDriver object to use for the connection
-        @param dsh the interface of the real C++ parent object
-        @param rec the creators of the pool
-
-        @since %Qore 3.0
-    */
-    DLLLOCAL Datasource(DBIDriver* driver, DatasourceStatementHelper* dsh, const qore_ds_pool_record& rec);
 
     //! creates the object and binds it to a particular DBIDriver
     /**
@@ -925,6 +912,24 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT QoreSandboxManager* getOptionPolicyManagerRef(const char* opt) const;
+
+    //! returns the destinations of the connection as they were checked against the sandbox, or nullptr
+    /** For a connection whose connection values were chosen by code that a sandbox restricting network or
+        filesystem access governed (see getConnectChoosers()), the Qore library asks the driver for the destinations of
+        the connection (@ref QDBI_METHOD_GET_CONNECT_TARGETS) before it opens it, checks each of them against the
+        policy of every such sandbox, and keeps the result here while the connection is open.  The driver must then
+        connect (and reconnect) to these destinations only, so that a host name that resolves to another address
+        after the check cannot redirect the connection.
+
+        @return nullptr if the connection was not checked (no such sandbox chose it), otherwise a list with a hash
+        for each destination that the driver reported, in the same order: \c "socket" (string), the path of a UNIX
+        socket, or \c "host" (string) and \c "port" (int) as the driver reported them, and \c "addresses" (a list of
+        strings, never empty), the numeric addresses of the host that were checked, in the order of their resolution;
+        the list is owned by the datasource and is valid until the connection is closed
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT const QoreListNode* getCheckedConnectTargets() const;
 
     //! replaces the content of \a c with the code that chose the connection: its creators and the setters of the
     //! connection values in use

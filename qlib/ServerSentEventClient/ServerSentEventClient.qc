@@ -678,12 +678,15 @@ sse.setEventQueue();
         }
 %endif
 
-        if (opts.hasKey("start_thread")) {
+        if (exists opts.start_thread) {
             if (!opts.start_thread.callp()) {
                 raiseError("option hash to ServerSentEventClient::constructor() has an invalid 'start_thread' key "
                     "with type %y; must be a callable value", opts.start_thread.fullType());
             }
             start_thread = remove opts.start_thread;
+        } else if (*code cap = get_thread_capability("start_thread")) {
+            # the capability of the code that the host runs (qorus#867)
+            start_thread = cap;
         }
 %ifdef PO_NO_THREAD_CONTROL
         else {
@@ -1207,8 +1210,10 @@ sse.setEventQueue();
         try {
             LoggerWrapper::logArgs(level, sprintf("ServerSentEventClient %s: ", cid) + message, args);
         } catch (hash<ExceptionInfo> ex) {
-            stderr.printf("ServerSentEventClient cannot log: %s: %s: %s msg: %s", ex.err, ex.desc, level.getStr(),
-                vsprintf(message, args));
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.printf("ServerSentEventClient cannot log: %s: %s: %s msg: %s", ex.err, ex.desc, level.getStr(),
+                    vsprintf(message, args));
+            }
         }
     }
 

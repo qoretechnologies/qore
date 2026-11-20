@@ -146,12 +146,15 @@ static inline bool isoctaldigit(const char x) {
 #if defined(__GNUC__) || defined(__clang__)
 #define QORE_INTERN_ALWAYS_INLINE __attribute__((always_inline)) inline
 #define QORE_INTERN_NOINLINE __attribute__((noinline))
+#define QORE_INTERN_COLD __attribute__((cold))
 #elif defined(_MSC_VER)
 #define QORE_INTERN_ALWAYS_INLINE __forceinline
 #define QORE_INTERN_NOINLINE __declspec(noinline)
+#define QORE_INTERN_COLD
 #else
 #define QORE_INTERN_ALWAYS_INLINE inline
 #define QORE_INTERN_NOINLINE
+#define QORE_INTERN_COLD
 #endif
 
 // here we define virtual types
@@ -1013,6 +1016,15 @@ struct QoreDiagnostic {
             this->metadata.id = this->code;
         }
     }
+
+    //! An error diagnostic for an exception raised in a parse, at the location of the exception
+    DLLLOCAL QoreDiagnostic(const char* code, const std::string& file, const std::string& source,
+            const QoreProgramLineLocation& loc, const char* message)
+            : error(true), code(code ? code : ""), file(file), source(source), start_line(loc.start_line),
+            end_line(loc.end_line), start_column(loc.start_column), end_column(loc.end_column),
+            message(message ? message : "") {
+        metadata.id = this->code;
+    }
 };
 
 DLLLOCAL QoreString* findFileInPath(const char* file, const char* path);
@@ -1626,6 +1638,44 @@ DLLLOCAL void qore_dbg_fd_wait(int fd);
 //! Debug-only: called by a read of a File that found its descriptor readable, right before the read (see
 //! dbg_hold_file_read_ready())
 DLLLOCAL void qore_dbg_file_read_ready(int fd);
+
+//! Debug-only: the outcome of a rendezvous of File::redirect() calls (see qore_dbg_file_redirect_rendezvous())
+enum QoreDbgFileRedirectOutcome : int {
+    //! not decided yet
+    QDFR_NONE = 0,
+    //! all the calls arrived, each with the first lock of its own: they hold different locks
+    QDFR_ARRIVED = 1,
+    //! a call waits for the first lock that the call at the rendezvous holds
+    QDFR_WAITER = 2,
+    //! the timeout of the rendezvous passed
+    QDFR_TIMEOUT = 3,
+};
+
+//! Debug-only: arms a rendezvous of the next calls of File::redirect() after they take their first lock
+/** The first of the next \a count calls to take its first lock waits there, with the lock held, until the outcome is
+    known: either \a count calls have arrived, each with a first lock of its own, or another call waits for the lock
+    that it holds, or, as a safety net, \a timeout_ms has passed (see dbg_file_redirect_rendezvous(), issue #6567)
+*/
+DLLLOCAL void qore_dbg_file_redirect_rendezvous(int count, int timeout_ms);
+
+//! Debug-only: waits until the outcome of the armed rendezvous is known, for up to \a timeout_ms; returns it
+DLLLOCAL QoreDbgFileRedirectOutcome qore_dbg_file_redirect_rendezvous_wait(int timeout_ms);
+
+//! Debug-only: returns the calls that arrived at the last rendezvous, those that waited until the timeout, and its
+//! outcome
+DLLLOCAL void qore_dbg_file_redirect_rendezvous_result(int& arrived, int& timed_out,
+        QoreDbgFileRedirectOutcome& outcome);
+
+//! Debug-only: a call of File::redirect() starts or stops waiting for the first lock of its two files
+/** @param lock the File (its private data) whose lock it waits for
+    @param waiting true when it is about to lock it, false when it has it
+*/
+DLLLOCAL void qore_dbg_file_redirect_lock_wait(const void* lock, bool waiting);
+
+//! Debug-only: the rendezvous of a call of File::redirect() with the first lock of its two files held, if one is armed
+/** @param lock the File (its private data) whose lock it holds
+*/
+DLLLOCAL void qore_dbg_file_redirect_locked(const void* lock);
 #endif
 
 //! Writes all of the data to the descriptor, waiting for room after EAGAIN (see qore_fd_wait_ready())
@@ -2504,7 +2554,9 @@ DLLLOCAL size_t q_find_last_path_sep(const QoreString& path);
 
 // reutrns the given file's mode or 0 if the stat() call fails
 DLLLOCAL int q_get_mode(const QoreString& path);
-//! returns the byte length of the next UTF-8 character or 0 for an encoding error or a negative number if the string is too short to represent the character
+//! returns the byte length of the next UTF-8 character, 0 for an invalid character (RFC 3629: also an overlong form,
+//! a surrogate or a code point above U+10FFFF) or minus the length of the character if the valid_len bytes are a
+//! valid start of it (qore#6604)
 DLLLOCAL qore_offset_t q_UTF8_get_char_len(const char* p, size_t valid_len);
 
 //! returns the byte length of the next UTF-16 (big-endian encoded) character or 0 for an encoding error or a negative number if the string is too short to represent the character

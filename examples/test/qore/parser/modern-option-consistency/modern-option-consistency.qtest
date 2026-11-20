@@ -12,6 +12,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires ../../../TestInterpreter.qm
+%requires ../../../QoreBuildTree.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -452,9 +453,18 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
 
     #! an executable cannot be linked from an object whose parse options have %modern with a compatibility option that
     #! it does not allow (an object compiled before issue #5682; here: one whose recorded parse options are patched)
+    /** The checksum of the patched metadata is set again with qore-aot-reseal, as the object of an earlier version of
+        Qore would have a checksum that matches its options; the same object without its checksum set again is
+        refused because of its checksum, before its options are read (issue #6451).
+    */
     craftedObjectLink() {
         if (!is_file(qcc_bin)) {
             testSkip("qcc is unavailable");
+            return;
+        }
+        string reseal_bin = ENV.QORE_AOT_RESEAL ?? dirname(qcc_bin) + "/qore-aot-reseal";
+        if (!is_file(reseal_bin)) {
+            testSkip("qore-aot-reseal is not available at " + reseal_bin);
             return;
         }
         TmpDir tmp("modern-option-consistency-link-");
@@ -504,10 +514,31 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
             pf.setPos(pos + 8);
             pf.write(bout.getData());
         }
+
+        # the patched object without its checksum set again: refused because of the checksum
+        string unsealed = tmp.path + "/unsealed.qo";
+        {
+            File uf();
+            uf.open2(unsealed, O_CREAT | O_WRONLY | O_TRUNC);
+            on_exit uf.close();
+            uf.write(File::readBinaryFile(obj));
+        }
+        string unsealed_exe = tmp.path + "/unsealed";
+        out = ExecModeHarness::run_any(sprintf("%s %s -o %s %s", env, qcc_bin, unsealed_exe, unsealed));
+        assertRegex("does not match its checksum", out, "the patched object without its checksum set again");
+        assertNRegex("%modern and %broken-range cannot be set together", out,
+            "the options of an object whose checksum does not match are not read");
+        assertFalse(is_file(unsealed_exe), "no executable was linked from the object without its checksum set again");
+
+        # the patched object with its checksum set again: refused because of its options
+        int reseal_rc;
+        string reseal_out = backquote(sprintf("%s %s %s 2>&1", env, reseal_bin, obj), \reseal_rc);
+        assertEq(0, reseal_rc, "the checksum of the patched metadata is set again: " + reseal_out);
         string exe = tmp.path + "/main";
         out = ExecModeHarness::run_any(sprintf("%s %s -o %s %s", env, qcc_bin, exe, obj));
         assertRegex("link failed for output .*%modern and %broken-range cannot be set together.*rebuild the objects "
             "with this version of Qore", out);
+        assertNRegex("does not match its checksum", out, "the checksum of the patched object was set again");
         assertFalse(is_file(exe), "no executable was linked");
     }
 
@@ -622,10 +653,12 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         TmpDir tmp("modern-option-consistency-stale-");
         string exe = tmp.path + "/host";
         *list<*string> target = Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/;
+        # a sanitizer build of libqore needs the same sanitizer in the hosts (qore#6682)
+        string flags = ((target ? (target[0],) : ()) + QoreBuildTree::sanitizer_flags(libdir)).join(" ");
         string out = ExecModeHarness::run_any(sprintf("%s -std=c++17 -I%s/include -I%s/include "
             "%s/stale-artifact-host.cpp "
             "-L%s -Wl,-rpath,%s -lqore %s -o %s 2>&1", cxx, root, libdir, dir, libdir, libdir,
-            target ? target[0] : "", exe));
+            flags, exe));
         assertTrue(is_file(exe), "compile host: " + out);
         out = ExecModeHarness::run_any(sprintf("%s %s", env, exe));
         assertRegex("STALE-REFUSED: PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; "
@@ -639,7 +672,7 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         # the entry points of an AOT executable
         string run_exe = tmp.path + "/run-host";
         string run_out = ExecModeHarness::run_any(sprintf("%s -std=c++17 -I%s/include -I%s/include %s/stale-run-host.cpp -L%s "
-            "-Wl,-rpath,%s -lqore %s -o %s 2>&1", cxx, root, libdir, dir, libdir, libdir, target ? target[0] : "",
+            "-Wl,-rpath,%s -lqore %s -o %s 2>&1", cxx, root, libdir, dir, libdir, libdir, flags,
             run_exe));
         assertTrue(is_file(run_exe), "compile run host: " + run_out);
         foreach string entry in (("v1", "v3")) {

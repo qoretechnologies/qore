@@ -62,8 +62,10 @@ void QoreClosureBase::captureTypeContext() {
     std::unique_ptr<QoreClosureTypeContext> ctx(new QoreClosureTypeContext);
     if (inst) {
         ctx->inst = *inst;
+        ctx->decls.add(ctx->inst.type_args);
     }
     ctx->receiver_type_info = receiver;
+    ctx->decls.add(receiver);
     type_context = ctx.release();
 }
 
@@ -76,10 +78,16 @@ void QoreClosureBase::captureObjectReceiver(const QoreObject* obj) {
     if (!receiver) {
         return;
     }
+    std::unique_ptr<QoreClosureTypeContext> ctx;
     if (!type_context) {
-        type_context = new QoreClosureTypeContext;
+        ctx.reset(new QoreClosureTypeContext);
     }
-    type_context->receiver_type_info = receiver;
+    QoreClosureTypeContext& tc = type_context ? *type_context : *ctx;
+    tc.decls.add(receiver);
+    tc.receiver_type_info = receiver;
+    if (ctx) {
+        type_context = ctx.release();
+    }
 }
 
 void QoreClosureTypeContextHelper::set() {
@@ -105,7 +113,7 @@ const QoreTypeInfo* QoreClosureBase::getCallTypeInfo() const {
     if (f) {
         AbstractFunctionSignature* sig = f->getUniqueSignature();
         if (sig) {
-            return qore_get_complex_code_type_from_signature(sig);
+            return sig->getRuntimeCodeTypeInfo();
         }
     }
     return nullptr;

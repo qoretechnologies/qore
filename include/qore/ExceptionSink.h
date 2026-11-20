@@ -48,6 +48,7 @@ class AbstractStatement;
 
 //! container for holding Qore-language exception information and also for registering a "thread_exit" call
 class ExceptionSink {
+    friend class qore_exception_sink_ops;
     friend struct qore_es_private;
     friend QoreXSinkException;
 
@@ -298,21 +299,6 @@ xsink->assimilate(bg_xsink);
     /** The caller owns the reference returned
     */
     DLLEXPORT QoreHashNode* getExceptionInfo();
-
-    DLLLOCAL void raiseException(QoreException* e);
-    DLLLOCAL void raiseException(const QoreListNode* n);
-    DLLLOCAL QoreException* catchException();
-    DLLLOCAL QoreException* getException();
-    DLLLOCAL void overrideLocation(const QoreProgramLocation& loc);
-    DLLLOCAL void setLastLocation(const QoreProgramLocation& loc);
-    DLLLOCAL void rethrow(QoreException* old);
-
-    DLLLOCAL static void defaultExceptionHandler(QoreException* e);
-    DLLLOCAL static void defaultWarningHandler(QoreException* e);
-
-    //! appends the location of an exception to the text of its report
-    DLLLOCAL static void outputExceptionLocation(QoreString& out, const char* fns, int start_line, int end_line,
-        const char* srcs, int offset, const char* langs, const char* types);
 
 private:
     //! private implementation of the class

@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+
+%exec-class IRFramePoolReuseTest
+
+#! qore#6627: a call frame of the IR interpreter is taken from a per-thread pool and reset for each call; the reset
+#! no longer reallocates the frame's slots when the frame already has the size that the function needs.  Each call
+#! must still start with no value of a previous call: a local that the call does not set is NOTHING, and a value
+#! borrowed from a container by a previous call is not seen again after the container is gone.  The checks run in the
+#! process's execution mode and in child processes in the ir and tiered modes, where the frames are reused
+public class IRFramePoolReuseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("IR frame pool reuse", "1.0", \ARGV) {
+        addTestCase("a call does not see the values of a previous call of the same function", \sameFunction());
+        # before the other sizes, which leave frames of their own at the depth
+        addTestCase("two functions that alternate at one depth do not see each other's values", \alternating());
+        addTestCase("frames of other sizes and depths are reused in turn", \mixedSizes());
+        addTestCase("a value borrowed from a freed container is not seen again", \borrowedValues());
+        addTestCase("the same checks in child processes in the ir and tiered modes", \childModes());
+        set_return_value(main());
+    }
+
+    sameFunction() {
+        assertEq(NOTHING, IRFramePoolReuse::optionalLocal(False), "first call, not set");
+        for (int i = 0; i < 200; ++i) {
+            assertEq("set " + i, IRFramePoolReuse::optionalLocal(True, i));
+            # the frame of the previous call had the local set
+            assertEq(NOTHING, IRFramePoolReuse::optionalLocal(False));
+        }
+    }
+
+    mixedSizes() {
+        for (int i = 0; i < 100; ++i) {
+            assertEq(i * 3, IRFramePoolReuse::small(i));
+            assertEq(NOTHING, IRFramePoolReuse::large(False, i));
+            assertEq(i + 45, IRFramePoolReuse::large(True, i));
+            # the recursion takes more frames than the pool had, and the next calls reuse the deeper ones
+            assertEq(NOTHING, IRFramePoolReuse::recurse(i % 7 + 1, False));
+            assertEq(i % 7 + 1, IRFramePoolReuse::recurse(i % 7 + 1, True));
+            assertEq(NOTHING, IRFramePoolReuse::optionalLocal(False));
+        }
+    }
+
+    #! two functions of other sizes called in turn from one frame each take a frame of the pool at the same depth: each
+    #! keeps a frame of its own (the frame of the depth and its spare, qore#6627 follow-up), which is reset in place
+    #! for its next call and must not keep the value that the previous call set
+    alternating() {
+        for (int i = 0; i < 200; ++i) {
+            # the results are checked after the four calls: a call of a check between them would take the frame of
+            # the depth too
+            auto set = IRFramePoolReuse::large(True, i);
+            auto small1 = IRFramePoolReuse::small(i);
+            auto unset = IRFramePoolReuse::large(False, i);
+            auto small2 = IRFramePoolReuse::small(i);
+            assertEq(i + 45, set);
+            assertEq(i * 3, small1);
+            assertEq(NOTHING, unset, "large after small");
+            assertEq(i * 3, small2);
+        }
+    }
+
+    borrowedValues() {
+        for (int i = 0; i < 200; ++i) {
+            {
+                list<string> l = (sprintf("value %d", i), "other");
+                assertEq(sprintf("value %d", i), IRFramePoolReuse::firstElement(l));
+            }
+            # the list of the previous call is gone; this call borrows nothing
+            assertEq(NOTHING, IRFramePoolReuse::firstElement());
+        }
+    }
+
+    childModes() {
+        string script = sprintf("%%modern\n%s\n%s",
+            ReadOnlyFile::readTextFile(get_script_path()).split(FunctionsMarker)[1], ChildMain);
+        TmpDir tmp("ir-frame-pool-reuse-");
+        foreach string mode in ("ir", "tiered") {
+            string path = tmp.path + sprintf("/ir-frame-pool-reuse-%s.q", mode);
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(script);
+            f.close();
+            # stdout only: a tool that the test runs under (valgrind) writes to the child's stderr
+            string err_path = path + ".err";
+            int rc;
+            string out = backquote(sprintf("%s --exec-mode=%s %s 2>%s", TestInterpreter::qore_interpreter(), mode,
+                path, err_path), \rc);
+            string err = ReadOnlyFile::readTextFile(err_path);
+            assertEq(0, rc, mode + ": " + out + err);
+            assertEq("OK\n", out, mode + ": " + err);
+        }
+    }
+
+    #! the marker around the functions that the child processes run, made so that it does not occur here
+    const FunctionsMarker = "#-- functions" + " --#";
+
+    #! the main code of a child process, which runs the checks of the cases and prints OK
+    const ChildMain = "
+string err;
+sub check(auto expected, auto actual, string what) {
+    if (expected !== actual && !err) {
+        err = sprintf(\"%s: expected %y, got %y\", what, expected, actual);
+    }
+}
+for (int i = 0; i < 300; ++i) {
+    auto alt_set = IRFramePoolReuse::large(True, i);
+    auto alt_small = IRFramePoolReuse::small(i);
+    auto alt_unset = IRFramePoolReuse::large(False, i);
+    check(i + 45, alt_set, \"alternating large\");
+    check(i * 3, alt_small, \"alternating small\");
+    check(NOTHING, alt_unset, \"alternating large after small\");
+    check(\"set \" + i, IRFramePoolReuse::optionalLocal(True, i), \"set\");
+    check(NOTHING, IRFramePoolReuse::optionalLocal(False), \"not set\");
+    check(i * 3, IRFramePoolReuse::small(i), \"small\");
+    check(NOTHING, IRFramePoolReuse::large(False, i), \"large not set\");
+    check(i + 45, IRFramePoolReuse::large(True, i), \"large\");
+    check(NOTHING, IRFramePoolReuse::recurse(i % 7 + 1, False), \"recurse not set\");
+    check(i % 7 + 1, IRFramePoolReuse::recurse(i % 7 + 1, True), \"recurse\");
+    {
+        list<string> l = (sprintf(\"value %d\", i), \"other\");
+        check(sprintf(\"value %d\", i), IRFramePoolReuse::firstElement(l), \"borrowed\");
+    }
+    check(NOTHING, IRFramePoolReuse::firstElement(), \"no borrow\");
+}
+print(err ? err + \"\\n\" : \"OK\\n\");
+";
+}
+
+#-- functions --#
+#! the functions whose frames are reused
+public class IRFramePoolReuse {
+    #! returns the local, which only a call with \a set sets
+    public static auto optionalLocal(bool set, int i = 0) {
+        auto v;
+        if (set) {
+            v = "set " + i;
+        }
+        return v;
+    }
+
+    #! a function with few slots
+    public static int small(int i) {
+        return i * 3;
+    }
+
+    #! a function with many slots; a call without \a set sets none of its locals
+    public static auto large(bool set, int i) {
+        auto a; auto b; auto c; auto d; auto e; auto f; auto g; auto h; auto j;
+        if (set) {
+            a = i; b = 1; c = 2; d = 3; e = 4; f = 5; g = 6; h = 7; j = 17;
+            return a + b + c + d + e + f + g + h + j;
+        }
+        return a ?? b ?? c ?? d ?? e ?? f ?? g ?? h ?? j;
+    }
+
+    #! recurses \a depth levels; returns the depth if \a set, else the local that the deepest level does not set
+    public static auto recurse(int depth, bool set) {
+        auto v;
+        if (depth > 1) {
+            auto r = IRFramePoolReuse::recurse(depth - 1, set);
+            return set ? r + 1 : r;
+        }
+        if (set) {
+            v = 1;
+        }
+        return v;
+    }
+
+    #! returns the first element of the list, borrowed from it, or NOTHING without a list
+    public static *string firstElement(*list<string> l) {
+        *string s;
+        if (l) {
+            s = l[0];
+        }
+        return s;
+    }
+}
+#-- functions --#

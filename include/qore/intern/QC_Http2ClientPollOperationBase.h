@@ -39,6 +39,7 @@
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
 #include "qore/intern/RSet.h"
 #include "qore/intern/QoreConsumeHook.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <atomic>
 #include <string>
@@ -311,7 +312,7 @@ public:
 
     DLLLOCAL void setMaxResponseBodySize(int64_t max_size) {
         if (sock_obj) {
-            sock_obj->setMaxResponseBodySize(max_size);
+            qore_socket_object_private(sock_obj).setMaxResponseBodySize(max_size);
         }
     }
 
@@ -320,7 +321,7 @@ public:
     */
     DLLLOCAL void releaseStream(int32_t stream_id) {
         if (sock_obj) {
-            sock_obj->releaseHttp2Stream(stream_id);
+            qore_socket_object_private(sock_obj).releaseHttp2Stream(stream_id);
         }
     }
 
@@ -328,7 +329,7 @@ public:
     /** Can be called from any thread
     */
     DLLLOCAL int64_t getDataIdleUs() const {
-        return sock_obj ? sock_obj->getDataIdleUs() : -1;
+        return sock_obj ? qore_socket_object_private(sock_obj).getDataIdleUs() : -1;
     }
 
     //! Sets the encoding assumed for text response bodies whose encoding is not determined otherwise
@@ -339,7 +340,7 @@ public:
     */
     DLLLOCAL void setAssumedEncoding(const QoreEncoding* enc) {
         if (sock_obj) {
-            sock_obj->setHttpAssumedEncoding(enc);
+            qore_socket_object_private(sock_obj).setHttpAssumedEncoding(enc);
         }
     }
 
@@ -351,7 +352,7 @@ public:
     */
     DLLLOCAL void setDecodeBody(bool decode) {
         if (sock_obj) {
-            sock_obj->setHttpDecodeBody(decode);
+            qore_socket_object_private(sock_obj).setHttpDecodeBody(decode);
         }
     }
 
@@ -501,6 +502,26 @@ public:
 
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
+
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
 
     //! Custom cycle scanner for stream_queues / pending_stream_registrations
     //! QoreObject refs that live in C++ containers invisible to the normal

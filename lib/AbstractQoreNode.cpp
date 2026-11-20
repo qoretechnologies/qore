@@ -512,7 +512,7 @@ static QoreListNode* crlr_list_copy(RuntimeConfig& rc, const QoreListNode* n, Ex
     assert(xsink);
     ReferenceHolder<QoreListNode> l(qore_list_private::get(*n)->getEmptyCopy(n->is_value()), xsink);
     for (unsigned i = 0; i < n->size(); i++) {
-        l->push(copy_value_and_resolve_lvar_refs(rc, n->retrieveEntry(i), xsink), nullptr);
+        l->push(copy_value_and_resolve_lvar_refs(rc, n->retrieveEntry(i), xsink), xsink);
         if (*xsink) {
             return nullptr;
         }

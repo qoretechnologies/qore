@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - the end of a background thread whose Program another thread deletes meanwhile
+# test-platform: macos - the end of a background thread whose destructors enter the Program it started in
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -33,16 +33,6 @@ class Tracked {
 
 #! the code of the Program that the test deletes
 const ProgramCode = "
-#! saves two objects that the code given creates in the thread-local data of a background thread started in this
-#! Program, which then ends; the thread's data holds the only references to them
-sub save_in_thread(code make, Counter saved) {
-    background sub () {
-        save_thread_data(\"a\", make());
-        save_thread_data(\"b\", make());
-        saved.dec();
-    }();
-}
-
 #! saves a value in the thread-local data
 sub save(string key, auto value) {
     save_thread_data(key, value);
@@ -103,17 +93,16 @@ const TopLevelCode = "
 SaveOnDestroy keep = save_on_destroy(get_thread_data(\"counter\"));
 ";
 
-#! the destructors that the end of a background thread runs can run after another thread deleted the thread's Program
-/** The thread's data is deleted at its end, after the thread has left its Program, which another thread can then
-    delete; the thread's Program is still its current Program while the destructors of its data run, so it must stay
-    allocated until the thread's data has been deleted.
-
-    The first destructor run by the end of the thread waits until the Program has been deleted, and the second one
-    then runs with the thread's Program deleted.
+#! the destructors of a background thread's data that enter the Program that the thread started in
+/** The teardown of a background thread runs in no Program of its own (qore#6629, see thread-exit-program-context.qtest,
+    which covers the destructors of classes of other Programs): a destructor of a class of the thread's Program enters
+    that Program as any thread enters a Program, with its thread count.  While the Program exists, the destructor runs,
+    and the thread's data in the Program that it records again is purged by the deletion of the thread's data; once the
+    Program has been deleted, its code cannot be entered: the destructor does not run, and the thread reports
+    PROGRAM-ERROR.  The thread's end leaves no record of the Program and no reference to it behind in either case.
 */
 class ThreadEndDeletedProgramTest inherits QUnit::Test {
     constructor() : Test("ThreadEndDeletedProgramTest", "1.0") {
-        addTestCase("a thread's data is deleted at its end after its Program was deleted", \threadEndTest());
         addTestCase("an object of a class of the thread's Program in its data is destroyed at its end",
             \ownClassTest());
         addTestCase("an object of a class of the thread's deleted Program in its data is not destroyed at its end",
@@ -121,50 +110,6 @@ class ThreadEndDeletedProgramTest inherits QUnit::Test {
         addTestCase("data saved while a thread's data in a Program is deleted at its end leaves nothing behind",
             \lateDataTest());
         set_return_value(main());
-    }
-
-    threadEndTest() {
-        # the ID of the thread's Program data, in debug builds
-        *int tpd_id;
-        Counter destroyed(2);
-        Counter in_destructor(1);
-        Queue release();
-        # the destructors that wait for the release continue in any case, so that a failed check does not leave the
-        # thread waiting
-        bool released;
-        on_exit if (!released) {
-            release.push(True);
-            release.push(True);
-        }
-        Counter saved(1);
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES, True);
-            p.parse(ProgramCode, "thread-end-deleted-program");
-            code blocker = sub () {
-                if (in_destructor.getCount()) {
-                    in_destructor.dec();
-                }
-                # a bound for a broken test only
-                release.get(120000);
-            };
-            p.callFunction("save_in_thread", Tracked sub () {
-                if (Option::HAVE_LIBRARY_DEBUGGING && !exists tpd_id) {
-                    tpd_id = call_function("dbg_get_thread_program_data_id");
-                }
-                return new Tracked(destroyed, blocker);
-            }, saved);
-            saved.waitForZero();
-            # the end of the thread runs the first destructor; the Program is deleted at the end of this block
-            assertEq(0, in_destructor.waitForZero(120000), "the end of the thread runs a destructor");
-        }
-        released = True;
-        release.push(True);
-        release.push(True);
-        assertEq(0, destroyed.waitForZero(120000), "the destructors of the thread's data ran");
-        # the thread has ended before the next test starts
-        if (exists tpd_id) {
-            assertTrue(call_function("dbg_wait_thread_program_data_released", tpd_id, 120000), "the thread has ended");
-        }
     }
 
     #! the destructor of an object of a class of the thread's Program runs at the thread's end, and the thread's end

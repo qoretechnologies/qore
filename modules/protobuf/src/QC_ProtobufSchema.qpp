@@ -315,7 +315,8 @@ list<string> ProtobufSchema::messageTypes() {
 
 //! Returns a default (zero-valued) message as a Qore hash
 /** @param type the fully-qualified message type name
-    @return a hash with all fields set to their default values
+    @return a hash with all fields set to their default values; message fields have no value (see
+    @ref protobufnesting)
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
 
@@ -336,13 +337,16 @@ hash<auto> ProtobufSchema::defaultMessage(string type) {
 
 //! Encodes a Qore hash as a protobuf binary message
 /** @param type the fully-qualified message type name
-    @param data the hash to encode
+    @param data the hash to encode; protobuf strings are UTF-8, so its strings and string map keys are converted to
+    UTF-8
 
     @return the protobuf-encoded binary data
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-FIELD-ERROR if a hash key doesn't match a field
     @throw PROTOBUF-ENCODE-ERROR if serialization fails
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
 
     @since %protobuf 1.0
 */
@@ -357,11 +361,14 @@ binary ProtobufSchema::encode(string type, hash<auto> data) {
 /** @param type the fully-qualified message type name
     @param data the protobuf-encoded binary data
 
-    @return the decoded message as a hash
+    @return the decoded message as a hash; protobuf strings are UTF-8, so its strings are tagged UTF-8, and string map
+    keys are converted to the default encoding, as for any hash key
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-DECODE-ERROR if parsing fails, or a string map key in the message contains a NUL character,
     which a hash key cannot hold
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
 
     @since %protobuf 1.0
 */
@@ -376,10 +383,12 @@ hash<auto> ProtobufSchema::decode(string type, binary data) {
 /** @param type the fully-qualified message type name
     @param data the hash to convert
 
-    @return the JSON string representation
+    @return the JSON string representation, tagged UTF-8
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-JSON-ERROR if JSON conversion fails
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
 
     @since %protobuf 1.0
 */
@@ -392,12 +401,14 @@ string ProtobufSchema::toJson(string type, hash<auto> data) {
 
 //! Parses a JSON string to a Qore hash via protobuf
 /** @param type the fully-qualified message type name
-    @param json the JSON string to parse
+    @param json the JSON string to parse; it is converted to UTF-8 before it is parsed, whatever its encoding
 
     @return the parsed message as a hash
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-JSON-ERROR if JSON parsing fails
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
     @throw PROTOBUF-DECODE-ERROR if a string map key in the message contains a NUL character, which a hash key cannot
     hold, so the message cannot be decoded to a hash
 

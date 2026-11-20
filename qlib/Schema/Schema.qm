@@ -630,12 +630,37 @@ module Schema {
 
     @section schema_upgrade_access Access Levels
 
-    Access levels control which migration actions are permitted:
+    Access levels control whether a schema can run SQL text from its description:
 
-    |!Level|!Constant|!Allowed Actions
-    |\c untrusted|@ref Schema::AL_UNTRUSTED "AL_UNTRUSTED"|Data-driven actions only (update, insert, delete, DDL operations)
-    |\c trusted|@ref Schema::AL_TRUSTED "AL_TRUSTED"|All data-driven actions + raw SQL (\c sql) + scripts (\c script)
-    |\c admin|@ref Schema::AL_ADMIN "AL_ADMIN"|Everything including force operations
+    |!Level|!Constant|!Allowed
+    |\c untrusted|@ref Schema::AL_UNTRUSTED "AL_UNTRUSTED"|Data-driven definitions and actions only (update, insert, delete, DDL operations); no SQL text
+    |\c trusted|@ref Schema::AL_TRUSTED "AL_TRUSTED"|Everything: also SQL text, raw SQL (\c sql) and scripts (\c script)
+    |\c admin|@ref Schema::AL_ADMIN "AL_ADMIN"|The same as \c trusted
+
+    Any other access level raises \c SCHEMA-ACCESS-ERROR.  A schema at the \c untrusted level is refused when it is
+    created, with \c SCHEMA-ACCESS-ERROR, if any key of its description gives SQL text (qore#6578):
+    - the \c types, \c functions, \c procedures, \c packages and \c materialized_views sections
+    - a table key other than \c columns, \c primary_key, \c indexes, \c unique_constraints,
+      \c foreign_constraints, \c comment, \c partition_strategy, \c partitions and \c auto_triggers (so also the
+      \c triggers and the \c driver overrides of a table), and a table, column or index named \c driver
+    - a column with \c default_value_native, a \c native_type that is not a type name of one word (with an optional
+      schema, size and array brackets) or a known type name of more words (ex: \c "double precision",
+      \c "timestamp with time zone": other words after a type are column clauses), a \c populate expression with
+      \c sql, or an
+      option other than \c qore_type, \c comment and \c default_value that is not a number or a boolean; a column's
+      own \c driver overrides are checked as columns
+    - an index column that is not a name (an expression), and the index options other than \c columns, \c unique,
+      \c replace, \c partition_aligned and \c index_tablespace (a name)
+    - a partition strategy key other than \c method, \c columns and \c subpartition (so also \c auto), a
+      partition key that gives SQL text (\c bound_sql, \c bound_from_sql, \c bound_to_sql, \c values_sql),
+      \c driver or \c schema, and a partition value with \c "$"
+    - a value of \c index_options or \c column_options that is not a name, a number or a boolean
+    - the migration actions \c sql, \c script and \c add_trigger, \c add_constraint with
+      <tt>constraint_type: check</tt>, \c add_index with a column that is not a name, and \c add_column and
+      \c modify_column with a column as above
+
+    @ref Schema::MigrationExecutor "MigrationExecutor" refuses such a step at the \c untrusted level as well, with
+    \c MIGRATION-ACCESS-ERROR, before it runs.
 
     @par Setting the access level
     @code{.py}
@@ -931,6 +956,9 @@ module Schema {
 
 
     @section schema_v1_9_0 Schema Module v1.9.0
+    - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the output of
+      alignments and migrations is left out when the module's code has no terminal I/O
+      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - added @ref Schema::AbstractSchema::alignWithInfoInTransaction()
       for alignment with caller-controlled commit or rollback; DataSchema
       rejects migration actions that commit independently in this mode
@@ -1063,6 +1091,14 @@ module Schema {
 
 #! this namespace contains all public definitions in the %Schema module
 public namespace Schema {
+    # writes the module's terminal output; nothing when its code has no terminal I/O, so that code without it can load
+    # the module, as the stdout constant needs terminal I/O only when it is written (qore#6438); not buffered
+    sub schema_terminal_printf(string fmt, ...) {
+        if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            stdout.vprintf(fmt, argv);
+        }
+    }
+
     #! Helper constant for column hash functions with "NULL" constraint for better readability
     public const C_NULL = False;
     #! Helper constant for column hash functions with "NOT NULL" constraint for better readability

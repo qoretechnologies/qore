@@ -55,6 +55,7 @@
 #include <qore/SystemEnvironment.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/SyncParseOptions.h"
 
 class AbstractQoreNode;
 class QoreValue;
@@ -560,7 +561,58 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        change with a SetCodeParseOptions instruction (QoreIROpcode::SetCodeParseOptions, 439: the options as four
 //!        32-bit ConstInt words), whose native code calls qore_rt_set_code_parse_options(); the AOT runtime identity
 //!        changes with the runtime entry (qore#6293)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
+//! v43 (batch AC; one format version for the format changes of the batch, one line each):
+//!      - the encoded metadata is followed by the XXH64 checksum (seed 0, u64 little-endian) of all of its bytes,
+//!        and the header flags have QORE_AOT_FLAG_METADATA_CHECKSUM; the reader checks it before it reads anything
+//!        else, so that metadata corrupted after it was written is refused (qore#6451)
+//! v44 (batch AE; one format version for the format changes of the batch, one line each):
+//!      - the module metadata record of an AOT module (QORE_AOT_MODULE_INFO_VERSION 3) has the restrictions that its
+//!        code gives the modules it requires, each with QMDR_* flags, which the loader applies before the module's
+//!        initialization (qore#6406, qore#6386)
+//! v45 (batch AF; one format version for the format changes of the batch, one line each):
+//!      - the module metadata record of an AOT module (QORE_AOT_MODULE_INFO_VERSION 4) has the functional domains
+//!        that the module declares in its header, the dependencies that it requires only after its header and the
+//!        functional domains that its own code restricts, with which the module loader removes the declared domains
+//!        from the restrictions that those dependencies inherit when the module is loaded as library code (qore#6351)
+//!      - the flags byte of the TIME_ZONE section has bit 2 set for a directive that applies only to a load of the
+//!        module as library code: one after the header of a module that declares the locale control domain, which
+//!        the module's own restriction disallowed when it was compiled (qore#6352)
+//! v46: the DebugStatement, DebugBlock and ScopeExit records of the debug IR end with the paths of a debugger's
+//!      flow requests (a u8 mask: bit 0 break, bit 1 continue, bit 2 return, then the u16 block index of each path in
+//!      that order), and the flags of a block record have the bit 0x10 for a block of such a path (#6200, #6201).  A
+//!      v9-v45 image has none: a request at a step event of its code returns from the function.
+//! v47 (batch AK; one format version for the format changes of the batch, one line each):
+//!      - each serialized IR instruction ends with its runtime location (QoreIRInstruction::stmt_loc), the location of
+//!        the innermost statement whose code it is: a u8 (QoreAOTStmtLocTag): 0 none, 1 the one of the instruction
+//!        written before it in its function, 2 an earlier entry of the function's statement location table (a u32
+//!        index), 3 a new entry (start line, end line and file, as the instruction's own location), so that the IR
+//!        rebuilt from the image (debug IR, closure bodies without native code, handler and background helper IR)
+//!        locates an exception at the statement, as all other code does; a v9-v46 image has none, and its IR takes
+//!        the location of each instruction (qore#6646)
+//! v48 (batch AL; the reader refuses v47 and older images):
+//!      - the block cleanups of a return statement that run handlers out of line past the inline cap have a ScopeExit
+//!        with flag bit 2 (hand_over_return), whose handlers hand the values of their returns to the frame's
+//!        handed-over return, and the return takes it with TakeHandedOverReturn (QoreIROpcode 441), or a return in a
+//!        handler that replaces it releases it with ReleaseHandedOverReturn (442); native code calls
+//!        qore_rt_exec_on_block_exit_return_hold(), qore_rt_take_handed_over_return() and
+//!        qore_rt_release_handed_over_return(); a ScopeExit outside return cleanups can produce a boolean that
+//!        branches to the handed-over return if a handler returned (#6137, #6552)
+//!      - ReleaseHandedOverReturn (442) can have one operand, the result of a ScopeExit past the inline cap, which it
+//!        only clears; the ScopeExit with flag bit 2 can have a result: whether its handlers handed a value over (#6552)
+//!      - debug IR can encode ReleasePlainLocalRead (opcode 443, Base group, one operand) to release a functional
+//!        operator's source after a plain local read (#5959); the maximum opcode in the AOT header is 443
+//!      - IR functions have their catch-exit depths and catch-cleanup results after their blocks, as (u16 block, u16
+//!        instruction, u32 value) entries, so that a module's debug IR closes its catch blocks as the IR it was made
+//!        from (qore#6733)
+//!      - the method name of an object method reference (OBJ_METHOD_REF_EXPR and EN_OBJ_METH_REF expressions, and the
+//!        name that native code passes to qore_rt_create_object_method_ref_aot()) is
+//!        "\x02<declared class reference>\x01<method class reference>\x01<method name>" for a normal method of a
+//!        parent class that the compiler resolved for the receiver's declared class (qore_aot_object_method_ref_name(),
+//!        qore#6680); an earlier reader would take it for the name of a method that does not exist
+//! The shared format version for the changes in batch AL (see v48 above).
+constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
+//! Old compiled artifacts must be rebuilt for AL's handler and source-release semantics.
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AL_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -618,13 +670,83 @@ constexpr uint16_t QORE_AOT_SHARED_HANDLER_VERSION = 41;
 constexpr uint16_t QORE_AOT_LVPATH_REF_RV_VERSION = 42;
 //! First format version whose top-level code can set the parse options of its statements (see v42 above)
 constexpr uint16_t QORE_AOT_CODE_PARSE_OPTIONS_VERSION = 42;
+static_assert(QORE_AOT_LVPATH_REF_RV_VERSION == QORE_AOT_CODE_PARSE_OPTIONS_VERSION,
+    "the format changes of batch AA share one format version (v42)");
+//! First format version whose encoded metadata is followed by its checksum (see v43 above)
+/** The checksum is the XXH64 (seed 0) of all the bytes of the encoded metadata (compressed, if it is compressed),
+    written as a u64 little-endian after them; the header flags have QORE_AOT_FLAG_METADATA_CHECKSUM.  The reader checks
+    it before it reads anything else (QoreAOTBinaryReader::open()), so that metadata corrupted after qcc wrote it is
+    refused as a whole: a module whose metadata does not match is not loaded, as a module whose metadata cannot be
+    read, and its source module is loaded instead when there is one (qore#6451)
+*/
+constexpr uint16_t QORE_AOT_METADATA_CHECKSUM_VERSION = 43;
+//! The size of the checksum that follows the encoded metadata (see QORE_AOT_METADATA_CHECKSUM_VERSION)
+constexpr uint32_t QORE_AOT_METADATA_CHECKSUM_SIZE = 8;
+//! First format version whose modules have the module metadata record with dependency restrictions (see v44 above)
+/** The record is outside the metadata, and its own version (QORE_AOT_MODULE_INFO_VERSION) gives its readers its
+    layout; the format version of the artifacts that carry it changes with it, so that the format that a module
+    reports (qcc --dump-info, the aot-format-version of its build information) tells which record it has (qore#6406,
+    qore#6386)
+*/
+constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
+//! First format version whose modules have the module metadata record with the declared domains (see v45 above)
+/** The record is outside the metadata, and its own version (QORE_AOT_MODULE_INFO_VERSION, 4 from this format) gives
+    its readers its layout; the format version of the artifacts that carry it changes with it, so that the format that
+    a module reports (qcc --dump-info, the aot-format-version of its build information) tells which record it has; a
+    record of an earlier version is refused, asking for the module to be rebuilt (qore#6351, qore#6352)
+*/
+constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
+//! First format version whose debug IR has the paths of a debugger's flow requests (see v46 above).
+constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
+//! The format version of the format changes of batch AK (see v47 above)
+/** Each change of the batch adds its line to the v47 history above and, if it needs one, a feature version of its own
+    that a static_assert keeps equal to this one
+*/
+constexpr uint16_t QORE_AOT_BATCH_AK_VERSION = 47;
+//! First format version whose serialized IR instructions have their runtime locations (see v47 above)
+/** The locations of the statements of an IR function form a table of the function, whose entries are written where
+    an instruction first has them; the IR of a handler, a closure or a background helper written in an instruction of
+    the function has a table of its own.  The reader gives the instructions with the same entry the same location, so
+    that the IR interpreter and native code store the location only where the statement changes, as for IR lowered
+    from the code (qore#6646)
+*/
+constexpr uint16_t QORE_AOT_STATEMENT_LOCATIONS_VERSION = 47;
+static_assert(QORE_AOT_STATEMENT_LOCATIONS_VERSION == QORE_AOT_BATCH_AK_VERSION,
+    "the format changes of batch AK share one format version (v47)");
+//! First format version whose return statements can take the values that handlers run out of line past the inline
+//! cap handed over (see v48 above, #6137)
+constexpr uint16_t QORE_AOT_HANDED_OVER_RETURN_VERSION = 48;
+static_assert(QORE_AOT_HANDED_OVER_RETURN_VERSION == QORE_AOT_BATCH_AL_VERSION,
+    "the format changes of batch AL share one format version (v48)");
+//! First format version whose IR functions record their catch-exit depths and catch-cleanup results (qore#6733)
+/** QoreIRFunction::catch_exit_depths and catch_cleanup_results (#5968, #6079) are written after the blocks of the
+    function as (block index, instruction index, value) entries, the index of an instruction being that of the
+    written IR (in which a PushTempMarkPair is two instructions); a change of batch AL (see v48 above)
+*/
+constexpr uint16_t QORE_AOT_CATCH_TABLES_VERSION = 48;
+static_assert(QORE_AOT_CATCH_TABLES_VERSION == QORE_AOT_BATCH_AL_VERSION,
+    "the format changes of batch AL share one format version (v48)");
+//! First format version whose object method references can give the method resolved for the receiver's declared
+//! class (see v48 above, qore#6680); a reader of an earlier image reads plain method names.
+constexpr uint16_t QORE_AOT_INHERITED_OBJECT_METHOD_REF_VERSION = 48;
+static_assert(QORE_AOT_INHERITED_OBJECT_METHOD_REF_VERSION == QORE_AOT_BATCH_AL_VERSION,
+    "the format changes of batch AL share one format version (v48)");
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CODE_PARSE_OPTIONS_VERSION;
-static_assert(QORE_AOT_LVPATH_REF_RV_VERSION == QORE_AOT_BINARY_VERSION
-    && QORE_AOT_CODE_PARSE_OPTIONS_VERSION == QORE_AOT_BINARY_VERSION,
-    "the format changes of batch AA share one format version (v42)");
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AL_VERSION;
+
+//! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
+enum class QoreAOTStmtLocTag : uint8_t {
+    //! the instruction has no runtime location (code outside the statements of the function)
+    None = 0,
+    //! the runtime location of the instruction written before it in its function
+    Previous = 1,
+    //! an entry of the statement location table of the function: its u32 index follows
+    Entry = 2,
+    //! a new entry of the table, which takes the next index: its start line, end line and file follow
+    New = 3,
+};
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -671,6 +793,35 @@ constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
 //! Binary header flags
 constexpr uint16_t QORE_AOT_FLAG_HAS_TOPLEVEL = 0x0001;
 constexpr uint16_t QORE_AOT_FLAG_IS_MODULE    = 0x0002;
+//! The encoded metadata is followed by its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION)
+constexpr uint16_t QORE_AOT_FLAG_METADATA_CHECKSUM = 0x0004;
+
+//! Returns the length of the encoded AOT metadata at \a data without its checksum, from its header
+/** The data can be longer than the metadata (\a avail): a symbol of an object file, whose size is taken up to the next
+    symbol in a format without symbol sizes; compressed metadata is decompressed to find its end.  Used by the reader to
+    find the checksum after the metadata in such data, and by the library and qcc to cut a symbol's data to its
+    metadata and checksum (qore#6451); exported for qcc
+
+    @param data the data
+    @param avail the size of \a data
+    @param len receives the length of the encoded metadata without its checksum
+    @param cancelled if not null, set to true if the scan was ended by a cancellation of the thread (qore_check_cancel())
+
+    @return true if \a data has the header of encoded AOT metadata that fits in \a avail bytes, with its length set
+*/
+bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t& len, bool* cancelled = nullptr);
+
+//! Returns the checksum of encoded AOT metadata: the XXH64 (seed 0) of its bytes (QORE_AOT_METADATA_CHECKSUM_VERSION)
+DLLLOCAL uint64_t qore_aot_metadata_checksum(const uint8_t* data, size_t size);
+
+//! Seals encoded AOT metadata whose format has a checksum: sets QORE_AOT_FLAG_METADATA_CHECKSUM in its header and
+//! appends its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION); metadata of an earlier format is left as it is
+DLLLOCAL void qore_aot_seal_metadata(std::vector<uint8_t>& metadata);
+
+//! Removes the checksum of sealed AOT metadata, so that its encoding can be changed (it is sealed again after)
+/** @return true if the metadata was sealed
+*/
+DLLLOCAL bool qore_aot_unseal_metadata(std::vector<uint8_t>& metadata);
 
 //! Feature flags for binary compatibility (64-bit bitmask in header.feature_flags)
 constexpr uint64_t QORE_AOT_FEAT_FOREACH_REF    = 1ULL << 0;  //!< RefForeach* opcodes (323-328)
@@ -775,8 +926,9 @@ enum class QoreAOTSectionType : uint16_t {
     UNRUN_TOP_LEVEL_CODE = 31,  //!< Optional top-level statements of a script fragment's sources that never run
     FUNCTIONAL_DOMAIN    = 32,  //!< The functional domains the code uses (u64 lo + u64 hi); absent if none
     MODULE_DOMAINS       = 33,  //!< The functional domains a user module declares in its header (u64); absent if none
-    TIME_ZONE            = 34,  //!< The time zone set with `%set-time-zone` (StringRef, then u8: 1 if the directive
-                                //!< follows the header of a module); absent if none (qore#6270)
+    TIME_ZONE            = 34,  //!< The time zone set with `%set-time-zone` (StringRef, then u8 flags: 1 if the
+                                //!< directive follows the header of a module, 2 if it applies only to a load of the
+                                //!< module as library code); absent if none (qore#6270, qore#6352)
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -1502,19 +1654,40 @@ public:
     //! Write a source-path reference; ordinary string values must use writeStringRef().
     /** @param path physical source path */
     void writeSourcePath(const char* path) {
+        noteStringRef();
         writeU32(addSourcePath(path));
     }
 
     //! Write a string reference (adds to pool, writes offset)
     void writeStringRef(const char* str) {
         uint32_t offset = strings.add(str);
+        noteStringRef();
         writeU32(offset);
     }
 
     //! Write a string reference with explicit length
     void writeStringRef(const char* str, size_t len) {
         uint32_t offset = strings.add(str, len);
+        noteStringRef();
         writeU32(offset);
+    }
+
+    //! The positions of the string references written while set (see noteStringRef()), or nullptr
+    /** The offset of a string in the pool depends on the strings written before it, so a digest of a payload takes
+        the strings of its references instead (QORE_AOT_DEBUG_IR_DIGEST, #6201)
+    */
+    std::vector<uint32_t>* string_ref_positions = nullptr;
+
+    //! Records the position of the string reference written next, if string_ref_positions is set
+    void noteStringRef() {
+        if (string_ref_positions) {
+            string_ref_positions->push_back(position());
+        }
+    }
+
+    //! Returns the string at an offset of the pool, or nullptr
+    const char* getPoolString(uint32_t offset) const {
+        return strings.get(offset);
     }
 
     //! Write a QoreValue (serializes constant value)
@@ -1656,6 +1829,8 @@ private:
 */
 class QoreAOTBinaryReader {
     const uint8_t* data = nullptr;
+    //! true if the last open() refused the metadata because it does not match its checksum
+    bool checksum_mismatch = false;
     uint32_t total_size = 0;
     const uint8_t* input_data = nullptr;
     uint32_t input_size = 0;
@@ -1754,9 +1929,13 @@ public:
     /** @param data pointer to the binary data
         @param size size of the binary data
         @param error receives error message on failure
+        @param verify_checksum false for metadata that a reader of the same load has already checked against its
+        checksum (QORE_AOT_METADATA_CHECKSUM_VERSION): the metadata that QoreAOTDebugMetadata keeps from the reader of
+        the module, or a copy of it that it makes; the checksum is then not computed again, but the metadata must
+        still have one (qore#6451)
         @return true on success, false on failure
     */
-    bool open(const uint8_t* data, uint32_t size, std::string& error);
+    bool open(const uint8_t* data, uint32_t size, std::string& error, bool verify_checksum = true);
 
     //! Get the parsed binary header
     const QoreAOTBinaryHeader& getHeader() const { return header; }
@@ -1764,6 +1943,13 @@ public:
     //! Original encoded metadata passed to open(); valid until the caller releases it.
     const uint8_t* getInputData() const { return input_data; }
     uint32_t getInputSize() const { return input_size; }
+
+    //! Returns true if the last open() refused the metadata because its checksum does not match or is missing
+    /** The metadata has the magic number and a supported version of a format with a checksum
+        (QORE_AOT_METADATA_CHECKSUM_VERSION), so it is most likely metadata that was changed after it was written
+        rather than other bytes (qore#6451)
+    */
+    bool checksumMismatch() const { return checksum_mismatch; }
 
     //! Returns the offset of a pointer into the (decompressed) metadata, or SIZE_MAX if it points elsewhere
     /** For metadata written uncompressed, it is the offset in the encoded metadata (QORE_AOT_TRACE_IR_DESER prints it
@@ -2416,6 +2602,27 @@ struct QoreModuleParseOptionMask;
 //! applied; see QoreModuleParseOptionMask
 /** \a p may be nullptr; \a exclude names the options the module does not inherit
 */
+//! Names the functional domains that the module metadata record of an AOT module declares while the module's
+//! initialization runs in this thread (qore#6351)
+/** The module loader relieves the dependencies of a module loaded as library code with the domains of its record
+    (QoreAOTModuleFileInfo::declared_domains), which it reads before the module is mapped; the initialization of the
+    module named \a module refuses the module if its MODULE_DOMAINS section declares other domains: the record is
+    damaged.  Only the first initialization of that module in the scope checks them.
+*/
+class QoreAOTModuleExpectedDomainsHelper {
+public:
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper(const char* module, int64 domains);
+    DLLLOCAL ~QoreAOTModuleExpectedDomainsHelper();
+
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper(const QoreAOTModuleExpectedDomainsHelper&) = delete;
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper& operator=(const QoreAOTModuleExpectedDomainsHelper&) = delete;
+
+private:
+    std::string old_module;
+    int64 old_domains;
+    bool old_set;
+};
+
 DLLLOCAL QoreParseOptions qore_get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
         const QoreModuleParseOptionMask& mask);
 
@@ -2439,12 +2646,13 @@ bool readModuleDomains(const QoreAOTBinaryReader& reader, int64& dom, std::strin
 //! offset) into the TIME_ZONE section, with \a after_module_header true if the directive follows the header of a
 //! module, whose \c domains can have removed the restriction the loader checks it against; nothing is written if
 //! \a zone is empty (qore#6270)
-void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header);
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header,
+        bool trusted_only = false);
 
 //! Read the time zone recorded in the TIME_ZONE section and whether its directive follows the header of a module;
 //! an empty zone if there is no such section
 bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& after_module_header,
-        std::string& error);
+        bool& trusted_only, std::string& error);
 
 //! Serialize producer/build metadata into the BUILD_INFO binary section.
 /** Wire format: u32 count, then count x (StringRef key, StringRef value).
@@ -3109,7 +3317,11 @@ DLLLOCAL FILE* qore_open_regular_file(const char* path);
     - uint32 magic ('QAMI'), uint32 version, uint32 payload_size (the bytes that follow)
     - the payload: the module name, then uint32 num_dependencies and the dependencies, then uint32 num_optional and
       the optional modules, each string as uint32 length followed by its bytes; every string is nonempty and
-      contains no NUL
+      contains no NUL; then the lists \c compiled_with, \c prepended_module_paths and \c appended_module_paths
+      (version 2), then (version 3) uint32 num_dependency_restrictions and for each the module name and its
+      restrictions as four uint32 (low 64 bits then high 64 bits, each low word first), then its uint32 QMDR_* flags
+      (any other bit makes the record invalid); then (version 4) uint64 declared_domains (two uint32, low word
+      first), the list \c post_header_dependencies and uint64 restricted_domains (likewise)
 
     The loader reads the metadata before it maps the qmod: it loads the dependencies first so the qmod can be
     mapped once with RTLD_NOW, and it checks the optional modules that were unavailable when the module was compiled
@@ -3135,14 +3347,50 @@ struct QoreAOTModuleFileInfo {
     std::vector<std::string> prepended_module_paths;
     //! the module's own %append-module-path directories, in the order its initialization searches them
     std::vector<std::string> appended_module_paths;
+    //! the options that the module's directives gave the modules that they loaded, in directive order (version 3)
+    /** The parse options that the module's Program gave each module that a directive loaded, which it inherits from
+        it (not those that relieve restrictions); the loader loads the module's dependencies with them, as the module's
+        source would (qore#6406; see qore_program_private::parse_module_restrictions); each entry has QMDR_* flags: the
+        modules that a module declaring functional domains requested before its header, and every module of a record
+        whose requests before the header could not be recorded exactly, are loaded before the module's
+        initialization with the restrictions of the loading code (qore#6386)
+    */
+    std::vector<QoreModuleDependencyRestriction> dependency_restrictions;
+    //! the functional domains that the module declares in its header (\c domains), as in the MODULE_DOMAINS
+    //! section of the image (version 4)
+    /** The module loader loads the module's dependencies before the module's initialization (see
+        QoreModuleManager::loadBinaryModuleFromPath()); for a module loaded as library code, they inherit the
+        restrictions of the Program loading the module without these domains, as the dependencies of the module's
+        source do, which its Program loads after its header has removed them (qore#6351)
+    */
+    int64 declared_domains = 0;
+    //! the dependencies that the module's parse requested only after its header (version 4), which inherit the
+    //! restrictions without the declared domains, as those of its source do, which its Program loads after its header
+    //! has removed them; the others (requested before the header, or not requested by the parse: in code that a
+    //! conditional excludes) inherit them with the domains
+    /** Never a module that dependency_restrictions lists with QMDR_BEFORE_HEADER, and empty if an entry of
+        dependency_restrictions has QMDR_INEXACT; the loader enforces both for any record (qore#6386)
+    */
+    std::vector<std::string> post_header_dependencies;
+    //! the functional domains that the module's code restricts with its own parse directives (version 4): the
+    //! dependencies do not inherit a relief of them from a module loading this one (qore#6351)
+    /** QDOM_ALL if an entry of dependency_restrictions has QMDR_INEXACT (qore#6386)
+    */
+    int64 restricted_domains = 0;
 };
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
 static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
 //! The format version of AOT module metadata records
-/** version 2 added the names of the modules the module was compiled with and its own module path directories
+/** version 2 added the names of the modules the module was compiled with and its own module path directories;
+    version 3 the restrictions that its code gives the modules it requires (qore#6406), each with QMDR_* flags
+    (qore#6386), from AOT format version 44 (QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION); version 4 the
+    functional domains that the module declares in its header, the dependencies it requires only after its header and
+    the functional domains its own code restricts (qore#6351), from AOT format version 45
+    (QORE_AOT_MODULE_INFO_DOMAINS_VERSION).  A record of another version is refused, asking for the module to be
+    rebuilt.
 */
-static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 2u;
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 4u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
 static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
 //! The segment of the Mach-O section holding AOT module metadata
@@ -4867,6 +5115,27 @@ typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t
 */
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
     const AOTExprWriteFunc& writeExpr);
+
+//! Writes the catch-exit depths and the catch-cleanup results of an IR function, after its blocks (see
+//! QORE_AOT_CATCH_TABLES_VERSION, qore#6733)
+/** Each table is a u32 count and (u16 block index, u16 instruction index, u32 value) entries sorted by position; the
+    index of an instruction is that of the written IR, in which a PushTempMarkPair is two instructions.
+
+    @return true on success, false (with the serialization error set) if an instruction is out of the format's range
+*/
+bool qore_aot_write_ir_catch_tables(QoreAOTBinaryWriter& writer, const QoreIRFunction& func);
+
+//! Reads the tables that qore_aot_write_ir_catch_tables() wrote into the IR function read (qore#6733)
+/** @param ptr the data pointer, advanced past the tables
+    @param end the end of the data
+    @param func the function read, whose blocks and instructions are complete
+    @param error receives the error message if an entry is malformed: an index beyond the blocks or the instructions
+    of a block, or an instruction given twice
+
+    @return true on success, false otherwise
+*/
+bool qore_aot_read_ir_catch_tables(const uint8_t*& ptr, const uint8_t* end, QoreIRFunction& func,
+    std::string& error);
 
 //! The handler functions written or read in the IR of a function (see QORE_AOT_SHARED_HANDLER_VERSION, #6087)
 /** A handler function shared by several handlers (QoreIROnBlockExitInstruction::handler_ir) is written in full once,

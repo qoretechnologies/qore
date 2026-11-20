@@ -156,6 +156,31 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" with a description of another
+      table name, which raised \c LOCK-ERROR instead of giving the SQL that renames the table
+      (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>)
+    - a string that is not valid in its encoding is refused with a \c VALUE-ERROR exception when it would be written into
+      an SQL string literal, with every driver; added @ref SqlUtil::sql_literal_check_encoding()
+      "sql_literal_check_encoding()", which the driver modules use for it, and the check of the value of an immediate
+      insert operator refuses such a string (<a href="https://github.com/qoretechnologies/qore/issues/6553">issue 6553</a>)
+    - a cast (@ref SqlUtil::cop_cast() "cop_cast()" and the cast data provider expression) accepts only a type name
+      (see @ref SqlUtil::sql_check_cast_type() "sql_check_cast_type()"), as the type is written into the SQL; any
+      other value raises \c OPERATOR-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6572">issue
+      6572</a>)
+    - no text given to a select is written into its SQL where it could change the query: a
+      @ref select_option_comment "comment" or @ref select_option_hint "hint" that could end its SQL comment or that
+      has a \c "%" placeholder character raises \c OPTION-ERROR (it is written right after the \c select keyword,
+      a hint first), a value given with
+      @ref SqlUtil::cop_value() "cop_value()" to an arithmetic column operator is an SQL literal of the database, as
+      in the select list, and an alias referenced in a superquery or a window is given as an identifier (<a href="https://github.com/qoretechnologies/qore/issues/6574">issue 6574</a>)
+    - added @ref SqlUtil::AbstractSqlUtilBase::getSqlStringLiteral() "AbstractSqlUtilBase::getSqlStringLiteral()" and
+      @ref SqlUtil::AbstractSqlUtilBase::checkSqlStringValue() "AbstractSqlUtilBase::checkSqlStringValue()": a string
+      given in an SQL string literal whose encoding is invalid or that has a NUL character is refused with
+      \c VALUE-ERROR, and its quotes are doubled without a regular expression; the drivers use them
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): an error for
+      an existing constraint name is raised without also printing its message, and a debug print of update operators was
+      removed (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - added @ref SqlUtil::op_trunc_date() "op_trunc_date()", which compares a date column truncated as
       @ref SqlUtil::cop_trunc_date() "cop_trunc_date()" does with a value or another where operator, with the
       database's own truncation (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
@@ -227,6 +252,14 @@ module SqlUtil {
     - added the \c "union", \c "union_all", \c "intersect" and \c "except" select options, which combine a select with
       other selects, and @ref SqlUtil::AbstractTable::SetOperatorSql "AbstractTable::SetOperatorSql" (see
       @ref select_option_set_operators) (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
+    - added recursive queries: the \c "recursive" select option (see @ref select_option_recursive),
+      join_inner_recursive(), join_recursive(), join_left_recursive(),
+      @ref SqlUtil::AbstractTable::supportsRecursiveQueries() "AbstractTable::supportsRecursiveQueries()" and
+      @ref SqlUtil::AbstractTable::getRecursiveQueryRecordType() "AbstractTable::getRecursiveQueryRecordType()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
+    - a recursive query can be the select of an insert-select or a create-as-select, placed in the statement as each
+      database needs it (see @ref select_option_recursive_insert_create)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
     - a template table built from a description (the @ref SqlUtil::Table "Table" constructor with a description,
       @ref SqlUtil::AbstractDatabase::makeTable() "AbstractDatabase::makeTable()" and
       @ref SqlUtil::Tables::populate() "Tables::populate()") is created by the driver as a template, which reads
@@ -542,6 +575,61 @@ module SqlUtil {
       @ref sql_cop_funcs "column operator" applied to the joined table's columns (see @ref join_column_operators);
       it raised \c RUNTIME-TYPE-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/738">issue 738</a>)
+    - fixed a column alias (@ref SqlUtil::cop_as() "cop_as()") in the columns of a
+      @ref select_option_superquery "superquery", which raised \c RUNTIME-TYPE-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6592">issue 6592</a>)
+    - fixed the \c delete_others upsert option, which matched the values of a composite primary key joined with
+      \c "-", so that a row whose key gave the same text was kept (ex: <tt>("a", "b-c")</tt> for
+      <tt>("a-b", "c")</tt>); a table without a primary key raises \c UPSERT-ERROR before any change, where it raised
+      \c RUNTIME-TYPE-ERROR after the input was upserted
+      (<a href="https://github.com/qoretechnologies/qore/issues/6580">issue 6580</a>)
+    - fixed the \c delete_others upsert option, which compared key values as text with those read from the database,
+      so that a value that the database stores in another form (ex: a date in another time zone, a float for an
+      integer column) deleted the row that the upsert had written, and which deleted rows while it read the table,
+      which lost the connection on SQL Server; an empty input now deletes every row, as documented, and an input row
+      without a value of the primary key raises \c UPSERT-ERROR, where every row was deleted
+      (<a href="https://github.com/qoretechnologies/qore/issues/6607">issue 6607</a>)
+    - fixed the \c delete_others upsert option, which deleted the row of an input key that the column rounds (ex:
+      <tt>1.005</tt> in a <tt>numeric(10,2)</tt> column): the PostgreSQL, MySQL, Oracle and SQL Server drivers
+      compare key values converted to the column's type
+      (<a href="https://github.com/qoretechnologies/qore/issues/6635">issue 6635</a>)
+    - fixed the \c delete_others upsert option, which deleted the row of an input key of a \c CHAR(n) or \c NCHAR(n)
+      primary key on Oracle, which stores it padded, or of a key given with trailing spaces on PostgreSQL: the values
+      are compared padded, without being truncated (<a href="https://github.com/qoretechnologies/qore/issues/6675">issue 6675</a>)
+    - fixed the \c delete_others upsert option with a primary key column whose name the driver gives in another case
+      in the rows read (ex: a mixed-case name on MySQL): the key values are taken by the column's name in any case
+      (<a href="https://github.com/qoretechnologies/qore/issues/6674">issue 6674</a>)
+    - fixed a select-first upsert, which updated an unchanged row when the driver gives a column's name in another case
+      (ex: a mixed-case name on MySQL) (<a href="https://github.com/qoretechnologies/qore/issues/6674">issue 6674</a>)
+    - fixed the upserts, which did not find the row of a key that the column rounds or pads when it stores it (ex: a
+      date with fractional seconds in a column with whole seconds, Oracle \c CHAR): the key values are compared and,
+      in a \c MERGE, selected converted to the column's type, as the \c delete_others option compares them
+      (<a href="https://github.com/qoretechnologies/qore/issues/6676">issue 6676</a>)
+    - fixed the select-first upsert, which ignored the \c omit_update option: the omitted columns are neither compared
+      nor updated (<a href="https://github.com/qoretechnologies/qore/issues/6683">issue 6683</a>)
+    - fixed the \c delete_others upsert option of @ref SqlUtil::AbstractTable::upsertFromIterator() with rows of list
+      values (bulk DML), which deleted every row of the table, those of the input as well: the key values of each of their
+      rows are input keys
+      (<a href="https://github.com/qoretechnologies/qore/issues/6687">issue 6687</a>)
+    - fixed an upsert closure (@ref SqlUtil::AbstractTable::getUpsertClosure()) called after
+      @ref SqlUtil::AbstractTable::clear(), which raised \c OBJECT-ALREADY-DELETED with a table's primary key: the
+      closure keeps a copy of the key's columns (<a href="https://github.com/qoretechnologies/qore/issues/6686">issue 6686</a>)
+    - fixed the upsert of a row of list values (bulk DML) by @ref SqlUtil::AbstractTable::upsertFromIterator() or an
+      upsert closure made from a row of list values, which failed with a bind error with every driver but Oracle: its
+      rows are upserted row by row where the driver cannot bind them as arrays, and lists of different lengths raise
+      \c UPSERT-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6691">issue 6691</a>)
+    - fixed the select-first upsert of a row of list values (bulk DML) on Oracle, which failed with \c BIND-ERROR: its
+      rows are upserted one by one (<a href="https://github.com/qoretechnologies/qore/issues/6688">issue 6688</a>)
+    - fixed the upsert of a row with no column to update (only key columns, or all other columns omitted with
+      \c omit_update), which gave an invalid update statement, inserted the row with an update-only upsert on SQL
+      Server, and raised \c UPSERT-ERROR with an update-only upsert on Oracle: the row of its key is unchanged
+      (<a href="https://github.com/qoretechnologies/qore/issues/6692">issue 6692</a>)
+    - fixed the upserts and the \c delete_others option on MySQL without a strict SQL mode, which did not find the row of
+      an integer key out of the range of its column, which MySQL stores as the nearest value in the range: the key
+      values are compared clamped to the range (<a href="https://github.com/qoretechnologies/qore/issues/6689">issue 6689</a>)
+    - fixed the upserts on PostgreSQL with an array column in the upsert key, which failed with
+      <tt>operator does not exist: integer[] = bigint[]</tt>: the key value is converted to the column's array type
+      (<a href="https://github.com/qoretechnologies/qore/issues/6695">issue 6695</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -911,6 +999,8 @@ hash soh = (
     - @ref select_option_superquery "superquery": (@ref hash_type "hash") specifies that the rest of the argument belong to a subquery and the hash arguments under this key will select from the subquery
     - @ref select_option_set_operators "union", "union_all", "intersect", "except": (@ref hash_type "hash" or
       @ref list_type "list") combine the results with those of other selects
+    - @ref select_option_recursive "recursive": (@ref hash_type "hash") a recursive query (a recursive common table
+      expression); the other options select from its rows
     - @ref select_option_forupdate_no_key "forupdate_no_key": (@c bool) explicitly permits concurrent key-share locks
     - @ref select_option_forupdate "forupdate": (\c bool_type "bool") adds a \c "for update" clause to a select query
 
@@ -939,6 +1029,9 @@ table.selectRows({"comment": "foo bar"});
 select /* foo bar *<!--%%-->/ ...
     @endcode
     @warning Oracle: using different comments in the same SQL can lead to new optimizer statement hard parsing.
+    @note The comment is written into an SQL comment right after the \c select keyword, so a comment that contains
+    \c "/<!--%%-->*", \c "*<!--%%-->/", \c "%" (which some database drivers read as a placeholder) or a NUL
+    character raises an \c OPTION-ERROR exception
 
     @subsubsection select_option_hint Select Option "hint"
     In database query operations, various SQL implementations use hints as additions to the SQL standard that instruct the database engine on how to execute the query. For example, a hint may tell the engine to use as little memory as possible (even if the query will run slowly), or to use or not to use an index (even if the query optimizer would decide otherwise).
@@ -951,7 +1044,10 @@ table.selectRows(("hint": "full(t1)"));
     @code{.py}
 select /*+ full(a) *<!--%%-->/ ...
     @endcode
-    The string is taken as-is and it's up to the caller to handle correct aliases in join functions etc.
+    The string is taken as-is and it's up to the caller to handle correct aliases in join functions etc.; as it is
+    written into an SQL comment right after the \c select keyword, a hint that contains \c "/<!--%%-->*",
+    \c "*<!--%%-->/", \c "%" or a NUL character raises an \c OPTION-ERROR exception; a hint is written before a
+    comment
     @note Hints are platform dependent. Curently only Oracle and some versions of PostgreSQL hints are supported in Sqlutil module.
     @warning Use hints only when you know what you are doing.
 
@@ -1264,6 +1360,134 @@ hash<auto> sh = {
       operator that the database does not support raises \c SET-OPERATOR-ERROR
 
     @since %SqlUtil 3.11.0
+
+    @subsubsection select_option_recursive Select Option "recursive"
+    <b>Recursive Query Example:</b>
+    @code{.py}
+# the employees under employee 1 to a depth of 5, with their depth
+*list<auto> rows = employees.selectRows({
+    "recursive": {
+        "name": "tree",
+        "columns": ("id", "manager_id", "name"),
+        # the first rows: employee 1
+        "anchor": {"columns": ("id", "manager_id", "name"), "where": {"id": 1}},
+        # each step adds the employees whose manager is a row of the CTE
+        "step": {"alias": "e", "columns": ("e.id", "e.manager_id", "e.name"),
+                 "join": join_inner_recursive("t", {"manager_id": "id"})},
+        "depth": "lvl",
+        "max_depth": 5,
+    },
+    # the other options select from the rows of the CTE
+    "columns": ("id", "name", "lvl"),
+    "orderby": ("lvl", "name"),
+});
+    @endcode
+    The \c "recursive" option makes the select a recursive query: a recursive common table expression (CTE), whose
+    rows are those of its anchor, and those that its step adds to the rows of the step before, until a step adds no
+    row.  The other options of the select option hash select from the rows of the CTE, as the options under
+    @ref select_option_superquery "superquery" select from a subquery: \c "columns", \c "where", \c "join",
+    \c "orderby", \c "desc", \c "groupby", \c "having", \c "limit", \c "offset" and the
+    @ref select_option_set_operators "set operators" name its columns.
+
+    The value of the option is a hash with the following keys:
+    |!Key|!Value
+    |\c name|the name of the CTE; optional, \c "rcte" by default
+    |\c columns|the list of the columns of the CTE; required
+    |\c anchor|the select of the first rows: a @ref select_option_hash "select option hash", which selects from the \
+same table, or a hash with a \c "table" key, giving another table of the same datasource as an \
+@ref SqlUtil::AbstractTable "AbstractTable" or @ref SqlUtil::Table "Table" object or a table name, and a \c "select" \
+key with the select option hash; required
+    |\c step|the select of the rows that each step adds, given as \c anchor is; it joins the CTE with \
+join_inner_recursive() (or join_recursive()) or join_left_recursive() in its \c "join" option, and names the columns \
+of the CTE with the alias of that join; required
+    |\c union|\c "all" (the default) for <tt>UNION ALL</tt> between the anchor and the step, or \c "distinct" for \
+\c UNION, which does not add a row that the CTE has already
+    |\c depth|the name of a depth column added to the CTE: \c 0 in the rows of the anchor, and one more than in the \
+row of the CTE that a row of the step is joined with
+    |\c max_depth|the depth to which the query runs: the step adds no row of a greater depth; needs \c depth
+
+    The anchor and the step must give as many columns as the CTE has (without the depth column) in their
+    \c "columns" options.  They cannot have the \c "orderby", \c "desc", \c "limit", \c "offset", \c "superquery",
+    \c "forupdate" and \c "forupdate_no_key" options or set operators.  The names of the CTE and of its columns are
+    quoted with the rules of the database if they need it, as other @ref sql_identifiers "identifiers", and cannot
+    have a \c "." (which a column reference reads as an alias and a column).
+
+    The above example results in SQL like the following on PostgreSQL:
+    @code{.py}
+*list<auto> rows = employees.vselectRows("with recursive tree (id, manager_id, name, lvl) as (select id, manager_id, name, 0 from public.employees where id = %v union all select e.id, e.manager_id, e.name, t.lvl + 1 from public.employees e inner join tree t on (e.manager_id = t.id) where t.lvl < %v) select id, name, lvl from tree order by lvl, name", (1, 5));
+    @endcode
+
+    Each database has its own SQL and its own limits:
+    |!Database|!SQL|!<tt>"union": "distinct"</tt>|!Recursion limit
+    |PostgreSQL|<tt>WITH RECURSIVE</tt>|yes|none
+    |MySQL 8.0 and later|<tt>WITH RECURSIVE</tt>|yes|an error after \c cte_max_recursion_depth (1000 by default) \
+iterations, which run a query to a depth of 999; a query with a \c max_depth of 1000 or more raises the limit to \
+<tt>max_depth + 1</tt> with a \c SET_VAR hint after its main \c SELECT keyword
+    |MariaDB 10.2.2 and later|<tt>WITH RECURSIVE</tt>|yes|\b no error: the query ends with the rows that it has \
+after \c max_recursive_iterations (1000 by default) iterations, which run a query to a depth of 1000; a query with a \
+\c max_depth above 1000 raises the limit to \c max_depth with <tt>SET STATEMENT ... FOR</tt>
+    |Oracle 11.2 and later|\c WITH (recursive subquery factoring)|no|none; Oracle raises \c ORA-32044 when a row \
+repeats one of the rows that it comes from, which a query with a depth column cannot do
+    |SQL Server|\c WITH|no|an error after 100 levels of recursion by default; a query with a \c max_depth sets the \
+limit to it with <tt>OPTION (MAXRECURSION n)</tt> (to no limit for a \c max_depth above 32767)
+    |Firebird|<tt>WITH RECURSIVE</tt>|no|an error (\c "Too many concurrent executions of the same request") when it \
+reaches 1024 levels; a \c max_depth above 1023 raises \c RECURSIVE-QUERY-ERROR
+    |SQLite 3.8.3 and later|<tt>WITH RECURSIVE</tt>|yes|none
+
+    The recursion limit of a database is changed only for a query with a \c max_depth, which bounds it; a query
+    without \c max_depth of data with a cycle ends with the error of the database's limit, or, on a database without
+    a limit, runs until it runs out of resources: give a \c max_depth, or use <tt>"union": "distinct"</tt> without a
+    depth column, for data that can have a cycle.
+
+    On MySQL and Firebird, the types of the columns of the CTE are those of the anchor's columns: a string column
+    whose values the step makes longer (ex: a path) needs its full size in the anchor, given with
+    @ref SqlUtil::cop_cast() "cop_cast()".
+
+    @ref SqlUtil::AbstractTable::supportsRecursiveQueries() "AbstractTable::supportsRecursiveQueries()" tells whether
+    the database supports recursive queries, and
+    @ref SqlUtil::AbstractTable::getRecursiveQueryRecordType() "AbstractTable::getRecursiveQueryRecordType()" gives the
+    types of the columns of the CTE.  The \c "recursive" search option of
+    @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider" searches the rows of a recursive query.
+
+    @note
+    - a recursive query raises \c RECURSIVE-QUERY-ERROR on a database that does not support it (Sybase, MySQL before
+      8.0, MariaDB before 10.2.2, Oracle before 11.2, SQLite before 3.8.3, and any driver without an implementation),
+      with an invalid \c "recursive" option, with \c "union": \c "distinct" on Oracle, SQL Server and Firebird, and
+      with the \c "superquery", \c "forupdate", \c "forupdate_no_key" and \c "partition" options
+    - a recursive query cannot be a subquery or a select of a set operator or of a superquery, which raise
+      \c RECURSIVE-QUERY-ERROR for it; it can be the select of an insert-select or a create-as-select (see
+      @ref select_option_recursive_insert_create)
+    - the outer select of a recursive query with an \c "offset" needs the \c "orderby_no_unique" option, as the CTE
+      has no unique key
+
+    @since %SqlUtil 3.11.0
+
+    @par Recursive Queries in Insert-Select and Create-As-Select
+    @anchor select_option_recursive_insert_create
+    A select option hash with the \c "recursive" option can be given to
+    @ref SqlUtil::AbstractTable::insertFromSelect() "AbstractTable::insertFromSelect()" and the other insert-select
+    methods, and to @ref SqlUtil::AbstractTable::createAsSelect() "AbstractTable::createAsSelect()" and the other
+    create-as-select methods; the target columns of an insert-select without a \c "columns" option in the outer
+    select are those of the CTE, with its depth column.  Each database places the WITH clause and the recursion limit
+    of the query in the statement as it needs:
+    |!Database|!Insert-select|!Create-as-select
+    |PostgreSQL, SQLite|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>|\
+<tt>CREATE TABLE t AS WITH RECURSIVE ... SELECT ...</tt>
+    |Oracle|<tt>INSERT INTO t (...) WITH ... SELECT ...</tt>|<tt>CREATE TABLE t AS WITH ... SELECT ...</tt>, with \
+the values of the query given as literals in the SQL, as Oracle refuses bind values in a create-as-select (see \
+\c OracleTable::getInlineSqlValue() in the \c OracleSqlUtilBase module for the literals and the values that it \
+refuses); the values then appear in the text of the statement
+    |MySQL|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>, with the \c SET_VAR hint of a \c max_depth \
+of 1000 or more after the \c INSERT keyword|<tt>CREATE TABLE t AS WITH RECURSIVE ... SELECT ...</tt>; a \
+\c max_depth of 1000 or more raises \c RECURSIVE-QUERY-ERROR, as the statement cannot raise the recursion limit
+    |MariaDB|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>, after the <tt>SET STATEMENT ... FOR</tt> of \
+a \c max_depth above 1000|<tt>CREATE TABLE t AS WITH RECURSIVE ... SELECT ...</tt>, after the \
+<tt>SET STATEMENT ... FOR</tt> of a \c max_depth above 1000
+    |SQL Server|<tt>WITH ... INSERT INTO t (...) SELECT ...</tt>, with the <tt>OPTION (MAXRECURSION n)</tt> of a \
+\c max_depth at its end|<tt>WITH ... SELECT ... INTO t FROM ...</tt>, with the <tt>OPTION (MAXRECURSION n)</tt> \
+of a \c max_depth at its end
+    |Firebird|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>|not supported: Firebird has no \
+create-as-select statement, and create-as-select raises \c OPTION-ERROR
 
     @subsubsection select_option_forupdate Select Option "forupdate"
     <b>For Update Example:</b>
@@ -1883,6 +2107,10 @@ if (sh) {
     - @ref SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst": first a select is made on the unique key, if the data to be updated is equal, nothing is done and @ref upsert_results "upsert result" @ref SqlUtil::AbstractTable::UR_Unchanged is returned
     - @ref SqlUtil::AbstractTable::UpsertInsertOnly "AbstractTable::UpsertInsertOnly": insert if the row doesn't exist, otherwise do nothing and @ref upsert_results "upsert result" @ref SqlUtil::AbstractTable::UR_Unchanged is returned
     - @ref SqlUtil::AbstractTable::UpsertUpdateOnly "AbstractTable::UpsertUpdateOnly": update if the row exists, otherwise do nothing and @ref upsert_results "upsert result" @ref SqlUtil::AbstractTable::UR_Unchanged is returned
+
+    With every strategy, a row with no column to update (only the columns of the upsert key, or all other columns
+    omitted with the \c omit_update option) does not update the row of its key, and
+    @ref SqlUtil::AbstractTable::UR_Unchanged is returned for it.
 
     @note @ref SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst" is the only upsert strategy that can return @ref SqlUtil::AbstractTable::UR_Updated; the @ref SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst" strategy should be used when verbose reporting is required, particularly if it's necessary to report the actual number of changed rows.
 */
@@ -2579,13 +2807,19 @@ list<auto> rows = source_table.selectRows({
     about the current SQL operation if an error occurs in the @ref sql_callback "sql callback" and can be specified as
     in the following example:
     @code{.py}
+# ds is the Datasource of the database
 code error_callback = sub (int ac, string type, string name, *string table, *string new_name, *string info,
         string sql, hash<ExceptionInfo> ex) {
-    if (ac == AC_Create && type == "materialized_view" && ex.arg.alterr == "OCI-01031") {
+    if (ac == AbstractDatabase::AC_Create && type == "materialized_view" && ex.arg.alterr == "OCI-01031") {
         # try to drop any table created to back the materialized view, ignoring ORA-00942 "table or view does not
-        # exist" errors but rethrowing all others; note that Oracle reports SQLCODE as the negative of the ORA number
-        ds.exec("begin execute immediate 'drop table " + name + "'; exception when others then "
-            "if sqlcode != -942 then raise; end if; end;");
+        # exist" errors but rethrowing all others; note that Oracle reports SQLCODE as the negative of the ORA number;
+        # the name is used only if it is a plain name, and it is in a string literal, in which each single quote is
+        # doubled; execRaw() takes no placeholders (the Oracle driver does this itself)
+        if (name !~ /^\w+(\.\w+)?$/) {
+            return;
+        }
+        ds.execRaw("begin execute immediate 'drop table " + replace(name, "'", "''") + "'; exception when others "
+            "then if sqlcode != -942 then raise; end if; end;");
     }
 };
     @endcode
@@ -3696,16 +3930,53 @@ public namespace SqlUtil {
         @endcode
 
         @param column the column specification for the column (string name or dot notation for use in joins) or any other column "cop_..." function
-        @param arg the new datatype to cast the column value(s) to
+        @param arg the new datatype to cast the column value(s) to: a %Qore type name (ex: \c "string") or a type name
+        of the database, as sql_check_cast_type() accepts it
         @param arg1 optional, type dependent, specification (e.g. size or precision)
         @param arg2 optional, type dependent, specification (e.g. scale)
 
         @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
+        @throw OPERATOR-ERROR \a arg is not a type name (see sql_check_cast_type())
+
         @see SqlUtil::cop_value for SQL literals handling
     */
     public hash<ColumnOperatorInfo> sub cop_cast(auto column, string arg, auto arg1, auto arg2) {
-        return make_cop(COP_CAST, column, (arg, arg1, arg2));
+        return make_cop(COP_CAST, column, (sql_check_cast_type(arg), arg1, arg2));
+    }
+
+    #! the regular expression of a type name for a cast (see sql_check_cast_type())
+    const CastTypeNameRegex = "\\A[A-Za-z_][A-Za-z0-9_$]*(?:\\.[A-Za-z_][A-Za-z0-9_$]*)?" + CastTypeSizeRegex
+        + "(?: [A-Za-z_][A-Za-z0-9_$]*" + CastTypeSizeRegex + ")*(?:\\[\\])*\\z";
+
+    #! the optional size of a word of a type name for a cast: digits, \c max or \c *, an optional scale and an optional
+    #! length unit (ex: \c "(max)", \c "(10,2)", \c "(*,2)", \c "(10 char)")
+    const CastTypeSizeRegex = "(?:\\((?:[0-9]+|(?i:max)|\\*)(?:, ?[0-9]+)?(?: (?i:char|byte))?\\))?";
+
+    #! Checks that a string is a type name for a cast and returns it
+    /** A cast writes its type name into the SQL, so only a type name is accepted: one or more words of ASCII letters,
+        digits, \c "_" and \c "$" (the first character of each word not a digit) separated by single spaces (ex:
+        \c "double precision", \c "timestamp with time zone"), with an optional schema prefix (\c "schema.type"),
+        an optional size after each word (digits, \c max or \c *, an optional scale and an optional \c char or
+        \c byte unit: ex: \c "numeric(10,2)", \c "nvarchar(max)", \c "timestamp(3) with time zone",
+        \c "varchar2(10 char)") and optional array brackets (\c "[]"); quotes (so quoted identifiers), comments,
+        statement separators and any other character are refused
+
+        @param type the type name
+
+        @return \a type
+
+        @throw OPERATOR-ERROR \a type is not a type name
+
+        @since SqlUtil 3.11
+    */
+    public string sub sql_check_cast_type(string type) {
+        if (!type.isDataAscii() || !regex(type, CastTypeNameRegex)) {
+            throw "OPERATOR-ERROR", sprintf("invalid cast type name %y: only a type name is accepted (letters, digits, "
+                "\"_\" and \"$\" in words separated by single spaces, an optional schema prefix, size and array "
+                "brackets)", type.isDataAscii() ? type : sprintf("<%d bytes>", type.size()));
+        }
+        return type;
     }
 
     #! returns a @ref ColumnOperatorInfo hash for the \c "prepend" operator with the given argument
@@ -5268,6 +5539,105 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     public hash<string, hash<JoinOperatorInfo>> sub join_right_alias(string ta, string table_name, *string alias, *hash jcols, *hash cond, *hash<auto> opt) {
         return make_jop(JOP_RIGHT, table_name, alias, jcols, cond, ta, opt);
     }
+
+    #! returns a hash for the inner join of the common table expression of a recursive query in its step
+    /** @par Example:
+        @code{.py}
+*list<auto> rows = employees.selectRows({
+    "recursive": {
+        "name": "tree",
+        "columns": ("id", "manager_id", "name"),
+        "anchor": {"columns": ("id", "manager_id", "name"), "where": {"id": 1}},
+        # the rows of the employees whose manager is a row of the CTE
+        "step": {"alias": "e", "columns": ("e.id", "e.manager_id", "e.name"),
+                 "join": join_inner_recursive("t", {"manager_id": "id"})},
+    },
+});
+        @endcode
+
+        @param alias the alias of the common table expression in the step; its columns are given with it, as in
+        \c "t.id"
+        @param jcols the columns to use for the join: the keys are columns of the table of the step, and the values
+        are columns of the common table expression or @ref sql_cop_funcs "column operator" hashes applied to them
+        @param cond additional conditions for the join clause; see @ref where_clauses for more information
+
+        @return a join description hash for use in the @ref select_option_join "join" option of the step of a
+        @ref select_option_recursive "recursive query"
+
+        @see @ref select_option_recursive
+
+        @since %SqlUtil 3.11.0
+    */
+    public hash<string, hash<JoinOperatorInfo>> sub join_inner_recursive(string alias, hash<auto> jcols,
+            *hash<auto> cond) {
+        return make_recursive_jop(JOP_INNER, alias, jcols, cond);
+    }
+
+    #! returns a hash for the inner join of the common table expression of a recursive query in its step
+    /** This function is the same as join_inner_recursive()
+
+        @param alias the alias of the common table expression in the step; its columns are given with it, as in
+        \c "t.id"
+        @param jcols the columns to use for the join: the keys are columns of the table of the step, and the values
+        are columns of the common table expression or @ref sql_cop_funcs "column operator" hashes applied to them
+        @param cond additional conditions for the join clause; see @ref where_clauses for more information
+
+        @return a join description hash for use in the @ref select_option_join "join" option of the step of a
+        @ref select_option_recursive "recursive query"
+
+        @see @ref select_option_recursive
+
+        @since %SqlUtil 3.11.0
+    */
+    public hash<string, hash<JoinOperatorInfo>> sub join_recursive(string alias, hash<auto> jcols, *hash<auto> cond) {
+        return make_recursive_jop(JOP_INNER, alias, jcols, cond);
+    }
+
+    #! returns a hash for the left outer join of the common table expression of a recursive query in its step
+    /** Most databases do not allow the common table expression in an outer join in the step of a recursive query,
+        and raise an error for it
+
+        @param alias the alias of the common table expression in the step; its columns are given with it, as in
+        \c "t.id"
+        @param jcols the columns to use for the join: the keys are columns of the table of the step, and the values
+        are columns of the common table expression or @ref sql_cop_funcs "column operator" hashes applied to them
+        @param cond additional conditions for the join clause; see @ref where_clauses for more information
+
+        @return a join description hash for use in the @ref select_option_join "join" option of the step of a
+        @ref select_option_recursive "recursive query"
+
+        @see @ref select_option_recursive
+
+        @since %SqlUtil 3.11.0
+    */
+    public hash<string, hash<JoinOperatorInfo>> sub join_left_recursive(string alias, hash<auto> jcols,
+            *hash<auto> cond) {
+        return make_recursive_jop(JOP_LEFT, alias, jcols, cond);
+    }
+
+    #! returns a join description hash for the common table expression of a recursive query
+    /** @note this function is normally not used directly, but rather is called by join_inner_recursive() and
+        join_left_recursive()
+
+        @since %SqlUtil 3.11.0
+    */
+    public hash<string, hash<JoinOperatorInfo>> sub make_recursive_jop(string jop, string alias, hash<auto> jcols,
+            *hash<auto> cond) {
+        if (!jcols) {
+            throw "RECURSIVE-QUERY-ERROR", "the join of the common table expression of a recursive query needs its "
+                "join columns";
+        }
+        return {
+            alias: <JoinOperatorInfo>{
+                "jop": jop,
+                "jcols": jcols,
+                "cond": cond,
+                "alias": alias,
+                # the table is set when the recursive query is prepared
+                "opt": {"recursive_cte": True},
+            },
+        };
+    }
     #/@}
 
     /** @defgroup sql_ops SQL Operators
@@ -5652,6 +6022,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 string exp0 = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
                 object subtable = info.table.getSubtableFromString(args[1], info.query_options);
                 list<auto> subargs;
+                # issue #3544: the WITH clause of a recursive query is at the start of the statement
+                if (exists args[2].recursive) {
+                    throw "RECURSIVE-QUERY-ERROR", "a subquery cannot be a recursive query";
+                }
                 string subsql = subtable.getSelectSql(args[2], \subargs);
                 # the subquery's bind arguments must go to the query's argument list; appending to the
                 # local parameter silently dropped them, executing the subquery with NULL binds and
@@ -6116,6 +6490,9 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                         }
                         # a column is an identifier in SQL
                         partitionby = info.table.getColumnSqlName(partitionby);
+                    } else {
+                        # an alias is an identifier in SQL, as the select list gives it, never its text (qore#6574)
+                        partitionby = info.table.getAliasSqlName(partitionby);
                     }
                     sql += sprintf("partition by %s", partitionby);
                 }
@@ -6129,6 +6506,9 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                                 "accessible column", orderby);
                         }
                         orderby = info.table.getColumnSqlName(orderby);
+                    } else {
+                        # an alias is an identifier in SQL (qore#6574)
+                        orderby = info.table.getAliasSqlName(orderby);
                     }
                     sql += sprintf(" order by %s", orderby);
                 }
@@ -7339,6 +7719,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 }
 
                 list<auto> subargs;
+                # issue #3544: the WITH clause of a recursive query is at the start of the statement
+                if (exists arg.select_hash.recursive) {
+                    throw "RECURSIVE-QUERY-ERROR", "a subquery cannot be a recursive query";
+                }
                 string subsql = subtable.getSelectSql(arg.select_hash, \subargs);
                 info.args += subargs;
                 return sprintf("%s in (%s)", cn, subsql);
@@ -8072,14 +8456,54 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         }
 
         #! Returns the cached table for the given connection description and table name, if any
-        static *AbstractTable get(string dsdesc, string name) {
+        /** Declares the \c PROCESS_CONTROL domain as put() does: the table holds the connection of the code that
+            cached it, and a description can be given for any connection; code restricted from the domain gets cached
+            tables only through getCached(), for its own datasource (qore#6337)
+        */
+        static *AbstractTable get(string dsdesc, string name) [dom=PROCESS_CONTROL] {
+            return TableCache::getIntern(dsdesc, name);
+        }
+
+        #! Returns the cached table for the given connection description and table name, if any
+        private:internal static *AbstractTable getIntern(string dsdesc, string name) {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
             return TableCache::cache{dsdesc}{name};
         }
 
+        #! Returns the cached table for the given connection, resolving and caching it first if needed
+        /** The key is the description of the connection given; used by
+            @ref SqlUtil::sqlutil_get_cached_table() "sqlutil_get_cached_table()", which resolves tables for the code
+            that generates SQL, also for code restricted from the \c PROCESS_CONTROL domain of put(): such code
+            gets a table from the cache only if its datasource is the one given, and a table that it resolves is
+            not cached, as the key is the description that the datasource gives (qore#6337)
+
+            @since %SqlUtil 3.2.0
+        */
+        static AbstractTable getCached(AbstractDatasource ds, string name) {
+            string dsdesc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
+            *AbstractTable cached = TableCache::getIntern(dsdesc, name);
+            # the key is the description that the datasource gives, which a subclass of AbstractDatasource chooses:
+            # code restricted from the PROCESS_CONTROL domain of put() gets only a table of its own datasource from
+            # the cache, and does not fill it (qore#6337)
+            bool restricted = SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL);
+            if (cached && (!restricted || cached.getDatasource() == ds)) {
+                return cached;
+            }
+
+            # resolve outside the lock; this loads the driver-specific module and can contact the server, and
+            # another thread resolving the same name at the same time is resolved by putIntern()
+            AbstractTable t = new Table(ds, name).getTable();
+            return restricted ? t : TableCache::putIntern(dsdesc, name, t);
+        }
+
         #! Caches the given table unless another thread cached one first; returns the table in the cache
         static AbstractTable put(string dsdesc, string name, AbstractTable t) [dom=PROCESS_CONTROL] {
+            return TableCache::putIntern(dsdesc, name, t);
+        }
+
+        #! Caches the given table unless another thread cached one first; returns the table in the cache
+        private:internal static AbstractTable putIntern(string dsdesc, string name, AbstractTable t) {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
             *AbstractTable cached = TableCache::cache{dsdesc}{name};
@@ -8196,15 +8620,7 @@ sqlutil_register_table_resolver(\sqlutil_get_cached_table());
         @since %SqlUtil 3.2.0
     */
     public AbstractTable sub sqlutil_get_cached_table(AbstractDatasource ds, string name) {
-        string dsdesc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
-        *AbstractTable cached = TableCache::get(dsdesc, name);
-        if (cached) {
-            return cached;
-        }
-
-        # resolve outside the lock; this loads the driver-specific module and can contact the server, and
-        # another thread resolving the same name at the same time is resolved by put()
-        return TableCache::put(dsdesc, name, new Table(ds, name).getTable());
+        return TableCache::getCached(ds, name);
     }
 
     #! Discards tables cached by sqlutil_get_cached_table()
@@ -10656,7 +11072,9 @@ string sql = constraint.getDeferrabilitySql();
         /** @param opt drop options (if supported by the driver and object); in this generic base class method, this argument is ignored
          */
         string getDropSql(*hash<auto> opt) {
-            return sprintf("drop %s %s", type, name);
+            # a plain name only, as for the other objects that this class quotes no name of (qore#6579); a driver
+            # quotes the names of its objects
+            return sprintf("drop %s %s", type, AbstractSqlUtilBase::getPlainSqlName(name, self.className()));
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not

@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ConvertAPI REST Connection",
+          "message": "ConvertAPI REST 連線"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ConvertAPI file conversion REST API",
+          "message": "連線至 ConvertAPI 檔案轉換 REST API"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ConvertAPI](https://www.convertapi.com) file conversion REST API.\n\nConvertAPI converts files between more than 300 format pairs, including:\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF and images\n- PDF to images, office formats, text and PDF/A\n- PDF tools: merge, split, compress, protect, OCR, watermark and more",
+          "message": "連線至 [ConvertAPI](https://www.convertapi.com) 檔案轉換 REST API。\n\nConvertAPI 可在超過 300 種格式組合之間轉換檔案，包括：\n- Office 文件、試算表和簡報與 PDF 之間的互相轉換\n- 網頁和 HTML 轉換為 PDF 和影像\n- PDF 轉換為影像、Office 格式、文字和 PDF/A\n- PDF 工具：合併、分割、壓縮、保護、OCR、浮水印等"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Token",
+          "message": "如何取得您的 API Token"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Sign up or log in at https://www.convertapi.com/a\n2. Open the **Authentication** page of your account\n3. Copy an API token (or create a new one) and paste it into the **API Token** field\n\n**Note:** each conversion consumes conversion credits; check your remaining balance in your ConvertAPI account.",
+          "message": "1. 在 https://www.convertapi.com/a 註冊或登入\n2. 開啟帳戶的 **Authentication** 頁面\n3. 複製 API 金鑰（或建立新的金鑰），並貼到 **API 金鑰** 欄位\n\n**注意：** 每次轉換都會消耗轉換額度；請在 ConvertAPI 帳戶中查看剩餘餘額。"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API 金鑰"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ConvertAPI API token",
+          "message": "ConvertAPI API 金鑰"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ConvertAPI API token used for authentication; it is sent as a bearer token.\n\nCreate or copy an API token on the [Authentication page](https://www.convertapi.com/a/authentication) of your ConvertAPI account.",
+          "message": "用於驗證的 ConvertAPI API 金鑰，會以 Bearer 權杖傳送。\n\n請在 ConvertAPI 帳戶的 [Authentication 頁面](https://www.convertapi.com/a/authentication)建立或複製 API 金鑰。"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "區域"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "The ConvertAPI region that processes the requests",
+          "message": "處理請求的 ConvertAPI 區域"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "The ConvertAPI region whose servers process the requests; the connection URL is derived from it.",
+          "message": "其伺服器處理請求的 ConvertAPI 區域；連線 URL 會由此衍生。"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmdsb2JhbA.display_name": {
+          "source": "Global",
+          "message": "全域"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmdsb2JhbA.desc": {
+          "source": "The global API endpoint https://v2.convertapi.com (the default)",
+          "message": "全球 API 端點 https://v2.convertapi.com（預設）"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "European Union",
+          "message": "歐盟"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "The API endpoint https://eu-v2.convertapi.com",
+          "message": "API 端點 https://eu-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVr.display_name": {
+          "source": "United Kingdom",
+          "message": "英國"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVr.desc": {
+          "source": "The API endpoint https://uk-v2.convertapi.com",
+          "message": "API 端點 https://uk-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "United States",
+          "message": "美國"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "The API endpoint https://us-v2.convertapi.com",
+          "message": "API 端點 https://us-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmNh.display_name": {
+          "source": "Canada",
+          "message": "加拿大"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmNh.desc": {
+          "source": "The API endpoint https://ca-v2.convertapi.com",
+          "message": "API 端點 https://ca-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmFz.display_name": {
+          "source": "Asia",
+          "message": "亞洲"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmFz.desc": {
+          "source": "The API endpoint https://as-v2.convertapi.com",
+          "message": "API 端點 https://as-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmF1.display_name": {
+          "source": "Australia",
+          "message": "澳洲"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmF1.desc": {
+          "source": "The API endpoint https://au-v2.convertapi.com",
+          "message": "API 端點 https://au-v2.convertapi.com"
+        }
+      }
+    }
+  }
+}

@@ -45,6 +45,8 @@
 #include "qore/intern/QoreDeferredRelease.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_encoding_private.h"
+#include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 CaseNode::~CaseNode() {
     val.discard(nullptr);
@@ -230,7 +232,7 @@ int SwitchStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
     ValueEvalRefHolder se(xsink);
     {
         QoreStatementTempScope temps(xsink);
-        se.eval(rc, sexp);
+        qore_value_eval_ref_holder_ops(se).eval(rc, sexp);
     }
 
     if (!*xsink) {
@@ -373,7 +375,7 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
 
         // evaluate case expression if necessary and no parse expressions have been raised
         if (!w->val.isValue()) {
-            if (err || parse_context.pgm->parseExceptionRaised()) {
+            if (err || qore_program_ops(parse_context.pgm).parseExceptionRaised()) {
                 w = w->next;
                 continue;
             }
@@ -459,9 +461,23 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
     nth.mergeAndApply();
     ash.mergeAndApply();
 
+    // a value of the switch expression can certainly match no case if there is no default case, every case compares
+    // a value, and the type of the expression has more values than the cases: an enum or a boolean value can be
+    // matched by every case (issue #5940)
+    if (!deflt && QoreTypeInfo::hasType(switch_type_info) && !QoreTypeInfo::getReturnEnum(switch_type_info)
+            && QoreTypeInfo::parseReturns(switch_type_info, NT_BOOLEAN) == QTI_NOT_EQUAL) {
+        no_match_possible = true;
+        for (const CaseNode* c = head; c; c = c->next) {
+            if (!c->isCaseNode()) {
+                no_match_possible = false;
+                break;
+            }
+        }
+    }
+
     // warn if the switch is over an enum value, has no default case, and does not handle all
     // enum members (only when the switch parsed cleanly, to avoid noise on broken code)
-    if (!err && !deflt && !parse_context.pgm->parseExceptionRaised()) {
+    if (!err && !deflt && !qore_program_ops(parse_context.pgm).parseExceptionRaised()) {
         warnNonExhaustiveSwitch(parse_context.pgm, loc, switch_type_info, head);
     }
 

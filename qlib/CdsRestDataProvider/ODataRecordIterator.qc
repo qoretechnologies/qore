@@ -38,14 +38,16 @@ public class ODataRecordIterator inherits AbstractODataRecordIterator {
     constructor(CdsRestClient::CdsRestClientIo rest, string entity_name, hash<ODataRecordInfo> record_info,
             *hash<auto> where_cond, *hash<auto> search_options)
             : AbstractODataRecordIterator(rest, record_info, search_options) {
-        # Make query
-        *string query = makeQuery(where_cond, search_options);
+        # Make query; the value of each option is percent-encoded on its own, so that no character of a string
+        # literal ends the option
+        hash<string, string> opts = makeQueryOptions(where_cond, search_options);
+        *string query = AbstractODataRecordIterator::joinQueryOptions(opts);
         try {
-            string uri = entity_name;
-            if (query) {
-                uri += sprintf("?%s", query);
+            string uri = CdsRestDataProviderBase::encodeRequestPath(entity_name);
+            if (opts) {
+                uri += "?" + AbstractODataRecordIterator::encodeQueryOptions(opts);
             }
-            hash<RestClient::RestResponseInfo> resp = rest.restGet(CdsRestDataProviderBase::encodeRequestPath(uri));
+            hash<RestClient::RestResponseInfo> resp = rest.restGet(uri);
             i = new ListHashIterator(resp.body.value ?? ());
             # Save next link for pagination
             nextLink = resp.body."@odata.nextLink";

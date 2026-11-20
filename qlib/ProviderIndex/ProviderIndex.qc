@@ -496,7 +496,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @since %ProviderIndex 1.0
     */
     public static hash<auto> createDataProviderIndex(hash<DataProviderIndexInfo> index = <DataProviderIndexInfo>{},
-            *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{}) [dom=PROCESS_CONTROL] {
+            *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{})
+            [dom=PROCESS_CONTROL,FILESYSTEM] {
         # Includes module loading and deferred output-type warm-up, not only serialization.
         DataProviderStaticMetadataHelper static_metadata();
         date start = now_us();
@@ -1386,7 +1387,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
 
         @since %ProviderIndex 1.2
     */
-    static prepareIndexWorker(string batch_path) [dom=PROCESS_CONTROL] {
+    static prepareIndexWorker(string batch_path) [dom=PROCESS_CONTROL,FILESYSTEM] {
         getWorkerBatch(batch_path);
     }
 
@@ -1418,7 +1419,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
         @since %ProviderIndex 1.2
     */
-    static int runIndexWorker(string batch_path, *code<nothing()> setup) [dom=PROCESS_CONTROL] {
+    static int runIndexWorker(string batch_path, *code<nothing()> setup) [dom=PROCESS_CONTROL,FILESYSTEM] {
         DataProviderStaticMetadataHelper static_metadata();
         hash<auto> batch;
         try {
@@ -2241,7 +2242,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     #! Returns the end of the given file for error reports
     private static *string getFileTail(string path, int size = 8192) {
         try {
-            ReadOnlyFile f(path);
+            # the tail can start in the middle of a character, so it is read without a check of its encoding
+            ReadOnlyFile f(path, NOTHING, ENCODING_ERRORS_KEEP);
             int file_size = f.hstat().size;
             if (file_size > size) {
                 f.setPos(file_size - size);

@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+# test-platform: macos - time zone files and the UTC offsets of regions in the formatting of dates
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class DateSaturatedUtcOffsetTest
+
+#! qore#6431: an absolute date at the limit of the seconds formats in the earliest or the latest year of a date
+/** An absolute date set from seconds whose year does not fit an int (from a number or an int at the limit of an int64,
+    as #6181 and #6212 saturate them, or given to TimeZone::date()) kept the seconds, and the conversion of the seconds
+    to a broken-down time overflowed, so the date at the smallest seconds was formatted in the same positive year as
+    that at the largest seconds, with an overflowed UTC offset.  The seconds of such a date are now saturated to the
+    range of an absolute date (the start of year -2147483647 to the end of year 2147483646 UTC, see
+    QORE_DATE_MIN_EPOCH), which every time zone formats without overflow; the extended years of a parsed date are kept.
+
+    The script next to the test (date-saturated-utc-offset/limits.q) runs in time zones ahead of and behind UTC in every
+    execution mode, on the IR tier and as AOT executables (qcc -O0 and -O3), and its output must be the expected one
+    (date-saturated-utc-offset/<zone>.txt).
+*/
+class DateSaturatedUtcOffsetTest inherits QUnit::Test {
+    public {
+        const Zones = ("UTC", "Europe/Prague", "America/New_York", "Pacific/Kiritimati", "Pacific/Pago_Pago");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("date saturated UTC offset", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode and on the IR tier in each time zone
+    private modesTest() {
+        foreach string zone in (Zones) {
+            string exp = expected(zone);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq(exp, ExecModeHarness::run(sprintf("TZ=%s %s %s --exec-mode=%s %s", zone, env, qore_bin,
+                    mode, scriptPath())), zone + " " + mode);
+            }
+            assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("TZ=%s %s %s --exec-mode=tiered %s", zone, env,
+                qore_bin, scriptPath())), zone + " " + ExecModeHarness::IRTierName);
+        }
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks the output of the executables in each time zone
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("date-saturated-utc-offset-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/limits%s", dir.path, opt);
+            # compiled in UTC: the executables must not depend on the time zone of the compilation
+            string out = ExecModeHarness::run_any(sprintf("TZ=UTC %s %s %s -o %s %s", env, qcc_bin, opt, exe,
+                scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            foreach string zone in (Zones) {
+                assertEq(expected(zone), ExecModeHarness::run_any(sprintf("TZ=%s %s %s", zone, env, exe)),
+                    zone + " AOT " + opt);
+            }
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/date-saturated-utc-offset/limits.q";
+    }
+
+    #! the expected output in a time zone
+    private string expected(string zone) {
+        return ReadOnlyFile::readTextFile(sprintf("%s/date-saturated-utc-offset/%s.txt", get_script_dir(),
+            replace(zone, "/", "_")));
+    }
+}

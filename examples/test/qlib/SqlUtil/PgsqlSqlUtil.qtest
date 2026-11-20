@@ -638,17 +638,19 @@ class PgsqlTest inherits SqlTestBase {
         assertEq(-1, db.getCurrentSchemaPhysicalSize(), "no schema of the search_path exists");
         ds.rollback();
 
-        # the measurement does not include, and does not grow with, the storage of other schemas, unlike the
-        # size of the whole database
+        # the measurement does not include, and does not grow with, the storage of other schemas
         ds.exec(sprintf("set search_path to %s", cur));
-        int before_db = db.getPhysicalSize();
         int before_other = db.getSchemaPhysicalSize(other);
         ds.exec(sprintf("insert into %s.items select g, repeat(md5(g::text), 100) from generate_series(1, 2000) g",
             other));
         map ds.exec(sprintf("create table %s.extra_%d (id bigint primary key, v text)", other, $1)), xrange(20);
         ds.commit();
-        assertGt(before_other, db.getSchemaPhysicalSize(other), "the other schema grew");
-        assertGt(before_db, db.getPhysicalSize(), "the database grew");
+        int other_size = db.getSchemaPhysicalSize(other);
+        assertGt(before_other, other_size, "the other schema grew");
+        # the size of the whole database changes with the other tests that run beside this one: it includes the storage
+        # of the schemas of this test, measured before it (issue #6711)
+        int own_size = other_size + db.getSchemaPhysicalSize(cur);
+        assertGe(own_size, db.getPhysicalSize(), "the database includes the storage of the schemas");
         assertEq(cur_size, db.getCurrentSchemaPhysicalSize(), "the current schema's size does not change");
         assertEq(db.getSchemaPhysicalSize(cur), db.getCurrentSchemaPhysicalSize());
         ds.rollback();
@@ -905,7 +907,12 @@ class PgsqlTest inherits SqlTestBase {
         }
 
         const int Workers = 32;
-        const int Iterations = 200;
+        # the workers start at once (the gate below), so that their introspections overlap from the first iteration:
+        # 25 iterations of 32 workers exercise the concurrent introspection that the case is for (#5359); each
+        # iteration runs about ten catalog queries, whose time grows with the load of the server and the size of its
+        # catalog, not with what the case tests, so that more iterations only make the case slower on a loaded server
+        # (200 iterations exceeded the time limit of the test on a loaded macOS host, issue #6711)
+        const int Iterations = 25;
         const string TableName = "pgsql_trigger_concurrency";
         const string FunctionName = "pgsql_trigger_concurrency_func";
 
@@ -1435,7 +1442,8 @@ class PgsqlTest inherits SqlTestBase {
             on_error ds.rollback();
             on_success ds.commit();
             ds.execRaw("do $$ begin "
-                "if not exists (select 1 from pg_type where typname = 'test_status_enum') then "
+                "if not exists (select 1 from pg_type where typname = 'test_status_enum' "
+                "and typnamespace = current_schema()::regnamespace) then "
                 "create type test_status_enum as enum ('active', 'inactive'); "
                 "end if; end $$");
             ds.execRaw("create table pgsql_udt_test (id serial primary key, "
@@ -1554,14 +1562,16 @@ class PgsqlTest inherits SqlTestBase {
         # verify the index exists with the right access method
         *string amname = ds.selectRow(
             "select am.amname from pg_class i, pg_am am "
-            "where i.relkind = 'i' and i.relname = %v and i.relam = am.oid",
+            "where i.relkind = 'i' and i.relname = %v "
+            "and i.relnamespace = pg_catalog.current_schema()::regnamespace and i.relam = am.oid",
             "sk_ivfflat_test_emb").amname;
         assertEq("ivfflat", amname, "ivfflat access method recorded in catalog");
 
         # verify the reconstructed DDL captures the WITH clause and opclass
         *string indexdef = ds.selectRow(
             "select pg_get_indexdef(i.oid, 0, false) indexdef from pg_class i "
-            "where i.relkind = 'i' and i.relname = %v", "sk_ivfflat_test_emb").indexdef;
+            "where i.relkind = 'i' and i.relname = %v "
+            "and i.relnamespace = pg_catalog.current_schema()::regnamespace", "sk_ivfflat_test_emb").indexdef;
         assertTrue(indexdef.lwr().find("ivfflat") >= 0, "DDL contains ivfflat");
         assertTrue(indexdef.lwr().find("vector_cosine_ops") >= 0, "DDL contains opclass");
         assertTrue(indexdef.lwr().find("lists") >= 0, "DDL contains WITH lists");
@@ -2051,7 +2061,7 @@ class PgsqlTest inherits SqlTestBase {
 
         # record the child heap, its indexes, and its TOAST relation before the drop
         hash<auto> child = ds.selectRow("select c.oid, c.reltoastrelid from pg_catalog.pg_class c "
-            "where c.relname = %v", p1);
+            "where c.relname = %v and c.relnamespace = pg_catalog.current_schema()::regnamespace", p1);
         assertTrue(child.reltoastrelid > 0, "the partition child has a TOAST relation");
         list<auto> child_indexes = map $1.indexrelid,
             ds.select("select i.indexrelid from pg_catalog.pg_index i where i.indrelid = cast(%v as oid)",
@@ -2077,7 +2087,8 @@ class PgsqlTest inherits SqlTestBase {
         # the structural bound-spec overload resolves and executes on a fresh object as well
         PgsqlTable fresh_spec(ds, parent);
         fresh_spec.dropPartitionCommit({"bound_from": 10, "bound_to": 20});
-        assertNothing(ds.selectRow("select 1 as x from pg_catalog.pg_class where relname = %v", p2),
+        assertNothing(ds.selectRow("select 1 as x from pg_catalog.pg_class where relname = %v "
+            "and relnamespace = pg_catalog.current_schema()::regnamespace", p2),
             "the bound-spec overload dropped the child relation");
 
         # an unresolvable partition still fails instead of returning success
@@ -2088,7 +2099,8 @@ class PgsqlTest inherits SqlTestBase {
         # adding and detaching are governed by the same decision
         PgsqlTable fresh_add(ds, parent);
         fresh_add.addPartitionCommit({"name": p3, "bound_from": 20, "bound_to": 30});
-        assertTrue(exists ds.selectRow("select 1 as x from pg_catalog.pg_class where relname = %v", p3),
+        assertTrue(exists ds.selectRow("select 1 as x from pg_catalog.pg_class where relname = %v "
+            "and relnamespace = pg_catalog.current_schema()::regnamespace", p3),
             "addPartition on a fresh object created the child relation");
 
         PgsqlTable fresh_detach(ds, parent);
@@ -2197,7 +2209,8 @@ class PgsqlTest inherits SqlTestBase {
             assertTrue(detached.checkExistence(), sprintf("%s: detach by typed bounds executed", native_type));
             detached.dropCommit();
             (new PgsqlTable(ds, parent)).dropPartitionCommit({"bound_from": bound_to, "bound_to": bound_end});
-            assertNothing(ds.selectRow("select 1 as x from pg_catalog.pg_class where relname = %v", p2),
+            assertNothing(ds.selectRow("select 1 as x from pg_catalog.pg_class where relname = %v "
+                "and relnamespace = pg_catalog.current_schema()::regnamespace", p2),
                 sprintf("%s: drop by typed bounds executed", native_type));
             ds.commit();
         }
@@ -3302,6 +3315,10 @@ class PgsqlTest inherits SqlTestBase {
         ds.execRaw("create table pce_normal (id int)");
         ds.commit();
 
+        # the listing and the export read the schemas of the search_path: only the run's schema, without another
+        # schema that has an extension of the database (ex: "public"), whose tables other tests create and lock
+        # (issue #6711)
+        ds.exec(sprintf("set search_path to %s", ds.selectRow("select quote_ident(current_schema()) as s").s));
         hash<auto> listed = map {$1: True}, (new Database(ds)).listTables();
         # PostgreSQL exposes partitions as relations, but a partition child is not a standalone logical table
         assertTrue(listed.hasKey("pce_part"), "partitioned parent is listed");

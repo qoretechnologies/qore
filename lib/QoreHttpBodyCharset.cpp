@@ -33,6 +33,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreHttpBodyCharset.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/qore_encoding_private.h"
 
@@ -505,6 +506,38 @@ SimpleValueQoreNode* qore_decode_http_body(const char* content_type, const Binar
     return qore_http_body_string(charset, body->getPtr(), body->size());
 }
 
+QoreStringNode* qore_http_response_body_string(const char* content_type, const QoreHttpBodyCharset& charset,
+        const void* data, size_t len, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> str(qore_http_body_string(charset, data, len));
+    if (qore_string_encoding_valid(**str)) {
+        return str.release();
+    }
+    switch (qore_http_body_kind(content_type)) {
+        // a body without a Content-Type that is text is any other text
+        case QoreHttpBodyKind::Binary:
+        case QoreHttpBodyKind::Html:
+        case QoreHttpBodyKind::Text:
+            str->setEncoding(QCS_ISO_8859_1);
+            return str.release();
+        default:
+            break;
+    }
+    xsink->raiseException("INVALID-ENCODING", "the HTTP response body of %zu bytes is not valid in its encoding "
+        "\"%s\"", len, charset.enc->getCode());
+    return nullptr;
+}
+
+SimpleValueQoreNode* qore_decode_http_response_body(const char* content_type, const BinaryNode* body,
+        const QoreEncoding* assumed, ExceptionSink* xsink) {
+    assert(body);
+    QoreHttpBodyCharset charset = qore_get_http_body_charset(content_type, body->getPtr(), body->size(), assumed);
+    if (!charset.enc) {
+        body->ref();
+        return const_cast<BinaryNode*>(body);
+    }
+    return qore_http_response_body_string(content_type, charset, body->getPtr(), body->size(), xsink);
+}
+
 const QoreEncoding* qore_get_http_header_charset(const char* content_type, const QoreEncoding* assumed) {
     if (!content_type || !*content_type) {
         // the data of a message without a type cannot be examined before it is read; it is assumed to be text
@@ -735,8 +768,9 @@ std::string qore_get_http_accept_charset(const char* t) {
             const QoreEncoding* enc = get_supported_http_charset(cs);
             if (enc) {
                 // a name or an alias of an encoding that Qore knows is given as it is, a label of a character set
-                // (see qore_find_untrusted_encoding()) as the name of its encoding, which the server converts with
-                best = QoreEncodingManager::find(cs.c_str()) ? cs : std::string(enc->getCode());
+                // (see qore_find_untrusted_encoding()) as the name of its encoding, which the server converts with;
+                // a label that the program registered as a name of another encoding is a label (qore#6570)
+                best = QoreEncodingManager::find(cs.c_str()) == enc ? cs : std::string(enc->getCode());
                 best_q = q;
             }
         }

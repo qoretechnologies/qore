@@ -1594,19 +1594,25 @@ stop();
 
         @note Extensions are applied in reverse order (last extension first)
 
+        @throw WEBSOCKET-INVALID-PAYLOAD a text message is not valid UTF-8 (after the extensions); the connection is
+        closed with @ref WebSocketUtil::WSCC_InvalidData "WSCC_InvalidData" (1007), as RFC 6455 section 8.1 requires
+
         @since WebSocketHandler 2.3
     */
     applyIncomingExtensions(reference<auto> msg, hash<auto> ctx) {
-        if (!active_extensions) {
-            return;
+        if (active_extensions) {
+            # Apply transforms in reverse order
+            ListIterator<AbstractWebSocketExtension> i(active_extensions);
+            i.last();
+            while (i.prev()) {
+                AbstractWebSocketExtension ext = i.getValue();
+                msg = ext.transformIncoming(msg, ctx);
+            }
         }
-
-        # Apply transforms in reverse order
-        ListIterator<AbstractWebSocketExtension> i(active_extensions);
-        i.last();
-        while (i.prev()) {
-            AbstractWebSocketExtension ext = i.getValue();
-            msg = ext.transformIncoming(msg, ctx);
+        # text from outside the server is checked where it enters it, before the connection's code sees it
+        # (qore#6554)
+        if (ctx.op == WSOP_Text && msg.typeCode() == NT_STRING && !msg.isEncodingValid()) {
+            throw "WEBSOCKET-INVALID-PAYLOAD", sprintf("a text message of %d bytes is not valid UTF-8", msg.size());
         }
     }
 
@@ -2140,6 +2146,11 @@ class WebSocketStreamProcessor {
                     try {
                         wsc.applyIncomingExtensions(\msg, ext_ctx);
                     } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "WEBSOCKET-INVALID-PAYLOAD") {
+                            handler.logError("H2/H3 WebSocket message rejected: %s", ex.desc);
+                            wsc.startStreamClose(WSCC_InvalidData, "Invalid UTF-8 in a text message");
+                            return;
+                        }
                         if (ex.err != "WEBSOCKET-MESSAGE-TOO-BIG") {
                             rethrow;
                         }

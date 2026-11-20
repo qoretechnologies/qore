@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the registration of a new background thread in the thread list, which runs in the new thread
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    thread_list() lists a background thread from the time its TID is returned, before the new thread has registered
+    itself, as num_threads() counts it (qore#6469).  A debug control holds the new thread before it registers, so the
+    window is held open for as long as the test needs it, without sleeps or retries.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ThreadListUnregisteredTest
+
+public class ThreadListUnregisteredTest inherits QUnit::Test {
+    constructor() : Test("ThreadListUnregisteredTest", "1.0") {
+        addTestCase("a thread that has not registered yet", \testUnregistered());
+        set_return_value(main());
+    }
+
+    testUnregistered() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_hold_next_thread_start())");
+        }
+        # the hold is ended, and the thread joined, also if the background operator or a check fails
+        int tid;
+        on_exit {
+            call_function("dbg_release_thread_start");
+            if (tid) {
+                thread_join(tid);
+            }
+        }
+        call_function("dbg_hold_next_thread_start", 30000);
+        tid = background sub () {}();
+        assertTrue(call_function("dbg_wait_thread_start_held", 30000));
+
+        # the thread has not registered yet: it is listed and counted
+        int count = num_threads();
+        list<int> l = thread_list();
+        assertTrue(inlist(tid, l), sprintf("TID %d in %y", tid, l));
+        assertEq(count, l.size());
+        assertEq(count, num_threads());
+
+        # it has no name or call stack yet, and has not terminated
+        assertNothing(get_thread_name(tid));
+        assertFalse(exists get_all_thread_call_stacks(){tid});
+        assertFalse(thread_join(tid, -1));
+
+        # once it runs, it ends as any other thread
+        call_function("dbg_release_thread_start");
+        assertTrue(thread_join(tid));
+        assertFalse(inlist(tid, thread_list()));
+    }
+}

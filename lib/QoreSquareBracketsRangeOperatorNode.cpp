@@ -33,6 +33,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreSquareBracketsRangeOperatorNode::op_str("x[m..n] operator expression");
 
@@ -93,7 +94,7 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
     bool plugin_range = false;
     if (!(parse_context.pflag & PF_FOR_ASSIGNMENT)) {
         QorePluginResolvedOperationInfo plugin_op;
-        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        ExceptionSink* parse_xsink = parse_context.pgm ? qore_program_ops(parse_context.pgm).getParseExceptionSink() : nullptr;
         int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, typeInfo0, nullptr, "slice",
             QorePluginHelperAbi::CallValueList, plugin_op, parse_xsink);
         if (plugin_rc < 0 && !err) {
@@ -216,18 +217,6 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
     return slice(*seq, *start_index, *stop_index, broken_list_range, negative_offsets, xsink);
 }
 
-//! makes the element type of a slice of a list that does not take NOTHING its or-nothing type (qore#6435)
-/** for a NOTHING element of the slice: a hole of the list (left by delete or remove, or a gap filled by an assignment
-    past its end) or, with %broken-list-range, an element outside of the list
-*/
-static void setSliceOrNothingType(QoreListNode& rv) {
-    qore_list_private* priv = qore_list_private::get(rv);
-    const QoreTypeInfo* vti = priv->getValueTypeInfo();
-    if (QoreTypeInfo::runtimeAcceptsValue(vti, QoreValue()) == QTI_NOT_EQUAL) {
-        priv->complexTypeInfo = qore_get_complex_list_type(get_or_nothing_type_check(vti));
-    }
-}
-
 QoreValue QoreSquareBracketsRangeOperatorNode::slice(const QoreValue& seq_value, const QoreValue& start_value,
         const QoreValue& stop_value, bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) {
     // the evaluated operands, under the names that the code below has always used
@@ -267,28 +256,16 @@ QoreValue QoreSquareBracketsRangeOperatorNode::slice(const QoreValue& seq_value,
             ReferenceHolder<QoreListNode> rv(new QoreListNode(out_of_range
                 ? get_or_nothing_type_check(l->getValueTypeInfo()) : l->getValueTypeInfo()), xsink);
             if (!empty || broken_list_range) {
-                // a typed list can hold NOTHING in its range: a hole left by delete or remove, or a gap filled by an
-                // assignment past its end; the first one makes the element type of the slice the or-nothing type
-                // (qore#6435); !v is the inline test for NOTHING, which a list holds only as VAL_NOTHING
-                bool hole = out_of_range;
+                // a list whose element type does not take NOTHING holds no NOTHING element (qore#6435), so every
+                // element in range has the element type of the slice
                 if (start < stop) {
                     for (int64 i = start; i <= stop; ++i) {
-                        QoreValue v = l->getReferencedEntry(i);
-                        if (!hole && !v) {
-                            hole = true;
-                            setSliceOrNothingType(**rv);
-                        }
-                        qore_list_private::pushCanonical(**rv, v, xsink);
+                        qore_list_private::pushCanonical(**rv, l->getReferencedEntry(i), xsink);
                         assert(!*xsink);
                     }
                 } else {
                     for (int64 i = start; i >= stop; --i) {
-                        QoreValue v = l->getReferencedEntry(i);
-                        if (!hole && !v) {
-                            hole = true;
-                            setSliceOrNothingType(**rv);
-                        }
-                        qore_list_private::pushCanonical(**rv, v, xsink);
+                        qore_list_private::pushCanonical(**rv, l->getReferencedEntry(i), xsink);
                         assert(!*xsink);
                     }
                 }
@@ -497,9 +474,13 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
     switch (seq_type) {
         case NT_LIST:   seq_size = seq.get<const QoreListNode>()->size(); break;
         case NT_STRING: {
-            // the elements of a string are its characters, which the range is resolved against
+            // the elements of a string are its characters, which the range is resolved against; a string that is not
+            // valid in its encoding has no character count to resolve it against (qore#6595)
             QoreStringValueHelper str(seq);
-            seq_size = str->length();
+            seq_size = qore_string_private::getCheckedLength(**str, "range operator [m..n]", xsink);
+            if (seq_size < 0) {
+                return false;
+            }
             break;
         }
         case NT_BINARY: seq_size = seq.get<const BinaryNode>()->size(); break;

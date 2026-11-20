@@ -33,10 +33,12 @@
 
 #define _QORE_STATEMENT_BLOCK_H
 
+#include "qore/intern/ParseWarnOptions.h"
 #include "qore/intern/QoreNativeParseInfo.h"
 #include "qore/intern/AbstractStatement.h"
 #include <qore/safe_dslist>
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -214,11 +216,9 @@ public:
         return on_block_exit_list;
     }
 
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        if (statement_list.empty())
-            return false;
-
-        return (*statement_list.last())->hasFinalReturn();
+    //! Returns true once the block has been parse-initialized
+    DLLLOCAL bool isParseInitialized() const {
+        return parse_initialized;
     }
 
     DLLLOCAL void setupLVList(QoreParseContext& parse_context) {
@@ -235,12 +235,16 @@ protected:
     statement_list_t statement_list;
     block_list_t on_block_exit_list;
     LVList* lvars = nullptr;
+    //! true once the block has been parse-initialized; the analysis of the code that calls the function, method or
+    //! closure of the block reads it (issue #5940)
+    bool parse_initialized = false;
 
     // start must be the element before the start position
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, statement_list_t::iterator start);
     DLLLOCAL void parseCommitIntern(statement_list_t::iterator start);
-    DLLLOCAL bool hasLastReturn(AbstractStatement* as);
-    DLLLOCAL int parseCheckReturn();
+    //! Checks that the end of the code of the variant cannot be reached without a return statement if it has a declared
+    //! return type that does not accept NOTHING (issue #5940)
+    DLLLOCAL int parseCheckReturn(const UserVariantBase* uvb);
 
     DLLLOCAL int execIntern(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int execIntern(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
@@ -330,12 +334,78 @@ public:
         parse_context.lvids = 0;
     }
 
+    //! Records the committed statements that no run has executed yet as executed, and returns their number
+    /** For Program::skipPendingStatements(); the caller holds the parse lock of the Program, so that no parse changes
+        the committed statements (issue #6511)
+    */
+    DLLLOCAL int64 skipUnexecuted() {
+        std::lock_guard<std::mutex> lg(ehwm_lock);
+        if (hwm == statement_list.end()) {
+            return 0;
+        }
+        statement_list_t::iterator i = ehwm;
+        if (i == statement_list.end()) {
+            i = statement_list.begin();
+        } else {
+            ++i;
+        }
+        int64 rv = 0;
+        statement_list_t::iterator stop = hwm;
+        ++stop;
+        for (; i != stop; ++i) {
+            ++rv;
+        }
+        if (rv) {
+            ehwm = hwm;
+            // the top-level code compiled ahead of time covers the statements skipped: it does not run either
+            aot_toplevel_ran = true;
+        }
+        return rv;
+    }
+
 protected:
     QoreNativeParseInfo committed_native_parse_info;
     // iterator to last commit element in statement list (for parsing)
     statement_list_t::iterator hwm;
-    // iterator to last executed element in statement list (for REPARSE mode execution)
+    // iterator to the last element of the statement list that a run has executed or is executing (for REPARSE mode
+    // execution, where a run claims each statement before it executes it: issue #6511)
     statement_list_t::iterator ehwm;
+    //! serializes the changes of ehwm by the threads that run the top-level code (issues #6475, #6511)
+    std::mutex ehwm_lock;
+    //! true once the top-level code compiled ahead of time has run in REPARSE mode, which runs it once (issue #6474)
+    //! guarded by ehwm_lock (see claimAOTToplevelRun())
+    bool aot_toplevel_ran = false;
+
+    //! Records the statements that the code has when a run starts as executed (issue #6475)
+    /** A run outside of REPARSE mode executes all of them, so a run after PO_ALLOW_REPARSE is set later executes only
+        the statements of later parses; the statements after one that raised an exception are recorded as well, as
+        the code that runs outside of REPARSE mode does not record the last one that it ran.  The list cannot change
+        while the code runs, as the Program cannot be parsed while threads run it.
+    */
+    DLLLOCAL void markExecuted() {
+        if (!statement_list.empty()) {
+            std::lock_guard<std::mutex> lg(ehwm_lock);
+            ehwm = statement_list.last();
+        }
+    }
+
+    //! Claims the run of the top-level code compiled ahead of time in REPARSE mode, which runs it once (issue #6474)
+    /** The statements that the code has are recorded as executed in the same step, under the lock that the runs that
+        execute the statements claim them with, so that a run in another thread that does not run the compiled code
+        does not execute them too (issue #6511).
+        @return true if this run runs the compiled code
+    */
+    DLLLOCAL bool claimAOTToplevelRun() {
+        std::lock_guard<std::mutex> lg(ehwm_lock);
+        if (aot_toplevel_ran) {
+            return false;
+        }
+        aot_toplevel_ran = true;
+        if (!statement_list.empty()) {
+            ehwm = statement_list.last();
+        }
+        return true;
+    }
     // true only the first time parseInit() is called
     bool first;
     // the values of first and of the size of lvars that a rollback restores: those of the last commit (issue #678)
@@ -458,6 +528,11 @@ protected:
     const QoreProgramLocation* loc;
     bool block_start;
     bool top_level;
+    //! the parse options and warning mask in effect where the variable is declared, under which the warnings raised
+    //! when it goes out of scope are checked (issue #6589)
+    ParseWarnOptions decl_opts;
+    //! true if decl_opts is set (a variable declared in a Program's code)
+    bool has_decl_opts = false;
 };
 
 class CatchExceptionHelper {

@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of handlers run out of line at the end of a block, a break or a continue
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include HandlerReturnPastCapFlow.qc
+
+%exec-class HandlerReturnPastCapFlowPart2
+
+#! runs part 2 of 2 of the cases of HandlerReturnPastCapFlowBase: tiered execution and qcc -O0/-O3
+class HandlerReturnPastCapFlowPart2 inherits HandlerReturnPastCapFlowBase {
+    constructor() : HandlerReturnPastCapFlowBase("HandlerReturnPastCapFlowPart2", 2) {
+    }
+}

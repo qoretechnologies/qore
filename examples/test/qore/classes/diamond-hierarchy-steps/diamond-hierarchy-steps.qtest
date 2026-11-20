@@ -1,0 +1,576 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - the step counts are taken over parses of Programs of the test's own process
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class DiamondHierarchyStepsTest
+
+#! the walks of a class hierarchy take steps polynomial in its ancestors, not in its paths (qore#6499, qore#6513,
+#! qore#6522)
+/** In a chain of diamonds (each level: two classes inheriting the class of the level below, and a class inheriting
+    both), there are 2^depth paths from the top class to the base class.  The walks that set up a class
+    (BCList::findInHierarchy(), BCList::addBaseClassesToSubclass(), the walks that build the inheritance lists of
+    methods and the search for the implementations of abstract methods) followed every path, so that the parse of a
+    few dozen classes did not end.  Each walk must visit each ancestor once: the walks of a class visit at most its
+    ancestors for each of its ancestors, so the steps of the walks of a whole chain are bounded by the square of the
+    number of its classes times the number of its inheritance edges, and grow polynomially with the depth (about 8
+    times for twice the depth), not with 2^depth.  The creation
+    of an object of such a chain walked the base classes without a constructor on every path to run the constructors
+    of their base classes (qore#6513): each must be walked once for the object, and a constructor is still run once.
+    The lookups that stop at the first match (a method, member, constant or static variable, \c instanceof, a cast,
+    a type check) walked every path when they found nothing (qore#6522), at parse time and at run time: each class
+    must be searched once, so that the steps of a lookup are at most the edges and grow about twice for twice the
+    depth.
+
+    The steps are counted by a debug hook of the library, so that check is skipped by a library built without it; a
+    chain of depth 40 is also parsed, run, an object of it created and lookups that find nothing made on it in every
+    execution mode and as a qcc-compiled executable, where the walks on every path did not end.
+*/
+class DiamondHierarchyStepsTest inherits QUnit::Test {
+    public {
+        #! the depths of the chains whose steps are counted
+        const Depths = (5, 10, 20, 40);
+
+        #! the depth of the chain that is run in child processes
+        const RunDepth = 40;
+
+        #! the output expected from the program with the chain of depth RunDepth
+        const Expected = (
+            "calls: [\"X0 1\", \"X40 s\", \"R1 1\"]",
+            "listed: {::X40::s(string str): 1, ::X0::s(int i): 1, ::R1::s(bool b): 1}",
+            "constructors: [1, 1]",
+            "misses: [\"METHOD-DOES-NOT-EXIST\", \"METHOD-DOES-NOT-EXIST\", False, False, \"RUNTIME-CAST-ERROR\", "
+                "\"RUNTIME-OVERLOAD-ERROR\", \"INVALID-MEMBER\", \"UNKNOWN-METHOD\"]",
+            "hits: [True, True, \"R1\", \"X0 2\"]",
+            "cut: [\"pm\", \"pc\", \"ps\", \"ps\", True]",
+        );
+
+        #! the lookups that find nothing at parse time: code parsed with a chain (\c XD is its top class)
+        const ParseMisses = {
+            # BCList::parseFindNormalMethod(): the call is resolved at run time
+            "method": "sub pm_method(XD x) { x.nosuch(); }",
+            # BCList::parseFindStaticMethod()
+            "static method": "sub pm_static() { XD::nosuch(); }",
+            # BCList::parseFindConstantValue(), BCList::parseFindStaticVar()
+            "constant": "sub pm_constant() { auto v = XD::NOSUCH; }",
+            # BCList::parseFindMember()
+            "member": "sub pm_member(XD x) { auto v = x.nosuch; }",
+            # the class checks of instanceof, a cast and an assignment
+            "instanceof": "bool sub pm_instanceof(XD x) { return x instanceof Other; }",
+            "cast": "sub pm_cast(XD x) { auto o = cast<Other>(x); }",
+            "assignment": "sub pm_assign(XD x) { Other o = x; }",
+        };
+
+        #! the lookups that find nothing at run time: functions called with an object of the top class of a chain
+        const RunMisses = {
+            # BCList::runtimeFindCommittedMethod()
+            "method": "rt_method",
+            "callable method": "rt_callable",
+            # BCList::getClass()
+            "instanceof": "rt_instanceof",
+            "cast": "rt_cast",
+            "parameter type": "rt_param",
+            # BCList::runtimeFindCommittedStaticMethod()
+            "static method": "rt_static",
+        };
+
+        #! the lookups that find a match at run time: their steps are bounded by the classes
+        const RunHits = {
+            "instanceof the base class": "rt_hit_base",
+            "instanceof a class after a miss": "rt_hit_r1",
+            "cast": "rt_hit_cast",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("DiamondHierarchySteps", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+
+        addTestCase("steps of the walks of diamond chains", \stepsTest());
+        addTestCase("steps of the creation of objects of diamond chains", \createStepsTest());
+        addTestCase("steps of the lookups that find nothing at parse time", \parseMissStepsTest());
+        addTestCase("steps of the lookups at run time", \runLookupStepsTest());
+        addTestCase("a chain of depth 40 in every execution mode and qcc", \runTest());
+        addTestCase("lookups with and without a diamond", \lookupPathsTest());
+        addTestCase("lookups with and without a diamond in every execution mode and qcc", \lookupPathsRunTest());
+        addTestCase("a diamond declared by a later parse, and a parse rollback", \lateAndRollbackTest());
+        set_return_value(main());
+    }
+
+    #! returns the steps of the hierarchy walks of the parser so far, or NOTHING without the debug hook
+    private static *int steps() {
+        # the debug hook exists in debug builds of the library only
+        try {
+            return call_function("dbg_class_hierarchy_walk_steps");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! returns the source of a chain of diamonds of the given depth
+    /** \c X0 is the base class; level k has \c Lk and \c Rk inheriting \c X(k-1), and \c Xk inheriting \c Lk and
+        \c Rk.  \c X0 and the top class declare a static method \c s(), and so does \c R1, so that the walks that
+        build the inheritance lists of methods run over the whole chain; \c X0 declares an abstract method that only
+        the top class implements, so that the search for its implementation in each class runs over the chain too.
+        \c X0 and \c L2 have a constructor, which counts its calls in a static variable; the other classes have none.
+    */
+    private static string chain(int depth) {
+        string src = "class X0 { public { static int n = 0; } constructor() { ++n; } "
+            "static string s(int i) { return \"X0 \" + i; } abstract string am(); }\n";
+        for (int k = 1; k <= depth; ++k) {
+            if (k == 2) {
+                src += "class L2 inherits X1 { public { static int n = 0; } constructor() { ++n; } }\n";
+            } else {
+                src += sprintf("class L%d inherits X%d {}\n", k, k - 1);
+            }
+            if (k == 1) {
+                src += "class R1 inherits X0 { static string s(bool b) { return \"R1 \" + b; } }\n";
+            } else {
+                src += sprintf("class R%d inherits X%d {}\n", k, k - 1);
+            }
+            if (k == depth) {
+                src += sprintf("class X%d inherits L%d, R%d { static string s(string str) { return \"X%d \" + str; } "
+                    "string am() { return \"am\"; } }\n", k, k, k, k);
+            } else {
+                src += sprintf("class X%d inherits L%d, R%d {}\n", k, k, k);
+            }
+        }
+        return src;
+    }
+
+    #! parses chains of increasing depth and checks that the steps of the walks are bounded by the chain's size
+    stepsTest() {
+        if (!exists steps()) {
+            testSkip("the library has no class hierarchy step counter (a debug build is required)");
+        }
+        hash<string, int> counts;
+        foreach int depth in (Depths) {
+            # the classes: X0, and three for each level
+            int classes = 1 + 3 * depth;
+            # the inheritance edges: four for each level
+            int edges = 4 * depth;
+            Program p(PO_NEW_STYLE);
+            int before = steps();
+            p.parse(chain(depth), "chain");
+            int n = steps() - before;
+            counts{depth} = n;
+            assertTrue(n > 0, sprintf("depth %d: the walks were counted", depth));
+            assertTrue(n <= classes * classes * edges, sprintf("depth %d: %d steps for %d classes and %d edges (at "
+                "most %d)", depth, n, classes, edges, classes * classes * edges));
+        }
+        # twice the depth: about eight times the steps, not 2^depth times
+        assertTrue(counts{"40"} <= 10 * counts{"20"}, sprintf("steps by depth: %y", counts));
+        assertTrue(counts{"20"} <= 10 * counts{"10"}, sprintf("steps by depth: %y", counts));
+    }
+
+    #! creates objects of chains of increasing depth and checks that the steps of the walk of their base class
+    #! constructors are bounded by the chain's size and grow linearly with the depth
+    createStepsTest() {
+        if (!exists steps()) {
+            testSkip("the library has no class hierarchy step counter (a debug build is required)");
+        }
+        hash<string, int> counts;
+        foreach int depth in (Depths) {
+            int classes = 1 + 3 * depth;
+            int edges = 4 * depth;
+            Program p(PO_NEW_STYLE);
+            p.parse(chain(depth) + sprintf("list<int> sub make() { X%d x(); return (X0::n, L2::n); }\n", depth),
+                "chain");
+            int before = steps();
+            list<int> created = p.callFunction("make");
+            int n = steps() - before;
+            counts{depth} = n;
+            assertEq((1, 1), created, sprintf("depth %d: each constructor ran once", depth));
+            assertTrue(n > 0, sprintf("depth %d: the walk was counted", depth));
+            # each class without a constructor is walked once, and each class with one runs its base classes' once
+            assertTrue(n <= classes + edges, sprintf("depth %d: %d steps for %d classes and %d edges (at most %d)",
+                depth, n, classes, edges, classes + edges));
+        }
+        # twice the depth: about twice the steps, not 2^depth times
+        assertTrue(counts{"40"} <= 3 * counts{"20"}, sprintf("steps by depth: %y", counts));
+        assertTrue(counts{"20"} <= 3 * counts{"10"}, sprintf("steps by depth: %y", counts));
+    }
+
+    #! returns the source of the functions that make lookups in a chain of the given depth at run time
+    /** \c Other is a class outside the chain
+    */
+    private static string lookups(int depth) {
+        return "class Other {}\n"
+            + "sub take_other(Other o) {}\n"
+            + "auto sub rt_method(auto x) { try { x.nosuch(); } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            + "auto sub rt_callable(auto x) { return x.hasCallableMethod(\"nosuch\"); }\n"
+            + "auto sub rt_instanceof(auto x) { return x instanceof Other; }\n"
+            + "auto sub rt_cast(auto x) { try { auto o = cast<Other>(x); } catch (hash<ExceptionInfo> ex) { "
+                "return ex.err; } }\n"
+            + "auto sub rt_param(auto x) { try { take_other(x); } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            + "auto sub rt_member(auto x) { try { auto v = x.nosuch; } catch (hash<ExceptionInfo> ex) { "
+                "return ex.err; } }\n"
+            + sprintf("auto sub rt_static(auto x) { try { call_static_method(\"X%d\", \"nosuch\"); } "
+                "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n", depth)
+            + "auto sub rt_hit_base(auto x) { return x instanceof X0; }\n"
+            + "auto sub rt_hit_r1(auto x) { return x instanceof R1; }\n"
+            + "auto sub rt_hit_cast(auto x) { return cast<R1>(x) ? \"R1\" : \"\"; }\n"
+            + sprintf("auto sub make() { return new X%d(); }\n", depth);
+    }
+
+    #! parses code with lookups that find nothing in chains of increasing depth and checks their steps
+    /** The code is parsed with the chain, whose classes are then not committed yet (as in the parse of a program that
+        declares them); the steps are those of the whole parse, which a parse error can end before the chain alone
+        would: they are bounded as those of the chain alone (see stepsTest())
+    */
+    parseMissStepsTest() {
+        if (!exists steps()) {
+            testSkip("the library has no class hierarchy step counter (a debug build is required)");
+        }
+        hash<string, hash<string, int>> counts;
+        foreach int depth in (Depths) {
+            int classes = 1 + 3 * depth;
+            int edges = 4 * depth;
+            string src = chain(depth) + "class Other {}\n";
+            foreach hash<auto> i in (ParseMisses.pairIterator()) {
+                Program p(PO_NEW_STYLE);
+                int before = steps();
+                try {
+                    p.parse(src + replace(i.value, "XD", sprintf("X%d", depth)), i.key);
+                } catch (hash<ExceptionInfo> ex) {
+                    # a parse error is the expected result of most of them
+                }
+                int n = steps() - before;
+                counts{i.key}{depth} = n;
+                assertTrue(n > 0, sprintf("parse %s depth %d: the walks were counted", i.key, depth));
+                assertTrue(n <= classes * classes * edges, sprintf("parse %s depth %d: %d steps for %d classes and "
+                    "%d edges (at most %d)", i.key, depth, n, classes, edges, classes * classes * edges));
+            }
+        }
+        # twice the depth: about eight times the steps of the parse, not 2^depth times
+        checkGrowth("parse", counts, 10);
+    }
+
+    #! makes lookups at run time in objects of chains of increasing depth and checks their steps
+    runLookupStepsTest() {
+        if (!exists steps()) {
+            testSkip("the library has no class hierarchy step counter (a debug build is required)");
+        }
+        hash<string, hash<string, int>> counts;
+        foreach int depth in (Depths) {
+            int classes = 1 + 3 * depth;
+            int edges = 4 * depth;
+            Program p(PO_NEW_STYLE);
+            p.parse(chain(depth) + lookups(depth), "chain");
+            object x = p.callFunction("make");
+            foreach hash<auto> i in (RunMisses.pairIterator()) {
+                int before = steps();
+                p.callFunction(i.value, x);
+                int n = steps() - before;
+                counts{i.key}{depth} = n;
+                assertTrue(n > 0, sprintf("run %s depth %d: the lookups were counted", i.key, depth));
+                # each lookup visits each edge once at most; the call makes a few lookups
+                assertTrue(n <= 8 * edges, sprintf("run %s depth %d: %d steps for %d edges (at most %d)", i.key,
+                    depth, n, edges, 8 * edges));
+            }
+            # a match found without a miss, or after the miss of the first base class, costs a few steps for each class
+            # (the call and its argument checks make lookups too)
+            foreach hash<auto> i in (RunHits.pairIterator()) {
+                int before = steps();
+                bool b = p.callFunction(i.value, x).toBool();
+                int n = steps() - before;
+                assertTrue(b, sprintf("run %s depth %d", i.key, depth));
+                assertTrue(n <= 2 * classes, sprintf("run %s depth %d: %d steps for %d classes", i.key, depth, n,
+                    classes));
+            }
+        }
+        # twice the depth: about twice the steps of a lookup, not 2^depth times
+        checkGrowth("run", counts, 3);
+    }
+
+    #! checks that the steps for twice the depth are at most \a factor times those of the depth
+    private checkGrowth(string label, hash<string, hash<string, int>> counts, int factor) {
+        foreach hash<auto> i in (counts.pairIterator()) {
+            assertTrue(i.value{"40"} <= factor * i.value{"20"}, sprintf("%s %s: steps by depth: %y", label, i.key,
+                i.value));
+            assertTrue(i.value{"20"} <= factor * i.value{"10"}, sprintf("%s %s: steps by depth: %y", label, i.key,
+                i.value));
+        }
+    }
+
+    #! returns the source of a hierarchy whose top class \c Top reaches \c H, which declares the members that the
+    #! lookups find, only after other classes, with or without a diamond
+    /** Without a diamond, each class has two parent classes and is reached through one path; with one, \c B0 and
+        \c D1 are reached through two paths, and \c H is reached after \c B0
+    */
+    private static string hierarchy(bool diamond) {
+        string src = "class H { public { int hm = 1; static int hsv = 2; } const HC = \"hc\"; "
+            "string hmeth() { return \"hm\"; } static string hs() { return \"hs\"; } }\n";
+        if (diamond) {
+            src += "class B0 {}\n"
+                "class L1 inherits B0 {}\n"
+                "class R1 inherits B0, H {}\n"
+                "class D1 inherits L1, R1 {}\n"
+                "class L2 inherits D1 {}\n"
+                "class R2 inherits D1 {}\n"
+                "class Top inherits L2, R2 {}\n";
+        } else {
+            src += "class TL1 {}\n"
+                "class TL2 {}\n"
+                "class TR2 {}\n"
+                "class TL inherits TL1, TL2 {}\n"
+                "class TR inherits TR2, H {}\n"
+                "class Top inherits TL, TR {}\n";
+        }
+        return src;
+    }
+
+    #! returns the source of the lookups of each kind that find something or nothing in an object of \c Top
+    /** The lookups that find something are those of the parse (with the object in a typed variable) and those at run
+        time (in an untyped one); \c results() returns their results
+    */
+    private static string pathLookups() {
+        return "class Other {}\n"
+            "sub take_h(H h) {}\n"
+            "sub take_other(Other o) {}\n"
+            "string sub err(code c) { try { c(); return \"none\"; } catch (hash<ExceptionInfo> ex) { "
+                "return ex.err; } }\n"
+            "list<auto> sub results(Top t) {\n"
+            "    auto a = t;\n"
+            "    H h = t;\n"
+            # found at parse time: method, static method, constant, static variable, member, instanceof, cast,
+            # assignment
+            "    list<auto> l = (t.hmeth(), Top::hs(), Top::HC, Top::hsv, t.hm, t instanceof H, cast<H>(t).hm, h.hm);\n"
+            # found at run time
+            "    l += (a.hmeth(), call_static_method(\"Top\", \"hs\"), a instanceof H, cast<H>(a).hm, "
+            "a.hasCallableMethod(\"hmeth\"), a.hm, err(sub () { take_h(a); }));\n"
+            # not found at run time
+            "    l += (err(sub () { a.nosuch(); }), a instanceof Other, err(sub () { auto o = cast<Other>(a); }), "
+            "err(sub () { take_other(a); }), a.hasCallableMethod(\"nosuch\"), "
+            "err(sub () { call_static_method(\"Top\", \"nosuch\"); }), err(sub () { auto v = a.nosuch; }));\n"
+            "    return l;\n"
+            "}\n";
+    }
+
+    #! the results of results() for both hierarchies
+    const PathResults = ("hm", "hs", "hc", 2, 1, True, 1, 1, "hm", "hs", True, 1, True, 1, "none",
+        "METHOD-DOES-NOT-EXIST", False, "RUNTIME-CAST-ERROR", "RUNTIME-OVERLOAD-ERROR", False, "UNKNOWN-METHOD",
+        "INVALID-MEMBER");
+
+    #! the lookups of each kind give the same results in a hierarchy with and without a diamond
+    /** A class whose hierarchy has no diamond is searched with the recursion of the lookups, which the step counter
+        does not count; one with a diamond with the walk that visits each class once (qore#6522)
+    */
+    lookupPathsTest() {
+        bool counted = exists steps();
+        foreach bool diamond in ((False, True)) {
+            string label = diamond ? "diamond" : "no diamond";
+            Program p(PO_NEW_STYLE);
+            p.parse(hierarchy(diamond) + pathLookups() + "Top sub make() { return new Top(); }\n", label);
+            object t = p.callFunction("make");
+            int before = counted ? steps() : 0;
+            list<auto> l = p.callFunction("results", t);
+            int n = counted ? steps() - before : 0;
+            assertEq(PathResults, l, label);
+            if (counted) {
+                if (diamond) {
+                    # each lookup in Top takes a few steps: about 300 for results()
+                    assertTrue(n >= 50, sprintf("%s: the lookups were walked (%d steps)", label, n));
+                } else {
+                    # only the lookups in builtin classes, which are walked, are counted: one to raise an exception
+                    assertTrue(n <= 2, sprintf("%s: the lookups were made by the recursion (%d steps)", label, n));
+                }
+            }
+            # the lookups that find nothing at parse time raise the same errors
+            hash<string, string> errs;
+            foreach hash<auto> i in (ParseMisses.pairIterator()) {
+                Program pp(PO_NEW_STYLE);
+                try {
+                    pp.parse(hierarchy(diamond) + "class Other {}\n" + replace(i.value, "XD", "Top"), i.key);
+                    errs{i.key} = "none";
+                } catch (hash<ExceptionInfo> ex) {
+                    errs{i.key} = ex.err;
+                }
+            }
+            assertEq(ParseMissErrors, errs, label);
+        }
+    }
+
+    #! the errors of the lookups of ParseMisses
+    const ParseMissErrors = {
+        "method": "none",
+        "static method": "PARSE-EXCEPTION",
+        "constant": "PARSE-EXCEPTION",
+        "member": "PARSE-EXCEPTION",
+        "instanceof": "none",
+        "cast": "none",
+        "assignment": "PARSE-TYPE-ERROR",
+    };
+
+    #! the lookups with and without a diamond give the same results in every execution mode and as a qcc-compiled
+    #! executable
+    lookupPathsRunTest() {
+        TmpDir tmp("qore-diamond-hierarchy-paths-");
+        foreach bool diamond in ((False, True)) {
+            string label = diamond ? "diamond" : "no-diamond";
+            string file = tmp.path + DirSep + label + ".q";
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%modern\n" + hierarchy(diamond) + pathLookups() + "printf(\"%y\\n\", results(new Top()));\n");
+            f.close();
+            string expected = sprintf("%y", PathResults);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string out = trim(ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                    "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, file)));
+                assertEq(expected, out, label + " " + mode);
+            }
+            string exe = tmp.path + DirSep + label;
+            string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+                libqore_dir, libqore_dir, libqore_dir, qcc_bin, exe, file));
+            assertTrue(is_file(exe), label + ": compiled the executable: " + out);
+            if (!is_file(exe)) {
+                continue;
+            }
+            out = trim(ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+                libqore_dir, exe)));
+            assertEq(expected, out, label + " executable");
+        }
+    }
+
+    #! a class declared by a later parse can make a diamond over classes declared before, and a parse that fails is
+    #! rolled back with its classes
+    /** Whether a hierarchy has a diamond is set for each class when it is initialized and does not change: a later
+        parse declares new classes only, and a class of a parse that fails is discarded with it
+    */
+    lateAndRollbackTest() {
+        bool counted = exists steps();
+        # a diamond over classes of an earlier parse
+        {
+            Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+            p.parsePending("class A { string am() { return \"am\"; } } class B inherits A {} class C {}\n"
+                "class BC inherits B, C {}\n", "first");
+            p.parseCommit();
+            p.parsePending("class Other {}\n"
+                "class D inherits BC, A {}\n"
+                "list<auto> sub check(auto x) { return (x instanceof A, x instanceof Other, x.am(), "
+                "x.hasCallableMethod(\"nosuch\")); }\n"
+                "auto sub make(string n) { return n == \"D\" ? new D() : new BC(); }\n", "second");
+            p.parseCommit();
+            foreach string n in (("BC", "D")) {
+                object x = p.callFunction("make", n);
+                int before = counted ? steps() : 0;
+                list<auto> l = p.callFunction("check", x);
+                int s = counted ? steps() - before : 0;
+                assertEq((True, False, "am", False), l, n);
+                if (counted) {
+                    if (n == "D") {
+                        assertTrue(s > 0, sprintf("%s: the diamond is walked (%d steps)", n, s));
+                    } else {
+                        assertEq(0, s, sprintf("%s: no diamond", n));
+                    }
+                }
+            }
+        }
+        # a parse with a diamond that fails, then the same names without one
+        {
+            Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+            try {
+                p.parsePending("class A { string am() { return \"am\"; } } class B inherits A {}\n"
+                    "class C inherits A {}\n"
+                    "class D inherits B, C {}\n"
+                    "sub f() { D d(); d.am(); no_such_function(); }\n", "failed");
+                p.parseCommit();
+                assertTrue(False, "the parse failed");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("PARSE-EXCEPTION", ex.err);
+                p.parseRollback();
+            }
+            p.parsePending("class Other {}\n"
+                "class A { string am() { return \"am\"; } } class B inherits A {} class C {}\n"
+                "class D inherits B, C {}\n"
+                "list<auto> sub check(auto x) { return (x instanceof A, x instanceof Other, x.am(), "
+                "x.hasCallableMethod(\"nosuch\"), x instanceof C); }\n"
+                "auto sub make() { return new D(); }\n", "second");
+            p.parseCommit();
+            object x = p.callFunction("make");
+            int before = counted ? steps() : 0;
+            list<auto> l = p.callFunction("check", x);
+            int s = counted ? steps() - before : 0;
+            assertEq((True, False, "am", False, True), l);
+            if (counted) {
+                assertEq(0, s, "the class of the second parse has no diamond");
+            }
+        }
+    }
+
+    #! a program with a chain of depth RunDepth runs in every execution mode and as a qcc-compiled executable
+    runTest() {
+        TmpDir tmp("qore-diamond-hierarchy-steps-");
+        string file = tmp.path + DirSep + "chain.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n%disable-warning non-existent-method-call\n" + chain(RunDepth)
+            + sprintf("printf(\"calls: %%y\\n\", (X%d::s(1), X%d::s(\"s\"), X%d::s(True)));\n", RunDepth,
+                RunDepth, RunDepth)
+            + "auto bad = (1,);\n"
+            + sprintf("try { X%d::s(bad); } catch (hash<ExceptionInfo> ex) {\n", RunDepth)
+            + "    hash<string, int> h = {};\n"
+            + "    foreach string line in (ex.desc.split(\"\\n\")) {\n"
+            + "        if (line =~ /^ +::/) { string v = trim(line); h{v} = (h{v} ?? 0) + 1; }\n"
+            + "    }\n"
+            + "    printf(\"listed: %y\\n\", h);\n"
+            + "}\n"
+            + sprintf("X%d x();\n", RunDepth)
+            + "printf(\"constructors: %y\\n\", (X0::n, L2::n));\n"
+            + lookups(RunDepth)
+            # a method that the parse does not find in the class of a typed variable is looked up at run time
+            + sprintf("auto sub typed_miss(X%d x) { try { x.nosuch(); } catch (hash<ExceptionInfo> ex) { "
+                "return ex.err; } }\n", RunDepth)
+            + "printf(\"misses: %y\\n\", (typed_miss(x), rt_method(x), rt_callable(x), rt_instanceof(x), "
+                "rt_cast(x), rt_param(x), rt_member(x), rt_static(x)));\n"
+            + sprintf("printf(\"hits: %%y\\n\", (rt_hit_base(x), rt_hit_r1(x), rt_hit_cast(x), X%d::s(2)));\n",
+                RunDepth)
+            # a class reached first through a private:internal edge that the lookups from outside do not follow, then
+            # through a public path: the walks record a class when they enter it, not when an edge reaches it
+            + "class PA { const PC = \"pc\"; static string ps() { return \"ps\"; } "
+                "string pmeth() { return \"pm\"; } }\n"
+            + "class PB inherits PA {}\n"
+            + "class PD inherits private:internal PA, PB {}\n"
+            + "auto pd = new PD();\n"
+            + "printf(\"cut: %y\\n\", (pd.pmeth(), PD::PC, PD::ps(), call_static_method(\"PD\", \"ps\"), "
+                "pd.hasCallableMethod(\"pmeth\")));\n");
+        f.close();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, file)));
+        }
+        string exe = tmp.path + DirSep + "chain";
+        string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+            libqore_dir, libqore_dir, libqore_dir, qcc_bin, exe, file));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        if (!is_file(exe)) {
+            return;
+        }
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}

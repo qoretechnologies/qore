@@ -166,6 +166,20 @@ This generalizes the existing Phase 1.5 init-expression outliner
      locals must not cross the boundary; a shared local's lifecycle op
      may sit inside the region only if the local has no references
      after it (the common `for`-init-in-previous-block shape);
+   - the catch blocks opened in the region are closed in it, and the
+     region closes none opened before it (a dataflow of the number of
+     the function's catch blocks open, from the exit depths of the
+     catch blocks' exit blocks); the helper counts the depths of its
+     exit blocks (`catch_exit_depths`) from the catch blocks open when
+     it is called (qore#6651);
+   - no scope with `on_exit`, `on_error` or `on_success` handlers
+     registered in the region is open on an edge to `F` (a dataflow of
+     the scopes entered and exited): the helper's return would run the
+     handlers there, and not where the scope ends in the coordinator
+     (such a scope has no `ScopeExit` when all of its paths end in a
+     return or an exception; qore#6652); the locals that the handlers
+     registered in the region reference count as written references of
+     the region (qore#6545, below);
    - the function entry block is never part of a region.
 
    Reference-promoted closure-use locals may cross the boundary when
@@ -213,10 +227,26 @@ This generalizes the existing Phase 1.5 init-expression outliner
    locals (transient `shared_locals`): the coordinator releases its
    reload storage of them (reload tracker, deferred slot, entry owner)
    right before the call and reloads them right after it, as around a
-   call that runs handlers out of line (`finalizeHandlerSites()`).
+   call that runs handlers out of line (`finalizeHandlerSites()`); only
+   for those that the helper can write (`written_shared_locals`: those
+   that an instruction of the region writes or that a handler declared
+   in the region references (see below), top-level locals, and those
+   that a reference, a closure or code evaluated through the AST can
+   reach), as a local that the helper only reads keeps its value across
+   the call (qore#6314).
    Otherwise that storage kept the value that the helper replaced in a
    shared local alive until the coordinator next reloaded the local, and
-   its destructor ran late (qore#6300).
+   its destructor ran late (qore#6300).  The locals of the function that
+   the `on_exit`, `on_error` and `on_success` handlers of a block in a
+   region reference count as references at the block's `OnBlockExit`
+   instruction (`QoreIRFunction::collectOnBlockExitLocals()`; a region
+   cannot hold a handler whose locals cannot be collected).  So a local
+   declared before the region, or a parameter, that only a handler in
+   the region references there is shared and counts as written by the
+   helper, which runs the handler: the coordinator releases its
+   storage of the local before the call, and the value that the handler
+   replaces is released at the assignment (qore#6545).  Closure-use
+   locals are left out, as their values are not in reload storage.
 8. **Self-recursive fast entry.** When the outliner fires, the
    Approach-B fast entry is skipped: fast-entry mode passes params as
    LLVM arguments (not TLS), which helpers cannot see, and a
@@ -250,6 +280,39 @@ This generalizes the existing Phase 1.5 init-expression outliner
    (this manifested as an infinite loop: the fused `while` condition
    never observed the helper's `++turn`).
 
+11. **The paths of a debugger's flow requests are set aside (#6201).**
+   Code with step events has a path per return, break and continue
+   request of its step events (`QoreIRBasicBlock::debug_flow`, see
+   design/debug-flow-edges.md).  AOT native code takes none of them: it
+   makes no step events (`emitDebugStepHook()` emits nothing in AOT
+   mode) and its lowering drops the path blocks.  Outlined code is AOT
+   native code only: the IR interpreter rejects `CallAOTHelper`, the
+   JIT never sees outlined IR, and `undo()` restores the function before
+   its debug IR is serialized, so a qcc program under a debugger runs
+   the un-outlined debug IR, paths included, in the IR interpreter.  So
+   no helper can ever see a request, and the outlined call needs no
+   "take the flow" step and the format no field for one.
+   `run()` sets the paths aside before it splits and analyzes the
+   function (`detachDebugFlowPaths()`: the path blocks with their
+   positions, the flow targets of the step events and ScopeExit
+   instructions, and the Phi incomings from the paths), so that regions
+   with step events are outlined as without them; `undo()` puts them
+   back (`reattachDebugFlowPaths()`).  Debug builds assert that `undo()`
+   restores the blocks, the branch and flow targets, the Phi incomings
+   and `max_value_id` exactly (`shapeOf()`), and that no `CallAOTHelper`
+   or outlined return reaches the debug IR writer, the IR interpreter or
+   JIT lowering.  `AOTDebugIRFlow.qtest` compares the digests of the
+   serialized debug IR (`QORE_AOT_DEBUG_IR_DIGEST`, with the strings of
+   the string references for their pool offsets) of a debuggable
+   function outlined and of the same function compiled with
+   `QORE_AOT_OUTLINE_FN=analyze`, which optimizes it as for outlining
+   but does not transform it: a function that may be outlined is
+   optimized with its outline regions preserved
+   (`aotFunctionBodyMayBeOutlined()`, the last argument of
+   `qore_ir_optimize()`), so its constant CSE differs from that of the
+   same function compiled with outlining off, whose debug IR is not
+   the same for that reason alone.
+
 ## Correctness invariants
 
 - Normal fallthrough through an outlined region is indistinguishable
@@ -259,6 +322,17 @@ This generalizes the existing Phase 1.5 init-expression outliner
   helper (generated by its own lowering), the helper returns with
   `xsink` set, the coordinator's post-call exception check routes to its
   own unwind path — the same sequence a real nested call produces.
+- The helper takes the function's tables of its try statements for the
+  instructions that it lowers (`catch_interrupted_returns`,
+  `catch_cleanup_results`, `catch_exit_unwind`; `catch_exit_depths`
+  too, qore#6651), releases its locals in their declaration
+  order (the coordinator's `all_body_locals` order), and an exception in
+  it whose handler's temp scope is the coordinator's leaves every temp
+  scope of the helper.  An exit of the helper on an exception returns
+  the value of a return of the helper that the exception interrupted
+  (`outline_held_return`) instead of releasing it, and the coordinator
+  holds the call's result as the value of its own return until after
+  its locals, as the function releases it (qore#5941, qore#6650).
 - Outlining disabled (`QORE_AOT_OUTLINE_FN=0`) must produce behavior
   byte-identical to the outlined build (test matrix requirement).
 

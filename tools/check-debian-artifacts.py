@@ -19,12 +19,26 @@ import subprocess
 import tarfile
 import tempfile
 import zlib
+import importlib.util
+
+
+def _load_qami():
+    """Loads tools/qore_qami.py, the parser of the AOT module metadata record that this tool shares with
+    tools/qore-qmod-cache.py (qore#6526), from the directory of this script, which is not in sys.path with
+    python3 -I"""
+    path = Path(__file__).resolve().parent / "qore_qami.py"
+    spec = importlib.util.spec_from_file_location("qore_qami", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+qore_qami = _load_qami()
 
 
 # the ELF note holding the metadata of an AOT module; see include/qore/intern/QoreAOTBinary.h
 MODULE_INFO_NOTE_NAME = b"Qore\0"
 MODULE_INFO_NOTE_TYPE = 0x494D4151
-MODULE_INFO_MAGIC = 0x494D4151
 
 
 def digest(data):
@@ -77,7 +91,8 @@ def module_info(data):
 
     qcc stores it in a note of the allocated section .note.qore.modinfo, which
     the linker places in a PT_NOTE segment. Raises ValueError for a truncated
-    image, a second record, or a record that is not a version 1 record.
+    image, a second record, or a record that tools/qore_qami.py does not read
+    (a damaged record, or one of a version that it does not know).
     """
     if len(data) < 16 or data[:4] != b"\x7fELF" or data[5] != 1 or data[4] not in (1, 2):
         return None
@@ -115,10 +130,7 @@ def module_info(data):
     if not records:
         return None
     record = records[0]
-    if len(record) < 12:
-        raise ValueError("Invalid AOT module metadata record")
-    magic, version, size = struct.unpack_from("<III", record)
-    if magic != MODULE_INFO_MAGIC or version != 1 or size != len(record) - 12:
+    if qore_qami.parse(record, 0, exact=True) is None:
         raise ValueError("Invalid AOT module metadata record")
     return record
 

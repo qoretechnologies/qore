@@ -75,6 +75,9 @@ const DebugDontAttach = DBG_RS_DONT_ATTACH;
 /** @defgroup debug_flow_options Debug Flow Constants
     These are the possible values that are passed back to program to change flow, i.e. exit loops or function from debugger
 
+    Code that was already running when the debugger attached does not take every request with the IR, JIT and tiered
+    execution modes; see @ref debugger_running_code
+
     @since %Qore 0.8.13
  */
 ///@{
@@ -223,7 +226,9 @@ abstract nothing DebugProgram::onDetach(ProgramControl[QoreProgram] program, ref
     which has no statement ID (ProgramControl::getStatementIdInfo() does not resolve it)
     @param statement_id the statement ID for the current statement, if available
     @param breakpoint_id the breakpoint ID, if a breakpoint triggered the callback
-    @param flow a reference to the flow-control action to return to the program
+    @param flow a reference to the flow-control action to return to the program (see @ref debug_flow_options); code
+    that was already running when the debugger attached does not take every request with the IR, JIT and tiered
+    execution modes (see @ref debugger_running_code)
     @param run_state a reference to the run state to return to the program
     @param run_to_statement_id a reference to the statement ID to run to
  */
@@ -243,6 +248,11 @@ abstract nothing DebugProgram::onFunctionEnter(ProgramControl[QoreProgram] progr
 
 //! Executed when a function is exited.
 /**
+    A function that was running as native code (JIT or AOT) when the debugger attached reports its exit when it returns
+    normally, and with no value when it ends with an exception, as with the interpreters (except a function called
+    through the call path that ran as native code, which reports none on an exception); it cannot change its result:
+    an assignment to \a return_value has no effect.
+
     @param program the program being debugged
     @param statement_id the statement ID for the exited function
     @param return_value a reference to the return value

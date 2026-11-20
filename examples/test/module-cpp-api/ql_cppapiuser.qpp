@@ -844,6 +844,48 @@ hash<auto> cpp_api_binary_data(binary b) {
     return rv.release();
 }
 
+//! decodes a string with the C++ API's base64 decoding methods that return a string (issue #6621)
+/** @param str the encoded string
+    @param url @ref True for the base64url methods (\c parseBase64UrlToString()), @ref False for the base64 ones
+    (\c parseBase64ToString())
+    @param node @ref True for the QoreStringNode methods, @ref False for the QoreString ones
+    @param encoding the encoding argument of the method; if not present, the overload without an encoding is called
+
+    @return a hash with \c str: the decoded string, and \c encoding: its encoding
+
+    @throw BASE64-PARSE-ERROR the string is not valid in the encoding
+*/
+hash<auto> cpp_api_string_parse_base64(string str, bool url, bool node, *string encoding) {
+    const QoreEncoding* enc = encoding ? QEM.findCreate(encoding) : nullptr;
+    SimpleRefHolder<QoreStringNode> rv;
+    if (node) {
+        if (url) {
+            rv = enc ? str->parseBase64UrlToString(enc, xsink) : str->parseBase64UrlToString(xsink);
+        } else {
+            rv = enc ? str->parseBase64ToString(enc, xsink) : str->parseBase64ToString(xsink);
+        }
+    } else {
+        const QoreString* s = str;
+        std::unique_ptr<QoreString> r;
+        if (url) {
+            r.reset(enc ? s->parseBase64UrlToString(enc, xsink) : s->parseBase64UrlToString(xsink));
+        } else {
+            r.reset(enc ? s->parseBase64ToString(enc, xsink) : s->parseBase64ToString(xsink));
+        }
+        if (r) {
+            rv = new QoreStringNode(*r);
+        }
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    assert(rv);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("encoding", new QoreStringNode(rv->getEncoding()->getCode()), xsink);
+    h->setKeyValue("str", rv.release(), xsink);
+    return h.release();
+}
+
 //! writes data of the given size, which is never touched, with OutputStream::write() of the stream (see above)
 /** @param output_stream the stream to write to
     @param size the number of bytes to write
@@ -1674,6 +1716,270 @@ binary cpp_api_binary_write_at(int pos, string str) [flags=RET_VALUE_ONLY] {
     return b.release();
 }
 
+//! Appends or prepends part of a binary value to a copy of it the given number of times
+/** BinaryNode::append() and BinaryNode::prepend() take data that may be part of the value itself, whose buffer can
+    move when it grows, or stay when it has room for the data
+
+    @param b the value to copy
+    @param offset the byte offset in the copy of the part to add
+    @param size the byte size of the part to add
+    @param count the number of times to add the part, each time from the current value
+    @param prepend @ref True to prepend the part, @ref False to append it
+
+    @return the copy with the parts added
+
+    @throw BINARY-PART-ERROR the part is not in the value
+*/
+binary cpp_api_binary_add_own_part(binary b, int offset, int size, int count, bool prepend) [flags=RET_VALUE_ONLY] {
+    if (offset < 0 || size < 0 || static_cast<size_t>(offset) + static_cast<size_t>(size) > b->size()) {
+        return xsink->raiseException("BINARY-PART-ERROR", "the part at offset " QLLD " with size " QLLD " is not in "
+            "the value of size %zu", offset, size, b->size());
+    }
+    SimpleRefHolder<BinaryNode> rv(b->copy());
+    for (int64 i = 0; i < count; ++i) {
+        const void* part = static_cast<const char*>(rv->getPtr()) + offset;
+        if (prepend) {
+            rv->prepend(part, static_cast<size_t>(size));
+        } else {
+            rv->append(part, static_cast<size_t>(size));
+        }
+    }
+    return rv.release();
+}
+
+//! Writes part of a copy of a binary value to the copy itself with BinaryNode::writeTo()
+/** @param b the value to copy
+    @param pos the position to write the part at; beyond the end of the value, the gap is filled with zero bytes
+    @param offset the byte offset in the copy of the part to write
+    @param size the byte size of the part to write
+
+    @return the copy written to
+
+    @throw BINARY-PART-ERROR the part is not in the value
+    @throw BINARY-WRITE-ERROR BinaryNode::writeTo() failed
+*/
+binary cpp_api_binary_write_own_part(binary b, int pos, int offset, int size) [flags=RET_VALUE_ONLY] {
+    if (pos < 0 || offset < 0 || size < 0 || static_cast<size_t>(offset) + static_cast<size_t>(size) > b->size()) {
+        return xsink->raiseException("BINARY-PART-ERROR", "the part at offset " QLLD " with size " QLLD " is not in "
+            "the value of size %zu", offset, size, b->size());
+    }
+    SimpleRefHolder<BinaryNode> rv(b->copy());
+    if (rv->writeTo(static_cast<size_t>(pos), static_cast<const char*>(rv->getPtr()) + offset,
+        static_cast<size_t>(size))) {
+        return xsink->raiseException("BINARY-WRITE-ERROR", "BinaryNode::writeTo() failed at position " QLLD, pos);
+    }
+    return rv.release();
+}
+
+//! Replaces bytes of a copy of a binary value with part of the copy itself with BinaryNode::splice()
+/** @param b the value to copy
+    @param offset the offset of the bytes to replace
+    @param length the number of bytes to replace
+    @param poff the byte offset in the copy of the part to insert
+    @param psize the byte size of the part to insert
+
+    @return the copy changed
+
+    @throw BINARY-PART-ERROR the part is not in the value
+*/
+binary cpp_api_binary_splice_own_part(binary b, int offset, int length, int poff, int psize) [flags=RET_VALUE_ONLY] {
+    if (poff < 0 || psize < 0 || static_cast<size_t>(poff) + static_cast<size_t>(psize) > b->size()) {
+        return xsink->raiseException("BINARY-PART-ERROR", "the part at offset " QLLD " with size " QLLD " is not in "
+            "the value of size %zu", poff, psize, b->size());
+    }
+    SimpleRefHolder<BinaryNode> rv(b->copy());
+    rv->splice(offset, length, static_cast<const char*>(rv->getPtr()) + poff, static_cast<size_t>(psize));
+    return rv.release();
+}
+
+//! Changes a string with a QoreString operation whose source is part of the string's own text
+/** @param str the string to copy
+    @param view_from -1 to change a copy of \a str; else the byte offset of a view (QoreStringNode::substr() to the
+    end of a copy of \a str, at least 4096 bytes long) that is changed
+    @param op the operation; \a a, \a b and \a c are byte offsets and sizes in the string changed:
+    - \c "splice": QoreString::splice() of the bytes at \a a with length \a b with the whole string
+    - \c "replace": QoreString::replace() of the bytes at \a a with length \a b with the text from byte \a c
+    - \c "concat": QoreString::concat(const char*, size_t) of the \a b bytes at \a a
+    - \c "concat-text": QoreString::concat(const char*) of the text from byte \a a
+    - \c "concat-string": QoreString::concat(const QoreString*, size_t, ExceptionSink*) of the first \a a characters
+    - \c "prepend": QoreString::prepend(const char*, size_t) of the \a b bytes at \a a
+    - \c "insert": QoreString::insert() of the text from byte \a a at byte \a b
+    - \c "replace-all": QoreString::replaceAll() of the \a b bytes at \a a (as text) with the text from byte \a c
+    - \c "sprintf": QoreString::sprintf() of \c "%s" with the text from byte \a a, \a b times
+    - \c "escape": QoreString::concatEscape(const char*) of the text from byte \a a, escaping \c 'a'
+    - \c "html-encode", \c "html-decode", \c "decode-url": the concat operations of the text from byte \a a
+    - \c "base64", \c "hex": the concat operations of the \a b bytes at \a a
+    - \c "set": QoreString::set(const char*, size_t) of the \a b bytes at \a a
+    - \c "set-view": QoreString::set(const QoreString*) with a view of the string from byte \a a
+    - \c "set-self": QoreString::set(const QoreString*) with the string itself
+    @param a see \a op
+    @param b see \a op
+    @param c see \a op
+
+    @return the string changed
+
+    @throw STRING-PART-ERROR the part is not in the string or the operation is unknown
+*/
+string cpp_api_string_own_part(string str, int view_from, string op, int a, int b, int c) [flags=RET_VALUE_ONLY] {
+    SimpleRefHolder<QoreStringNode> rv(str->copy());
+    if (view_from >= 0) {
+        SimpleRefHolder<QoreStringNode> view(rv->substr(view_from, xsink));
+        if (*xsink) {
+            return QoreValue();
+        }
+        // the view is changed
+        rv = view.release();
+    }
+    QoreStringNode* s = *rv;
+    size_t size = s->size();
+    if (a < 0 || b < 0 || c < 0) {
+        return xsink->raiseException("STRING-PART-ERROR", "negative argument");
+    }
+    const char* p = s->c_str();
+    std::string o = op->c_str();
+    bool part = o == "concat" || o == "prepend" || o == "base64" || o == "hex" || o == "set" || o == "replace-all";
+    if ((part && static_cast<size_t>(a) + static_cast<size_t>(b) > size)
+        || (!part && o != "splice" && o != "concat-string" && static_cast<size_t>(a) >= size)) {
+        return xsink->raiseException("STRING-PART-ERROR", "the part is not in the string");
+    }
+    if (o == "splice") {
+        s->splice(a, b, *s, xsink);
+    } else if (o == "replace") {
+        s->replace(static_cast<size_t>(a), static_cast<size_t>(b), p + c);
+    } else if (o == "concat") {
+        s->concat(p + a, static_cast<size_t>(b));
+    } else if (o == "concat-text") {
+        s->concat(p + a);
+    } else if (o == "concat-string") {
+        s->concat(s, static_cast<size_t>(a), xsink);
+    } else if (o == "prepend") {
+        s->prepend(p + a, static_cast<size_t>(b));
+    } else if (o == "insert") {
+        s->insert(p + a, static_cast<size_t>(b));
+    } else if (o == "replace-all") {
+        std::string old_text(p + a, static_cast<size_t>(b));
+        // the old text is found in the string itself, at the position given
+        const char* found = strstr(p, old_text.c_str());
+        assert(found);
+        s->replaceAll(found, p + c);
+    } else if (o == "sprintf") {
+        for (int64 i = 0; i < b; ++i) {
+            s->sprintf("%s", s->c_str() + a);
+        }
+    } else if (o == "escape") {
+        s->concatEscape(p + a, 'a');
+    } else if (o == "html-encode") {
+        s->concatAndHTMLEncode(p + a);
+    } else if (o == "html-decode") {
+        s->concatAndHTMLDecode(p + a);
+    } else if (o == "decode-url") {
+        s->concatDecodeUrl(p + a);
+    } else if (o == "base64") {
+        s->concatBase64(p + a, static_cast<size_t>(b));
+    } else if (o == "hex") {
+        s->concatHex(p + a, static_cast<size_t>(b));
+    } else if (o == "set") {
+        s->set(p + a, static_cast<size_t>(b));
+    } else if (o == "set-self") {
+        s->set(s);
+    } else if (o == "set-view") {
+        SimpleRefHolder<QoreStringNode> view(s->substr(a, xsink));
+        if (*xsink) {
+            return QoreValue();
+        }
+        s->set(*view);
+    } else {
+        return xsink->raiseException("STRING-PART-ERROR", "unknown operation '%s'", op->c_str());
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rv.release();
+}
+
+//! Runs a QoreString operation whose source is a QoreString with the string itself and with a copy of it
+/** @param str the string to copy
+    @param view_from -1 to change a copy of \a str; else the byte offset of a view (QoreStringNode::substr() to the
+    end of a copy of \a str, at least 4096 bytes long) that is changed; another view of the same text is kept for
+    \c "set-sibling"
+    @param op the operation: \c "encode", \c "decode", \c "html-encode", \c "decode-url", \c "encode-url",
+    \c "encode-uri-request", \c "decode-uri-request", \c "escape", \c "trim", \c "trim-leading",
+    \c "trim-trailing", \c "trim-trailing-text", \c "concat-pos", \c "concat-pos-len", \c "set-sibling" (set() with
+    another view of the same text; a view is changed then)
+
+    @return a list of the string changed with itself as the source and the string changed with a copy of itself
+
+    @throw STRING-PART-ERROR the operation is unknown
+*/
+list<auto> cpp_api_string_own_vs_copy(string str, int view_from, string op) [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int run = 0; run < 2; ++run) {
+        SimpleRefHolder<QoreStringNode> target(str->copy());
+        SimpleRefHolder<QoreStringNode> sibling;
+        if (view_from >= 0) {
+            SimpleRefHolder<QoreStringNode> view(target->substr(view_from, xsink));
+            if (*xsink) {
+                return QoreValue();
+            }
+            sibling = target->substr(view_from, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            target = view.release();
+        }
+        QoreStringNode* s = *target;
+        // the source: the string itself, or a copy of it
+        // (the string itself is not referenced again: it is changed, so it must stay unique)
+        SimpleRefHolder<QoreStringNode> copy(run ? new QoreStringNode(s->c_str(), s->size(), s->getEncoding())
+            : nullptr);
+        const QoreString* src = run ? static_cast<const QoreString*>(*copy) : s;
+        std::string o = op->c_str();
+        if (o == "encode") {
+            s->concatEncode(xsink, *src, CE_ALL);
+        } else if (o == "decode") {
+            s->concatDecode(xsink, *src, CD_ALL);
+        } else if (o == "html-encode") {
+            s->concatAndHTMLEncode(src, xsink);
+        } else if (o == "decode-url") {
+            s->concatDecodeUrl(*src, xsink);
+        } else if (o == "encode-url") {
+            s->concatEncodeUrl(xsink, *src, true);
+        } else if (o == "encode-uri-request") {
+            s->concatEncodeUriRequest(xsink, *src);
+        } else if (o == "decode-uri-request") {
+            s->concatDecodeUriRequest(*src, xsink);
+        } else if (o == "escape") {
+            s->concatEscape(src, 'a', '\\', xsink);
+        } else if (o == "trim") {
+            s->trim(xsink, src);
+        } else if (o == "trim-leading") {
+            s->trimLeading(xsink, src);
+        } else if (o == "trim-trailing") {
+            s->trimTrailing(xsink, src);
+        } else if (o == "trim-trailing-text") {
+            s->trim_trailing(src->c_str() + src->size() / 2);
+        } else if (o == "concat-pos") {
+            s->concat(*src, 3, xsink);
+        } else if (o == "concat-pos-len") {
+            s->concat(*src, 3, 100, xsink);
+        } else if (o == "set-sibling") {
+            if (!sibling) {
+                return xsink->raiseException("STRING-PART-ERROR", "set-sibling needs a view");
+            }
+            // the sibling is a view of the same text as the string changed; with a copy the sibling is copied
+            const QoreString* ssrc = run ? static_cast<const QoreString*>(*copy) : static_cast<const QoreString*>(*sibling);
+            s->set(ssrc);
+        } else {
+            return xsink->raiseException("STRING-PART-ERROR", "unknown operation '%s'", op->c_str());
+        }
+        if (*xsink) {
+            return QoreValue();
+        }
+        rv->push(target.release(), xsink);
+    }
+    return rv.release();
+}
+
 //! Allocates memory with q_sb_malloc() and keeps it; returns a handle for sb_mem_resize() and sb_mem_free()
 /** The memory counts against the memory limit of the sandbox call that the current thread runs.
 
@@ -1954,6 +2260,26 @@ nothing sb_capture_applied_check_read(int handle, string path) {
         smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
     }
     return QoreValue();
+}
+
+//! Calls code while a capture is applied, as a native bridge runs a handler for the code whose sandbox it captured
+/** The capture is applied with QoreSandboxCaptureHelper; the code runs as the submitter's operation, governed by the
+    captured sandbox (qorus#867: a capability scope set there is refused)
+
+    @param handle the handle of the capture
+    @param c the code to call
+
+    @return the value that \a c returns
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+auto sb_capture_applied_call(int handle, code c) [dom=THREAD_CONTROL] {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return QoreValue();
+    }
+    QoreSandboxCaptureHelper sch(*capture);
+    return c->execValue(nullptr, xsink);
 }
 
 //! Checks read access to a path with one capture applied inside another, as a native bridge does

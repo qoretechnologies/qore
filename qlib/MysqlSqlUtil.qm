@@ -200,6 +200,16 @@ hash<auto> desc = {
 
 
     @section mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - implemented @ref select_option_recursive "recursive queries", which need MySQL 8.0 or MariaDB 10.2.2 or later;
+      a query with a \c max_depth above the default recursion limit of the server raises it for the statement
+      (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
+    - a recursive query can be the select of an insert-select or a create-as-select; a create-as-select on MySQL
+      cannot raise the recursion limit (see @ref select_option_recursive_insert_create)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
     - the \c "intersect" and \c "except" @ref select_option_set_operators "set operators" of a select need MySQL
       8.0.31 or MariaDB 10.3 or later; with an older server they raise \c SET-OPERATOR-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
@@ -416,7 +426,7 @@ public namespace MysqlSqlUtil {
                 "of an emulated sequence, as it is stored in a string literal, which reads a backslash according to "
                 "the sql_mode of the session", name);
         }
-        return "'" + replace(name, "'", "''") + "'";
+        return AbstractSqlUtilBase::getSqlStringLiteral(name);
     }
 
     sub parse_schema_name(string nname, reference<*string> schema, reference<string> name) {
@@ -1034,7 +1044,8 @@ auto v = c.name;
         /** @param opt this argument is ignored
          */
         string getDropSql(*hash opt) {
-            return sprintf("drop function %s", name);
+            # the name is an identifier (qore#6579)
+            return sprintf("drop function %s", mysql_get_sql_object_name(name));
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -1047,7 +1058,9 @@ auto v = c.name;
             @param opt this argument is ignored
          */
         softlist getRenameSql(string new_name, *hash opt) {
-            return sprintf("alter function %s rename to %s", name, new_name);
+            # the names are identifiers (qore#6579)
+            return sprintf("alter function %s rename to %s", mysql_get_sql_object_name(name),
+                mysql_get_sql_identifier(new_name));
         }
     }
 
@@ -1547,18 +1560,35 @@ end";
         #! Compares the query of a view with the query of a view of a schema description as MySQL normalizes them
         /** MySQL keeps the query of a view in a form of its own (with qualified, quoted names), which it gives for
             the query of the view of the description as well, made as a view with a name of its own on another
-            connection, so that its DDL does not commit the transaction of this connection, and dropped
+            connection, so that its DDL does not commit the transaction of this connection, and dropped; only a query
+            that AbstractDatabase::viewProbeSourceSafe() accepts is given to it (qore#6578), and it is made also when
+            the SQL is only returned (ex: \c qschema \c diff or \c --dry-run make and drop a probe view)
         */
         private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
             string live_src = AbstractDatabase::normalizeViewSource(live.src);
             if (live_src == AbstractDatabase::normalizeViewSource(tmpl.src)) {
                 return True;
             }
+            # another query is compared as text, so the view is created again by the alignment
+            if (!AbstractDatabase::viewProbeSourceSafe(tmpl.src, True)) {
+                return False;
+            }
             Datasource pds(ds.getConfigHash());
             string probe = "qore_view_probe_" + get_random_string(12).lwr();
-            on_exit {
-                pds.execRaw(sprintf("drop view if exists %s", mysql_get_sql_object_name(probe)));
+            # the probe is dropped also when making or reading it fails; a drop that fails then does not hide that
+            # error, and a drop that fails otherwise is raised
+            string drop_sql = sprintf("drop view if exists %s", mysql_get_sql_object_name(probe));
+            on_success {
+                pds.execRaw(drop_sql);
                 pds.commit();
+            }
+            on_error {
+                try {
+                    pds.execRaw(drop_sql);
+                    pds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    pds.rollback();
+                }
             }
             pds.execRaw(sprintf("create view %s as %s", mysql_get_sql_object_name(probe), tmpl.src));
             *string src = pds.selectRow("select view_definition from information_schema.views where table_schema = "
@@ -1889,6 +1919,23 @@ end";
 
     #! provides the MySQL-specific implementation of the AbstractTable interface
     public class MysqlTable inherits SqlUtil::AbstractTable {
+        #! the default recursion limit of a recursive query on MySQL (\c cte_max_recursion_depth) and MariaDB (\c max_recursive_iterations)
+        /** @since MysqlSqlUtil 1.6
+        */
+        const MysqlRecursionDepthDefault = 1000;
+
+        #! the ranges of the integer types (issue #6689)
+        const IntegerRanges = {
+            "tinyint": {"signed": {"min": "-128", "max": "127"}, "unsigned": {"min": "0", "max": "255"}},
+            "smallint": {"signed": {"min": "-32768", "max": "32767"}, "unsigned": {"min": "0", "max": "65535"}},
+            "mediumint": {"signed": {"min": "-8388608", "max": "8388607"},
+                "unsigned": {"min": "0", "max": "16777215"}},
+            "int": {"signed": {"min": "-2147483648", "max": "2147483647"},
+                "unsigned": {"min": "0", "max": "4294967295"}},
+            "bigint": {"signed": {"min": "-9223372036854775808", "max": "9223372036854775807"},
+                "unsigned": {"min": "0", "max": "18446744073709551615"}},
+        };
+
         public {
             #! the \c information_schema.tables \c table_type values of tables, as an SQL list
             /** \c "BASE TABLE" is a table, \c "SYSTEM VERSIONED" a MariaDB system-versioned table, and
@@ -2006,9 +2053,11 @@ end";
             const MysqlCopMap = (
                 COP_CAST: (
                     "code": string sub (string cve, list<auto> args) {
-                        string name = QoreTypeMap{args[0]} ?? args[0];
+                        string name = QoreTypeMap{args[0]} ?? SqlUtil::sql_check_cast_type(args[0]);
                         if (name == "varchar") name = "char"; # NOTE: due to current MariaSQL issue ("ERROR 1064 (42000)")
-                        hash desc = MysqlTypeMap{name};
+                        # a type that the driver does not describe (ex: a sized type name such as "varchar2(10 char)") is given as
+                        # it is (qore#6572)
+                        *hash<auto> desc = MysqlTypeMap{name};
                         string sql = sprintf ("cast(%s as %s", cve, name);
                         switch (name) {
                             default:
@@ -2136,10 +2185,11 @@ end";
                         "return_type": AbstractDataProviderTypeMap."any",
                     },
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the arguments are the expression, the type, and an optional size and scale; the type name is checked
+                        # first, as it is written into the SQL (qore#6572)
+                        string name = QoreTypeMap{args[1]} ?? SqlUtil::sql_check_cast_type(args[1]);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
-                        # the arguments are the expression, the type, and an optional size and scale
-                        string name = QoreTypeMap{args[1]} ?? args[1];
                         *hash<auto> desc = MysqlTypeMap{name};
                         string sql = sprintf ("cast (%s as %s", exp0, name);
                         if (desc.size == SZ_MAND) {
@@ -2538,8 +2588,7 @@ end";
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         if (exists args[1]) {
-                            string fmt = MysqlTable::convertDateFormat(args[1]);
-                            return sprintf("str_to_date(%s, '%s')", exp0, fmt);
+                            return sprintf("str_to_date(%s, %s)", exp0, MysqlTable::getDateFormatLiteral(args[1]));
                         }
                         return sprintf("cast(%s as datetime)", exp0);
                     },
@@ -2604,8 +2653,7 @@ end";
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."date");
-                        string fmt = MysqlTable::convertDateFormat(args[1]);
-                        return sprintf("date_format(%s, '%s')", exp0, fmt);
+                        return sprintf("date_format(%s, %s)", exp0, MysqlTable::getDateFormatLiteral(args[1]));
                     },
                 },
             };
@@ -2672,6 +2720,10 @@ end";
         /** @since MysqlSqlUtil 1.6 the schema and the name are quoted if they are not ordinary names
         */
         string getSqlName() {
+            # issue #3544: the common table expression of a recursive query has no schema
+            if (recursive_cte) {
+                return mysql_get_sql_identifier(name);
+            }
             return mysql_get_sql_identifier(schema) + "." + mysql_get_sql_identifier(name);
         }
 
@@ -2703,6 +2755,8 @@ end";
             @return the format string with MySQL-specific codes: %Y, %y, %m, %d, %H, %i, %s, %f
         */
         static string convertDateFormat(string fmt) {
+            # the format is written into an SQL string literal (qore#6553)
+            sql_literal_check_encoding(fmt);
             # replace longer tokens first to avoid partial matches (YYYY before YY)
             fmt = regex_subst(fmt, "YYYY", "%Y", RE_Global);
             fmt = regex_subst(fmt, "YY", "%y", RE_Global);
@@ -2712,9 +2766,23 @@ end";
             fmt = regex_subst(fmt, "mm", "%i", RE_Global);
             fmt = regex_subst(fmt, "SS", "%s", RE_Global);
             fmt = regex_subst(fmt, "us", "%f", RE_Global);
-            # escape single quotes for safe SQL embedding
-            fmt = regex_subst(fmt, "'", "''", RE_Global);
             return fmt;
+        }
+
+        #! Returns the date format converted by convertDateFormat() as an SQL string literal (qore#6557)
+        /** A backslash is an escape character in a string literal unless the sql_mode of the session has
+            NO_BACKSLASH_ESCAPES, so a format with a backslash is given as a hex literal in UTF-8 with a character set
+            introducer, which every sql_mode reads as the same string, as string values are (see getSqlValueImpl());
+            any other format is given in single quotes, with each single quote doubled
+
+            @throw VALUE-ERROR the format is not valid in its encoding
+        */
+        static string getDateFormatLiteral(string fmt) {
+            fmt = convertDateFormat(fmt);
+            if (fmt.find("\\") >= 0) {
+                return "_utf8mb4 X'" + binary(convert_encoding(fmt, "UTF-8")).toHex() + "'";
+            }
+            return "'" + replace(fmt, "'", "''") + "'";
         }
 
         #! Returns the expression map for MySQL
@@ -2772,6 +2840,137 @@ end";
                     getDesc(), ds.getDriverName());
             }
             return sprintf("drop table%s %s", opt.if_exists ? " if exists" : "", getSqlName());
+        }
+
+        #! returns the types that the "delete_others" upsert option converts the values of numeric, date and time key columns to (issue #6635)
+        /** the types are the targets of MySQL's \c CAST() for the columns as they are declared (ex:
+            \c "decimal(10,2)", \c "datetime(0)", \c "signed"), so that a bound value is rounded as the column
+            rounds it when it stores it; a \c float or \c double column is cast to \c float or \c double (MySQL 8.0.17
+            or later, MariaDB 10.4.5 or later), without the deprecated number of decimals of \c float(M,D)
+
+            Without a strict SQL mode, an integer key value is clamped to the range of its column (issue #6689); the
+            SQL mode of the session is read with the types, which the upsert closures keep: after the SQL mode is
+            changed, @ref SqlUtil::AbstractTable::clear() "clear()" makes them read again, and the connections of a
+            pool are expected to use the same SQL mode
+        */
+        private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+            *hash<auto> qh = ds.select("select column_name, data_type, column_type, numeric_precision, numeric_scale, "
+                "datetime_precision from information_schema.columns where table_name = %v and table_schema = %v",
+                name, schema);
+            hash<string, string> rv;
+            # without a strict SQL mode, MySQL stores an integer value out of the range of its column as the nearest
+            # value in the range: the key values are clamped as well (issue #6689)
+            *bool clamp;
+            foreach hash<auto> row in (qh.contextIterator()) {
+                # the result keys of information_schema may be in upper case
+                row = map {$1.key.lwr(): $1.value}, row.pairIterator();
+                string col = row.column_name;
+                if (!inlist(col, pkl)) {
+                    continue;
+                }
+                string dt = row.data_type.lwr();
+                *string type;
+                switch (dt) {
+                    case "tinyint":
+                    case "smallint":
+                    case "mediumint":
+                    case "int":
+                    case "integer":
+                    case "bigint": {
+                        bool unsigned = (row.column_type =~ /unsigned/i);
+                        type = unsigned ? "unsigned" : "signed";
+                        if (!exists clamp) {
+                            clamp = !isStrictSqlMode();
+                        }
+                        if (clamp) {
+                            hash<auto> r = IntegerRanges{dt == "integer" ? "int" : dt}{unsigned ? "unsigned" : "signed"};
+                            type += sprintf("@%s:%s", r.min, r.max);
+                        }
+                        break;
+                    }
+                    case "decimal":
+                    case "numeric":
+                        type = sprintf("decimal(%d,%d)", row.numeric_precision, row.numeric_scale);
+                        break;
+                    case "datetime":
+                    case "timestamp":
+                        type = sprintf("datetime(%d)", row.datetime_precision ?? 0);
+                        break;
+                    case "time":
+                        type = sprintf("time(%d)", row.datetime_precision ?? 0);
+                        break;
+                    case "date":
+                        type = "date";
+                        break;
+                    case "float":
+                        type = "float";
+                        break;
+                    case "double":
+                        type = "double";
+                        break;
+                }
+                if (type) {
+                    rv{col} = type;
+                }
+            }
+            return rv;
+        }
+
+        #! returns the type that the "delete_others" upsert option converts a key value to (issue #6635)
+        /** a number or a string is bound as a string, which MySQL rounds when it stores it in an integer column, but
+            which a cast to an integer type truncates: such a value is converted with a cast to a decimal without
+            decimals, which rounds it in the same way; a float is converted to the integer type, which rounds it as the
+            database does
+        */
+        private *string getDeleteOthersKeyCastType(string type, auto val) {
+            # an integer type with the range of the column to clamp the value to (issue #6689)
+            *string range = (type =~ x/@(.*)$/)[0];
+            string base = range ? type.substr(0, type.find("@")) : type;
+            if (base != "signed" && base != "unsigned") {
+                return type;
+            }
+            # a value that is clamped is converted exactly (a negative integer is not wrapped by an unsigned cast); a
+            # float within the range of the column is converted to the integer type, which rounds it exactly as MySQL
+            # stores it, and a float out of the range (or at a bound, which a float may not give exactly) is rounded,
+            # ties to even, and clamped, which gives the bound (a cast of a float out of the range of an integer type
+            # does not saturate in every version) (issue #6689)
+            if (range) {
+                if (val.typeCode() == NT_FLOAT) {
+                    (string min, string max) = range.split(":");
+                    if (val > min.toFloat() && val < max.toFloat()) {
+                        return base;
+                    }
+                    return "double@" + range;
+                }
+                return "decimal(65,0)@" + range;
+            }
+            if (val.typeCode() != NT_FLOAT && val.typeCode() != NT_INT) {
+                return "decimal(65,0)";
+            }
+            return type;
+        }
+
+        #! returns the SQL expression that converts a key value to the type of its column (issues #6635, #6689)
+        /** a type with the range of an integer column (\c "<type>@<min>:<max>", without a strict SQL mode) gives the
+            converted value clamped to the range, as MySQL stores a value out of the range of the column: a value is
+            converted to \c decimal(65,0), a float (\c "double@...") rounded to the nearest integer first, ties to even
+        */
+        private string getKeyCastExpr(string expr, string type) {
+            int i = type.find("@");
+            if (i < 0) {
+                return sprintf("cast(%s as %s)", expr, type);
+            }
+            (string min, string max) = type.substr(i + 1).split(":");
+            string val = type.substr(0, i) == "double"
+                ? sprintf("cast(round(%s) as decimal(65,0))", expr)
+                : sprintf("cast(%s as decimal(65,0))", expr);
+            return sprintf("least(greatest(%s, %s), %s)", val, min, max);
+        }
+
+        #! returns @ref True "True" if the SQL mode of the session is strict (issue #6689)
+        private bool isStrictSqlMode() {
+            *string mode = ds.selectRow("select @@session.sql_mode as m").firstValue();
+            return mode =~ /STRICT_(TRANS|ALL)_TABLES/i;
         }
 
         private Columns describeImpl() {
@@ -3306,11 +3505,13 @@ end";
                     # with a backslash is given as a hex literal in UTF-8 with a character set introducer, which
                     # every sql_mode reads as the same string; any other string is given as before, with single
                     # quotes doubled
+                    # issue #6586: a string whose encoding is invalid is refused, and the quotes are doubled
+                    # without a regular expression
+                    AbstractSqlUtilBase::checkSqlStringValue(v);
                     if (v.find("\\") >= 0) {
                         return "_utf8mb4 X'" + binary(convert_encoding(v, "UTF-8")).toHex() + "'";
                     }
-                    v =~ s/'/''/g;
-                    return "'" + v + "'";
+                    return "'" + replace(v, "'", "''") + "'";
                 }
 
                 case NT_NULL:
@@ -3989,6 +4190,95 @@ string str = table.getSqlValue(date);
                 }
             }
             return AbstractTable::getSetOperatorSql(op);
+        }
+
+        #! Returns @ref nothing if the server supports recursive queries, which need MySQL 8.0 or MariaDB 10.2.2
+        /** @since MysqlSqlUtil 1.6
+        */
+        private *string getRecursiveQueryUnsupportedReasonImpl() {
+            int version = ds.getServerVersion();
+            # MariaDB's versions are 10.0 and later; MySQL's are before 10.0
+            if (version >= 100000 ? version < 100202 : version < 80000) {
+                return sprintf("recursive queries need MySQL 8.0 or MariaDB 10.2.2 or later; the server's version is "
+                    "%d", version);
+            }
+        }
+
+        #! Returns the SQL of a recursive query
+        /** The recursion limit of the server is raised for the statement when the \c max_depth of the query needs it:
+            - MySQL ends a recursive query with an error after \c cte_max_recursion_depth (1000 by default) iterations,
+              which run a query to a \c max_depth of 999: a query with a \c max_depth of 1000 or more sets it to
+              <tt>max_depth + 1</tt> with a \c SET_VAR hint after its main \c SELECT keyword
+            - MariaDB ends a recursive query without an error, with the rows that it has, after
+              \c max_recursive_iterations (1000 by default) iterations, which run a query to a \c max_depth of
+              1000: a query with a \c max_depth above it sets it to \c max_depth with <tt>SET STATEMENT ... FOR</tt>
+
+            A query without \c max_depth keeps the limit of the server
+
+            @since MysqlSqlUtil 1.6
+        */
+        private string getRecursiveQuerySqlImpl(string with_sql, string select_sql, hash<auto> rq) {
+            string sql = with_sql + " " + select_sql;
+            if (exists rq.max_depth && rq.max_depth >= MysqlRecursionDepthDefault) {
+                if (ds.getServerVersion() < 100000) {
+                    # MySQL: the hint is given after the main SELECT keyword
+                    sql = with_sql + " " + regex_subst(select_sql, "^select ",
+                        sprintf("select /*+ SET_VAR(cte_max_recursion_depth = %d) */ ", rq.max_depth + 1));
+                } else if (rq.max_depth > MysqlRecursionDepthDefault) {
+                    sql = sprintf("set statement max_recursive_iterations = %d for %s", rq.max_depth, sql);
+                }
+            }
+            return sql;
+        }
+
+        #! Returns the SQL of an insert-select whose select is a recursive query
+        /** The recursive query follows the insert: <tt>insert into t (c1, c2) with recursive ... select ...</tt>; when
+            the \c max_depth of the query needs a higher recursion limit (see getRecursiveQuerySqlImpl()), MySQL gives
+            the \c SET_VAR hint after the \c INSERT keyword, the first keyword of the statement, and MariaDB gives
+            <tt>SET STATEMENT ... FOR</tt> before the statement
+
+            @since MysqlSqlUtil 1.6
+        */
+        private string getRecursiveInsertSelectSqlImpl(string insert_sql, string with_sql, string select_sql,
+                hash<auto> rq) {
+            string sql = insert_sql + " " + with_sql + " " + select_sql;
+            if (exists rq.max_depth && rq.max_depth >= MysqlRecursionDepthDefault) {
+                if (ds.getServerVersion() < 100000) {
+                    sql = regex_subst(insert_sql, "^insert ",
+                        sprintf("insert /*+ SET_VAR(cte_max_recursion_depth = %d) */ ", rq.max_depth + 1)) + " "
+                        + with_sql + " " + select_sql;
+                } else if (rq.max_depth > MysqlRecursionDepthDefault) {
+                    sql = sprintf("set statement max_recursive_iterations = %d for %s", rq.max_depth, sql);
+                }
+            }
+            return sql;
+        }
+
+        #! Returns the SQL of a create-as-select whose select is a recursive query
+        /** The recursive query follows the create: <tt>create table t as with recursive ... select ...</tt>; when the
+            \c max_depth of the query needs a higher recursion limit (see getRecursiveQuerySqlImpl()), MariaDB gives
+            <tt>SET STATEMENT ... FOR</tt> before the statement, and MySQL, whose \c CREATE \c TABLE statement takes no
+            \c SET_VAR hint, raises \c RECURSIVE-QUERY-ERROR
+
+            @throw RECURSIVE-QUERY-ERROR MySQL: the query has a \c max_depth of 1000 or more
+
+            @since MysqlSqlUtil 1.6
+        */
+        private string getRecursiveCreateAsSelectSqlImpl(string with_sql, string select_sql, hash<auto> rq,
+                *hash<auto> opt) {
+            string sql = getCreateAsSelectSqlImpl(with_sql + " " + select_sql, opt);
+            if (exists rq.max_depth && rq.max_depth >= MysqlRecursionDepthDefault) {
+                if (ds.getServerVersion() < 100000) {
+                    throw "RECURSIVE-QUERY-ERROR", sprintf("%s: a create-as-select on MySQL cannot raise the "
+                        "recursion limit of the server (cte_max_recursion_depth), which a recursive query with a "
+                        "max_depth of %d needs; create the table and use insert-select instead", getDesc(),
+                        rq.max_depth);
+                }
+                if (rq.max_depth > MysqlRecursionDepthDefault) {
+                    sql = sprintf("set statement max_recursive_iterations = %d for %s", rq.max_depth, sql);
+                }
+            }
+            return sql;
         }
 
         #! returns @ref True if the database requires a wildcard \c "*" to be prefixed with the table name when it appears with other column arguments in a select statement

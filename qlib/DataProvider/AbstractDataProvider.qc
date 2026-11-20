@@ -259,6 +259,49 @@ public const OI_Requires = "requires";
 */
 public const OptionInteractionsKey = "interactions";
 
+#! The \c encoding_errors option of the data providers that read text
+/** Says what input text that is not valid in its @ref character_encoding "character encoding" gives; the value is
+    passed to the text reader (ex: @ref Qore::StreamReader "StreamReader" or
+    @ref Qore::InputStreamLineIterator "InputStreamLineIterator"), which checks it; one of the
+    @ref encoding_errors_constants:
+    - \c "raise" (the default): raises an \c INVALID-ENCODING exception
+    - \c "latin1": the text that is not valid (a whole line, for data read by line) is read as \c ISO-8859-1, with
+      its bytes
+    - \c "keep": the text is kept in the encoding of the input as read, without a check
+
+    The data providers that read text, such as the CSV, fixed-length, NDJSON, JSON file, EDIFACT and HL7 v2 read
+    data providers, declare it as a constructor option; see @ref encoding_errors
+
+    @since %DataProvider 3.12
+*/
+public const EncodingErrorsOptionInfo = <DataProviderOptionInfo>{
+    "display_name": "Encoding Errors",
+    "short_desc": "What text that is not valid in its character encoding gives",
+    "type": AbstractDataProviderTypeMap."string",
+    "desc": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an "
+        "`INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as "
+        "`ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+    "default_value": ENCODING_ERRORS_RAISE,
+    "allowed_values": (
+        <AllowedValueInfo>{
+            "value": ENCODING_ERRORS_RAISE,
+            "display_name": "Raise an Error",
+            "desc": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+        },
+        <AllowedValueInfo>{
+            "value": ENCODING_ERRORS_LATIN1,
+            "display_name": "Read as Latin-1",
+            "desc": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its "
+                "bytes",
+        },
+        <AllowedValueInfo>{
+            "value": ENCODING_ERRORS_KEEP,
+            "display_name": "Keep Without a Check",
+            "desc": "Keep the text in the input encoding as read, without a check",
+        },
+    ),
+};
+
 #! A machine-readable interaction of an option with another option of the same data provider or action
 /** Interactions are kept in the option's \c metadata under @ref OptionInteractionsKey, so they are carried
     unchanged into action options and the data provider index without changing the option hashdecls.  They
@@ -7382,6 +7425,51 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
         self += checkOptions("CONSTRUCTOR-OPTION-ERROR", option_desc, options, required_options);
     }
 
+    #! Returns True if an option value, or the option's type, is a hash, list or object, which can hold credentials
+    /** @param type the option's type; @ref nothing if the option has no type
+        @param value the option value
+
+        @return @ref True if the value is not given in an error of an option that is not sensitive
+    */
+    private static bool mayHoldCredentials(*AbstractDataProviderType type, auto value) {
+        switch (value.typeCode()) {
+            case NT_HASH:
+            case NT_LIST:
+            case NT_OBJECT:
+                return True;
+        }
+        if (!type) {
+            return False;
+        }
+        string base = type.getBaseTypeName();
+        return exists type.getFields() || base == "hash" || base == "list" || base == "object";
+    }
+
+    #! Returns the path of the field of a hash type that refuses its value, or @ref nothing
+    /** Called only after the type has refused the value, to name the field in an error without giving the value,
+        which can hold credentials
+
+        @param type the type that refused the value
+        @param value the value refused
+
+        @return the names of the fields, from the outermost, of the field that refuses its value; @ref nothing if the
+        value is not a hash, the type has no fields, or no field refuses its value
+    */
+    private static *list<string> getRefusedFieldPath(AbstractDataProviderType type, auto value) {
+        if (value.typeCode() != NT_HASH) {
+            return;
+        }
+        *hash<string, AbstractDataField> fields = type.getFields();
+        foreach hash<auto> i in (fields.pairIterator()) {
+            AbstractDataField field = i.value;
+            try {
+                field.acceptsValue(value{i.key});
+            } catch (hash<ExceptionInfo> ex) {
+                return (i.key,) + (AbstractDataProvider::getRefusedFieldPath(field.getType(), value{i.key}) ?? ());
+            }
+        }
+    }
+
     #! Verifies options according to the option
     /**
         @param err The error code in case of any errors; this is the exception code (\c err) that will be raised
@@ -7432,8 +7520,23 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                 } catch (hash<ExceptionInfo> ex) {
                     # a type that is not part of this module may still refuse a value with RUNTIME-TYPE-ERROR
                     if (ex.err == "TYPE-VALUE-ERROR" || ex.err == "RUNTIME-TYPE-ERROR") {
-                        type_error = sprintf("option %y of type %y cannot be assigned a value of type %y (value %y): "
-                            "%s: %s", i.key, type.getName(), options{i.key}.type(), options{i.key}, ex.err, ex.desc);
+                        # the value, and the type's own error, which describes the value too, are given only for an
+                        # option that is not marked sensitive and whose value or type is not a hash, list or object,
+                        # which can hold credentials (ex: headers); the field of a hash that refused its value is
+                        # named instead
+                        string detail = "";
+                        if (!i.value.sensitive) {
+                            if (AbstractDataProvider::mayHoldCredentials(type, options{i.key})) {
+                                *list<string> path = AbstractDataProvider::getRefusedFieldPath(type, options{i.key});
+                                if (path) {
+                                    detail = sprintf(": field %y refused its value", path.join("."));
+                                }
+                            } else {
+                                detail = sprintf(" (value %y): %s: %s", options{i.key}, ex.err, ex.desc);
+                            }
+                        }
+                        type_error = sprintf("option %y of type %y cannot be assigned a value of type %y%s",
+                            i.key, type.getName(), options{i.key}.type(), detail);
                         continue;
                     }
                     rethrow;
@@ -7455,8 +7558,12 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                     }
                 }
                 if (!allowed) {
-                    error("OPTION-VALUE-ERROR", sprintf("option %y does not accept value %y; possible values: %y",
-                        i.key, options{i.key}, (map $1.value, i.value.allowed_values)));
+                    # the value of a sensitive option, or a value that can hold credentials, is never given
+                    error("OPTION-VALUE-ERROR", "option %y does not accept %s; possible values: %y",
+                        i.key, (i.value.sensitive || AbstractDataProvider::mayHoldCredentials(NOTHING, options{i.key}))
+                            ? "the value given"
+                            : sprintf("value %y", options{i.key}),
+                        (map $1.value, i.value.allowed_values));
                 }
             }
             if (i.value.element_allowed_values && !i.value.element_allowed_values_creatable) {
@@ -7469,8 +7576,10 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                         }
                     }
                     if (!allowed) {
-                        error("OPTION-VALUE-ERROR", sprintf("Option %y does not accept element value %y; possible "
-                            "element values: %y", i.key, opt, (map $1.value, i.value.element_allowed_values)));
+                        # the value of a sensitive option is never given
+                        error("OPTION-VALUE-ERROR", "Option %y does not accept %s; possible element values: %y",
+                            i.key, i.value.sensitive ? "an element value given" : sprintf("element value %y", opt),
+                            (map $1.value, i.value.element_allowed_values));
                     }
                 }
             }
@@ -7508,11 +7617,12 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             }
         }
         if (!ok) {
+            # only the names of the options provided: their values can be credentials
             if (missing) {
-                throw err, sprintf("missing required options %y; options provided: %y", missing, options);
+                throw err, sprintf("missing required options %y; options provided: %y", missing, keys options);
             } else {
                 throw err, sprintf("missing required options %s; options provided: %y",
-                    (foldl $1 + " OR " + $2, (map sprintf("%y", $1), req_list)), options);
+                    (foldl $1 + " OR " + $2, (map sprintf("%y", $1), req_list)), keys options);
             }
         }
     }

@@ -33,6 +33,7 @@
 
 #define _QORE_QORECLASSINTERN_H
 
+#include <functional>
 #include <mutex>
 #include "qore/safe_dslist"
 #include "qore/intern/QoreTypeOwner.h"
@@ -83,8 +84,17 @@ DLLLOCAL extern std::atomic<int64> qore_class_hierarchy_steps;
 */
 DLLLOCAL extern std::atomic<int64> qore_generic_parent_check_steps;
 #define QORE_GENERIC_PARENT_CHECK_STEP() qore_generic_parent_check_steps.fetch_add(1, std::memory_order_relaxed)
+//! the parent class edges that the walks of class hierarchies that set up a class have visited (qore#6499)
+/** BCList::findInHierarchy(), BCList::addBaseClassesToSubclass(), the walks that build the inheritance lists of
+    methods and the walk of the base class constructors of an object (qore#6513); read by the
+    dbg_class_hierarchy_walk_steps() debug hook, so that a test can require a bound on the steps independent of the
+    timing
+*/
+DLLLOCAL extern std::atomic<int64> qore_class_hierarchy_walk_steps;
+#define QORE_CLASS_HIERARCHY_WALK_STEP() qore_class_hierarchy_walk_steps.fetch_add(1, std::memory_order_relaxed)
 #else
 #define QORE_GENERIC_PARENT_CHECK_STEP()
+#define QORE_CLASS_HIERARCHY_WALK_STEP()
 #endif
 
 // cannot use vector_map here for performance reasons with method lookups
@@ -101,6 +111,17 @@ typedef std::map<std::string, QoreMethod*> hm_method_t;
 class qore_class_private;
 // the source Program of a class taken for a frame; see CodeContextHelperBase
 struct QoreClassSourceProgramInfo;
+
+#ifdef DEBUG
+//! the parent class edges that the lookups of the parameterized base types of classes have visited (qore#6449)
+/** Read by the dbg_param_class_check_steps() debug hook, so that a test can require a bound on the steps of the
+    run-time checks of objects against parameterized class types independent of the timing
+*/
+DLLLOCAL extern std::atomic<int64> qore_param_class_check_steps;
+#define QORE_PARAM_CLASS_CHECK_STEP() qore_param_class_check_steps.fetch_add(1, std::memory_order_relaxed)
+#else
+#define QORE_PARAM_CLASS_CHECK_STEP()
+#endif
 
 //! Process-wide epoch incremented whenever a callable method table changes or a class or hashdecl is destroyed
 /** A dispatch cache keyed by class, hashdecl or type pointers matches only entries made in the current epoch: the
@@ -1545,6 +1566,31 @@ public:
     // issue #6393: copies the context entries of the given member, which shares the storage of this member
     DLLLOCAL void addContextMap(const QoreMemberInfo& mi);
 
+    //! merges the same declaration reached through another path of the hierarchy of the class (qore#6523)
+    /** A member declared in a class that the hierarchy reaches through several paths is one member of the object
+        with the least restrictive access of the paths: if it is accessible through one of them, its value is in the
+        standard object data for every class context; otherwise it is in the storage of the first path, for the
+        class contexts of every path
+
+        @param mi the member as it is in the base class of the other path
+        @param mi_access the access that the member has in this class through the other path; if this member is not
+        accessible, neither is \a mi
+    */
+    DLLLOCAL void mergeDeclarationPath(const QoreMemberInfo& mi, ClassAccess mi_access);
+
+    //! adds the class contexts that access this declaration of the member to \a ctx (qore#6523)
+    DLLLOCAL void getDeclarationContexts(std::set<const qore_class_private*>& ctx) const;
+
+    //! copies the context entries of the given member (qore#6523)
+    /** The entries of a declaration that this member has already (reached through another path of the hierarchy) get
+        the storage that this member gives it; the entries of this declaration are not copied if this member is
+        accessible (its value is in the standard object data)
+    */
+    DLLLOCAL void mergeContextMap(const QoreMemberInfo& mi);
+
+    //! removes the context entries of the class contexts of this declaration of an accessible member (qore#6523)
+    DLLLOCAL void dropDeclarationContexts();
+
     DLLLOCAL void addContextAccessForClass(const qore_class_private* class_ctx,
             const qore_class_private* member_class_ctx);
 
@@ -2652,6 +2698,13 @@ public:
     // classes is a builtin class or a class whose own sml is complete; then the base classes do not have to be walked
     // again to add the ancestors to a subclass or to search the hierarchy (issue #6106)
     bool sml_complete = false;
+    //! true if the hierarchy reaches each ancestor through one path only (no diamond); set with sml_complete
+    /** Then the lookups of the hierarchy search it with the recursion through BCNode, which visits each class once
+        here; otherwise (a diamond, or a hierarchy not known to be complete, such as that of a builtin class or of a
+        class that is still being initialized) they search it with a walk that visits each class once (qore#6522).
+        It does not change once set: the hierarchy of a class does not change after it has been initialized.
+    */
+    bool diamond_free = false;
 
     DLLLOCAL BCList(BCNode* n) {
         push_back(n);
@@ -2660,7 +2713,8 @@ public:
     DLLLOCAL BCList() {
     }
 
-    DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete) {
+    DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete),
+            diamond_free(old.diamond_free) {
         assert(old.valid);
         reserve(old.size());
         for (bclist_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i)
@@ -2693,6 +2747,11 @@ public:
             const qore_class_private* class_ctx, bool allow_internal) const;
     DLLLOCAL const QoreMethod* runtimeFindCommittedStaticMethod(const char* name, ClassAccess& access,
             const qore_class_private* class_ctx, bool allow_internal) const;
+
+    //! finds the first committed public method of the name (normal or static as \a is_static) in the parent classes
+    //! reached through public inheritance only and not overridden by a private method: the method that a caller
+    //! outside the class hierarchy can call (see qore_class_private::runtimeFindPublicCommittedMethod())
+    DLLLOCAL const QoreMethod* runtimeFindPublicCommittedMethod(const char* name, bool is_static) const;
 
     DLLLOCAL bool match(const QoreClass* cls);
     DLLLOCAL void execConstructors(QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
@@ -2777,15 +2836,7 @@ public:
         }
     }
 
-    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const {
-        for (auto& i : *this) {
-            const ConstantEntry* ce = (*i).findConstantEntry(name);
-            if (ce) {
-                return ce;
-            }
-        }
-        return nullptr;
-    }
+    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
 };
 
 // BCEANode
@@ -2796,6 +2847,8 @@ public:
    QoreListNode* args = nullptr;
    const AbstractQoreFunctionVariant* variant = nullptr;
    bool execed = false;
+   //! for a class without a constructor: its base class constructors have been walked for the object (qore#6513)
+   bool walked = false;
    LexicalSemanticPolicy semantic_policy;
 
    DLLLOCAL BCEANode(const QoreProgramLocation* loc, QoreListNode* args, const AbstractQoreFunctionVariant* variant) : loc(loc), args(args), variant(reinterpret_cast<const MethodVariant*>(variant)) {
@@ -2828,6 +2881,14 @@ protected:
 
 public:
     DLLLOCAL void deref(ExceptionSink* xsink);
+
+    //! records that the base class constructors of a class without a constructor are walked for the object
+    /** Only for a class that is reached through more than one path in a hierarchy (see
+        qore_class_private::multi_path)
+
+        @return true if they were already walked (qore#6513)
+    */
+    DLLLOCAL bool visitNoConstructorClass(qore_classid_t classid);
     // evaluates arguments, returns -1 if an exception was thrown
     DLLLOCAL int add(qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink);
     DLLLOCAL int add(LexicalSemanticPolicy policy, qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink);
@@ -3001,6 +3062,9 @@ public:
     */
     qore_ns_private* ns = nullptr;
     BCList* scl = nullptr;          // base class list
+    //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
+    //! the class (issue #3286)
+    bool parse_abr = false;
     qc_ref_map_t qcrefs;            // QoreClass pointers associated with this private object (besides cls)
 
     mutable VRMutex gate;           // for synchronized static methods
@@ -3036,6 +3100,15 @@ public:
         only looks for the accessors of such classes
     */
     bool has_member_accessors = false;
+    //! Set when code in other threads can reach the class (issue #6422)
+    /** A builtin class committed into a namespace (QoreNamespace::addSystemClass()) outside a module's
+        initialization, a builtin class committed during a module's initialization once the initialization has
+        returned, and a user class when it is committed.  From then on other threads can read the class's members and
+        flags without a lock, so a module can no longer add a member through the API (QoreClass::addMember(),
+        QoreClass::addBuiltinMemberWithAccessors()); only the API's additions read it, under the lock that also
+        serializes its setting.
+    */
+    std::atomic<bool> reachable{false};
 
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
@@ -3057,6 +3130,23 @@ public:
         }
         return findAccessorMember(mem) != nullptr;
     }
+
+    //! marks the class as reachable by code in other threads (issue #6422)
+    DLLLOCAL void markReachable();
+
+    //! called when a builtin class is committed into a namespace: marks it reachable now, or when the module whose
+    //! initialization is running returns from it (issue #6422)
+    DLLLOCAL void systemClassCommitted();
+
+    //! returns true if code in other threads can reach the class
+    DLLLOCAL bool isReachable() const {
+        return reachable.load(std::memory_order_acquire);
+    }
+
+    //! adds a member through the API, unless the class is reachable; returns -1 with CLASS-MEMBER-ADD-ERROR then
+    /** \a add makes the addition, under the lock that serializes the marking (issue #6422)
+    */
+    DLLLOCAL int addMemberApi(const char* mem, ExceptionSink* xsink, const std::function<void()>& add);
 
     //! adds a declared member whose value is held in external storage; see QoreClass::addBuiltinMemberWithAccessors()
     DLLLOCAL void addBuiltinMemberWithAccessors(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeinfo,
@@ -3255,6 +3345,14 @@ public:
     //! the cached result of getMemberInitCode(): -1 if not computed for the current member initialization list
     mutable std::atomic<int8_t> member_init_code{-1};
 
+    //! true if the class is reached through more than one path in the hierarchy of a class whose objects are created
+    /** Set by markMultiPathAncestors() when the first object of such a class is created; the base classes of a class
+        without a constructor are then walked once for each object (see BCEAList::visitNoConstructorClass(),
+        qore#6513).  Once set, it is never cleared; it costs a class that is reached through one path in another
+        hierarchy only the record of the walk.
+    */
+    mutable std::atomic<bool> multi_path{false};
+
     //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
     /** Set with released_spgm_id, under gate.asl_lock
     */
@@ -3346,6 +3444,37 @@ public:
 
     // Find a constant entry by name
     DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
+
+    //! the declarations with a name visible in the class (issue #3286)
+    struct name_kinds_t {
+        const qore_class_private* member = nullptr;
+        const qore_class_private* constant = nullptr;
+        const qore_class_private* var = nullptr;
+
+        DLLLOCAL unsigned count() const {
+            return (member ? 1 : 0) + (constant ? 1 : 0) + (var ? 1 : 0);
+        }
+
+        DLLLOCAL bool operator==(const name_kinds_t& o) const {
+            return member == o.member && constant == o.constant && var == o.var;
+        }
+    };
+
+    //! returns the class with an accessible constant with the name in the hierarchy, without initializing it; \a top
+    //! is true when the lookup is made from the class itself
+    DLLLOCAL const qore_class_private* parseFindConstantOwnerNoInit(const char* cname, bool top) const;
+    DLLLOCAL const qore_class_private* parseFindConstantOwnerNoInit(const char* cname, bool top,
+            std::vector<const qore_class_private*>& seen) const;
+
+    //! returns the declarations with the name visible in the class
+    DLLLOCAL name_kinds_t parseGetNameKinds(const char* n) const;
+
+    //! adds the names of the constants, members and static variables of the hierarchy
+    DLLLOCAL void parseGetHierarchyNames(std::set<std::string>& names,
+            std::vector<const qore_class_private*>& seen) const;
+
+    //! raises the language-traps warning for names that are a constant and a member or static variable (issue #3286)
+    DLLLOCAL void parseCheckNameKindClashes(QoreProgram* pgm);
 
     // add a base class to this class
     DLLLOCAL void addBaseClass(QoreClass* qc, bool virt);
@@ -3520,6 +3649,15 @@ public:
 
     DLLLOCAL bool hasAbstract() const {
         return !ahm.empty();
+    }
+
+    //! returns true if the class has abstract variants of the given method that it does not implement
+    /** A call of such a method whose variant is not a concrete variant resolved at parse time is resolved at run time
+        by name on the class of the object, which can inherit the implementation of an abstract variant from another
+        parent class than this one (issue #6161)
+    */
+    DLLLOCAL bool hasUnimplementedAbstractVariants(const char* mname) const {
+        return ahm.find(mname) != ahm.end();
     }
 
     //! records a public member declaration in the class: the class then declares its members (see
@@ -4037,6 +4175,31 @@ public:
         return info;
     }
 
+    //! returns the member that a call of the name made through the code that a member holds may use (qore#6487)
+    /** this = the object's class; a call through a member (`o.x(...)` where `x` is a member that holds a closure or a
+        call reference) applies the access rules of a read of the member, exactly: the class context is used only if
+        it is in the hierarchy of the object's class (as qore_object_private::checkMemberAccess() callers make it:
+        runtimeCheckPrivateClassAccess()), and a private or internal member is not accessible without one
+
+        @param mem the member name
+        @param class_ctx the class context of the call; set to nullptr if it cannot access private members of this
+        class, so that the caller continues with the context that the member read would use
+
+        @return the member, or nullptr if there is none or the member is not accessible: the call then goes on as for
+        a name that is no member (a pseudo-method, the methodGate or METHOD-DOES-NOT-EXIST)
+    */
+    DLLLOCAL const QoreMemberInfo* runtimeGetCallableMemberInfo(const char* mem,
+            const qore_class_private*& class_ctx) const {
+        if (class_ctx && !runtimeCheckPrivateClassAccess(class_ctx)) {
+            class_ctx = nullptr;
+        }
+        const QoreMemberInfo* info = runtimeGetMemberInfo(mem, class_ctx);
+        if (info && info->access > Public && !class_ctx) {
+            return nullptr;
+        }
+        return info;
+    }
+
     DLLLOCAL const QoreMemberInfo* parseFindMember(const char* mem, const qore_class_private*& qc, ClassAccess& access) const {
         access = Public;
         const_cast<qore_class_private*>(this)->initialize();
@@ -4286,6 +4449,11 @@ public:
     DLLLOCAL QoreValue parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo, bool& found,
             const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc = nullptr);
 
+    //! the search of parseFindConstantValueIntern() in the class itself: \a found is set only for an accessible
+    //! constant
+    DLLLOCAL QoreValue parseFindLocalAccessibleConstantValue(const char* cname, const QoreTypeInfo*& cTypeInfo,
+            bool& found, const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc);
+
     DLLLOCAL QoreVarInfo* parseFindLocalStaticVar(const char* vname) const {
         QoreVarInfo* vi = vars.find(vname);
 
@@ -4301,6 +4469,21 @@ public:
     }
 
     DLLLOCAL QoreVarInfo* parseFindStaticVarIntern(const char* vname, const QoreClass*& qc, ClassAccess& access, bool check, bool toplevel) const {
+        bool stop = false;
+        QoreVarInfo* vi = parseFindLocalStaticVarIntern(vname, qc, access, check, toplevel, stop);
+        if (vi || stop) {
+            return vi;
+        }
+
+        return scl ? scl->parseFindStaticVar(vname, qc, access, check, toplevel) : nullptr;
+    }
+
+    //! the search of parseFindStaticVarIntern() in the class itself
+    /** @param stop set to true if the class has the variable but it is not accessible: the search stops in this class
+        and its base classes are not searched
+    */
+    DLLLOCAL QoreVarInfo* parseFindLocalStaticVarIntern(const char* vname, const QoreClass*& qc, ClassAccess& access,
+            bool check, bool toplevel, bool& stop) const {
         QoreVarInfo* vi = vars.find(vname);
 
         if (vi) {
@@ -4314,6 +4497,7 @@ public:
                 // an internal member is accessible only in its own class, not in subclasses
                 if (check && (access > Public)
                     && ((access >= Internal && parse_get_class_priv() != this) || !parseCheckPrivateClassAccess())) {
+                    stop = true;
                     return nullptr;
                 }
 
@@ -4322,7 +4506,7 @@ public:
             }
         }
 
-        return scl ? scl->parseFindStaticVar(vname, qc, access, check, toplevel) : nullptr;
+        return nullptr;
     }
 
     //! adds a member
@@ -4693,6 +4877,11 @@ public:
     //! computes and caches the result of getMemberInitCode()
     DLLLOCAL int8_t computeMemberInitCode() const;
 
+    //! sets multi_path in each base class that the class's hierarchy reaches through more than one path (qore#6513)
+    /** Called once for the class, by computeMemberInitCode(), before its first object's constructors run
+    */
+    DLLLOCAL void markMultiPathAncestors() const;
+
     //! initializes the members of an object with the source Programs of their classes entered; see initMembers()
     DLLLOCAL int initMembersEntered(QoreObject& o, bool& need_scan, const QoreClassSourceProgramInfo& spgm_info,
             ExceptionSink* xsink) const;
@@ -5004,6 +5193,20 @@ public:
 
     DLLLOCAL const QoreMethod* runtimeFindCommittedMethodForEval(const char* nme, ClassAccess& access,
         const qore_class_private* class_ctx) const;
+
+    //! returns the method of the name that a caller outside the class hierarchy calls, or nullptr if there is none
+    /** The first public normal method, otherwise the first public static method, of the class or of a parent class
+        reached through public inheritance only, as the parse-time lookups without a class context find it: a
+        private method, and the methods of a privately inherited class, are skipped (qore#6704).  A private method
+        overrides the methods of the name of the parent classes of its class, which are not returned in its place
+        (qore#6062).  Called by the run-time lookups when the method that they found first cannot be called by such
+        a caller
+
+        @param nme the name of the method
+        @param mask the kinds of methods searched: QCCM_NORMAL and / or QCCM_STATIC
+    */
+    DLLLOCAL const QoreMethod* runtimeFindPublicCommittedMethod(const char* nme,
+            int mask = QCCM_NORMAL | QCCM_STATIC) const;
 
     DLLLOCAL const QoreMethod* runtimeFindAnyCommittedMethod(const char* nme) const {
         ClassAccess access = Public;
@@ -6357,6 +6560,23 @@ public:
         assert(this->valid());
         return this->i->first;
     }
+};
+
+//! Collects the builtin classes that a module commits into namespaces during its initialization (issue #6422)
+/** They become reachable by code in other threads when the initialization returns (commit()); nested module loads
+    stack
+*/
+class QoreModuleInitClassesHelper {
+public:
+    DLLLOCAL QoreModuleInitClassesHelper();
+    DLLLOCAL ~QoreModuleInitClassesHelper();
+
+    //! marks the classes as reachable; called when the module's initialization has returned without an error
+    DLLLOCAL void commit();
+
+private:
+    std::vector<qore_class_private*> classes;
+    std::vector<qore_class_private*>* prev;
 };
 
 #endif

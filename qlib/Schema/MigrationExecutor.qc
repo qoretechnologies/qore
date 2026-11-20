@@ -173,7 +173,7 @@ public class MigrationExecutor {
             *code<nothing(Qore::SQL::AbstractDatasource, list<string>)>
                 ddl_callback) {
         ds = n_ds;
-        access_level = al;
+        access_level = SchemaAccessCheck::checkAccessLevel(al);
         verbose = v;
         log_callback = log;
         ddl_change_callback = ddl_callback;
@@ -328,6 +328,17 @@ public class MigrationExecutor {
         if (RestrictedActions{action} && access_level == AL_UNTRUSTED) {
             throw "MIGRATION-ACCESS-ERROR", sprintf("action %y requires 'trusted' or 'admin' access level; "
                 "current level is %y", action, access_level);
+        }
+        # a step that gives SQL text in another way (qore#6578)
+        if (access_level == AL_UNTRUSTED) {
+            try {
+                SchemaAccessCheck::checkUntrustedStep(sprintf("%s step", action), step);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SCHEMA-ACCESS-ERROR") {
+                    rethrow;
+                }
+                throw "MIGRATION-ACCESS-ERROR", ex.desc;
+            }
         }
 
         logMsg(sprintf("  step: %s%s", action, step.table ? sprintf(" on %s", step.table) : ""));
@@ -834,7 +845,7 @@ public class MigrationExecutor {
             if (log_callback) {
                 log_callback(msg);
             } else {
-                printf("%s\n", msg);
+                schema_terminal_printf("%s\n", msg);
             }
         }
     }

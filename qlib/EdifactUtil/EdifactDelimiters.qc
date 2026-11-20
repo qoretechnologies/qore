@@ -145,9 +145,9 @@ EdifactDelimiters delim(<EdifactDelimiterInfo>{
             @throw EDIFACT-DELIMITER-ERROR if the UNA segment is invalid
         */
         parseUna(string una_segment) {
-            if (una_segment.size() < 9) {
+            if (una_segment.length() < 9) {
                 throw "EDIFACT-DELIMITER-ERROR", sprintf("UNA segment too short: %d characters (minimum 9 required)",
-                    una_segment.size());
+                    una_segment.length());
             }
 
             if (una_segment.substr(0, 3) != UnaSegmentTag) {
@@ -172,8 +172,8 @@ EdifactDelimiters delim(<EdifactDelimiterInfo>{
             una_present = True;
 
             @debug {
-                if (getenv("QORE_EDIFACT_DEBUG")) {
-                    printf("EdifactDelimiters::parseUna(): comp=%y elem=%y dec=%y rel=%y term=%y\n",
+                if (getenv("QORE_EDIFACT_DEBUG") && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    stdout.printf("EdifactDelimiters::parseUna(): comp=%y elem=%y dec=%y rel=%y term=%y\n",
                         component_separator, element_separator, decimal_notation,
                         release_character, segment_terminator);
                 }
@@ -232,8 +232,7 @@ string escaped = delim.escape("Price: $10.50");  # "Price?: $10.50" (if : is com
         */
         string escape(string value) {
             string result = "";
-            for (int i = 0; i < value.size(); i++) {
-                string char = value[i];
+            foreach string char in (value.splitChars()) {
                 if (isDelimiter(char) || char == release_character) {
                     result += release_character;
                 }
@@ -249,8 +248,7 @@ string escaped = delim.escape("Price: $10.50");  # "Price?: $10.50" (if : is com
         string unescape(string value) {
             string result = "";
             bool escaped = False;
-            for (int i = 0; i < value.size(); i++) {
-                string char = value[i];
+            foreach string char in (value.splitChars()) {
                 if (!escaped && char == release_character) {
                     escaped = True;
                     continue;
@@ -266,19 +264,19 @@ string escaped = delim.escape("Price: $10.50");  # "Price?: $10.50" (if : is com
         */
         private validateDelimiters() {
             # Check that all delimiters are single characters
-            if (component_separator.size() != 1) {
+            if (component_separator.length() != 1) {
                 throw "EDIFACT-DELIMITER-ERROR", "component separator must be exactly 1 character";
             }
-            if (element_separator.size() != 1) {
+            if (element_separator.length() != 1) {
                 throw "EDIFACT-DELIMITER-ERROR", "element separator must be exactly 1 character";
             }
-            if (decimal_notation.size() != 1) {
+            if (decimal_notation.length() != 1) {
                 throw "EDIFACT-DELIMITER-ERROR", "decimal notation must be exactly 1 character";
             }
-            if (release_character.size() != 1) {
+            if (release_character.length() != 1) {
                 throw "EDIFACT-DELIMITER-ERROR", "release character must be exactly 1 character";
             }
-            if (segment_terminator.size() != 1) {
+            if (segment_terminator.length() != 1) {
                 throw "EDIFACT-DELIMITER-ERROR", "segment terminator must be exactly 1 character";
             }
 

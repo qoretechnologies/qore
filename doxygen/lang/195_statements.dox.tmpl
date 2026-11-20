@@ -518,6 +518,68 @@ string sub getName() {
 }
 string name = getName();@endcode
 
+    @anchor missing_return
+    @par Missing Return Statements
+    The code of a function, method or closure whose declared return type does not accept @ref nothing "NOTHING" is
+    refused with a \c MISSING-RETURN parse error when its end can be reached without a \c return statement, where
+    every condition that is not a constant is assumed to go both ways (as in the definite return analysis of other
+    languages), while a call whose code is not known when the code is parsed makes the end uncertain, which is not an
+    error (see below).  The end is reached when the last statement can complete; the check follows these rules:
+    - a condition (of an @ref if "if" statement, a loop or the @ref conditional_operator "?:" operator) is assumed to
+      be able to be true and false, unless it is a constant boolean or integer, even when other code makes one of its
+      values impossible (ex: <tt>if (b) { return 1; } if (!b) { return 2; }</tt> is refused): the end of
+      <tt>if (i) { return 1; }</tt> is reachable, while a <tt>while (True)</tt> or <tt>for (;;)</tt> loop without a
+      @ref break "break" statement does not complete; the value of another constant (such as a string) depends on
+      the boolean semantics in effect, so either branch may be the one that runs
+    - a @ref switch "switch" statement over a constant value runs the case that the value matches; one over another
+      value without a \c default case is assumed to be able to match no case, unless its cases are not all values or
+      its expression is of an @ref enums "enum" type, \c bool, or a type that is not declared
+    - a @ref throw "throw", @ref rethrow "rethrow", @ref thread_exit "thread_exit" or \c return statement does not
+      complete; nor does a block whose @ref on_exit "on_exit" or @ref on_success "on_success" code does not complete
+    - a @ref try "catch" block is taken to be reached when the \c try block contains a \c throw or \c rethrow
+      statement that can run, or calls user code that can raise an exception; an exception raised by other
+      calls, by an \@assert statement (which @ref enable-debug "%enable-debug" enables) or by an operator is
+      possible but not certain, and when an \c on_exit or @ref on_error "on_error" handler of the block that raises
+      it ends the thread or the process instead, the exception is not taken to leave the block
+    - a call completes if the code that it calls can return: the code of a user function, of a static method, or of a
+      method that the call names with its class (<tt>Base::m()</tt>) or of a @ref final_classes "final" class, in
+      the same %Program, can return if one of its paths reaches a \c return statement or the end of the code; a
+      builtin function returns, except @ref Qore::exit() "exit()", @ref Qore::abort() "abort()" and
+      @ref Qore::exec() "exec()", which do not
+
+    A call whose code is not known when the code is parsed (a call of a @ref closure "closure" or a
+    @ref call_reference "call reference", of a method that a subclass can override, or of a function of another
+    %Program or of a module), a recursive call, a constructor of a user class, a builtin that can run user code (a
+    builtin method, which can call the methods of its object that a user class overrides; the \c call_*() functions
+    such as @ref Qore::call_function() "call_function()", @ref Qore::load_module() "load_module()" and the functions
+    that run the cleanup code of thread resources; a builtin given an argument that can be a closure, a call
+    reference or an object; a pseudo-method of a value that can be an object, a hash or code), the creation of a
+    value of a @ref hashdecl "hashdecl", the @ref delete "delete" operator, the member of an object (which can be
+    read by its \c memberGate() method) and the iteration of an object (which calls its \c next() method) may or may
+    not complete; code whose end can only be reached through such a construct is accepted.  A destructor that runs
+    when the last reference to an object is released is not taken into account.
+
+    @par Example
+    @code{.py}
+# MISSING-RETURN: the end is reached when i is 0
+int sub get(int i) {
+    if (i) {
+        return i;
+    }
+}
+
+sub error(string err) {
+    throw err, "invalid value";
+}
+
+# accepted: error() never returns
+int sub check(int i) {
+    if (i > 0) {
+        return i;
+    }
+    error("INVALID-VALUE");
+}@endcode
+
     @anchor return_interrupted_by_exception
     @par Return Interrupted by an Exception
     When an exception interrupts a return, such as an error raised for a value that the declared return type rejects
@@ -552,6 +614,13 @@ string name = getName();@endcode
     requires the cleanup.\n\n
     Note that if this statement is reached when executing in a loop, the <tt><b>on_exit</b></tt> code will be executed
     for each iteration of the loop.\n\n
+    @anchor on_block_exit_in_block
+    An <tt><b>on_exit</b></tt>, <tt><b>on_success</b></tt> or <tt><b>on_error</b></tt> statement must be a statement of
+    a block in braces, as it runs when that block ends: it cannot be the body of another statement without braces
+    (an @ref if "if" or \c else, a loop, a \c try or \c catch, a \c context, \c subcontext or \c summarize
+    statement, or another \c on_exit, \c on_success or \c on_error statement), whose scope would be unclear; <tt>if (x) on_success f();</tt> is a parse error, and
+    <tt>if (x) { on_success f(); }</tt> runs \c f() when the \c if block ends.  Inside braces, it can be nested
+    (<tt>on_exit { on_success f(); }</tt>).\n\n
     By using this statement, programmers ensure that necessary cleanup will be performed regardless of the exit status
     of the block (exception, @ref return "return", etc).
 
@@ -561,7 +630,12 @@ string name = getName();@endcode
     the return value of the block: a @ref return "return statement" in it replaces the value of a return that left
     the block, which is released at the end of the return statement, and a return without a value replaces it with no
     value; a handler that runs later can replace it again.  A return in a @ref try "try statement" in the handler
-    replaces it when the try statement ends (see @ref try_return).
+    replaces it when the try statement ends (see @ref try_return).\n\n
+    A return in a handler returns from the function, as a return in the block would, also when the block ends
+    without a return or is left by a @ref break "break" or @ref continue "continue": the remaining handlers of the
+    block run, and a handler that completes normally keeps the value, which the next handler's return replaces.  When
+    an exception or a @ref thread_exit "thread_exit" leaves the block, or a later handler raises one, the exception
+    or thread_exit goes on and the value is released.
 
     @par Example
 @code{.py}
@@ -603,7 +677,8 @@ string name = getName();@endcode
     similar to <tt><b>on_success</b></tt> statements, except <tt><b>on_error</b></tt> statements are only executed
     when there is an active exception when the block is exited.\n\n
     Note that if this statement is reached when executing in a loop, the <tt><b>on_success</b></tt> code will be
-    executed for each iteration of the loop (as long as there is no active exception).
+    executed for each iteration of the loop (as long as there is no active exception).\n\n
+    See @ref on_block_exit_in_block "on_exit statements" for where it can be used.\n
 
     @par Example
 @code{.py}
@@ -651,7 +726,8 @@ string name = getName();@endcode
     @ref rethrow "rethrow statements" are allowed in \c on_error statements, allowing for exception enrichment.
     Note that the code in this statement can only be executed once in any block, as a block (even a block within a
     loop) can only exit the loop once with an active exception (in contrast to @ref on_success "on_success" and
-    @ref on_exit "on_exit statements", which are executed for every iteration of a loop).
+    @ref on_exit "on_exit statements", which are executed for every iteration of a loop).\n\n
+    See @ref on_block_exit_in_block "on_exit statements" for where it can be used.\n
 
     @par Example
 @code{.py}{

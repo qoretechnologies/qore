@@ -769,6 +769,12 @@ protected:
 
 DLLLOCAL extern QoreThreadList thread_list;
 
+//! Iterates the TIDs in use, which are the TIDs that QoreThreadList::getNumThreads() counts, with the list locked
+/** Every TID that is not available is given, except TID 0 (the signal thread): an active thread, a thread that has been
+    started but has not registered yet (the TID returned by background or q_start_thread()), a thread that is being
+    deregistered, and a TID reserved for a foreign thread (qore#6469); only an active thread has data
+    (QoreThreadList::getThreadData())
+*/
 class QoreThreadListIterator : public AutoLocker {
 public:
     DLLLOCAL QoreThreadListIterator() : AutoLocker(thread_list.lck) {
@@ -777,7 +783,7 @@ public:
     DLLLOCAL bool next() {
         do {
             w = w ? w->next : thread_list.tid_head;
-        } while (w && (!w->tid || (thread_list.entry[w->tid].status != QTS_ACTIVE)));
+        } while (w && (!w->tid || thread_list.entry[w->tid].available()));
 
         return (bool)w;
     }

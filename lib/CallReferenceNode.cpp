@@ -47,6 +47,7 @@
 #include "qore/intern/WeakHashReferenceNode.h"
 
 #include <shared_mutex>
+#include <optional>
 #include <unordered_map>
 
 namespace {
@@ -72,6 +73,30 @@ void qore_capture_call_reference_provenance(const ResolvedCallReferenceNode* ref
     }
     auto& registry = call_reference_provenance_registry();
     std::unique_lock<std::shared_mutex> lock(registry.mutex);
+    registry.contexts.emplace(ref, context.get());
+    context.release();
+    call_reference_provenance_count.fetch_add(1, std::memory_order_relaxed);
+}
+
+void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm) {
+    // only a reference to library module code records anything, and then only for restricted creating code
+    if (!code_pgm || !qore_program_is_library_module(code_pgm)) {
+        return;
+    }
+    QoreParseOptions origin = qore_creation_origin_restrictions();
+    if (!origin) {
+        return;
+    }
+    auto& registry = call_reference_provenance_registry();
+    std::unique_lock<std::shared_mutex> lock(registry.mutex);
+    auto i = registry.contexts.find(ref);
+    if (i != registry.contexts.end()) {
+        // the sandbox provenance that the reference's construction captured; not yet applied by any call
+        i->second->origin_restrictions |= origin;
+        return;
+    }
+    std::unique_ptr<QoreSandboxContext> context(new QoreSandboxContext(false));
+    context->origin_restrictions = origin;
     registry.contexts.emplace(ref, context.get());
     context.release();
     call_reference_provenance_count.fetch_add(1, std::memory_order_relaxed);
@@ -352,6 +377,49 @@ void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
         creator_po = qore_relieve_module_declared_domains(creator_po, pgm);
     }
     has_creator_po = true;
+    // the run-time call reference classes call this from their constructors, when the reference is complete: a
+    // reference to library module code records the restrictions of the code that creates it (qore#6520)
+    qore_capture_call_reference_origin(this, getOriginCodeProgram());
+}
+
+//! returns the Program whose code a user function runs, or nullptr for a builtin function
+static const QoreProgram* qore_function_code_program(const QoreFunction* f) {
+    const AbstractQoreFunctionVariant* v = f ? f->first() : nullptr;
+    const UserVariantBase* uvb = v ? v->getUserVariantBase() : nullptr;
+    return uvb ? uvb->pgm : nullptr;
+}
+
+//! returns the Program whose code a method runs: the Program that defines its class, nullptr for a builtin class
+static const QoreProgram* qore_method_code_program(const QoreMethod* m) {
+    const QoreClass* cls = m ? m->getClass() : nullptr;
+    if (!cls) {
+        return nullptr;
+    }
+    const QoreProgram* pgm = cls->getSourceProgram();
+    return pgm ? pgm : cls->getProgram();
+}
+
+const QoreProgram* ResolvedCallReferenceNodeIntern::getOriginCodeProgram() const {
+    return qore_call_reference_code_program(this);
+}
+
+const QoreProgram* LocalStaticMethodCallReferenceNode::getOriginCodeProgram() const {
+    return qore_method_code_program(method);
+}
+
+const QoreProgram* LocalFunctionCallReferenceNode::getOriginCodeProgram() const {
+    return qore_function_code_program(uf);
+}
+
+const QoreProgram* RunTimeResolvedMethodReferenceNode::getOriginCodeProgram() const {
+    // the method that a call dispatches to on the object's class (see qore_call_reference_code_program())
+    return qore_call_reference_code_program(this);
+}
+
+const QoreProgram* qore_closure_code_program(const ResolvedCallReferenceNode* closure) {
+    // a closure's code is that of the Program that defines it (see qore_call_reference_code_program())
+    const QoreProgram* pgm = qore_function_code_program(closure->getFunction());
+    return pgm ? pgm : closure->getProgram();
 }
 
 AbstractCallReferenceNode::AbstractCallReferenceNode(bool n_needs_eval,
@@ -468,9 +536,14 @@ QoreValue ParseObjectMethodReferenceNode::makeReference(QoreValue val, Exception
 
     const QoreClass* oc = o->getClass();
 
-    // the method of the declared class, resolved when parsing, for an object of that class; a static method of it is
-    // bound to that class, as a call through the object is (qore#5990)
-    if (m && (oc == m->getClass() || m->isStatic())) {
+    // the method of the declared class, resolved when parsing, for an object of that class, as for a call of the method
+    // (AbstractMethodCallNode::exec()), also when it is inherited past a method of the name that is not accessible
+    // here (qore#6680); a static method of it is bound to that class, as a call through the object is (qore#5990).
+    // The class of the object can be another QoreClass of the declared class, with the same class ID: the copy of a
+    // module's class imported into a Program, to which a compiled image resolves the declared class, while the object
+    // has the module's own class; native code calls the method resolved for the class in this case as well
+    // (qore_rt_same_class())
+    if (m && (oc == qc || oc == m->getClass() || m->isStatic() || oc->getID() == qc->getID())) {
         return new RunTimeResolvedMethodReferenceNode(loc, o, m);
     }
 
@@ -509,6 +582,12 @@ QoreValue ParseObjectMethodReferenceNode::makeReferenceForClass(QoreObject* o, c
     if (access > Public) {
         // the access check depends on the class context of the caller, so the result is not cached
         if (!qore_class_private::runtimeCheckPrivateClassAccess(*oc)) {
+            // the method that a call of the method makes from here, also when the method found first is not
+            // accessible here (qore#6704); not cached, as it depends on the class context of the caller
+            if (const QoreMethod* pm = qore_class_private::get(*oc)->runtimeFindPublicCommittedMethod(
+                    method.c_str())) {
+                return new RunTimeResolvedMethodReferenceNode(loc, o, pm);
+            }
             if (om->isPrivate()) {
                 xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
                     "cannot create a call reference to %s %s::%s() from outside the class",
@@ -891,7 +970,7 @@ QoreFunction* RunTimeResolvedMethodReferenceNode::getFunction() const {
 bool qore_object_has_pseudo_or_member_method(const qore_class_private* cls, const char* method,
         const qore_class_private* class_ctx) {
     QoreClass* pqc;
-    return pseudo_classes_find_method(NT_OBJECT, method, pqc) || cls->runtimeGetMemberInfo(method, class_ctx);
+    return pseudo_classes_find_method(NT_OBJECT, method, pqc) || cls->runtimeGetCallableMemberInfo(method, class_ctx);
 }
 
 // out of line: needs_scan() calls it only for call references, and inlined there it makes needs_scan() too large to be
@@ -1017,7 +1096,7 @@ QoreFunction* RunTimePseudoMethodReferenceNode::getFunction() const {
 //! of the name calls when the class has no method of the name (see qore_class_private::checkMethodForEval())
 static bool qore_object_member_holds_code(const qore_class_private* cls, QoreObject* obj, const char* name,
         const qore_class_private* class_ctx) {
-    const QoreMemberInfo* mi = cls->runtimeGetMemberInfo(name, class_ctx);
+    const QoreMemberInfo* mi = cls->runtimeGetCallableMemberInfo(name, class_ctx);
     if (!mi) {
         return false;
     }
@@ -1324,7 +1403,10 @@ static const UserVariantBase* qore_call_reference_function_variant(const Resolve
 }
 
 int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, bool* sandboxed) {
+    if (sandboxed) {
+        *sandboxed = false;
+    }
     // the code of a user function runs in the Program that defines it (see qore_get_function_pgm_context()), which
     // can have been deleted: it is taken with a reference while its options are read
     if (const UserVariantBase* uvb = qore_call_reference_function_variant(rcr)) {
@@ -1338,6 +1420,9 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
                 return -1;
             }
             po = pgm->getParseOptions();
+            if (sandboxed) {
+                *sandboxed = qore_program_is_sandboxed(pgm);
+            }
             return 1;
         }
         if (holder.sourceDeleted()) {
@@ -1349,6 +1434,9 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
         return 0;
     }
     po = pgm->getParseOptions();
+    if (sandboxed) {
+        *sandboxed = qore_program_is_sandboxed(pgm);
+    }
     return 1;
 }
 
@@ -1672,11 +1760,38 @@ StaticMethodCallReferenceNode::StaticMethodCallReferenceNode(const QoreProgramLo
     // make a weak reference to the Program - a strong reference (QoreProgram::ref()) could cause a recursive
     // reference
     pgm->depRef();
+    // the classes are referenced, as the Program's copies of the classes that it imported are released with it
+    // (qore#6622); a class can refer to the reference (from a static variable or a constant), but the deletion of
+    // the Program releases those values with their own reference counts, so this does not make a recursive reference
+    const qore_class_private* receiver_cls = nullptr;
+    if (receiver_type_info) {
+        if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(receiver_type_info)) {
+            receiver_cls = qore_class_private::get(*pti->getBaseClass());
+        } else if (const QoreClass* rcls = QoreTypeInfo::getUniqueReturnClass(receiver_type_info)) {
+            receiver_cls = qore_class_private::get(*rcls);
+        }
+    }
+    const qore_class_private* classes[3] = {
+        method->getClass() ? qore_class_private::get(*method->getClass()) : nullptr,
+        class_ctx,
+        receiver_cls,
+    };
+    for (unsigned i = 0; i < 3; ++i) {
+        if (classes[i]) {
+            classes[i]->ref();
+            held_classes[i] = classes[i];
+        }
+    }
 }
 
 bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     //printd(5, "StaticMethodCallReferenceNode::deref() this: %p pgm: %p refs: %d -> %d\n", this, pgm,
     //  reference_count(), reference_count() - 1);
+    for (const qore_class_private* cls : held_classes) {
+        if (cls) {
+            const_cast<qore_class_private*>(cls)->deref(false, false, false);
+        }
+    }
     pgm->depDeref();
 #ifdef DEBUG
     pgm = nullptr;
@@ -2001,24 +2116,29 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
             "call the method, or reference a function", scope->ostr);
         return -1;
     }
+    // a reference to a function defined in a namespace
+    auto make_function_ref = [&](const FunctionEntry* fe) -> int {
+        LocalFunctionCallReferenceNode* fr = new LocalFunctionCallReferenceNode(loc, fe->getFunction());
+        fr->setFunctionEntry(fe);
+        // the explicit type arguments of \NS::f<T>() instantiate the function when the reference is called
+        if (!explicit_parse_type_args.empty()) {
+            std::vector<const QoreTypeInfo*> type_args;
+            if (qore_resolve_call_reference_type_args(explicit_parse_type_args, loc, type_args)) {
+                fr->deref(nullptr);
+                return -1;
+            }
+            fr->setExplicitTypeArgs(std::move(type_args));
+        }
+        deref();
+        val = fr;
+        return parse_init_same_level(fr, val, parse_context);
+    };
+
     if (!qc) {
         // see if this is a function call to a function defined in a namespace
         const FunctionEntry* fe = qore_root_ns_private::parseResolveFunctionEntry(*scope);
         if (fe) {
-            LocalFunctionCallReferenceNode* fr = new LocalFunctionCallReferenceNode(loc, fe->getFunction());
-            fr->setFunctionEntry(fe);
-            // the explicit type arguments of \NS::f<T>() instantiate the function when the reference is called
-            if (!explicit_parse_type_args.empty()) {
-                std::vector<const QoreTypeInfo*> type_args;
-                if (qore_resolve_call_reference_type_args(explicit_parse_type_args, loc, type_args)) {
-                    fr->deref(nullptr);
-                    return -1;
-                }
-                fr->setExplicitTypeArgs(std::move(type_args));
-            }
-            deref();
-            val = fr;
-            return parse_init_same_level(fr, val, parse_context);
+            return make_function_ref(fe);
         }
         if (qore_aot_source_parse_active() && scope->size() >= 2) {
             if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
@@ -2064,29 +2184,68 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
     const QoreMethod* qm = nullptr;
     // try to find a pointer to a non-static method if parsing in the class's context
     // and bare references are enabled
-    if (parse_context.oflag && parse_check_parse_option(PO_ALLOW_BARE_REFS)) {
+    bool bare_method = parse_context.oflag && parse_check_parse_option(PO_ALLOW_BARE_REFS);
+    if (bare_method) {
         qm = qore_class_private::get(*qc)->parseFindAnyMethodStaticFirst(scope->getIdentifier(), class_ctx);
         //assert(!qm || !qm->isStatic());
 
-        if (qm) {
-            if (!qm->isStatic() && !strcmp(qm->getName(), "copy")) {
-                parseException(*loc, "INVALID-METHOD", "cannot take a reference to base class copy method %s::%s()",
-                    qc->getName(), scope->getIdentifier());
-                return -1;
-            }
-        } else {
-            parseException(*loc, "INVALID-METHOD", "class '%s' has no accessible method '%s'", qc->getName(),
-                scope->getIdentifier());
+        if (qm && !qm->isStatic() && !strcmp(qm->getName(), "copy")) {
+            parseException(*loc, "INVALID-METHOD", "cannot take a reference to base class copy method %s::%s()",
+                qc->getName(), scope->getIdentifier());
             return -1;
         }
     } else {
         qm = qore_class_private::get(*qc)->parseFindStaticMethod(scope->getIdentifier(), class_ctx);
+    }
 
-        if (!qm) {
+    if (!qm && scope->size() == 2) {
+        // the first class with the name has no such method: as for calls, a function of a namespace with the name,
+        // a method of the class being parsed or of a parent class with the name (with bare references), and a static
+        // method of another class with the name (issue #1527)
+        qore_class_private* ref_class_ctx = parse_context.oflag
+            ? qore_class_private::get(*const_cast<QoreClass*>(
+                QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo())))
+            : parse_get_class_priv();
+        if (const FunctionEntry* fe = qore_root_ns_private::parseResolveFunctionEntry(*scope)) {
+            return make_function_ref(fe);
+        }
+        // a call with the name would call a closure or call reference in a constant or static variable of a class
+        // with the name: the reference keeps the error rather than reach another target than the call
+        const QoreTypeInfo* const_type = nullptr;
+        bool const_found = false;
+        ValueHolder const_val(defer_source_function ? QoreValue()
+            : qore_root_ns_private::parseFindReferencedConstantValue(loc, *scope, const_type, const_found, false),
+            nullptr);
+        const QoreMethod* other_method = nullptr;
+        QoreClass* other_qc = nullptr;
+        // a function of another source of an AOT group is resolved at link time
+        if (!defer_source_function && !const_found) {
+            if (bare_method) {
+                other_qc = qore_root_ns_private::parseFindParentClassWithMethod(scope->get(0), scope->getIdentifier(),
+                    ref_class_ctx, other_method);
+            }
+            if (!other_qc) {
+                other_qc = qore_root_ns_private::parseFindClassWithStaticMethod(scope->get(0),
+                    scope->getIdentifier(), ref_class_ctx, &other_method);
+            }
+        }
+        if (other_qc && other_method) {
+            qc = other_qc;
+            qm = other_method;
+            class_ctx = ref_class_ctx && qore_class_private::parseCheckPrivateClassAccess(*qc, ref_class_ctx)
+                ? ref_class_ctx : nullptr;
+        }
+    }
+
+    if (!qm) {
+        if (bare_method) {
+            parseException(*loc, "INVALID-METHOD", "class '%s' has no accessible method '%s'", qc->getName(),
+                scope->getIdentifier());
+        } else {
             parseException(*loc, "INVALID-METHOD", "class '%s' has no accessible static method '%s'", qc->getName(),
                 scope->getIdentifier());
-            return -1;
         }
+        return -1;
     }
 
     // check class capabilities against parse options
@@ -2166,6 +2325,8 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
         if (qore_resolve_explicit_type_param_instantiation(*explicit_inst, resolved)) {
             rv->explicit_inst = std::make_shared<QoreTypeParamInstantiation>(std::move(resolved));
         }
+        // the reference can outlive the Program of a type argument (issue #6489)
+        rv->holdExplicitTypeArgDecls();
     }
     return rv;
 }
@@ -2436,11 +2597,22 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
+            // a trusted build's barrier hides the caller; it never hides the current Program, which is the Program
+            // that created the capability once it has been entered, so that Program's sandbox governs the build
+            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
+            std::optional<QoreTrustedBuildChargeHelper> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
-            QoreSandboxTrustedPolicyHelper privilege;
+            // the caller's policy is masked for a system-policy callback; a trusted build's barrier hides it already
+            std::optional<QoreSandboxTrustedPolicyHelper> privilege;
+            if (!build) {
+                privilege.emplace();
+            }
             return qore_call_ref_invoke_named(callback, *evaluated, arg_names, policy, xsink);
         }
         return qore_call_ref_invoke_named(callback, args, arg_names, policy, xsink);
@@ -2450,9 +2622,12 @@ public:
         return dispatchValue(args, xsink);
     }
 
-    SandboxBoundCallReference(const ResolvedCallReferenceNode* callback, bool trusted)
-            : callback(const_cast<ResolvedCallReferenceNode*>(callback)), trusted(trusted),
+    //! a binding: \a trusted for a capability (SandboxManager::createSystemPolicyCall()), \a build for a trusted
+    //! build capability as well (SandboxManager::createTrustedBuildCall())
+    SandboxBoundCallReference(const ResolvedCallReferenceNode* callback, bool trusted, bool build = false)
+            : callback(const_cast<ResolvedCallReferenceNode*>(callback)), trusted(trusted), build(build),
                 trusted_program(trusted ? ::getProgram() : nullptr) {
+        assert(!build || trusted);
         callback->ref();
         if (trusted_program) {
             trusted_program->depRef();
@@ -2472,11 +2647,22 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
+            // a trusted build's barrier hides the caller; it never hides the current Program, which is the Program
+            // that created the capability once it has been entered, so that Program's sandbox governs the build
+            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
+            std::optional<QoreTrustedBuildChargeHelper> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
-            QoreSandboxTrustedPolicyHelper privilege;
+            // the caller's policy is masked for a system-policy callback; a trusted build's barrier hides it already
+            std::optional<QoreSandboxTrustedPolicyHelper> privilege;
+            if (!build) {
+                privilege.emplace();
+            }
             return callback->invoke(*evaluated, xsink);
         }
         return callback->invoke(args, xsink);
@@ -2496,11 +2682,22 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
+            // a trusted build's barrier hides the caller; it never hides the current Program, which is the Program
+            // that created the capability once it has been entered, so that Program's sandbox governs the build
+            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
+            std::optional<QoreTrustedBuildChargeHelper> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
-            QoreSandboxTrustedPolicyHelper privilege;
+            // the caller's policy is masked for a system-policy callback; a trusted build's barrier hides it already
+            std::optional<QoreSandboxTrustedPolicyHelper> privilege;
+            if (!build) {
+                privilege.emplace();
+            }
             return callback->invokeLexical(*evaluated, xsink, policy);
         }
         return callback->invokeLexical(args, xsink, policy);
@@ -2511,6 +2708,7 @@ public:
     const ResolvedCallReferenceNode* getCallback() const { return callback; }
     const ResolvedCallReferenceNode* getSandboxBoundCallback() const override { return callback; }
     bool isTrusted() const { return trusted; }
+    bool isBuild() const { return build; }
 
 protected:
     bool derefImpl(ExceptionSink* xsink) override {
@@ -2525,7 +2723,44 @@ protected:
 private:
     ResolvedCallReferenceNode* const callback;
     const bool trusted;
+    //! a trusted build: the callback runs under a construction barrier (see SandboxManager::createTrustedBuildCall())
+    const bool build;
     QoreProgram* const trusted_program;
+
+    //! Establishes the construction barrier of a trusted build, if this is one
+    /** Under it nothing of the caller below it is seen: what the callback creates or commits keeps no sandbox of the
+        caller (see qore_program_private::creator_sandbox_manager), and the threads that it starts inherit none; the
+        provenance of the objects and callbacks of the caller that it uses still applies to them
+
+        @return 0 for OK, -1 if the barrier could not be recorded (an out-of-memory exception is raised)
+    */
+    int enterBuild(std::optional<QoreModuleInitSandboxBarrierHelper>& barrier,
+            std::optional<QoreTrustedBuildChargeHelper>& charge, ExceptionSink* xsink) const {
+        if (!build) {
+            return 0;
+        }
+        // the sandboxes that govern the caller, resolved before the barrier hides them: the code that they govern is
+        // the caller's code in the build (QoreSandboxBudgetStack::suspendCharge())
+        QoreSandboxManager* callers = qore_find_thread_sandbox_manager_ref();
+        barrier.emplace(QoreTrustedBuildTag());
+        if (!barrier->recorded()) {
+            if (callers) {
+                callers->deref(nullptr);
+            }
+            xsink->outOfMemory();
+            return -1;
+        }
+        // the memory that the build's own code allocates is shared state, charged to no caller but to the sandbox of
+        // the Program that created the capability, if it has a memory limit; the caller's code that it calls stays
+        // charged to the caller (QoreSandboxBudgetStack::suspendCharge()); the floor is set before the creator is
+        // entered, so that the creator's budgets are above it
+        charge.emplace(trusted_program, callers);
+        if (!charge->established()) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return 0;
+    }
 };
 }
 
@@ -2559,6 +2794,11 @@ ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNod
             const auto* bound = dynamic_cast<const SandboxBoundCallReference*>(callback);
             if (!bound) {
                 break;
+            }
+            if (bound->isBuild()) {
+                xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a trusted build capability cannot be registered as "
+                    "a system-policy callback");
+                return nullptr;
             }
             if (bound->isTrusted()) {
                 return bound->refRefSelf();
@@ -2616,6 +2856,47 @@ private:
     //! the Program that created the capability, in which the thread runs; with a dependency reference
     QoreProgram* const pgm;
 };
+}
+
+ResolvedCallReferenceNode* qore_create_trusted_build_call(const ResolvedCallReferenceNode* callback,
+        ExceptionSink* xsink) {
+    // code that any sandbox governs, whatever policy barrier is active, and sandboxed code that no manager governs (a
+    // Program sandboxed by its flag): the capability removes the caller's sandbox from what its callback builds
+    if (qore_caller_is_sandboxed()) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a trusted build capability cannot be created by code "
+            "that a sandbox governs or that is sandboxed");
+        return nullptr;
+    }
+    if (QoreSandboxContext* creation = qore_get_call_reference_provenance(callback)) {
+        creation->deref();
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a trusted build capability must not have "
+            "sandbox provenance");
+        return nullptr;
+    }
+    if (qore_get_sandbox_bound_callback(callback) || dynamic_cast<const SystemThreadCallReference*>(callback)) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a trusted build capability must be a plain "
+            "callback, not a bound callback or a capability");
+        return nullptr;
+    }
+    // the code of the callback must not be sandboxed code either (a function of a Program that sandboxed code
+    // created, imported into a trusted Program)
+    QoreParseOptions code_po;
+    bool code_sandboxed;
+    int rc = qore_call_reference_code_parse_options(callback, code_po, xsink, &code_sandboxed);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (rc < 0) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the Program of the callback of a trusted build capability "
+            "has been deleted");
+        return nullptr;
+    }
+    if (rc > 0 && code_sandboxed) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a trusted build capability belongs to a "
+            "sandboxed Program");
+        return nullptr;
+    }
+    return new SandboxBoundCallReference(callback, true, true);
 }
 
 ResolvedCallReferenceNode* qore_create_system_thread_call(const ResolvedCallReferenceNode* callback,

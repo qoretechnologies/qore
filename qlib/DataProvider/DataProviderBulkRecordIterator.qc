@@ -141,7 +141,11 @@ public class DataProviderBulkRecordIterator inherits AbstractDataProviderRecordI
     }
 
     #! This method is never called by this implementation
+    /** @throw INVALID-OPERATION always: next() does not call it
+    */
     private bool nextImpl() {
+        throw "INVALID-OPERATION", sprintf("%s::nextImpl() is not used; call %s::next() instead",
+            self.className(), self.className());
     }
 }
 }

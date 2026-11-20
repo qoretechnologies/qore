@@ -304,6 +304,25 @@ Every AOT metadata blob carries:
 
 Loaders must reject metadata requiring unsupported features or newer opcodes.
 
+From format version 43 (`QORE_AOT_METADATA_CHECKSUM_VERSION`), the encoded
+metadata (compressed, when it is compressed) is followed by its XXH64 checksum
+(seed 0, little-endian u64), and the header flags have
+`QORE_AOT_FLAG_METADATA_CHECKSUM` (qore#6451). The writer appends it
+(`qore_aot_seal_metadata()`; the compression of the metadata recomputes it over
+the new encoding), and `QoreAOTBinaryReader::open()` checks it before it reads
+anything else, for the module loader and for qcc's reads of object data alike.
+The checksum of a module's metadata is computed once per load: the metadata
+that `QoreAOTDebugMetadata` keeps for lazy and debug IR (or its copy of it) is
+opened again with `verify_checksum` false, as the reader of the module checked
+it.
+Metadata that does not match is refused as a whole ("the AOT metadata does not
+match its checksum"), and its module is not loaded, as a module whose metadata
+cannot be read: the source module is loaded instead when there is one. The
+checksum detects metadata changed after qcc wrote it; it is not a signature.
+The readers still check every read and value of the metadata (qore#6265,
+qore#6451): tests that patch the metadata of a module set its checksum again
+with `qore-aot-reseal` to check them.
+
 Native `.qmod` code has an additional ABI contract independent of the metadata
 format and the C/C++ binary-module API. Generated module descriptors encode the
 exact `QORE_AOT_MODULE_ABI_VERSION` in a tagged form of the existing module
@@ -407,18 +426,67 @@ of the module's image:
   is the record. The linker places it in a `PT_NOTE` segment, and it is marked
   `SHF_GNU_RETAIN`, so `--gc-sections` keeps it.
 
-The record is little-endian: magic `QAMI`, format version (2), payload size,
+The record is little-endian: magic `QAMI`, format version (4), payload size,
 then the module name, the dependency count and dependencies, the optional
 module count and requests, the count and names of the modules the module was
 compiled with (every module it requires, directly or not, and every module one
 of them re-exports, which the loader checks; see `aot-linked-module-sources.md`),
 and the counts and directories of the module's own `%prepend-module-path` and
 `%append-module-path` directives (which its initialization searches, so the
-loader finds the modules it checks with them), each string as a 32-bit length
-and its bytes.  Version 2 added the last three lists. Every
-string is nonempty and contains no NUL; payloads are bounded to 16 MiB and
-65,536 entries per list. `QoreAOTModuleFileInfo` in
-`include/qore/intern/QoreAOTBinary.h` documents the layout.
+loader finds the modules it checks with them), and the count and entries of the
+restricting parse options that the module's `%requires` and `%try-module`
+directives gave its dependencies, in directive order.  Each string is a 32-bit
+length and its bytes; each parse option entry is a module name, the options
+as four 32-bit words, the low and high halves of each of the two option words,
+and a 32-bit word of flags (`QMDR_*` in `include/qore/intern/SyncParseOptions.h`;
+any other bit makes the record invalid).
+The loader loads those dependencies first, in that order, and adds their
+options to the restrictions that they inherit; the decoder keeps only the
+options that qcc writes, the restrictions that a loaded module inherits.
+A module that declares functional domains in its header also lists the
+modules that it requested before its header, in every form of module request
+(`%requires` in any form, `%try-module`, in an included file), with the flag
+`QMDR_BEFORE_HEADER`: the loader loads them before the module's initialization
+removes the declared domains from the restrictions, as its source loads them.
+A conditional directive before its header makes every entry `QMDR_INEXACT`, as
+what it requests there can depend on where it is loaded: the loader then loads
+every listed module with the restrictions of the loading code, relieving none
+(fail-closed; qore#6386).  Then (version 4) follow the functional domains that
+the module declares in its header (a 64-bit value as two 32-bit words, low word first),
+the count and names of the dependencies that it requires only after its
+header, and the functional domains that its own code restricts (64-bit, as
+before; qore#6351): the dependencies of a module loaded as library code that it
+requires after its header inherit the restrictions without the declared
+domains, as the source's do.  That relief never applies to a module listed with
+`QMDR_BEFORE_HEADER`, and a record with a `QMDR_INEXACT` entry relieves nothing,
+neither with its declared domains nor with a relief from a module loading it:
+qcc then writes no post-header dependency and `QDOM_ALL` as the restricted
+domains, and the loader enforces both rules for any record.  The relief
+applies only to the load of the dependency itself (the load frame that is a
+direct child of the module's own, with the dependency's name), not to a load
+that the loading Program's code makes meanwhile (a callback or a constant of
+the dependency that runs it).  Both domain fields hold only functional domains
+(`QDOM_ALL`; the decoder refuses other bits), and the module's initialization
+refuses a module whose record declares other domains than its
+`MODULE_DOMAINS` section.
+
+When the restrictions refuse a module that a `%try-module` directive before
+the header requests, the qmod, compiled where the request succeeded and with no
+code for its failure, is refused with the error of that module's load
+(`AOT-MODULE-RESTRICTED` when the module is itself a qmod; fail-closed), while
+the source continues without the module and fails or not by its own code (with
+`PARSE-EXCEPTION` when it calls the module that it did not load).
+
+Version 2 added the compiled-with and module path lists, version 3 the parse
+option list, which came with AOT format version 44
+(`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), and version 4 the three
+fields of the declared domains, with AOT format version 45
+(`QORE_AOT_MODULE_INFO_DOMAINS_VERSION`), so that the format that a module
+reports tells which record it has; a runtime reads only its own record version
+and refuses any other, asking for the module to be rebuilt. Every string is
+nonempty and contains no NUL; payloads are bounded to 16 MiB and 65,536 entries
+per list. `QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h`
+documents the layout.
 
 qcc adds the section as a constant global of the LLVM module
 (`addAOTModuleInfoSection()` in `lib/QoreAOT.cpp`) to the object that is linked
@@ -777,7 +845,7 @@ so artifacts carry no separate PC→location map, and stripping debug info
 the line of each instruction with no column.
 
 Format version 21 dropped the per-function location table from the function
-records of the metadata (a v9–v20 record's table is skipped when read), and qcc
+records of the metadata, and qcc
 no longer writes the PC→location maps that earlier versions carried in a `QPCM`
 EOF trailer and in a `qore_aot_pcloc` (Mach-O `__QORE,__pcloc`) object section.
 
@@ -928,9 +996,10 @@ emitted object is read back; the IR interpreter qualifies only because the
 compiler's outlining pass no longer calls into it.
 
 Both halves of the binary format belong in the fingerprint, not just the
-writer. The load-time check rejects a `.qo` whose version is *newer* than the
-reader's and accepts an older one, so a reader change against an
-un-invalidated cache is silent misinterpretation rather than a load error.
+writer. The reader checks that a `.qo` is within its supported version
+range. Batch AL sets the minimum to v48, so artifacts from AK (v47) and
+earlier require recompilation. A reader change within the supported range
+still needs to invalidate cached artifacts when it changes their interpretation.
 
 `qcc` owns the reusable build-sidecar contract for `.qo` and aggregate outputs.
 Build systems should prefer qcc options over external scanners when the needed

@@ -116,6 +116,12 @@ public:
         return has_creator_po ? &creator_po : nullptr;
     }
 
+    //! returns the Program whose code a call of the reference runs, or nullptr for builtin code (qore#6520)
+    /** Called by captureCreatorParseOptions() in the constructor of the run-time reference classes, which give their
+        target without the generic lookup (qore_call_reference_code_program())
+    */
+    DLLLOCAL virtual const QoreProgram* getOriginCodeProgram() const;
+
 protected:
     //! records the effective parse options of the context creating the reference value
     DLLLOCAL void captureCreatorParseOptions();
@@ -163,6 +169,8 @@ public:
 //! a call reference to a static user method
 class LocalStaticMethodCallReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
+    DLLLOCAL const QoreProgram* getOriginCodeProgram() const override;
+
     /** @param n_scope_cls the class that the reference names (\\H::m()), if not the class of the method; a
         reference to a static method of a generic class through a class that inherits a specialization of it calls
         the method with the type arguments of the specialization (qore#6285)
@@ -246,6 +254,13 @@ class StaticMethodCallReferenceNode : public LocalStaticMethodCallReferenceNode 
 protected:
     QoreProgram* pgm;
     const qore_class_private* class_ctx;
+    //! the classes that a call of the reference reads, referenced as long as the reference exists (qore#6622)
+    /** the class of the method, the class context of the code that created the reference, and the class that the
+        receiver of the calls belongs to: the Program is held with a weak reference only, and the classes that it
+        imported (its copies of them) are released when the Program is deleted, while a call of the reference reads
+        the method and the classes before it finds that the Program has been deleted
+    */
+    const qore_class_private* held_classes[3] = {};
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 
@@ -410,6 +425,8 @@ public:
 //! a call reference to a user function from within the same QoreProgram object
 class LocalFunctionCallReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
+    DLLLOCAL const QoreProgram* getOriginCodeProgram() const override;
+
     DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf);
 
     DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
@@ -501,8 +518,20 @@ public:
         return pgm;
     }
 
+    //! keeps the declarations of the explicit type arguments; called once they are final
+    /** The reference can outlive the Program that declared a type argument (a reference made by generic code of
+        one Program for a class of another), whose declarations are freed with it (issue #6489)
+    */
+    DLLLOCAL void holdExplicitTypeArgDecls() {
+        if (explicit_inst) {
+            explicit_type_arg_decls.add(explicit_inst->type_args);
+        }
+    }
+
 protected:
     QoreProgram* pgm;
+    //! the declarations of the explicit type arguments (see holdExplicitTypeArgDecls())
+    QoreTypeDeclRefs explicit_type_arg_decls;
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 };
@@ -607,6 +636,11 @@ private:
 */
 class RunTimePseudoMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
+    //! a pseudo-method is builtin code
+    DLLLOCAL const QoreProgram* getOriginCodeProgram() const override {
+        return nullptr;
+    }
+
     //! creates the reference; takes a new reference to \a n_val, which is not an object
     DLLLOCAL RunTimePseudoMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_val, const char* n_method);
 
@@ -667,6 +701,8 @@ DLLLOCAL bool qore_object_has_pseudo_or_member_method(const qore_class_private* 
 // is known when the method reference node object is created
 class RunTimeResolvedMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
+    DLLLOCAL const QoreProgram* getOriginCodeProgram() const override;
+
     //! Raises the exception of a call of the method for an object that has been deleted, before the arguments are
     //! evaluated (issue #5784) and when the call is made: naming the class of the method and the method, as the call
     //! of the method raises it (issue #6083)
@@ -763,10 +799,12 @@ DLLLOCAL int qore_call_reference_check_target(const ResolvedCallReferenceNode* r
     imported the function still holds it: it is taken with a reference while its options are read.  Such a Program
     is deleted once another thread has deleted it or is deleting it, also while threads still hold references to it.
 
+    @param sandboxed if not nullptr, set to true if the same Program is sandboxed (see qore_program_is_sandboxed())
+
     @return 1 if the code has a Program (\a po is set to its options), 0 if it has none (builtin code), -1 if the
     Program of its code has been deleted
 */
 DLLLOCAL int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
-        ExceptionSink* xsink);
+        ExceptionSink* xsink, bool* sandboxed = nullptr);
 
 #endif

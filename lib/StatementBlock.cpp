@@ -58,7 +58,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <optional>
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/QoreCompletionAnalysis.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -66,6 +69,14 @@ extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::ve
 
 VNode::VNode(LocalVar* lv, const QoreProgramLocation* n_loc, int n_refs, bool n_top_level) :
         lvar(lv), refs(n_refs), loc(n_loc), block_start(false), top_level(n_top_level) {
+    // the options of the declaration: the variable can go out of scope after the statement that declares it, when its
+    // block is initialized, under other options (those of the commit; issue #6589)
+    if (lvar) {
+        if (QoreProgram* pgm = getProgram()) {
+            decl_opts = qore_program_private::getParseWarnOptions(pgm);
+            has_decl_opts = true;
+        }
+    }
     next = update_get_vstack(this);
     // the variable below this one in its frame, for the chains of the local variables that statements can refer to;
     // the chain of a function ends with its first variable, as the top-level variables, which have global scope, are
@@ -88,6 +99,11 @@ VNode::~VNode() {
     if (lvar && !refs && !lvar->isAssigned()) {
         const QoreTypeInfo* ti = lvar->parseGetTypeInfo();
         if (!QoreTypeInfo::parseAcceptsReturns(ti, NT_OBJECT)) {
+            // the warning is raised as the code that declares the variable enables it (issue #6589)
+            std::optional<ParseWarnHelper> pwh;
+            if (has_decl_opts) {
+                pwh.emplace(decl_opts);
+            }
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_UNREFERENCED_VARIABLE,
                 "UNREFERENCED-VARIABLE", "local variable '%s' was declared in this block but not referenced; to " \
                 "disable this warning, use '%%disable-warning unreferenced-variable' in your code", lvar->getName());
@@ -380,7 +396,7 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                         std::unique_ptr<SingleArgvContextHelper> argv_helper;
                         std::unique_ptr<CatchExceptionHelper> ex_helper;
                         if (type == OBE_Error) {
-                            QoreException* except = xsink->getException();
+                            QoreException* except = qore_exception_sink_ops(xsink).getException();
                             assert(except);
                             ex_helper.reset(new CatchExceptionHelper(except));
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
@@ -388,7 +404,13 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                         {
                             // the handler is a statement of its own
                             QoreStatementTempScope temps(&obe_xsink);
-                            nrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
+                            // a handler that completes normally keeps the return of a handler that ran before it
+                            // (#6677), whose value a return in a later handler replaces (#5992); otherwise the block
+                            // takes the request of the last handler run (a debugger's break or continue: #6201)
+                            int hrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
+                            if (hrc || nrc != RC_RETURN) {
+                                nrc = hrc;
+                            }
                         }
                         if (type == OBE_Error) {
                             if (qore_es_private::get(obe_xsink)->rethrown) {
@@ -645,6 +667,8 @@ int StatementBlock::parseInitImpl(QoreParseContext& parse_context) {
     // function has the local variables that its condition and log message are checked with
     setParseScope();
 
+    parse_initialized = true;
+
     //printd(5, "StatementBlock::parseInitImpl(this=%p): done (lvars=%p, %d vars, vstack = %p)\n", this, lvars, lvids,
     //    getVStack());
     return err;
@@ -660,25 +684,27 @@ int StatementBlock::parseInit(UserVariantBase* uvb, const QoreClass* class_ctx) 
     // initialize code block
     QoreParseContext parse_context(class_ctx);
     int err = parseInitImpl(parse_context);
-    if (parseCheckReturn() && !err) {
+    if (parseCheckReturn(uvb) && !err) {
         err = -1;
     }
     return err;
 }
 
-int StatementBlock::parseCheckReturn() {
-    const QoreTypeInfo* returnTypeInfo = getReturnTypeInfo();
-    if (QoreTypeInfo::hasType(returnTypeInfo) && !QoreTypeInfo::parseAccepts(returnTypeInfo, nothingTypeInfo)) {
-        // make sure the last statement is a return statement if the block has a return type
-        if (statement_list.empty() || !(*statement_list.last())->hasFinalReturn()) {
-            QoreStringNode* desc = new QoreStringNode("this code block has declared return type ");
-            QoreTypeInfo::getThisType(returnTypeInfo, *desc);
-            desc->concat(" but does not have a return statement as the last statement in the block");
-            qore_program_private::makeParseException(getProgram(), *loc, "MISSING-RETURN", desc);
-            return -1;
-        }
+int StatementBlock::parseCheckReturn(const UserVariantBase* uvb) {
+    assert(uvb->getStatementBlock() == this);
+    // the declared return type of the code parsed (and not that of the code running in the thread, which can be
+    // parsing it at run time; issue #5940)
+    const QoreTypeInfo* returnTypeInfo = uvb->getUserSignature()->getReturnTypeInfo();
+    if (!QoreTypeInfo::hasType(returnTypeInfo) || QoreTypeInfo::parseAccepts(returnTypeInfo, nothingTypeInfo)) {
+        return 0;
     }
-    return 0;
+    QoreProgram* pgm = getProgram();
+    // the check of code initialized by a parse waits until the parse has initialized all of its code, as it
+    // analyzes the code of the functions and methods called
+    if (qore_program_private::get(*pgm)->deferMissingReturnCheck(uvb)) {
+        return 0;
+    }
+    return qore_parse_check_missing_return(pgm, uvb);
 }
 
 int StatementBlock::parseInitMethod(const QoreTypeInfo* typeInfo, UserVariantBase* uvb) {
@@ -695,7 +721,7 @@ int StatementBlock::parseInitMethod(const QoreTypeInfo* typeInfo, UserVariantBas
         parse_context.setFlags(PF_CONST_METHOD);
     }
     int err = parseInitImpl(parse_context);
-    if (parseCheckReturn() && !err) {
+    if (parseCheckReturn(uvb) && !err) {
         err = -1;
     }
     return err;
@@ -747,7 +773,7 @@ int StatementBlock::parseInitClosure(UserVariantBase* uvb, UserClosureFunction* 
         parse_context.setFlags(PF_CONST_METHOD);
     }
     int err = parseInitImpl(parse_context);
-    if (parseCheckReturn() && !err) {
+    if (parseCheckReturn(uvb) && !err) {
         err = -1;
     }
     return err;
@@ -922,14 +948,14 @@ namespace {
 */
 class ToplevelCodeParseOptionsHelper {
 public:
-    DLLLOCAL ToplevelCodeParseOptionsHelper(const QoreParseOptions& po) {
+    ToplevelCodeParseOptionsHelper(const QoreParseOptions& po) {
         swap_toplevel_code_parse_options(po, old_stmt, old_loc, old_po);
         rc = &rc_get_tls_ref();
         old_rc_po = rc->getParseOptions();
         rc->setParseOptions(po);
     }
 
-    DLLLOCAL ~ToplevelCodeParseOptionsHelper() {
+    ~ToplevelCodeParseOptionsHelper() {
         rc->setParseOptions(old_rc_po);
         restore_toplevel_code_parse_options(old_stmt, old_loc, old_po);
     }
@@ -961,6 +987,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         pgm = rc.getProgram();
     }
     const QoreParseOptions& runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
+    const bool reparse_mode = (runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE))
+        == QoreParseOptions(PO_ALLOW_REPARSE);
 
     // with a debugger attached, the top-level code runs on the AST tier, as a function does (see
     // UserVariantBase::evalTiered()): the debugger's callbacks, such as the exception callback of each statement that
@@ -971,8 +999,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // with a debugger attached, top-level code compiled ahead of time runs its debug IR in the IR interpreter, as an AOT
     // function does (UserVariantBase::materializeAOTDebugIR()): native code reads no value that the debugger sets
     // and does not stop for an exception that a try statement catches (qore#5851)
+    // in REPARSE mode, it runs once, as below (issue #6474)
     if (statement_list.empty() && cached_toplevel_aot_ctx && cached_toplevel_aot_ctx->hasLazyDebugIR()
-            && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+            && qore_program_private::get(*pgm)->hasDebuggerAttached()
+            && (!reparse_mode || claimAOTToplevelRun())) {
         QoreIRFunction* debug_ir = getAOTDebugIR(xsink);
         if (!debug_ir) {
             return -1;
@@ -980,9 +1010,18 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         return execIR(debug_ir, false, runtime_parse_options, pgm, return_value, xsink);
     }
 
-    // AOT pre-compiled top-level function — execute directly if registered
-    if (!debug_ast
-            && !((runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE))) {
+    // AOT pre-compiled top-level function — execute directly if registered; in REPARSE mode, it runs once, and later
+    // runs execute the statements that later parses add (issue #6474)
+    if (!debug_ast && (!reparse_mode
+            || ((cached_toplevel_aot_fn || cached_toplevel_jit_fn) && claimAOTToplevelRun()))) {
+        // a run outside of REPARSE mode executes all of the statements (see markExecuted(), issue #6475); the
+        // statements of an image with its source are those of the precompiled code, which a later run in REPARSE mode
+        // does not execute again (claimAOTToplevelRun() records them); the paths below (IR/JIT, AST) are taken from
+        // here when there is no precompiled code, and a run with a debugger outside of REPARSE mode records them on
+        // the AST path
+        if (!reparse_mode) {
+            markExecuted();
+        }
         if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
             // Instantiate nested non-closure body locals before AOT execution.
             // Top-level locals are pre-instantiated by QoreProgram.  Closure-use
@@ -1198,55 +1237,64 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         }
     }
 
-    // In REPARSE mode (PO_ALLOW_REPARSE), only execute statements that haven't been executed yet
-    // This is determined by the execution high water mark (ehwm)
+    // In REPARSE mode (PO_ALLOW_REPARSE), only the statements that no run has executed yet are executed: a run claims
+    // each statement before it executes it by moving the execution high water mark (ehwm) to it, so that each
+    // statement is executed once, also by runs in several threads at the same time (issue #6511).  A statement that
+    // raises an exception has been claimed and is not executed again; the statements after it are executed by the
+    // next run.
     if (runtime_parse_options & PO_ALLOW_REPARSE) {
         int stmt_rc = 0;
 
-        // Determine start position - one past the execution high water mark
-        statement_list_t::iterator start = ehwm;
-        if (start != statement_list.end()) {
-            ++start;
-        } else {
-            start = statement_list.begin();
-        }
-
-        // If nothing new to execute, return early
-        if (start == statement_list.end()) {
-            return 0;
-        }
-
         // Authoritative current thread-program data for debug hooks (see note in exec()).
-        ThreadLocalProgramData* tlpd = get_thread_local_program_data();
-        if (!tlpd) {
-            tlpd = rc.getThreadLocalProgramData();
-        }
-        // Execute only new statements
-        for (statement_list_t::iterator i = start; i != statement_list.end(); ++i) {
+        ThreadLocalProgramData* tlpd = nullptr;
+        while (true) {
+            statement_list_t::iterator i, prev;
+            {
+                std::lock_guard<std::mutex> lg(ehwm_lock);
+                prev = ehwm;
+                if (prev != statement_list.end()) {
+                    i = prev;
+                    ++i;
+                } else {
+                    i = statement_list.begin();
+                }
+                if (i == statement_list.end()) {
+                    break;
+                }
+                ehwm = i;
+            }
+            if (!tlpd) {
+                tlpd = get_thread_local_program_data();
+                if (!tlpd) {
+                    tlpd = rc.getThreadLocalProgramData();
+                }
+            }
             if (tlpd->runtimeCheck()) {
                 stmt_rc = tlpd->dbgStep(this, *i, xsink);
                 if (stmt_rc || *xsink) {
+                    // the statement is not executed: it is given back, unless another run has claimed a statement
+                    // after it in the meantime
+                    std::lock_guard<std::mutex> lg(ehwm_lock);
+                    if (ehwm == i) {
+                        ehwm = prev;
+                    }
                     break;
                 }
             }
             stmt_rc = (*i)->exec(rc, return_value, xsink);
-            // Update ehwm to current statement after successful execution
-            // so that on exception, only successfully executed statements are marked
-            if (!stmt_rc && !*xsink) {
-                ehwm = i;
-            }
             if (*xsink && tlpd->runtimeCheck()) {
                 tlpd->dbgException(*i, xsink);
-                if (*xsink) {
-                    break;
-                }
             }
-            if (stmt_rc) break;
+            if (stmt_rc || *xsink) {
+                break;
+            }
         }
         return stmt_rc;
     }
 
-    // Normal mode - execute all statements
+    // Normal mode - execute all statements; they are recorded as executed, so that a run after PO_ALLOW_REPARSE is set
+    // does not execute them again (issue #6475)
+    markExecuted();
     return execIntern(rc, return_value, xsink);
 }
 
@@ -1331,8 +1379,9 @@ int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const 
 
         // Clear any pending deopt request from top-level JIT execution.
         // Top-level code handles guard failures internally (e.g., via
-        // try-catch) and must not propagate deopt to subsequent calls.
-        qore_jit_deopt_requested();
+        // try-catch) and must not propagate deopt to subsequent calls; the request of a debugger for the exit events of
+        // the native frames that were running when it attached is kept for them (issue #6602)
+        qore_jit_clear_deopt_request();
     } else {
         // suppress_guard_deopt=true: top-level code must not deopt on
         // guard failure because re-executing the entire block from the
