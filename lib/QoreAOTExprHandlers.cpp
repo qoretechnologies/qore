@@ -3238,7 +3238,7 @@ static bool write_expr_const_string(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_const_string(AOTExprReadCtx& ctx) {
     const char* str_content = ctx.reader.readStringRef(ctx.ptr);
-    return QoreValue::makeStringValue(str_content);
+    return QoreValue::makeUtf8StringValue(str_content);
 }
 
 // ============================================================================

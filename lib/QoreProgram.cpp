@@ -5974,7 +5974,8 @@ QoreValue qore_parse_get_define_value(const QoreProgramLocation* loc, const char
         arg.trim_single_trailing(c);
         arg.trim_single_leading(c);
         size_t len = arg.strlen();
-        return new QoreStringNode(arg.giveBuffer(), len, len + 1, QCS_DEFAULT);
+        const QoreEncoding* encoding = arg.getEncoding();
+        return new QoreStringNode(arg.giveBuffer(), len, len + 1, encoding);
     }
 
     const char* p = arg.getBuffer();

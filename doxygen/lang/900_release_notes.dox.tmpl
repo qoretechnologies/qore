@@ -122,6 +122,14 @@
     sandboxed or restricted code that may not use uncontrolled APIs; a compiled module whose source is next to it is
     loaded as source (see @ref sandbox_native_code; <a href="https://github.com/qoretechnologies/qore/issues/6776">issue
     6776</a>).
+    @par REPL History Files Use UTF-8
+    The @ref qorerepl_history_encoding "REPL writes its history files in UTF-8" with a byte order mark, which older
+    %Qore versions may display as a marker character at the start of the first entry (issue #6816).
+
+    @par Source Files and Standard Input Use UTF-8
+    %Qore reads @ref character_encoding "source text" as UTF-8 in every locale and reports malformed input at its
+    source line, so legacy Latin-1 files must be converted, for example with <tt>iconv -f ISO-8859-1 -t UTF-8</tt>
+    (issue #6816).
 
     @par An Encoding That Is Not Predefined Has One Canonical Name
     The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
@@ -2520,6 +2528,9 @@
     - @ref Qore::Serializable::deserialize() "Serializable::deserialize()" reads serialized data in a process whose
       @ref default_encoding "default character encoding" is not \c UTF-8, where it raised
       \c DESERIALIZATION-ERROR for the header (<tt>expecting 'QS', got 'QS'</tt>; issue #6722)
+    - @ref qore_regex_result_encoding "Regular expression captures, split pieces and substitutions" preserve the subject's
+      encoding (issue #6815).
+
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)

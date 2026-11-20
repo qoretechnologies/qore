@@ -9254,7 +9254,13 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             ConstHashIterator it(hash);
             while (it.next()) {
                 const char* key = it.getKey();
-                values.push_back(builder.createConstString(key ? key : "")->result);
+                if (QCS_DEFAULT == QCS_UTF8) {
+                    values.push_back(builder.createConstString(key ? key : "")->result);
+                } else {
+                    // Hash keys are stored in the process encoding.
+                    ValueHolder key_value(QoreValue::makeStringValue(key), nullptr);
+                    values.push_back(builder.createLoadConstant(nullptr, *key_value, nullptr)->result);
+                }
                 QoreValue entry = it.get();
                 QoreIRValue lowered = lowerContainerElement(entry, error);
                 if (!lowered.isValid()) {
@@ -9284,6 +9290,10 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     }
     if (expr.getType() == NT_STRING && expr.isValue()) {
         QoreStringValueHelper str(expr);
+        if (str->getEncoding() != QCS_UTF8) {
+            // ConstString carries UTF-8 bytes. A value produced in another encoding keeps its original tag.
+            return builder.createLoadConstant(nullptr, expr, nullptr)->result;
+        }
         const char* buf = str->getBuffer();
         return builder.createConstString(std::string(buf ? buf : "", str->size()))->result;
     }
@@ -17777,7 +17787,7 @@ static bool qore_ir_parse_fixed_sprintf_int(const QoreValue& format_value,
         return false;
     }
     QoreStringValueHelper format(format_value);
-    if (format->getEncoding() != QCS_DEFAULT) {
+    if (format->getEncoding() != QCS_UTF8 || QCS_DEFAULT != QCS_UTF8) {
         return false;
     }
     const char* str = format->getBuffer();

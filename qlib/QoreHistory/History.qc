@@ -30,6 +30,7 @@ public namespace QoreHistory {
 */
 public class History {
     private {
+        const Utf8Bom = <efbbbf>;
         #! History entries with timestamps
         list<hash<HistoryEntry>> items = ();
         #! Navigation index (-1 = not navigating)
@@ -38,6 +39,8 @@ public class History {
         int max_length = 500;
         #! Deduplication mode
         int dedup_mode = DEDUP_CONSECUTIVE;
+        #! Keep history entries in UTF-8 when input and persisted text use different encodings
+        bool utf8_entries;
         #! Active prefix filter for prev/next navigation
         *string nav_prefix;
         #! Search navigation index (-1 = not searching)
@@ -49,9 +52,11 @@ public class History {
     #! Creates a new History instance
     /** @param opts optional configuration hash:
         - \c max_length: maximum number of history entries (default: 500)
+        - \c utf8_entries: keep entries in UTF-8 and write a UTF-8 byte order mark when saving (default: False)
         - \c dedup_mode: deduplication mode (default: DEDUP_CONSECUTIVE)
     */
     constructor(*hash<auto> opts) {
+        utf8_entries = opts.utf8_entries ?? False;
         if (opts.max_length > 0) {
             max_length = opts.max_length;
         }
@@ -68,6 +73,9 @@ public class History {
         @param text the text to add to history
     */
     nothing add(string text) {
+        if (utf8_entries && text.encoding() != "UTF-8") {
+            text = convert_encoding(text, "UTF-8");
+        }
         if (!text || !trim(text)) {
             return;
         }
@@ -295,6 +303,7 @@ public class History {
           older files)
         - Legacy format: one entry per line (no timestamp markers)
 
+        A UTF-8 byte order mark selects UTF-8. Unmarked files use the process charset.
         If the file does not exist or is empty, existing entries are cleared.
 
         @param path the file path to load from
@@ -302,13 +311,26 @@ public class History {
     nothing load(string path) {
         items = ();
         resetNavigation();
-        if (!is_readable(path)) {
+        binary data;
+        try {
+            data = ReadOnlyFile::readBinaryFile(path);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "FILE-OPEN2-ERROR" && ex.arg == Err::ENOENT) {
+                return;
+            }
+            rethrow;
+        }
+        if (!data.size()) {
             return;
         }
-        ReadOnlyFile f(path);
-        *string content = f.read(-1);
-        if (!exists content || content == "") {
-            return;
+        bool marked = data.substr(0, Utf8Bom.size()) == Utf8Bom;
+        string content = marked ? binary_to_string(data.substr(Utf8Bom.size()), "UTF-8")
+            : binary_to_string(data, get_default_encoding());
+        if (!content.isEncodingValid()) {
+            throw "INVALID-ENCODING", sprintf("history file '%s' contains invalid %s text", path, content.encoding());
+        }
+        if (utf8_entries && content.encoding() != "UTF-8") {
+            content = convert_encoding(content, "UTF-8");
         }
         list<string> lines = content.split("\n");
         # Remove trailing empty line from split
@@ -339,7 +361,10 @@ public class History {
         try {
             {
                 File f();
-                f.open(tmp_path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+                f.open2(tmp_path, O_WRONLY | O_CREAT | O_TRUNC, 0600, utf8_entries ? "UTF-8" : NOTHING);
+                if (utf8_entries) {
+                    f.write(Utf8Bom);
+                }
                 foreach hash<HistoryEntry> item in (items) {
                     f.write("#" + string(item.timestamp.getEpochMicroseconds()) + "\n");
                     f.write(item.text + "\n");
