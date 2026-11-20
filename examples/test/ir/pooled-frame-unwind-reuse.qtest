@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+# A pooled IR call frame that a call left by an exception is reused by a later call of the same frame sizes: the later
+# call releases its own locals normally and must not use the function of the earlier call, which can be freed by then
+# (here, with the Program that it belongs to) (qore#6672)
+
+our int count = 0;
+
+class R {
+    destructor() {
+        ++count;
+    }
+}
+
+sub g(bool t) {
+    R r();
+    R r2();
+    if (t) {
+        throw "X";
+    }
+}
+
+const ChildSource = "
+class R {
+    destructor() {
+    }
+}
+
+sub f(bool t) {
+    R r();
+    R r2();
+    if (t) {
+        throw \"X\";
+    }
+}
+";
+
+%exec-class Main
+
+public class Main inherits QUnit::Test {
+    constructor() : Test("PooledFrameUnwindReuse", "1.0") {
+        addTestCase("a reused frame does not keep the function of a call that an exception left", \reuseTest());
+        set_return_value(main());
+    }
+
+    reuseTest() {
+        int caught = 0;
+        for (int i = 0; i < 20; ++i) {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(ChildSource, "child");
+            try {
+                p.callFunction("f", True);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "X") {
+                    ++caught;
+                }
+            }
+            # frees the child's IR, including the function that the exception left
+            delete p;
+            # same frame sizes at the same depth: the frame of the child's call is reused
+            g(False);
+        }
+        assertEq(20, caught, "every call of the child's function left by its exception");
+        assertEq(40, count, "the locals of every later call were released normally");
+    }
+}

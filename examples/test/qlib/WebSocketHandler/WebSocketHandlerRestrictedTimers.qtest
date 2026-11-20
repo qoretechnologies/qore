@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT execution and qcc AOT executable linking of the module-owned timer checks
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class WebSocketHandlerRestrictedTimersTest
+
+#! WebSocketHandler arms its own timers for a sandboxed Program restricted from thread control that loads it first
+/** WebSocketHandler arms the heartbeat and idle timers of its HTTP/2 and HTTP/3 streams with the AsyncIoController
+    builtins for each frame, which are tagged \c THREAD_CONTROL (#6836), so it declares \c THREAD_CONTROL in its
+    module header: a Program restricted with \c PO_NO_THREAD_CONTROL, as a Qorus service is, can load it, and when a
+    sandboxed one loads it first, so that the module's Program has the restrictions of that Program, the builtins'
+    \c MODULE_OWNED check lets the module's own code run as timers, while the caller's own code is refused.
+
+    The service starts an HTTP/2 WebSocket stream of a handler with an idle timeout, which the handler's own idle timer
+    ends; a module that arms its timers in the same way and declares the same domain is checked as well, with a
+    closure of the service, which is refused, and a module that does not declare the domain, whose own timer is
+    refused.  Each check runs in a child process of its own (a module is loaded once in a process, with the
+    restrictions of the Program that loads it first), in every execution mode and in a qcc-compiled executable; the
+    code of the service is in WebSocketHandlerRestrictedTimersService.q.
+*/
+class WebSocketHandlerRestrictedTimersTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the child: parses the code of the service in a sandboxed Program with the restrictions of a Qorus service
+        const Child = "%modern
+Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL | PO_NO_PROCESS_CONTROL);
+p.setSandboxManager(new SandboxManager());
+try {
+    p.parse(ReadOnlyFile::readTextFile(ARGV[0]), \"service\");
+    map printf(\"%s\\n\", $1), p.callFunction(\"test\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s: %s: %s\\n\", get_ex_pos(ex), ex.err, ex.desc);
+}
+";
+
+        #! the output of a child
+        const Expected = "WebSocketHandler stream idle timer: \"ended\"
+declared own timer fired: True
+declared own timer canceled: True
+declared caller closure: INVALID-FUNCTION-ACCESS
+undeclared own timer: INVALID-FUNCTION-ACCESS
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string mod_dir;
+
+        #! the code of the service
+        string service;
+    }
+
+    constructor() : QUnit::Test("WebSocketHandlerRestrictedTimers", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        # the module path, where a module's domain declaration applies: the qlib modules and the fixtures
+        string script_dir = realpath(get_script_dir());
+        service = script_dir + DirSep + "WebSocketHandlerRestrictedTimersService.q";
+        mod_dir = realpath(script_dir + "/../../../../qlib") + ":" + script_dir;
+        if (ENV.QORE_MODULE_DIR) {
+            mod_dir += ":" + ENV.QORE_MODULE_DIR;
+        }
+
+        addTestCase("a sandboxed restricted Program loads WebSocketHandler first and its module's timers run",
+            \testRestricted());
+        set_return_value(main());
+    }
+
+    testRestricted() {
+        TmpDir tmp("qore-websockethandler-restricted-timers-");
+        string child = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(child, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Child);
+        f.close();
+
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s",
+            libqore_dir, libqore_dir, libqore_dir, mod_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(Expected, backquote(sprintf("%s %s -b --exec-mode=%s %s %s 2>/dev/null", env, qore_bin, mode,
+                child, service)), mode);
+        }
+
+        # a qcc-compiled executable
+        string exe = tmp.path + DirSep + "child";
+        string out = backquote(sprintf("%s %s -O0 -o %s %s 2>&1", env, qcc_bin, exe, child));
+        assertTrue(is_file(exe), sprintf("qcc compiled the executable: %s", out));
+        assertEq(Expected, backquote(sprintf("%s %s %s 2>/dev/null", env, exe, service)), "qcc");
+    }
+}
