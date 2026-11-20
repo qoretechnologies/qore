@@ -212,6 +212,11 @@ Ran 4 test cases, 1 succeeded, 1 failed, 1 error, 1 skipped (2 assertions, 1 suc
     - a skip or an exception in @ref QUnit::Test::globalSetUp() "Test::globalSetUp()" stops the test cases: they are
       reported as skipped with its reason instead of running without what it prepares
       (<a href="https://github.com/qoretechnologies/qore/issues/6659">issue 6659</a>)
+    - fixed the name of an error in @ref QUnit::Test::globalSetUp() "Test::globalSetUp()" in the list of failed test
+      cases after the run and in the junit report: it was given as \c globalTearDown; the report of an error in
+      @ref QUnit::Test::globalTearDown() "Test::globalTearDown()" gives only its own assertions, without those of
+      the global setup
+      (<a href="https://github.com/qoretechnologies/qore/issues/6925">issue 6925</a>)
     - a @ref Qore::Program "Program" restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" can
       load the module (it declares the \c PROCESS domain); a test created there raises \c TEST-OPTION-ERROR
       instead of exiting the process for a usage error, and does not install the \c SIGUSR1 handler
@@ -2938,11 +2943,17 @@ fail("Unexpected code executed");
             result_by_name{tcname} = m_results[m_results.size() - 1].result;
         }
 
-        try {
-            gtc.rename("globalTearDown");
-            globalTearDown();
-        } catch (hash<ExceptionInfo> ex) {
-            gtc.checkException(self, ex);
+        # the global teardown has a test case of its own: a result keeps its test case, whose name and assertions the
+        # summary and the junit report give, so the global setup's result must not be renamed (qore#6925)
+        {
+            TestCase gttc("globalTearDown", sub () {});
+            gttc.setupThread();
+            on_exit gttc.restoreThread();
+            try {
+                globalTearDown();
+            } catch (hash<ExceptionInfo> ex) {
+                gttc.checkException(self, ex);
+            }
         }
 
         printSummary();
