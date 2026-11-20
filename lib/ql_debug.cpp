@@ -109,6 +109,7 @@
 #include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreHttpManagerSysEnvOps.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -13301,7 +13302,7 @@ public:
     */
     DLLLOCAL void addPooledForOrigin(HttpClientConnectionBase* conn, const char* host,
             int port, bool ssl) {
-        const std::string key = poolKey(host, port, ssl);
+        const std::string key = qore_http_manager_ops(this).poolKey(host, port, ssl);
         conn->setPoolKey(key);
         conn->setManager(this);
         conn->ref();
@@ -13315,7 +13316,7 @@ public:
     }
 
     DLLLOCAL void drainClosed(ExceptionSink* xsink) {
-        processClosedConnections(xsink);
+        qore_http_manager_ops(this).processClosedConnections(xsink);
     }
 };
 
@@ -13554,7 +13555,7 @@ public:
 
     DLLLOCAL HttpClientConnectionBase* swap(HttpClientConnectionBase* neg, HttpClientConnectionBase* concrete,
             ExceptionSink* xsink) {
-        return swapNegotiatedConnection(neg, concrete, false, xsink);
+        return qore_http_manager_ops(this).swapNegotiatedConnection(neg, concrete, false, xsink);
     }
 
     DLLLOCAL void addPooled(HttpClientConnectionBase* conn, const std::string& key) {
@@ -14689,7 +14690,7 @@ public:
     }
 
     DLLLOCAL void addPooledForOrigin(HttpClientConnectionBase* conn, const char* host, int port, bool ssl) {
-        const std::string key = poolKey(host, port, ssl);
+        const std::string key = qore_http_manager_ops(this).poolKey(host, port, ssl);
         conn->setPoolKey(key);
         conn->setManager(this);
         conn->ref();

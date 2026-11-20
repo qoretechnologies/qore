@@ -80,6 +80,7 @@
 #include "qore/intern/SseEventFramer.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/HttpClientDrainDebug.h"
+#include "qore/intern/QoreHttpManagerSysEnvOps.h"
 
 #include <atomic>
 #include <cassert>
@@ -1481,7 +1482,7 @@ struct qore_httpclient_priv {
         @param retried true if the request has already been repeated
     */
     DLLLOCAL static bool canRepeatOnNewConnection(const char* meth, bool conn_reused, bool retried) {
-        return conn_reused && !retried && HttpClientConnectionManagerBase::isIdempotentMethod(meth);
+        return conn_reused && !retried && qore_http_manager_ops::isIdempotentMethod(meth);
     }
 
     //! Returns the Proxy-Authorization value for the connection manager, or an empty string if not needed
@@ -4551,7 +4552,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             cleanup_failed_connect();
             xsink->raiseException("HTTP2-CONNECT-ERROR",
                 "HTTP/2 connection closed before CONNECT response was received");
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
         if (rv->getType() != NT_HASH) {
@@ -4569,7 +4570,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 CONNECT request failed";
             cleanup_failed_connect();
             xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
 
@@ -4776,7 +4777,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             restore_forced_h3();
             xsink->raiseException("HTTP3-CONNECT-ERROR",
                 "HTTP/3 connection closed before CONNECT response was received");
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
         if (rv->getType() != NT_HASH) {
@@ -4795,7 +4796,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             cleanup_failed_connect();
             restore_forced_h3();
             xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
 
@@ -4944,7 +4945,7 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
                 const char* err_str = err_data.c_str();
                 const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 stream read failed";
                 xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-                HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                 return nullptr;
             }
             QoreValue legacy_error = h->getKeyValue("error");
@@ -5153,7 +5154,7 @@ BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int tim
                 const char* err_str = err_data.c_str();
                 const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/3 stream read failed";
                 xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-                HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                 return nullptr;
             }
             QoreValue legacy_error = h->getKeyValue("error");
@@ -5985,7 +5986,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                                 "connection closed before response received");
                             // a cancellation of this thread that closed the connection is reported as such
-                            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                         }
                         break;
                     }
@@ -6013,7 +6014,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s",
                             desc_str.c_str());
                         // a cancellation of this thread that ended the request first is reported as such
-                        HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                        qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                         close_and_evict_if_unusable();
                         return nullptr;
                     }
@@ -6254,7 +6255,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
                     // a cancellation of this thread that ended the request first (the code that it ends closes the
                     // transport) is reported as such
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     result.discard(xsink);
                     close_and_evict_if_unusable();
                     return nullptr;
@@ -6434,11 +6435,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
                     // a cancellation of this thread that ended the request first is reported as such, and the
                     // request is not repeated
-                    if (HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink)) {
+                    if (qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink)) {
                         return nullptr;
                     }
                     // a reused connection closed by the peer before a response was received
-                    if (!got_headers && HttpClientConnectionManagerBase::isConnectionClosedError(*xsink)
+                    if (!got_headers && qore_http_manager_ops::isConnectionClosedError(*xsink)
                             && canRepeatOnNewConnection(meth, conn_reused, stream_retried)) {
                         xsink->clear();
                         stream_retry = true;
@@ -6822,7 +6823,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 if (!has_value) {
                     xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                         "connection closed before response headers received");
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
 
@@ -6847,7 +6848,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         desc_str = desc->c_str();
                     }
                     xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
 
@@ -6934,7 +6935,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // (not for a cancelled request: the cancellation is reported, and the Alt-Svc entry is kept)
                 if (attempted_h3_upgrade
                         && http3_mode != HTTP3_MODE_REQUIRED
-                        && !HttpClientConnectionManagerBase::isCancelPending()) {
+                        && !qore_http_manager_ops::isCancelPending()) {
                     markAltSvcFailed(this_connection.host.c_str(),
                         this_connection.port);
                     http3_active = false;
@@ -6967,7 +6968,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
                     xsink->raiseExceptionArg(err_str.c_str(), raw_resp->getKeyValue("arg").refSelf(), "%s",
                         desc_str.c_str());
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
                 QoreValue sc_val = raw_resp->getKeyValue("status_code");
@@ -6998,7 +6999,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             "received");
                     }
                     // a cancellation of this thread that ended the request first is reported as such
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
             }
@@ -7399,7 +7400,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
         if (!has_value) {
             xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                 "connection closed before WebSocket Upgrade response received");
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
         if (rv->getType() != NT_HASH) {
@@ -7418,7 +7419,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
             const char* desc_str = desc_data ? desc_data.c_str() : "WebSocket Upgrade request failed";
             // the description is text, not a format
             xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
 
@@ -10110,7 +10111,7 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
         }
         xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
         // a cancellation of this thread that ended the stream first is reported as such
-        HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+        qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
         return nullptr;
     }
 
