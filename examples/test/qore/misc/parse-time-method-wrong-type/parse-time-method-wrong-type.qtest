@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of method calls resolved at parse time
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ParseTimeMethodWrongTypeTest
+
+#! A method call resolved at parse time behaves on a value of another type as on a value with no declared type (#6813)
+/** When the declared type of a builtin's value does not match the value that it returns, a method call resolved at
+    parse time from the declared type is made on a value of another type: it gives the result of the same call on a
+    value with no declared type, in every execution mode and compiled with qcc.  ParseTimeMethodWrongType.q uses a
+    debug-only builtin, so the test needs a debug build of the library.
+*/
+class ParseTimeMethodWrongTypeTest inherits QUnit::Test {
+    public {
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+        #! the output of the AST interpreter
+        *string ast_output;
+    }
+
+    constructor() : QUnit::Test("ParseTimeMethodWrongTypeTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/ParseTimeMethodWrongType.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the call gives the result of an untyped call", \modeTest(), (mode,));
+        }
+        addTestCase(ExecModeHarness::IRTierName + ": the call gives the result of an untyped call", \irTierTest());
+        addTestCase("jit with synchronous compiles: the call gives the result of an untyped call", \syncJitTest());
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the call gives the result of an untyped call", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        ast_output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
+            libqore_dir, libqore_dir, qore_bin, script));
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+    }
+
+    modeTest(string mode) {
+        checkDebug();
+        checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script)));
+    }
+
+    irTierTest() {
+        checkDebug();
+        checkOutput(ExecModeHarness::IRTierName, ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s --exec-mode=tiered %s", libqore_dir, libqore_dir, qore_bin, script)));
+    }
+
+    #! JIT with its default thresholds and synchronous compiles: the first call of a function runs its native code
+    syncJitTest() {
+        checkDebug();
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf(
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=jit %s", libqore_dir, libqore_dir, qore_bin,
+            script), NOTHING, "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_TIMING=1");
+        ExecModeHarness::check_native(r);
+        checkOutput("jit with synchronous compiles", r.out);
+    }
+
+    aotTest(int opt) {
+        checkDebug();
+        TmpDir tmp("qore-parse-time-method-wrong-type-");
+        string exe = tmp.path + DirSep + "parse-time-method-wrong-type";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput(sprintf("qcc -O%d", opt), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)));
+    }
+
+    #! Checks that each typed call gives the result of its untyped call, and that the output is the AST interpreter's
+    private checkOutput(string mode, string output) {
+        hash<string, string> res = parseOutput(output);
+        assertEq(48, res.size(), mode + ": the cases of the output");
+        foreach hash<auto> i in (res.pairIterator()) {
+            if (i.key =~ /^typed /) {
+                string ukey = "un" + i.key;
+                assertEq(res{ukey}, i.value, sprintf("%s: %s as the untyped call", mode, i.key));
+            }
+        }
+        assertEq(ast_output, output, mode + ": the output of the AST interpreter");
+    }
+
+    #! Returns the lines of an output by their label
+    private static hash<string, string> parseOutput(string output) {
+        hash<string, string> rv();
+        foreach string line in (output.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            int i = line.find(": ");
+            rv{i > 0 ? line.substr(0, i) : line} = i > 0 ? line.substr(i + 2) : "";
+        }
+        return rv;
+    }
+}

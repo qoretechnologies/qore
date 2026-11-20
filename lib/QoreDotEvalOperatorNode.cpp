@@ -77,7 +77,9 @@ template <bool Lexical>
 QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionSink* xsink) const {
     LexicalSemanticPolicy policy;
     if constexpr (Lexical) policy = getSemanticPolicy();
-    switch (base.getType()) {
+    // the type is read once (see the pseudo-method below)
+    qore_type_t bt = base.getType();
+    switch (bt) {
         case NT_WEAKREF: {
             // FIXME: inefficient
             return qore_dot_eval_weakref_call<Lexical>(m, policy, base, xsink);
@@ -94,6 +96,8 @@ QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionS
                     return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
                 }
             }
+            // the type is known on this path, so it is not kept across the call above
+            bt = NT_WEAKREF_HASH;
             break;
         }
 
@@ -113,6 +117,8 @@ QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionS
                     return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
                 }
             }
+            // the type is known on this path, so it is not kept across the call above
+            bt = NT_HASH;
             break;
         }
 
@@ -121,8 +127,11 @@ QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionS
     }
 
     // FIXME: inefficient
-    if (m->isPseudo()) {
-        return m->execPseudoWithPolicy<Lexical>(policy, base, xsink);
+    // the pseudo-method that the parse-time resolution bound is called only on a value of its class: a value of
+    // another type (the value of a builtin whose declared type is wrong) finds the method by name in the pseudo-class
+    // of its type below, as a value with no declared type does (qore#6813)
+    if (m->isPseudo() && (bt == NT_NOTHING || m->pseudoAcceptsType(bt))) {
+        return m->execPseudoWithPolicy<Lexical>(policy, base, bt, xsink);
     }
 
     // a named call of a method of an object resolved at run time by parameter name whose receiver is not an object
