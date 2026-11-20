@@ -1,0 +1,18 @@
+unrestricted caller:
+BI object: outside: 2 2 2 1 5
+BI object: BI: 2 2 2 1 5
+BI object: CI: 2 2 2 1 5
+BI object: X: 2 2 2 1 5
+CI object: outside: 2 2 2 1 5
+CI object: BI: 2 2 2 1 5
+CI object: CI: 2 2 2 1 5
+CI object: X: 2 2 2 1 5
+restricted caller:
+BI object: outside: 2 2 2 1 5
+BI object: BI: 2 2 2 1 5
+BI object: CI: 2 2 2 1 5
+BI object: X: 2 2 2 1 5
+CI object: outside: METHOD-ERROR METHOD-ERROR METHOD-ERROR MEMBER-ERROR MEMBER-ERROR
+CI object: BI: 2 2 2 1 5
+CI object: CI: METHOD-ERROR METHOD-ERROR METHOD-ERROR MEMBER-ERROR MEMBER-ERROR
+CI object: X: METHOD-ERROR METHOD-ERROR METHOD-ERROR MEMBER-ERROR MEMBER-ERROR

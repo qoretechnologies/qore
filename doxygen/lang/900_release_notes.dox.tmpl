@@ -2578,6 +2578,9 @@
     - @ref Qore::ReadOnlyFile::readLine() "ReadOnlyFile::readLine()" with an end of line marker ends a line only where
       the marker starts at a character boundary, where a marker byte inside a character of a double-byte encoding
       such as \c Shift_JIS ended the line in the character (issue #6648)
+    - reflection (such as @ref Qore::Reflection::NormalMethod::call() "NormalMethod::call()") uses the methods and
+      members that an object's class inherits through a class inherited with
+      @ref private_inheritance "private:internal", where it raised \c METHOD-ERROR or \c MEMBER-ERROR (issue #6644)
     - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" of @ref sqlutilintro "SqlUtil"
       with a description of another table name, which raised \c LOCK-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>); see @ref sqlutilv3_11_0
