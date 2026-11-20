@@ -57,6 +57,7 @@ class DebuggerNativeCalleeStepsTest inherits QUnit::Test {
     constructor() : QUnit::Test("DebuggerNativeCalleeStepsTest", "1.0") {
         qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("steps in pure functions, methods and closures with constant arguments", \pureCallSteps());
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(mode + ": the step events of native calls after a debugger attaches", \modeTest(), (mode,));
         }
@@ -68,5 +69,40 @@ class DebuggerNativeCalleeStepsTest inherits QUnit::Test {
             "QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s", libqore_dir,
             libqore_dir, qore_bin, mode, get_script_dir() + "/NativeCalleeSteps.q"));
         assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    pureCallSteps() {
+        string fixture = get_script_dir() + "/PureCalleeSteps.q";
+        string expected = "54 [5, 6, 11, 12, 39, 40]\n";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected, ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 "
+                "QORE_JIT_THRESHOLD=1 %s -b --exec-mode=%s %s", qore_bin, mode, fixture)), mode);
+        }
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            return;
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        foreach int opt in (0, 3) {
+            string exe = dir + "/pure-" + opt;
+            string log = backquote(sprintf("%s -O%d -g -o %s %s 2>&1", qcc, opt, exe, fixture));
+            assertTrue(is_file(exe), log);
+            string actual = ExecModeHarness::run_any(exe + " -b");
+            if (opt == 0) {
+                assertEq(expected, actual, "qcc -O0 -g");
+            } else {
+                # Optimized code can fold any of the three calls.
+                assertTrue(actual.startsWith("54 ["), actual);
+            }
+        }
+
+        string outlined = dir + "/outlined";
+        string log = backquote(sprintf("QORE_DUMP_LLVM_IR=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=20 "
+            "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 QORE_AOT_OUTLINE_FN_TARGET_INSTS=20 %s -O0 -g -o %s %s 2>&1",
+            qcc, outlined, fixture));
+        assertTrue(is_file(outlined), log);
+        assertTrue(log =~ /define i64 @runOutlined_[A-Za-z0-9_]+_outline_[0-9]+\(/, "native outlined helper");
+        assertEq("28 [51, 52, 51, 52]\n", ExecModeHarness::run_any(outlined + " -b outlined"));
     }
 }

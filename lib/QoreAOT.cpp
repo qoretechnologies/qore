@@ -1152,6 +1152,11 @@ static bool aotEmitDebugInfo() {
     return !strip;
 }
 
+// A different Program can attach after native code has entered the caller.
+static bool aotPreserveDebugCalls(int opt_level, QoreProgram* pgm) {
+    return opt_level == 0 && aotEmitDebugInfo() && pgm->checkAllowDebugging(nullptr);
+}
+
 static llvm::Type* qore_aot_fast_entry_param_type(BatchCalleeParamKind kind,
         llvm::Type* i64_ty, llvm::Type* double_ty) {
     if (kind == BatchCalleeParamKind::NativeFloat) {
@@ -5941,7 +5946,7 @@ static void aotEraseOutlinedFunctions(llvm::Module& module, const std::vector<AO
     aotEraseUnusedClosureDispatchDecls(module, owner);
 }
 
-static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
+static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
         llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
     const bool dbg = q_env_is_set("QORE_AOT_DEBUG");
@@ -5953,7 +5958,7 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
             fprintf(stderr, "=================\n");
         }
         QoreIRToLLVM lowerer(ctx);
-        lowerer.setAOTMode(&slots);
+        lowerer.setAOTMode(&slots, !preserve_debug_calls);
         lowerer.setSharedDebugInfo(di_builder, di_cu);
         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
         lowerer.setDeferredExceptionChecking(false);
@@ -6217,8 +6222,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     buildAOTSlotMap(*ir_func, slots);
 
     QoreIRToLLVM lowerer(ctx);
-    lowerer.setAOTMode(&slots);
-    lowerer.setAOTDirectClosureFastEntry(false);
+    lowerer.setAOTMode(&slots, false);
     lowerer.setDeferredExceptionChecking(false);
     lowerer.setSharedDebugInfo(&di_builder, di_cu);
     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -14500,7 +14504,7 @@ bool qore_ir_resolve_batch_function_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
-        bool collect_body_dependency_provenance) {
+        bool collect_body_dependency_provenance, bool preserve_debug_calls) {
     // the location of each body, for the callers that a summary of the body takes the place of a call in
     size_t body_loc_count = 0;
     for (const auto& [variant, func] : functions) {
@@ -14630,6 +14634,11 @@ bool qore_ir_resolve_batch_function_summaries(
             callee_it->second.param_may_modify =
                 summary.param_may_modify;
         }
+    }
+    // The debugger must be able to enter the real callee. Keep the effect and calling-convention
+    // facts above, but never publish a replacement for the body of a source-debug build.
+    if (preserve_debug_calls) {
+        return !collect_body_dependency_provenance || resolveAOTBatchBodyDependencyProvenance(functions, batch_callees);
     }
     // Member access, string and collection summaries replace a call with the value the callee's body returns, and
     // an inferred boxed return kind describes that value, so they are only derived from functions whose declared
@@ -16495,7 +16504,7 @@ size_t qore_ir_fuse_batch_aggregate_return_projections(
         func, projection_query);
 }
 
-static bool resolveAOTBatchFunctionEffectSummaries(
+static bool resolveAOTBatchFunctionEffectSummaries(bool preserve_debug_calls,
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             std::unique_ptr<QoreIRFunction>>>& candidates,
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
@@ -16517,7 +16526,7 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         }
     }
     return qore_ir_resolve_batch_function_summaries(
-        functions, batch_callees, true);
+        functions, batch_callees, true, preserve_debug_calls);
 }
 
 static size_t projectAOTNonescapingObjectScalars(
@@ -16973,7 +16982,7 @@ static bool finalizeAOTBatchFastEntrySymbols(llvm::Module& module,
     return true;
 }
 
-static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
+static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module,
         const AOTGenericSpecializationCandidates& specializations,
         std::unordered_map<const AbstractQoreFunctionVariant*,
@@ -16998,7 +17007,7 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
         UserVariantBase* uvb = variant
             ? const_cast<AbstractQoreFunctionVariant*>(variant)
                 ->getUserVariantBase() : nullptr;
-        if (info == batch_callees.end() || !uvb
+        if (info == batch_callees.end() || !uvb || (method && preserve_debug_calls)
                 || (method
                     ? !isAOTFastMethodCallEligible(variant, true)
                     : !uvb->isStaticallyFastCallEligible(true))) {
@@ -17070,7 +17079,7 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
 
     const std::vector<std::pair<const AbstractQoreFunctionVariant*,
         std::unique_ptr<QoreIRFunction>>> effect_only_candidates;
-    if (!resolveAOTBatchFunctionEffectSummaries(candidates,
+    if (!resolveAOTBatchFunctionEffectSummaries(preserve_debug_calls, candidates,
             effect_only_candidates, batch_callees)) {
         return false;
     }
@@ -17106,7 +17115,7 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
             batch_callees);
 }
 
-static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
+static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& aot_batch_callee_map,
         std::set<std::string>& declared_keys,
@@ -17369,7 +17378,10 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 const bool speculative_object_fast_entry = !speculative_object_fast_entry_env.get();
                 bool implicit_self = isAOTImplicitSelfFastEntryEligible(
                     ir_func, uvb, qc, meth, variant, speculative_object_fast_entry);
-                if (!will_outline && fast_method_eligible
+                // Only named functions have debugger dispatch in their typed native entry. A method
+                // call in a source-debug build uses the ordinary method binder, including in callers
+                // whose eligibility to run with a borrowed AOT context is determined from this map.
+                if (!preserve_debug_calls && !will_outline && fast_method_eligible
                         && ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
                         || implicit_self)) {
                     unsigned num_params = sig->numParams();
@@ -17567,7 +17579,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 effect_only_candidates, *generic_specializations)) {
         return false;
     }
-    if (!resolveAOTBatchFunctionEffectSummaries(
+    if (!resolveAOTBatchFunctionEffectSummaries(preserve_debug_calls,
             context_candidates, effect_only_candidates, aot_batch_callee_map)) {
         return false;
     }
@@ -17598,7 +17610,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         }
         ++ns_i;
         if (ni.second) {
-            if (!declareAOTBatchFastEntries(qore_ns_private::get(*ni.second), pgm, ctx, module,
+            if (!declareAOTBatchFastEntries(qore_ns_private::get(*ni.second), pgm, preserve_debug_calls, ctx, module,
                     aot_batch_callee_map, declared_keys, compile_module, compile_file,
                     keep_modules, compile_files, generic_specializations)) {
                 return false;
@@ -17606,7 +17618,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         }
     }
     if (owns_generic_specializations
-            && !resolveAOTBatchGenericSpecializations(pgm, ctx,
+            && !resolveAOTBatchGenericSpecializations(pgm, preserve_debug_calls, ctx,
                 module, *generic_specializations,
                 aot_batch_callee_map)) {
         return false;
@@ -18733,7 +18745,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     return true;
 }
 
-static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
+static bool addAOTPreloadedFastEntries(qore_ns_private* ns, bool preserve_debug_calls,
         const std::unordered_map<std::string, QoreAOTSymbolIndexRecord>& records,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
     size_t check_count = 0;
@@ -18767,6 +18779,11 @@ static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
             BatchCalleeInfo info;
             bool cancelled = false;
             if (loadAOTFastEntryInfo(rec_it->second, info, cancelled)) {
+                // A debug caller can still use a sibling's real named entry. An optimized
+                // sibling with a body substitution can always be called by its standard entry.
+                if (preserve_debug_calls && info.hasImportableBodySummary()) {
+                    continue;
+                }
                 info.call_ref_path = function_name;
                 info.single_variant_function = func->numVariants() == 1;
                 batch_callees.emplace(variant, std::move(info));
@@ -18814,6 +18831,9 @@ static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
                     BatchCalleeInfo info;
                     bool cancelled = false;
                     if (loadAOTFastEntryInfo(rec_it->second, info, cancelled)) {
+                        if (preserve_debug_calls && (info.approach_b_eligible || info.hasImportableBodySummary())) {
+                            continue;
+                        }
                         batch_callees.emplace(variant, std::move(info));
                     } else if (cancelled) {
                         return false;
@@ -18829,7 +18849,7 @@ static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
             return false;
         }
         if (ni.second && !addAOTPreloadedFastEntries(qore_ns_private::get(*ni.second),
-                records, batch_callees)) {
+                preserve_debug_calls, records, batch_callees)) {
             return false;
         }
     }
@@ -19376,7 +19396,7 @@ static bool defineAOTClosureNativeThrowingDispatch(llvm::LLVMContext& ctx,
     runtime slot-map reconstruction create the closure variant from the owner's
     CLOSURE_CREATE record before registering the native body on that variant.
 */
-static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm,
+static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledFunc>& compiled_funcs,
@@ -19845,7 +19865,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                         }
                     }
                     QoreIRToLLVM fast_lowerer(ctx);
-                    fast_lowerer.setAOTMode(&slots);
+                    fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                     fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     fast_lowerer.setDeferredExceptionChecking(false);
@@ -19931,7 +19951,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             }
         } else {
             QoreIRToLLVM lowerer(ctx);
-            lowerer.setAOTMode(&slots);
+            lowerer.setAOTMode(&slots, !preserve_debug_calls);
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
             lowerer.setDeferredExceptionChecking(false);
@@ -19999,7 +20019,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             fprintf(stderr, "AOT: compiled native closure '%s'\n", native_key.c_str());
         }
 
-        if (!compileAOTClosureBodiesForOwner(closure_index, pgm, ctx, module,
+        if (!compileAOTClosureBodiesForOwner(closure_index, pgm, preserve_debug_calls, ctx, module,
                 di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
                 total_ir_insts_all, const_reverse_map, compile_module, metadata_only,
                 aot_batch_callee_map, fatal_error)) {
@@ -20009,7 +20029,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
     return true;
 }
 
-static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
+static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledFunc>& compiled_funcs,
@@ -20039,7 +20059,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     }
     if (!metadata_only && owns_aot_batch_callee_map) {
         std::set<std::string> declared_fast_keys;
-        if (!declareAOTBatchFastEntries(ns, pgm, ctx, module, local_aot_batch_callee_map,
+        if (!declareAOTBatchFastEntries(ns, pgm, preserve_debug_calls, ctx, module, local_aot_batch_callee_map,
                 declared_fast_keys, compile_module, compile_file, keep_modules, compile_files)) {
             setAOTCompileFatal(fatal_error, "namespace", "<batch-callee-fast-entry>",
                 "declaration", "cancelled");
@@ -22191,7 +22211,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 } else {
                     // Lower to LLVM with AOT mode
                     QoreIRToLLVM lowerer(ctx);
-                    lowerer.setAOTMode(&slots);
+                    lowerer.setAOTMode(&slots, !preserve_debug_calls);
                     lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     // Deferring exception checks is not semantics-preserving for
@@ -22245,7 +22265,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     // helper failure fall back to un-outlined lowering.
                     if (fn_outliner.active()) {
                         std::string helper_error;
-                        if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, ctx,
+                        if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls, ctx,
                                 module, slots, &di_builder, di_cu, helper_error)) {
                             fn_outliner.undo();
                         }
@@ -22264,7 +22284,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         aotEraseOutlinedFunctions(module, fn_outliner.helpers, ir_func->name, true);
                         fn_outliner.undo();
                         QoreIRToLLVM retry_lowerer(ctx);
-                        retry_lowerer.setAOTMode(&slots);
+                        retry_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                         retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         retry_lowerer.setDeferredExceptionChecking(false);
@@ -22315,7 +22335,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         }
 
                         QoreIRToLLVM fast_lowerer(ctx);
-                        fast_lowerer.setAOTMode(&slots);
+                        fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                         fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         fast_lowerer.setDeferredExceptionChecking(false);
@@ -22392,7 +22412,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
-                    if (!compileAOTClosureBodiesForOwner(owner_index, pgm, ctx, module,
+                    if (!compileAOTClosureBodiesForOwner(owner_index, pgm, preserve_debug_calls, ctx, module,
                             di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
                             total_ir_insts_all, const_reverse_map, compile_module, metadata_only,
                             aot_batch_callee_map, fatal_error)) {
@@ -22683,7 +22703,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     } else {
                         // Lower to LLVM with AOT mode
                         QoreIRToLLVM lowerer(ctx);
-                        lowerer.setAOTMode(&slots);
+                        lowerer.setAOTMode(&slots, !preserve_debug_calls);
                         lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         lowerer.setDeferredExceptionChecking(false);
@@ -22717,7 +22737,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         // lowering of the restored original method.
                         if (fn_outliner.active()) {
                             std::string helper_error;
-                            if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, ctx,
+                            if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls, ctx,
                                     module, slots, &di_builder, di_cu, helper_error)) {
                                 fn_outliner.undo();
                             }
@@ -22734,7 +22754,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             aotEraseOutlinedFunctions(module, fn_outliner.helpers, ir_func->name, true);
                             fn_outliner.undo();
                             QoreIRToLLVM retry_lowerer(ctx);
-                            retry_lowerer.setAOTMode(&slots);
+                            retry_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                             retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                             retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                             retry_lowerer.setDeferredExceptionChecking(false);
@@ -22783,7 +22803,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             }
 
                             QoreIRToLLVM fast_lowerer(ctx);
-                            fast_lowerer.setAOTMode(&slots);
+                            fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                             fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                             fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                             fast_lowerer.setDeferredExceptionChecking(false);
@@ -22856,7 +22876,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         const size_t owner_index = compiled_funcs.size();
                         compiled_funcs.push_back(std::move(cf));
                         ++compiled_count;
-                        if (!compileAOTClosureBodiesForOwner(owner_index, pgm, ctx, module,
+                        if (!compileAOTClosureBodiesForOwner(owner_index, pgm, preserve_debug_calls, ctx, module,
                                 di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
                                 total_ir_insts_all, const_reverse_map, compile_module, metadata_only,
                                 aot_batch_callee_map, fatal_error)) {
@@ -22997,8 +23017,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 return true;
             }
             QoreIRToLLVM lowerer(ctx);
-            lowerer.setAOTMode(&slots);
-            lowerer.setAOTDirectClosureFastEntry(false);
+            lowerer.setAOTMode(&slots, false);
             lowerer.setDeferredExceptionChecking(false);
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -23333,7 +23352,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
-            compileNamespaceFunctions(qore_ns_private::get(*child_ns), pgm, ctx, module,
+            compileNamespaceFunctions(qore_ns_private::get(*child_ns), pgm, preserve_debug_calls, ctx, module,
                 di_builder, di_cu,
                 compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
                 failed_count, total_ir_insts_all, const_reverse_map, compiled_keys,
@@ -25310,8 +25329,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
     // slot dispatch even when the callee has a direct native ABI in this module.
     std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>
         executable_batch_callees;
+    const bool preserve_debug_calls = aotPreserveDebugCalls(opt_level, pgm);
     std::set<std::string> declared_fast_keys;
-    if (!declareAOTBatchFastEntries(root_ns, pgm, ctx, *module,
+    if (!declareAOTBatchFastEntries(root_ns, pgm, preserve_debug_calls, ctx, *module,
             executable_batch_callees, declared_fast_keys, "", nullptr,
             local_module_names.empty() ? nullptr : &local_module_names, nullptr)) {
         error = "operation cancelled during executable AOT fast-entry discovery";
@@ -25331,7 +25351,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     // ("Global is external, but doesn't have external or weak linkage!") -- and
     // that a module-private caller compiled below binds its call to.
     for (auto& root : local_module_roots) {
-        if (!declareAOTBatchFastEntries(root.second, pgm, ctx, *module,
+        if (!declareAOTBatchFastEntries(root.second, pgm, preserve_debug_calls, ctx, *module,
                 executable_batch_callees, declared_fast_keys, root.first.c_str(),
                 nullptr, nullptr, nullptr)) {
             error = "operation cancelled during executable AOT embedded-module "
@@ -25346,7 +25366,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     // same local-module keep set that serialization keeps below.
     std::string fatal_lowering_error;
     std::set<std::string> compiled_keys;
-    compileNamespaceFunctions(root_ns, pgm, ctx, *module, di_builder, di_cu,
+    compileNamespaceFunctions(root_ns, pgm, preserve_debug_calls, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
         total_ir_insts_all, &const_reverse_map, &compiled_keys, "",
         nullptr, false, nullptr, nullptr, &fatal_lowering_error,
@@ -25357,7 +25377,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         // compileNamespaceFunctions() build its own under this module's
         // `compile_module`, re-declaring a prefixed `_fast` twin of every
         // exported item whose body the walk above already emitted.
-        compileNamespaceFunctions(root.second, pgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root.second, pgm, preserve_debug_calls, ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
             total_ir_insts_all, &const_reverse_map, &compiled_keys, root.first.c_str(),
             nullptr, false, nullptr, nullptr, &fatal_lowering_error, nullptr, nullptr,
@@ -25531,7 +25551,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 buildAOTSlotMap(*ir_func, slots);
 
                 QoreIRToLLVM llvm_lowerer(ctx);
-                llvm_lowerer.setAOTMode(&slots);
+                llvm_lowerer.setAOTMode(&slots, !preserve_debug_calls);
                 if (!executable_batch_callees.empty()) {
                     llvm_lowerer.setBatchCallees(&executable_batch_callees);
                 }
@@ -25588,7 +25608,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
-                    if (!compileAOTClosureBodiesForOwner(owner_index, pgm, ctx, *module,
+                    if (!compileAOTClosureBodiesForOwner(owner_index, pgm, preserve_debug_calls, ctx, *module,
                             di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
                             total_ir_insts_all, &const_reverse_map, "", false,
                             executable_batch_callees.empty()
@@ -28279,13 +28299,15 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // namespace block), which were previously missed when only child
     // namespaces were iterated.
     std::string fatal_lowering_error;
+    const bool preserve_debug_calls = aotPreserveDebugCalls(opt_level, *qpgm);
     // the module owns its fast-entry map: it is written to the module's symbol index, so that a module compiled
     // against this one can call its functions' native fast entries, and to its table of fast entries, through which
     // such a call finds them at run time (qore#6035)
     std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo> module_batch_callees;
     {
         std::set<std::string> declared_fast_keys;
-        if (!declareAOTBatchFastEntries(root_ns, *qpgm, ctx, *module, module_batch_callees, declared_fast_keys,
+        if (!declareAOTBatchFastEntries(root_ns, *qpgm, preserve_debug_calls,
+                ctx, *module, module_batch_callees, declared_fast_keys,
                 mod_info.name.c_str(), nullptr, nullptr, nullptr)) {
             error = "operation cancelled during module AOT fast-entry discovery";
             return false;
@@ -28300,7 +28322,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             }
         }
     }
-    compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+    compileNamespaceFunctions(root_ns, *qpgm, preserve_debug_calls, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
         total_ir_insts_all, &const_reverse_map, nullptr, mod_info.name.c_str(),
         nullptr, false, nullptr, nullptr, &fatal_lowering_error, nullptr, nullptr, &module_batch_callees);
@@ -28825,7 +28847,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // namespace block), which were previously missed when only child
         // namespaces were iterated.
         std::string fatal_lowering_error;
-        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root_ns, *qpgm, aotPreserveDebugCalls(opt_level, *qpgm),
+                ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), nullptr, false, nullptr, nullptr,
@@ -29498,7 +29521,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     }
 
     std::string fatal_lowering_error;
-    compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
+    compileNamespaceFunctions(root_ns, qpgm, aotPreserveDebugCalls(opt_level, qpgm), ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
         failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
         /*compile_module=*/nullptr, /*compile_file=*/target_canon.c_str(),
@@ -30881,6 +30904,7 @@ bool QoreAOT::compileScriptFilesBatch(
     }
     deps_done = std::chrono::steady_clock::now();
 
+    const bool preserve_debug_calls = aotPreserveDebugCalls(opt_level, *qpgm);
     // Discover fast-entry ABIs once across the shared parse.  Each per-file
     // object receives declarations for this immutable map, while its normal
     // source filter still emits only that file's definitions.
@@ -30895,7 +30919,7 @@ bool QoreAOT::compileScriptFilesBatch(
     if (!sibling_preload.fast_entries.empty()
             && !q_env_is_set("QORE_DISABLE_AOT_CROSS_FILE_FAST_ENTRIES")) {
         qore_ns_private* preload_root_ns = qore_ns_private::get(*batch_pp->RootNS);
-        if (!addAOTPreloadedFastEntries(preload_root_ns,
+        if (!addAOTPreloadedFastEntries(preload_root_ns, preserve_debug_calls,
                 sibling_preload.fast_entries, shared_batch_callees)) {
             error = "operation cancelled during preloaded AOT fast-entry import";
             return false;
@@ -30920,7 +30944,7 @@ bool QoreAOT::compileScriptFilesBatch(
             discovery_ctx);
         std::set<std::string> declared_fast_keys;
         qore_ns_private* root_ns = qore_ns_private::get(*batch_pp->RootNS);
-        if (!declareAOTBatchFastEntries(root_ns, *qpgm, discovery_ctx,
+        if (!declareAOTBatchFastEntries(root_ns, *qpgm, preserve_debug_calls, discovery_ctx,
                 discovery_module, shared_batch_callees, declared_fast_keys,
                 nullptr, nullptr, nullptr, &batch_target_files)) {
             error = "operation cancelled during AOT batch fast-entry discovery";
@@ -31501,7 +31525,8 @@ bool QoreAOT::compileScriptAggregate(
         register_native_inputs, include_source);
     if (!declaration_only) {
         std::string fatal_lowering_error;
-        compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root_ns, qpgm, aotPreserveDebugCalls(opt_level, qpgm),
+                ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             /*compile_module=*/nullptr, /*compile_file=*/nullptr,
@@ -32170,6 +32195,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
+    const bool preserve_debug_calls = aotPreserveDebugCalls(opt_level, *qpgm);
     std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>
         standalone_batch_callees;
     {
@@ -32177,7 +32203,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         llvm::Module discovery_module("qore_aot_standalone_fast_entry_discovery",
             discovery_ctx);
         std::set<std::string> declared_fast_keys;
-        if (!declareAOTBatchFastEntries(root_ns, *qpgm, discovery_ctx,
+        if (!declareAOTBatchFastEntries(root_ns, *qpgm, preserve_debug_calls, discovery_ctx,
                 discovery_module, standalone_batch_callees, declared_fast_keys,
                 nullptr, target_canon.c_str(), nullptr, nullptr)) {
             error = "operation cancelled during standalone AOT fast-entry discovery";
@@ -32185,7 +32211,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
     }
     if (!sibling_fast_entries.empty()
-            && !addAOTPreloadedFastEntries(root_ns, sibling_fast_entries,
+            && !addAOTPreloadedFastEntries(root_ns, preserve_debug_calls, sibling_fast_entries,
                 standalone_batch_callees)) {
         error = "operation cancelled during preloaded AOT fast-entry import";
         return false;
@@ -32216,7 +32242,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 qore_aot_set_body_contract_dep_sink(nullptr);
             }
         } body_dep_guard(&body_contract_dependencies);
-        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder,
+        compileNamespaceFunctions(root_ns, *qpgm, preserve_debug_calls, ctx, *module, di_builder,
             di_cu, compiled_funcs, compiled_init_funcs, total_funcs,
             compiled_count, failed_count, total_ir_insts_all,
             &const_reverse_map, nullptr, /*compile_module=*/nullptr,
@@ -32811,7 +32837,8 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         // Compile only items whose declaration location matches the
         // target file (per-file filter, slice 4).
         std::string fatal_lowering_error;
-        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root_ns, *qpgm, aotPreserveDebugCalls(opt_level, *qpgm),
+                ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), target_canon.c_str(), false, nullptr, nullptr,
@@ -33340,7 +33367,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         // metadata_only=true — only external declarations go into the
         // glue module; actual bodies come from input .qo's at link time.
         std::string fatal_lowering_error;
-        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root_ns, *qpgm, aotPreserveDebugCalls(opt_level, *qpgm),
+                ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), /*compile_file=*/nullptr,
@@ -33914,7 +33942,8 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
         std::string fatal_lowering_error;
-        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compileNamespaceFunctions(root_ns, *qpgm, aotPreserveDebugCalls(opt_level, *qpgm),
+                ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), /*compile_file=*/nullptr,
@@ -38142,23 +38171,16 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 : (target && target->method ? target->method : mc->getMethod());
             const char* fallback_name = target && target->fallback_method_name
                 ? target->fallback_method_name : mc->getName();
-            id.ref2 = method ? method->getName() : (fallback_name ? fallback_name : "");
             const AbstractQoreFunctionVariant* variant = force_name_dispatch
                 ? (record_parse_target ? mc->getVariant() : nullptr)
                 : (target && target->variant ? target->variant : mc->getVariant());
-            if (variant) {
-                if (AbstractFunctionSignature* sig = variant->getSignature()) {
-                    const QoreClass* variant_class = variant->getClass();
-                    id.ref2.append("\n");
-                    id.ref2.append(qore_aot_encode_class_ref(variant_class, is_pseudo));
-                    id.ref2.append("\n");
-                    id.ref2.append(sig->getSignatureText());
-                }
-            }
+            id.ref2 = qore_aot_dot_method_ref(method ? method->getName() : fallback_name, method, variant, is_pseudo);
             // the explicit type arguments of the call (obj.method<T>()): the target has no expression node to hold them
             qore_aot_append_call_type_args(id.ref2, mc->getExplicitTypeParamInstantiation());
-            id.flags = (is_pseudo ? QORE_AOT_DOT_EVAL_TARGET_PSEUDO : 0)
-                | (force_name_dispatch ? QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH : 0);
+            id.flags = qore_aot_dot_target_flags(method, is_pseudo, force_name_dispatch);
+            if (method) {
+                id.ref3 = qore_aot_encode_class_ref(method->getClass(), is_pseudo);
+            }
             return id;
         }
     }

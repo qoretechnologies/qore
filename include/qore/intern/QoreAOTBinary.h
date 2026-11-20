@@ -2771,12 +2771,24 @@ bool readEmbeddedSource(const uint8_t* data, uint32_t size, const char*& source,
 
 // ---- Slot Map Serialization (Phase 5) ----
 
-//! Expression identity kinds for serialized slot maps
 //! AOTExprKind::DOT_EVAL_TARGET flag: a pseudo-method call
 constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_PSEUDO = (1 << 0);
 //! AOTExprKind::DOT_EVAL_TARGET flag: the call is dispatched by name; the class, method and variant recorded are those
 //! resolved at parse time, used only by the check of the call's target (issue #5824)
 constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH = (1 << 1);
+//! AO v51 (#6805): kind 35 and direct/invoke instruction groups 14/15 store the parsed method family here.
+//! A bound family appends its declaring-class StringRef even when overload selection is deferred.
+//! The name-dispatch bit belongs only to slot records for the separate CheckCallTarget operation.
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_INSTANCE = 0x04;
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_STATIC = 0x08;
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_FAMILY = 0x0c;
+
+inline bool qore_aot_valid_dot_target_flags(uint8_t flags, bool slot) {
+    const uint8_t allowed = QORE_AOT_DOT_EVAL_TARGET_PSEUDO | QORE_AOT_DOT_EVAL_TARGET_FAMILY
+        | (slot ? QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH : 0);
+    return !(flags & ~allowed) && (flags & QORE_AOT_DOT_EVAL_TARGET_FAMILY) != QORE_AOT_DOT_EVAL_TARGET_FAMILY;
+}
+
 
 enum class AOTExprKind : uint8_t {
     UNSUPPORTED        = 0,   //!< Compile-time-only invalid marker; never serialized in new AOT output
@@ -2815,7 +2827,7 @@ enum class AOTExprKind : uint8_t {
     CONST_NOTHING      = 32,  //!< Nothing constant: no data
     LIST_LITERAL       = 33,  //!< List literal: count(u8) + [value(AOTExprKind)] * N
     CONST_NULL         = 34,  //!< NULL constant: no data
-    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name[\nvariant_class\nvariant_sig], flags=QORE_AOT_DOT_EVAL_TARGET_*
+    DOT_EVAL_TARGET    = 35,  //!< Receiver class, encoded method, flags, and declaring class when bound
     FUNC_CALL_REF      = 36,  //!< Function call reference (\func): ref1=function_name
     BOUND_METHOD_REF   = 37,  //!< Bound method reference (\method): ref1=class_path, ref2=method_name
     STATIC_METHOD_REF  = 38,  //!< Static method reference (\Class::method): ref1=class_path, ref2=method_name
@@ -3167,7 +3179,7 @@ struct AOTExprSlotId {
     AOTExprKind kind = AOTExprKind::UNSUPPORTED; //!< expression kind; UNSUPPORTED is compile-time-only
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
-    std::string ref3;        //!< kind-specific: instantiated object type path for NEW_OBJECT
+    std::string ref3;        //!< instantiated type for NEW_OBJECT or declaring class for a bound DOT_EVAL_TARGET
     uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: QORE_AOT_DOT_EVAL_TARGET_*)
     QoreAOTCallRelocationTargetKind call_relocation_kind = QoreAOTCallRelocationTargetKind::NONE;
     std::string reloc_qore_path; //!< canonical symbol-index path for safe direct-call relocation

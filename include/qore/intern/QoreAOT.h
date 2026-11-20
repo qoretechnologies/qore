@@ -290,6 +290,25 @@ class FunctionCallBase;
 class QoreAOTBinaryWriter;
 class QoreAOTBinaryReader;
 
+//! Common identity of inline and slot DOT_EVAL_TARGET records. The declaration can be bound before overload selection.
+struct QoreAOTDotTarget {
+    std::string name;
+    std::string type_args;
+    QoreAOTNamedCallArgs named;
+    const QoreClass* receiver = nullptr;
+    const QoreMethod* method = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    uint8_t flags = 0;
+};
+
+DLLLOCAL std::string qore_aot_dot_method_ref(const char* name, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, bool pseudo);
+DLLLOCAL uint8_t qore_aot_dot_target_flags(const QoreMethod* method, bool pseudo, bool name_dispatch);
+DLLLOCAL void qore_aot_write_dot_target_family(QoreAOTBinaryWriter& writer, const QoreMethod* method, bool pseudo);
+bool qore_aot_read_dot_target(const QoreAOTBinaryReader& reader, const uint8_t*& ptr, const uint8_t* end,
+    QoreProgram* pgm, bool slot, QoreAOTDotTarget& target, std::string& error);
+
+
 //! writes the names of the arguments of a named call reference call (AOTExprKind::CALLREF_CALL_NAMED): u8 count, then
 //! a string ref per name; returns false if there are more than 255
 DLLLOCAL bool qore_aot_write_callref_arg_names(QoreAOTBinaryWriter& writer, const name_vec_t& names);

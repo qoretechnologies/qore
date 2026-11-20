@@ -29,6 +29,7 @@
     information.
 */
 
+#include "qore/intern/BarewordNode.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreIR.h"
 
@@ -3415,6 +3416,35 @@ std::string qore_aot_get_function_call_signature_ref(const FunctionCallNode* cal
     // the explicit type arguments of the call (f<T>()), which serialized IR also carries (qore#5865)
     qore_aot_append_call_type_args(rv, call->getExplicitTypeParamInstantiation());
     return rv;
+}
+
+std::string qore_aot_dot_method_ref(const char* name, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, bool pseudo) {
+    std::string ref(name ? name : "");
+    // A variant used only to check arguments (e.g. a named call through *Class) does not bind a dynamic call.
+    if (method && variant) {
+        if (const AbstractFunctionSignature* sig = variant->getSignature()) {
+            ref += "\n";
+            ref += qore_aot_encode_class_ref(variant->getClass(), pseudo);
+            ref += "\n";
+            ref += sig->getSignatureText();
+        }
+    }
+    return ref;
+}
+
+uint8_t qore_aot_dot_target_flags(const QoreMethod* method, bool pseudo, bool name_dispatch) {
+    const uint8_t family = !method ? 0
+        : (method->isStatic() ? QORE_AOT_DOT_EVAL_TARGET_STATIC : QORE_AOT_DOT_EVAL_TARGET_INSTANCE);
+    return family | (pseudo ? QORE_AOT_DOT_EVAL_TARGET_PSEUDO : 0)
+        | (name_dispatch ? QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH : 0);
+}
+
+void qore_aot_write_dot_target_family(QoreAOTBinaryWriter& writer, const QoreMethod* method, bool pseudo) {
+    writer.writeU8(qore_aot_dot_target_flags(method, pseudo, false));
+    if (method) {
+        writer.writeStringRef(qore_aot_encode_class_ref(method->getClass(), pseudo).c_str());
+    }
 }
 
 const char* qore_aot_find_call_type_args(const char* ref) {
@@ -14674,23 +14704,15 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
             // so that the node read back is the node parsed: the messages of a call on an object that has been
             // deleted name the variant (issue #5823), and the explicit type arguments of the call (obj.method<T>()),
             // which come last (qore#5865)
-            std::string method_ref = mc->getName() ? mc->getName() : "";
-            if (const AbstractQoreFunctionVariant* variant = mc->getVariant()) {
-                if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(variant)
-                        ->getSignature()) {
-                    method_ref += "\n";
-                    method_ref += qore_aot_encode_class_ref(variant->getClass(), mc->isPseudo());
-                    method_ref += "\n";
-                    method_ref += sig->getSignatureText();
-                }
-            }
+            std::string method_ref = qore_aot_dot_method_ref(mc->getName(), mc->getMethod(), mc->getVariant(),
+                mc->isPseudo());
             qore_aot_append_call_type_args(method_ref, mc->getExplicitTypeParamInstantiation());
             // the arguments are written in source order (the order of their evaluation): a named call keeps the
             // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
             // name) first (read by read_expr_dot_eval_target())
             method_ref.insert(0, qore_aot_named_call_arg_prefix(mc));
             writer.writeStringRef(method_ref.c_str());
-            writer.writeU8(mc->isPseudo() ? 1 : 0);
+            qore_aot_write_dot_target_family(writer, mc->getMethod(), mc->isPseudo());
             // Target expression (left-hand side of the dot)
             if (!classifyAndWriteExpr(writer, de->getExpression(),
                     parent_locals, parent_globals, const_reverse_map)) {
@@ -20179,6 +20201,16 @@ static bool skipAOTVariantSignature(const QoreAOTBinaryReader& reader,
     return true;
 }
 
+//! Keeps the source spelling of a deferred expression default until its AST is restored.
+/** During registration the method can already be identified by its signature. A scalar placeholder would cache
+    that scalar in the signature text and prevent a reference to the original overload from resolving.
+    BarewordNode contributes its text verbatim, just as for a default still being parsed. The fixup owns its
+    replacement and runs before calls can evaluate the default.
+*/
+static QoreValue aotDeferredExpressionDefault() {
+    return QoreValue(new BarewordNode(&loc_builtin, strdup("<exp>")));
+}
+
 //! Helper: read a variant signature and set up the UserSignature from AOT metadata
 static bool readAndSetupVariantSignature(
         const QoreAOTBinaryReader& reader,
@@ -20410,7 +20442,7 @@ static bool readAndSetupVariantSignature(
                 // Use a non-NOTHING placeholder so hasDefaultArg(j) reports true and
                 // min_param_types counts this param as optional; the fixup pass replaces
                 // it with the deserialized tree before any call can execute.
-                param_defaults[j] = QoreValue(true);
+                param_defaults[j] = aotDeferredExpressionDefault();
             }
         } else if (has_default == 2) {
             // Expression default: no-arg function call (e.g., getcwd()).
@@ -20446,7 +20478,7 @@ static bool readAndSetupVariantSignature(
                 // Non-NOTHING placeholder so hasDefaultArg(j) reports true and
                 // min_param_types counts this param as optional; the fixup pass
                 // replaces it with the resolved call before any call can execute.
-                param_defaults[j] = QoreValue(true);
+                param_defaults[j] = aotDeferredExpressionDefault();
             } else {
                 // Never substitute a placeholder value here: the parameter's declared
                 // type is unrelated to the placeholder, so a silent substitution
@@ -20556,7 +20588,7 @@ static bool readAndSetupVariantSignature(
                     // optional. The fixup pass after commitDeserializedClasses
                     // replaces this with the resolved StaticMethodCallNode
                     // before any call can execute.
-                    param_defaults[j] = QoreValue(true);
+                    param_defaults[j] = aotDeferredExpressionDefault();
                 } else {
                     error = "cannot resolve default static method '";
                     error += qoreAOTDescribeClassRef(class_path);

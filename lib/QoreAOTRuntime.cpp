@@ -2162,32 +2162,6 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
     @param num_globals number of entries in globals
     @return reconstructed expression, or NOTHING on failure
 */
-//! Resolve a pseudo-class by its serialized path (e.g. "::Qore::<value>")
-//! Pseudo-classes are not in the normal namespace hierarchy, so runtimeFindClass
-//! cannot find them.  This helper iterates the pseudo-class table and matches by path.
-static const QoreClass* findPseudoClassByPath(const char* path) {
-    if (!path || !*path) {
-        return nullptr;
-    }
-    // Check base types NT_NOTHING(0) through NT_NUMBER(11)
-    for (qore_type_t t = 0; t <= NT_NUMBER; ++t) {
-        const QoreClass* pc = qore_pseudo_get_class(t);
-        if (pc && !strcmp(pc->getPath(), path)) {
-            return pc;
-        }
-    }
-    // Check funcref and closure pseudo-classes
-    const QoreClass* pc = qore_pseudo_get_class(NT_FUNCREF);
-    if (pc && !strcmp(pc->getPath(), path)) {
-        return pc;
-    }
-    pc = qore_pseudo_get_class(NT_RUNTIME_CLOSURE);
-    if (pc && !strcmp(pc->getPath(), path)) {
-        return pc;
-    }
-    return nullptr;
-}
-
 static constexpr const char* AOT_RUNTIME_CLASS_REF_MODULE_PREFIX = "@qore-module:";
 static constexpr size_t AOT_RUNTIME_CLASS_REF_MODULE_PREFIX_LEN = 13;
 
@@ -2334,7 +2308,7 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
         qc = resolveAOTBareClassRefByNamespacePriority(pgm, class_path);
     }
     if (!qc && pseudo) {
-        qc = findPseudoClassByPath(class_path);
+        qc = qore_pseudo_find_class_by_path(class_path);
     }
     if (!qc) {
         const char* req_path = class_path;
@@ -2774,6 +2748,78 @@ static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
         method = variant_method;
     }
     return variant;
+}
+
+bool qore_aot_read_dot_target(const QoreAOTBinaryReader& reader, const uint8_t*& ptr, const uint8_t* end,
+        QoreProgram* pgm, bool slot, QoreAOTDotTarget& target, std::string& error) {
+    if (ptr > end || end - ptr < 9) {
+        error = "truncated DOT_EVAL_TARGET identity";
+        return false;
+    }
+    const char* receiver = reader.readStringRef(ptr);
+    const char* encoded = reader.readStringRef(ptr);
+    target.flags = reader.readU8(ptr);
+    if (!receiver || !encoded || !qore_aot_valid_dot_target_flags(target.flags, slot)) {
+        error = "invalid DOT_EVAL_TARGET identity or flags";
+        return false;
+    }
+    const uint8_t family = target.flags & QORE_AOT_DOT_EVAL_TARGET_FAMILY;
+    const char* owner = nullptr;
+    if (family) {
+        if (end - ptr < 4 || !(owner = reader.readStringRef(ptr)) || !*owner) {
+            error = "invalid DOT_EVAL_TARGET declaring class reference";
+            return false;
+        }
+    }
+    std::string method_text(encoded);
+    if (qore_aot_parse_named_call_arg_prefix(method_text, target.named)
+            || (slot && (target.named.has_names || target.named.has_map))) {
+        error = "invalid DOT_EVAL_TARGET parameter binding";
+        return false;
+    }
+    if (const char* args = qore_aot_find_call_type_args(method_text.c_str())) {
+        target.type_args = args;
+        method_text.resize(args - method_text.c_str());
+    }
+    AOTEncodedMethodRef ref(method_text.c_str());
+    target.name = ref.method_name;
+    if (target.name.empty() || (!family && ref.sig_text)) {
+        error = "invalid DOT_EVAL_TARGET method or unbound overload";
+        return false;
+    }
+    const bool pseudo = target.flags & QORE_AOT_DOT_EVAL_TARGET_PSEUDO;
+    target.receiver = *receiver ? findAOTClassByPath(pgm, receiver, pseudo) : nullptr;
+    if (!family) {
+        return true;
+    }
+    const bool is_static = family == QORE_AOT_DOT_EVAL_TARGET_STATIC;
+    const QoreClass* declaration = findAOTClassByPath(pgm, owner, pseudo);
+    ClassAccess access = Public;
+    target.method = declaration ? findAOTVariantClassLocalMethod(declaration, ref.method_name, is_static) : nullptr;
+    if (!target.receiver || !target.method
+            || (!target.receiver->inHierarchy(*declaration, access)
+                // A derived lexical class can bind its own private:internal method on a base-typed receiver.
+                && !(qore_method_private::getAccess(*target.method) == Internal
+                    && declaration->inHierarchy(*target.receiver, access)))) {
+        error = "cannot resolve DOT_EVAL_TARGET declaration " + std::string(owner) + "::" + target.name;
+        return false;
+    }
+    if (ref.sig_text) {
+        const QoreMethod* variant_method = target.method;
+        if (ref.variant_class_path) {
+            const QoreClass* variant_class = findAOTClassByPath(pgm, ref.variant_class_path, pseudo);
+            variant_method = findAOTVariantClassLocalMethod(variant_class, ref.method_name, is_static);
+        }
+        const MethodFunctionBase* variants = variant_method ? qore_method_private::get(*variant_method)->getFunction()
+            : nullptr;
+        target.variant = variants ? variants->findVariantBySignatureText(ref.sig_text) : nullptr;
+        if (!target.variant || !qore_method_private::get(*target.method)->getFunction()
+                ->findVariantOwnerFunction(target.variant)) {
+            error = "cannot resolve DOT_EVAL_TARGET overload in " + std::string(owner) + "::" + target.name;
+            return false;
+        }
+    }
+    return true;
 }
 
 const AbstractQoreFunctionVariant* qore_aot_find_method_variant(QoreProgram* pgm, const QoreMethod*& method,
@@ -4402,77 +4448,45 @@ static QoreAOTContext* buildContextFromSlotMap(
                 continue;
             }
             case AOTExprKind::DOT_EVAL_TARGET: {
-                // Dot-eval method target: resolve class/method from strings
-                // and populate call_targets directly — no AST node needed
-                ref1 = reader.readStringRef(ptr);    // class_path
-                // method_name[\nvariant_class\nvariant_signature][QORE_AOT_CALL_TYPE_ARGS_MARKER N\npath...]
-                const std::string encoded_target = reader.readStringRef(ptr);
-                const size_t target_type_arg_pos = encoded_target.rfind(QORE_AOT_CALL_TYPE_ARGS_MARKER);
-                const std::string target_method_text = target_type_arg_pos == std::string::npos
-                    ? encoded_target : encoded_target.substr(0, target_type_arg_pos);
-                AOTEncodedMethodRef method_ref(target_method_text.c_str());
-                const uint8_t target_flags = QoreAOTBinaryReader::readU8(ptr);
-                const bool is_pseudo = (target_flags & QORE_AOT_DOT_EVAL_TARGET_PSEUDO) != 0;
-                // a call dispatched by name records the method resolved at parse time only for the check of its
-                // target (issue #5824)
-                const bool name_dispatch = (target_flags & QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH) != 0;
-
-                const QoreClass* qc = findAOTClassByPath(pgm, ref1, is_pseudo);
-                const QoreMethod* method = findAOTMethodByName(qc, method_ref.method_name);
-                const AbstractQoreFunctionVariant* variant = findAOTMethodVariantByRef(
-                    pgm, method, method_ref, is_pseudo);
-                ctx->call_targets[i].check_qc = qc;
-                ctx->call_targets[i].check_method = method;
-                ctx->call_targets[i].check_variant = variant;
-                if (name_dispatch) {
-                    qc = nullptr;
-                    method = nullptr;
-                    variant = nullptr;
+                QoreAOTDotTarget target;
+                std::string error;
+                if (!qore_aot_read_dot_target(reader, ptr, end, pgm, true, target, error)) {
+                    setBuildError(error);
+                    delete ctx;
+                    return nullptr;
                 }
-                ctx->call_targets[i].method = method;
-                ctx->call_targets[i].qc = qc;
-                ctx->call_targets[i].is_pseudo = is_pseudo;
-                // Make an owned copy of the method name since the source buffer
-                // (decompressed metadata) may be freed after deserialization
-                if (method_ref.method_name && *method_ref.method_name) {
-                    ctx->owned_call_target_strings.emplace_back(method_ref.method_name);
-                    ctx->call_targets[i].method_name = ctx->owned_call_target_strings.back().c_str();
+                auto& call = ctx->call_targets[i];
+                call.check_qc = target.receiver;
+                call.check_method = target.method;
+                call.check_variant = target.variant;
+                // CheckCallTarget uses the parsed declaration even if the subsequent invocation dispatches by name.
+                if (!(target.flags & QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH)) {
+                    call.qc = target.receiver;
+                    call.method = target.method;
+                    call.variant = target.variant;
+                    if (call.method && !call.variant) {
+                        // A single local variant is the only candidate if no inherited variant can match.
+                        auto* variants = qore_method_private::get(*call.method)->getFunction();
+                        if (variants && variants->numVariants() == 1 && !variants->hasInheritedVariants()) {
+                            call.check_variant = call.variant = variants->first();
+                        }
+                    }
                 }
-                // the explicit type arguments of the call; the owner is not known before the call chooses its
-                // variant, and an instantiation without an owner applies to the variant that is called
-                if (target_type_arg_pos != std::string::npos) {
+                call.is_pseudo = target.flags & QORE_AOT_DOT_EVAL_TARGET_PSEUDO;
+                ctx->owned_call_target_strings.emplace_back(std::move(target.name));
+                call.method_name = ctx->owned_call_target_strings.back().c_str();
+                if (!target.type_args.empty()) {
                     auto inst = std::make_shared<QoreTypeParamInstantiation>();
-                    const UserSignature* target_signature = uvb ? uvb->getUserSignature() : nullptr;
-                    bool type_args_ok = qore_aot_decode_call_type_args(pgm,
-                        encoded_target.c_str() + target_type_arg_pos, nullptr, target_signature, *inst);
-                    if (!type_args_ok) {
-                        printd(0, "AOT v2: cannot resolve the explicit type arguments of method call '%s'\n",
-                            method_ref.method_name ? method_ref.method_name : "(null)");
-                        has_unsupported = true;
-                        continue;
+                    const UserSignature* signature = uvb ? uvb->getUserSignature() : nullptr;
+                    if (!qore_aot_decode_call_type_args(pgm, target.type_args.c_str(), nullptr, signature, *inst)) {
+                        setBuildError(std::string("cannot resolve type arguments of method ") + call.method_name);
+                        delete ctx;
+                        return nullptr;
                     }
                     if (!inst->type_args.empty()) {
                         ctx->owned_explicit_type_param_insts.push_back(inst);
-                        ctx->call_targets[i].explicit_type_param_instantiation = inst.get();
+                        call.explicit_type_param_instantiation = inst.get();
                     }
-                }
-                if (variant) {
-                    ctx->call_targets[i].variant = variant;
-                } else if (method && !method_ref.sig_text) {
-                    MethodFunctionBase* mfb = qore_method_private::get(
-                        *method)->getFunction();
-                    if (mfb && mfb->numVariants() == 1 && !mfb->hasInheritedVariants()) {
-                        // Resolve variant from method only when the method has exactly
-                        // ONE variant — safe fast-dispatch shortcut. For overloaded
-                        // methods, leave variant null so the runtime does proper
-                        // arg-type-based overload resolution via findVariant. Falling
-                        // back to first() is unsafe: try_dispatch_method_fast binds
-                        // caller args directly to the picked variant's signature.
-                        ctx->call_targets[i].variant = mfb->first();
-                    }
-                }
-                if (!name_dispatch) {
-                    ctx->call_targets[i].check_variant = ctx->call_targets[i].variant;
                 }
                 // Store NOTHING in exprs — slot-based dispatch uses call_targets
                 ctx->exprs[i] = toBitsNB(QoreValue());

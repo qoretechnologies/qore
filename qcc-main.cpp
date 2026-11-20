@@ -2956,9 +2956,14 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         }
 
         case AOTExprKind::DOT_EVAL_TARGET: {
+            uint8_t flags;
+            const char* owner = nullptr;
             if (!dump_skip_string_ref(reader, p, end)
                     || !dump_skip_string_ref(reader, p, end)
-                    || !dump_skip_bytes(p, end, 1)) {
+                    || !dump_read_u8(p, end, flags)
+                    || !qore_aot_valid_dot_target_flags(flags, slot_form)
+                    || ((flags & QORE_AOT_DOT_EVAL_TARGET_FAMILY)
+                        && (!dump_skip_string_ref(reader, p, end, &owner) || !owner || !*owner))) {
                 return false;
             }
             if (!slot_form) {
