@@ -25076,7 +25076,14 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         }
     } else {
         // Dynamic link: use CXX compiler from config, link -lqore + system libs
+#ifdef __APPLE__
+        // libqore is linked weakly, so that dyld does not end an executable run with a libqore that lacks a symbol
+        // it imports before main() runs: qore_aot_run_v4() then refuses the executable for its AOT runtime identity,
+        // or main() reports that the library predates the check (issue #6898)
+        cmd = compiler + " -o " + output + " " + object + " -L" + libdir + " -Wl,-weak-lqore";
+#else
         cmd = compiler + " -o " + output + " " + object + " -L" + libdir + " -lqore";
+#endif
         appendAOTExecutableLinkOptions(cmd);
         if (config.emit_rpath) {
             cmd += " -Xlinker -rpath -Xlinker " + libdir;
@@ -25104,7 +25111,8 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
 
 //! Generate the LLVM IR for main() and the function registration table
 //! Generate main() and function table for AOT binary.
-/** Embeds serialized metadata blob and calls qore_aot_run_v2() from main().
+/** Embeds serialized metadata blob and calls qore_aot_run_v4() from main() with the AOT runtime identity of this
+    libqore, which the runtime checks before anything else (issue #6898).
 */
 static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
@@ -25198,10 +25206,17 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         func_table_gv = nullptr;
     }
 
-    // Declare qore_aot_run_v3 (accepts full 128-bit parse options as two i64)
+    // the AOT runtime identity of this libqore: the runtime refuses the executable if it has another one (issue #6898)
+    std::string identity = qore_aot_get_compile_runtime_identity();
+    llvm::Constant* identity_data = llvm::ConstantDataArray::getString(ctx, identity, true);
+    auto* identity_gv = new llvm::GlobalVariable(module, identity_data->getType(), true,
+        llvm::GlobalValue::PrivateLinkage, identity_data, "qore_aot_runtime_identity_str");
+
+    // Declare qore_aot_run_v4 (accepts full 128-bit parse options as two i64)
     auto* aot_run_type = llvm::FunctionType::get(i32_type, {
         i32_type,       // argc
         ptr_type,       // argv
+        ptr_type,       // identity (const char*)
         ptr_type,       // metadata (const uint8_t*)
         i32_type,       // metadata_len
         ptr_type,       // label
@@ -25210,7 +25225,11 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         ptr_type,       // functions
         i32_type        // num_functions
     }, false);
-    auto aot_run_fn = module.getOrInsertFunction("qore_aot_run_v3", aot_run_type);
+    auto aot_run_fn = module.getOrInsertFunction("qore_aot_run_v4", aot_run_type);
+    // referenced weakly: run with a libqore that predates it, main() reports the mismatch itself instead of the
+    // dynamic loader failing (libqore is linked weakly on macOS, see linkExecutable())
+    auto* aot_run_decl = llvm::cast<llvm::Function>(aot_run_fn.getCallee());
+    aot_run_decl->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
 
     // Generate main()
     auto* main_type = llvm::FunctionType::get(i32_type, {i32_type, ptr_type}, false);
@@ -25222,6 +25241,32 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
     auto arg_it = main_fn->arg_begin();
     llvm::Value* argc_val = &*arg_it++;
     llvm::Value* argv_val = &*arg_it;
+
+    {
+        auto* old_bb = llvm::BasicBlock::Create(ctx, "runtime_predates_entry", main_fn);
+        auto* run_bb = llvm::BasicBlock::Create(ctx, "run", main_fn);
+        builder.CreateCondBr(builder.CreateIsNull(aot_run_decl), old_bb, run_bb);
+
+        // the error is written with write(2): nothing of the Qore library is called
+        builder.SetInsertPoint(old_bb);
+        std::string msg = "AOT-RUNTIME-MISMATCH: the AOT-compiled program (" + std::string(qore_aot_map_source_path(
+            label)) + ") was compiled for AOT runtime identity '" + identity + "', but the Qore library it was "
+            "started with predates the AOT runtime identity check of executables (it has no qore_aot_run_v4()); its "
+            "native code was generated for a different Qore library and cannot be run with this one; rebuild it with "
+            "the qcc of this Qore installation\n";
+        llvm::Constant* msg_data = llvm::ConstantDataArray::getString(ctx, msg, false);
+        auto* msg_gv = new llvm::GlobalVariable(module, msg_data->getType(), true,
+            llvm::GlobalValue::PrivateLinkage, msg_data, "qore_aot_runtime_mismatch_msg");
+        // size_t and ssize_t: Qore targets are 64-bit only
+        auto* size_type = i64_type;
+        auto write_fn = module.getOrInsertFunction("write",
+            llvm::FunctionType::get(size_type, {i32_type, ptr_type, size_type}, false));
+        builder.CreateCall(write_fn, {builder.getInt32(2), msg_gv,
+            llvm::ConstantInt::get(size_type, msg.size())});
+        builder.CreateRet(builder.getInt32(2));
+
+        builder.SetInsertPoint(run_bb);
+    }
 
     // GEP to get pointers to metadata and label
     llvm::Value* meta_ptr = builder.CreateInBoundsGEP(
@@ -25245,6 +25290,7 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
     llvm::Value* rc = builder.CreateCall(aot_run_fn, {
         argc_val,
         argv_val,
+        identity_gv,
         meta_ptr,
         builder.getInt32(static_cast<int>(metadata.size())),
         lbl_ptr,
@@ -27106,7 +27152,7 @@ static std::string scriptBatchSourceId(const std::string& target_canon) {
       giving the descriptor count.
     - `qore_<sanapp>_<sanfile>_script_register(QoreProgram*)` —
       exported fn.  Thin wrapper around
-      `qore_aot_script_register(pgm, blob, len, label, funcs, n)`
+      `qore_aot_script_register_v2(identity, pgm, blob, len, label, funcs, n)`
       using this file's own metadata blob + func table.  Called
       once per file by the host's `main()` (or slice 10d's
       glue-generated `qore_app_register_all`).
@@ -27201,13 +27247,18 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
         prefix_public + "_script_num_funcs");
     count_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
 
-    // Declare qore_aot_script_register bridge.
+    // Declare the qore_aot_script_register_v2() bridges, which take the AOT runtime identity of this libqore first:
+    // the runtime refuses the object if it has another one (issue #6898)
     auto* bridge_fn_type = llvm::FunctionType::get(i32_type,
-        {ptr_type, ptr_type, i32_type, ptr_type, ptr_type, i32_type}, false);
-    auto bridge_fn = module.getOrInsertFunction("qore_aot_script_register",
+        {ptr_type, ptr_type, ptr_type, i32_type, ptr_type, ptr_type, i32_type}, false);
+    auto bridge_fn = module.getOrInsertFunction("qore_aot_script_register_v2",
         bridge_fn_type);
-    auto native_bridge_fn = module.getOrInsertFunction("qore_aot_script_register_native",
+    auto native_bridge_fn = module.getOrInsertFunction("qore_aot_script_register_native_v2",
         bridge_fn_type);
+    llvm::Constant* identity_data = llvm::ConstantDataArray::getString(ctx, qore_aot_get_compile_runtime_identity(),
+        true);
+    auto* identity_gv = new llvm::GlobalVariable(module, identity_data->getType(), true,
+        llvm::GlobalValue::PrivateLinkage, identity_data, "qore_aot_script_runtime_identity_" + file_basename_san);
 
     // Private label string for diagnostics.
     auto* label_data = llvm::ConstantDataArray::getString(ctx,
@@ -27241,6 +27292,7 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
     }
 
     builder.CreateCall(bridge_fn, {
+        identity_gv,
         pgm_arg,
         blob_ptr,
         builder.getInt32(static_cast<int>(blob_size)),
@@ -27294,6 +27346,7 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
                 llvm::cast<llvm::PointerType>(ptr_type));
         }
         native_builder.CreateCall(native_bridge_fn, {
+            identity_gv,
             native_pgm_arg,
             native_blob_ptr,
             native_builder.getInt32(static_cast<int>(blob_size)),

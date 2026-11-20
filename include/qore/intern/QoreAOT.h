@@ -741,20 +741,12 @@ inline bool qore_aot_func_has_closure_context(const QoreAOTFunc& func) {
     return static_cast<uint32_t>(func.num_regex_cases) & QORE_AOT_FUNC_HAS_CLOSURE_CONTEXT;
 }
 
-//! C ABI entry point called by AOT-compiled binaries from their generated main()
-/** Initializes the Qore runtime, re-parses the embedded source to build the AST/type system,
-    registers pre-compiled function pointers, and runs the program.
-    Functions without pre-compiled pointers fall back to runtime JIT compilation.
+//! The C ABI entry point of the generated main() of executables compiled by the first qcc versions
+/** Refuses the executable: it was compiled before the AOT runtime identity check of executables (issue #6898), so its
+    native code was generated for a different Qore library (see qore_aot_run_v4())
 
-    @param argc command-line argument count
-    @param argv command-line argument vector
-    @param source embedded Qore source text
-    @param source_len length of source text in bytes
     @param label label for the source (e.g. script filename)
-    @param parse_options parse options used during original compilation
-    @param functions array of pre-compiled function descriptors
-    @param num_functions number of entries in functions array
-    @return exit code (0 = success)
+    @return 2
 */
 extern "C" int qore_aot_run(
     int argc, char** argv,
@@ -764,20 +756,12 @@ extern "C" int qore_aot_run(
     const QoreAOTFunc* functions, int num_functions
 );
 
-//! C ABI entry point called by source-stripped AOT binaries from their generated main()
-/** Deserializes binary metadata to reconstruct the namespace tree (instead of re-parsing
-    source), builds AOT contexts from slot maps, and runs the program.
-    Functions with unsupported expression types are rejected during AOT compilation.
+//! The C ABI entry point of the generated main() of executables compiled before the 128-bit parse options
+/** Refuses the executable: it was compiled before the AOT runtime identity check of executables (issue #6898), so its
+    native code was generated for a different Qore library (see qore_aot_run_v4())
 
-    @param argc command-line argument count
-    @param argv command-line argument vector
-    @param metadata serialized binary metadata blob
-    @param metadata_len length of metadata blob in bytes
     @param label label for the source (e.g. script filename)
-    @param parse_options parse options used during original compilation
-    @param functions array of pre-compiled function descriptors
-    @param num_functions number of entries in functions array
-    @return exit code (0 = success)
+    @return 2
 */
 extern "C" int qore_aot_run_v2(
     int argc, char** argv,
@@ -823,8 +807,12 @@ extern "C" QoreStringNode* qore_aot_module_init_v2(
     const QoreAOTFunc* functions, int num_functions
 );
 
-//! C ABI entry point called by source-stripped AOT binaries from their generated main() (v3 - full 128-bit parse_options)
-/** Like qore_aot_run_v2, but accepts full 128-bit parse options as two int64_t values.
+//! The C ABI entry point of the generated main() of executables compiled before the AOT runtime identity check
+/** Refuses the executable: such an executable records a different AOT runtime identity than this runtime, whose
+    sources include this entry point (issue #6898; see qore_aot_run_v4())
+
+    @param label label for the source (e.g. script filename)
+    @return 2
 */
 extern "C" int qore_aot_run_v3(
     int argc, char** argv,
@@ -833,6 +821,63 @@ extern "C" int qore_aot_run_v3(
     int64_t parse_options_lo, int64_t parse_options_hi,
     const QoreAOTFunc* functions, int num_functions
 );
+
+//! C ABI entry point called by qcc-compiled executables from their generated main()
+/** Checks the AOT runtime identity that the executable was compiled for before anything else: an executable compiled
+    by a qcc whose libqore has another identity is refused with an \c AOT-RUNTIME-MISMATCH error on stderr naming both
+    identities and exit code 2, before the runtime is initialized and before anything of its image is read or any of
+    its native code runs, as an AOT module is refused when it is loaded (issue #6898; see
+    design/aot-object-files-and-module-artifacts.md "AOT Module Runtime Identity").  Otherwise it deserializes the
+    binary metadata to reconstruct the namespace tree, builds AOT contexts from slot maps, and runs the program.
+
+    The generated main() references this function weakly: run with a libqore that predates it, main() reports the
+    mismatch itself.
+
+    @param argc command-line argument count
+    @param argv command-line argument vector
+    @param identity the AOT runtime identity of the libqore of the qcc that compiled the executable
+    @param metadata serialized binary metadata blob
+    @param metadata_len length of metadata blob in bytes
+    @param label label for the source (e.g. script filename)
+    @param parse_options_lo the low 64 bits of the parse options used during original compilation
+    @param parse_options_hi the high 64 bits of the parse options used during original compilation
+    @param functions array of pre-compiled function descriptors
+    @param num_functions number of entries in functions array
+    @return exit code (0 = success)
+*/
+extern "C" DLLEXPORT int qore_aot_run_v4(
+    int argc, char** argv,
+    const char* identity,
+    const uint8_t* metadata, int metadata_len,
+    const char* label,
+    int64_t parse_options_lo, int64_t parse_options_hi,
+    const QoreAOTFunc* functions, int num_functions
+);
+
+//! Registers a script object (a script-context \c .qo) into a Program; called by the native code of the object
+/** Like qore_aot_script_register(), but checks the AOT runtime identity that the object was compiled for first: an
+    object compiled by a qcc whose libqore has another identity is refused with an \c AOT-RUNTIME-MISMATCH error on
+    stderr before anything of it is read or registered, and an active batch of the Program then fails in
+    qore_aot_script_end_batch() before anything of the batch runs (issue #6898)
+
+    @param identity the AOT runtime identity of the libqore of the qcc that compiled the object
+
+    @return 0 on success, 14 if the object was refused, another non-zero value on another failure
+*/
+extern "C" DLLEXPORT int qore_aot_script_register_v2(const char* identity, QoreProgram* tpgm,
+        const uint8_t* metadata, int metadata_len, const char* label, const QoreAOTFunc* functions,
+        int num_functions);
+
+//! Registers the native code of a script object whose declarations an aggregate object registered
+/** The identity is checked as by qore_aot_script_register_v2()
+
+    @param identity the AOT runtime identity of the libqore of the qcc that compiled the object
+
+    @return 0 on success, 14 if the object was refused, another non-zero value on another failure
+*/
+extern "C" DLLEXPORT int qore_aot_script_register_native_v2(const char* identity, QoreProgram* tpgm,
+        const uint8_t* metadata, int metadata_len, const char* label, const QoreAOTFunc* functions,
+        int num_functions);
 
 //! C ABI entry point called by source-stripped AOT modules from their generated qore_module_init() (v3 - full 128-bit parse_options)
 /** Like qore_aot_module_init_v2, but accepts full 128-bit parse options as two int64_t values.

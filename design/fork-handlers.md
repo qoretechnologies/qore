@@ -222,7 +222,8 @@ that code, so it requests a quick exit from its child handler with `qore_fork_ch
     condition waker. No program is torn down there in any process. With other threads running (or from the signal
     thread, for a `SIGTERM` without a handler), it already ends with `_Exit(rc)`, without flushing.
   - The executables that `qcc` compiles call it after `qore_cleanup()` too: the runtime entry points of their
-    generated `main()` (`qore_aot_run()`, `qore_aot_run_v2()` and `qore_aot_run_v3()` in `QoreAOTRuntime.cpp`) and the
+    generated `main()` (`qore_aot_run_v4()` in `QoreAOTRuntime.cpp`; the older entry points only refuse their
+    executables, see design/aot-object-files-and-module-artifacts.md "AOT Module Runtime Identity") and the
     `main()` that `qcc` writes for executables linked from script objects (`qcc-main.cpp`).
   - Embedding programs that return from `main()` call it themselves after `qore_cleanup()`.
 - **What is skipped:** every `atexit()` handler and C++ static destructor, of every library and module, including the

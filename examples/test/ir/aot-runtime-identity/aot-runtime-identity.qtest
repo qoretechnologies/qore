@@ -1,0 +1,270 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks run qcc and the programs it compiles in child processes
+# test-platform: macos - AOT code generation and linking of executables and script objects, and the weak linking of libqore on macOS
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../QoreBuildTree.qm
+%requires FsUtil
+
+%exec-class AotRuntimeIdentityTest
+
+#! a qcc-compiled executable or script object compiled for another AOT runtime identity is refused before it runs
+/** The native code of an executable or script object calls the runtime with the contract of the libqore of the qcc
+    that compiled it (its AOT runtime identity).  Run with a libqore of another identity, it used to run unchecked or
+    end in the dynamic loader (issue #6898); it must be refused with an \c AOT-RUNTIME-MISMATCH error naming both
+    identities before any of its code runs, as an AOT module is (ir/AOTModuleContextPath.qtest).
+
+    qcc stamps the identity given with \c QORE_AOT_TEST_RUNTIME_IDENTITY instead of its own, which compiles an image
+    for another runtime.
+*/
+class AotRuntimeIdentityTest inherits QUnit::Test {
+    public {
+        #! the identity of another runtime
+        const OtherIdentity = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+        #! the output of the program
+        const ProgramOutput = "identity program ran: 42\n";
+
+        #! the output of the script objects
+        const ScriptOutput = "script objects ran: 42\n";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string source_root;
+        string env;
+        string dir;
+        #! the AOT runtime identity of the libqore under test
+        string identity;
+    }
+
+    constructor() : QUnit::Test("AOT runtime identity of executables and script objects", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        source_root = realpath(get_script_dir() + "/../../../..");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_INCLUDE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, source_root + "/include");
+        dir = get_script_dir();
+        addTestCase("executable", \executableTest());
+        addTestCase("script objects", \scriptObjectTest());
+        addTestCase("script aggregate with native registers", \scriptAggregateTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        int rc;
+        string out = backquote(sprintf("%s %s --version 2>&1", env, qcc_bin), \rc);
+        assertEq(0, rc, out);
+        *list<*string> m = (out =~ x/AOT runtime identity: ([0-9a-f]{64})/);
+        assertEq(1, m.size(), "qcc --version names the AOT runtime identity: " + out);
+        identity = m[0];
+        assertNeq(OtherIdentity, identity);
+    }
+
+    #! an executable compiled for another identity is refused before the runtime is initialized
+    executableTest() {
+        TmpDir tmp("aot-runtime-identity-exe-");
+        string src = realpath(dir + "/aot-runtime-identity.q");
+
+        # compiled for this runtime, it runs
+        hash<auto> r = compileAndRun(tmp.path + "/same", src, "");
+        assertEq(0, r.rc, r.out);
+        assertEq(ProgramOutput, r.out);
+
+        # compiled for another runtime, it is refused
+        r = compileAndRun(tmp.path + "/other", src, "QORE_AOT_TEST_RUNTIME_IDENTITY=" + OtherIdentity);
+        assertEq(2, r.rc, "refused with exit code 2, not ended by a signal: " + r.out);
+        assertEq(sprintf("AOT-RUNTIME-MISMATCH: the AOT-compiled program (%s) was compiled for AOT runtime identity "
+            "'%s', but this Qore runtime (libqore %s) has AOT runtime identity '%s'; its native code was generated "
+            "for a different Qore library and cannot be run with this one; rebuild it with the qcc of this Qore "
+            "installation\n", src, OtherIdentity, Qore::VersionString, identity), r.out);
+    }
+
+    #! a script object compiled for another identity is refused, and the batch of its program fails before it runs
+    scriptObjectTest() {
+        TmpDir tmp("aot-runtime-identity-qo-");
+        string provider = tmp.path + "/identity_provider.qr";
+        string consumer = tmp.path + "/identity_consumer.qr";
+        write(provider, "%modern
+int sub identity_value() {
+    return 42;
+}
+");
+        # each object is compiled on its own: the consumer calls the provider's function by name
+        write(consumer, "%modern
+int sub main() {
+    printf(\"script objects ran: %d\\n\", call_function(\"identity_value\"));
+    return 0;
+}
+");
+        string provider_qo = tmp.path + "/identity_provider.qo";
+        string consumer_qo = tmp.path + "/identity_consumer.qo";
+        string exe = tmp.path + "/identity_objects";
+
+        # compiled for this runtime, the objects run
+        compileObject(provider_qo, provider, "");
+        compileObject(consumer_qo, consumer, "");
+        hash<auto> r = linkAndRun(exe, (provider_qo, consumer_qo));
+        assertEq(0, r.rc, r.out);
+        assertEq(ScriptOutput, r.out);
+
+        # the provider compiled for another runtime is refused, and nothing of the program runs
+        compileObject(provider_qo, provider, "QORE_AOT_TEST_RUNTIME_IDENTITY=" + OtherIdentity);
+        r = linkAndRun(exe, (provider_qo, consumer_qo));
+        assertEq(1, r.rc, "the program fails, not ended by a signal: " + r.out);
+        assertTrue(r.out.find(sprintf("AOT-RUNTIME-MISMATCH: the AOT-compiled script object (%s) was compiled for "
+            "AOT runtime identity '%s', but this Qore runtime (libqore %s) has AOT runtime identity '%s'; its native "
+            "code was generated for a different Qore library and cannot be run with this one; rebuild it with the "
+            "qcc of this Qore installation\n", "identity_provider", OtherIdentity, Qore::VersionString, identity))
+            >= 0, r.out);
+        assertEq(1, (r.out =~ x/(AOT-RUNTIME-MISMATCH)/g).size(), "only the provider is refused: " + r.out);
+        assertFalse(r.out.find("script objects ran") >= 0, r.out);
+    }
+
+    #! the objects of a script aggregate with native registers compiled for another identity are refused
+    /** The aggregate registers the declarations (qore_aot_script_register_v2()) and calls the native registers of the
+        per-source objects (qore_aot_script_register_native_v2())
+    */
+    scriptAggregateTest() {
+        TmpDir tmp("aot-runtime-identity-agg-");
+        string qo_dir = tmp.path + "/qo";
+        mkdir(qo_dir);
+        string provider = tmp.path + "/agg_provider.qr";
+        string consumer = tmp.path + "/agg_consumer.qr";
+        write(provider, "%modern
+int sub agg_value() {
+    return 42;
+}
+");
+        write(consumer, "%modern
+int sub main() {
+    printf(\"script objects ran: %d\\n\", agg_value());
+    return 0;
+}
+");
+        string glue = tmp.path + "/host.cpp";
+        write(glue, "#include <qore/Qore.h>
+#include <qore/QoreAOT.h>
+#include <stdio.h>
+
+extern \"C\" void init_IDENTITY_AGG_qo(QoreProgram*);
+
+int main(int, char**) {
+    qore_init(QL_GPL, \"UTF-8\", true);
+    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
+    if (!pgm) {
+        qore_cleanup();
+        return 1;
+    }
+    qore_aot_script_begin_batch(pgm);
+    init_IDENTITY_AGG_qo(pgm);
+    int rc = qore_aot_script_end_batch(pgm);
+    if (!rc) {
+        rc = qore_run_callable(pgm, \"main\", NULL);
+    } else {
+        fprintf(stderr, \"batch rc=%d\\n\", rc);
+    }
+    qore_destroy_program(pgm);
+    qore_cleanup();
+    return rc ? 1 : 0;
+}
+");
+        string aggregate = tmp.path + "/identity-aggregate.qo";
+        string exe = tmp.path + "/identity-aggregate";
+        foreach bool other in ((False, True)) {
+            int rc;
+            string out = backquote(sprintf("%s%s %s -c --output-dir=%s --batch-script-aggregate=IDENTITY_AGG "
+                "--batch-script-aggregate-output=%s --script-aggregate-native-registers %s %s 2>&1",
+                other ? "QORE_AOT_TEST_RUNTIME_IDENTITY=" + OtherIdentity + " " : "", env, qcc_bin, qo_dir,
+                aggregate, provider, consumer), \rc);
+            assertEq(0, rc, "qcc: " + out);
+            assertTrue(is_file(aggregate), "qcc wrote the aggregate: " + out);
+
+            string cxx = ENV.CXX ?? "g++";
+            out = backquote(sprintf("%s %s -std=c++17 -I%s -I%s %s %s/*.qo %s -L%s -Wl,-rpath,%s -lqore -o %s %s "
+                "2>&1", env, cxx, source_root + "/include", libqore_dir + "/include", glue, qo_dir, aggregate,
+                libqore_dir, libqore_dir, exe, libqoreTargetFlags(libqore_dir).join(" ")), \rc);
+            assertEq(0, rc, "link: " + out);
+
+            out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
+            if (!other) {
+                assertEq(0, rc, out);
+                assertEq(ScriptOutput, out);
+                continue;
+            }
+            assertEq(1, rc, "the program fails, not ended by a signal: " + out);
+            # the declarations of the aggregate (qore_aot_script_register_v2()) and the native code of both sources
+            # (qore_aot_script_register_native_v2()) are refused
+            assertTrue(out.find(sprintf("AOT-RUNTIME-MISMATCH: the AOT-compiled script object (IDENTITY_AGG) was "
+                "compiled for AOT runtime identity '%s', but this Qore runtime (libqore %s) has AOT runtime identity "
+                "'%s'", OtherIdentity, Qore::VersionString, identity)) >= 0, out);
+            foreach string name in (("agg_provider_qr", "agg_consumer_qr")) {
+                assertTrue(out.regex(sprintf("AOT-RUNTIME-MISMATCH: the AOT-compiled script object \\([^)]*%s\\) "
+                    "was compiled for AOT runtime identity '%s'", name, OtherIdentity)), name + ": " + out);
+            }
+            assertEq(3, (out =~ x/(AOT-RUNTIME-MISMATCH)/g).size(), out);
+            assertTrue(out.find("batch rc=14\n") >= 0, out);
+            assertFalse(out.find("script objects ran") >= 0, out);
+        }
+    }
+
+    #! compiles \a src to the executable \a exe with the environment prefix \a extra_env and runs it
+    /** @return a hash: \c rc: the exit code of the executable; \c out: its output (stdout and stderr)
+    */
+    private hash<auto> compileAndRun(string exe, string src, string extra_env) {
+        int rc;
+        string out = backquote(sprintf("%s %s %s -O0 -o %s %s 2>&1", extra_env, env, qcc_bin, exe, src), \rc);
+        assertEq(0, rc, "qcc: " + out);
+        assertTrue(is_file(exe), "qcc wrote the executable: " + out);
+        out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
+        return {"rc": rc, "out": out};
+    }
+
+    #! compiles the script \a src to the object \a qo with the environment prefix \a extra_env
+    private compileObject(string qo, string src, string extra_env) {
+        int rc;
+        string out = backquote(sprintf("%s %s %s -O0 -c -o %s %s 2>&1", extra_env, env, qcc_bin, qo, src), \rc);
+        assertEq(0, rc, "qcc -c: " + out);
+        assertTrue(is_file(qo), "qcc wrote the object: " + out);
+    }
+
+    #! links the objects with qcc and runs the executable
+    /** @return a hash: \c rc: the exit code of the executable; \c out: its output (stdout and stderr)
+    */
+    private hash<auto> linkAndRun(string exe, list<string> objects) {
+        int rc;
+        string out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, exe, objects.join(" ")), \rc);
+        assertEq(0, rc, "qcc link: " + out);
+        assertTrue(is_file(exe), "qcc linked the executable: " + out);
+        out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
+        return {"rc": rc, "out": out};
+    }
+
+    private static write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        f.write(body);
+        f.close();
+    }
+
+    #! The macOS deployment target libqore was built for, as compiler flags, and the sanitizer flags of libqore
+    private static list<string> libqoreTargetFlags(string lib_dir) {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return (m ? (m[0],) : ()) + QoreBuildTree::sanitizer_flags(lib_dir);
+    }
+}

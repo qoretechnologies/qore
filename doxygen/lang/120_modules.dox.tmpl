@@ -1456,6 +1456,16 @@ qcc of this Qore installation
     generated code keeps the identity, so existing compiled modules keep loading.  Ordinary binary modules written
     in C/C++ are not affected.
 
+    Executables compiled with \c qcc, and the script objects (\c "*.qo") linked into them, record the identity as
+    well and are refused the same way when they are run with a %Qore library of another identity, before any of
+    their code runs; an executable then exits with status 2, for example:
+
+    @verbatim
+AOT-RUNTIME-MISMATCH: the AOT-compiled program (/home/user/app/app.qr) was compiled for AOT runtime identity '...',
+but this Qore runtime (libqore 3.0.0) has AOT runtime identity '...'; its native code was generated for a
+different Qore library and cannot be run with this one; rebuild it with the qcc of this Qore installation
+    @endverbatim
+
     Modules built outside of the %Qore source tree with the %Qore CMake support (\c qore_user_modules() and
     \c qore_external_user_module()) recompile their AOT modules whenever \c qcc, the %Qore library or the installed
     qcc format fingerprint changes, so rebuilding such a module after installing a new %Qore library is enough.

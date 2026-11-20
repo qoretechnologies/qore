@@ -22,13 +22,12 @@ referenced image bytes, not allocated memory.
 ## Caller lifetime audit
 
 |!Caller|!Input provenance and decision
-|`qore_aot_run_v2`|Generated executable blob and descriptors: borrow if the image check succeeds; otherwise copy
-|`qore_aot_run_v3`|Generated executable blob and descriptors: same check
+|`qore_aot_run_v4`|Generated executable blob and descriptors: borrow if the image check succeeds; otherwise copy (`qore_aot_run_v2` and `qore_aot_run_v3` refuse their executables for the AOT runtime identity before reading anything, issue #6898)
 |`qore_aot_module_init_v2`|Mapped qmod or statically linked module: same check; loader keeps successful modules mapped
 |`qore_aot_module_init_v3`|Mapped qmod or statically linked module: same check
 |`runAOTModuleInitForProgram`|Deferred initializer fallback owns a shared vector snapshot: copy remains the default
 |`qore_aot_script_register_native_impl`|Linked per-file native metadata: same image check, also reached from batch processing
-|`qore_aot_script_register`|Public host API may receive a transient buffer: same image check rejects heap input
+|`qore_aot_script_register`|Public host API may receive a transient buffer: same image check rejects heap input (generated code calls `qore_aot_script_register_v2`, the same path after its AOT runtime identity check)
 |`qore_aot_script_end_batch`|Deferred host metadata remains valid through the batch; same image check before retaining it
 |`installSourceParseIRFallbacks` (direct constructor)|Deserializer input may be temporary `.qo`/`.qoa` or compiler storage: default copy is unchanged
 
