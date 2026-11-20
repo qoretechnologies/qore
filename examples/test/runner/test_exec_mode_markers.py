@@ -28,11 +28,14 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_watchdog import STAND_IN_VERSION, stand_in_build  # noqa: E402
 TESTS = ROOT / "examples/test"
 
 MARKER = re.compile(r"(?m)^# test-exec-mode: (?P<kind>\S+) - (?P<why>\S.*)$")
@@ -534,9 +537,10 @@ class RunnerExclusionTest(unittest.TestCase):
             (binaries / "libqore.so").touch()
             log = root / "ran"
             qore = binaries / "qore"
-            qore.write_text('#!/bin/sh\nfor a in "$@"; do case "$a" in *.qtest) basename "$a" >> "$RAN_LOG";; esac; '
-                            'done\nexit 0\n')
+            qore.write_text('#!/bin/sh\n' + STAND_IN_VERSION + 'for a in "$@"; do case "$a" in *.qtest) basename "$a" '
+                            '>> "$RAN_LOG";; esac; done\nexit 0\n')
             qore.chmod(0o755)
+            stand_in_build(root, binaries)
             env = {
                 "PATH": os.defpath,
                 "CI": "1",

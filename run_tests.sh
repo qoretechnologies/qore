@@ -61,6 +61,16 @@ print_usage () {
   echo "                           (the macOS CI job sets it): the tests whose checks depend on the platform."
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
+  echo "  QORE_TEST_ALLOW_BUILD_MISMATCH"
+  echo "                           Set to '1' to run the tests although the build does not match the tree; the run"
+  echo "                           says so.  Before anything runs, the commit that the build was made from (qore"
+  echo "                           --version's git hash) must be in the tree's repository, and the files the build is"
+  echo "                           made from (lib/, include/, qlib/, modules/, cmake/, the C and C++ sources and CMake"
+  echo "                           files) must not differ from it, unless the build, configured from this tree, is"
+  echo "                           newer than them; changes to tests are allowed.  A tree without git needs"
+  echo "                           .git-archive-revision naming the build's commit.  The qcc and the .qmod files the"
+  echo "                           tests use must come from the same build.  Otherwise the run ends with a MISMATCH"
+  echo "                           error naming both commits and the first files that differ."
   echo "  QORE_MODULE_DIR_ONLY     When set, QORE_MODULE_DIR is the complete module path: the directories of the"
   echo "                           installed modules that the build compiled its qmods against (listed by cmake in"
   echo "                           qore-external-module-dirs.txt in the build directory) are not appended to it."
@@ -612,6 +622,256 @@ elif [ "$QORE_TEST_SOURCE_MODULES" != "1" ] && [ -d "$QORE_BUILD_DIR/qlib-qmod" 
 fi
 if [ -n "$BUILD_QMOD_DIR" ]; then
     BUILD_QMOD_DIR=`cd "$BUILD_QMOD_DIR" && pwd -P`
+fi
+
+# The build must match the tree (qore#6897): the tests and the qlib sources of one tree run with the qore, libqore, qcc
+# and .qmod files of another build produced failures that looked like anything but a mismatch.  Before anything runs,
+# the commit that the build was made from (the "git hash" of qore --version, run through the qore that the tests use)
+# is compared with the tree:
+# - in a git working tree, the commit must be in the tree's repository, and the files that the build is made from
+#   (BUILD_INPUT_PATHSPECS: libqore, the programs, the modules and their CMake files; not the tests, the documentation
+#   or the scripts) must not differ between that commit and the working tree.  When the build was configured from this
+#   very tree (its CMakeCache.txt names it), a file that differs is accepted if the build is newer than it: the build
+#   then has it (an uncommitted change that was built, or a commit made after the build), while a file changed after
+#   the build (an edit or a checkout that was not built) is not.  The build's time is that of its newest file of
+#   libqore, qore, CMakeCache.txt, build.ninja, .ninja_log and Makefile, and, for a module in qlib, that of its .qmod
+#   if one is used.  A new file that git does not know of is not seen.
+# - in a tree without git (an archive), .git-archive-revision must name the commit (an archive that git makes has
+#   it, see .gitattributes), and it must be the build's;
+# - the qcc that the tests use (QCC, QORE_QCC, QORE_QCC_EXECUTABLE, the qcc next to qore, or the one in the PATH; see
+#   examples/test/TestInterpreter.qm) and the .qmod files that they load (the build's qlib-qmod or QORE_TEST_QMOD_DIR,
+#   and the build that each qlib/*.qmod symlink points into) must come from the same build: the qore next to each of
+#   them must be the qore used or name the same commit.
+# A mismatch ends the run with a MISMATCH error naming both commits and the first paths that differ, unless
+# QORE_TEST_ALLOW_BUILD_MISMATCH=1, with which the run goes on and says so.
+
+# The files that the build is made from, as git pathspecs from the root of the tree (decided from the inputs of
+# CMakeLists.txt): the tests in examples/ are not, except their C and C++ sources and CMake files (the test
+# programs, plugins and modules that CMake builds)
+BUILD_INPUT_PATHSPECS="lib include qlib modules cmake bin tools CMakeLists.txt :(glob)*.cpp :(glob)*.c :(glob)*.h
+:(glob)*.in :(glob)examples/**/*.cpp :(glob)examples/**/*.cc :(glob)examples/**/*.c :(glob)examples/**/*.h
+:(glob)examples/**/*.hpp :(glob)examples/**/*.qpp :(glob)examples/**/CMakeLists.txt :(glob)examples/**/*.cmake"
+
+# Prints the commit that the given qore was built from (its --version's "git hash"), or nothing if it names none
+build_git_hash() {
+    "$1" --version 2>/dev/null | sed -n 's/^[	 ]*git hash:[	 ]*\([0-9a-f]\{40,64\}\)[	 ]*$/\1/p' | head -1
+}
+
+# Runs git in the tree; safe.directory: a tree that another user owns (a CI job's checkout) is read all the same.
+# The commands read the build's commit and its files only, which a shallow clone of that commit has (see
+# examples/test/runner/test_ci_shallow_clone.py).
+tree_git() {
+    git -c safe.directory='*' -C "$QORE_SOURCE_DIR" "$@"
+}
+
+# Prints the physical path of the given directory, or nothing
+physical_dir() {
+    (cd "$1" 2>/dev/null && pwd -P)
+}
+
+BUILD_MISMATCH=""
+# Adds a line to the description of the mismatch
+build_mismatch() {
+    BUILD_MISMATCH="$BUILD_MISMATCH  $*
+"
+}
+
+# Checks that the qore next to the given file (qcc, or a .qmod directory: the first argument names it) is the build's,
+# or names the build's commit
+check_companion_build() {
+    companion_dir=`physical_dir "$2"`
+    if [ -n "$companion_dir" ] && [ "$companion_dir" = "$QORE_BUILD_DIR" ]; then
+        return
+    fi
+    if [ -n "$companion_dir" ] && [ -x "$companion_dir/qore" ]; then
+        companion_hash=`build_git_hash "$companion_dir/qore"`
+        if [ "$companion_hash" = "$BUILD_HASH" ]; then
+            return
+        fi
+        build_mismatch "$1 comes from the build in $companion_dir, made from commit ${companion_hash:-unknown}," \
+            "not $BUILD_HASH"
+        return
+    fi
+    build_mismatch "$1 comes from $2, which has no qore that names its commit: it cannot be told to be the build's"
+}
+
+# Prints the time reference for a changed path (see above): the .qmod used for a module in qlib, or else the newest of
+# the build's main files; nothing for a module in qlib that has no .qmod (its source is used)
+build_reference_file() {
+    case "$1" in
+        qlib/*)
+            ref_module=${1#qlib/}
+            ref_module=${ref_module%%/*}
+            ref_module=${ref_module%.qm}
+            ref_module=${ref_module%.qc}
+            if [ -n "$BUILD_QMOD_DIR" ] && [ -e "$BUILD_QMOD_DIR/$ref_module.qmod" ]; then
+                echo "$BUILD_QMOD_DIR/$ref_module.qmod"
+            elif [ -e "$QORE_SOURCE_DIR/qlib/$ref_module.qmod" ]; then
+                echo "$QORE_SOURCE_DIR/qlib/$ref_module.qmod"
+            elif [ -e "$QORE_SOURCE_DIR/qlib/$ref_module" ] || [ -e "$QORE_SOURCE_DIR/qlib/$ref_module.qm" ]; then
+                :
+            else
+                echo "$BUILD_REFERENCE"
+            fi
+            ;;
+        *) echo "$BUILD_REFERENCE" ;;
+    esac
+}
+
+check_build_matches_tree() {
+    BUILD_HASH=`build_git_hash "$QORE"`
+    BUILD_TREE_HASH=""
+    if [ -z "$BUILD_HASH" ]; then
+        build_mismatch "the build ($QORE) does not name the commit it was made from (qore --version shows no git hash)"
+        return
+    fi
+    if [ -e "$QORE_SOURCE_DIR/.git" ]; then
+        if ! command -v git > /dev/null 2>&1; then
+            build_mismatch "the tree is a git working tree, but git is not installed to compare it with the build"
+            return
+        fi
+        BUILD_TREE_HASH=`tree_git rev-parse --verify -q "HEAD^{commit}" 2>/dev/null`
+        if ! tree_git cat-file -e "$BUILD_HASH^{commit}" 2>/dev/null; then
+            build_mismatch "the build's commit $BUILD_HASH is not in the tree's repository (the tree is at" \
+                "${BUILD_TREE_HASH:-an unknown commit})"
+            return
+        fi
+        # set -f: the pathspecs are not file name patterns for the shell
+        set -f
+        build_changes=`tree_git diff --name-only --no-renames "$BUILD_HASH" -- $BUILD_INPUT_PATHSPECS 2>&1`
+        build_diff_rc=$?
+        set +f
+        if [ $build_diff_rc -ne 0 ]; then
+            build_mismatch "the tree cannot be compared with the build's commit $BUILD_HASH: $build_changes"
+            return
+        fi
+        if [ -z "$build_changes" ]; then
+            return
+        fi
+        # a build configured from this tree: the files that it is newer than are in it
+        build_source=`sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null`
+        same_tree=0
+        if [ -n "$build_source" ] && [ "`physical_dir "$build_source"`" = "$QORE_SOURCE_DIR" ]; then
+            same_tree=1
+            BUILD_REFERENCE=""
+            for ref in "$LIBQORE" "$QORE_BUILD_DIR/qore" "$QORE_BUILD_DIR/CMakeCache.txt" \
+                    "$QORE_BUILD_DIR/build.ninja" "$QORE_BUILD_DIR/.ninja_log" "$QORE_BUILD_DIR/Makefile"; do
+                if [ -f "$ref" ] && { [ -z "$BUILD_REFERENCE" ] || [ "$ref" -nt "$BUILD_REFERENCE" ]; }; then
+                    BUILD_REFERENCE=$ref
+                fi
+            done
+        fi
+        stale=""
+        stale_count=0
+        while IFS= read -r path; do
+            if [ -z "$path" ]; then
+                continue
+            fi
+            if [ $same_tree -eq 1 ]; then
+                ref=`build_reference_file "$path"`
+                if [ -z "$ref" ]; then
+                    continue
+                fi
+                # a file that is gone: the directory it was removed from (its nearest one that exists)
+                file=$QORE_SOURCE_DIR/$path
+                while [ ! -e "$file" ] && [ "$file" != "$QORE_SOURCE_DIR" ]; do
+                    file=`dirname "$file"`
+                done
+                if [ ! "$file" -nt "$ref" ]; then
+                    continue
+                fi
+            fi
+            stale_count=$((stale_count + 1))
+            if [ $stale_count -le 10 ]; then
+                stale="$stale    $path
+"
+            fi
+        done <<BUILD_CHANGES_EOF
+$build_changes
+BUILD_CHANGES_EOF
+        if [ $stale_count -gt 0 ]; then
+            if [ $same_tree -eq 1 ]; then
+                build_mismatch "$stale_count files of the build changed since the build was made (from commit" \
+                    "$BUILD_HASH; the tree is at $BUILD_TREE_HASH); the first of them:"
+            else
+                build_mismatch "$stale_count files of the build differ between the build's commit $BUILD_HASH" \
+                    "and the tree (at $BUILD_TREE_HASH), and the build was not made from this tree; the first of them:"
+            fi
+            BUILD_MISMATCH="$BUILD_MISMATCH$stale"
+        fi
+    else
+        marker=`grep -v '^#' "$QORE_SOURCE_DIR/.git-archive-revision" 2>/dev/null | head -1 | tr -d ' \t\r'`
+        case "$marker" in
+            *[!0-9a-f]*|"")
+                build_mismatch "the tree has no git repository and no .git-archive-revision naming the commit it was" \
+                    "made from (an archive that git makes has it), so it cannot be compared with the build's commit $BUILD_HASH"
+                ;;
+            *)
+                BUILD_TREE_HASH=$marker
+                if [ "$marker" != "$BUILD_HASH" ]; then
+                    build_mismatch "the tree was made from commit $marker (.git-archive-revision), the build from" \
+                        "$BUILD_HASH"
+                fi
+                ;;
+        esac
+    fi
+}
+
+# Checks the qcc and the .qmod files that the tests use (see above)
+check_build_parts() {
+    if [ -z "$BUILD_HASH" ]; then
+        return
+    fi
+    test_qcc=""
+    for candidate in "$QCC" "$QORE_QCC" "$QORE_QCC_EXECUTABLE"; do
+        if [ -n "$candidate" ]; then
+            test_qcc=$candidate
+            break
+        fi
+    done
+    if [ -z "$test_qcc" ]; then
+        if [ -f "$QORE_DIR/qcc" ]; then
+            test_qcc=$QORE_DIR/qcc
+        else
+            test_qcc=`command -v qcc 2>/dev/null`
+        fi
+    fi
+    case "$test_qcc" in
+        */*) check_companion_build "the qcc that the tests use ($test_qcc)" "`dirname "$test_qcc"`" ;;
+    esac
+    if [ -n "$BUILD_QMOD_DIR" ]; then
+        check_companion_build "the .qmod files in $BUILD_QMOD_DIR" "`dirname "$BUILD_QMOD_DIR"`"
+    fi
+    # the builds that the tree's qlib/*.qmod symlinks point into, each once
+    qmod_link_dirs=`find "$QORE_SOURCE_DIR/qlib" -maxdepth 1 -name '*.qmod' -type l -exec readlink {} + 2>/dev/null \
+        | sed -n 's|/[^/]*/[^/]*$||p' | sort -u`
+    if [ -n "$qmod_link_dirs" ]; then
+        while IFS= read -r qmod_build; do
+            case "$qmod_build" in
+                /*) ;;
+                *) qmod_build=$QORE_SOURCE_DIR/qlib/$qmod_build ;;
+            esac
+            check_companion_build "the qlib/*.qmod links into $qmod_build" "$qmod_build"
+        done <<QMOD_LINKS_EOF
+$qmod_link_dirs
+QMOD_LINKS_EOF
+    fi
+}
+
+check_build_matches_tree
+check_build_parts
+if [ -n "$BUILD_MISMATCH" ]; then
+    echo "*** MISMATCH: the build does not match the tree: the tests would run with a build made from other" \
+        "sources (build: $QORE, commit ${BUILD_HASH:-unknown}; tree: $QORE_SOURCE_DIR, commit" \
+        "${BUILD_TREE_HASH:-unknown}):"
+    printf '%s' "$BUILD_MISMATCH"
+    if [ "$QORE_TEST_ALLOW_BUILD_MISMATCH" = 1 ]; then
+        echo "*** the tests run all the same: QORE_TEST_ALLOW_BUILD_MISMATCH=1 ***"
+    else
+        echo "*** rebuild, or test the tree the build was made from; QORE_TEST_ALLOW_BUILD_MISMATCH=1 runs the tests" \
+            "all the same. Exiting. ***"
+        exit 1
+    fi
 fi
 
 export LD_LIBRARY_PATH=$QORE_LIB_PATH

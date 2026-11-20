@@ -134,6 +134,35 @@ def run_in_session(args, timeout, capture_output=False, **kwargs):
     return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
 
 
+# the commit that the stand-in builds of the harness's trees name (see RunnerTree)
+STAND_IN_COMMIT = "6897" * 10
+
+
+# the first line of a stand-in qore that names STAND_IN_COMMIT for --version, as a build's qore does
+STAND_IN_VERSION = '[ "$1" = --version ] && { echo "  git hash: %s"; exit 0; }\n' % STAND_IN_COMMIT
+
+
+def stand_in_build(root, binaries, commit=STAND_IN_COMMIT):
+    """Makes the tree at root an archive of the commit of a stand-in build in binaries (#6897): run_tests.sh compares
+    the tree's .git-archive-revision with the commit that its qore names (see STAND_IN_VERSION), and the qcc that the
+    tests would use, here the stand-in next to qore, must come from the same build"""
+    (Path(root) / ".git-archive-revision").write_text(commit + "\n")
+    qcc = Path(binaries) / "qcc"
+    qcc.write_text("#!/bin/sh\necho 'qcc stand-in of commit %s'\n" % commit)
+    qcc.chmod(0o755)
+
+
+def build_commit():
+    """Returns the commit that the build in BUILD_DIR was made from (qore --version), or the stand-in commit without
+    one"""
+    if not HAVE_QORE:
+        return STAND_IN_COMMIT
+    result = subprocess.run([str(BUILD_DIR / "qore"), "--version"], capture_output=True, text=True,
+                            env=dict(os.environ, LD_LIBRARY_PATH=str(BUILD_DIR), DYLD_LIBRARY_PATH=str(BUILD_DIR)))
+    match = re.search(r"^\s*git hash:\s*([0-9a-f]{40,64})\s*$", result.stdout, re.M)
+    return match.group(1) if match else STAND_IN_COMMIT
+
+
 class RunnerTree:
     """A tree that run_tests.sh runs in, with Python scripts as its tests, or qore scripts with the qore of the build"""
 
@@ -154,9 +183,18 @@ class RunnerTree:
         (self.bin / "libqore.so").touch()
         # the modules of the qore tests: QUnit from the source of this tree (QORE_TEST_SOURCE_MODULES below)
         (self.root / "qlib").symlink_to(ROOT / "qlib")
-        # qore: runs the test file it is given with Python, in the same process
+        # The tree is an archive of the commit of its build (#6897): .git-archive-revision names it, and the stand-in
+        # qore and qcc name it as the commit of their build; a tree of the qore tests names the commit of the build
+        # whose qore runs them, whose qcc is next to it
+        self.commit = build_commit() if qore else STAND_IN_COMMIT
+        stand_in_build(self.root, self.bin, self.commit)
+        # qore: prints the commit for --version, and runs the test file it is given with Python, in the same process
         self.write_script("qore", f"""\
             #!/bin/sh
+            if [ "$1" = --version ]; then
+                echo "  git hash: {self.commit}"
+                exit 0
+            fi
             for arg in "$@"; do
                 case "$arg" in
                     *.qtest) exec '{sys.executable}' -B "$arg" ;;

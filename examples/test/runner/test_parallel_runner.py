@@ -27,10 +27,12 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_watchdog import STAND_IN_VERSION, stand_in_build  # noqa: E402
 
 # runs the test file given (the argument ending in .qtest) as a shell script
 QORE_STANDIN = """#!/bin/sh
-for a in "$@"; do
+""" + STAND_IN_VERSION + """for a in "$@"; do
     case "$a" in
         *.qtest) exec sh "$a" ;;
     esac
@@ -59,6 +61,7 @@ class ParallelRunnerTest(unittest.TestCase):
         qore = self.bin / "qore"
         qore.write_text(QORE_STANDIN)
         qore.chmod(0o755)
+        stand_in_build(self.root, self.bin)
         self.shared = self.root / "shared"
         self.shared.mkdir()
 
