@@ -888,16 +888,17 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                 }
 
                 # parse content type and optionally any content encoding
+                hash<auto> fields = h.hdr.headers ?? h.hdr;
                 *string ce;
 
                 # set chunked flag
-                chunked = (h.hdr."transfer-encoding" == "chunked");
+                chunked = (fields."transfer-encoding" == "chunked");
 
                 # always check DataStream-Content-Type first; HTTP/2 and HTTP/3 don't use
                 # chunked transfer encoding, so the DataStream headers must be checked
                 # regardless of the transfer-encoding
-                ct = h.hdr{DataStreamContentType.lwr()} ?? h.hdr."content-type";
-                ce = h.hdr{DataStreamContentEncoding.lwr()} ?? h.hdr."content-encoding";
+                ct = fields{DataStreamContentType.lwr()} ?? fields."content-type";
+                ce = fields{DataStreamContentEncoding.lwr()} ?? fields."content-encoding";
 
                 # remove any ";charset=utf-8" from the end of the content-type header
                 ct =~ s/; *charset=utf-?8$//i;
@@ -907,7 +908,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
 
                 # set datastream flag if DataStream-Content-Type header is present
                 # NOTE: HTTP/2 and HTTP/3 don't use chunked transfer encoding
-                datastream = h.hdr.hasKey(DataStreamContentType.lwr());
+                datastream = fields.hasKey(DataStreamContentType.lwr());
 
                 dce = ds_get_content_decode(ce);
 
@@ -1457,15 +1458,16 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
                 # HTTP error handler), throw immediately rather than trying to parse the
                 # body as Connect frames — plain text would be misinterpreted as frame
                 # headers, causing spurious CONNECT-MESSAGE-SIZE-ERROR
-                int resp_status = h.hdr.":status" ?? h.hdr.status_code ?? 200;
-                *string ct = h.hdr."content-type";
+                hash<auto> fields = h.hdr.headers ?? h.hdr;
+                int resp_status = h.hdr.status_code ?? fields.":status" ?? 200;
+                *string ct = fields."content-type";
                 if (resp_status >= 400 && ct.val() && ct !~ /^application\/connect\+/i) {
                     throw "CONNECT-HTTP-ERROR",
                         sprintf("server returned HTTP %d with non-Connect content type %y",
                             resp_status, ct);
                 }
                 # Parse content encoding for compressed frames
-                *string ce = h.hdr{ConnectContentEncodingHdr} ?? h.hdr."content-encoding";
+                *string ce = fields{ConnectContentEncodingHdr} ?? fields."content-encoding";
                 dce = ds_get_content_decode(ce);
                 # Do NOT return here — for non-chunked HTTP/2 responses, the body data may
                 # be delivered in the same callback invocation as the headers. Fall through
