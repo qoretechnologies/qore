@@ -267,6 +267,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   --exec-mode, in qcc executables and in a qcc-compiled module
         # - asyncio_callback_exception_stderr (#6275): its checks run in child processes without an execution mode,
         #   whose standard output and error output it reads
+        # - asyncio_poll_complete_notify (#6804): its checks run in child processes without an execution mode, whose
+        #   standard output and error output it reads
         # - AOTMemberInitNegativeOffsets (#6294): its checks run in child processes of the interpreter and of qcc
         #   executables
         # - QUnit result-counts (#2297): the test whose results it counts runs in child processes without an
@@ -357,6 +359,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/number-round-exact.qtest",
                                  "examples/test/qore/classes/Program/expression-declarations-modes.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
+                                 "examples/test/qore/classes/AsyncIoController/asyncio_poll_complete_notify.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
