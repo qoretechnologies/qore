@@ -31,6 +31,8 @@ job before any test runs, but the pipeline then has to be run again.
   registry (`invalid.invalid/unresolved/...`); a dotenv report variable takes precedence over a global variable, so a
   job that did not get the report fails to pull its image instead of running on a tag or on the runner's default
   image.  Nothing falls back to a tag.
+- The resolver is run once more when it fails (`retry: max: 1` on `script_failure` and `runner_system_failure`), so
+  a registry that is briefly unavailable does not fail the pipeline; a second failure does.
 - Credentials: the image pulls of mirror/qore authenticate with the project's `DOCKER_AUTH_CONFIG` (the job token of
   mirror/qore is not in the inbound job token allowlist of infrastructure/qore-test-base), so the script uses the
   credentials of the registry in `DOCKER_AUTH_CONFIG` for the registry's token service, or else, for `CI_REGISTRY`,
@@ -40,7 +42,8 @@ job before any test runs, but the pipeline then has to be run again.
   modules.
 - `ci-build-image-check.sh` remains as the backstop: a test job whose image is not its build job's still fails before
   any test runs.
-- The macOS job (`test-macos`, tart executor) is not changed: it names no image (the runner's default,
+- The macOS job (`test-macos`, tart executor) is deliberately not pinned (decided in the review of this change): it
+  names no image (the runner's default,
   `qore-test-base-macos:develop`, is cloned once per job) and builds and tests in the same VM, so no other job can run
   on another macOS image.
 

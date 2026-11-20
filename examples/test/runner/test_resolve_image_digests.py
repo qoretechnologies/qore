@@ -333,6 +333,11 @@ class CiImageDigestsTest(unittest.TestCase):
         self.assertRegex(resolver, r"(?m)^  stage: \.pre$")
         self.assertRegex(resolver, r"(?m)^      dotenv: qore-test-base-images\.env$")
         self.assertIn("test/docker_test/resolve-image-digests.py qore-test-base-images.env", resolver)
+        # a registry that is briefly unavailable fails the script: the job runs once more, and a runner system
+        # failure (the default retry, which the job's own retry replaces) is retried as well
+        retry = re.search(r"(?m)^  retry:\n    max: 1\n    when:\n((?:      - \w+\n)+)", resolver)
+        self.assertIsNotNone(retry, "the resolver is retried once")
+        self.assertEqual({"runner_system_failure", "script_failure"}, set(re.findall(r"- (\w+)", retry.group(1))))
         # the variables the resolver writes, and the tags it resolves
         resolved = dict(re.findall(r'"(QORE_TEST_BASE_\w+_IMAGE)=\$\{QORE_TEST_BASE_REPOSITORY\}:([\w.-]+)"',
                                    resolver))

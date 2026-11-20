@@ -83,6 +83,13 @@ resolve-qore-test-base-images:
     - amd64
   services: []
   before_script: []
+  # one more run when the registry was briefly unavailable (the script exits 1 on any error); this replaces the
+  # default retry, so a runner system failure is retried as well
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - script_failure
   script:
     - python3 -I test/docker_test/resolve-image-digests.py qore-test-base-images.env
       "QORE_TEST_BASE_UBUNTU_AMD64_IMAGE=${QORE_TEST_BASE_REPOSITORY}:develop"
