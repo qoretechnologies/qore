@@ -158,7 +158,7 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
     }
 
     #! Returns the socket
-    /** Implemented by the protocol-specific poll operations, whose system base class keeps the socket (qore#6839)
+    /** Implemented by the C++ base class of each protocol-specific poll operation, which keeps the socket (qore#6772)
     */
     abstract Socket getSocket();
 

@@ -4438,7 +4438,11 @@ public:
         return scl ? scl->parseFindVar(vname, qc, access, toplevel) : nullptr;
     }
 
-    DLLLOCAL int parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& l_mi, const QoreMemberInfo& b_mi) const;
+    //! Checks that the declarations \a b_mi and \a l_mi of a member of the hierarchy of the class \a cname can be
+    //! combined; raises a parse exception if not, as for every two declarations but those of two system classes
+    //! (qore#6772)
+    DLLLOCAL int parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& b_mi,
+            const QoreMemberInfo& l_mi, const char* cname) const;
 
     DLLLOCAL int checkExistingVarMember(const char* dname, const QoreMemberInfoBaseAccess* mi, const QoreMemberInfoBaseAccess* omi, const qore_class_private* qc, ClassAccess oaccess, bool var = false) const;
 
