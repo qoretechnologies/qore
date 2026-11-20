@@ -14,7 +14,9 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 import os
 from pathlib import Path
 import re
+import resource
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -81,11 +83,11 @@ class ParallelRunnerTest(unittest.TestCase):
             "QORE_TEST_JOBS": str(jobs),
         }
 
-    def run_runner(self, jobs, extra=None, timeout=60, path=None):
+    def run_runner(self, jobs, extra=None, timeout=60, path=None, preexec_fn=None):
         env = self.runner_env(jobs, path)
         env.update(extra or {})
         return subprocess.run(["sh", str(ROOT / "run_tests.sh")], cwd=self.root, env=env, capture_output=True,
-                              text=True, timeout=timeout)
+                              text=True, timeout=timeout, preexec_fn=preexec_fn)
 
     def blocks(self, output):
         """Returns {test name: the lines of its block} and checks that each block is whole"""
@@ -313,24 +315,65 @@ kill -9 $shells
                 self.assertEqual(2, len(self.blocks(result.stdout)))
                 self.assertIn("Passed 2 out of 2 tests. 0 tests failed.", result.stdout)
 
-    def test_time_limit_in_a_parallel_run(self):
+    def child_runs(self, pid, fifo):
+        """Returns True if the given process runs and is the child that the hanging test started (its command reads
+        the given FIFO): a process that has ended (also a zombie that its new parent has not waited for yet) or that
+        has taken its process ID since does not"""
+        result = subprocess.run(["ps", "-o", "stat=", "-o", "command=", "-p", str(pid)], capture_output=True,
+                                text=True)
+        line = result.stdout.strip()
+        return bool(line) and not line.startswith("Z") and str(fifo) in line
+
+    def time_limit(self, jobs):
+        """A test that exceeds its time limit is ended with every process that it started (#6835): its child, which
+        blocks on a FIFO that nothing writes, was left running for good where nothing looks for the processes a test
+        leaves (macOS); the child's process ID is in a file, and the child is killed after the run if it still runs"""
         timeout = shutil.which("timeout") or shutil.which("gtimeout")
         if not timeout:
             self.skipTest("needs timeout or gtimeout")
-        self.fifo("never")
-        # the test blocks until its limit: nothing writes to the FIFO; the other test still runs and passes
-        self.make_test("hang.qtest", 'echo "out hang.qtest: started"\ncat "$SHARED/never"\n', "# test-timeout: 1\n")
+        fifo = self.fifo("never")
+        child_file = self.shared / "child"
+        # the test blocks until its limit: nothing writes to the FIFO; the other test still runs and passes.  The
+        # child does not hold the output, so that a run that leaves it running ends, and the check below reports it
+        self.make_test("hang.qtest", 'echo "out hang.qtest: started"\ncat "$SHARED/never" > /dev/null 2>&1 &\n'
+                       'echo $! > "$SHARED/child.new" && mv "$SHARED/child.new" "$SHARED/child"\nwait\n',
+                       "# test-timeout: 1\n")
         self.make_test("ok.qtest", "exit 0\n")
         path = str(self.bin) + os.pathsep + os.path.dirname(timeout) + os.pathsep + os.defpath
-        result = self.run_runner(2, {"QORE_TEST_STACK_DUMP_WAIT": "1"}, path=path)
-        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
-        blocks = self.blocks(result.stdout)
-        self.assertIn("out hang.qtest: started", blocks["hang.qtest"])
-        # the test does not announce a SIGUSR1 handler (see test_watchdog.py), so it is aborted at once
-        self.assertIn("*** the test exceeded its 1s limit: SIGABRT sent at once, as it does not handle SIGUSR1, which"
-                      " would end it without its call stacks or a core dump ***", blocks["hang.qtest"])
-        self.assertIn("TIMEOUT: test exceeded 1s limit (it was ended by signal 6)", blocks["hang.qtest"])
-        self.assertIn("Failed tests:\n./examples/test/hang.qtest\n", result.stdout)
+        child = None
+        try:
+            # without a core dump of the aborted test, which would be left where the system writes cores (/tmp):
+            # the runner's "ulimit -c unlimited" cannot raise a hard limit of 0
+            result = self.run_runner(jobs, {"QORE_TEST_STACK_DUMP_WAIT": "1"}, path=path,
+                                     preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_CORE, (0, 0)))
+            self.assertTrue(child_file.exists(), result.stdout + result.stderr)
+            child = int(child_file.read_text())
+            self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+            blocks = self.blocks(result.stdout)
+            self.assertIn("out hang.qtest: started", blocks["hang.qtest"])
+            # the test does not announce a SIGUSR1 handler (see test_watchdog.py), so it is aborted at once
+            self.assertIn("*** the test exceeded its 1s limit: SIGABRT sent at once, as it does not handle SIGUSR1,"
+                          " which would end it without its call stacks or a core dump ***", blocks["hang.qtest"])
+            self.assertIn("TIMEOUT: test exceeded 1s limit (it was ended by signal 6)", blocks["hang.qtest"])
+            self.assertIn("Failed tests:\n./examples/test/hang.qtest\n", result.stdout)
+            # the runner ended the child with the test: it is not one that the test left (which would be reported)
+            self.assertFalse([line for line in blocks["hang.qtest"] if "left processes running" in line],
+                             blocks["hang.qtest"])
+            self.assertFalse(self.child_runs(child, fifo), "the child of the timed-out test %d still runs" % child)
+        finally:
+            if child is None and child_file.exists():
+                child = int(child_file.read_text())
+            if child is not None and self.child_runs(child, fifo):
+                try:
+                    os.kill(child, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+
+    def test_time_limit_in_a_parallel_run(self):
+        self.time_limit(2)
+
+    def test_time_limit_in_a_run_of_one_test_at_a_time(self):
+        self.time_limit(1)
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "the runner looks for leftover processes in /proc")
     def test_leftover_processes_in_a_parallel_run(self):

@@ -29,7 +29,9 @@ print_usage () {
   echo "                           (-b in QORE_TEST_OPTS), is aborted at once.  On Linux, the state, CPU time and"
   echo "                           kernel wait channel of each of its threads are printed when it exceeds it and"
   echo "                           again before it is aborted, with /proc/pressure and the cgroup's cpu.stat and"
-  echo "                           memory.events."
+  echo "                           memory.events.  The test runs in a process group of its own (made with perl,"
+  echo "                           or setsid without it), and the processes left in the group are killed once the"
+  echo "                           test has ended, as they are when a signal ends the run."
   echo "  QORE_TEST_CGROUP         The cgroup directory whose cpu.stat and memory.events are printed then (default:"
   echo "                           the test's cgroup v2 directory under /sys/fs/cgroup)."
   echo "  QORE_TEST_STACK_DUMP_WAIT"
@@ -1171,6 +1173,9 @@ trap remove_runner_files 0
 # changed since the flag was set (*_before_pid, $! then: the previous test's watchdog, for example)
 test_pid=""
 test_starting=0
+# the process group of the test (its process ID; see exec_in_test_group()) from its start until it has been ended or
+# left to the checks after the test
+test_group=""
 test_before_pid=""
 watchdog_pid=""
 watchdog_starting=0
@@ -1183,6 +1188,59 @@ test_has_mark() {
         tr '\0' '\n' < /proc/$1/environ 2>/dev/null | grep -qx "QORE_TEST_PROCESS_MARK=$2"
     else
         ps -E -ww -o command= -p $1 2>/dev/null | grep -q "QORE_TEST_PROCESS_MARK=$2\( \|$\)"
+    fi
+}
+
+# A test that the watchdog watches (see run_with_watchdog()) runs as the leader of a process group of its own, so
+# that every process it starts, and every process those start, can be ended with it when it exceeds its time limit or
+# the run is interrupted, on every platform: a process that a test leaves is otherwise found only on Linux (see
+# find_test_survivors()), and nothing ended the processes of a timed-out test elsewhere (qore#6835: macOS kept the
+# children of such tests for days).  The group is made by perl (setpgid(), in the runner's session), or by setsid
+# (a session of its own, which is a process group too) where there is no perl; there is no portable shell command for
+# it ("set -m" needs a terminal in dash and BusyBox sh).  Without either, the test is signalled alone, as before.
+# A process that a test starts and that leaves the group (setsid(), setpgid()) is not ended with it.
+TEST_GROUP_TOOL=""
+if command -v perl > /dev/null 2>&1 && perl -e 'exit 0' > /dev/null 2>&1; then
+    TEST_GROUP_TOOL=perl
+elif command -v setsid > /dev/null 2>&1; then
+    TEST_GROUP_TOOL=setsid
+fi
+
+# Replaces the shell with the given command, as the leader of a process group of its own if it can (see above).  The
+# shell is a process run in the background by a non-interactive shell, so it is not the leader of a group already:
+# setsid would otherwise fork, and its process would not be the test's.
+exec_in_test_group() {
+    case "$TEST_GROUP_TOOL" in
+        perl)
+            exec perl -e 'setpgrp(0, 0) or die "setpgrp: $!\n";
+                exec { $ARGV[0] } @ARGV or die "exec $ARGV[0]: $!\n"' -- "$@"
+            ;;
+        setsid) exec setsid "$@" ;;
+    esac
+    exec "$@"
+}
+
+# Sends the given signal to the process group of the test whose process is given (it leads the group), or to the
+# test's process alone if there is no such group (it has not made it yet, or cannot).  The process has not been waited
+# for yet, so its ID is not another process's, nor the ID of another group.  Whether the group exists is checked first,
+# rather than taken from the result of the signal, which fails also when it reaches some of the group but not all
+# (another user's process): the test's process would get the signal twice.
+signal_test_group() {
+    if [ -n "$TEST_GROUP_TOOL" ] && kill -0 -$2 2>/dev/null; then
+        kill -$1 -$2 2>/dev/null
+    else
+        kill -$1 $2 2>/dev/null
+    fi
+}
+
+# Kills what is left of the process group of the test whose process is given, once that process has ended and has been
+# waited for (see exec_in_test_group()).  The group's ID cannot be taken by another process or group while the group
+# has a process; once it has none, the signal finds no group, unless every process ID has been used since the test was
+# waited for, an instant before, and the process that got the ID leads a group.  The test's QORE_TEST_PROCESS_MARK
+# cannot tell: macOS shows no environment of a system binary (ps -E), such as a cat that the test started.
+end_test_group() {
+    if [ -n "$TEST_GROUP_TOOL" ] && [ -n "$1" ]; then
+        kill -KILL -$1 2>/dev/null
     fi
 }
 
@@ -1247,11 +1305,17 @@ runner_signaled() {
         watchdog_pid=""
     fi
     end_test_survivors "$test_pid"
+    # the group of a test that has ended and been waited for, whose processes were not ended yet
+    if [ -z "$test_pid" ] && [ -n "$test_group" ]; then
+        end_test_group $test_group
+        test_group=""
+    fi
     if [ -n "$test_pid" ]; then
+        # the signal goes to every process of the test (see exec_in_test_group())
         if [ "$1" = INT ]; then
-            kill -TERM $test_pid 2>/dev/null
+            signal_test_group TERM $test_pid
         else
-            kill -$1 $test_pid 2>/dev/null
+            signal_test_group $1 $test_pid
         fi
         # the helper reads the trap's report that the test has ended from a FIFO of the runner's own, for at most
         # TEST_INTERRUPT_WAIT seconds, and then kills the test, but only a process that still has the test's
@@ -1274,21 +1338,24 @@ runner_signaled() {
                         && test_has_mark $test_pid "$TEST_PROCESS_MARK"; then
                     echo "*** the run is interrupted, and the test did not end within ${TEST_INTERRUPT_WAIT}s:" \
                         "SIGKILL sent ***"
-                    kill -KILL $test_pid 2>/dev/null
+                    signal_test_group KILL $test_pid
                 fi
             ) &
             interrupt_helper=$!
         elif test_has_mark $test_pid "$TEST_PROCESS_MARK"; then
             echo "*** the run is interrupted, and the runner cannot wait for the test for a limited time: SIGKILL" \
                 "sent ***"
-            kill -KILL $test_pid 2>/dev/null
+            signal_test_group KILL $test_pid
         fi
         # for the tests of run_tests.sh: reports that the trap waits for the test
         if [ -n "$QORE_TEST_RUNNER_TRAP_REPORT" ]; then
             echo waiting > "$QORE_TEST_RUNNER_TRAP_REPORT"
         fi
         wait $test_pid 2>/dev/null
+        # what is left of the test's group: processes that handle or ignore the signal
+        end_test_group $test_pid
         test_pid=""
+        test_group=""
         if [ -n "$interrupt_helper" ]; then
             echo ended >&5
             wait $interrupt_helper 2>/dev/null
@@ -1426,13 +1493,24 @@ run_with_watchdog() {
     fi
     test_before_pid=$!
     test_starting=1
-    # a parallel run writes the output of the test to its log (TEST_LOG)
+    # a parallel run writes the output of the test to its log (TEST_LOG).  The test runs in a process group of its
+    # own (see exec_in_test_group()); the mark is in its environment from the start, so that the process has it also
+    # before the command that makes the group has replaced itself with the test
     if [ -n "$TEST_LOG" ]; then
-        QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" "$@" 4>&- >> "$TEST_LOG" 2>&1 &
+        (
+            QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" QORE_TEST_PROCESS_MARK="$TEST_PROCESS_MARK"
+            export QORE_TEST_EVENT_FIFO QORE_TEST_PROCESS_MARK
+            exec_in_test_group "$@"
+        ) 4>&- >> "$TEST_LOG" 2>&1 &
     else
-        QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" "$@" 4>&- &
+        (
+            QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" QORE_TEST_PROCESS_MARK="$TEST_PROCESS_MARK"
+            export QORE_TEST_EVENT_FIFO QORE_TEST_PROCESS_MARK
+            exec_in_test_group "$@"
+        ) 4>&- &
     fi
     test_pid=$!
+    test_group=$test_pid
     test_starting=0
     # the process of the test (env executes qore), whose core is found by its process ID (see find_test_core())
     TEST_PID=$test_pid
@@ -1626,6 +1704,13 @@ event $1
             watchdog_message "*** WATCHDOG ERROR: the watchdog ended with exit code $watchdog_rc ***"
             ;;
     esac
+    # The test exceeded its time limit, and the watchdog has ended it (SIGUSR1 for its call stacks, then SIGABRT): the
+    # processes it started are ended too, as nothing else would end them.  Those of a test that ended by itself are
+    # left to the check for the processes a test leaves (see find_test_survivors()), which fails the test for them.
+    if [ $WATCHDOG_TIMED_OUT -eq 1 ]; then
+        end_test_group $TEST_PID
+    fi
+    test_group=""
     if [ $WATCHDOG_TIMED_OUT -eq 1 ]; then
         return 124
     fi
