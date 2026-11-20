@@ -37,6 +37,8 @@
 %requires ShippoRestClient
 %requires KlaviyoRestClient
 %requires ConfluenceRestClient
+%requires KitRestClient
+%requires ApolloRestClient
 
 %exec-class RestConnectionKeyFallbackTest
 
@@ -304,6 +306,7 @@ public class RestConnectionKeyFallbackTest inherits QUnit::Test {
         addTestCase("no fallback", \noFallbackTest());
         addTestCase("refresh against a stand-in", \refreshStandInTest());
         addTestCase("Shippo, Klaviyo and Confluence key-only connections", \shippoKlaviyoTest());
+        addTestCase("Kit and Apollo key-only connections", \kitApolloTest());
         set_return_value(main());
     }
 
@@ -627,6 +630,75 @@ public class RestConnectionKeyFallbackTest inherits QUnit::Test {
         assertTrue(klaviyo.getExtendedInfo().oauth2);
         assertEq("refresh-1", klaviyo.getConnectionOptions().oauth2_refresh_token);
         assertEq("authorization_code", klaviyo.getConnectionOptions().oauth2_grant_type);
+    }
+
+    #! Kit (an API key or a token) and Apollo (a token): their getConnectionOptions() adds no OAuth2 options to a key
+    kitApolloTest() {
+        # Kit's API key is sent in its own header
+        KitRestConnection kit("kit", "test", "kitrest://127.0.0.1:9", {}, {"apikey": "kit-key"});
+        assertKeyOnly(kit);
+        KitRestClient kit_client = kit.get(False);
+        assertEq("kit-key", kit_client.getDefaultHeaders()."X-Kit-Api-Key");
+        assertFalse(kit_client.usingOAuth2());
+        KitRestClientIo kit_io = kit.getAsync(False);
+        on_exit kit_io.close();
+        assertNothing(kit_io.getOAuth2Options().oauth2_grant_type);
+
+        # a Kit token alone is sent as a Bearer token
+        kit = new KitRestConnection("kit", "test", "kitrest://127.0.0.1:9", {}, {"token": "kit-token"});
+        assertKeyOnly(kit);
+        assertEq("Bearer kit-token", kit.get(False).getDefaultHeaders().Authorization);
+        KitRestClientIo kit_token_io = kit.getAsync(False);
+        on_exit kit_token_io.close();
+        assertNothing(kit_token_io.getOAuth2Options().oauth2_grant_type);
+
+        # an authorized Kit connection keeps OAuth2 and gets Kit's OAuth2 URLs
+        kit = new KitRestConnection("kit", "test", "kitrest://127.0.0.1:9", {}, {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "access-1",
+            "oauth2_refresh_token": "refresh-1",
+            "oauth2_token_expiry": now_us() + 1h,
+        });
+        assertTrue(kit.getInfo().up);
+        assertTrue(kit.getExtendedInfo().oauth2);
+        hash<auto> opts = kit.getConnectionOptions();
+        assertEq(KitRestClientBase::DefaultTokenUrl, opts.oauth2_token_url);
+        assertEq("authorization_code", opts.oauth2_grant_type);
+        assertEq("refresh-1", opts.oauth2_refresh_token);
+        assertTrue(kit.get(False).usingOAuth2());
+
+        # Apollo's API token
+        ApolloRestConnection apollo("apollo", "test", "apollorest://127.0.0.1:9", {}, {"token": "apollo-token"});
+        assertKeyOnly(apollo);
+        ApolloRestClient apollo_client = apollo.get(False);
+        assertEq("Bearer apollo-token", apollo_client.getDefaultHeaders().Authorization);
+        assertFalse(apollo_client.usingOAuth2());
+        ApolloRestClientIo apollo_io = apollo.getAsync(False);
+        on_exit apollo_io.close();
+        assertNothing(apollo_io.getOAuth2Options().oauth2_grant_type);
+
+        # an authorized Apollo connection keeps OAuth2 and gets Apollo's OAuth2 URLs
+        apollo = new ApolloRestConnection("apollo", "test", "apollorest://127.0.0.1:9", {}, {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "access-1",
+            "oauth2_refresh_token": "refresh-1",
+        });
+        assertTrue(apollo.getInfo().up);
+        assertTrue(apollo.getExtendedInfo().oauth2);
+        opts = apollo.getConnectionOptions();
+        assertEq(ApolloRestClientBase::DefaultTokenUrl, opts.oauth2_token_url);
+        assertEq("authorization_code", opts.oauth2_grant_type);
+        assertTrue(apollo.get(False).usingOAuth2());
+
+        # neither can be created with no credential
+        assertThrows("CONNECTION-OPTION-ERROR", sub () {
+            new KitRestConnection("kit", "test", "kitrest://127.0.0.1:9", {}, {});
+        });
+        assertThrows("CONNECTION-OPTION-ERROR", sub () {
+            new ApolloRestConnection("apollo", "test", "apollorest://127.0.0.1:9", {}, {});
+        });
     }
 
     #! Asserts that a connection authenticated by a key does not use OAuth2
