@@ -5847,10 +5847,11 @@ public:
         std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
         str_set_t::iterator i = str_set.lower_bound(str);
         if (i == str_set.end() || strcmp(*i, str)) {
-            // fork() waits for the change (see recordLock())
-            char* copy = strdup(str);
+            // fork() waits for the change (see recordLock()); the copy is freed if it cannot be stored
+            std::unique_ptr<char, decltype(&free)> copy(strdup(str), &free);
             std::lock_guard<std::mutex> rl(threadContainerLock());
-            str_vec.push_back(copy);
+            str_vec.push_back(copy.get());
+            copy.release();
             i = str_set.insert(i, str_vec.back());
         }
         return *i;

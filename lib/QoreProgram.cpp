@@ -1780,10 +1780,11 @@ const char* qore_program_private_base::addRuntimeString(const char* str) {
     std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     str_set_t::iterator i = rt_str_set.lower_bound(str);
     if (i == rt_str_set.end() || strcmp(*i, str)) {
-        // fork() waits for the change (see recordLock())
-        char* copy = strdup(str);
+        // fork() waits for the change (see recordLock()); the copy is freed if it cannot be stored
+        std::unique_ptr<char, decltype(&free)> copy(strdup(str), &free);
         std::lock_guard<std::mutex> rl(threadContainerLock());
-        rt_str_vec.push_back(copy);
+        rt_str_vec.push_back(copy.get());
+        copy.release();
         i = rt_str_set.insert(i, rt_str_vec.back());
     }
     return *i;
