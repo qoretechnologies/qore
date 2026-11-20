@@ -2497,6 +2497,9 @@
       a Python module that module-python imported) skipped its destructor with a \c PROGRAM-ERROR exception (see
       @ref program_deletion_constant_objects; <a href="https://github.com/qoretechnologies/qore/issues/6791">issue
       6791</a>)
+    - a @ref number "number" parsed from a decimal string of 22 to 31 digits, including a value read from a
+      \c buffer<decimal128>, has enough precision to print as the value, where it could print with
+      binary conversion noise (see @ref number_string_precision; issue #6824)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)
