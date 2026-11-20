@@ -48,12 +48,12 @@ public class Completer {
     }
 
     destructor() {
-        # the operation's step result is released: the operation completes, and its onComplete() is dispatched to a
-        # callback worker with the context of the thread that submitted it, not of the cleanup
+        # the operations' step results are released: the operations complete, and their onComplete() calls are
+        # dispatched to callback workers with the context of the thread that submitted them, not of the cleanup
         call_function("dbg_async_io_release_held_step_results");
         # the I/O thread processes the result and queues the operation's onComplete(), which a worker then processes:
         # it must skip it, as the Program of the operation's module is closed to the worker
-        bool queued = call_function("dbg_async_io_wait_on_complete_queued", 1, 20s);
+        bool queued = call_function("dbg_async_io_wait_on_complete_queued", 3, 20s);
         AsyncIoController::flushCallbacks();
         printf("completed while the modules were deleted: %y\n", queued);
         # the timer's callback is dispatched to a callback worker, which must skip it; the release returns once it has

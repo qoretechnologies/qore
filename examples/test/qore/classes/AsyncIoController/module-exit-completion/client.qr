@@ -8,4 +8,6 @@
 %requires ModuleExitCleaner
 
 printf("held: %y\n", Holder::held);
+printf("nested held: %y\n", Holder::nested_held);
+printf("failing held: %y\n", Holder::failing_held);
 printf("timer held: %y\n", Holder::timer_held);

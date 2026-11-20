@@ -2746,6 +2746,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         }
 
         ExceptionSink work_xsink;
+        // the refusals of this thread's entries into the Programs of the modules before the item runs (see below)
+        const uint64_t module_entry_refusals = qore_module_entry_refusals();
         const char* method_name = nullptr;
         // the class of the operation of a continuePoll() item, whose reference is released after the step; for the
         // log below (copied, as the release can delete the object and, with it, the last reference to its class)
@@ -2778,22 +2780,6 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             if (!async_item.owner.empty()) {
                 owner_shutting_down = shutting_down_owners.count(async_item.owner) > 0;
             }
-        }
-        // the Program of a module that the worker could not enter above because the module cleanup at the end of the
-        // process has closed the Programs of the modules to the threads that do not run work that it handed over: the
-        // operation was submitted by another thread and completes while the modules are deleted; its callbacks would
-        // be refused entry (PROGRAM-ERROR), so they are skipped, as those of a Program that is being deleted are.  The
-        // Programs stay closed once closed, so a failed entry seen with them closed was refused or would be; an entry
-        // made before they closed is waited for by the cleanup (qore#6685).  Only the operation's callbacks are
-        // skipped: the operation is still live (the cleanup has not canceled it yet), so a step that cannot run gives
-        // the refusal as the operation's error, whose onComplete() is then skipped, and a native task (which carries no
-        // delegation of the cleanup's work) runs as it did
-        if (!pgm_shutting_down && pgm_guard && !pgm_guard->entered()
-                && (async_item.type == DT_ABORT || async_item.type == DT_ON_COMPLETE
-                    || async_item.type == DT_STREAM_DATA_NOTIFY || async_item.type == DT_STREAM_SEND_RESULT_NOTIFY
-                    || async_item.type == DT_POLL_COMPLETE_NOTIFY)
-                && qore_module_program_entry_refused(async_item.pgm)) {
-            pgm_shutting_down = true;
         }
 
         // Mark this thread as a dispatcher callback worker for the WHOLE
@@ -2885,26 +2871,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 case DT_CALLBACK: {
                     method_name = "callback";
                     if (async_item.callback) {
-                        // a callback of a module's code (a timer of the module) that the worker cannot enter because
-                        // the module cleanup at the end of the process has closed the Programs of the modules to it is
-                        // skipped, as the callbacks of the module's operations are (see above); the callback's Program
-                        // is entered first, as the item's Program is above, so that the check has no window
-                        // (qore#6685)
-                        QoreProgram* cb_pgm = async_item.callback->getProgram();
-                        ExceptionSink cb_guard_xsink;
-                        std::unique_ptr<ProgramThreadCountContextHelper> cb_guard;
-                        bool refused = false;
-                        if (cb_pgm && qore_program_has_module_lifetime(cb_pgm)) {
-                            cb_guard.reset(new ProgramThreadCountContextHelper);
-                            cb_guard->set(&cb_guard_xsink, cb_pgm, true);
-                            refused = !cb_guard->entered() && qore_module_program_entry_refused(cb_pgm);
-                            // another failure is the callback's own exception, raised when it enters the Program
-                            cb_guard_xsink.clear();
-                        }
-                        if (!refused) {
-                            ValueHolder rv(async_item.callback->invoke(async_item.args, &work_xsink),
-                                &work_xsink);
-                        }
+                        ValueHolder rv(async_item.callback->invoke(async_item.args, &work_xsink),
+                            &work_xsink);
                     }
                     break;
                 }
@@ -3126,6 +3094,22 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // next, unrelated work item on this worker
         end_thread_cancellation();
 
+        // a callback whose only failure is that it was refused entry into the Program of a module, which the module
+        // cleanup at the end of the process closes to the threads other than its own before it deletes the modules,
+        // is not reported, at any depth: the item's own Program (an operation that a module's code submitted, whose
+        // step completes while the modules are deleted), the Program of the class of the method that it calls (an
+        // HTTP client operation of a connection manager whose object belongs to its client's Program), or the Program
+        // of a timer's callback; the code of the closed Program does not run.  Any other exception is reported (one
+        // that a callback raised after it caught the refusal, for example).  A step (continuePoll()) gives the
+        // refusal as the operation's error, as before (qore#6685)
+        if (work_xsink && qore_module_entry_refusals() != module_entry_refusals
+                && qore_module_entry_refusals_only(&work_xsink)) {
+            work_xsink.clear();
+        }
+        // the same for the release of the item's references below, which can run the destructor of an object of a
+        // module's class
+        const uint64_t cleanup_module_entry_refusals = qore_module_entry_refusals();
+
         if (work_xsink) {
             QoreStringValueHelper err_str(work_xsink.getExceptionErr());
             QoreStringValueHelper desc_str(work_xsink.getExceptionDesc());
@@ -3295,7 +3279,12 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // exits), while the derefs above can run arbitrary Qore destructors that raise into it.  An
         // exception left pending here would stay for every subsequent work item, where it is invisible and
         // can be mistaken for a failure by any helper that reports through the sink.  Report it once and
-        // clear it so each work item starts from a clean sink.
+        // clear it so each work item starts from a clean sink.  A refused entry into the Program of a module while
+        // the modules are deleted is not reported (see above; qore#6685)
+        if (*xsink && qore_module_entry_refusals() != cleanup_module_entry_refusals
+                && qore_module_entry_refusals_only(xsink)) {
+            xsink->clear();
+        }
         if (*xsink) {
             QoreStringValueHelper err(xsink->getExceptionErr());
             QoreStringValueHelper desc(xsink->getExceptionDesc());

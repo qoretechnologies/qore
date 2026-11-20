@@ -1885,13 +1885,20 @@ DLLLOCAL void qore_close_module_programs();
 */
 DLLLOCAL bool qore_module_cleanup_delegation();
 
-//! Returns true if the calling thread would be refused entry into the given Program: it is the Program of a module,
-//! and the Programs of the modules are closed to the thread (see qore_close_module_programs(); qore#6685)
-/** Asynchronous work that the thread would run in the Program (the callbacks of an asynchronous I/O operation that a
-    thread other than the module cleanup submitted, which completes while the modules are deleted) is then skipped, as
-    the work of a Program that is being deleted is
+//! Returns the number of times that the calling thread was refused entry into the Program of a module because the
+//! module cleanup had closed the Programs of the modules to it (see qore_close_module_programs(); qore#6685)
+/** A callback whose only failure is a new refusal was refused entry into a module's Program, at any depth (its own
+    Program, the Program of the class of the method that it calls, or one that it calls into): the failure is not
+    reported (see qore_module_entry_refusals_only())
 */
-DLLLOCAL bool qore_module_program_entry_refused(const QoreProgram* pgm);
+DLLLOCAL uint64_t qore_module_entry_refusals();
+
+//! Returns true if every exception in \a xsink is the refusal of an entry into the Program of a module once the
+//! module cleanup has closed them (see qore_module_entry_refusals()), and there is at least one
+/** A failure with any other exception is reported: it can be one that a callback raised after it caught the refusal,
+    or one of its own before code that it ran on exit was refused
+*/
+DLLLOCAL bool qore_module_entry_refusals_only(ExceptionSink* xsink);
 
 //! Keeps the Programs of the modules open to the calling thread while it runs work that the module cleanup handed
 //! over, if \a delegate (the result of qore_module_cleanup_delegation() in the handing thread) is true
