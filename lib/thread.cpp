@@ -88,6 +88,7 @@
 #include "qore/intern/QC_AbstractThreadResource.h"
 #include "qore/intern/QC_AbstractConnectionPool.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreSandboxPollOps.h"
 
 #include <string.h>
 
@@ -7638,7 +7639,7 @@ int QoreInheritedSandbox::capture(ExceptionSink* xsink, std::unique_ptr<QoreInhe
     // the thread is counted against the limit of the manager that governs everything but policy checks; the
     // policy manager differs only under a policy barrier, which does not change who started the thread
     if (QoreSandboxManager* sm = sbx->ctx.manager) {
-        if (sm->acquireThreadSlot(xsink)) {
+        if (qore_sandbox_manager_ops(sm).acquireThreadSlot(xsink)) {
             return -1;
         }
         sm->ref();
@@ -7654,7 +7655,7 @@ QoreInheritedSandbox::~QoreInheritedSandbox() {
 
 void QoreInheritedSandbox::releaseSlot() {
     if (counted) {
-        counted->releaseThreadSlot();
+        qore_sandbox_manager_ops(counted).releaseThreadSlot();
         counted->deref(nullptr);
         counted = nullptr;
     }

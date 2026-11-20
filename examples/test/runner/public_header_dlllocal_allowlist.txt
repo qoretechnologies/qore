@@ -60,15 +60,6 @@ include/qore/ParseOptionMap.h|ParseOptionMap|ParseOptionMap(const ParseOptionMap
 include/qore/ParseOptionMap.h|ParseOptionMap|static QoreHashNode* getCodeToStringMap()
 include/qore/ParseOptionMap.h|ParseOptionMap|static QoreHashNode* getStringToCodeMap()
 include/qore/ParseOptionMap.h|ParseOptionMap|static void static_init()
-include/qore/PollPipeline.h|PollPipelinePriv|QoreHashNode* buildResultHash(ExceptionSink* xsink) const
-include/qore/PollPipeline.h|PollPipelinePriv|SocketPollOperationBase* createInnerOp(const Step& step, ExceptionSink* xsink)
-include/qore/PollPipeline.h|PollPipelinePriv|int armImapLineRead(ExceptionSink* xsink)
-include/qore/PollPipeline.h|PollPipelinePriv|int armImapLiteralRead(size_t count, ExceptionSink* xsink)
-include/qore/PollPipeline.h|PollPipelinePriv|int handleImapResponse(ExceptionSink* xsink)
-include/qore/PollPipeline.h|PollPipelinePriv|void deliverResult(ExceptionSink* xsink)
-include/qore/PollPipeline.h|PollPipelinePriv|void extractOutput(ExceptionSink* xsink)
-include/qore/PollPipeline.h|PollPipelinePriv|void releaseCurrentOp(ExceptionSink* xsink)
-include/qore/PollPipeline.h|PollPipelinePriv|void setError(const char* err, const char* desc, ExceptionSink* xsink)
 include/qore/QoreBigFloatNode.h|QoreBigFloatNode|virtual bool getAsBoolImpl() const override
 include/qore/QoreBigFloatNode.h|QoreBigFloatNode|virtual double getAsFloatImpl() const override
 include/qore/QoreBigFloatNode.h|QoreBigFloatNode|virtual int getAsIntImpl() const override
@@ -202,12 +193,6 @@ include/qore/QoreSSLCertificate.h|QoreSSLCertificate|QoreValue doPurposeValue(in
 include/qore/QoreSSLCertificate.h|QoreSSLCertificate|virtual ~QoreSSLCertificate()
 include/qore/QoreSSLPrivateKey.h|QoreSSLPrivateKey|QoreSSLPrivateKey(EVP_PKEY* p)
 include/qore/QoreSSLPrivateKey.h|QoreSSLPrivateKey|virtual ~QoreSSLPrivateKey()
-include/qore/QoreSandboxManager.h|QoreNetworkSecurityManager|bool allowsPort(int port, int proto) const
-include/qore/QoreSandboxManager.h|QoreSandboxManager|int acquireThreadSlot(ExceptionSink* xsink)
-include/qore/QoreSandboxManager.h|QoreSandboxManager|int acquireThreadSlotQuiet(ExceptionSink* xsink, bool& released)
-include/qore/QoreSandboxManager.h|QoreSandboxManager|void notifyThreadSlotReleased(const AbstractPrivateData* except = nullptr)
-include/qore/QoreSandboxManager.h|QoreSandboxManager|void releaseThreadSlot()
-include/qore/QoreSandboxManager.h|QoreSandboxManager|void releaseThreadSlotQuiet()
 include/qore/QoreSocket.h|QoreSocket|QoreSocket(int n_sock, int n_sfamily, int n_stype, int s_prot, const QoreEncoding* csid)
 include/qore/QoreSocket.h|SocketSource|SocketSource& operator=(const SocketSource&)
 include/qore/QoreSocket.h|SocketSource|SocketSource(const SocketSource&)

@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/QoreSandboxPollOps.h"
 
 // checks the network policy that applies to the calling code against every address of a TCP destination, as a
 // connection made here would be checked (qore#6745)
@@ -1019,7 +1020,7 @@ nothing SandboxManager::allowHTTPSOnly() {
     // it adds 443/TCP to the allowed ports: with no port rule every port is allowed already, so it only restricts
     // the ports then (as it does when 443/TCP is allowed already), but it loosens an allowlist that lacks the port
     // (see qore_sandbox_manager_check_change())
-    if (!sm->network().allowsPort(443, QSEC_NET_TCP)
+    if (!qore_network_security_manager_ops(sm->network()).allowsPort(443, QSEC_NET_TCP)
         && qore_sandbox_manager_check_change(sm, "SandboxManager::allowHTTPSOnly()", xsink)) {
         return QoreValue();
     }
