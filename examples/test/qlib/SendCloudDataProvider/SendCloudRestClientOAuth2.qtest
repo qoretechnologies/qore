@@ -1,0 +1,261 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SendCloudRestClientOAuth2.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires json
+%requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
+%requires HttpServerUtil
+%requires HttpServer
+%requires SendCloudRestClient
+%requires SendCloudDataProvider
+
+%exec-class SendCloudRestClientOAuth2Test
+
+#! A local stand-in for SendCloud's token endpoint and API that records the requests it gets
+class SendCloudStandInHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of tokens issued
+        int tokens;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? body.toString() : NOTHING,
+        };
+        if (hdr.path == "oauth2/token") {
+            # the response of the SendCloud documentation
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({
+                    "access_token": "access-" + ++tokens,
+                    "expires_in": 3599,
+                    "scope": "api",
+                    "token_type": "bearer",
+                }),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"path": hdr.path, "authorization": hdr.authorization}),
+        };
+    }
+}
+
+#! OAuth2 client credentials and HTTP Basic authentication of the SendCloud REST client and connection
+/** (qore#6896)  No credentials and no network: options and URLs are inspected, and requests (including the token
+    requests) go to a local stand-in.
+*/
+public class SendCloudRestClientOAuth2Test inherits QUnit::Test {
+    private {
+        HttpServer server;
+        SendCloudStandInHandler handler();
+        string base;
+    }
+
+    constructor() : Test("SendCloudRestClientOAuth2", "1.0", \ARGV, Opts) {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        server.setDefaultHandler("sendcloud", handler);
+        base = "http://localhost:" + port;
+
+        addTestCase("scheme", \schemeTest());
+        addTestCase("grant type", \grantTypeTest());
+        addTestCase("HTTP Basic fallback", \basicFallbackTest());
+        addTestCase("client credentials requests", \clientCredentialsTest());
+        addTestCase("data provider clients for other base URLs", \otherBaseUrlTest());
+        set_return_value(main());
+    }
+
+    #! The connection scheme names OAuth2 first and defaults its options to the client credentials flow
+    schemeTest() {
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("sendcloudrest");
+        assertEq("oauth2_client_id,oauth2_client_secret|public_key,secret_key", scheme.required_options);
+        list<string> alternatives = scheme.required_options.split("|");
+        assertEq("oauth2_client_id,oauth2_client_secret", alternatives[0]);
+        assertEq("public_key,secret_key", alternatives[1]);
+        assertEq("https://account.sendcloud.com/oauth2/token", scheme.options.oauth2_token_url.default_value);
+        assertEq("client_credentials", scheme.options.oauth2_grant_type.default_value);
+        assertEq(("api",), scheme.options.oauth2_scopes.default_value);
+        assertEq(True, scheme.options.oauth2_token_use_basic_auth.default_value);
+        assertTrue(scheme.options.public_key.sensitive);
+        assertTrue(scheme.options.secret_key.sensitive);
+        assertTrue(scheme.options.oauth2_client_secret.sensitive);
+    }
+
+    #! An OAuth2 connection reports the client credentials grant; a connection with the keys reports no grant
+    grantTypeTest() {
+        SendCloudRestConnection conn({
+            "name": "sendcloud-oauth2",
+            "opts": {
+                "oauth2_client_id": "pk-1",
+                "oauth2_client_secret": "sk-1",
+            },
+        });
+        assertEq("client_credentials", conn.getExtendedInfo().oauth2_grant_type);
+        *hash<auto> features = conn.getFeatures();
+        assertTrue(features{RestConnection::RCF_OAUTH2});
+        assertTrue(features{RestConnection::RCF_OAUTH2_CLIENT_CREDENTIALS});
+        # a non-interactive grant has no authorization step to offer
+        assertFalse(features{RestConnection::RCF_OAUTH2_AUTH} ?? False);
+        hash<auto> opts = conn.getConnectionOptions();
+        assertEq("https://account.sendcloud.com/oauth2/token", opts.oauth2_token_url);
+        assertEq(("api",), opts.oauth2_scopes);
+        assertEq(True, opts.oauth2_token_use_basic_auth);
+        assertTrue(conn.getInfo().up);
+
+        SendCloudRestConnection basic({
+            "name": "sendcloud-basic",
+            "opts": {
+                "public_key": "pk-1",
+                "secret_key": "sk-1",
+            },
+        });
+        assertEq("none", basic.getExtendedInfo().oauth2_grant_type);
+        assertFalse(basic.getFeatures(){RestConnection::RCF_OAUTH2} ?? False);
+    }
+
+    #! The keys win over OAuth2: they are sent by HTTP Basic Auth and the OAuth2 options are removed
+    basicFallbackTest() {
+        SendCloudRestConnection conn({
+            "name": "sendcloud-basic",
+            "opts": {
+                "public_key": "pk-1",
+                "secret_key": "sk-1",
+            },
+        });
+        assertTrue(conn.getInfo().up);
+        hash<auto> client_opts = SendCloudRestClientBase::getOptions(conn.getConnectionOptions());
+        assertEq("pk-1", client_opts.username);
+        assertEq("sk-1", client_opts.password);
+        foreach string opt in (SendCloudRestClientBase::OAuth2OptionNames) {
+            assertFalse(client_opts.hasKey(opt), opt);
+        }
+
+        client_opts = SendCloudRestClientBase::getOptions({
+            "public_key": "pk-1",
+            "secret_key": "sk-1",
+            "oauth2_client_id": "pk-2",
+            "oauth2_client_secret": "sk-2",
+        });
+        assertEq("pk-1", client_opts.username);
+        assertFalse(client_opts.hasKey("oauth2_client_id"));
+
+        # one key without the other is still an error
+        assertThrows("SENDCLOUD-ERROR", "secret_key", sub () { SendCloudRestClientBase::getOptions(
+            {"public_key": "pk-1", "oauth2_client_id": "pk-2", "oauth2_client_secret": "sk-2"}); });
+        # with neither the keys nor OAuth2, the client cannot authenticate
+        assertThrows("SENDCLOUD-ERROR", sub () { SendCloudRestClientBase::getOptions({}); });
+
+        # the keys are sent by HTTP Basic Auth, with no token request
+        handler.requests = ();
+        SendCloudRestClient client({"url": base + "/api/v2", "public_key": "pk-1", "secret_key": "sk-1"}, True);
+        hash<auto> body = client.get("user").body;
+        assertEq("Basic " + make_base64_string("pk-1:sk-1"), body.authorization);
+        assertEq(1, handler.requests.size());
+    }
+
+    #! A token is requested with the client credentials grant and the api scope by HTTP basic client authentication
+    clientCredentialsTest() {
+        hash<auto> opts = {
+            "url": base + "/api/v2",
+            "oauth2_client_id": "pk-1",
+            "oauth2_client_secret": "sk-1",
+            "oauth2_token_url": base + "/oauth2/token",
+        };
+        hash<auto> client_opts = SendCloudRestClientBase::getOptions(opts);
+        assertEq("client_credentials", client_opts.oauth2_grant_type);
+        assertEq(("api",), client_opts.oauth2_scopes);
+        assertNothing(client_opts.username);
+
+        handler.requests = ();
+        SendCloudRestClient client(opts, True);
+        hash<auto> body = client.get("user").body;
+        assertEq(2, handler.requests.size());
+        checkTokenRequest(handler.requests[0]);
+        assertEq("api/v2/user", handler.requests[1].path);
+        assertEq("Bearer " + "access-" + handler.tokens, body.authorization);
+
+        # the async client acquires its own token
+        handler.requests = ();
+        SendCloudRestClientIo client_io(opts);
+        body = client_io.restGet("user").body;
+        assertEq(2, handler.requests.size());
+        checkTokenRequest(handler.requests[0]);
+        assertEq("Bearer " + "access-" + handler.tokens, body.authorization);
+
+        # the async client keeps the OAuth2 credentials for the data provider
+        *hash<auto> creds = client_io.getSendCloudCredentials();
+        assertEq("pk-1", creds.public_key);
+        assertEq("sk-1", creds.secret_key);
+        assertTrue(creds.oauth2);
+        assertEq(base + "/oauth2/token", creds.oauth2_token_url);
+    }
+
+    #! The data provider's clients for other base URLs use the OAuth2 credentials of the connection
+    otherBaseUrlTest() {
+        handler.requests = ();
+        SendCloudDataProvider::SendCloudDataProvider dp({
+            "restclient_options": {
+                "url": base + "/api/v2",
+                "oauth2_client_id": "pk-1",
+                "oauth2_client_secret": "sk-1",
+                "oauth2_token_url": base + "/oauth2/token",
+            },
+        });
+        assertTrue(dp.getSendCloudCredentials().oauth2);
+        handler.requests = ();
+        hash<auto> body = dp.doAbsoluteGet(base + "/api/v2/service-points", {"country": "NL"});
+        assertEq("api/v2/service-points?country=NL", body.path);
+        assertEq("Bearer " + "access-" + handler.tokens, body.authorization);
+        assertEq(2, handler.requests.size());
+        checkTokenRequest(handler.requests[0]);
+    }
+
+    private checkTokenRequest(hash<auto> req) {
+        assertEq("POST", req.method);
+        assertEq("oauth2/token", req.path);
+        assertEq("Basic " + make_base64_string("pk-1:sk-1"), req.authorization);
+        hash<auto> form = mime_parse_form_urlencoded_string(req.body);
+        assertEq("client_credentials", form.grant_type);
+        assertEq("api", form.scope);
+        assertFalse(form.hasKey("client_secret"));
+    }
+}
