@@ -335,6 +335,14 @@ public class TestRun {
             if (vars && (map {ENV{$1}: True}, vars).size() == 1) {
                 return TestRun::getPreconditionFailure(vars[0], ENV{vars[0]}, ex);
             }
+            # more than one variable of the driver: the error is that of one of them
+            if (vars) {
+                string names = join(" or ", vars);
+                string reason = TestRun::getPreconditionFailure(names, ENV{vars[0]}, ex);
+                # the datasource of each variable, masked
+                return replace(reason, sprintf("%s is set to %y", names, TestRun::describeDatasource(ENV{vars[0]})),
+                    sprintf("%s are set (%s)", names, join(", ", map TestRun::describeDatasource(ENV{$1}), vars)));
+            }
         }
         return sprintf("%s: %s", prefix, ex.err);
     }
