@@ -1789,6 +1789,9 @@ const char* qore_program_private_base::addRuntimeString(const char* str) {
     if (i == rt_str_set.end() || strcmp(*i, str)) {
         // fork() waits for the change (see recordLock()); the copy is freed if it cannot be stored
         std::unique_ptr<char, decltype(&free)> copy(strdup(str), &free);
+        if (!copy) {
+            throw std::bad_alloc();
+        }
         std::lock_guard<std::mutex> rl(threadContainerLock());
         rt_str_vec.push_back(copy.get());
         copy.release();

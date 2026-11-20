@@ -274,9 +274,10 @@ Besides the locks:
   (`qore_thread_counter_share`, `qore_tp_thread_counter_share`: its own run, and the ThreadPool task it runs), so
   that the end of the child's Programs and `qore_cleanup()` do not wait for threads that do not exist.
 - **Programs**: each Program's locks are initialized again (also its parse options mutex), its thread counts keep only
-  the forking thread, and parse ownership held by another thread is released; the counts of the calls in progress into
-  its debug program and of the copies in progress of its external data keep only those of the forking thread
-  (`QoreForkCountedHold`).  The locks of the Program data of every thread (the forking thread's, and those of the
+  the forking thread, and parse ownership held by another thread is released; the count of the calls in progress into
+  its debug program keeps only those of the forking thread (`QoreForkCountedHold`), and the count of the copies in
+  progress of its external data only the forking thread's copies (`ExtDataCopyFrame`, `getOwnExtDataCopies()`).  The
+  locks of the Program data of every thread (the forking thread's, and those of the
   other threads that have data in a Program or are registered with a Program family) are initialized again. The
   records that other threads change at run time are changed under the stripe locks that `fork()` waits for, so the
   child gets them consistent, although the owners' locks are only initialized again: the containers that record a
@@ -332,7 +333,8 @@ Besides the locks:
 
 - Per-object locks that a thread of the parent held at the moment of the fork: object r-sections, variable locks,
   socket, queue and mutex objects, namespaces, the gate of the synchronized static methods of a class.  A child that
-  uses an object whose lock was held then waits forever, as before.  The locks of the DBI objects are the exception (see "What the child repairs").
+  uses an object whose lock was held then waits forever, as before.  The locks of the DBI objects are the exception
+  (see "What the child repairs").
 - The data of a Program that changes only while it is parsed or torn down (its namespaces and code, the statement
   index of the debugger): it is not consistent in a child created while another thread parsed or tore down that
   Program.  The teardown of such a Program does not finish in the child, so the Program, and the references that

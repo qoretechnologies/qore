@@ -5972,6 +5972,9 @@ public:
         if (i == str_set.end() || strcmp(*i, str)) {
             // fork() waits for the change (see recordLock()); the copy is freed if it cannot be stored
             std::unique_ptr<char, decltype(&free)> copy(strdup(str), &free);
+            if (!copy) {
+                throw std::bad_alloc();
+            }
             std::lock_guard<std::mutex> rl(threadContainerLock());
             str_vec.push_back(copy.get());
             copy.release();
@@ -7038,15 +7041,20 @@ public:
         AutoLocker al(tlock);
         //QoreAutoRWWriteLocker arwl(&lck_debug_program);
 
-        std::lock_guard<std::mutex> rl(recordLock(n_dpgm));
-        record();
-        if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
-            return;
-        if (!dpgm.load(std::memory_order_relaxed)) {
-            qore_aot_debug_program_change(true);
+        {
+            // the record and the Program's debug program are one change for fork(); the stripe lock is a leaf lock,
+            // held only around them (see recordLock())
+            std::lock_guard<std::mutex> rl(recordLock(n_dpgm));
+            record();
+            if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
+                return;
+            if (!dpgm.load(std::memory_order_relaxed)) {
+                qore_aot_debug_program_change(true);
+            }
+            dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
         }
-        dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
-        // the IR interpreter no longer inlines the calls of this Program's methods (issue #6473)
+        // the IR interpreter no longer inlines the calls of this Program's methods (issue #6473); after the store, and
+        // under tlock, but not under the stripe lock, as it takes the lock of the inline sites
         qore_ir_suspend_inline_states(&dpgm);
         printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
@@ -7077,12 +7085,15 @@ public:
         AutoLocker al(tlock);
         //QoreAutoRWWriteLocker arwl(&lck_debug_program);
         assert(n_dpgm==dpgm.load(std::memory_order_relaxed));
-        std::lock_guard<std::mutex> rl(recordLock(n_dpgm));
-        unrecord();
-        if (!n_dpgm)
-            return;
-        if (dpgm.exchange(nullptr, std::memory_order_release)) {
-            qore_aot_debug_program_change(false);
+        {
+            // see attachDebug()
+            std::lock_guard<std::mutex> rl(recordLock(n_dpgm));
+            unrecord();
+            if (!n_dpgm)
+                return;
+            if (dpgm.exchange(nullptr, std::memory_order_release)) {
+                qore_aot_debug_program_change(false);
+            }
         }
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
