@@ -712,6 +712,16 @@ void QoreEncodingManager::addAlias(const QoreEncoding* qcs, const char* alias) {
     mutex.unlock();
 }
 
+// the private implementation of the registration of encodings, with access to the tables of QoreEncodingManager
+class qore_encoding_manager_private {
+public:
+    //! finds or creates an encoding as findCreate() does for trusted code: any name that is not known is registered
+    DLLLOCAL static const QoreEncoding* findCreateTrusted(const char* name);
+
+    //! returns the encoding whose name or alias has the given key (its letters and digits in upper case), if any
+    DLLLOCAL static const QoreEncoding* findByNameKey(const char* key);
+};
+
 // returns the canonical name of an encoding that Qore does not know, defined after the table of character set labels
 static std::string qore_canonical_charset_name(const char* name);
 
@@ -729,9 +739,98 @@ const QoreEncoding* QoreEncodingManager::findUnlocked(const char* name) {
     return 0;
 }
 
+// the name of the encoding that untrusted code gets for a name that it may not register (qore#6826)
+static constexpr const char* QORE_UNREGISTERED_ENCODING = "X-QORE-UNREGISTERED";
+
+// returns true if untrusted code may register an encoding of the given name that Qore does not know: a plain name of
+// an encoding that iconv converts both ways; iconv also accepts names with any conversion suffix ("//...", or a
+// trailing "/") and with leading whitespace, so that such names, and names with control characters or beyond a
+// length that no encoding name has, would let it register names without bound (qore#6826)
+static bool qore_untrusted_may_register_encoding(const char* name) {
+    size_t len = strlen(name);
+    if (!len || len > 64) {
+        return false;
+    }
+    for (const char* p = name; *p; ++p) {
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (c <= 0x20 || c >= 0x7f || c == '/' || c == '\\') {
+            return false;
+        }
+    }
+    iconv_t to = iconv_open(name, "UTF-8");
+    if (to == reinterpret_cast<iconv_t>(-1)) {
+        return false;
+    }
+    iconv_close(to);
+    iconv_t from = iconv_open("UTF-8", name);
+    if (from == reinterpret_cast<iconv_t>(-1)) {
+        return false;
+    }
+    iconv_close(from);
+    return true;
+}
+
+// returns the letters and digits of an encoding name in upper case: iconv ignores punctuation in names (glibc some
+// of it, musl all of it), so that the names that it accepts for an encoding are unbounded but their keys are not
+static std::string qore_encoding_name_key(const char* name) {
+    std::string key;
+    for (const char* p = name; *p; ++p) {
+        char c = *p;
+        if (c >= 'a' && c <= 'z') {
+            key += static_cast<char>(c - 'a' + 'A');
+        } else if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+            key += c;
+        }
+    }
+    return key;
+}
+
+const QoreEncoding* qore_encoding_manager_private::findByNameKey(const char* key) {
+    AutoLocker al(QoreEncodingManager::mutex);
+    for (const auto& i : QoreEncodingManager::emap) {
+        if (qore_encoding_name_key(i.first) == key) {
+            return i.second;
+        }
+    }
+    for (const auto& i : QoreEncodingManager::amap) {
+        if (qore_encoding_name_key(i.first) == key) {
+            return i.second;
+        }
+    }
+    return nullptr;
+}
+
 const QoreEncoding* QoreEncodingManager::findCreate(const char* name) {
-    AutoLocker al(mutex);
-    const QoreEncoding* rv = findUnlocked(name);
+    {
+        AutoLocker al(mutex);
+        if (const QoreEncoding* rv = findUnlocked(name)) {
+            return rv;
+        }
+    }
+    // a name that is not known: code that is not trusted registers only a bounded set of names, as data that is not
+    // trusted does (qore_find_untrusted_encoding()), and the encodings that iconv converts by their plain names
+    if (qore_caller_is_untrusted()) {
+        if (const QoreEncoding* rv = qore_find_untrusted_encoding(name)) {
+            return rv;
+        }
+        // another spelling of a known name, which iconv accepts in unbounded spellings, gives its encoding; this
+        // registers nothing
+        std::string key = qore_encoding_name_key(name);
+        if (!key.empty()) {
+            if (const QoreEncoding* rv = qore_encoding_manager_private::findByNameKey(key.c_str())) {
+                return rv;
+            }
+        }
+        if (key.empty() || !qore_untrusted_may_register_encoding(name)) {
+            return qore_encoding_manager_private::findCreateTrusted(QORE_UNREGISTERED_ENCODING);
+        }
+    }
+    return qore_encoding_manager_private::findCreateTrusted(name);
+}
+
+const QoreEncoding* qore_encoding_manager_private::findCreateTrusted(const char* name) {
+    AutoLocker al(QoreEncodingManager::mutex);
+    const QoreEncoding* rv = QoreEncodingManager::findUnlocked(name);
     if (rv) {
         return rv;
     }
@@ -741,7 +840,7 @@ const QoreEncoding* QoreEncodingManager::findCreate(const char* name) {
     std::string code = qore_canonical_charset_name(name);
     std::unique_ptr<QoreEncoding> qcs(new QoreEncoding(code.c_str()));
     qore_encoding_private::get(*qcs)->probe();
-    emap[qcs->getCode()] = qcs.get();
+    QoreEncodingManager::emap[qcs->getCode()] = qcs.get();
     return qcs.release();
 }
 
@@ -830,7 +929,7 @@ const QoreEncoding* qore_find_untrusted_encoding(const char* name, size_t len) {
     for (const auto& label : qore_untrusted_charset_labels) {
         if (!strcasecmp(name, label.label)) {
             const QoreEncoding* enc = QoreEncodingManager::find(label.name);
-            return enc ? enc : QEM.findCreate(label.name);
+            return enc ? enc : qore_encoding_manager_private::findCreateTrusted(label.name);
         }
     }
     return QoreEncodingManager::find(name);

@@ -2904,7 +2904,13 @@ public:
     }
 
     DLLLOCAL void setAssumedEncoding(const char* str) {
-        assume_http_encoding = str;
+        if (!str || !*str) {
+            assume_http_encoding.clear();
+            return;
+        }
+        // the name is resolved by the code that sets it, which can be code that is not trusted, not by the code that
+        // uses it later (qore#6826)
+        assume_http_encoding = QEM.findCreate(str)->getCode();
     }
 
     DLLLOCAL const char* getAssumedEncoding() const {
