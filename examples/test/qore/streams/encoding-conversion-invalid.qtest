@@ -515,22 +515,24 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
             ENCODING_ERRORS_LATIN1));
     }
 
-    #! input that the platform's iconv decodes is converted: JOHAB "D9 31" is U+3000, whose trail byte 0x31 is in the
-    #! JOHAB range 0x31 - 0x7e (qore#6796, #6665)
+    #! the other names of the multi-byte encodings that Qore defines, and an encoding of a probed family (qore#6796,
+    #! #6665)
     multiByteValidTest() {
         # an encoding of a multi-byte family whose definition Qore knows, by any name that iconv implementations know
         # for it, also with conversion flags, has the character functions of its definition, which check the input of
-        # its conversions on every platform (qore#6796): the encoding, its bytes, and the number of characters that
-        # they are, or -1 if they are no characters of the encoding, which its conversions refuse
+        # its conversions on every platform (qore#6796): the encoding, its bytes, the number of characters that they
+        # are, or -1 if they are no characters of the encoding, which its conversions refuse, and True if every iconv
+        # that has the encoding converts them (isEncodingValid() is a conversion to UTF-8, so it is checked only then)
         list<list<auto>> defined = (
-            # JOHAB (glibc: also MSCP1361)
-            ("JOHAB", <41d93142>, 3), ("MSCP1361", <41d93142>, 3),
-            # a C1 control character of EUC-JP and EUC-KR (JIS X 0208:1997 Annex 1, KS X 2901); that iconv decodes
-            # it is not checked: glibc's does, musl's EUC-JP refuses it, and musl's EUC-KR is CP949
+            # JOHAB (glibc: also MSCP1361): "D9 31" is U+3000, whose trail byte 0x31 is in the JOHAB range 0x31 - 0x7e
+            ("JOHAB", <41d93142>, 3, True), ("MSCP1361", <41d93142>, 3, True),
+            # a C1 control character of EUC-JP and EUC-KR (JIS X 0208:1997 Annex 1, KS X 2901), which glibc's iconv
+            # decodes; GNU libiconv's (macOS) and musl's EUC-JP refuse it, and musl's EUC-KR is CP949
             ("EUCJP", <418142>, 3), ("UJIS", <418142>, 3), ("eucJP-win", <418142>, 3), ("OSF00030010", <418142>, 3),
             ("EUCKR", <418142>, 3), ("OSF0004000A", <418142>, 3),
             # EUC-CN has no C1 character
-            ("GB2312", <418142>, -1), ("EUC-CN", <418142>, -1), ("CN-GB", <418142>, -1), ("GB2312", <41b0a142>, 3),
+            ("GB2312", <418142>, -1), ("EUC-CN", <418142>, -1), ("CN-GB", <418142>, -1),
+            ("GB2312", <41b0a142>, 3, True),
             # glibc's iconv decodes the byte 0x80 of Big5 (also CN-BIG5) as U+0080
             ("CN-BIG5", <418042>, -1), ("GB18030", <41812042>, -1), ("GB13000", <41814042>, 3),
             ("MSCP949", <41814142>, 3),
@@ -553,8 +555,10 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
                 assertEq("ENCODING-CONVERSION-ERROR", ex.err, label);
                 assertRegex("byte offset 1", ex.desc, label);
             } else {
-                assertTrue(s.isEncodingValid(), label);
                 assertEq(c[2], s.length(), label);
+                if (c[3]) {
+                    assertTrue(s.isEncodingValid(), label);
+                }
             }
         }
         # the conversions that every iconv that has the encoding decodes
