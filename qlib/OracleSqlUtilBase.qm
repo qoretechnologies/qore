@@ -392,6 +392,10 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - implemented the SqlUtil @ref select_option_lock_wait "lock_wait" select option (\c "nowait",
+      \c "wait" and, with Oracle 11g and later, \c "skip_locked"), and the classification of the lock-not-available
+      errors (\c ORA-00054 and \c ORA-30006), also with the \c jdbc driver
+      (<a href="https://github.com/qoretechnologies/qore/issues/6803">issue 6803</a>)
     - a string given as the first argument of the \c in data provider expression is a bound value, as with the other
       databases; it was written into the SQL as a column name
       (<a href="https://github.com/qoretechnologies/qore/issues/6574">issue 6574</a>)
@@ -651,6 +655,27 @@ int sub oracle_get_server_major_version(AbstractDatasource ds) {
         return version.major_version.toInt();
     }
     return (version =~ x/([0-9]+)/)[0].toInt();
+}
+
+# returns True if the server supports the lock_wait mode: NOWAIT and WAIT n are supported by every version that the
+# module supports; SKIP LOCKED is documented since Oracle 11g
+bool sub oracle_supports_lock_wait(AbstractDatasource ds, string mode) {
+    return mode != "skip_locked" || oracle_get_server_major_version(ds) >= 11;
+}
+
+# returns True if the exception is Oracle's error for a lock that is not available: ORA-00054 (resource busy and
+# acquire with NOWAIT specified, also raised for an expired WAIT n by Oracle 23) or ORA-30006 (resource busy; acquire
+# with WAIT timeout expired): the oracle driver gives the code in the "alterr" key of the exception's argument
+# (ex: "OCI-00054"); the jdbc driver gives the Java exception, whose getErrorCode() gives it
+bool sub oracle_is_lock_not_available(hash<ExceptionInfo> ex) {
+    *int code = sqlutil_get_vendor_error_code(ex);
+    if (!exists code && ex.arg.typeCode() == NT_HASH && ex.arg.alterr.typeCode() == NT_STRING) {
+        *list<auto> m = (ex.arg.alterr =~ x/^(?:OCI|ORA)-([0-9]+)$/);
+        if (m) {
+            code = m[0].toInt();
+        }
+    }
+    return code == 54 || code == 30006;
 }
 
 # returns a database link name for SQL, where it is not quoted: letters, digits, underscores, dollar and pound signs,
@@ -1940,6 +1965,27 @@ public class OracleMaterializedView inherits OracleCodeBaseNoRename {
 
 #! the Oracle specialization for SqlUtil::AbstractDatabase
 public class OracleDatabase inherits SqlUtil::AbstractDatabase {
+    #! NOWAIT and WAIT n are supported by every version; SKIP LOCKED needs Oracle 11g
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool supportsLockWaitImpl(string mode) {
+        return oracle_supports_lock_wait(ds, mode);
+    }
+
+    #! ORA-00054 or ORA-30006
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+        return oracle_is_lock_not_available(ex);
+    }
+
+    #! A statement that fails releases its row locks (it is rolled back to the start of the statement)
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool lockNotAvailableReleasesLocksImpl() {
+        return True;
+    }
+
     public {
         #! options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()"
         /** @since OracleSqlUtilBase 1.7
@@ -4699,6 +4745,27 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         a plain \c FOR UPDATE would also try to lock (\c ORA-02014), so only the base table's rows are locked
         with <tt>FOR UPDATE OF</tt> there.
     */
+    #! NOWAIT and WAIT n are supported by every version; SKIP LOCKED needs Oracle 11g
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool supportsLockWaitImpl(string mode) {
+        return oracle_supports_lock_wait(ds, mode);
+    }
+
+    #! ORA-00054 or ORA-30006
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+        return oracle_is_lock_not_available(ex);
+    }
+
+    #! A statement that fails releases its row locks (it is rolled back to the start of the statement)
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool lockNotAvailableReleasesLocksImpl() {
+        return True;
+    }
+
     private doForUpdate(reference<string> sql) {
         if (sql.find(ForUpdatePageJoin) >= 0) {
             sql += sprintf(" for update of %s.%s", ForUpdatePageTableAlias, getColumnSqlName(describe().keys()[0]));

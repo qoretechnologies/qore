@@ -2064,6 +2064,9 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
       - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - the @ref select_option_lock_wait "lock_wait" select option gives a locking select \c NOWAIT, \c SKIP
+        \c LOCKED or \c WAIT \c n on PostgreSQL, Oracle, MySQL and MariaDB, with the classification of the
+        lock-not-available error (<a href="https://github.com/qoretechnologies/qore/issues/6803">issue 6803</a>)
       - see @ref sqlutilv3_11_0 for all changes
 
     - @ref tablemapperintro "TableMapper" module
