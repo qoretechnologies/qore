@@ -1540,6 +1540,52 @@ static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_
     return !qore_caller_is_sandboxed();
 }
 
+//! Returns the ID of the caller %Program: the %Program whose code called the running code
+/** The caller %Program is the first %Program, from the running code outward, that is not the %Program of a user
+    module: library module code that serves a call from a %Program's code, also through more library module code,
+    gets the ID of that %Program.  Library code uses it to record the %Program that owns an object that it creates for
+    its caller, and to allow a later change of the object only to code of that %Program (compare with
+    @ref Qore::Program::getProgramId() "Program::getProgramId()").
+
+    The caller is recorded where the code of another %Program is called, in every execution mode, and where a thread
+    is started (the @ref background "background" operator, a thread pool task) for the code that runs later: the
+    caller of code that runs in such a thread is the caller of the code that started it.  Code runs as its own
+    %Program's code: a closure or call reference that a %Program created runs that %Program's code wherever it is
+    called, so library code that it calls gets that %Program's ID; calling another %Program's closure runs that
+    %Program's code.
+
+    The caller is unknown, and the method returns @ref nothing, where the code that the running code serves cannot be
+    identified: in code that a trusted build (createTrustedBuildCall()) created or runs, and in work that started on a
+    thread that no code submitted (an I/O callback or a signal handler) when only module code runs in it.  An unknown
+    caller must be treated as not being any given %Program.
+
+    It is not a sandbox check: a sandboxed caller that it identifies is still refused by the checks that consider
+    every sandbox that governs the code (see isProcessWideRegistrationAllowed() and isSandboxed()).  It reveals only
+    the ID of a %Program whose code is on the current thread's call stack, so it is not restricted itself.
+
+    @return the ID of the caller %Program, or @ref nothing if it is unknown
+
+    @par Example:
+    @code{.py}
+# the object belongs to the Program of the code that created it
+owner_pgm_id = SandboxManager::getCallerProgramId();
+...
+# only the code of that Program can change it
+if (!exists owner_pgm_id || SandboxManager::getCallerProgramId() != owner_pgm_id) {
+    throw "PERMISSION-DENIED", "only the code that created the object can change it";
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
+    qore_program_id_t id;
+    if (qore_get_caller_program_id(id)) {
+        return QoreValue();
+    }
+    return static_cast<int64>(id);
+}
+
 //! Returns @ref True if the code that calls into the library is restricted from any of the given functional domains
 /** A module is a capability: its code runs with its own %Program's options, whatever the restrictions of the code
     that calls it.  Library code that performs an operation of a functional domain on behalf of its caller, such as

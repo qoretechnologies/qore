@@ -1172,6 +1172,48 @@ DLLEXPORT int qore_check_process_wide_registration(const char* what, ExceptionSi
 //! defined if qore_check_process_wide_registration() is available
 #define QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION 1
 
+//! Returns the ID of the caller Program: the Program whose code called the running code (qore#6852)
+/** The caller Program is the first Program, from the running code outward, that is not a module's Program: library
+    module code that serves a call from a Program's code, also through more library code, returns that Program.  A
+    builtin function or method runs in its caller's Program, so in C++ it returns the Program of the code that called
+    the builtin, or of the code that that library code serves.
+
+    The caller is recorded where the code of another Program is called, in every execution mode (also in JIT and AOT
+    code), and where a thread is started or a task is submitted for the code that runs later; it costs nothing per
+    call.  Code runs as its own Program's code: a closure or call reference that a Program created runs that Program's
+    code wherever it is called, so library code that it calls sees that Program as its caller.
+
+    The caller is unknown, and the function fails, where the code that the running code serves cannot be identified:
+    - code that a trusted build (SandboxManager::createTrustedBuildCall()) created or runs
+    - work that started on a thread that no code submitted (an I/O callback, a signal handler), when no Program that
+      is not a module's runs in it
+
+    An unknown caller must be treated as not being any given Program (fail closed).  It does not replace the sandbox
+    checks (see qore_check_process_wide_registration()), which consider every sandbox that governs the running code.
+
+    @param id set to the ID of the caller Program (see QoreProgram::getProgramId()), or to the maximum value of
+    \c qore_program_id_t if it is unknown
+
+    @return 0 if the caller Program was found, -1 if it is unknown
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_get_caller_program_id(qore_program_id_t& id);
+
+//! Returns the caller Program: the Program whose code called the running code (qore#6852)
+/** See qore_get_caller_program_id() for the caller Program and when it is unknown
+
+    @return the caller Program, which is not referenced and is valid during the call only, or nullptr if it is unknown;
+    it can also be nullptr when the caller is known by its ID only (the initialization of a module that a Program that
+    has ended loaded); qore_get_caller_program_id() returns the ID then
+
+    @since %Qore 3.0
+*/
+DLLEXPORT QoreProgram* qore_get_caller_program();
+
+//! defined if qore_get_caller_program_id() and qore_get_caller_program() are available
+#define QORE_HAVE_CALLER_PROGRAM 1
+
 //! defined if the uncontrolled-API policy of sandboxes is available
 /** QoreSandboxManager::setUncontrolledApiPolicy(), QoreSandboxManager::getUncontrolledApiPolicy() and
     qore_sandbox_allows_uncontrolled_apis()

@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a module of caller-program.qtest that a tenant loads by its path: a module's Program, which serves the tenant
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires CallerProbeA
+
+module TenantMod {
+    version = "1.0";
+    desc = "a tenant's own module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace TenantMod {
+#! the module code of a tenant's module that calls library module code
+public *int sub call_probe() {
+    return CallerProbeA::probe();
+}
+}

@@ -1568,6 +1568,12 @@
     sandboxed code as well, and the SSH registry does not give it its providers
     (<a href="https://github.com/qoretechnologies/qore/issues/6744">issue 6744</a>).
 
+    @par The Caller Program of Library Code
+    Library code can identify the %Program whose code it serves, also through other module code, threads and thread
+    pool tasks, to record the owner of an object it creates: @ref Qore::SandboxManager::getCallerProgramId(), and
+    \c qore_get_caller_program_id() and \c qore_get_caller_program() in the C++ API (\c QORE_HAVE_CALLER_PROGRAM)
+    (<a href="https://github.com/qoretechnologies/qore/issues/6852">issue 6852</a>).
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
