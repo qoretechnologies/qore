@@ -115,6 +115,14 @@
     @ref restclientintro "RestClient" and the clients built on it raise \c RESTCLIENT-ERROR for the HTTPClient option
     \c http_fields_at_top_level set to @ref False, as they read the fields of a response at its top level (see
     @ref restclientv2_7; issue #6869).
+    @par The Size of an HTTP/1.x Header and Trailer Section Is Limited
+    The readers of an HTTP/1.x header section, of the trailer section of a chunked body and of a chunk size line
+    (@ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()", the chunked body readers, the poll operations and
+    the HTTP client and server) raise \c HTTP-HEADER-TOO-LARGE, and an HTTP/2 or HTTP/3 stream whose header list is
+    larger is reset, when a peer sends more than 65536 bytes (a server answers with 431); before, there was no limit.
+    @ref Qore::Socket::setMaxHeaderSize() "Socket::setMaxHeaderSize()" and the \c max_header_size option of
+    @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" change it
+    (<a href="https://github.com/qoretechnologies/qore/issues/6867">issue 6867</a>).
 
     @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,

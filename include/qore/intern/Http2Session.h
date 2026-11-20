@@ -104,6 +104,13 @@ struct Http2StreamInfo {
     //! True when receiving trailer headers (after initial headers + body)
     bool receiving_trailers = false;
 
+    //! The size of the header list received so far in the current header block (RFC 9113 section 6.5.2: the length
+    //! of each name and value plus 32 bytes) (qore#6867)
+    size_t header_list_size = 0;
+
+    //! True if the header list received exceeded the maximum header size of the socket and the stream was rejected
+    bool header_list_too_large = false;
+
     // Body data
     std::vector<char> body;
 
@@ -1096,6 +1103,10 @@ public:
 
     //! Get remote peer settings
     DLLLOCAL Http2Settings getRemoteSettings() const { return remote_settings; }
+
+    //! Returns the maximum size of the header list of a received header block: the maximum header size of the socket
+    //! (see Socket::setMaxHeaderSize(); qore#6867)
+    DLLLOCAL uint32_t getMaxHeaderListSize() const;
 
     //! Get the underlying nghttp2 session handle
     DLLLOCAL nghttp2_session* getSession() const { return session; }

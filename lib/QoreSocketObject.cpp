@@ -37,6 +37,7 @@
 #include "qore/intern/WeakReferenceNode.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/SocketRecvHttpLinePollOperation.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -3941,7 +3942,7 @@ static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocke
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n\r\n"));
     s->ref();
     ValueHolder result(qore_socket_object_exec_recv_poll(s,
-        new SocketRecvUntilBytesPollOperation(xsink, *pattern, s, true, true),
+        new SocketRecvHttpLinePollOperation(xsink, *pattern, s, true, true, "header"),
         timeout_ms, "readHTTPHeaderString", xsink), xsink);
     if (*xsink) {
         return nullptr;
@@ -4016,12 +4017,16 @@ static int qore_socket_object_exec_run_http_recv_header_callback(QoreObject* obj
     return *xsink ? -1 : 0;
 }
 
+//! reads a chunk size line or a line of a trailer section, within the size limit of the socket (qore#6867)
+/** @param what \c "chunk size line" or \c "chunked body trailer"
+    @param used the size of the part of the trailer section read before this line, which counts against the limit
+*/
 static QoreStringNode* qore_socket_object_exec_recv_http_line(QoreSocketObject* s, int timeout_ms,
-        const char* owner_name, ExceptionSink* xsink) {
+        const char* owner_name, ExceptionSink* xsink, const char* what, size_t used = 0) {
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
     s->ref();
     ValueHolder result(qore_socket_object_exec_recv_poll(s,
-        new SocketRecvUntilBytesPollOperation(xsink, *pattern, s, true, true),
+        new SocketRecvHttpLinePollOperation(xsink, *pattern, s, true, true, what, used),
         timeout_ms, owner_name, xsink), xsink);
     if (*xsink) {
         return nullptr;
@@ -4045,8 +4050,10 @@ static int qore_socket_object_exec_read_http_chunked_trailers(QoreSocketObject* 
             return -1;
         }
 
+        // the lines of the trailer section count together against the limit
         SimpleRefHolder<QoreStringNode> line(
-            qore_socket_object_exec_recv_http_line(s, timeout_ms, owner_name, xsink));
+            qore_socket_object_exec_recv_http_line(s, timeout_ms, owner_name, xsink, "chunked body trailer",
+                trailers.size()));
         if (*xsink) {
             return -1;
         }
@@ -4119,7 +4126,7 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
         }
 
         SimpleRefHolder<QoreStringNode> line(
-            qore_socket_object_exec_recv_http_line(s, timeout_ms, owner_name, xsink));
+            qore_socket_object_exec_recv_http_line(s, timeout_ms, owner_name, xsink, "chunk size line"));
         if (*xsink) {
             return nullptr;
         }
@@ -6803,6 +6810,15 @@ void QoreSocketObject::setMaxChunkedBodySize(int64 size) {
 int64 QoreSocketObject::getMaxChunkedBodySize() const {
     AutoLocker al(priv->m);
     return priv->socket->getMaxChunkedBodySize();
+}
+
+void QoreSocketObject::setMaxHeaderSize(size_t size) {
+    // an atomic value that is only read when a section is read: no lock and no round trip to the I/O thread
+    priv->socket->setMaxHeaderSize(size);
+}
+
+size_t QoreSocketObject::getMaxHeaderSize() const {
+    return priv->socket->getMaxHeaderSize();
 }
 
 void QoreSocketObject::setHttp2MaxRequestBodySize(int64 size) {

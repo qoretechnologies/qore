@@ -2411,6 +2411,23 @@ int MyPollable::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) cons
     */
     DLLEXPORT int64 getMaxChunkedBodySize() const;
 
+    //! Sets the maximum size of an HTTP/1.x header section, of a chunked body trailer section and of a chunk size line
+    /** The readers of these sections raise an \c HTTP-HEADER-TOO-LARGE exception if a peer sends more.  The size
+        is that of the text received, with the line ends.
+
+        @param size the maximum size in bytes; 0 restores the default of 65536 bytes
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void setMaxHeaderSize(size_t size);
+
+    //! Returns the maximum size of an HTTP/1.x header section, of a chunked body trailer section and of a chunk size line
+    /** @return the maximum size in bytes; the default of 65536 bytes if no other was set
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT size_t getMaxHeaderSize() const;
+
     //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
     /** When set, HTTP/2 DATA frame accumulation exceeding this limit will cause
         the stream to be reset with REFUSED_STREAM.

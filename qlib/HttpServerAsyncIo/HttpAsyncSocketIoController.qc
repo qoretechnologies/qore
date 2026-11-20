@@ -155,6 +155,10 @@ public class HttpAsyncSocketIoController {
         #! The time allowed for an I/O operation of a connection (the \c io_operation_timeout option)
         date io_operation_timeout;
 
+        #! The maximum size in bytes of a request header and of a chunked body trailer section (the
+        #! \c max_header_size option; 0 = the default of the socket)
+        int max_header_size = 0;
+
         #! Shutdown flag; prevents handler tasks from submitting new operations during stop()
         bool stopping = False;
 
@@ -260,6 +264,7 @@ public class HttpAsyncSocketIoController {
         self.controller = controller;
         self.logger = logger;
         self.pool_opts = opts;
+        max_header_size = opts.max_header_size ?? 0;
         io_operation_timeout = exists opts.io_operation_timeout
             ? milliseconds(opts.io_operation_timeout)
             : AsyncSocketIoController::DefaultIoOperationTimeout;
@@ -1378,6 +1383,10 @@ public class HttpAsyncSocketIoController {
             listener.setSslVerifyMode(ssl_verify_flags);
         }
         listener.acceptAllCertificates(ssl_accept_all_certs);
+        # the HTTP/3 sessions of the listener take the limit of the header list from its socket (qore#6867)
+        if (max_header_size > 0) {
+            listener.setMaxHeaderSize(max_header_size);
+        }
         hash<auto> socket_info = listener.getSocketInfo(False);
 
         {
@@ -1993,6 +2002,11 @@ public class HttpAsyncSocketIoController {
                 try { sock.close(); } catch () {}
                 return;
             }
+        }
+
+        # the size limit of the header of a request, and of the trailer section of a chunked body (qore#6867)
+        if (max_header_size > 0) {
+            sock.setMaxHeaderSize(max_header_size);
         }
 
         # Set body size limits on accepted socket before HTTP/2 session setup
@@ -3910,6 +3924,21 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
+        # an HTTP/1.x request header or chunked body trailer larger than the limit of the socket is answered with 431
+        # (Request Header Fields Too Large), and the connection is closed, as the rest of the request cannot be framed
+        # (qore#6867)
+        if ((state == HttpConnectionState::Idle || state == HttpConnectionState::KeepAlive
+                || state == HttpConnectionState::ReadHeader
+                || state == HttpConnectionState::SendAndReadHeader)
+            && ex.err == "HTTP-HEADER-TOO-LARGE"
+            && cinfo.sock.isOpen()) {
+            log(LoggerLevel::WARN, "HTTP request header received on %s is too large: %s: %s; answering with 431 "
+                "(Request Header Fields Too Large)", uh, ex.err, ex.desc);
+            if (sendBadRequest(uh, cinfo, ex.desc, 431, "Request Header Fields Too Large")) {
+                return;
+            }
+        }
+
         # an HTTP/1.x request header that cannot be read, such as one with a NUL character, is answered with 400
         # (Bad Request), as RFC 9112 requires, and the connection is closed, as the rest of the request cannot be
         # framed; before, the connection was closed without a response
@@ -3947,7 +3976,7 @@ public class HttpAsyncSocketIoController {
         endConnectionSseStream(uh, cinfo);
     }
 
-    #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request), then closes the connection
+    #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request) or 431 (Request Header Fields Too Large), then closes the connection
     /** @param uh the connection's unique hash
         @param cinfo the connection
         @param desc why the header could not be read; sent as the body of the response
@@ -3955,15 +3984,16 @@ public class HttpAsyncSocketIoController {
         @return @ref True if the response is being sent; the connection is closed after it is sent, with a lingering
         close; @ref False if the response could not be started, in which case the caller closes the connection
     */
-    private bool sendBadRequest(string uh, hash<HttpActiveConnectionInfo> cinfo, string desc) {
+    private bool sendBadRequest(string uh, hash<HttpActiveConnectionInfo> cinfo, string desc, int code = 400,
+            string reason = "Bad Request") {
         AbstractPollOperation op;
         try {
-            op = cinfo.sock.startPollSendHttpResponse(400, "Bad Request", "1.1", {
+            op = cinfo.sock.startPollSendHttpResponse(code, reason, "1.1", {
                 "Content-Type": "text/plain;charset=utf-8",
                 "Connection": "close",
             }, desc + "\n");
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::DEBUG, "400 response to %s not started: %s: %s", uh, ex.err, ex.desc);
+            log(LoggerLevel::DEBUG, "%d response to %s not started: %s: %s", code, uh, ex.err, ex.desc);
             return False;
         }
         # with no pending stream and no callback after the response, the connection is closed once it is sent

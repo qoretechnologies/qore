@@ -1243,6 +1243,7 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
     }
     // whether the session advertises extended CONNECT (RFC 9220); setupHttp3() runs after the session is created
     session->enable_connect_protocol_ = sock->h3_enable_connect_protocol.load(std::memory_order_acquire);
+    session->setMaxHeaderListSize(sock->getMaxHeaderSize());
     // Clear the temporary socket pointer; it was only needed during init
     session->clearSockPtr();
     return session;
@@ -2117,6 +2118,9 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     }
     // RFC 9297: Enable HTTP/3 datagrams (SETTINGS_H3_DATAGRAM)
     h3_settings.h3_datagram = 1;
+    // the limit of the header section that this side accepts; nghttp3 does not enforce it, the header callbacks do
+    // (qore#6867)
+    h3_settings.max_field_section_size = max_header_list_size_.load(std::memory_order_relaxed);
 
     auto* mem = nghttp3_mem_default();
 
@@ -5876,11 +5880,35 @@ int QuicSession::h3BeginHeadersCallback(nghttp3_conn* /* conn */, int64_t stream
                                          void* conn_user_data, void* /* stream_user_data */) {
     try {
         auto* session = static_cast<QuicSession*>(conn_user_data);
-        session->getOrCreateStream(stream_id);
+        session->getOrCreateStream(stream_id)->header_list_size = 0;
     } catch (...) {
         return NGHTTP3_ERR_CALLBACK_FAILURE;
     }
     return 0;
+}
+
+//! counts a header field against the limit of the header list, and rejects the stream when it is exceeded
+/** @return true if the field is not to be kept: the stream is rejected (qore#6867)
+*/
+bool QuicSession::h3CheckHeaderListSize(QuicSession* session, QuicStreamInfo& stream, int64_t stream_id,
+        size_t name_len, size_t value_len) {
+    if (stream.header_too_large) {
+        return true;
+    }
+    stream.header_list_size += name_len + value_len + 32;
+    size_t max_size = session->max_header_list_size_.load(std::memory_order_relaxed);
+    if (stream.header_list_size <= max_size) {
+        return false;
+    }
+    // fail closed: nothing more of the header list is kept; the rest of the header block is decoded and dropped, as
+    // nghttp3 cannot be told to stop a header block in the middle (an error returned from a callback ends the whole
+    // connection), and the stream ends with an error when the block ends (see h3EndHeadersCallback())
+    stream.header_too_large = true;
+    stream.headers.clear();
+    stream.trailers.clear();
+    stream.error_message = "the HTTP/3 header of stream " + std::to_string(stream_id)
+        + " exceeds the maximum size of " + std::to_string(max_size) + " bytes";
+    return true;
 }
 
 int QuicSession::h3RecvHeaderCallback(nghttp3_conn* /* conn */, int64_t stream_id,
@@ -5893,6 +5921,10 @@ int QuicSession::h3RecvHeaderCallback(nghttp3_conn* /* conn */, int64_t stream_i
 
         nghttp3_vec name_vec = nghttp3_rcbuf_get_buf(name);
         nghttp3_vec value_vec = nghttp3_rcbuf_get_buf(value);
+
+        if (h3CheckHeaderListSize(session, *stream, stream_id, name_vec.len, value_vec.len)) {
+            return 0;
+        }
 
         std::string name_str(reinterpret_cast<const char*>(name_vec.base), name_vec.len);
         std::string value_str(reinterpret_cast<const char*>(value_vec.base), value_vec.len);
@@ -5946,6 +5978,10 @@ int QuicSession::h3RecvTrailerCallback(nghttp3_conn* /* conn */, int64_t stream_
         nghttp3_vec name_vec = nghttp3_rcbuf_get_buf(name);
         nghttp3_vec value_vec = nghttp3_rcbuf_get_buf(value);
 
+        if (h3CheckHeaderListSize(session, *stream, stream_id, name_vec.len, value_vec.len)) {
+            return 0;
+        }
+
         std::string name_str(reinterpret_cast<const char*>(name_vec.base), name_vec.len);
         // trailers carry no pseudo-header fields (RFC 9114 section 4.1)
         if (!name_str.empty() && name_str[0] != ':') {
@@ -5964,6 +6000,22 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
     try {
         auto* session = static_cast<QuicSession*>(conn_user_data);
         auto* stream = session->getOrCreateStream(stream_id);
+        if (stream->header_too_large) {
+            // the header list was larger than the limit and was dropped (see h3CheckHeaderListSize()): the stream is
+            // reset, so that the request is not dispatched; a client's request ends with the error (qore#6867)
+            nghttp3_conn_shutdown_stream_read(session->h3_conn_, stream_id);
+            int rv = session->is_server_
+                ? ngtcp2_conn_shutdown_stream(session->conn_, 0, stream_id, NGHTTP3_H3_EXCESSIVE_LOAD)
+                : ngtcp2_conn_shutdown_stream_read(session->conn_, 0, stream_id, NGHTTP3_H3_EXCESSIVE_LOAD);
+            if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
+                printd(1, "h3EndHeadersCallback(): shutting down stream %lld failed: %s\n", (long long)stream_id,
+                    ngtcp2_strerror(rv));
+            }
+            if (!session->is_server_) {
+                session->markStreamComplete(stream_id);
+            }
+            return 0;
+        }
         stream->headers_complete = true;
         stream->headers_end_stream = (fin != 0);
         // record the response header for the event sink of the client that issued the request: the
