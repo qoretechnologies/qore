@@ -112,7 +112,9 @@ list<hash<auto>> docs = users.aggregate((
       \c ENVIRONMENT) are refused with \c NETWORK-ACCESS-DENIED when sandboxed code creates the client, and when
       sandboxed code connects with such a client
     - the TLS connections of sandboxed code never contact an OCSP responder: a stapled OCSP response is still
-      checked (as with the \c tlsDisableOCSPEndpointCheck option)
+      checked (as with the \c tlsDisableOCSPEndpointCheck option); this needs a libmongoc version whose TLS options
+      the module can set (1.17.0 to 2.5.9, which the build reports): with another version, the TLS connections of
+      sandboxed code are refused
     - \c GSSAPI authentication, for which Kerberos contacts the KDCs itself, is allowed to sandboxed code only when its
       network policy is unrestricted (as for the krb5 module): it is refused with \c NETWORK-ACCESS-DENIED otherwise,
       when the client is created and when it connects

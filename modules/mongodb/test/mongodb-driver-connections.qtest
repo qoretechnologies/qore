@@ -420,6 +420,11 @@ class MongoDbDriverConnectionsTest inherits QUnit::Test {
             Timeouts);
         *hash<ExceptionInfo> ex = tenant(server.getPort(), dir).callFunction("ping", url);
         assertTrue(exists ex, "the test server fails the command");
+        if (ex.desc =~ /are not supported with libmongoc/) {
+            # a libmongoc version whose TLS options the module cannot set: the connection is refused, closed
+            assertEq(0, responder.getConnections());
+            return;
+        }
         # the TLS connection was made, and the driver contacted no responder
         assertGt(0, server.getConnections(), sprintf("%y", ex));
         assertEq(0, responder.getConnections());
