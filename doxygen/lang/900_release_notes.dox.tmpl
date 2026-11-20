@@ -2571,6 +2571,8 @@
     - \c self.<member> and \c $.<member> for a member that a class reaches only through a base class that one of
       its base classes inherits with @ref private_inheritance "private:internal" are refused when parsing, as the
       name alone is, instead of raising \c INVALID-MEMBER at run time (issue #6669)
+    - a private member is accessible only in the class that declares it and its subclasses, as a private method is,
+      not in another base class of a subclass (issue #6760)
     - code that the AST interpreter runs (in any execution mode) returns the value of a return in an
       @ref on_exit "on_exit", @ref on_success "on_success" or @ref on_error "on_error" handler when a handler of the
       same block that runs after it completes normally, as compiled code does, instead of going on with the function

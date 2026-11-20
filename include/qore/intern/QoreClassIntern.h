@@ -4105,7 +4105,8 @@ public:
         // inherited through a class inherited with private:internal only in this class or a class that it inherits
         // (issue #6640)
         if ((access > Public) && !parseHasMemberGate()
-                && (!parseCheckPrivateClassAccess() || !parseCheckInheritedInternalMemberAccess(omi, qc, access))) {
+                && (!parseCheckPrivateClassAccess() || !parseCheckInheritedInternalMemberAccess(omi, qc, access)
+                    || !parseCheckPrivateMemberAccess(qc, access))) {
             memberTypeInfo = nullptr;
             parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
             return -1;
@@ -4254,7 +4255,9 @@ public:
 
         @return the member found or nullptr if not found
     */
-    DLLLOCAL const QoreMemberInfo* runtimeGetMemberInfo(const char* mem, const qore_class_private* class_ctx) const {
+    //! inline in the paths of a member access whatever the size of their translation units (issue #6760)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreMemberInfo* runtimeGetMemberInfo(const char* mem,
+            const qore_class_private* class_ctx) const {
         QoreMemberInfo* info;
         if (class_ctx) {
             info = class_ctx->members.find(mem);
@@ -4292,11 +4295,26 @@ public:
         if (!class_ctx) {
             return false;
         }
-        if (info->access != Internal || info->local() || class_ctx == this) {
+        // the class itself and the class that declares a private member, inline; the other contexts out of line
+        if (class_ctx == this || (info->access == Private && class_ctx == info->getClass())) {
             return true;
         }
-        return checkInheritedInternalMemberContext(class_ctx, info->getClass());
+        return runtimeCheckMemberAccessContext(info, class_ctx);
     }
+
+    //! returns true if the member \a mem of an object of this class, which is in the object's member data, can be
+    //! used in the class context \a class_ctx (issue #6760); not inline, for the loops over the members of an object
+    DLLLOCAL QORE_INTERN_NOINLINE bool runtimeCanUseMember(const char* mem, const qore_class_private* class_ctx) const;
+
+    //! the part of runtimeCheckMemberAccess() for a class context that is neither this class nor the class that
+    //! declares a private member; not inline, as it walks the class hierarchy
+    DLLLOCAL QORE_INTERN_NOINLINE bool runtimeCheckMemberAccessContext(const QoreMemberInfo* info,
+            const qore_class_private* class_ctx) const;
+
+    //! returns true if \a class_ctx is \a decl, the class that declares a private member, or inherits it (issue
+    //! #6760); not inline, as it walks the class hierarchy
+    DLLLOCAL QORE_INTERN_NOINLINE static bool checkPrivateMemberContext(const qore_class_private* class_ctx,
+            const qore_class_private* decl);
 
     //! returns true if \a class_ctx can use a member declared in \a decl that this class inherits through a class
     //! inherited with \c private:internal: it is this class, or a class that this class inherits and that is or
@@ -4320,6 +4338,21 @@ public:
         }
         const qore_class_private* class_ctx = parse_get_class_priv();
         return class_ctx && checkInheritedInternalMemberContext(class_ctx, qc);
+    }
+
+    //! returns true if a private member declared in \a qc can be used in the parse class context (issue #6760)
+    /** A private member is reachable only from the class that declares it and its subclasses; the other access rules
+        are checked by the caller
+
+        @param qc the class that declares the member, as returned by parseFindMember()
+        @param access the access of the member in this class, as returned by parseFindMember()
+    */
+    DLLLOCAL bool parseCheckPrivateMemberAccess(const qore_class_private* qc, ClassAccess access) const {
+        if (access != Private) {
+            return true;
+        }
+        const qore_class_private* class_ctx = parse_get_class_priv();
+        return class_ctx && (class_ctx == this || class_ctx == qc || checkPrivateMemberContext(class_ctx, qc));
     }
 
     //! returns the member that a call of the name made through the code that a member holds may use (qore#6487)

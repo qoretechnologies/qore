@@ -1968,6 +1968,34 @@ bool qore_class_private::checkInheritedInternalMemberContext(const qore_class_pr
     return getClass(*class_ctx, ca) && (!decl || class_ctx == decl || class_ctx->getClass(*decl, ca));
 }
 
+bool qore_class_private::runtimeCanUseMember(const char* mem, const qore_class_private* class_ctx) const {
+    const QoreMemberInfo* info = runtimeGetMemberInfo(mem, class_ctx);
+    return !info || runtimeCheckMemberAccess(info, class_ctx);
+}
+
+bool qore_class_private::runtimeCheckMemberAccessContext(const QoreMemberInfo* info,
+        const qore_class_private* class_ctx) const {
+    if (info->access == Internal) {
+        return info->local() || checkInheritedInternalMemberContext(class_ctx, info->getClass());
+    }
+    // a private member is reachable only from the class that declares it and its subclasses, as a private method is
+    // (issue #6760); a member that is not accessible in this class (Inaccessible) is used only through the storage
+    // that the class context has for it (getClassContext()), which runtimeGetMemberInfo() checked
+    if (info->access != Private) {
+        return true;
+    }
+    return checkPrivateMemberContext(class_ctx, info->getClass());
+}
+
+bool qore_class_private::checkPrivateMemberContext(const qore_class_private* class_ctx,
+        const qore_class_private* decl) {
+    if (!decl) {
+        return true;
+    }
+    ClassAccess ca;
+    return class_ctx->getClass(*decl, ca) != nullptr;
+}
+
 int qore_class_private::initializeMembers() {
     // nothing is resolved again for a committed user class (see parseInitPartial())
     if (!parse_resolve_class_members && !(committed && !sys)) {
