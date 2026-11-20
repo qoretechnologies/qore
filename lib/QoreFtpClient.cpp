@@ -63,6 +63,7 @@
 #include <unistd.h>
 
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #define FTPDEBUG 5
 
@@ -858,7 +859,7 @@ struct qore_ftp_private {
         if (event_queue) {
             event_queue->ref();
         }
-        control.setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
+        qore_socket_ops(control).setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
         if (*xsink) {
             return;
         }
@@ -874,7 +875,7 @@ struct qore_ftp_private {
         if (data_event_queue) {
             data_event_queue->ref();
         }
-        data.setEventQueue(xsink, data_event_queue, data_event_arg.refSelf(), data_event_with_data);
+        qore_socket_ops(data).setEventQueue(xsink, data_event_queue, data_event_arg.refSelf(), data_event_with_data);
     }
 
     DLLLOCAL void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
@@ -894,14 +895,14 @@ struct qore_ftp_private {
         if (event_queue) {
             event_queue->ref();
         }
-        control.setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
+        qore_socket_ops(control).setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
         if (*xsink) {
             return;
         }
         if (event_queue) {
             event_queue->ref();
         }
-        data.setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
+        qore_socket_ops(data).setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
         if (*xsink) {
             return;
         }
@@ -911,10 +912,10 @@ struct qore_ftp_private {
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
         AutoLocker al(m);
         cleanupAsync(xsink);
-        if (data.getQueue() && (data.getQueue() == control.getQueue())) {
+        if (qore_socket_ops(data).getQueue() && (qore_socket_ops(data).getQueue() == qore_socket_ops(control).getQueue())) {
             // make sure only one close event is pushed on the queue
             data.cleanup(xsink);
-            control.setEventQueue(xsink, nullptr, QoreValue(), false);
+            qore_socket_ops(control).setEventQueue(xsink, nullptr, QoreValue(), false);
             return;
         }
 
@@ -2674,20 +2675,20 @@ const char* QoreFtpClient::getHostName() const {
     return priv->host;
 }
 
-void QoreFtpClient::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setEventQueue(xsink, q, arg, with_data);
+void qore_ftp_client_ops::setEventQueueImpl(QoreFtpClient* b, ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
+    b->priv->setEventQueue(xsink, q, arg, with_data);
 }
 
-void QoreFtpClient::setControlEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setControlEventQueue(xsink, q, arg, with_data);
+void qore_ftp_client_ops::setControlEventQueueImpl(QoreFtpClient* b, ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
+    b->priv->setControlEventQueue(xsink, q, arg, with_data);
 }
 
-void QoreFtpClient::setDataEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setDataEventQueue(xsink, q, arg, with_data);
+void qore_ftp_client_ops::setDataEventQueueImpl(QoreFtpClient* b, ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
+    b->priv->setDataEventQueue(xsink, q, arg, with_data);
 }
 
-void QoreFtpClient::cleanup(ExceptionSink* xsink) {
-    priv->cleanup(xsink);
+void qore_ftp_client_ops::cleanupImpl(QoreFtpClient* b, ExceptionSink* xsink) {
+    b->priv->cleanup(xsink);
 }
 
 void QoreFtpClient::clearWarningQueue(ExceptionSink* xsink) {
@@ -2707,12 +2708,12 @@ void QoreFtpClient::clearStats() {
     priv->clearStats();
 }
 
-void QoreFtpClient::setTimeout(int timeout_ms) {
-    priv->timeout_ms = timeout_ms;
+void qore_ftp_client_ops::setTimeoutImpl(QoreFtpClient* b, int timeout_ms) {
+    b->priv->timeout_ms = timeout_ms;
 }
 
-int QoreFtpClient::getTimeout() const {
-    return priv->timeout_ms;
+int qore_ftp_client_ops::getTimeoutImpl(QoreFtpClient* b) {
+    return b->priv->timeout_ms;
 }
 
 void QoreFtpClient::setNetworkFamily(int family) {

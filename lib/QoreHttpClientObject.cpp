@@ -81,6 +81,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreHttpManagerSysEnvOps.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #include <atomic>
 #include <cassert>
@@ -1753,7 +1754,7 @@ struct qore_httpclient_priv {
             sink_q->ref();
         }
         QoreValue sink_arg = arg.refSelf();
-        msock->socket->setEventQueue(xsink, q, arg, with_data);
+        qore_socket_ops(msock->socket).setEventQueue(xsink, q, arg, with_data);
         event_sink->set(xsink, sink_q, sink_arg, with_data);
     }
 
@@ -1991,7 +1992,7 @@ struct qore_httpclient_priv {
 
     DLLLOCAL void setNoDelay() {
         if (nodelay) {
-            if (msock->socket->setNoDelay(1)) {
+            if (qore_socket_ops(msock->socket).setNoDelay(1)) {
                 nodelay = false;
             }
         }
@@ -2244,7 +2245,7 @@ struct qore_httpclient_priv {
             return 0;
         }
 
-        if (msock->socket->setNoDelay(1)) {
+        if (qore_socket_ops(msock->socket).setNoDelay(1)) {
             return -1;
         }
 

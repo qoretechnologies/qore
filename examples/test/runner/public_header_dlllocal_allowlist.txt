@@ -116,20 +116,6 @@ include/qore/QoreEnumDecl.h|QoreEnumMember|QoreEnumMember(const char* name, Qore
 include/qore/QoreEnumDecl.h|QoreEnumMember|~QoreEnumMember()
 include/qore/QoreFile.h|QoreFile|QoreFile& operator=(const QoreFile&)
 include/qore/QoreFile.h|QoreFile|QoreFile(const QoreFile&)
-include/qore/QoreFile.h|QoreFile|QoreStringNode* readUntilText(const QoreString& eol, bool incl_eol, ExceptionSink* xsink)
-include/qore/QoreFile.h|QoreFile|int getTerminalAttributes(QoreTermIOS *ios, ExceptionSink* xsink) const
-include/qore/QoreFile.h|QoreFile|int openCheckAccess(ExceptionSink* xsink, const char* fn, int flags, int mode, const QoreEncoding* cs)
-include/qore/QoreFile.h|QoreFile|int setTerminalAttributes(int action, QoreTermIOS *ios, ExceptionSink* xsink) const
-include/qore/QoreFile.h|QoreFile|void cleanup(ExceptionSink* xsink)
-include/qore/QoreFile.h|QoreFile|void makeOwnedSpecial(int fd)
-include/qore/QoreFile.h|QoreFile|void makeSpecial(int sfd)
-include/qore/QoreFile.h|QoreFile|void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data)
-include/qore/QoreFtpClient.h|QoreFtpClient|int getTimeout() const
-include/qore/QoreFtpClient.h|QoreFtpClient|void cleanup(ExceptionSink* xsink)
-include/qore/QoreFtpClient.h|QoreFtpClient|void setControlEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data)
-include/qore/QoreFtpClient.h|QoreFtpClient|void setDataEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data)
-include/qore/QoreFtpClient.h|QoreFtpClient|void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data)
-include/qore/QoreFtpClient.h|QoreFtpClient|void setTimeout(int timeout_ms)
 include/qore/QoreFuture.h|QoreFuture|QoreFuture(qore_future_private* p)
 include/qore/QoreHashNode.h|ConstHashIterator|ConstHashIterator& operator=(const HashIterator&)
 include/qore/QoreHashNode.h|ConstHashIterator|ConstHashIterator(const ConstHashIterator&)
@@ -187,11 +173,6 @@ include/qore/QoreProgram.h|QoreProgram|QoreProgram& operator=(const QoreProgram&
 include/qore/QoreProgram.h|QoreProgram|QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr, const QoreParseOptions* parent_po = nullptr, ExceptionSink* xsink = nullptr)
 include/qore/QoreProgram.h|QoreProgram|QoreProgram(const QoreProgram&)
 include/qore/QoreProgram.h|QoreProgram|virtual ~QoreProgram()
-include/qore/QoreQueue.h|QoreQueue|TryPushResult tryPush(ExceptionSink* xsink, QoreValue n, bool ignore_max = false)
-include/qore/QoreQueue.h|QoreQueue|std::shared_ptr<QueueItemConsumeHook> getItemConsumeHook()
-include/qore/QoreQueue.h|QoreQueue|void addRoomListener(std::shared_ptr<QoreQueueRoomListener> listener)
-include/qore/QoreQueue.h|QoreQueue|void removeRoomListener(const QoreQueueRoomListener* listener)
-include/qore/QoreQueue.h|QoreQueue|void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook)
 include/qore/QoreRWLock.h|QoreAutoRWReadLocker|QoreAutoRWReadLocker& operator=(const QoreAutoRWReadLocker&)
 include/qore/QoreRWLock.h|QoreAutoRWReadLocker|QoreAutoRWReadLocker(const QoreAutoRWReadLocker&)
 include/qore/QoreRWLock.h|QoreAutoRWReadLocker|void *operator new(size_t)
@@ -227,24 +208,9 @@ include/qore/QoreSandboxManager.h|QoreSandboxManager|int acquireThreadSlotQuiet(
 include/qore/QoreSandboxManager.h|QoreSandboxManager|void notifyThreadSlotReleased(const AbstractPrivateData* except = nullptr)
 include/qore/QoreSandboxManager.h|QoreSandboxManager|void releaseThreadSlot()
 include/qore/QoreSandboxManager.h|QoreSandboxManager|void releaseThreadSlotQuiet()
-include/qore/QoreSocket.h|QoreSocket|AbstractPollState* startLayeredSslConnect(ExceptionSink* xsink, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr)
-include/qore/QoreSocket.h|QoreSocket|AbstractPollState* startProxySslConnect(ExceptionSink* xsink)
 include/qore/QoreSocket.h|QoreSocket|QoreSocket(int n_sock, int n_sfamily, int n_stype, int s_prot, const QoreEncoding* csid)
-include/qore/QoreSocket.h|QoreSocket|QoreSocket* createAcceptedSocket(int descriptor)
-include/qore/QoreSocket.h|QoreSocket|Queue* getQueue()
-include/qore/QoreSocket.h|QoreSocket|int getDescriptor() const
-include/qore/QoreSocket.h|QoreSocket|int getNoDelay() const
-include/qore/QoreSocket.h|QoreSocket|int getUserTimeout() const
-include/qore/QoreSocket.h|QoreSocket|int setNoDelay(int nodelay)
-include/qore/QoreSocket.h|QoreSocket|int setUserTimeout(int ms)
-include/qore/QoreSocket.h|QoreSocket|int64 getObjectIDForEvents() const
-include/qore/QoreSocket.h|QoreSocket|static void convertHeaderToHash(QoreHashNode* h, char* p)
-include/qore/QoreSocket.h|QoreSocket|static void doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink)
-include/qore/QoreSocket.h|QoreSocket|void setAccept(QoreObject* o)
-include/qore/QoreSocket.h|QoreSocket|void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data)
 include/qore/QoreSocket.h|SocketSource|SocketSource& operator=(const SocketSource&)
 include/qore/QoreSocket.h|SocketSource|SocketSource(const SocketSource&)
-include/qore/QoreSocket.h|SocketSource|void setAll(QoreObject* o, ExceptionSink* xsink)
 include/qore/QoreSocketObject.h|QoreSocketObject|QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr) # the socket object is created and destroyed only by the library (reference counted): a private constructor and a protected destructor that modules never call
 include/qore/QoreSocketObject.h|QoreSocketObject|virtual ~QoreSocketObject() # the socket object is created and destroyed only by the library (reference counted): a private constructor and a protected destructor that modules never call
 include/qore/QoreStringNode.h|QoreStringNode|QoreStringNode(const char* str, const QoreEncoding* from, const QoreEncoding* to, ExceptionSink* xsink)

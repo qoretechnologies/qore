@@ -110,6 +110,7 @@
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreHttpManagerSysEnvOps.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -1226,9 +1227,9 @@ static void ut_qorefile_timed_read_contract(UnitTestCounters& c) {
 
     ExceptionSink xsink;
     QoreFile file;
-    file.makeSpecial(fds[0]);
+    qore_file_ops(file).makeSpecial(fds[0]);
     Queue* event_queue = new Queue();
-    file.setEventQueue(&xsink, event_queue, QoreValue(), false);
+    qore_file_ops(file).setEventQueue(&xsink, event_queue, QoreValue(), false);
     UT_ASSERT(c, !xsink, "QoreFile event queue setup succeeds");
 
     char byte = 0;
@@ -1255,7 +1256,7 @@ static void ut_qorefile_timed_read_contract(UnitTestCounters& c) {
         "the timed QoreFile read emits EVENT_DATA_READ");
     event.discard(&xsink);
 
-    file.cleanup(&xsink);
+    qore_file_ops(file).cleanup(&xsink);
     ::close(fds[0]);
     ::close(fds[1]);
     UT_ASSERT(c, !xsink, "QoreFile timed-read fixture cleanup succeeds");
@@ -1352,7 +1353,7 @@ static void ut_qorefile_open_sandbox_policy(UnitTestCounters& c) {
             QoreFile allowed;
             UT_ASSERT_EQ(c, 0, allowed.open(inside.c_str()), "open inside the sandbox root succeeds");
             QoreFile checked;
-            UT_ASSERT_EQ(c, -1, checked.openCheckAccess(&xsink, outside.c_str(), O_RDONLY, 0, QCS_DEFAULT),
+            UT_ASSERT_EQ(c, -1, qore_file_ops(checked).openCheckAccess(&xsink, outside.c_str(), O_RDONLY, 0, QCS_DEFAULT),
                 "checked open outside the sandbox root fails");
             UT_ASSERT(c, xsink.isException(), "checked open raises an exception");
             xsink.clear();
@@ -6070,7 +6071,7 @@ private:
                 return Drive::Connected;
             }
             std::vector<struct pollfd> fds;
-            int sock = client.getDescriptor();
+            int sock = qore_socket_ops(client).getDescriptor();
             if (sock >= 0) {
                 fds.push_back({sock, static_cast<short>(((rc & SOCK_POLLIN) ? POLLIN : 0)
                     | ((rc & SOCK_POLLOUT) ? POLLOUT : 0)), 0});
@@ -7129,7 +7130,7 @@ public:
             xsink.clear();
             return;
         }
-        const int fd = listener.getDescriptor();
+        const int fd = qore_socket_ops(listener).getDescriptor();
         std::shared_ptr<void> hold;
         UT_ASSERT_EQ(c, -1, listener.holdDescriptor(fd + 1000, hold), "another descriptor is not held");
         UT_ASSERT(c, !hold, "no hold is given for another descriptor");
@@ -7137,7 +7138,7 @@ public:
         UT_ASSERT(c, hold != nullptr, "the hold is given");
 
         listener.close();
-        UT_ASSERT(c, listener.getDescriptor() == QORE_INVALID_SOCKET, "the socket has no descriptor after the close");
+        UT_ASSERT(c, qore_socket_ops(listener).getDescriptor() == QORE_INVALID_SOCKET, "the socket has no descriptor after the close");
         UT_ASSERT(c, fcntl(fd, F_GETFD) != -1, "the held descriptor stays open after the close");
         std::shared_ptr<void> hold2;
         UT_ASSERT_EQ(c, -1, listener.holdDescriptor(fd, hold2), "a closed socket's descriptor is not held again");
@@ -7316,9 +7317,9 @@ public:
             }
             // the listener is non-blocking, and the connection can be complete for the client before it is in the
             // listener's queue (macOS processes loopback input in another thread): wait for it
-            struct pollfd lpfd = {listener.getDescriptor(), POLLIN, 0};
+            struct pollfd lpfd = {qore_socket_ops(listener).getDescriptor(), POLLIN, 0};
             if (::poll(&lpfd, 1, 10000) == 1) {
-                holder_peer = ::accept(listener.getDescriptor(), nullptr, nullptr);
+                holder_peer = ::accept(qore_socket_ops(listener).getDescriptor(), nullptr, nullptr);
             }
             UT_ASSERT(c, holder_peer >= 0, "connect failure port holder is accepted");
             if (holder_peer < 0) {
@@ -9171,7 +9172,7 @@ private:
         }
 
         DLLLOCAL virtual int getPollableDescriptor() const override {
-            return socket.getDescriptor();
+            return qore_socket_ops(socket).getDescriptor();
         }
 
         DLLLOCAL virtual int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override {
@@ -15746,7 +15747,7 @@ static void ut_tls_close_full_send_buffer(UnitTestCounters& c) {
         return;
     }
     // the peer does not read: fill the connection's buffers with bytes written past TLS until no more fit
-    int fd = qs.getDescriptor();
+    int fd = qore_socket_ops(qs).getDescriptor();
     int sndbuf = 4096;
     setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
     char block[16384] = {};

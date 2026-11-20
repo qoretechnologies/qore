@@ -76,6 +76,7 @@ class QoreSSLPrivateKey;
     @deprecated use QoreSocket::getPeerInfo() and QoreSocket::getSocketInfo() to get more detailed information; this data structure will not be enhanced and will disappear in the next major version of the Qore library
  */
 class SocketSource {
+    friend class qore_socket_source_ops;
     friend struct qore_socket_private;
 
 private:
@@ -114,7 +115,6 @@ public:
     */
     DLLEXPORT const char* getHostName() const;
 
-    DLLLOCAL void setAll(QoreObject* o, ExceptionSink* xsink);
 };
 
 //! provides access to sockets using Qore data structures
@@ -129,6 +129,7 @@ public:
     @see QoreEncoding
 */
 class QoreSocket {
+    friend class qore_socket_ops;
     friend struct qore_socket_private;
     friend struct qore_httpclient_priv;
     friend class QoreSocketObject;
@@ -225,32 +226,6 @@ public:
     DLLEXPORT AbstractPollState* startSslConnect(ExceptionSink* xsink, QoreSSLCertificate* cert = nullptr,
             QoreSSLPrivateKey* pkey = nullptr);
 
-    //! Starts a non-blocking TLS connection to an HTTPS proxy
-    /** Unlike startSslConnect(), the connection is made without the socket's client certificate and ALPN protocols,
-        which are meant for the target server reached through the proxy
-
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-
-        @return a socket poll state object or nullptr in case of an exception
-
-        @since %Qore 3.0
-    */
-    DLLLOCAL AbstractPollState* startProxySslConnect(ExceptionSink* xsink);
-
-    //! Starts a non-blocking TLS connection carried by the TLS connection that the socket already has
-    /** Used for a TLS connection to a server through a tunnel of an HTTPS proxy, where the socket's TLS connection
-        is the connection to the proxy
-
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-        @param cert the client certificate to use
-        @param pkey the private key to use
-
-        @return a socket poll state object or nullptr in case of an exception
-
-        @since %Qore 3.0
-    */
-    DLLLOCAL AbstractPollState* startLayeredSslConnect(ExceptionSink* xsink, QoreSSLCertificate* cert = nullptr,
-            QoreSSLPrivateKey* pkey = nullptr);
 
     //! Starts a non-blocking send operation on a connected socket
     /**
@@ -1972,9 +1947,6 @@ public:
     */
     DLLEXPORT int getDescriptorForLibrary() const;
 
-    //! Returns the socket's descriptor, for the library's own use
-    DLLLOCAL int getDescriptor() const;
-
     //! Keeps the socket's descriptor open while an async I/O event loop has it registered
     /** For an I/O object whose pollable descriptor is that of a socket, to implement
         AbstractPollableIoObjectBase::holdPollableDescriptor(): while the hold exists, a close of the socket from any
@@ -2428,55 +2400,8 @@ int MyPollable::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) cons
     */
     DLLEXPORT int64 getHttp2MaxRequestBodySize() const;
 
-    DLLLOCAL static void doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink);
 
-    //! sets the event queue (not part of the library's pubilc API), must be already referenced before call
-    DLLLOCAL void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data);
 
-    //! returns the event queue (not part of the library's public API)
-    DLLLOCAL Queue* getQueue();
-
-    //! returns a unique ID for the socket to be used in event messages
-    DLLLOCAL int64 getObjectIDForEvents() const;
-
-    DLLLOCAL int setNoDelay(int nodelay);
-    DLLLOCAL int getNoDelay() const;
-
-    //! Set the TCP_USER_TIMEOUT socket option (Linux/Solaris) in milliseconds.
-    /** Kernel-level safety net for TCP-layer death.  Bounds how long
-        unacknowledged data on a TCP connection may sit before the kernel
-        reports the connection dead with ETIMEDOUT on the next read/write.
-        Catches peer reboots, NIC failures, network partitions, and NAT
-        rebinds that would otherwise hang send()/recv() for the kernel's
-        full TCP retransmit budget (~15 minutes default on Linux).
-
-        @note This is NOT a half-open HTTP detector.  If the peer's TCP
-        stack ack's bytes but the application stops generating responses,
-        TCP_USER_TIMEOUT never fires (nothing is unack'd).  Use an
-        application-level deadline (e.g. the connection manager's
-        @c request_timeout) for that case.
-
-        The value is also stored on the socket object and re-applied after
-        every successful connect, so callers may set it before connecting.
-        Passing 0 disables the option (kernel default).
-
-        On platforms without TCP_USER_TIMEOUT (BSD/macOS/Windows) the value
-        is stored but no kernel option is set; the call returns 0.
-
-        @param ms timeout in milliseconds; 0 disables
-        @return 0 on success, non-zero on setsockopt failure (errno set)
-    */
-    DLLLOCAL int setUserTimeout(int ms);
-    //! Returns the TCP_USER_TIMEOUT value in milliseconds.
-    /** When the socket is an open TCP socket and the platform supports
-        @c TCP_USER_TIMEOUT, returns the kernel's current value via getsockopt.
-        Otherwise returns the configured value stored on the socket (0 if
-        unset).
-    */
-    DLLLOCAL int getUserTimeout() const;
-
-    //! sets backwards-compatible members on accept in a new object - will be removed in a future version of qore
-    DLLLOCAL void setAccept(QoreObject* o);
 
 private:
     //! private implementation of the class
@@ -2484,11 +2409,6 @@ private:
 
     //! private constructor, not exported in the library's public interface
     DLLLOCAL QoreSocket(int n_sock, int n_sfamily, int n_stype, int s_prot, const QoreEncoding* csid);
-
-    //! Creates a new accepted socket with listener SSL and protocol parameters copied
-    DLLLOCAL QoreSocket* createAcceptedSocket(int descriptor);
-
-    DLLLOCAL static void convertHeaderToHash(QoreHashNode* h, char* p);
 
     DLLLOCAL QoreSocket(const QoreSocket&) = delete;
     DLLLOCAL QoreSocket& operator=(const QoreSocket&) = delete;

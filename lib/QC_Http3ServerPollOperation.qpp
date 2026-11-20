@@ -42,6 +42,7 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #include <exception>
 
@@ -163,7 +164,7 @@ void Http3ServerPollOperationPriv::closeStreamQueues() {
             // released by the standard internal_members deref path.  Pushed
             // without waiting, even if the Queue is bounded and full (issue #5859).
             ExceptionSink push_xsink;
-            queue->tryPush(&push_xsink, QoreValue(), true);
+            qore_queue_ops(queue).tryPush(&push_xsink, QoreValue(), true);
             push_xsink.clear();
         }
     }
@@ -888,7 +889,7 @@ void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
                 "pushing persistent close session=%lld\n", (long long)sid);
             // pushed without waiting, even if the Queue is bounded and full (issue #5859)
             ExceptionSink push_xsink;
-            q->tryPush(&push_xsink, close_entry.release(), true);
+            qore_queue_ops(q).tryPush(&push_xsink, close_entry.release(), true);
             push_xsink.clear();
         }
     }
@@ -944,7 +945,7 @@ void Http3ServerPollOperationPriv::closeSessionStreams(int64_t session_id) {
             // stays clear: other live sessions must still be able to register.
             // Pushed without waiting, even if the Queue is bounded and full (issue #5859).
             ExceptionSink push_xsink;
-            it->second->tryPush(&push_xsink, QoreValue(), true);
+            qore_queue_ops(it->second).tryPush(&push_xsink, QoreValue(), true);
             push_xsink.clear();
         }
         // Dispatch onStreamData() for this stream so the listener's notifyIo()
