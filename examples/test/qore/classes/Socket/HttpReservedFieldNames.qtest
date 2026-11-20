@@ -403,13 +403,15 @@ public class HttpReservedFieldNamesTest inherits QUnit::Test {
     httpClientTrailerSize() {
         string url = sprintf("http://localhost:%d", server_info.port);
         string trailer;
-        for (int i = 0; i < 20; ++i) {
+        # more than the default maximum size of a trailer section (65536 bytes; issue #6867)
+        for (int i = 0; i < 70; ++i) {
             trailer += sprintf("X-T%d: %s\r\n", i, strmul("x", 1000));
         }
         HTTPClient hc({"url": url, "timeout": 30s});
         Counter served = serveOnce("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: text/plain\r\n\r\n"
             "5\r\nhello\r\n0\r\n" + trailer + "\r\n");
-        assertThrows("HTTP1-RECV-ERROR", "trailer section.*exceeds the maximum size", \hc.send(), (NOTHING, "GET", "/"));
+        assertThrows("HTTP-HEADER-TOO-LARGE", "chunked body trailer.*exceeds the maximum size of 65536 bytes", \hc.send(),
+            (NOTHING, "GET", "/"));
         hc.disconnect();
         assertEq(0, served.waitForZero(30s), "the server thread is done");
     }
