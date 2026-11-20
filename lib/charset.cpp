@@ -36,6 +36,7 @@
 #include "qore/intern/QoreUtf8.h"
 #include "qore/intern/QoreUtf16.h"
 
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -1570,13 +1571,38 @@ const struct {
     {"UHC", QORE_MULTIBYTE_FAMILY("UHC", DBCS_get_char_len<&uhc_bytes>, 2, false)},
     {"JOHAB", QORE_MULTIBYTE_FAMILY("JOHAB", DBCS_get_char_len<&johab_bytes>, 2, false)},
     {"CP1361", QORE_MULTIBYTE_FAMILY("JOHAB", DBCS_get_char_len<&johab_bytes>, 2, false)},
+    // other names of these encodings that iconv implementations know (glibc's eucJP-ms is EUC-JP with the user-defined
+    // area, which has the same byte structure) (qore#6796)
+    {"eucJP-ms", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"eucJP-open", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"csEUCPkdFmtJapanese", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"csEUCKR", QORE_MULTIBYTE_FAMILY("EUC-KR", (EUC_get_char_len<true, false>), 2, false)},
+    {"MS936", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<&gbk_bytes>, 2, false)},
+    {"Windows-936", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<&gbk_bytes>, 2, false)},
+    {"csBig5", QORE_MULTIBYTE_FAMILY("Big5", DBCS_get_char_len<&big5_bytes>, 2, false)},
+    {"BIG-FIVE", QORE_MULTIBYTE_FAMILY("Big5", DBCS_get_char_len<&big5_bytes>, 2, false)},
 };
 #undef QORE_MULTIBYTE_FAMILY
 
-// returns the family of the encoding of the given name, if Qore knows its definition
+// returns the name in upper case without "-", "_" and " ", as iconv implementations match names (ex: "EUCJP" is
+// "EUC-JP" for glibc), and without any conversion flags after "//"
+static std::string normalize_multibyte_family_name(const std::string& name) {
+    std::string rv;
+    for (char c : name.substr(0, name.find("//"))) {
+        if (c != '-' && c != '_' && c != ' ') {
+            rv += static_cast<char>(toupper(static_cast<unsigned char>(c)));
+        }
+    }
+    return rv;
+}
+
+// returns the family of the encoding of the given name, if Qore knows its definition; any spelling of the name that
+// iconv accepts is matched (qore#6796: "EUCJP" and "EUCKR" got the generic EUC family, which refuses the C1 bytes
+// of EUC-JP and EUC-KR that iconv decodes)
 const multibyte_family* get_named_multibyte_family(const std::string& code) {
+    std::string name = normalize_multibyte_family_name(code);
     for (const auto& i : named_multibyte_families) {
-        if (!strcasecmp(code.c_str(), i.name)) {
+        if (name == normalize_multibyte_family_name(i.name)) {
             return &i.family;
         }
     }
