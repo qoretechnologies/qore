@@ -480,7 +480,7 @@ struct InternalEdgeCutForContext {
     bool allow_internal;
 
     bool cut(const BCNode& n, const qore_class_private* parent) const {
-        return n.access >= Internal && !(parent ? class_ctx == parent : allow_internal);
+        return n.access >= Internal && !(parent ? parent->isClassContext(class_ctx) : allow_internal);
     }
 };
 
@@ -493,7 +493,7 @@ struct ParseMethodEdgeCut {
 
     bool cut(const BCNode& n, const qore_class_private* parent) const {
         return n.access > Public && (!class_ctx
-            || (n.access == Internal && !(parent ? class_ctx == parent : allow_internal)));
+            || (n.access == Internal && !(parent ? parent->isClassContext(class_ctx) : allow_internal)));
     }
 };
 
