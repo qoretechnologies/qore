@@ -27,6 +27,7 @@
 
 %requires yaml
 %requires Mime >= 1.7
+%requires HttpUtil
 
 %try-module xml
 %define NoXml
@@ -315,6 +316,10 @@ message: "Hello, Hello, World!!"
 
 
     @section datastreamutil_v1_4 DataStreamUtil v1.4
+    - the receive callbacks and @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()" read the
+      fields of a message from the \c "headers" key of its hash, or from its top level (see
+      @ref HttpUtil::http_get_field() "http_get_field()")
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - fixed @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()",
       @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()",
       @ref DataStreamUtil::connect_set_chunked_headers() "connect_set_chunked_headers()" and
@@ -471,7 +476,7 @@ public namespace DataStreamUtil {
 
         @par Example:
         @code{.py}
-bool yaml = ds_is_yaml_type(hdr."content-type");
+bool yaml = ds_is_yaml_type(http_get_field(hdr, "content-type"));
         @endcode
 
         @since DataStreamUtil 1.4
@@ -489,7 +494,7 @@ bool yaml = ds_is_yaml_type(hdr."content-type");
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
     /** @par Example:
         @code{.py}
-*code decode = ds_get_content_decode(hdr."content-encoding");
+*code decode = ds_get_content_decode(http_get_field(hdr, "content-encoding"));
         @endcode
 
         The following \c "Content-Encoding" values are recognized:
@@ -874,7 +879,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                         }
                     }
                     # call "end of data" callback with any error message reported by the sender
-                    eod_callback(h.hdr{DataStreamError.lwr()});
+                    eod_callback(http_get_field(h.hdr, DataStreamError.lwr()));
                     return;
                 }
 
@@ -1280,7 +1285,7 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
     public bool sub connect_detect_protocol(hash<auto> hdr) {
         # Check for Connect protocol version header — both unary and streaming Connect
         # always set this header, so it is the primary detection mechanism
-        if (hdr{ConnectProtocolVersionHdr}.val()) {
+        if (http_get_field(hdr, ConnectProtocolVersionHdr).val()) {
             return True;
         }
         # Check for the explicit Connect streaming content type as a fallback;
@@ -1288,7 +1293,7 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
         # IANA YAML MIME type (RFC 9512) used by RestClientIo for all YAML requests,
         # not just Connect; matching it would incorrectly enable Connect mode on regular
         # REST calls
-        *string ct = hdr."content-type";
+        *string ct = http_get_field(hdr, "content-type");
         if (ct.val()) {
             ct = ct.lwr();
             if (ct =~ /^application\/connect\+/) {

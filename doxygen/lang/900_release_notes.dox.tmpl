@@ -108,8 +108,10 @@
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
     (\c body, \c path, \c status_code, ...) is no longer given at its top level, where the other fields stay for now
-    (deprecated; see @ref Qore::Socket::setHttpFieldsAtTopLevel() "Socket::setHttpFieldsAtTopLevel()" and
-    @ref httpclient_response_fields; issues #6761, #6811, #6851, #6869).
+    (deprecated; see @ref Qore::Socket::setHttpFieldsAtTopLevel() "Socket::setHttpFieldsAtTopLevel()",
+    @ref httpclient_response_fields and the HttpServer option
+    @ref HttpServer::HttpServerOptionInfo::http_fields_at_top_level "http_fields_at_top_level"; read a field with
+    @ref HttpUtil::http_get_field() "http_get_field()"; issues #6761, #6811, #6851, #6869).
 
     @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
@@ -1920,6 +1922,9 @@
         @ref httpserver_after_send)
       - the thread of a persistent HTTP/1.x connection does not count against \c max_handler_threads
         (<a href="https://github.com/qoretechnologies/qore/issues/5758">issue 5758</a>)
+      - the \c http_fields_at_top_level option gives the fields of a request only under \c "headers" (see
+        @ref HttpServer::HttpServerOptionInfo::http_fields_at_top_level "http_fields_at_top_level";
+        <a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
       - see @ref http1_7 for all changes
 
     - @ref httpserverutilintro "HttpServerUtil" module

@@ -29,6 +29,7 @@
 %requires RestClient >= 1.4
 %requires yaml
 %requires Mime >= 1.7
+%requires HttpUtil
 
 %modern
 
@@ -149,6 +150,9 @@ client.setMaxMessageSize(8 * 1024 * 1024);  # 8 MB
     @section datastreamclientrelnotes Release Notes
 
     @subsection datastreamclient_v1_5_1 DataStreamClient v1.5.1
+    - reads the fields of a response from the \c "headers" key of the hash that
+      @ref Qore::HTTPClient "HTTPClient" gives, or from its top level (see @ref HttpUtil::http_get_field()
+      "http_get_field()") (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - a server-side error is described with its location only when the server gives one (issue #6780)
     - fixed requests with headers whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>:
       @ref DataStreamClient::DataStreamClient::sendRawStream() "sendRawStream()",

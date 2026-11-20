@@ -2378,12 +2378,16 @@ public class HttpAsyncSocketIoController {
         # Build header hash (same format as HTTP/2)
         # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted
         # socket has the listener's setting), never with the name of a key of the header (qore#6761)
-        hash<auto> hdr = http_get_request_header_hash(request.headers, listener.getHttpFieldsAtTopLevel());
+        bool top_level = listener.getHttpFieldsAtTopLevel();
+        hash<auto> hdr = http_get_request_header_hash(request.headers, top_level);
         hdr.method = request.method;
         hdr.path = request.path;
         hdr.":authority" = request.authority;
         hdr.":scheme" = request.scheme ?? "https";
-        hdr.host = request.authority;
+        # the Host field is given at the top level only if the fields are given there (qore#6851)
+        if (top_level) {
+            hdr.host = request.authority;
+        }
         # the authority of the request is its Host field, as it is in an HTTP/1.1 request (qore#6761)
         if (!exists hdr.headers.host && exists request.authority) {
             hdr.headers.host = request.authority;
@@ -2392,9 +2396,8 @@ public class HttpAsyncSocketIoController {
 
         # Parse accept-encoding header
         *list<string> accept_encoding;
-        if (hdr."accept-encoding") {
-            accept_encoding = map trim($1.split(";")[0]),
-                hdr."accept-encoding".split(",");
+        if (auto ae = http_get_field(hdr, "accept-encoding")) {
+            accept_encoding = map trim($1.split(";")[0]), ae.split(",");
         }
 
         # Detect headers-only dispatch
@@ -4036,14 +4039,14 @@ public class HttpAsyncSocketIoController {
             # the length is parsed as the server does (digits only): a value read differently here would pre-read a
             # body that the handler does not expect, or none that it waits for; an invalid length is left to the
             # handler, which refuses the request
-            *int content_length = HttpServer::http_parse_content_length(output.hdr."content-length");
-            bool has_expect = (output.hdr.expect =~ /100-continue/i);
+            *int content_length = HttpServer::http_parse_content_length(http_get_field(output.hdr, "content-length"));
+            bool has_expect = (http_get_field(output.hdr, "expect") =~ /100-continue/i);
             bool has_body = (content_length > 0);
 
             if (has_body && !has_expect) {
                 try {
                     softint cl = content_length;
-                    bool conn_close = (output.hdr.connection =~ /close/i);
+                    bool conn_close = (http_get_field(output.hdr, "connection") =~ /close/i);
                     AbstractPollOperation body_op = dispatch_sock.startPollReadHttpBody(cl, False,
                         conn_close);
                     # Stay in controller tracking — socket is managed during body read
@@ -5211,12 +5214,16 @@ public class HttpAsyncSocketIoController {
         # Build header hash
         # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted
         # socket has the listener's setting), never with the name of a key of the header (qore#6761)
-        hash<auto> hdr = http_get_request_header_hash(request.headers, cinfo.sock.getHttpFieldsAtTopLevel());
+        bool top_level = cinfo.sock.getHttpFieldsAtTopLevel();
+        hash<auto> hdr = http_get_request_header_hash(request.headers, top_level);
         hdr.method = request.method;
         hdr.path = request.path;
         hdr.":authority" = request.authority;
         hdr.":scheme" = request.scheme;
-        hdr.host = request.authority;
+        # the Host field is given at the top level only if the fields are given there (qore#6851)
+        if (top_level) {
+            hdr.host = request.authority;
+        }
         # the authority of the request is its Host field, as it is in an HTTP/1.1 request (qore#6761)
         if (!exists hdr.headers.host && exists request.authority) {
             hdr.headers.host = request.authority;
@@ -5225,9 +5232,8 @@ public class HttpAsyncSocketIoController {
 
         # Parse accept-encoding header for compression support
         *list<string> accept_encoding;
-        if (hdr."accept-encoding") {
-            accept_encoding = map trim($1.split(";")[0]),
-                hdr."accept-encoding".split(",");
+        if (auto ae = http_get_field(hdr, "accept-encoding")) {
+            accept_encoding = map trim($1.split(";")[0]), ae.split(",");
         }
 
         # In headers-only mode, check if the HEADERS frame itself had END_STREAM.
@@ -5617,12 +5623,16 @@ public class HttpAsyncSocketIoController {
         # Build header hash
         # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted
         # socket has the listener's setting), never with the name of a key of the header (qore#6761)
-        hash<auto> hdr = http_get_request_header_hash(request.headers, cinfo.sock.getHttpFieldsAtTopLevel());
+        bool top_level = cinfo.sock.getHttpFieldsAtTopLevel();
+        hash<auto> hdr = http_get_request_header_hash(request.headers, top_level);
         hdr.method = request.method;
         hdr.path = request.path;
         hdr.":authority" = request.authority;
         hdr.":scheme" = request.scheme;
-        hdr.host = request.authority;
+        # the Host field is given at the top level only if the fields are given there (qore#6851)
+        if (top_level) {
+            hdr.host = request.authority;
+        }
         # the authority of the request is its Host field, as it is in an HTTP/1.1 request (qore#6761)
         if (!exists hdr.headers.host && exists request.authority) {
             hdr.headers.host = request.authority;
@@ -5631,9 +5641,8 @@ public class HttpAsyncSocketIoController {
 
         # Parse accept-encoding header for compression support
         *list<string> accept_encoding;
-        if (hdr."accept-encoding") {
-            accept_encoding = map trim($1.split(";")[0]),
-                hdr."accept-encoding".split(",");
+        if (auto ae = http_get_field(hdr, "accept-encoding")) {
+            accept_encoding = map trim($1.split(";")[0]), ae.split(",");
         }
 
         # Create send-and-wake wrapper for handler threads.
@@ -6112,12 +6121,12 @@ thread_local *Counter running_dispatch;
     \c "body-content-type" keys with a Content-Type
 */
 hash<auto> sub http_request_header_info(hash<auto> hdr) {
-    auto ac = hdr."accept-charset";
+    auto ac = http_get_field(hdr, "accept-charset");
     if (ac.typeCode() == NT_LIST) {
         ac = (select ac, $1.typeCode() == NT_STRING).join(", ");
     }
     hash<auto> rv = {"accept-charset": get_http_accept_charset(ac.typeCode() == NT_STRING ? ac : NOTHING)};
-    auto ct = hdr."content-type";
+    auto ct = http_get_field(hdr, "content-type");
     if (ct.typeCode() == NT_LIST) {
         ct = ct.last();
     }

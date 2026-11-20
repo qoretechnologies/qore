@@ -133,11 +133,22 @@ module HttpServerUtil {
     @subsection httpserverutil_request_headers HttpServerUtil Request Headers
 
     The request headers given to a handler (the \c hdr argument of its methods and the \c hdr key of the
-    @ref httpserverutil_request_context "request context") have lower-case names, and the server sets the following
-    keys in them:
+    @ref httpserverutil_request_context "request context") give the fields of the request, with lower-case names,
+    under their \c "headers" key, and also at their top level (deprecated), except a field whose name is a key of the
+    hash (see @ref HttpUtil::HttpReservedFieldNames "HttpReservedFieldNames"), unless the server's
+    \c http_fields_at_top_level option is @ref False.  Read a field with @ref HttpUtil::http_get_field()
+    "http_get_field()", which gives it from \c "headers", or from the top level of a hash built by user code (see
+    @ref httputil_message_fields):
+
+    @code{.py}
+*string accept = http_get_field(hdr, "accept");
+    @endcode
+
+    The server sets the following keys in them:
 
     |!Key|!Type|!Description
-    |\c content-type|*string|the request \c Content-Type: for an HTTP/1.x request, the value without its \c charset parameter (the \c body-content-type value of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"), so that the media type can be compared without it, with its other parameters (such as \c boundary); for an HTTP/2 or HTTP/3 request, the value as received
+    |\c headers|hash|the fields of the request, with lower-case names; the server sets \c content-type here as described below
+    |\c content-type|*string|the request \c Content-Type (a field: under \c "headers", and at the top level as the other fields are): for an HTTP/1.x request, the value without its \c charset parameter (the \c body-content-type value of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"), so that the media type can be compared without it, with its other parameters (such as \c boundary); for an HTTP/2 or HTTP/3 request, the value as received
     |\c _qore_orig_content_type|*string|the request \c Content-Type as received, with any \c charset parameter; set if the request has a \c Content-Type
     |\c http_version|string|the HTTP version of the request
     |\c method|string|the HTTP method of the request (ex: \c "GET" or \c "POST")
@@ -161,6 +172,11 @@ module HttpServerUtil {
       another tenant, could report itself persistent and call the callback of the first one; the cleanup of a thread
       ends the persistence of every handler that set it on the thread, not of the last one only
       (issue #6847)
+    - @ref HttpServer::HttpReservedFieldNames is @ref HttpUtil::HttpReservedFieldNames; the handlers and
+      @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator" read the fields of a request with
+      @ref HttpUtil::http_get_field() "http_get_field()", from the \c "headers" key of its header hash, or from the
+      top level of a hash built by user code
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - added @ref HttpServer::HttpReservedFieldNames and @ref HttpServer::http_get_request_header_hash(); the header
       hash of a request gives its fields under \c "headers", and a field whose name is a key of the hash is not given
       at its top level; AbstractHttpRequestHandler::getMessageBody() gives the trailer fields of a chunked body,
@@ -360,20 +376,14 @@ module HttpServerUtil {
 public namespace HttpServer {
 #! The names of the keys that the readers of an HTTP message set in its hash themselves
 /** A header or trailer field with one of these names is given only under the \c "headers" or \c "trailers" key of
-    the message, never at its top level, so that a field cannot replace a key of the message (qore#6761, qore#6811)
+    the message, never at its top level, so that a field cannot replace a key of the message (qore#6761, qore#6811);
+    the same as @ref HttpUtil::HttpReservedFieldNames
+
+    @see @ref HttpUtil::http_get_field() "http_get_field()", which reads a field of such a hash
 
     @since HttpServerUtil 1.6
 */
-public const HttpReservedFieldNames = {
-    "body": True,
-    "headers": True,
-    "trailers": True,
-    "status_code": True,
-    "status_message": True,
-    "http_version": True,
-    "method": True,
-    "path": True,
-};
+public const HttpReservedFieldNames = HttpUtil::HttpReservedFieldNames;
 
 #! Returns the hash of the header of a request from its header fields, as Qore::Socket::readHTTPHeader() gives it
 /** @param fields the header fields of the request, with lower-case names
@@ -1131,7 +1141,7 @@ public class CookieHelper {
 
     @par Example:
     @code{.py}
-*int len = http_parse_content_length(hdr."content-length");
+*int len = http_parse_content_length(http_get_field(hdr, "content-length"));
 if (!exists len) {
     # answer 400 Bad Request
 }
@@ -1229,7 +1239,7 @@ bool sub http_is_exception_info(auto v) {
 */
 public bool sub is_extended_connect(hash<auto> cx, hash<auto> hdr) {
     return cx."header-info".is_extended_connect
-        || (hdr.method == "CONNECT" && hdr.":protocol".val());
+        || (hdr.method == "CONNECT" && http_get_field(hdr, ":protocol").val());
 }
 
 #! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT for WebSocket
@@ -1243,7 +1253,7 @@ public bool sub is_extended_connect(hash<auto> cx, hash<auto> hdr) {
 public bool sub is_websocket_extended_connect(hash<auto> cx, hash<auto> hdr) {
     return is_extended_connect(cx, hdr)
         && (cx."header-info".is_websocket_connect
-            || hdr.":protocol" == "websocket");
+            || http_get_field(hdr, ":protocol") == "websocket");
 }
 
 #! returns a complete URL from a bind address
@@ -2182,7 +2192,7 @@ public class AbstractAuthenticator {
         @since HttpServerUtil 1.6
     */
     string getDefault401ContentType(*hash<auto> cx) {
-        *string accept = cx.hdr.accept ?? cx.hdr.Accept;
+        *string accept = http_get_field(cx.hdr, "accept") ?? cx.hdr.Accept;
         if (accept && accept =~ /text\/html/i) {
             return MimeTypeHtml;
         }
@@ -2288,24 +2298,25 @@ public class AbstractAuthenticator {
     */
     private *hash<HttpResponseInfo> authenticateRequestIntern(HttpListenerInterface listener, hash<auto> hdr,
             reference<hash<auto>> cx, reference<bool> authenticated) {
-        if (hdr.authorization) {
+        auto authorization = http_get_field(hdr, "authorization");
+        if (authorization) {
             try {
-                if (hdr.authorization =~ /^Negotiate .+/i) {
+                if (authorization =~ /^Negotiate .+/i) {
                     if (*hash<HttpResponseInfo> rv = processNegotiateAuthorizationHeader(listener, hdr, \cx,
                         \authenticated)) {
                         return rv;
                     }
-                } else if (hdr.authorization =~ /^Basic .+/i) {
+                } else if (authorization =~ /^Basic .+/i) {
                     if (*hash<HttpResponseInfo> rv = processBasicAuthorizationHeader(listener, hdr, \cx,
                         \authenticated)) {
                         return rv;
                     }
-                } else if (hdr.authorization =~ /^Digest .+/i) {
+                } else if (authorization =~ /^Digest .+/i) {
                     if (*hash<HttpResponseInfo> rv = processDigestAuthorizationHeader(listener, hdr, \cx,
                         \authenticated)) {
                         return rv;
                     }
-                } else if (hdr.authorization =~ /^Bearer .+/i) {
+                } else if (authorization =~ /^Bearer .+/i) {
                     if (*hash<HttpResponseInfo> rv = processBearerAuthorizationHeader(listener, hdr, \cx,
                         \authenticated)) {
                         return rv;
@@ -2313,7 +2324,7 @@ public class AbstractAuthenticator {
                 } else {
                     # the header value is a credential; only the name of its scheme can be logged
                     listener.logError("Unsupported 'Authorization' header scheme: %y (from %s)",
-                        (hdr.authorization =~ x/^([-A-Za-z0-9._~+\/]+)/)[0], cx."peer-info".address_desc);
+                        (authorization =~ x/^([-A-Za-z0-9._~+\/]+)/)[0], cx."peer-info".address_desc);
                 }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "AUTHENTICATION-ERROR") {
@@ -2328,7 +2339,7 @@ public class AbstractAuthenticator {
             }
         }
 
-        if (hdr.cookie) {
+        if (http_get_field(hdr, "cookie")) {
             if (*hash<HttpResponseInfo> rv = processCookieHeader(listener, hdr, \cx, \authenticated)) {
                 return rv;
             }
@@ -2356,7 +2367,7 @@ public class AbstractAuthenticator {
 
     private *hash<HttpResponseInfo> processBasicAuthorizationHeader(HttpListenerInterface listener, hash<auto> hdr,
             reference<hash<auto>> cx, reference<bool> authenticated) {
-        *string bstr = (hdr.authorization =~ x/basic (.*)/i)[0];
+        *string bstr = (http_get_field(hdr, "authorization") =~ x/basic (.*)/i)[0];
         if (!bstr) {
             listener.logError("Invalid Basic Authorization header %y received from %s", bstr,
                 cx."peer-info".address_desc);
@@ -2775,7 +2786,7 @@ public class AbstractStreamRequest {
                 ? s.getQuicStreamTrailers(cx."header-info".session_id, sid)
                 : s.getHttp2StreamTrailers(sid)});
         } else {
-            if (hdr."transfer-encoding" == "chunked") {
+            if (http_get_field(hdr, "transfer-encoding") == "chunked") {
                 # HTTP/1.1 chunked reading: the native socket library controls
                 # the chunk loop via readHTTPChunkedBody*WithCallback(), so
                 # unlike HTTP/2/3 (which have explicit loops with
@@ -2794,7 +2805,7 @@ public class AbstractStreamRequest {
                     }
                 };
                 try {
-                    if (hdr."content-encoding") {
+                    if (http_get_field(hdr, "content-encoding")) {
                         s.readHTTPChunkedBodyBinaryWithCallback(chunked_recv,
                             timeout_ms);
                     } else {
@@ -4184,7 +4195,7 @@ public class AbstractHttpRequestHandler {
         # Socket::readHTTPHeader() sets the value in cx.close according to the HTTP version and the Connection header
         if (cx.close)
             throw "PERSISTENT-ERROR", sprintf("a persistent connection cannot be granted because the requesting HTTP "
-                "level is %y and the Connection header is %y", hdr.http_version, hdr.connection);
+                "level is %y and the Connection header is %y", hdr.http_version, http_get_field(hdr, "connection"));
     }
 
     #! Called if the request contains an \c "Expect: 100-continue" header
@@ -4484,7 +4495,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @since HttpServerUtil 1.6
     */
     static string decodeRequestText(hash<auto> hdr, binary body, string assumed_encoding) {
-        auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
+        auto ct = hdr."_qore_orig_content_type" ?? http_get_field(hdr, "content-type");
         data rv;
         try {
             rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed_encoding, "raise");
@@ -4587,12 +4598,12 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             *HttpListenerInterface listener, *reference<*hash<auto>> trailers) {
         # set if the chunked body read here is to be decoded as text, as readHTTPChunkedBody() returned it
         bool chunked_text;
-        if (!body && hdr."transfer-encoding" == "chunked") {
+        if (!body && http_get_field(hdr, "transfer-encoding") == "chunked") {
             # the body is read as bytes and decoded once below: a chunk can end inside a character, and the text is
             # checked where it enters the server (qore#6604)
             hash<auto> chunked = s.readHTTPChunkedBodyBinary(timeout_ms);
             body = remove chunked.body;
-            chunked_text = !hdr."content-encoding";
+            chunked_text = !http_get_field(hdr, "content-encoding");
             # the trailer fields are given to the caller apart and are not merged into the request's header fields,
             # so that they neither replace nor add a header field (RFC 9110 section 6.5, RFC 9112 section 7.1.2); the
             # body is decoded with the request's own header fields (qore#6753); they are read from "trailers", where
@@ -4602,10 +4613,10 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             }
         }
 
-        if (decode && body && hdr."content-encoding" && decompress) {
+        if (decode && body && http_get_field(hdr, "content-encoding") && decompress) {
             # the decompressed octets are text in the charset of the request, decoded as an uncompressed body is,
             # with the socket's encoding as the assumed one (qore#6618)
-            body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
+            body = AbstractHttpRequestHandler::decodeRequestBody(http_get_field(hdr, "content-encoding"), body, NOTHING,
                 getMaxDecodedBodySize(listener));
             if (decompress_to_string) {
                 body = AbstractHttpRequestHandler::decodeRequestText(hdr, body, getAssumedTextEncoding(s, listener));
@@ -4800,7 +4811,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             *hash<auto> response_hdr) {
         # make sure no forward slashes are doubled in the path
         path =~ s/\/+/\//g;
-        string uri = sprintf("http%s://%s/%s", cx.ssl ? "s" : "", request_hdr.host, path);
+        string uri = sprintf("http%s://%s/%s", cx.ssl ? "s" : "", http_get_field(request_hdr, "host"), path);
         return <HttpResponseInfo>{
             "code": status_code,
             "hdr": response_hdr + {"Location": uri},
