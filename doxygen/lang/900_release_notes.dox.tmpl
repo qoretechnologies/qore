@@ -2544,10 +2544,10 @@
     - a parent class or hashdecl given without a namespace path in a namespace is resolved in the namespace of the
       inheriting class or hashdecl (see @ref parent_class_name_resolution and @ref hashdecl_inheritance_rules), where
       one of the same name in another namespace could be inherited instead (issue #6710)
-    - a @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool "DatasourcePool" converts its
-      connection values, datasource strings and option names to the @ref default_encoding "default encoding", which
-      drivers read them in, where a UTF-8 value reached the driver double-encoded; a value that the default encoding
-      cannot represent raises \c ENCODING-CONVERSION-ERROR
+    - @ref Qore::SQL::Datasource "Datasource", @ref Qore::SQL::DatasourcePool "DatasourcePool" and
+      @ref Qore::SQL::parse_datasource() "parse_datasource()" convert connection values and option names to the
+      @ref default_encoding "default encoding", which drivers read them in, where a value in another encoding kept its
+      bytes; one that it cannot represent raises \c ENCODING-CONVERSION-ERROR, which does not show it
     - a parse error message naming a built-in complex type such as \c hash<auto> or \c list<auto> no longer aborts a
       debug build in a process whose @ref default_encoding "default encoding" is not UTF-8; type names are added to a
       message in its encoding (issue #6814)

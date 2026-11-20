@@ -1815,7 +1815,7 @@ DLLLOCAL QoreHashNode* statvfs_to_hash(const struct statvfs& statvfs);
 //! gets the string value of the given key, if any, in the default encoding; raises \a err if the value is not a string
 //! or contains a NUL, and \c ENCODING-CONVERSION-ERROR if the default encoding cannot represent it
 /** The value is converted to the default encoding, in which datasources keep their connection values (see
-    q_ds_value_to_default())
+    q_ds_value_to_default(), which raises another exception of the conversion as it is)
 
     @param secret if true, the value is a secret (ex: a password) and is not shown in the exception raised for a NUL
     character
@@ -1835,7 +1835,8 @@ DLLLOCAL bool check_hash_key(const QoreHashNode* h, const char* key, const char*
     default encoding is ISO-8859-1) is therefore converted before its bytes are used; a value that the default
     encoding cannot represent raises \c ENCODING-CONVERSION-ERROR instead of being kept as bytes that its encoding tag
     would misdescribe.  The exception does not show the value, which can be a password or a datasource string with a
-    password.
+    password.  Another exception of the conversion (ex: \c THREAD-CANCELLED, where the conversion validates its input
+    and is a cancellation point) is raised as it is.
 
     @param value set to \a str in the default encoding
     @param str the value
