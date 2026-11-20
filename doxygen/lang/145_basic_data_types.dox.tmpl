@@ -365,6 +365,23 @@ bool same = c'a' == "a";        # True
     \c 9 digits in the fraction, so a value with such a run prints rounded (ex: \c 1.00000000000000000001n prints as
     \c 1); @ref <number>::toStringRoundTrip() "<number>::toStringRoundTrip()" returns the exact value.
 
+    @par Exact Decimal Value of a Number:
+    @anchor number_exact_decimal A number written to a fixed-scale decimal value (an element of a
+    \c buffer<decimal128>, as of a decimal column of a @ref Qore::SQL::ColumnarResult "ColumnarResult", a
+    \c decimal128 value of an Arrow or Parquet column of a \c DataFrame, or a MongoDB \c Decimal128 value) is
+    written as its exact decimal value, the string of
+    @ref <number>::toStringRoundTrip() "<number>::toStringRoundTrip()", when the display rounding removes digits of
+    it and it has at most the decimal digits of the number's precision (its bits times log10(2), rounded down) less
+    17 significant digits, and fits the precision and scale of the decimal value; otherwise the number is written as
+    its display string.  A number parsed from a decimal string has 20 such guard digits (see
+    @ref number_string_precision), so it is written as that decimal value, also when it has a run of more than 16
+    \c 0 or \c 9 digits in its fraction (ex: \c 1.00000000000000000001n is written as \c 1.00000000000000000001 to
+    a \c decimal(38,20) element).  A number computed in binary, whose exact value has about the decimal digits of
+    its precision, is written as its display string, which removes the noise of the binary computation (ex:
+    <tt>0.1n + 0.2n</tt> is written as \c 0.3).  An exact value with more digits after the decimal point than the
+    scale also falls back to the display string (ex: \c 1.00000000000000000001n is written as \c 1 to a
+    \c decimal(38,10) element).
+
     @par Exact Integer Text:
     For integral number values, \c value.toString(NF_Raw) includes every stored integer digit,
     even when the exponent exceeds the value's binary precision. This is useful when exporting
