@@ -55,8 +55,14 @@ import subprocess
 import sys
 here = os.path.dirname(os.path.abspath(sys.argv[0]))
 latch = os.path.join(here, "latch")
-children = [subprocess.Popen([sys.executable, "-B", os.path.join(here, "stuck_child.py"), latch])
-            for i in range({children})]
+child = [sys.executable, "-B", os.path.join(here, "stuck_child.py"), latch]
+if {detached}:
+    # each child is started by a shell that ends at once, so that it is adopted by another process (init, launchd);
+    # the test then blocks on the latch itself
+    for i in range({children}):
+        subprocess.run(["sh", "-c", '"$@" &', "sh"] + child, check=True)
+    os.read(os.open(latch, os.O_RDWR), 1)
+children = [subprocess.Popen(child) for i in range({children})]
 for child in children:
     child.wait()
 """
@@ -86,8 +92,8 @@ def ptrace_attach_works(tool):
 @unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
 class DescendantStacksTest(unittest.TestCase):
 
-    def run_test(self, children=1, jobs=1, scripts=None, harness_limit=120, **variables):
-        """Runs TEST with the given number of children; returns the test's output, the children's process IDs, the
+    def run_test(self, children=1, jobs=1, scripts=None, harness_limit=120, detached=False, **variables):
+        """Runs TEST with the given number of children (detached: adopted by another process); returns the test's output, the children's process IDs, the
         runner's result, the seconds the run took and the tree's root (for the files of the stand-ins)
 
         scripts: stand-in commands put on PATH, {name: source}, with {latch} for a FIFO that nobody writes and {calls}
@@ -96,7 +102,7 @@ class DescendantStacksTest(unittest.TestCase):
         directory = tempfile.TemporaryDirectory(prefix="qore-runner-stacks-")
         self.addCleanup(directory.cleanup)
         tree = RunnerTree(directory.name)
-        test = tree.add_test("hangs.qtest", TEST.format(children=children, limit=LIMIT))
+        test = tree.add_test("hangs.qtest", TEST.format(children=children, limit=LIMIT, detached=detached))
         (test.parent / "stuck_child.py").write_text(CHILD)
         os.mkfifo(test.parent / "latch")
         tool_latch = tree.root / "tool-latch"
@@ -108,6 +114,7 @@ class DescendantStacksTest(unittest.TestCase):
             variables["QORE_TEST_JOBS"] = str(jobs)
         start = time.monotonic()
         result = tree.run(timeout=harness_limit, **variables)
+        result.root = tree.root
         elapsed = time.monotonic() - start
         sections = RunnerTree.sections(result.output)
         self.assertEqual(["hangs.qtest"], sorted(sections), result.output)
@@ -133,10 +140,11 @@ class DescendantStacksTest(unittest.TestCase):
 
     def capture(self, output, pid):
         """Returns the lines of the capture of the given process, after its label (which must be there)"""
-        label = re.search(r"^\*\*\* native call stacks of process %d \(a descendant of test (\d+)\): (.*) \*\*\*$"
+        label = re.search(r"^\*\*\* native call stacks of process %d \(a process of test (\d+)\): (.*) \*\*\*$"
                           % pid, output, re.M)
         self.assertIsNotNone(label, output)
         self.assertIn("stuck_child.py", label.group(2), output)
+        self.assertFalse(label.group(2).endswith(" "), output)
         rest = output[label.end():]
         end = re.search(r"^\*\*\* (native call stacks of process \d+|end of the native call stacks)", rest, re.M)
         self.assertIsNotNone(end, output)
@@ -150,14 +158,14 @@ class DescendantStacksTest(unittest.TestCase):
         self.assertNotEqual(-1, signal_line, output)
         self.assertLess(end, signal_line, output)
 
-    def check_real_tool(self, jobs):
+    def check_real_tool(self, jobs=1, detached=False):
         tools = [tool for tool in DEFAULT_TOOLS if shutil.which(tool)]
         if not tools:
             self.skipTest("none of %s is installed" % ", ".join(DEFAULT_TOOLS))
         if not ptrace_attach_works(tools[0]):
             self.skipTest("%s cannot attach to a process it does not descend from (ptrace_scope or "
                           "CAP_SYS_PTRACE)" % tools[0])
-        output, pids, result, elapsed, root = self.run_test(children=1, jobs=jobs)
+        output, pids, result, elapsed, root = self.run_test(children=1, jobs=jobs, detached=detached)
         stacks = self.capture(output, pids[0])
         self.assertRegex(stacks, READ_FRAME, output)
         self.assertNotIn("failed (exit code", stacks, output)
@@ -165,11 +173,50 @@ class DescendantStacksTest(unittest.TestCase):
         self.assert_before_signals(output)
 
     def test_the_stacks_of_a_child_stuck_on_a_latch_are_printed(self):
-        self.check_real_tool(jobs=1)
+        self.check_real_tool()
 
     def test_the_stacks_of_a_child_stuck_on_a_latch_are_printed_in_a_parallel_run(self):
         # the output of a test of a parallel run goes to its log, which the runner prints when the test ends
         self.check_real_tool(jobs=2)
+
+    def test_the_stacks_of_a_child_adopted_by_another_process_are_printed(self):
+        # a child whose parent (a shell that ran it with "&") ended is no descendant of the test: it is found by the
+        # test's mark (Linux) or process group (elsewhere)
+        self.check_real_tool(detached=True)
+
+    def test_the_children_adopted_by_another_process_are_captured_with_any_tool(self):
+        output, pids, result, elapsed, root = self.run_test(
+            children=2, detached=True, scripts={"printing-tool": '#!/bin/sh\necho "stacks of $1 from a stand-in"\n'},
+            QORE_TEST_STACK_TOOLS="printing-tool")
+        for pid in pids:
+            self.assertIn("stacks of %d from a stand-in" % pid, self.capture(output, pid))
+        # the shells that started them have ended, and the test itself is not captured
+        self.assertEqual(2, output.count("from a stand-in"), output)
+        self.assert_before_signals(output)
+
+    def test_times_that_are_not_whole_numbers_fall_back_to_the_defaults(self):
+        # shell arithmetic on "2m" was an error that ended the watchdog, which never ended the test, and the run never
+        # ended; "30s" dropped the limit of each capture
+        blocks = '#!/bin/sh\necho "$0 $$" >> "{calls}"\nread line < "{latch}"\n'
+        for wait, total, limit, messages in (
+                ("30s", "2m", 30, ("QORE_TEST_STACK_CAPTURE_WAIT=30s is not a whole number of seconds of at least 1: "
+                                   "30 is used",
+                                   "QORE_TEST_STACK_CAPTURE_TOTAL=2m is not a whole number of seconds of at least 1: "
+                                   "120 is used")),
+                ("2", "1.5", 2, ("QORE_TEST_STACK_CAPTURE_TOTAL=1.5 is not a whole number of seconds of at least 1: "
+                                 "120 is used",)),
+                ("0", "3", 3, ("QORE_TEST_STACK_CAPTURE_WAIT=0 is not",)),
+                ("x", "03", 3, ("QORE_TEST_STACK_CAPTURE_WAIT=x is not",)),
+                ("02", "-1", 2, ("QORE_TEST_STACK_CAPTURE_TOTAL=-1 is not",))):
+            with self.subTest(wait=wait, total=total):
+                output, pids, result, elapsed, root = self.run_test(
+                    scripts={"blocking-tool": blocks}, harness_limit=120, QORE_TEST_STACK_TOOLS="blocking-tool",
+                    QORE_TEST_STACK_CAPTURE_WAIT=wait, QORE_TEST_STACK_CAPTURE_TOTAL=total)
+                for message in messages:
+                    self.assertIn(message, result.output)
+                self.assertIn("*** process %d: blocking-tool did not end within %ds and was killed ***"
+                              % (pids[0], limit), self.capture(output, pids[0]))
+                self.assertLess(elapsed, LIMIT + limit + 25, output)
 
     def test_a_capture_that_hangs_is_killed_at_its_limit(self):
         # every default tool is a stand-in that blocks on a latch; the first one is killed at the limit of one capture,
@@ -201,7 +248,8 @@ class DescendantStacksTest(unittest.TestCase):
             children=2, scripts={"blocking-tool": blocks}, harness_limit=60, QORE_TEST_STACK_TOOLS="blocking-tool",
             QORE_TEST_STACK_CAPTURE_WAIT="60", QORE_TEST_STACK_CAPTURE_TOTAL="2")
         pids.sort()
-        self.assertIn("blocking-tool did not end within 2s and was killed", self.capture(output, pids[0]))
+        # within the 2 s, or 1 s if a second began between the start of the captures and the first one
+        self.assertRegex(self.capture(output, pids[0]), r"blocking-tool did not end within [12]s and was killed")
         self.assertIn("*** process %d: not captured, as the captures have taken their 2s "
                       "(QORE_TEST_STACK_CAPTURE_TOTAL) ***" % pids[1], self.capture(output, pids[1]))
         self.assertEqual(1, len((root / "calls").read_text().splitlines()))
@@ -226,6 +274,20 @@ class DescendantStacksTest(unittest.TestCase):
         self.assertIn("*** process %d: failing-tool failed (exit code 3) ***" % pids[0], stacks)
         self.assertIn("stacks of %d from a stand-in" % pids[0], stacks)
         self.assertNotIn("no tool could capture", stacks)
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "ptrace's restrictions are explained on Linux")
+    def test_an_attach_that_ptrace_does_not_permit_is_explained(self):
+        # a debugger's report of EPERM, as gdb prints it when yama's ptrace_scope or the container forbids the attach
+        scripts = {"denied-tool": '#!/bin/sh\necho "ptrace: Operation not permitted."\nexit 1\n'}
+        output, pids, result, elapsed, root = self.run_test(scripts=scripts, QORE_TEST_STACK_TOOLS="denied-tool")
+        stacks = self.capture(output, pids[0])
+        self.assertIn("*** process %d: denied-tool failed (exit code 1) ***" % pids[0], stacks)
+        try:
+            scope = Path("/proc/sys/kernel/yama/ptrace_scope").read_text().strip()
+        except OSError:
+            scope = "not set"
+        self.assertIn("*** process %d: ptrace is restricted, so its call stacks cannot be captured: "
+                      "kernel.yama.ptrace_scope is %s" % (pids[0], scope), stacks)
 
     def test_every_tool_failing_is_reported(self):
         scripts = {"failing-tool": '#!/bin/sh\nexit 3\n'}
