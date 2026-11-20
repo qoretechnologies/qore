@@ -158,6 +158,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       (<a href="https://github.com/qoretechnologies/qore/issues/6554">issue 6554</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6755">issue 6755</a>)
+    - a control frame with an RSV bit set (RFC 6455 section 5.2), or a continuation frame with RSV1 set (the
+      "Per-Message Compressed" bit of permessage-deflate, RFC 7692 section 6.1), closes the connection with
+      @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002) on HTTP/1.1, HTTP/2 and HTTP/3
+      (<a href="https://github.com/qoretechnologies/qore/issues/6781">issue 6781</a>)
     - a connection closed because a message was larger than the maximum message size is reported with its close code
       1009 (Message Too Big) and reason, on HTTP/1.1, HTTP/2 and HTTP/3: added
       @ref WebSocketHandler::WebSocketConnection::getCloseCode() "WebSocketConnection::getCloseCode()" and
