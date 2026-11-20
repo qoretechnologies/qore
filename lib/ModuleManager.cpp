@@ -6805,6 +6805,9 @@ void QoreModuleManager::delUser() {
     }
 
 #ifdef DEBUG
+    // the work that the test hook still holds runs now, after the user modules have been deleted (qore#6928)
+    qore_dbg_release_held_module_cleanup_work("the user modules have been deleted");
+
     for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
         if (i->second->isUser() && left.find(i->first) == left.end()) {
             printd(0, "QoreModuleManager::delUser() '%s' %p not yet removed\n", i->second->getName(), i->second);

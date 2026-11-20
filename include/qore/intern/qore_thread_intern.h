@@ -1903,6 +1903,12 @@ DLLLOCAL void qore_stop_module_uncounted_entries();
 */
 DLLLOCAL void qore_close_module_programs();
 
+#ifdef DEBUG
+//! Debug-only: re-queues the work items that the dbg_async_io_hold_module_cleanup_work() test hook held and ends the
+//! hold; \a by names the stage of the module cleanup that releases them, which is written on stderr with their number
+DLLLOCAL void qore_dbg_release_held_module_cleanup_work(const char* by);
+#endif
+
 //! Returns true if the Programs of the modules are closed (see qore_close_module_programs()) and the calling thread
 //! can still enter them: it runs the module cleanup, or work that the cleanup handed over
 /** Called by the code that hands work to another thread, in the handing thread (QoreSandboxContext for a ThreadPool

@@ -1271,6 +1271,66 @@ size_t AsyncIoControllerPriv::dbgReleaseHeldStepResults(ExceptionSink* xsink) {
     return held.size();
 }
 
+// the onComplete() work items of the module cleanup held by the dbg_async_io_hold_module_cleanup_work() test hook
+// (qore#6928); see dbgHoldModuleCleanupWork()
+namespace {
+struct AsyncIoDebugHeldModuleCleanupWork {
+    //! True while such items are held; checked without the lock first
+    std::atomic<bool> hold{false};
+    QoreThreadLock lock;
+    //! the items held, with the dispatcher that they were queued to
+    std::vector<std::pair<QoreCallDispatcher*, QoreCallDispatcher::AsyncWorkItem>> held;
+
+    //! Returns the state, which is never destroyed (see AsyncIoDebugHeldReleases::get())
+    static AsyncIoDebugHeldModuleCleanupWork& get() {
+        static AsyncIoDebugHeldModuleCleanupWork* state = new AsyncIoDebugHeldModuleCleanupWork;
+        return *state;
+    }
+};
+}
+
+void AsyncIoControllerPriv::dbgHoldModuleCleanupWork(bool hold) {
+    AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
+    AutoLocker al(state.lock);
+    state.hold.store(hold, std::memory_order_release);
+}
+
+//! Holds @a item if it is an onComplete() that the module cleanup hands over while the test hook holds them
+/** Takes over the item and returns true if it is held
+*/
+bool QoreCallDispatcher::dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item) {
+    AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
+    if (!state.hold.load(std::memory_order_acquire) || item.type != DT_ON_COMPLETE
+            || !async_io_module_cleanup_delegate(item.sandbox_ctx)) {
+        return false;
+    }
+    AutoLocker al(state.lock);
+    if (!state.hold.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    state.held.emplace_back(this, std::move(item));
+    return true;
+}
+
+void qore_dbg_release_held_module_cleanup_work(const char* by) {
+    AsyncIoDebugHeldModuleCleanupWork& state = AsyncIoDebugHeldModuleCleanupWork::get();
+    std::vector<std::pair<QoreCallDispatcher*, QoreCallDispatcher::AsyncWorkItem>> held;
+    {
+        AutoLocker al(state.lock);
+        // the hold ends: the work that the cleanup hands over from now on is queued
+        if (!state.hold.load(std::memory_order_relaxed) && state.held.empty()) {
+            return;
+        }
+        state.hold.store(false, std::memory_order_release);
+        held.swap(state.held);
+    }
+    fprintf(stderr, "held module cleanup work: %zu released (%s)\n", held.size(), by);
+    fflush(stderr);
+    for (auto& i : held) {
+        i.first->enqueue(std::move(i.second));
+    }
+}
+
 bool AsyncIoControllerPriv::dbgHoldStepResult(const std::string& key, uint64_t op_id, int thread_idx,
         QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state) {
     AsyncIoDebugHeldStepResults& hstate = AsyncIoDebugHeldStepResults::get();
@@ -2122,6 +2182,13 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
             item.pgm->depRef();
         }
     }
+
+#ifdef DEBUG
+    // the test hook holds the item with its program dependency reference
+    if (dbgHoldModuleCleanupWorkItem(item)) {
+        return;
+    }
+#endif
 
     // The discard decision is made under the lock, but the item's references are
     // only released after the lock is dropped: a deref can run a Qore destructor

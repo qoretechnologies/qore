@@ -95,6 +95,14 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             addTestCase(sprintf("%s: an operation that the module cleanup cancels in its step ends without an error",
                 mode), sub () { runStepCase(m); });
         }
+        foreach string mode in (ExecModes) {
+            foreach string protocol in (Protocols) {
+                string m = mode;
+                string p = protocol;
+                addTestCase(sprintf("%s: %s: the work that the module cleanup hands over ends before a module's Program "
+                    "is deleted", mode, protocol), sub () { runHoldCase(m, p); });
+            }
+        }
         on_exit {
             delete server;
         }
@@ -141,6 +149,27 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertRegex("(^|\n)result received: True\n", out, "the operation's result is received: " + out);
         assertRegex("(^|\n)abort\n", out, "abort() runs in the module cleanup: " + out);
         assertRegex("(^|\n)onComplete: canceled: True\n", out, "onComplete() runs in the module cleanup: " + out);
+        assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
+        assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
+    }
+
+    #! the onComplete() of the connection that the cleanup cancels is held until the cleanup releases it, so that it
+    #! runs as late as the cleanup lets it: the cleanup must wait for it before it waits for the threads of a module's
+    #! Program and deletes it, and it must not run after the HttpClientIo module's Program has been deleted (qore#6928)
+    private runHoldCase(string mode, string protocol) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the work is held with a test hook of a debug build");
+        }
+        string url = sprintf("https://127.0.0.1:%d", protocol == "h3" ? quic_port : tls_port);
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s %s 2>&1", shellQuote(module_dir),
+            shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep
+            + "hold-client.qr"), shellQuote(url), protocol), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)status: 200\n", out, "the request succeeds: " + out);
+        # the work is held, and the cleanup releases it when it waits for it, before any module is deleted
+        assertRegex("(^|\n)held module cleanup work: [1-9][0-9]* released \\(the module cleanup waits for its work\\)\n",
+            out, "the cleanup waits for the work held: " + out);
         assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
     }

@@ -669,6 +669,15 @@ private:
     //! Enqueue a work item, starting a worker if needed
     DLLLOCAL void enqueue(AsyncWorkItem&& item);
 
+#ifdef DEBUG
+    //! Debug-only: holds @a item, taking it over, if the dbg_async_io_hold_module_cleanup_work() test hook holds the
+    //! onComplete() work items that the module cleanup hands over; returns true if it is held (qore#6928)
+    DLLLOCAL bool dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item);
+
+    //! re-queues the items held
+    friend void qore_dbg_release_held_module_cleanup_work(const char* by);
+#endif
+
     //! Releases every reference held by a work item that will never be dispatched
     /** Must be called with the dispatcher lock NOT held: these derefs can run Qore
         destructors that re-enter the dispatcher (for example an
@@ -2340,6 +2349,14 @@ public:
         they are released
     */
     DLLLOCAL static void dbgHoldStepResults(bool hold);
+
+    //! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (qore#6928)
+    /** Called by the dbg_async_io_hold_module_cleanup_work() test hook: such an item (a canceled operation's
+        onComplete() with QoreSandboxContext::module_cleanup_delegate) is held instead of queued until the module
+        cleanup releases it (qore_dbg_release_held_module_cleanup_work()), so that a test can make it run as late as
+        the cleanup lets it
+    */
+    DLLLOCAL static void dbgHoldModuleCleanupWork(bool hold);
 
     //! Debug-only: waits until at least @p count step results are held; returns false if the wait timed out
     DLLLOCAL static bool dbgWaitHeldStepResults(size_t count, int64_t timeout_ms);
