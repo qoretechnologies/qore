@@ -200,6 +200,11 @@ hash<auto> desc = {
 
 
     @section mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - implemented the SqlUtil @ref select_option_lock_wait "lock_wait" select option: \c "nowait" and
+      \c "skip_locked" with MySQL 8.0 and later, \c "nowait" and \c "wait" with MariaDB 10.3 and later and
+      \c "skip_locked" with MariaDB 10.6 and later, and the classification of the lock-not-available errors
+      (\c 3572 and \c 1205)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6803">issue 6803</a>)
     - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
       column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
       with \c VALUE-ERROR, and its quotes are doubled without a regular expression
@@ -1167,7 +1172,50 @@ auto v = c.name;
     }
 
     #! provides the MySQL-specific implementation of the AbstractDatabase interface
+    # returns True if the server supports the lock_wait mode; MariaDB's versions are 10.0 and later, MySQL's are before
+    # 10.0: MySQL 8.0 supports NOWAIT and SKIP LOCKED, and no WAIT n; MariaDB 10.3 supports NOWAIT and WAIT n, and
+    # MariaDB 10.6 also SKIP LOCKED
+    bool sub mysql_supports_lock_wait(AbstractDatasource ds, string mode) {
+        int version = ds.getServerVersion();
+        if (version >= 100000) {
+            return version >= (mode == "skip_locked" ? 100600 : 100300);
+        }
+        return mode != "wait" && version >= 80000;
+    }
+
+    # returns True if the exception is MySQL's or MariaDB's error for a lock that is not available: 3572 (MySQL:
+    # NOWAIT found a locked row) or 1205 (lock wait timeout exceeded: MariaDB's NOWAIT and WAIT n, and a lock wait
+    # that ran out of innodb_lock_wait_timeout)
+    bool sub mysql_is_lock_not_available(hash<ExceptionInfo> ex) {
+        *int code = sqlutil_get_vendor_error_code(ex);
+        return code == 3572 || code == 1205;
+    }
+
     public class MysqlDatabase inherits SqlUtil::AbstractDatabase {
+        #! The modes of the @ref select_option_lock_wait "lock_wait" select option that the server supports
+        /** MySQL 8.0 supports NOWAIT and SKIP LOCKED, and no lock wait with a time; MariaDB 10.3 supports NOWAIT and
+            WAIT n, and MariaDB 10.6 also SKIP LOCKED
+
+            @since MysqlSqlUtil 1.6
+        */
+        private bool supportsLockWaitImpl(string mode) {
+            return mysql_supports_lock_wait(ds, mode);
+        }
+
+        #! MySQL's error 3572 (NOWAIT) and the lock wait timeout error 1205 (MariaDB's NOWAIT and WAIT n)
+        /** @since MysqlSqlUtil 1.6
+        */
+        private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+            return mysql_is_lock_not_available(ex);
+        }
+
+        #! InnoDB keeps the row locks of a failed statement until the transaction ends
+        /** @since MysqlSqlUtil 1.6
+        */
+        private bool lockNotAvailableReleasesLocksImpl() {
+            return False;
+        }
+
         public {
             #! MySQL-specific options
             const MysqlOptions = (
@@ -1919,6 +1967,30 @@ end";
 
     #! provides the MySQL-specific implementation of the AbstractTable interface
     public class MysqlTable inherits SqlUtil::AbstractTable {
+        #! The modes of the @ref select_option_lock_wait "lock_wait" select option that the server supports
+        /** MySQL 8.0 supports NOWAIT and SKIP LOCKED, and no lock wait with a time; MariaDB 10.3 supports NOWAIT and
+            WAIT n, and MariaDB 10.6 also SKIP LOCKED
+
+            @since MysqlSqlUtil 1.6
+        */
+        private bool supportsLockWaitImpl(string mode) {
+            return mysql_supports_lock_wait(ds, mode);
+        }
+
+        #! MySQL's error 3572 (NOWAIT) and the lock wait timeout error 1205 (MariaDB's NOWAIT and WAIT n)
+        /** @since MysqlSqlUtil 1.6
+        */
+        private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+            return mysql_is_lock_not_available(ex);
+        }
+
+        #! InnoDB keeps the row locks of a failed statement until the transaction ends
+        /** @since MysqlSqlUtil 1.6
+        */
+        private bool lockNotAvailableReleasesLocksImpl() {
+            return False;
+        }
+
         #! the default recursion limit of a recursive query on MySQL (\c cte_max_recursion_depth) and MariaDB (\c max_recursive_iterations)
         /** @since MysqlSqlUtil 1.6
         */

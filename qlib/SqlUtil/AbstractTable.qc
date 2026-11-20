@@ -139,6 +139,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "superquery": Type::Hash,
             "forupdate": Type::Boolean,
             "forupdate_no_key": Type::Boolean,
+            # the lock wait of a locking select (since SqlUtil 3.11.0)
+            "lock_wait": Type::NothingType,
             "partition": Type::String,
             # set operators (since SqlUtil 3.11.0)
             "union": "hash/list",
@@ -166,13 +168,13 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         /** @since %SqlUtil 3.11.0
         */
         const list<string> RecursiveQueryRefusedOptions = ("superquery", "forupdate", "forupdate_no_key",
-            "partition");
+            "lock_wait", "partition");
 
         #! the select options that the anchor and the step of a recursive query cannot have
         /** @since %SqlUtil 3.11.0
         */
         const list<string> RecursiveQueryMemberRefusedOptions = ("recursive", "superquery", "forupdate",
-            "forupdate_no_key", "orderby", "desc", "limit", "offset", "union", "union_all", "intersect", "except");
+            "forupdate_no_key", "lock_wait", "orderby", "desc", "limit", "offset", "union", "union_all", "intersect", "except");
 
         #! the default name of the common table expression of a recursive query
         /** @since %SqlUtil 3.11.0
@@ -6583,6 +6585,12 @@ string sql = table.getSelectSql(sh, \args);
             }
         }
 
+        # the lock wait of a locking select (since SqlUtil 3.11.0)
+        *hash<auto> lock_wait;
+        if (exists info.query_hash.lock_wait) {
+            lock_wait = checkLockWaitIntern(info.query_hash);
+        }
+
         if (exists info.query_hash.offset) {
             if (!info.query_hash.orderby) {
                 # use primary key by default
@@ -6942,6 +6950,9 @@ string sql = table.getSelectSql(sh, \args);
             } else {
                 doForUpdate(\sql);
             }
+            if (lock_wait) {
+                doLockWait(\sql, lock_wait.mode, lock_wait.seconds);
+            }
         }
 
         # issue #4206: splice comments and hints into the SQL query string last, right after the select keyword, where a
@@ -6989,7 +7000,7 @@ string sql = table.getSelectSql(sh, \args);
         @since %SqlUtil 3.11.0
     */
     private prepareSetOperationsIntern(reference<hash<QueryInfo>> info) {
-        foreach string opt in ("superquery", "forupdate", "forupdate_no_key") {
+        foreach string opt in ("superquery", "forupdate", "forupdate_no_key", "lock_wait") {
             if (info.query_hash{opt}) {
                 throw "SELECT-ERROR", sprintf("%s: the %y select option cannot be combined with the set operators "
                     "(%y)", getDesc(), opt, keys info.query_hash{keys SetOperatorSql});
@@ -7825,6 +7836,62 @@ string sql = table.getSelectSql(sh, \args);
 
     private doForNonKeyUpdate(reference<string> sql) {
         throw "NONKEY-UPDATE-LOCK-NOT-SUPPORTED", "non-key update locks are not implemented by this driver";
+    }
+
+    #! Checks the @ref select_option_lock_wait "lock_wait" select option of a select
+    /** @param qh the select option hash, which has the \c "lock_wait" option
+
+        @return a hash with \c mode (\c "nowait", \c "skip_locked" or \c "wait") and, for \c "wait", \c seconds
+
+        @throw SELECT-ERROR the select is not a locking select (it has no \c "forupdate" option, or it has a
+        \c "superquery"), the value of the option is not valid, or the database does not support the mode
+
+        @since %SqlUtil 3.11.0
+    */
+    private hash<auto> checkLockWaitIntern(hash<auto> qh) {
+        auto v = qh.lock_wait;
+        hash<auto> rv;
+        switch (v.typeCode()) {
+            case NT_STRING:
+                if (v == "nowait" || v == "skip_locked") {
+                    rv = {"mode": v};
+                }
+                break;
+            case NT_INT:
+                if (v >= 0) {
+                    rv = {"mode": "wait", "seconds": v};
+                }
+                break;
+        }
+        if (!rv) {
+            throw "SELECT-ERROR", sprintf("%s: invalid \"lock_wait\" select option %y; expecting \"nowait\", "
+                "\"skip_locked\" or a number of seconds to wait for a lock (an integer greater than or equal to 0)",
+                getDesc(), v);
+        }
+        if (!qh.forupdate || qh.superquery) {
+            throw "SELECT-ERROR", sprintf("%s: the \"lock_wait\" select option (%y) needs a locking select: the "
+                "\"forupdate\" option without a \"superquery\"", getDesc(), v);
+        }
+        if (!supportsLockWait(rv.mode)) {
+            throw "SELECT-ERROR", sprintf("%s: the database (driver %y) does not support the %y mode of the "
+                "\"lock_wait\" select option", getDesc(), ds.getDriverName(), rv.mode);
+        }
+        return rv;
+    }
+
+    #! Appends the clause of the @ref select_option_lock_wait "lock_wait" select option to a locking select
+    /** @param sql the SQL of the select, which ends with its locking clause
+        @param mode \c "nowait", \c "skip_locked" or \c "wait"
+        @param seconds the number of seconds to wait for a lock for the \c "wait" mode
+
+        @since %SqlUtil 3.11.0
+    */
+    private doLockWait(reference<string> sql, string mode, *int seconds) {
+        switch (mode) {
+            case "nowait": sql += " nowait"; break;
+            case "skip_locked": sql += " skip locked"; break;
+            case "wait": sql += sprintf(" wait %d", seconds); break;
+        }
     }
 
     private string getSelectSqlName(*hash<auto> qh) {
