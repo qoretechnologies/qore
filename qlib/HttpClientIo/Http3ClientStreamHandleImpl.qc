@@ -257,7 +257,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 throw "HTTPCLIENT-NOT-READY",
                     "connection is not ready for async streaming request";
             }
-            if (!conn.waitForReady(timeout_ms: getReadyWait())) {
+            timeout ready_wait = getReadyWait();
+            if (!conn.waitForReady(timeout_ms: ready_wait)) {
                 {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Pending;
@@ -266,7 +267,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     delete data_channel;
                 }
                 # the reservation is released; the connection keeps connecting for other waiters (#6429, #6430)
-                throwConnectWaitExpired();
+                throwConnectWaitExpired(ready_wait);
             }
         }
 
@@ -333,14 +334,15 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: getReadyWait())) {
+            timeout ready_wait = getReadyWait();
+            if (!conn.waitForReady(timeout_ms: ready_wait)) {
                 {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Pending;
                     streaming = False;
                 }
                 # the reservation is released; the connection keeps connecting for other waiters (#6429, #6430)
-                throwConnectWaitExpired();
+                throwConnectWaitExpired(ready_wait);
             }
         }
 
