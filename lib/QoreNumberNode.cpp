@@ -226,6 +226,29 @@ int qore_number_private::getRoundTripString(QoreString& str, bool scientific, Ex
     return qore_format_round_trip_digits(str, selected, static_cast<int64>(exponent), scientific, xsink);
 }
 
+// At the guarded storage precision, adjacent decimal candidates are many binary ulps apart.
+// Rounding to that grid skips any trailing run of zeros (or carries a run of nines). If the
+// result restores the input, no shorter decimal can restore it with a different value:
+// every shorter decimal is also on this grid. Otherwise use the general shortest-string search.
+static int qore_decimal_round_trip(QoreString& str, const qore_number_private& value, size_t digits,
+        ExceptionSink* xsink) {
+    if (qore_check_cancel(xsink, "formatting a round-trip number")) {
+        return -1;
+    }
+    mpfr_exp_t exponent;
+    std::unique_ptr<char, decltype(&mpfr_free_str)> raw(
+        mpfr_get_str(nullptr, &exponent, 10, digits, value.num, QORE_MPFR_RND), &mpfr_free_str);
+    if (raw) {
+        QoreString input;
+        input.sprintf("%se" QLLD, raw.get(), static_cast<int64>(exponent) - static_cast<int64>(digits));
+        qore_number_private restored(mpfr_get_prec(value.num));
+        if (!mpfr_set_str(restored.num, input.c_str(), 10, QORE_MPFR_RND) && mpfr_equal_p(value.num, restored.num)) {
+            return qore_format_round_trip_digits(str, raw.get(), static_cast<int64>(exponent), false, xsink);
+        }
+    }
+    return value.getRoundTripString(str, false, xsink);
+}
+
 int qore_number_private::getDecimalString(QoreString& str, int precision, int scale, ExceptionSink* xsink) const {
     size_t start = str.size();
     qore_number_rounding_info_t rounding;
@@ -248,7 +271,8 @@ int qore_number_private::getDecimalString(QoreString& str, int precision, int sc
         return 0;
     }
     QoreString exact;
-    if (getRoundTripString(exact, false, xsink)) {
+    size_t digits = precision > 0 ? std::min(max_digits, static_cast<size_t>(precision)) : max_digits;
+    if (qore_decimal_round_trip(exact, *this, digits, xsink)) {
         return -1;
     }
     // the significant, integer and fractional digits of the exact value
