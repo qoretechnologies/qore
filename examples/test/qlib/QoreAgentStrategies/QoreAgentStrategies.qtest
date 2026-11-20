@@ -192,8 +192,7 @@ public class QoreAgentStrategiesTest inherits QUnit::Test {
             \parallelStartThreadOptionWinsTest());
         addTestCase("Parallel - unknown option rejected",
             \parallelUnknownOptionTest());
-        addTestCase("Parallel - sandbox parse stub passes under PO_NO_THREAD_CONTROL",
-            \parallelSandboxParseStubTest());
+        addTestCase("Parallel - restricted caller can run a serial call", \restrictedModuleCallTest());
 
         # Hashdecl tests
         addTestCase("AgentContext defaults", \contextDefaultsTest());
@@ -765,35 +764,16 @@ public class QoreAgentStrategiesTest inherits QUnit::Test {
         );
     }
 
-    #! Proves that the parallel-dispatch pattern used in ParallelToolDispatcher
-    #! parses cleanly under PO_NO_THREAD_CONTROL.  See the equivalent test in
-    #! QoreStructuredExtractionTest::sandboxParseStubTest() for why an
-    #! end-to-end module-load sandbox test is not feasible from this qtest.
-    parallelSandboxParseStubTest() {
+    restrictedModuleCallTest() {
         Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
-        string stub = '
-            class Dispatcher {
-                private {
-                    *code<int(code<nothing()>)> start_thread;
-                }
-
-                constructor(*code<int(code<nothing()>)> starter) {
-                    start_thread = starter;
-                }
-
-                int run(code<nothing()> worker) {
-%ifdef PO_NO_THREAD_CONTROL
-                    return call_function(start_thread, worker);
-%else
-                    if (start_thread) {
-                        return call_function(start_thread, worker);
-                    }
-                    return background worker();
-%endif
-                }
-            }
-        ';
-        p.parse(stub, "parallel-sandbox-stub");
+        p.parse("%requires QoreAgentStrategies\n"
+            "list<auto> sub probe(QoreAgentStrategies::ParallelToolDispatcher value) { "
+            "return value.dispatchToolsParallel(({\"name\": \"echo\"},), "
+            "string sub(string n, hash<auto> args) { return n; }); }", "restricted-library-call");
+        ParallelToolDispatcher worker({"max_concurrent": 1});
+        list<auto> result = p.callFunction("probe", worker);
+        assertEq(1, result.size());
+        assertEq("echo", result[0].result);
     }
 
     parallelErrorTest() {

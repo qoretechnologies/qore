@@ -112,17 +112,8 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Wait for a given period of time
-    static threadWait(date wait_period) {
-%ifdef PO_NO_PROCESS_CONTROL
-        # workaround to wait in a context without process control
-        Mutex m();
-        Condition c();
-        m.lock();
-        on_exit m.unlock();
-        c.wait(m, wait_period);
-%else
+    static threadWait(date wait_period) [dom=PROCESS_CONTROL] {
         usleep(wait_period);
-%endif
     }
 
     #! Retrieves info for the given guild; must be accessible to the calling user
@@ -181,7 +172,8 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
                                 "future (%y)", reset, diff);
                         }
                         warn("RATE LIMIT: connection sleeping for: %y", diff);
-                        threadWait(diff);
+                        # Waiting for Discord's rate limit is part of the request.
+                        usleep(diff);
                     }
                     continue;
                 }
