@@ -6821,6 +6821,15 @@ size_t QoreSocketObject::getMaxHeaderSize() const {
     return priv->socket->getMaxHeaderSize();
 }
 
+void QoreSocketObject::setMaxLineSize(size_t size) {
+    // an atomic value that is only read when a line is read: no lock and no round trip to the I/O thread
+    priv->socket->setMaxLineSize(size);
+}
+
+size_t QoreSocketObject::getMaxLineSize() const {
+    return priv->socket->getMaxLineSize();
+}
+
 void QoreSocketObject::setHttp2MaxRequestBodySize(int64 size) {
     // the limit of the socket's HTTP/2 session, if any, always has the effect of the socket's limit (see
     // qore_socket_private::max_http2_body_size), so setting the value the socket has changes nothing and needs no

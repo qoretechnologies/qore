@@ -115,6 +115,14 @@
     @ref restclientintro "RestClient" and the clients built on it raise \c RESTCLIENT-ERROR for the HTTPClient option
     \c http_fields_at_top_level set to @ref False, as they read the fields of a response at its top level (see
     @ref restclientv2_7; issue #6869).
+    @par The Size of a Line That Is Read Until a Line Terminator Is Limited
+    A read until a line terminator (<tt>&quot;\\n&quot;</tt> or <tt>&quot;\\r\\n&quot;</tt>), such as the line readers of the IMAP, POP3, SMTP and FTP
+    clients and of a @ref Qore::PollPipeline "PollPipeline", raises \c SOCKET-LINE-TOO-LARGE when a peer sends more than
+    1048576 bytes, and the lines of an SMTP, FTP or similar reply count together; before, there was no limit.
+    @ref Qore::Socket::setMaxLineSize() "Socket::setMaxLineSize()" changes it, and the new \c max_response_size option of
+    @ref Pop3Client::Pop3Client "Pop3Client" limits a message
+    (<a href="https://github.com/qoretechnologies/qore/issues/6914">issue 6914</a>).
+
     @par The Size of an HTTP/1.x Header and Trailer Section Is Limited
     The readers of an HTTP/1.x header section, of the trailer section of a chunked body and of a chunk size line
     (@ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()", the chunked body readers, the poll operations and

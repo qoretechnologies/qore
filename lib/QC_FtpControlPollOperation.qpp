@@ -419,6 +419,15 @@ QoreHashNode* FtpControlPollOperationPriv::handleRecvLine(ExceptionSink* xsink) 
 
     // Accumulate response text
     response_accum.concat(lstr, llen);
+    // the lines of a reply count together against the maximum line size of the socket (qore#6914)
+    size_t max_line = ctrl_sock->getMaxLineSize();
+    if (response_accum.size() > max_line) {
+        response_accum.clear();
+        xsink->raiseException("SOCKET-LINE-TOO-LARGE", "the FTP reply received exceeds the maximum size of %zu bytes; "
+            "the limit can be changed with Socket::setMaxLineSize()", max_line);
+        setClosed();
+        return nullptr;
+    }
 
     // RFC 959: final response line = 3 digits + space; continuation = 3 digits + dash
     if (llen >= 4 && isdigit(lstr[0]) && isdigit(lstr[1]) && isdigit(lstr[2])

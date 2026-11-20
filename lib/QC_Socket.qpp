@@ -7485,6 +7485,37 @@ int Socket::getMaxHeaderSize() [flags=CONSTANT] {
     return static_cast<int>(s->getMaxHeaderSize());
 }
 
+//! Sets the maximum size of a line that is read until a line terminator
+/** The readers that receive until a line terminator (<tt>&quot;\\n&quot;</tt> or <tt>&quot;\\r\\n&quot;</tt>), such as
+    @ref Qore::Socket::startPollRecvUntilBytesString() "startPollRecvUntilBytesString()", the line steps of a
+    @ref Qore::PollPipeline "PollPipeline" and the IMAP, POP3, SMTP and FTP clients that are built on them, raise a
+    \c SOCKET-LINE-TOO-LARGE exception, and keep no more data in memory, if a peer sends a line larger than this limit.
+    The size is that of the line as received, with the line end.  A read until another pattern, such as the end of a
+    POP3 message, is not limited by this value.
+
+    @param max_line_size the maximum size in bytes; 0 restores the default of 1048576 bytes
+
+    @throw INVALID-ARGUMENT the size is negative
+
+    @since %Qore 3.0
+*/
+Socket::setMaxLineSize(int max_line_size) [flags=NAMED_ARGS] {
+    if (max_line_size < 0) {
+        return xsink->raiseException("INVALID-ARGUMENT", "the maximum line size cannot be negative (%d)",
+            max_line_size);
+    }
+    s->setMaxLineSize(static_cast<size_t>(max_line_size));
+}
+
+//! Returns the maximum size of a line that is read until a line terminator
+/** @return the maximum size in bytes; the default of 1048576 bytes if no other was set
+
+    @since %Qore 3.0
+*/
+int Socket::getMaxLineSize() [flags=CONSTANT] {
+    return static_cast<int>(s->getMaxLineSize());
+}
+
 //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
 /** When set, HTTP/2 DATA frame accumulation exceeding this limit will cause
     the stream to be reset with REFUSED_STREAM.

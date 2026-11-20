@@ -115,6 +115,15 @@ typedef struct ares_channeldata ares_channel_t;
 #define QORE_MAX_HEADER_SIZE 65536
 #endif
 
+//! The default maximum size in bytes of a line that a client of a line-based protocol (IMAP, POP3, SMTP, FTP) reads,
+//! or that any reader reads until a line terminator ("\n" or "\r\n") (qore#6914)
+/** The limit is the size of the line as received, with the line end.  It can be changed per socket with
+    Socket::setMaxLineSize().
+*/
+#ifndef QORE_MAX_LINE_SIZE
+#define QORE_MAX_LINE_SIZE (1024 * 1024)
+#endif
+
 #define CHF_HTTP11  (1 << 0)
 #define CHF_PROCESS (1 << 1)
 #define CHF_REQUEST (1 << 2)
@@ -1454,6 +1463,22 @@ public:
         this->max_size = max_size;
         limit_what = what;
         limit_total = total_max ? total_max : max_size;
+        line_limit = false;
+        message_limit = false;
+    }
+
+    //! Limits the size of the data received for a reader of a message that can be large, such as the end of a POP3
+    //! message (qore#6914)
+    /** A SOCKET-RESPONSE-TOO-LARGE exception is raised, and no more data is read or kept, when the data received is
+        larger than the limit.
+
+        @param max_size the maximum size in bytes; 0 = no limit
+    */
+    DLLLOCAL void setMessageLimit(size_t max_size) {
+        this->max_size = max_size;
+        limit_total = max_size;
+        line_limit = false;
+        message_limit = true;
     }
 
 private:
@@ -1466,6 +1491,10 @@ private:
     const char* limit_what = nullptr;
     //! the limit of the whole section, for the exception, when the data is a part of a section
     size_t limit_total = 0;
+    //! true if the limit is the maximum line size of the socket (a read until a line terminator; qore#6914)
+    bool line_limit = false;
+    //! true if the limit is that of a message (qore#6914)
+    bool message_limit = false;
 
     qore_socket_private* sock;
     // we are using QoreStringNode as it has a much better append / concat implementation than BinaryNode
@@ -2246,6 +2275,18 @@ public:
     DLLLOCAL size_t getMaxHeaderSize() const {
         size_t rv = max_header_size.load(std::memory_order_relaxed);
         return rv ? rv : QORE_MAX_HEADER_SIZE;
+    }
+
+    //! Maximum size in bytes of a line read until a line terminator (0 = QORE_MAX_LINE_SIZE)
+    /** The readers of a line raise a SOCKET-LINE-TOO-LARGE exception when a peer sends more, instead of keeping the
+        data in memory.  The value is read when the line is read, so that it can change at any time.
+    */
+    std::atomic<size_t> max_line_size{0};
+
+    //! Returns the maximum size in bytes of a line read until a line terminator
+    DLLLOCAL size_t getMaxLineSize() const {
+        size_t rv = max_line_size.load(std::memory_order_relaxed);
+        return rv ? rv : QORE_MAX_LINE_SIZE;
     }
 
     //! Maximum request body size for HTTP/2 streams (0 = unlimited)

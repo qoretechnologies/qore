@@ -50,9 +50,13 @@ public:
         @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
         @param what what is read, for the exception: \c "header", \c "chunked body trailer" or \c "chunk size line"
         @param used the size of the part of the section that was read before, which counts against the limit
+        @param message_max if not 0, the data is a message (a response that can be large) and this is its maximum size
+            in bytes (a SOCKET-RESPONSE-TOO-LARGE exception is raised for more), instead of the maximum header size of
+            the socket (qore#6914)
     */
     DLLLOCAL SocketRecvHttpLinePollOperation(ExceptionSink* xsink, const QoreStringNode* pattern,
-            QoreSocketObject* sock, bool to_string, bool defer_init, const char* what, size_t used = 0);
+            QoreSocketObject* sock, bool to_string, bool defer_init, const char* what, size_t used = 0,
+            size_t message_max = 0);
 
 private:
     DLLLOCAL virtual int initPollState(ExceptionSink* xsink) override;
@@ -63,6 +67,7 @@ private:
     SimpleRefHolder<QoreStringNode> http_pattern;
     const char* what;
     size_t used;
+    size_t message_max;
 };
 
 #endif // _QORE_INTERN_SOCKETRECVHTTPLINEPOLLOPERATION_H

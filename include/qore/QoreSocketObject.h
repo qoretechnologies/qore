@@ -674,6 +674,12 @@ if (accepted) {
     //! Returns the maximum size of an HTTP/1.x header section, of a chunked body trailer section and of a chunk size line
     DLLEXPORT size_t getMaxHeaderSize() const;
 
+    //! Sets the maximum size of a line that is read until a line terminator (0 = the default)
+    DLLEXPORT void setMaxLineSize(size_t size);
+
+    //! Returns the maximum size of a line that is read until a line terminator
+    DLLEXPORT size_t getMaxLineSize() const;
+
     //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
     DLLEXPORT void setHttp2MaxRequestBodySize(int64 size);
 
