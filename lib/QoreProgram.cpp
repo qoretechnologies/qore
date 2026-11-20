@@ -7147,9 +7147,10 @@ public:
     }
 
     void child() noexcept override {
-        // the objects are created again in place: the waiters and the holder are gone with their threads
+        // the condition is created again in place: the waiters are gone with their threads; the mutex is held by this
+        // thread since prepare(): released, so that ThreadSanitizer sees the release (issue #6817)
         new (&exit_hook_cond) std::condition_variable();
-        new (&exit_hook_lock) std::mutex();
+        exit_hook_lock.unlock();
         system_threads_starting = 0;
     }
 };
