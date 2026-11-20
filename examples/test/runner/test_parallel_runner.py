@@ -11,6 +11,7 @@ others, an exclusive test alone), the order (longest first), a test's time limit
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
+import errno
 import os
 from pathlib import Path
 import re
@@ -21,6 +22,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -342,7 +344,8 @@ kill -9 $shells
     def child_ends(self, pid, fifo, timeout=10):
         """Returns True if the child (see child_runs()) has ended or ends within the time given: a SIGKILL that the
         runner sent before it ended is delivered asynchronously.  Waits for the process's exit event (a pidfd on
-        Linux, a kqueue elsewhere), not for a time"""
+        Linux, a kqueue elsewhere), not for a time; only where neither exists (Python < 3.9, a kernel without pidfds
+        or a seccomp filter that denies them) is the child checked every 50 ms until the time has passed"""
         if not self.child_runs(pid, fifo):
             return True
         if hasattr(os, "pidfd_open"):
@@ -350,11 +353,16 @@ kill -9 $shells
                 fd = os.pidfd_open(pid)
             except ProcessLookupError:
                 return True
-            try:
-                select.select([fd], [], [], timeout)
-            finally:
-                os.close(fd)
-        else:
+            except OSError as e:
+                if e.errno not in (errno.ENOSYS, errno.EPERM):
+                    raise
+            else:
+                try:
+                    select.select([fd], [], [], timeout)
+                finally:
+                    os.close(fd)
+                return not self.child_runs(pid, fifo)
+        elif hasattr(select, "kqueue"):
             kq = select.kqueue()
             try:
                 event = select.kevent(pid, filter=select.KQ_FILTER_PROC, flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
@@ -365,7 +373,14 @@ kill -9 $shells
                     return True
             finally:
                 kq.close()
-        return not self.child_runs(pid, fifo)
+            return not self.child_runs(pid, fifo)
+        # no event source: a bounded check
+        deadline = time.monotonic() + timeout
+        while self.child_runs(pid, fifo):
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.05)
+        return True
 
     def time_limit(self, jobs):
         """A test that exceeds its time limit is ended with every process that it started (#6835): its child, which

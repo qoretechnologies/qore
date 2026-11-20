@@ -1371,6 +1371,8 @@ runner_signaled() {
                 # the signals the trap ignores would be ignored by the commands run here too (an ignored signal is
                 # inherited): the timeout command could not end its reader with SIGTERM
                 trap - HUP INT TERM
+                # this process is not the shell that waits for the test: the shell may wait for it between the check
+                # in signal_test_group() and the signal (the ID would then have to be taken in that instant)
                 if ! $TIMEOUT_CMD $TEST_INTERRUPT_WAIT sh -c 'read -r ended' <&5 2>/dev/null \
                         && test_has_mark $test_pid "$TEST_PROCESS_MARK"; then
                     echo "*** the run is interrupted, and the test did not end within ${TEST_INTERRUPT_WAIT}s:" \
