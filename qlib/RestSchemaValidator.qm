@@ -1432,6 +1432,15 @@ public namespace RestSchemaValidator {
         this class.
     */
     public class AbstractRestSchemaObject inherits AbstractComposableSchemaObject {
+        private {
+            #! True if the schema object was created by code that no sandbox governs, such as the initialization
+            #! of a module that parses its schema
+            /** Such a schema can be shared by every Program of the process, so sandboxed code cannot replace its
+                types (qore#6843)
+            */
+            transient bool shared_object = SandboxManager::isProcessWideRegistrationAllowed();
+        }
+
         public {
             #! Items schema for arrays
             *AbstractSchemaObject items;
@@ -1674,6 +1683,11 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.5
         */
         replaceType(AbstractDataProviderType t) {
+            # a schema that may be shared by every Program cannot be changed by sandboxed code (qore#6843)
+            if (shared_object && !SandboxManager::isProcessWideRegistrationAllowed()) {
+                SandboxManager::checkProcessWideRegistration("replace a data type of a REST schema that is shared by "
+                    "every Program of the process");
+            }
             *AbstractRestSchemaValidator schema = getTypeBuildSchema();
             if (schema && !schema.isTypeBuildActive()) {
                 schema.runTypeBuild(sub () {

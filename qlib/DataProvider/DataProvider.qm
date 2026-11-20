@@ -1837,6 +1837,11 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       standard modules refuse changes of their process-wide registries to sandboxed code; the process-wide type cache
       (@ref DataProvider::DataProvider::getTypeCache() "DataProvider::getTypeCache()") refuses them too
       (<a href="https://github.com/qoretechnologies/qore/issues/6747">issue 6747</a>)
+    - sandboxed code cannot change a data type or a data field that code no sandbox governs created, which every
+      %Program of the process can share; added @ref DataProvider::AbstractDataProviderType::freeze()
+      "AbstractDataProviderType::freeze()" and @ref DataProvider::AbstractDataField::freeze()
+      "AbstractDataField::freeze()" for types that a module builds in a sandboxed call and keeps for every caller
+      (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

@@ -256,6 +256,7 @@ public class QoreDataField inherits AbstractDataField {
         Explicit type replacements leave choice replacement to the caller, such as a wire codec overlay.
     */
     AbstractDataField updateFieldType(AbstractDataProviderType type) {
+        checkChange();
         # Schema adapters initially build fields with AutoType to break recursive graphs.
         # Convert choices before publishing the final type, including integer/boolean
         # values represented as strings by schema lookup sets. Labels remain untouched.

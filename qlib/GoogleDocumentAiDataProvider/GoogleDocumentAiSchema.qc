@@ -61,6 +61,9 @@ public class GoogleDocumentAiManifest {
 */
 public class GoogleDocumentAiSchema {
     private {
+        #! The ID of the lazy value of getActionSets() (qore#6843)
+        static int action_sets_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \GoogleDocumentAiSchema::buildActionSetsValue());
         static list<RestSchemaActionSet> sets = ();
     }
 
@@ -73,6 +76,15 @@ public class GoogleDocumentAiSchema {
         @throw GOOGLE-DOCUMENTAI-SCHEMA-ERROR an unreviewed resource is loaded
     */
     static list<RestSchemaActionSet> getActionSets() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(action_sets_value_id);
+    }
+
+    #! Builds the value of getActionSets() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static list<RestSchemaActionSet> buildActionSetsValue() {
         AutoLock al(lck);
         if (!sets) {
             list<RestSchemaActionSet> built = ();

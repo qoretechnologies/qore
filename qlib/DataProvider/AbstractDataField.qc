@@ -315,6 +315,14 @@ public class AbstractDataField inherits Qore::Serializable {
     }
 
     private {
+        #! True if the field was created by code that no sandbox governs, such as the initialization of a module
+        /** Such a field can be shared by every Program of the process, so sandboxed code cannot change it
+            (qore#6843); see checkChange()
+        */
+        transient bool shared_object = SandboxManager::isProcessWideRegistrationAllowed();
+    }
+
+    private {
         #! the default value for the field, if any
         auto default_value;
 
@@ -382,6 +390,31 @@ public class AbstractDataField inherits Qore::Serializable {
         return getType().getSupportedOptions();
     }
 
+    #! Raises an exception if sandboxed code changes a field that code that no sandbox governs created
+    /** A field that a module creates outside a sandbox may be shared by every Program of the process, so it cannot be
+        changed by code that a sandbox governs; a field that sandboxed code creates can be changed by it (qore#6843)
+
+        @throw SANDBOX-REGISTRATION-ERROR the field was created outside a sandbox, and sandboxed code changes it (see
+        Qore::SandboxManager::checkProcessWideRegistration())
+
+        @since DataProvider 3.12
+    */
+    #! Marks the field and its type as shared by every Program of the process; see
+    #! AbstractDataProviderType::freeze()
+    /** @since DataProvider 3.12
+    */
+    freeze() {
+        shared_object = True;
+        getType().freeze();
+    }
+
+    private checkChange() {
+        if (shared_object && !SandboxManager::isProcessWideRegistrationAllowed()) {
+            SandboxManager::checkProcessWideRegistration(sprintf("change data field %y, which is shared by every "
+                "Program of the process", getName()));
+        }
+    }
+
     #! sets the given option on the field's type
     /** @param opt the option to set
         @param value the value to set
@@ -389,6 +422,7 @@ public class AbstractDataField inherits Qore::Serializable {
         @throw TYPE-OPTION-ERROR invalid option or invalid option type
     */
     AbstractDataField setOption(string opt, auto value) {
+        checkChange();
         getType().setOption(opt, value);
         return self;
     }
@@ -399,6 +433,7 @@ public class AbstractDataField inherits Qore::Serializable {
         @throw TYPE-OPTION-ERROR option value has an invalid type
     */
     AbstractDataField setOptions(hash<auto> options) {
+        checkChange();
         getType().setOptions(options);
         return self;
     }
@@ -417,6 +452,7 @@ public class AbstractDataField inherits Qore::Serializable {
         @note A refused list leaves the previous allowed values unchanged.
     */
     AbstractDataField setAllowedValues(list<auto> allowed_values, *bool allowed_values_creatable) {
+        checkChange();
         AbstractDataProviderType type = getType();
         list<hash<AllowedValueInfo>> resolved;
         if (allowed_values[0] instanceof hash<AllowedValueInfo>) {
@@ -458,6 +494,7 @@ public class AbstractDataField inherits Qore::Serializable {
     */
     AbstractDataField setElementAllowedValues(list<auto> element_allowed_values,
             *bool element_allowed_values_creatable) {
+        checkChange();
         AbstractDataProviderType type = getType();
         *AbstractDataProviderType et = type.getElementType();
         list<hash<AllowedValueInfo>> resolved;
@@ -503,6 +540,7 @@ public class AbstractDataField inherits Qore::Serializable {
 
     #! sets the default value for the field
     AbstractDataField setDefaultValue(auto default_value) {
+        checkChange();
         # check that the value can be assigned to the type
         self.default_value = getType().acceptsValue(default_value);
         return self;
@@ -521,6 +559,7 @@ public class AbstractDataField inherits Qore::Serializable {
         @since DataProvider 3.11
     */
     AbstractDataField setRemoteDefaultValue(auto value) {
+        checkChange();
         remove remote_default_value;
         if (exists value) {
             try {
@@ -792,12 +831,14 @@ public class AbstractDataField inherits Qore::Serializable {
 
     #! Sets custom attributes
     AbstractDataField setAttributes(hash<auto> attr) {
+        checkChange();
         self.attr += attr;
         return self;
     }
 
     #! Replaces all custom attributes
     replaceAttributes(*hash<auto> attr) {
+        checkChange();
         remove self.attr;
         if (attr) {
             self.attr += attr;

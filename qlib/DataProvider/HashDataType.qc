@@ -122,6 +122,7 @@ public class HashDataType inherits QoreDataType {
 
     #! Sets the default field type for unlisted fields
     setDefaultOtherFieldType(*AbstractDataProviderType default_other_field_type) {
+        checkChange("fields");
         self.default_other_field_type = default_other_field_type;
         if (default_other_field_type) {
             has_default_other_field_type = default_other_field_type.hasType();
@@ -163,6 +164,7 @@ type.setRequiredGroups((("input_path", "data"), ("output_path", "return_data")))
         @since DataProvider 3.1
     */
     HashDataType setRequiredGroups(list<list<string>> groups) {
+        checkChange("fields");
         # Validate all field names exist
         foreach list<string> group in (groups) {
             if (group.empty()) {
@@ -381,6 +383,7 @@ auto v = t.getDefaultValue();
         @since DataProvider 3.0
     */
     HashDataType addQoreFields(hash<auto> new_fields) {
+        checkChange("fields");
         if (!new_fields) {
             return self;
         }
@@ -413,6 +416,14 @@ auto v = t.getDefaultValue();
         return self;
     }
 
+    #! Marks the fields of the type and their types as shared; see AbstractDataProviderType::freeze()
+    private freezeImpl() {
+        map $1.freeze(), fields.iterator();
+        if (default_other_field_type) {
+            default_other_field_type.freeze();
+        }
+    }
+
     #! Adds a field to the type
     /** @param field field to add
         @return this type
@@ -429,6 +440,7 @@ invoice.addField(new QoreDataField("approved", "Approval status", BoolOrNothingT
         @endcode
     */
     HashDataType addField(AbstractDataField field) {
+        checkChange("fields");
         addFieldIntern(field);
         return self;
     }
@@ -455,6 +467,7 @@ node.setFields(fields);
         @since DataProvider 3.11
     */
     HashDataType setFields(hash<string, AbstractDataField> fields) {
+        checkChange("fields");
         self.fields = fields;
         if (type == AutoHashType) {
             scanFieldsForRequired();
@@ -482,6 +495,7 @@ response.setFieldList((id_field, name_field));
         @since DataProvider 3.11
     */
     HashDataType setFieldList(list<AbstractDataField> fields) {
+        checkChange("fields");
         self.fields = {};
         remove default_value;
         default_value_needs_check = False;
@@ -495,12 +509,14 @@ response.setFieldList((id_field, name_field));
 
     #! Adds a field to the type from a typed hash member
     HashDataType addField(Qore::Reflection::TypedHashMember mem) {
+        checkChange("fields");
         addFieldIntern(mem);
         return self;
     }
 
     #! Replaces an existing field with a new definition
     HashDataType replaceField(AbstractDataField field) {
+        checkChange("fields");
         if (!fields{field.getName()}) {
             throw "REPLACE-FIELD-ERROR", sprintf("Field %y cannot be replaced, as it does not exist",
                 field.getName());
@@ -511,6 +527,7 @@ response.setFieldList((id_field, name_field));
 
     #! Adds or replaces a field with a new definition
     HashDataType addOrReplaceField(AbstractDataField field) {
+        checkChange("fields");
         addFieldIntern(field);
         return self;
     }

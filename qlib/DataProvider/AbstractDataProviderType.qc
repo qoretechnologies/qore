@@ -463,6 +463,15 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         #! type options
         hash<auto> options;
 
+        #! True if the type was created by code that no sandbox governs, such as the initialization of a module
+        /** Such a type can be shared by every Program of the process (in a constant or a static variable of a
+            module), so sandboxed code cannot change it (qore#6843); see checkChange()
+        */
+        transient bool shared_object = SandboxManager::isProcessWideRegistrationAllowed();
+
+        #! True once freeze() has marked the type as shared; see freeze()
+        transient bool frozen;
+
         #! type tags
         *hash<auto> tags;
 
@@ -764,6 +773,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     /** @since DataProvider 3.0
     */
     setPath(string path) {
+        checkChange("options");
         self.path = path;
     }
 
@@ -771,6 +781,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     /** @since DataProvider 3.0
     */
     clearPath() {
+        checkChange("options");
         remove path;
     }
 
@@ -803,6 +814,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         @since DataProvider 3.11
     */
     setSchemaIdentity(*string schema_identity) {
+        checkChange("options");
         self.schema_identity = schema_identity;
     }
 
@@ -1193,6 +1205,7 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         @throw TYPE-OPTION-ERROR invalid option or invalid option type
     */
     setOption(string opt, auto value) {
+        checkChange("options");
         if (!(*hash<string, hash<DataProviderTypeOptionInfo>> options = getSupportedOptions()){opt}) {
             throw "TYPE-OPTION-ERROR", sprintf("option %y is not supported by type %y; supported options: %y",
                 opt, getName(), keys options);
@@ -1215,6 +1228,7 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         @throw TYPE-OPTION-ERROR invalid option type
     */
     setOptions(hash<auto> options) {
+        checkChange("options");
         foreach hash<auto> i in (getSupportedOptions().pairIterator()) {
             if (exists (auto value = options{i.key})) {
                 string value_type = value.type();
@@ -1244,7 +1258,49 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
 
     #! Sets the dynamic tag on the type
     setDynamicTag() {
+        checkChange("options");
         tags.dynamic = True;
+    }
+
+    #! Raises an exception if sandboxed code changes a type that code that no sandbox governs created
+    /** A type that a module creates outside a sandbox (in its initialization, or in code that it runs with the
+        system policy) may be shared by every Program of the process, so it cannot be changed by code that a sandbox
+        governs; a type that sandboxed code creates can be changed by it (qore#6843)
+
+        @param what what is changed, for the error message
+
+        @throw SANDBOX-REGISTRATION-ERROR the type was created outside a sandbox, and sandboxed code changes it (see
+        Qore::SandboxManager::checkProcessWideRegistration())
+
+        @since DataProvider 3.12
+    */
+    #! Marks the type, and the types and fields that it holds, as shared by every Program of the process
+    /** For a type that a module builds in a call that a sandbox governs and then keeps for every caller, such as in a
+        process-wide cache: sandboxed code cannot change it afterwards, as if code that no sandbox governs had created
+        it (qore#6843, qore#6863).  It cannot be undone.
+
+        @since DataProvider 3.12
+    */
+    freeze() {
+        if (frozen) {
+            return;
+        }
+        frozen = True;
+        shared_object = True;
+        freezeImpl();
+    }
+
+    #! Marks the types and fields that the type holds as shared; see freeze()
+    /** The base class method does nothing; a type that holds other types or fields overrides it
+    */
+    private freezeImpl() {
+    }
+
+    private checkChange(string what) {
+        if (shared_object && !SandboxManager::isProcessWideRegistrationAllowed()) {
+            SandboxManager::checkProcessWideRegistration(sprintf("change the %s of data type %y, which is shared "
+                "by every Program of the process", what, getName()));
+        }
     }
 
     #! Returns a "soft" type equivalent to the current type
