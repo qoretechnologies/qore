@@ -72,6 +72,13 @@ DLLLOCAL const char* qore_mongo_check_uri_tls_files(const mongoc_uri_t* uri, Exc
 */
 DLLLOCAL const char* qore_mongo_driver_connection_reason(const mongoc_uri_t* uri);
 
+//! Returns why a sandbox's policy does not allow the URI's GSSAPI authentication, or nullptr
+/** With GSSAPI, Kerberos contacts the KDCs itself, through no stream that the module creates; as the krb5 module
+    does, it is allowed only when the sandbox's network policy is unrestricted (qoretechnologies/qore#6912)
+*/
+DLLLOCAL const char* qore_mongo_gssapi_reason(const mongoc_uri_t* uri, QoreSandboxManager* sm,
+        ExceptionSink* xsink);
+
 //! Configure libmongoc logging for the Qore MongoDB module
 DLLLOCAL void qore_mongo_set_log_handler();
 

@@ -550,13 +550,49 @@ const char* qore_mongo_driver_connection_reason(const mongoc_uri_t* uri) {
     return nullptr;
 }
 
+const char* qore_mongo_gssapi_reason(const mongoc_uri_t* uri, QoreSandboxManager* sm, ExceptionSink* xsink) {
+    const char* mech = mongoc_uri_get_auth_mechanism(uri);
+    if (!sm || !mech || strcasecmp(mech, "GSSAPI")) {
+        return nullptr;
+    }
+    // unrestricted: the default policy allows, and there are no host, port or range rules (as for the krb5 module)
+    ReferenceHolder<QoreHashNode> config(sm->network().getConfiguration(xsink), xsink);
+    if (*xsink || !config) {
+        return "authMechanism GSSAPI (Kerberos contacts the KDCs itself)";
+    }
+    QoreValue policy = config->getKeyValue("default_policy");
+    bool default_allow = false;
+    if (policy.getType() == NT_STRING) {
+        QoreStringValueHelper policy_str(policy);
+        default_allow = !strcmp(policy_str->c_str(), "allow");
+    }
+    const QoreListNode* allowed_hosts = config->getKeyValue("allowed_hosts").get<const QoreListNode>();
+    const QoreListNode* allowed_ports = config->getKeyValue("allowed_ports").get<const QoreListNode>();
+    bool unrestricted = default_allow
+        && (!allowed_hosts || allowed_hosts->empty())
+        && (!allowed_ports || allowed_ports->empty())
+        && !config->getKeyValue("allowed_ranges_count").getAsBigInt()
+        && !config->getKeyValue("denied_ranges_count").getAsBigInt();
+    return unrestricted ? nullptr : "authMechanism GSSAPI with a restricted network policy (Kerberos contacts the "
+        "KDCs itself, with no check of the policy)";
+}
+
 // the TLS options of libmongoc that mongoc_ssl_opt_t::internal points to: libmongoc's _mongoc_internal_tls_opts_t
-// (mongoc-ssl-private.h, the same layout since libmongoc 1.16, checked for 2.2.2); the module's stream initiator
-// replaces libmongoc's, which sets them from the URI
+// (mongoc-ssl-private.h), which libmongoc does not export; the module's stream initiator replaces libmongoc's, which
+// sets them from the URI.  The layout is used only with the libmongoc versions whose private header was checked:
+// 1.17.0 to 2.5.9, every release of which has the same two members (1.16 has none); with another version, the
+// options are not written, and the TLS connections of sandboxed code, which must not contact OCSP responders, are
+// refused (qoretechnologies/qore#6911)
+#define QORE_MONGOC_VERSION_NUM (MONGOC_MAJOR_VERSION * 1000000 + MONGOC_MINOR_VERSION * 1000 + MONGOC_MICRO_VERSION)
+// QORE_MONGOC_FORCE_UNCHECKED_VERSION builds the code of an unchecked version, to test it
+#if QORE_MONGOC_VERSION_NUM >= 1017000 && QORE_MONGOC_VERSION_NUM <= 2005009 \
+    && !defined(QORE_MONGOC_FORCE_UNCHECKED_VERSION)
+#define QORE_MONGOC_INTERNAL_TLS_OPTS 1
 struct qore_mongoc_internal_tls_opts {
     bool tls_disable_certificate_revocation_check;
     bool tls_disable_ocsp_endpoint_check;
 };
+#endif
 
 mongoc_stream_t* qore_mongo_stream_initiator(
     const mongoc_uri_t* uri,
@@ -585,7 +621,17 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     // the driver connects by itself for some authentication mechanisms, through no stream that the module creates and
     // so with no check of the sandbox: they are refused for sandboxed code before anything else is done
     if (sandboxed) {
-        if (const char* reason = qore_mongo_driver_connection_reason(uri)) {
+        const char* reason = qore_mongo_driver_connection_reason(uri);
+        // GSSAPI: each policy that governs the connection must be unrestricted (qoretechnologies/qore#6912)
+        ExceptionSink gss_xsink;
+        if (!reason && smh) {
+            reason = qore_mongo_gssapi_reason(uri, smh.get(), &gss_xsink);
+        }
+        if (!reason && creation_policy) {
+            reason = qore_mongo_gssapi_reason(uri, *creation_policy, &gss_xsink);
+        }
+        gss_xsink.clear();
+        if (reason) {
             bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                 "MongoDB connection denied by sandbox: NETWORK-ACCESS-DENIED: %s", reason);
             return nullptr;
@@ -728,6 +774,7 @@ mongoc_stream_t* qore_mongo_stream_initiator(
         // ignored
         mongoc_ssl_opt_t ssl_opt = *mongoc_ssl_opt_get_default();
         qore_mongo_apply_uri_tls_opts(uri, ssl_opt);
+#ifdef QORE_MONGOC_INTERNAL_TLS_OPTS
         // the revocation options of the URI, which libmongoc's own initiator sets too; for sandboxed code, OCSP
         // responders are never contacted: the driver connects to the responder that the server's certificate names
         // by itself, with no check of the sandbox (qoretechnologies/qore#6911); a stapled response is still checked
@@ -736,6 +783,17 @@ mongoc_stream_t* qore_mongo_stream_initiator(
             sandboxed || mongoc_uri_get_option_as_bool(uri, MONGOC_URI_TLSDISABLEOCSPENDPOINTCHECK, false),
         };
         ssl_opt.internal = &tls_internal;
+#else
+        // OCSP responder checks cannot be turned off with this libmongoc version: fail closed for sandboxed code
+        if (sandboxed) {
+            mongoc_stream_destroy(base);
+            bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
+                "MongoDB connection denied by sandbox: NETWORK-ACCESS-DENIED: TLS connections of sandboxed code "
+                "are not supported with libmongoc %s, with which the module cannot keep the driver from contacting "
+                "OCSP responders itself", MONGOC_VERSION_S);
+            return nullptr;
+        }
+#endif
 
         mongoc_stream_t* tls_stream = mongoc_stream_tls_new_with_hostname(base, host->host, &ssl_opt, 1);
         if (!tls_stream) {
