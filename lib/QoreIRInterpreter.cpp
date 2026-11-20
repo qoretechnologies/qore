@@ -20490,6 +20490,17 @@ load_local_done:
                 } else {
                     res.discard(xsink);
                 }
+                // releasing the removed value (when the result is not used) or the interpreter's references to the
+                // local can run a destructor that raises an exception; it is the instruction's own, as in the AST,
+                // where the remove expression's statement raises it (qore#6823)
+                if (*xsink) {
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return exitAfterUnwind();
+                }
                 ++ip;
                 break;
             }
