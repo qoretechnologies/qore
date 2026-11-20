@@ -4598,7 +4598,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // the statements of the catch block are marked for the debugger's exception events (#5816)
         int old_debug_catch_child_depth = debug_catch_child_depth;
         debug_catch_child_depth = debug_nest_depth;
-        bool catch_ok = !try_stmt->getCatchBlock() || lowerStatementBlock(try_stmt->getCatchBlock(), error);
+        bool catch_ok = !try_stmt->getCatchBlock() || lowerStatementBlock(try_stmt->getCatchBlock(), error,
+            catch_exit_block ? nullptr : catch_var);
         debug_catch_child_depth = old_debug_catch_child_depth;
         AnchorCatchInfo exit_catches;
         if (catch_exit_block) {
@@ -4885,7 +4886,7 @@ static bool qore_ir_statement_parse_options_differ(const StatementBlock::stateme
     return false;
 }
 
-bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::string& error) {
+bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::string& error, LocalVar* debug_catch_var) {
     if (!block) {
         error = "null statement block for IR lowering";
         return false;
@@ -5076,10 +5077,18 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // of the statement that contains it (#5921); only code with the statements' debug instructions, which record
         // the statements that the frame is in, uses them
         auto* dbg_block = static_cast<QoreIRDebugStatementInstruction*>(builder.createDebugBlock(block->loc, block));
-        if (lvars && !lvars->lv.empty()
+        if ((debug_catch_var || (lvars && !lvars->lv.empty()))
                 && (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements)) {
             dbg_block->block_locals = std::make_unique<QoreIRDebugBlockLocals>();
-            dbg_block->block_locals->locals = lvars->lv;
+            auto& locals = dbg_block->block_locals->locals;
+            // The catch parameter is declared before the catch body's locals. The debugger releases this list in
+            // reverse order before reporting the enclosing statement, including when the catch has no exit block.
+            if (debug_catch_var) {
+                locals.push_back(debug_catch_var);
+            }
+            if (lvars) {
+                locals.insert(locals.end(), lvars->lv.begin(), lvars->lv.end());
+            }
             // the depth of the statement that contains the block, which the locals are recorded on: the frame can
             // still have the statements of another block of the statement in it whose ends did not run, as with the
             // try block of a catch block (#5999)

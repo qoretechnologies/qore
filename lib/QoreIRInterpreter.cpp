@@ -1791,6 +1791,14 @@ static void releaseActiveIteratorsFrom(std::unordered_map<FunctionalOperatorInte
     }
 }
 
+struct IRCatchEntry {
+    QoreException* caught;  // the caught exception
+    QoreException* saved;   // the previous td->catchException value
+    //! the number of scopes open when the catch block was entered (those that enclose the try statement): the
+    //! catch block is in every scope below that depth, and is left when one of them is (#5969)
+    size_t scope_depth;
+};
+
 //! A statement that a frame is in, for the debugger's exception events of the statements that an exception leaves
 //! (#5816)
 struct QoreIRDebugNestEntry {
@@ -1798,6 +1806,8 @@ struct QoreIRDebugNestEntry {
     const AbstractStatement* stmt = nullptr;
     //! the number of scopes of the frame (scope_stack) at its start
     size_t scope_depth = 0;
+    //! Number of active catches when this statement began.
+    size_t catch_depth = 0;
     //! the depth and the QORE_IR_DEBUG_NEST_* flags of the statement
     uint16_t depth = 0;
     uint8_t flags = 0;
@@ -1814,6 +1824,7 @@ struct QoreIRDebugNestEntry {
 */
 struct QoreIRDebugNest {
     std::vector<QoreIRDebugNestEntry> entries;
+    std::vector<IRCatchEntry>* catches = nullptr;
     //! the function of the frame and its pre-instantiated locals, for the release of the locals of a block (#5921)
     const QoreIRFunction* func = nullptr;
     const IRPreInstantiated* pre_instantiated = nullptr;
@@ -1825,6 +1836,7 @@ struct QoreIRDebugNest {
 
     DLLLOCAL void reset() {
         entries.clear();
+        catches = nullptr;
         chain = -1;
         last_end = QoreIRDebugNestEntry();
     }
@@ -9221,7 +9233,8 @@ static QoreIRDebugNest& qore_ir_dbg_frame_nest() {
 
 //! Records the statement of a DebugStatement instruction in the statements that the frame is in
 static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameState& st,
-        const QoreIRDebugStatementInstruction* inst, const AbstractStatement* stmt, size_t scope_depth) {
+        const QoreIRDebugStatementInstruction* inst, const AbstractStatement* stmt, size_t scope_depth,
+        std::vector<IRCatchEntry>& catches) {
     QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
     if (!st.nest_used) {
         n.reset();
@@ -9232,6 +9245,8 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameStat
     QoreIRDebugNestEntry& e = entries.back();
     e.stmt = stmt;
     e.scope_depth = scope_depth;
+    n.catches = &catches;
+    e.catch_depth = catches.size();
     e.depth = inst->nest_depth;
     e.flags = inst->nest_flags;
     e.block = nullptr;
@@ -9361,6 +9376,19 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_enclosing(QoreIRDebugFrameSt
             assert(pool.top);
             qore_ir_release_block_locals(block->block_locals->locals, block->block_locals->slots, *pool.frames[pool.top - 1],
                 n.func, n.pre_instantiated, xsink);
+        }
+        // A catch owns the original exception as well as its local. Release it at the same boundary as the
+        // catch block's locals, before an enclosing block releases its locals. Keep the stack entries for the
+        // normal unwind instructions, which still count them when restoring the enclosing catches.
+        if ((e.flags & QORE_IR_DEBUG_NEST_TRY) && n.catches) {
+            for (size_t i = n.catches->size(); i > e.catch_depth; --i) {
+                auto& entry = (*n.catches)[i - 1];
+                if (QoreException* caught = entry.caught) {
+                    entry.caught = nullptr;
+                    catch_swap_exception(entry.saved);
+                    caught->del(xsink);
+                }
+            }
         }
         --n.chain;
         if (!e.stmt) {
@@ -10029,14 +10057,6 @@ DLLLOCAL QoreValue irEvalInvokeGiven(const IRConsumedCallArgs& consumed, const Q
 #endif
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
-struct IRCatchEntry {
-    QoreException* caught;  // the caught exception
-    QoreException* saved;   // the previous td->catchException value
-    //! the number of scopes open when the catch block was entered (those that enclose the try statement): the
-    //! catch block is in every scope below that depth, and is left when one of them is (#5969)
-    size_t scope_depth;
-};
-
 //! Closes the catch blocks opened since the try statement of a catch block's exit block began (#5968)
 /** Returns false if \a inst is the CatchCleanup of no exit block, which closes the innermost catch block. */
 static QORE_INTERN_NOINLINE bool qore_ir_catch_exit_cleanup(const QoreIRFunction& func, const QoreIRInstruction* inst,
@@ -17980,7 +18000,7 @@ load_local_done:
                         // the statements that the frame is in, for the exception events (#5816)
                         if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_VALID) {
                             qore_ir_dbg_nest_statement(dbg_state, dbg_inst, dbg_stmt,
-                                scope_stack.size());
+                                scope_stack.size(), catch_exception_stack);
                         }
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
                         // the debugger can set the local variables of the frame while the thread is stopped,
