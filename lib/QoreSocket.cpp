@@ -38,6 +38,7 @@
 #include <climits>
 #include <algorithm>
 #include <typeinfo>
+#include <thread>
 #include <string_view>
 #include <atomic>
 #include <limits>
@@ -15773,6 +15774,28 @@ SocketPollSocketOperationBase::~SocketPollSocketOperationBase() {
 }
 
 // the socket and the goal of an operation of qore/SocketPollOperation.h, kept with the operation (qore#6839)
+
+//! holds the spin lock of the members of a poll operation; the lock is held only to copy a value
+class PollMemberSpinLocker {
+public:
+    DLLLOCAL PollMemberSpinLocker(std::atomic_flag& lock) : lock(lock) {
+        while (lock.test_and_set(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+    }
+
+    //! adopts the lock taken by a successful try
+    DLLLOCAL PollMemberSpinLocker(std::atomic_flag& lock, bool) : lock(lock) {
+    }
+
+    DLLLOCAL ~PollMemberSpinLocker() {
+        lock.clear(std::memory_order_release);
+    }
+
+private:
+    std::atomic_flag& lock;
+};
+
 SocketPollOperationMembers::~SocketPollOperationMembers() {
     // the values are released when the object of the operation is deleted (releasePollMembers()); values that are
     // left (an operation whose object was not deleted normally) are released here, where no exception can be raised
@@ -15788,7 +15811,7 @@ void SocketPollOperationMembers::setPollMember(const char* key, QoreValue val, E
     assert(!strcmp(key, "sock") || !strcmp(key, "goal"));
     QoreValue old;
     {
-        AutoLocker al(poll_member_lock);
+        PollMemberSpinLocker al(poll_member_lock);
         QoreValue& v = key[0] == 's' ? poll_sock : poll_goal;
         old = v;
         // a value that a scan can have read is given up: marked under the lock (design/dgc.md)
@@ -15803,14 +15826,14 @@ void SocketPollOperationMembers::setPollMember(const char* key, QoreValue val, E
 
 QoreValue SocketPollOperationMembers::getReferencedPollMember(const char* key) const {
     assert(!strcmp(key, "sock") || !strcmp(key, "goal"));
-    AutoLocker al(poll_member_lock);
+    PollMemberSpinLocker al(poll_member_lock);
     return (key[0] == 's' ? poll_sock : poll_goal).refSelf();
 }
 
 void SocketPollOperationMembers::releasePollMembers(ExceptionSink* xsink) {
     QoreValue s, g;
     {
-        AutoLocker al(poll_member_lock);
+        PollMemberSpinLocker al(poll_member_lock);
         s = poll_sock;
         g = poll_goal;
         // a value that a scan can have read is given up: marked under the lock (design/dgc.md)
@@ -15826,11 +15849,11 @@ void SocketPollOperationMembers::releasePollMembers(ExceptionSink* xsink) {
 
 bool SocketPollOperationMembers::scanPollMembers(RObject& obj, RSetHelper& rsh) {
     // the lock is only tried, as for a Queue (see design/dgc.md, "A container that a scan finds locked")
-    if (poll_member_lock.trylock()) {
+    if (poll_member_lock.test_and_set(std::memory_order_acquire)) {
         rsh.containerContended(obj);
         return false;
     }
-    AutoLocker al(poll_member_lock, true);
+    PollMemberSpinLocker al(poll_member_lock, true);
     return poll_sock.getType() == NT_OBJECT && obj.scanCheck(rsh, poll_sock.getInternalNode());
 }
 
@@ -15903,7 +15926,7 @@ QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xs
             rv = qore_poll_op_get_referenced_member(self_obj, "sock", xsink);
         }
     } else {
-        rv = self_obj->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
+        rv = self_obj->getReferencedInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -15962,7 +15985,7 @@ QoreValue qore_poll_op_get_referenced_member(const QoreObject* op_obj, const cha
     if (m) {
         return m->getReferencedPollMember(key);
     }
-    return op_obj->getReferencedMemberNoMethod(key, QC_SOCKETPOLLOPERATIONBASE, xsink);
+    return op_obj->getReferencedInternalMemberValue(key, QC_SOCKETPOLLOPERATIONBASE, xsink);
 }
 
 int qore_poll_op_release_members(QoreObject* self, SocketPollOperationBase* op, ExceptionSink* xsink) {

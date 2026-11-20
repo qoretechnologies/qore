@@ -43,6 +43,7 @@
 #include <qore/QoreString.h>
 #include <qore/Transform.h>
 
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -133,7 +134,10 @@ public:
 
 private:
     //! the lock of the values: the async I/O controller reads the socket while the object can be deleted
-    mutable QoreThreadLock poll_member_lock;
+    /** a spin lock, held only to copy a value: an operation is created for each synchronous Socket call, and a mutex
+        would cost its creation more than the member storage that the members save
+    */
+    mutable std::atomic_flag poll_member_lock = ATOMIC_FLAG_INIT;
     QoreValue poll_sock;
     QoreValue poll_goal;
 };

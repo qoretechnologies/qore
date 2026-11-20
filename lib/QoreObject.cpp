@@ -2757,6 +2757,15 @@ int QoreObject::setMemberValue(const char* key, const QoreClass* cls, QoreValue 
     return *xsink ? -1 : 0;
 }
 
+QoreValue QoreObject::getReferencedInternalMemberValue(const char* key, const QoreClass* cls,
+        ExceptionSink* xsink) const {
+    assert(cls);
+    const qore_class_private* class_ctx = qore_class_private::get(*cls);
+    // the class declares the member with private:internal access, so its storage is the class's own (qore#6839)
+    assert(class_ctx->runtimeIsMemberInternal(key));
+    return priv->getReferencedMemberNoMethodResolvedNoAccessor(key, class_ctx, xsink);
+}
+
 int QoreObject::setInternalMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink) {
     assert(cls);
     const qore_class_private* class_ctx = qore_class_private::get(*cls);
