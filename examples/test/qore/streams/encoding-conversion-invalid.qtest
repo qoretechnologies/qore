@@ -214,13 +214,20 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
     }
 
     #! the input of a conversion from a multi-byte encoding is checked by Qore, not only by the platform's iconv, which
-    #! can decode an invalid sequence (musl's decodes the Shift_JIS bytes 81 20 as U+301C) (qore#6796)
+    #! can decode an invalid sequence (musl's decodes the Shift_JIS bytes 81 20 as U+301C, Apple's the lead bytes
+    #! f0 - f9 of the user-defined area of CP932, which are no characters of Shift_JIS) (qore#6796)
     sjisIconvTest() {
-        string s = binary_to_string(<41812042>, "Shift_JIS");
-        assertFalse(s.isEncodingValid());
-        *hash<ExceptionInfo> ex = getError(sub () { convert_encoding(s, "UTF-8"); });
-        assertEq("ENCODING-CONVERSION-ERROR", ex.err);
-        assertRegex("byte offset 1", ex.desc);
+        foreach binary data in (<41812042>, <41f04042>, <41f9fc42>) {
+            string s = binary_to_string(data, "Shift_JIS");
+            assertFalse(s.isEncodingValid(), data.toHex());
+            *hash<ExceptionInfo> ex = getError(sub () { convert_encoding(s, "UTF-8"); });
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err, data.toHex());
+            assertRegex("byte offset 1", ex.desc, data.toHex());
+        }
+        # CP932 has the user-defined area
+        string s = binary_to_string(<41f04042>, "CP932");
+        assertTrue(s.isEncodingValid());
+        assertEq(3, s.length());
     }
 
     otherInvalidTest() {

@@ -12,7 +12,9 @@
     and every two-byte sequence whose first byte is 0x80 - 0xff against iconv; with a strict iconv (glibc's, Apple's
     libiconv) no sequence that iconv decodes may be refused by the character functions, but the byte 0x80 of the Big5
     encodings, which glibc decodes as U+0080, and which is no character of them (as for the WHATWG Encoding
-    Standard).  The other difference, a
+    Standard), and the Shift_JIS sequences of the lead bytes 0xf0 - 0xf9, which Apple's libiconv decodes as private
+    use characters, and which are no characters of Shift_JIS (JIS X 0208 Appendix 1 has the lead bytes 0x81 - 0x9f
+    and 0xe0 - 0xef; 0xf0 - 0xf9 is the user-defined area of CP932, which accepts them).  The other difference, a
     sequence that the character functions accept and iconv refuses (an unassigned code point of the encoding), is
     allowed: its conversion fails with ENCODING-CONVERSION-ERROR, as for an undefined byte of a single-byte encoding.
     musl's iconv decodes some invalid sequences (ex: Shift_JIS 81 20), which is why the input is validated.
@@ -25,6 +27,23 @@
 %exec-class MultiByteIconvParityTest
 
 class MultiByteIconvParityTest inherits QUnit::Test {
+    public {
+        #! the sequences that a strict iconv decodes and the character functions refuse, by the upper-case name
+        /** the first bytes of the sequences and their number; they are no characters of the encoding
+        */
+        const KnownDifferences = {
+            # glibc decodes the byte 0x80 as U+0080 (it is none, as for the WHATWG Encoding Standard): 0x80 alone,
+            # followed by each ASCII byte, and twice
+            "BIG5": {"leads": "80", "count": 130},
+            "BIG5-HKSCS": {"leads": "80", "count": 130},
+            "BIG5HKSCS": {"leads": "80", "count": 130},
+            "CP950": {"leads": "80", "count": 130},
+            # Apple's libiconv decodes the user-defined area of CP932 as private use characters: each of the lead
+            # bytes 0xf0 - 0xf9 followed by each of the 188 trail bytes
+            "SHIFT_JIS": {"leads": "f0,f1,f2,f3,f4,f5,f6,f7,f8,f9", "count": 1880},
+        };
+    }
+
     constructor() : QUnit::Test("multi-byte character functions and iconv", "1.0", \ARGV) {
         addTestCase("every one- and two-byte sequence", \parity());
         set_return_value(main());
@@ -54,27 +73,29 @@ class MultiByteIconvParityTest inherits QUnit::Test {
                 assertEq("EUC-TW", line.split(" ")[0], "an encoding without character functions");
                 continue;
             }
-            *list<*string> m = line =~ x/^(\S+) (\d+) (\d+) (\d+) (\d+) \[([^\]]*)\] \[([^\]]*)\]$/;
+            *list<*string> m = line =~ x/^(\S+) (\d+) (\d+) (\d+) \[([^\]]*)\] \[([^\]]*)\] \[([^\]]*)\]$/;
             assertTrue(exists m, "line: " + line);
             ++available;
             string enc = m[0];
             assertEq(32896, m[1].toInt(), enc + ": sequences checked");
             int iconv_only = m[3].toInt();
-            int iconv_only_80 = m[4].toInt();
+            string leads = m[4];
             if (strict) {
-                # every sequence that iconv decodes is valid for the character functions
-                assertEq(0, iconv_only, sprintf("%s: sequences that iconv decodes and the character functions "
-                    "refuse: %s", enc, m[6]));
-                # but the byte 0x80 of the Big5 encodings, which glibc decodes as U+0080: it is no character of them
-                # (as for the WHATWG Encoding Standard), and isEncodingValid() and the conversions refuse it
-                if (iconv_only_80) {
-                    assertTrue(inlist(enc.upr(), ("BIG5", "BIG5-HKSCS", "BIG5HKSCS", "CP950")),
-                        enc + ": sequences of the byte 0x80");
-                    # 0x80 alone, followed by each ASCII byte, and twice
-                    assertEq(130, iconv_only_80, enc + ": sequences of the byte 0x80");
+                # every sequence that iconv decodes is valid for the character functions, but the known differences
+                # of the strict implementations, which are no characters of the encoding, and which
+                # isEncodingValid() and the conversions refuse
+                *hash<auto> known = KnownDifferences{enc.upr()};
+                if (iconv_only && known) {
+                    assertEq(known.leads, leads, sprintf("%s: the first bytes of the sequences that iconv decodes and "
+                        "the character functions refuse: %s", enc, m[6]));
+                    assertEq(known.count, iconv_only, sprintf("%s: sequences that iconv decodes and the character "
+                        "functions refuse: %s", enc, m[6]));
+                } else {
+                    assertEq(0, iconv_only, sprintf("%s: sequences that iconv decodes and the character functions "
+                        "refuse: %s", enc, m[6]));
                 }
-            } else if (iconv_only || iconv_only_80) {
-                lenient += sprintf("%s: %d (%s)", enc, iconv_only + iconv_only_80, m[6]);
+            } else if (iconv_only) {
+                lenient += sprintf("%s: %d (%s)", enc, iconv_only, m[6]);
             }
         }
         assertGt(0, available, "multi-byte encodings that the platform's iconv has");

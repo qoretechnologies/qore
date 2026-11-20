@@ -30,12 +30,13 @@
 
     Every byte 0x80 - 0xff on its own and every two-byte sequence whose first byte is 0x80 - 0xff is checked; for each
     encoding the program prints one line:
-        <encoding> <checked> <qore-only> <iconv-only> <iconv-only-80> [<first qore-only sequences>]
-            [<first iconv-only sequences that do not start with 0x80>]
-    where iconv-only-80 is the number of sequences that iconv decodes and the character functions refuse whose first
-    byte is 0x80 (glibc decodes the byte 0x80 of Big5, Big5-HKSCS and CP950 as U+0080; it is no character of these
-    encodings, as for the WHATWG Encoding Standard, and isEncodingValid() refuses it)
-    or "<encoding> unavailable" if the platform's iconv does not know the encoding, or "<encoding>
+        <encoding> <checked> <qore-only> <iconv-only> [<first bytes of the iconv-only sequences>]
+            [<first qore-only sequences>] [<first iconv-only sequences>]
+    where the first bytes of the sequences that iconv decodes and the character functions refuse are given as hex
+    bytes, so that the test can tell the known differences of an iconv implementation from others (glibc decodes the
+    byte 0x80 of Big5, Big5-HKSCS and CP950 as U+0080, Apple's libiconv the Shift_JIS sequences of the lead bytes
+    0xf0 - 0xf9, the user-defined area of CP932; neither is a character of the encoding, and isEncodingValid()
+    refuses them), or "<encoding> unavailable" if the platform's iconv does not know the encoding, or "<encoding>
     no-character-functions" for an encoding that Qore handles without the character functions of a family (its
     conversions are not validated: EUC-TW, whose characters of four bytes are handled as stateful text).  The test that runs it
     (multibyte-iconv-parity.qtest) decides which differences are allowed on the platform.
@@ -120,8 +121,10 @@ int main(int argc, char** argv) {
             std::printf("%s unavailable\n", name);
             continue;
         }
-        unsigned long checked = 0, qore_only = 0, iconv_only = 0, iconv_only_80 = 0;
+        unsigned long checked = 0, qore_only = 0, iconv_only = 0;
         std::string qore_ex, iconv_ex;
+        // the first bytes of the sequences that only iconv decodes
+        bool iconv_only_lead[0x100] = {};
         auto check = [&](const unsigned char* b, size_t len) {
             ++checked;
             bool q = qore_valid(enc, b, len);
@@ -131,9 +134,8 @@ int main(int argc, char** argv) {
                     qore_ex += (qore_ex.empty() ? "" : ",") + hex(b, len);
                 }
             } else if (i && !q) {
-                if (b[0] == 0x80) {
-                    ++iconv_only_80;
-                } else if (++iconv_only <= 8) {
+                iconv_only_lead[b[0]] = true;
+                if (++iconv_only <= 8) {
                     iconv_ex += (iconv_ex.empty() ? "" : ",") + hex(b, len);
                 }
             }
@@ -147,7 +149,14 @@ int main(int argc, char** argv) {
             }
         }
         iconv_close(cd);
-        std::printf("%s %lu %lu %lu %lu [%s] [%s]\n", enc->getCode(), checked, qore_only, iconv_only, iconv_only_80,
+        std::string leads;
+        for (unsigned b0 = 0x80; b0 < 0x100; ++b0) {
+            if (iconv_only_lead[b0]) {
+                unsigned char b = static_cast<unsigned char>(b0);
+                leads += (leads.empty() ? "" : ",") + hex(&b, 1);
+            }
+        }
+        std::printf("%s %lu %lu %lu [%s] [%s] [%s]\n", enc->getCode(), checked, qore_only, iconv_only, leads.c_str(),
             qore_ex.c_str(), iconv_ex.c_str());
     }
     qore_cleanup();

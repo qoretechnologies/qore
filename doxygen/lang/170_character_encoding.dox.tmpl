@@ -151,7 +151,8 @@
     EUC-KR, CP949, JOHAB, GBK, GB2312, GB18030, Big5, Big5-HKSCS, CP950, also by other names of these encodings) is
     checked with the character functions of the encoding, as <tt><string>::isEncodingValid()</tt> does, on every
     platform: the \c iconv of some platforms decodes some sequences that are not characters of the encoding (musl's
-    decodes the Shift_JIS bytes 0x81 0x20, glibc's the byte 0x80 of Big5, Big5-HKSCS and CP950), which such a
+    decodes the Shift_JIS bytes 0x81 0x20, glibc's the byte 0x80 of Big5, Big5-HKSCS and CP950, Apple's the Shift_JIS
+    sequences of the lead bytes 0xF0 - 0xF9, the user-defined area of CP932), which such a
     conversion refuses (@ref Qore::convert_encoding() "convert_encoding()" raises \c ENCODING-CONVERSION-ERROR for
     them, a conversion stream \c INVALID-ENCODING):
     - \c "raise" (the default): input that is not valid in the source encoding (also a character or shift sequence
