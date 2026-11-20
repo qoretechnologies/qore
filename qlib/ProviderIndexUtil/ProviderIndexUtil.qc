@@ -284,6 +284,9 @@ hashdecl MetadataDeserializeContext {
     TypedHash dp_msg_info_th;
     TypedHash dp_sig_info_th;
     TypedHash dp_arg_info_th;
+    # the processing and billing metadata of apps and actions (qore#6736)
+    TypedHash processing_th;
+    TypedHash billing_th;
     hash<auto> type_map;
     # the descriptions of the types in type_map
     hash<auto> type_info_map;
@@ -2644,7 +2647,15 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
             "path_vars": (summary.path_vars
                 ? ctx.path_vars_th.doCastValues(summary.path_vars)
                 : NOTHING),
-        });
+        } + getProcessingBillingOverrides(summary, ctx));
+    }
+
+    #! Returns the casts of the processing and billing metadata of a serialized app or action (qore#6736)
+    static private hash<auto> getProcessingBillingOverrides(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
+        return {
+            "processing": (info.processing ? ctx.processing_th.doCast(info.processing) : NOTHING),
+            "billing": (info.billing ? ctx.billing_th.doCast(info.billing) : NOTHING),
+        };
     }
 
     #! Packs the action summary file of a metadata cache
@@ -4488,6 +4499,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             "dp_msg_info_th": TypedHash::forName("DataProvider::IndexedDataProviderMessageInfo"),
             "dp_sig_info_th": TypedHash::forName("DataProvider::IndexedDataProviderSignatureTypeInfo"),
             "dp_arg_info_th": TypedHash::forName("DataProvider::DataProviderArgInfo"),
+            "processing_th": TypedHash::forName("DataProvider::DataProviderProcessingInfo"),
+            "billing_th": TypedHash::forName("DataProvider::DataProviderBillingInfo"),
             "type_map": type_map,
             "type_info_map": (map {$1.key: $1.value.getInfo()}, type_map.pairIterator()),
             "shape_map": getDataProviderShapeMap(),
@@ -4499,7 +4512,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
     #! Reconstructs one typed app metadata hash
     static private hash<auto> deserializeAppInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
-        return ctx.app_info_th.doCastWithOverrides(info, (
+        return ctx.app_info_th.doCastWithOverrides(info, getProcessingBillingOverrides(info, ctx) + (
             info.connection_options
             ? {
                 "connection_options": ctx.conn_opt_th.doCastValuesWithOverrides(info.connection_options, map {
@@ -4558,7 +4571,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         *IndexedTypeTable types = action.hasKey(IndexedTypeTableKey) ? action{IndexedTypeTableKey} : NOTHING;
         # dynamic callbacks and output types are not indexed; earlier indexes may contain output types
         action -= ("output_type", "get_output_type", "get_dynamic_options", IndexedTypeTableKey);
-        return ctx.action_info_th.doCastWithOverrides(action, {
+        return ctx.action_info_th.doCastWithOverrides(action, getProcessingBillingOverrides(action, ctx) + {
             "path_vars": (action.path_vars
                 ? ctx.path_vars_th.doCastValues(action.path_vars)
                 : NOTHING),

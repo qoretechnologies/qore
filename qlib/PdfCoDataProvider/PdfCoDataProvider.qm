@@ -58,6 +58,17 @@ module PdfCoDataProvider {
                 "This integration supports 26 actions covering conversion, document operations, "
                 "search and editing, AI-powered extraction, barcodes, security, and email.",
             "scheme": "pdfco",
+            # the documents are processed by PDF.co; API calls and pages consume credits
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "pdf.co",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "unit": "credit",
+                "source": "https://pdf.co/pricing",
+                "effective_date": 2026-11-20,
+            },
             "logo": PdfCoDataProvider::PdfCoLogo,
             "logo_file_name": "pdfco-logo.svg",
             "logo_mime_type": MimeTypeSvg,
