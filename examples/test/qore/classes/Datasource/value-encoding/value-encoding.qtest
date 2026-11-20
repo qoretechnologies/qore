@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks run in child processes with a default encoding of their own
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../../../TestInterpreter.qm
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a datasource keeps its connection values as bytes in the default encoding, which its drivers read them in: the
+# Datasource and DatasourcePool constructors and setters, the hash and datasource string forms, deserialization and
+# parse_datasource() stored the bytes of a value in another encoding without converting them, so that a getter (and a
+# driver) returned the bytes of a UTF-8 value tagged with the default encoding (module-jni's jdbc driver connected to
+# a JDBC URL with the UTF-8 bytes of a database name decoded as ISO-8859-1); each entry point is checked in a child
+# process whose default encoding is ISO-8859-1 (see child.q), in each execution mode and compiled with qcc
+
+%exec-class Main
+
+public class Main inherits QUnit::Test {
+    public {
+        #! the number of checks that the child makes
+        const Checks = 265;
+    }
+
+    constructor() : Test("DatasourceValueEncoding", "1.0") {
+        addTestCase("connection values are kept in the default encoding", \encodingTest());
+        set_return_value(main());
+    }
+
+    encodingTest() {
+        string qore = TestInterpreter::qore_interpreter();
+        string script = get_script_dir() + DirSep + "child.q";
+        hash<string, string> commands;
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            commands{mode} = sprintf("'%s' --exec-mode=%s '%s'", qore, mode, script);
+        }
+        *string qcc = TestInterpreter::qcc_compiler();
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        if (qcc) {
+            foreach int opt in ((0, 3)) {
+                string exe = sprintf("%s%schild-%d", dir, DirSep, opt);
+                string log = backquote(sprintf("'%s' -O%d -o '%s' '%s' 2>&1", qcc, opt, exe, script));
+                assertTrue(is_file(exe), sprintf("qcc -O%d: %s", opt, log));
+                commands{"qcc-O" + opt} = sprintf("'%s'", exe);
+            }
+        }
+        foreach hash<auto> c in (commands.pairIterator()) {
+            string mode = c.key;
+            int rc;
+            # the output is in the child's default encoding
+            string output = binary_to_string(binary(backquote(sprintf("QORE_CHARSET=ISO-8859-1 %s 2>&1", c.value),
+                \rc)), "ISO-8859-1");
+            assertEq(0, rc, mode + ": exit code: " + output);
+            list<string> lines = output.split("\n");
+            assertEq("default: ISO-8859-1", lines[0], mode + ": the child's default encoding: " + output);
+            list<string> failures = select lines, $1 =~ /^FAIL: /;
+            assertEq((), failures, mode + ": failed checks");
+            int oks = (select lines, $1 =~ /^ok: /).size();
+            *string done = (select lines, $1 =~ /^done: /)[0];
+            assertEq(sprintf("done: %d", Checks), done, mode + ": the checks that the child made: " + output);
+            assertEq(Checks, oks, mode + ": the checks that passed");
+        }
+    }
+}

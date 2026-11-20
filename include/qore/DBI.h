@@ -739,6 +739,9 @@ public:
 DLLEXPORT extern DBIDriverList DBI;
 
 //! parses a datasource string and returns a hash of the component parts
+/** @param ds the datasource string in the default encoding; the strings of the hash returned are in the default
+    encoding, in which a datasource keeps its connection values (ex: Datasource::setPendingDBName())
+*/
 DLLEXPORT QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink);
 
 //! builds a datasource connection string from a hash of component parts
