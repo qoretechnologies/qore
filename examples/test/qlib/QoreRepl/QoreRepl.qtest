@@ -1265,8 +1265,15 @@ public class QoreReplTest inherits QUnit::Test {
         history.load(path);
         list<string> expected = ("# café", "# 😀");
         assertEq(expected, select (map $1.text, history.getItems()), $1 != "/quit");
-        out = historySession(tmp.path, "UTF-8", "/quit\n");
+        out = historySession(tmp.path, "UTF-8", "# 🚀\n/quit\n");
         assertFalse(out.find("Warning:") >= 0, out);
+        expected += "# 🚀";
+        history.load(path);
+        assertEq(expected, select (map $1.text, history.getItems()), $1 != "/quit");
+        # Reopen the UTF-8 writer's new command in Latin-1 and verify that this session saved its own entry too.
+        out = historySession(tmp.path, "ISO-8859-1", "# reopened\n/quit\n");
+        assertFalse(out.find("Warning:") >= 0, out);
+        expected += "# reopened";
         history.load(path);
         assertEq(expected, select (map $1.text, history.getItems()), $1 != "/quit");
     }
