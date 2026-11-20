@@ -6270,6 +6270,37 @@ bool qore_scope_creator_is_sandboxed() {
         || !visit_thread_provenance(td, false, true, governs);
 }
 
+const char* thread_capability_call_refusal(const char* call_name) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return "it is not called by Qore code";
+    }
+    // the innermost frame is the call's own builtin frame, whose Program is that of the code that made the call (the
+    // Program of a call reference's caller, not of the reference): a missing or other frame fails closed
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    if (!own || own->getCallType() != CT_BUILTIN || own->getCallName() != call_name) {
+        return "it is not called directly by Qore code";
+    }
+    // the code that made the call: Qore code, not another builtin (call_static_method(), call_function(), a call
+    // reference to a builtin), whose caller is not the code that runs in the frame below
+    const QoreStackLocation* caller = own->getNext();
+    if (caller && caller->getCallType() != CT_USER) {
+        return "it is not called directly by Qore code";
+    }
+    // the Program of the calling code and the Program running on the thread, sandboxed by a manager or by their flag
+    // (a Program that sandboxed code created); sandboxed callers further up the stack do not count (qore#6737)
+    if (qore_program_private::isSandboxed(own->getProgram()) || qore_program_private::isSandboxed(td->current_pgm)) {
+        return "a sandbox governs the calling code";
+    }
+    // the calling code must be allowed to control threads: judged by the options of its own Program, as a call
+    // reference that host code created runs the builtin with the options of the reference's Program
+    if (own->getProgram() && runtime_get_effective_parse_options_for(own->getProgram())
+            .hasAny(QoreParseOptions(PO_NO_THREAD_CONTROL))) {
+        return "the calling code may not control threads";
+    }
+    return nullptr;
+}
+
 bool qore_caller_is_untrusted() {
     // the in-module domain only marks the Programs of modules
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS

@@ -558,6 +558,17 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 */
 DLLLOCAL bool qore_scope_creator_is_sandboxed();
 
+//! Returns why the calling code may not run ThreadCapabilityScope::call(), or nullptr if it may (qore#6737)
+/** The call is bound to the frame of the code that makes it, so only that code is judged: it must be Qore code that
+    calls the builtin directly (not a call reference to the builtin, which runs it for the reference's caller, nor
+    another builtin, such as call_static_method()), and neither its Program nor the Program running on the thread
+    may be sandboxed (by a manager or by its flag).  Sandboxed callers further up the stack do not count, unlike for
+    a scope object (qore_scope_creator_is_sandboxed()), whose set stays in effect after the call that creates it.
+
+    @param call_name the call name of the builtin's own frame
+*/
+DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
+
 #ifdef DEBUG
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
 //! was found on (0 if none); for the unit tests

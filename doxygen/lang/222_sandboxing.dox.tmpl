@@ -334,6 +334,27 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_thread_capabilities Thread Capability Scopes
+
+    A host makes its implementations of thread capabilities (such as \c start_thread) available to the module code
+    that it runs for an interface with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"; module code
+    uses them through a guard (@ref Qore::get_thread_capability() "get_thread_capability()"), which runs only
+    code that no sandbox governs.  Sandboxed code can neither set nor see the capabilities.
+
+    - <b>A scope object</b> (<tt>ThreadCapabilityScope scope(caps);</tt>) keeps its set in effect until it is
+      destroyed, also for the code that runs after the call that created it: it cannot be created while any code that
+      a sandbox governs is on the thread's stack, including callers of the code that creates it.
+    - <b>A call-bound scope</b> (@ref Qore::Thread::ThreadCapabilityScope::call() "ThreadCapabilityScope::call()")
+      sets the capabilities only while the given call runs, and restores the outer set however it ends, so it cannot
+      outlive the frame of the code that made it.  Only that code is judged: Qore code that calls it directly, whose
+      %Program and the %Program running on the thread are not sandboxed (by a manager, or as a %Program that sandboxed
+      code created), and that may control threads.  Sandboxed callers further up the stack do not count, so a host
+      whose interfaces all have a sandbox manager can set the capabilities of the interface that it calls for another
+      one.  A call reference to the method is refused, as it would run the method for the code that holds the
+      reference, as is a call through another builtin (for example
+      @ref Qore::call_static_method() "call_static_method()").  The code run in the call, which can be sandboxed, keeps
+      its own restrictions: sandboxed code still cannot see the capabilities or set a scope.
+
     @subsection sandbox_datasource_options Datasource Options Are Judged by the Code That Sets Them
 
     A DBI driver applies the options of a datasource when it opens a connection, which can happen long after the

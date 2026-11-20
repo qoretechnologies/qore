@@ -1152,9 +1152,11 @@
 
     @par Thread Capability Scopes
     A host sets capabilities for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope",
-    which module code uses through a guard (@ref Qore::get_thread_capability() "get_thread_capability()") when its
-    caller gives no \c start_thread or \c call_wrapper option
-    (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>).
+    or for one call with @ref Qore::Thread::ThreadCapabilityScope::call() "ThreadCapabilityScope::call()" also while
+    sandboxed callers are on the stack, which module code uses through a guard
+    (@ref Qore::get_thread_capability() "get_thread_capability()") when its caller gives no \c start_thread or
+    \c call_wrapper option (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/6737">issue 6737</a>; see @ref sandbox_thread_capabilities).
 
     @par Strict Parse Errors
     The @ref strict-parse-errors "%strict-parse-errors" parse option, implied by @ref modern "%modern", raises the
