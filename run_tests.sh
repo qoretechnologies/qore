@@ -1693,6 +1693,28 @@ event $1
             return 0
         }
 
+        # Returns 0 if test_pid is still the test's process: the child of the runner's shell that the shell has not
+        # waited for (test_is_shell_child()), or, once that shell has ended, a process with the test's
+        # QORE_TEST_PROCESS_MARK (test_has_mark()).  A shell that is killed with SIGKILL (a kill by process ID) runs no
+        # trap, so nothing stops its watchdog (see runner_signaled()) or tells it that the test has ended; at the
+        # test's time limit, the test's process ID may then be another process's, which must not be signalled
+        # (qore#6875: the watchdog subshell of a test of another run was killed with SIGKILL).  Otherwise this prints
+        # that nothing is sent, and the watchdog ends.  The runner's shell may wait for the test between the check and
+        # the signal (it then writes "exit"): the ID would have to be taken by another process in that instant.
+        watchdog_check_test() {
+            if test_is_shell_child $test_pid || test_has_mark $test_pid "$TEST_PROCESS_MARK"; then
+                return 0
+            fi
+            echo "*** process $test_pid is no longer the test: nothing is sent to it ***"
+            exit $status
+        }
+
+        # Sends the given signal to the test (see watchdog_check_test())
+        watchdog_signal() {
+            watchdog_check_test
+            kill -$1 $test_pid 2>/dev/null
+        }
+
         watchdog_wait $limit exit
         # the test has ended, or the read failed before the time limit: the test is not ended for that (an
         # interrupted run stops the watchdog with "exit" too, in this phase or any later one; see runner_signaled())
@@ -1700,13 +1722,14 @@ event $1
             exit $status
         fi
         status=$((status | 1))
+        watchdog_check_test
         print_test_threads "at its time limit"
         if [ $TEST_SIGNALS_ENABLED -eq 0 ]; then
             echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent (signal handling is" \
                 "disabled) ***"
         elif usr1_cannot_end_test; then
             echo "*** the test exceeded its ${limit}s limit: SIGUSR1 sent for the call stacks of its threads ***"
-            kill -USR1 $test_pid 2>/dev/null
+            watchdog_signal USR1
             if watchdog_wait $TEST_STACK_DUMP_WAIT dumped exit && watchdog_got exit; then
                 exit $status
             fi
@@ -1716,9 +1739,9 @@ event $1
             echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent at once, as it does not" \
                 "handle SIGUSR1, which would end it without its call stacks or a core dump ***"
         fi
-        kill -$TEST_TIMEOUT_SIGNAL $test_pid 2>/dev/null
+        watchdog_signal $TEST_TIMEOUT_SIGNAL
         if ! watchdog_wait 60 exit; then
-            kill -KILL $test_pid 2>/dev/null
+            watchdog_signal KILL
         fi
         exit $status
     ) &
