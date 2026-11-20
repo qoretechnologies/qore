@@ -31,6 +31,8 @@
     information.
 */
 
+#include <optional>
+#include "qore/intern/QoreThreadScratch.h"
 #include <qore/Qore.h>
 #include <qore/QoreAbstractLoggerInterface.h>
 
@@ -177,70 +179,6 @@ private:
     std::string identity_hash;
 };
 
-class Http2SocketControllerPollOperation : public SocketPollOperationBase {
-public:
-    DLLLOCAL Http2SocketControllerPollOperation(AbstractPollState* poll_state, SocketSendPollState* send_state)
-            : poll_state(poll_state), send_state(send_state) {
-    }
-
-    DLLLOCAL virtual bool goalReached() const override {
-        return done;
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
-        poll_state.reset();
-        done = true;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        if (!poll_state) {
-            done = true;
-            return nullptr;
-        }
-
-        int rc = poll_state->continuePoll(xsink);
-        if (send_state) {
-            bytes_sent = send_state->getBytesSent();
-        }
-        if (!rc && !send_state) {
-            data = poll_state->takeOutput().get<BinaryNode>();
-        }
-        if (*xsink || rc <= 0) {
-            poll_state.reset();
-            if (!*xsink) {
-                done = true;
-            }
-            return nullptr;
-        }
-        return getSocketPollInfoHash(xsink, rc);
-    }
-
-    DLLLOCAL virtual QoreValue getOutput() const override {
-        if (send_state) {
-            return static_cast<int64>(bytes_sent);
-        }
-        return data ? data->refSelf() : QoreValue();
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const override {
-        if (done) {
-            return send_state ? "sent" : "received";
-        }
-        return send_state ? "sending" : "receiving";
-    }
-
-    DLLLOCAL size_t getBytesSent() const {
-        return bytes_sent;
-    }
-
-private:
-    std::unique_ptr<AbstractPollState> poll_state;
-    SocketSendPollState* send_state = nullptr;
-    size_t bytes_sent = 0;
-    bool done = false;
-    SimpleRefHolder<BinaryNode> data;
-};
-
 static QoreHashNode* http2_exec_poll_operation(qore_socket_private* sock, QoreObject* sock_obj,
         Http2SocketControllerPollable* pollable, QoreObject* op_obj, int timeout_ms, const char* owner_name,
         ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
@@ -335,18 +273,124 @@ static QoreValue http2_exec_poll(qore_socket_private* sock, SocketPollOperationB
     return poller->getOutput();
 }
 
+static BinaryNode* http2_socket_recv_some_on_io_thread(qore_socket_private* sock, size_t size, bool& timed_out,
+        std::unique_ptr<SocketRecvSomePollState>& saved, int* poll_events, ExceptionSink* xsink) {
+    timed_out = false;
+
+    // The normal one-pass read stays on the stack. Keep its original TLS buffer only if
+    // the operation must be retried (e.g. a read that needs to write a handshake record).
+    std::optional<SocketRecvSomePollState> fresh;
+    if (!saved) {
+        fresh.emplace(xsink, sock, size);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+    SocketRecvSomePollState& state = saved ? *saved : *fresh;
+    // Reuse the transport buffer across ordinary reads on this I/O thread. A crossed TLS
+    // retry keeps its buffer in the saved operation, even if another connection runs first.
+    struct ReadScratch { std::unique_ptr<char[]> buffer; };
+    QoreThreadScratch<ReadScratch> scratch;
+    if (!saved && scratch) {
+        state.swapReadBuffer(scratch->buffer);
+    }
+    int rc = state.continuePoll(xsink);
+    if (scratch && !(rc > 0 && state.mustRetryTlsRead()) && !scratch->buffer) {
+        state.swapReadBuffer(scratch->buffer);
+    }
+    if (*xsink || rc < 0) {
+        saved.reset();
+        return nullptr;
+    }
+    if (rc > 0) {
+        if (state.mustRetryTlsRead()) {
+            if (!saved) {
+                saved.reset(new (std::nothrow) SocketRecvSomePollState(std::move(state)));
+                if (!saved) {
+                    xsink->outOfMemory();
+                    return nullptr;
+                }
+            }
+        } else {
+            saved.reset();
+        }
+        if (poll_events) {
+            *poll_events = rc;
+        }
+        timed_out = true;
+        return nullptr;
+    }
+    ValueHolder v(state.takeOutput(), xsink);
+    saved.reset();
+    if (v->getType() != NT_BINARY) {
+        xsink->raiseException("HTTP2-ERROR", "expected binary data from HTTP/2 receive poll state, got '%s'",
+            v->getFullTypeName());
+        return nullptr;
+    }
+    return v.release().get<BinaryNode>();
+}
+
+// Both public synchronous callers and the persistent poll operation drive the same reader on
+// the socket's I/O thread. A zero-timeout call performs one pass, including when TLS needs
+// output to finish its read. A timed wait leaves that read available to the next caller.
+class Http2SocketControllerRead : public SocketPollOperationBase {
+public:
+    Http2SocketControllerRead(std::shared_ptr<Http2Session> session, qore_socket_private* sock,
+            std::unique_ptr<SocketRecvSomePollState>& saved, size_t size, bool single_pass)
+        : session(std::move(session)), sock(sock), saved(saved), size(size), single_pass(single_pass) {
+    }
+
+    bool goalReached() const override { return done; }
+
+    void abort(ExceptionSink*) override { done = true; }
+
+    QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+        bool waiting = false;
+        data = http2_socket_recv_some_on_io_thread(sock, size, waiting, saved, &events, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (waiting && !single_pass) {
+            return getSocketPollInfoHash(xsink, events);
+        }
+        if (!waiting) {
+            events = 0;
+        }
+        done = true;
+        return nullptr;
+    }
+
+    QoreValue getOutput() const override {
+        if (events) {
+            return events;
+        }
+        return data ? data->refSelf() : QoreValue();
+    }
+
+    const char* getStateImpl() const override { return done ? "received" : "receiving"; }
+
+private:
+    std::shared_ptr<Http2Session> session; // owns saved until the controller releases this operation
+    qore_socket_private* sock;
+    std::unique_ptr<SocketRecvSomePollState>& saved;
+    size_t size;
+    bool single_pass;
+    bool done = false;
+    int events = 0;
+    SimpleRefHolder<BinaryNode> data;
+};
+
 static BinaryNode* http2_socket_exec_recv_some(qore_socket_private* sock, size_t size, int timeout_ms,
+        std::shared_ptr<Http2Session> session, std::unique_ptr<SocketRecvSomePollState>& saved, int* poll_events,
         bool& timed_out, ExceptionSink* xsink) {
     timed_out = false;
 
-    SocketRecvSomePollState* state = new SocketRecvSomePollState(xsink, sock, size);
-    if (*xsink) {
-        delete state;
-        return nullptr;
-    }
     QoreHashNode* ex = nullptr;
     ValueHolder result(http2_exec_poll(sock,
-        new Http2SocketControllerPollOperation(state, nullptr),
+        new Http2SocketControllerRead(std::move(session), sock, saved, size, !timeout_ms),
         timeout_ms, "receiveData", "received", xsink, &ex), xsink);
     ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
     if (*xsink) {
@@ -360,6 +404,13 @@ static BinaryNode* http2_socket_exec_recv_some(qore_socket_private* sock, size_t
         http2_raise_poll_result_exception(*ex_holder, xsink);
         return nullptr;
     }
+    if (result->getType() == NT_INT) {
+        timed_out = true;
+        if (poll_events) {
+            *poll_events = result->getAsBigInt();
+        }
+        return new BinaryNode;
+    }
     if (result->isNothing()) {
         return new BinaryNode;
     }
@@ -371,33 +422,6 @@ static BinaryNode* http2_socket_exec_recv_some(qore_socket_private* sock, size_t
     return result.release().get<BinaryNode>();
 }
 
-static BinaryNode* http2_socket_recv_some_on_io_thread(qore_socket_private* sock, size_t size, bool& timed_out,
-        ExceptionSink* xsink) {
-    timed_out = false;
-
-    SocketRecvSomePollState state(xsink, sock, size);
-    if (*xsink) {
-        return nullptr;
-    }
-    int rc = state.continuePoll(xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (rc > 0) {
-        timed_out = true;
-        return new BinaryNode;
-    }
-    if (rc < 0) {
-        return nullptr;
-    }
-    ValueHolder v(state.takeOutput(), xsink);
-    if (v->getType() != NT_BINARY) {
-        xsink->raiseException("HTTP2-ERROR", "expected binary data from HTTP/2 receive poll state, got '%s'",
-            v->getFullTypeName());
-        return nullptr;
-    }
-    return v.release().get<BinaryNode>();
-}
 
 Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char* scheme)
     : sock(sock), is_server(is_server), scheme(scheme ? scheme : "https") {
@@ -1365,8 +1389,11 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         // only the debug log reads it
         [[maybe_unused]] size_t total_collected = 0;
         // set when collection stopped at the high-water mark with output left in nghttp2
-        bool capped = false;
-        while (true) {
+        const bool retrying = send_offset < send_buffer.size();
+        bool capped = retrying;
+        // SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER still requires the same bytes and length on a retry.
+        // Leave new output in nghttp2 until the TLS write has accepted its original buffer.
+        while (!retrying) {
             // nghttp2 serializes DATA only when it is asked for output: the output is taken only while the unwritten
             // part of the buffer is below the high-water mark, so that a peer that does not read (whatever window it
             // grants) leaves the rest in the streams' pending data, where its limits apply (issue #5819)
@@ -1409,7 +1436,7 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         response_end_streams_serialized.clear();
 
         // Compact send buffer when consumed prefix exceeds threshold
-        if (send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
+        if (!retrying && send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
             send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send_offset);
             send_buffer_base += send_offset;
             send_offset = 0;
@@ -1463,9 +1490,9 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
                     // Returns: SOCK_POLLIN/SOCK_POLLOUT if need to poll, 0 if done, < 0 on error
                     size_t real_io = 0;
                     printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", to_send);
-                    rc = ssl->doNonBlockingIo(xsink, "sendPendingData",
+                    rc = ssl->sendNonBlocking(xsink, "sendPendingData",
                         const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data() + send_offset)),
-                        to_send, SslAction::WRITE, real_io);
+                        to_send, real_io, tls_awaiting_drain);
                     printd(5, "sendPendingData() doNonBlockingIo rc=%zd real_io=%zu xsink=%d\n", rc, real_io, (int)*xsink);
                     if (*xsink) {
                         return -1;
@@ -1550,7 +1577,7 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     return 0;
 }
 
-int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
+int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink, int* poll_events) {
     // Fast-path bail-out when the owning socket is closing (or has
     // closed).  Without this check a caller racing Socket::close() can
     // enter the controller receive path and wait for the full timeout_ms
@@ -1558,6 +1585,9 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     // shutdown in qore_socket_private::prepareForClose() would make the
     // wait return errno=EPIPE almost immediately; skip the pointless
     // round-trip.
+    if (poll_events) {
+        *poll_events = 0;
+    }
     if (session_closed_.load(std::memory_order_acquire)) {
         return 1;  // connection closed — matches the EOF return value
     }
@@ -1580,8 +1610,9 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
 
     bool timed_out = false;
     SimpleRefHolder<BinaryNode> data(qore_on_async_io_thread()
-        ? http2_socket_recv_some_on_io_thread(sock, 16384, timed_out, xsink)
-        : http2_socket_exec_recv_some(sock, 16384, timeout_ms, timed_out, xsink));
+        ? http2_socket_recv_some_on_io_thread(sock, 16384, timed_out, io_read, poll_events, xsink)
+        : http2_socket_exec_recv_some(sock, 16384, timeout_ms, shared_from_this(), io_read, poll_events,
+            timed_out, xsink));
     if (*xsink) {
         printd(5, "receiveData() error xsink=%d\n", (int)*xsink);
         if (http2DebugEnabled()) {
@@ -1592,6 +1623,9 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         return -1;
     }
     if (timed_out) {
+        if (poll_events && !*poll_events) {
+            *poll_events = SOCK_POLLIN;
+        }
         printd(5, "receiveData() timeout (no data)\n");
         if (http2DebugEnabled()) {
             fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (timeout)\n",

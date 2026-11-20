@@ -15575,6 +15575,7 @@ struct UtTlsPeer {
     SSL_CTX* ctx = nullptr;
     std::thread thr;
     std::atomic<int> result{NO_TLS};
+    size_t received = 0; // read by the client only after joining the peer
 
     //! When set, the server does not read until release() is called
     bool hold_reads = false;
@@ -15636,6 +15637,7 @@ struct UtTlsPeer {
                 while (true) {
                     int n = SSL_read(ssl, buf, sizeof(buf));
                     if (n > 0) {
+                        received += n;
                         continue;
                     }
                     result.store(SSL_get_error(ssl, n) == SSL_ERROR_ZERO_RETURN ? CLOSE_NOTIFY : NO_CLOSE_NOTIFY,
@@ -15676,6 +15678,125 @@ struct UtTlsPeer {
         }
     }
 };
+
+#if defined(DEBUG) && OPENSSL_VERSION_NUMBER >= 0x10101000L
+//! Controls only the transport BIO of a private loopback connection. All SSL operations are real.
+class DLLLOCAL TlsDuplexPollTest {
+    struct Gate {
+        int read_wait = 0;
+        int write_wait = 0;
+        unsigned reads = 0;
+        unsigned writes = 0;
+    };
+
+    static long beforeIo(BIO* bio, int op, const char*, size_t, int, long, int ret, size_t*) {
+        if (op != BIO_CB_READ && op != BIO_CB_WRITE) {
+            return ret;
+        }
+        Gate& gate = *reinterpret_cast<Gate*>(BIO_get_callback_arg(bio));
+        bool read = op == BIO_CB_READ;
+        ++(read ? gate.reads : gate.writes);
+        int wait = read ? gate.read_wait : gate.write_wait;
+        if (!wait) {
+            return ret;
+        }
+        BIO_clear_retry_flags(bio);
+        if (wait == SOCK_POLLIN) {
+            BIO_set_retry_read(bio);
+        } else {
+            BIO_set_retry_write(bio);
+        }
+        errno = EAGAIN;
+        return -1;
+    }
+
+public:
+    static void run(UnitTestCounters& c) {
+        UtTlsPeer peer;
+        if (peer.start(0, true)) {
+            UT_ASSERT(c, false, "create loopback TLS peer");
+            return;
+        }
+        ExceptionSink xsink;
+        QoreSocket socket;
+        if (socket.connectINETSSL(&xsink, "127.0.0.1", peer.port, 5000)) {
+            UT_ASSERT(c, false, "connect to loopback TLS peer");
+            xsink.clear();
+            ut_connect_loopback_and_close(peer.port);
+            return;
+        }
+        Gate gate;
+        {
+            qore_socket_private* sp = qore_socket_private::get(socket);
+            qore_socket_private::IoUseHelper use(*sp);
+            OptionalNonBlockingHelper nonblock(*sp, true, &xsink);
+            SSLSocketHelper* client = use.getSsl();
+            BIO* transport = SSL_get_wbio(client->ssl);
+            BIO_set_callback_arg(transport, reinterpret_cast<char*>(&gate));
+            BIO_set_callback_ex(transport, beforeIo);
+            char in = 0;
+            char out = 'a';
+            size_t io = 0;
+            size_t draining = 0;
+            auto read = [&]() {
+                io = 0;
+                return client->doNonBlockingIo(&xsink, "read", &in, 1, READ, io);
+            };
+            auto write = [&]() {
+                io = 0;
+                return client->sendNonBlocking(&xsink, "write", &out, 1, io, draining);
+            };
+
+            UT_ASSERT(c, read() == SOCK_POLLIN && !io, "idle TLS read subscribes to input");
+            UT_ASSERT(c, !write() && io == 1 && !draining, "idle TLS client can initiate a write");
+
+            gate.write_wait = SOCK_POLLIN;
+            UT_ASSERT(c, write() == SOCK_POLLIN && !io, "TLS write asks for input");
+            unsigned reads = gate.reads;
+            UT_ASSERT(c, read() == SOCK_POLLIN && !io && reads == gate.reads,
+                "read waits for the pending SSL_write without entering the read BIO");
+            gate.write_wait = 0;
+            UT_ASSERT(c, !write() && io == 1, "original write completes");
+
+            SocketRecvPollState pending_read(&xsink, sp, 1);
+            gate.read_wait = SOCK_POLLOUT;
+            UT_ASSERT(c, pending_read.continuePoll(&xsink) == SOCK_POLLOUT, "TLS read asks for output");
+            UT_ASSERT(c, pending_read.mustCloseOnAbort() && !pending_read.getBytesReceived(),
+                "aborting a crossed read must close even before the first application byte");
+            unsigned writes = gate.writes;
+            UT_ASSERT(c, write() == SOCK_POLLOUT && !io && writes == gate.writes,
+                "write waits for the pending SSL_read without entering the write BIO");
+            gate.read_wait = 0;
+            UT_ASSERT(c, pending_read.continuePoll(&xsink) == SOCK_POLLIN && !pending_read.mustCloseOnAbort(),
+                "ordinary empty read is recoverable after the crossed retry completes");
+
+            gate.write_wait = SOCK_POLLOUT;
+            UT_ASSERT(c, write() == SOCK_POLLOUT && !io && draining == 1 && client->staged,
+                "staged record remains unacknowledged while the transport is full");
+            reads = gate.reads;
+            UT_ASSERT(c, read() == SOCK_POLLIN && gate.reads > reads,
+                "backpressured transport permits an independent SSL_read");
+            gate.write_wait = 0;
+            UT_ASSERT(c, !write() && io == 1 && !draining && !client->staged,
+                "drain acknowledges the original byte once and frees the staging BIO");
+
+            gate.write_wait = SOCK_POLLOUT;
+            SocketSendPollState pending_write(&xsink, sp, &out, 1);
+            UT_ASSERT(c, pending_write.continuePoll(&xsink) == SOCK_POLLOUT
+                    && pending_write.started() && !pending_write.getBytesSent(),
+                "aborting an undrained write must close without acknowledging its bytes");
+            BIO_set_callback_ex(transport, nullptr);
+            BIO_set_callback_arg(transport, nullptr);
+            UT_ASSERT(c, !xsink, "crossed TLS retries preserve the session");
+        }
+        socket.close();
+        peer.finish();
+        UT_ASSERT_EQ(c, 3, peer.received, "peer receives exactly the acknowledged bytes before abort");
+        UT_ASSERT_EQ(c, UtTlsPeer::NO_CLOSE_NOTIFY, peer.result.load(),
+            "close discards the undrained record without a premature close_notify");
+    }
+};
+#endif
 
 //! RFC 8446 section 6.1: each party must send close_notify before closing its write side
 /** For TLS 1.2 and TLS 1.3, the peer must receive close_notify before the end of the stream when the client closes
@@ -21422,6 +21543,14 @@ static QoreValue f_dbg_run_http1_duplex_tests(const QoreListNode* params, Runtim
     Http1DuplexSendFailureTest::run(c);
     return make_unit_test_result(c, xsink);
 }
+
+#if OPENSSL_VERSION_NUMBER >= 0x10101000L
+static QoreValue f_dbg_run_tls_duplex_tests(const QoreListNode*, RuntimeConfig&, ExceptionSink* xsink) {
+    UnitTestCounters c;
+    TlsDuplexPollTest::run(c);
+    return make_unit_test_result(c, xsink);
+}
+#endif
 #endif
 
 #ifdef DEBUG
@@ -22886,6 +23015,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_pool_sandbox(c);
     ut_tls_close_sends_close_notify(c);
     ut_tls_close_full_send_buffer(c);
+#if defined(DEBUG) && OPENSSL_VERSION_NUMBER >= 0x10101000L
+    TlsDuplexPollTest::run(c);
+#endif
     ut_socket_object_accept_returns_valid_socket(c);
     ut_event_notifier_use_after_close(c);
     ut_event_notifier_concurrent_close(c);
@@ -28074,6 +28206,10 @@ void init_debug_functions(QoreNamespace& qns) {
 #endif
     qns.addBuiltinVariant("dbg_run_variant_search_tests", f_dbg_run_variant_search_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+#if OPENSSL_VERSION_NUMBER >= 0x10101000L
+    qns.addBuiltinVariant("dbg_run_tls_duplex_tests", f_dbg_run_tls_duplex_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+#endif
     qns.addBuiltinVariant("dbg_run_http1_duplex_tests", f_dbg_run_http1_duplex_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_poll_close_before_open_state", f_dbg_poll_close_before_open_state, QCF_NO_FLAGS,
