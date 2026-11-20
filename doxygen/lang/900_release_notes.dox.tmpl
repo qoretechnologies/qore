@@ -262,6 +262,12 @@
     raised \c ENCODING-CONVERSION-ERROR or passed it through, and @ref Qore::convert_encoding() "convert_encoding()"
     checks a string already in the target encoding (see @ref encoding_conversion_streams; issue #6730).
 
+    @par Conversions From Multi-Byte Encodings Check Their Input on Every Platform
+    The input of a conversion from Shift_JIS, Big5, GBK, EUC-JP, EUC-KR, GB18030 and the other multi-byte encodings
+    whose characters %Qore finds by their bytes is checked as <tt><string>::isEncodingValid()</tt> checks it, where it
+    was left to \c iconv, which decodes some invalid sequences on some platforms (see @ref encoding_conversion_streams;
+    issue #6796).
+
     @par trunc_str() Raises INVALID-ENCODING for a String Not Valid in Its Encoding Within the Length
     @ref Qore::trunc_str() "trunc_str()" raises \c INVALID-ENCODING for an invalid character within the length, also
     when the whole string is within it, where it returned the part before the character or the string unchecked

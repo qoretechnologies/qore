@@ -35,7 +35,9 @@
     where iconv-only-80 is the number of sequences that iconv decodes and the character functions refuse whose first
     byte is 0x80 (glibc decodes the byte 0x80 of Big5, Big5-HKSCS and CP950 as U+0080; it is no character of these
     encodings, as for the WHATWG Encoding Standard, and isEncodingValid() refuses it)
-    or "<encoding> unavailable" if the platform's iconv does not know the encoding.  The test that runs it
+    or "<encoding> unavailable" if the platform's iconv does not know the encoding, or "<encoding>
+    no-character-functions" for an encoding that Qore handles without the character functions of a family (its
+    conversions are not validated: EUC-TW, whose characters of four bytes are handled as stateful text).  The test that runs it
     (multibyte-iconv-parity.qtest) decides which differences are allowed on the platform.
 */
 
@@ -102,11 +104,17 @@ int main(int argc, char** argv) {
         encs.push_back(argv[i]);
     }
     if (encs.empty()) {
-        encs = {"Shift_JIS", "CP932", "EUC-JP", "EUC-KR", "CP949", "JOHAB", "GBK", "GB2312", "GB18030", "Big5",
-            "Big5-HKSCS", "CP950", "EUC-TW"};
+        // the encodings, also by other names that iconv knows; EUC-TW has no character functions of a family (its
+        // four-byte characters are handled as stateful text), which is reported
+        encs = {"Shift_JIS", "CP932", "EUC-JP", "EUCJP", "eucJP-ms", "EUC-KR", "EUCKR", "CP949", "UHC", "JOHAB", "GBK",
+            "CP936", "GB2312", "GB18030", "Big5", "BIG5HKSCS", "Big5-HKSCS", "CP950", "EUC-TW"};
     }
     for (const char* name : encs) {
         const QoreEncoding* enc = QoreEncodingManager::findCreate(name);
+        if (!enc->isMultiByte()) {
+            std::printf("%s no-character-functions\n", name);
+            continue;
+        }
         iconv_t cd = iconv_open("UTF-8", enc->getCode());
         if (cd == reinterpret_cast<iconv_t>(static_cast<intptr_t>(-1))) {
             std::printf("%s unavailable\n", name);

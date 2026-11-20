@@ -49,6 +49,11 @@ class MultiByteIconvParityTest inherits QUnit::Test {
             if (line =~ / unavailable$/) {
                 continue;
             }
+            # EUC-TW: handled without the character functions of a family, so its conversions are not validated
+            if (line =~ / no-character-functions$/) {
+                assertEq("EUC-TW", line.split(" ")[0], "an encoding without character functions");
+                continue;
+            }
             *list<*string> m = line =~ x/^(\S+) (\d+) (\d+) (\d+) (\d+) \[([^\]]*)\] \[([^\]]*)\]$/;
             assertTrue(exists m, "line: " + line);
             ++available;
@@ -63,7 +68,7 @@ class MultiByteIconvParityTest inherits QUnit::Test {
                 # but the byte 0x80 of the Big5 encodings, which glibc decodes as U+0080: it is no character of them
                 # (as for the WHATWG Encoding Standard), and isEncodingValid() and the conversions refuse it
                 if (iconv_only_80) {
-                    assertTrue(inlist(enc.upr(), ("BIG5", "BIG5-HKSCS", "CP950")),
+                    assertTrue(inlist(enc.upr(), ("BIG5", "BIG5-HKSCS", "BIG5HKSCS", "CP950")),
                         enc + ": sequences of the byte 0x80");
                     # 0x80 alone, followed by each ASCII byte, and twice
                     assertEq(130, iconv_only_80, enc + ": sequences of the byte 0x80");
