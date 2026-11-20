@@ -835,6 +835,15 @@ class ChildClass inherits private:internal ParentClass {
 
     @note Class members only exist once for each object; therefore if classes in an inheritance tree have different uses for members with the same name, then a class hierarchy built of such classes will probably not function properly.
 
+    @anchor class_member_combination
+    Two classes of a hierarchy that declare a member with the same name (other than a <tt><b>private:internal</b></tt> member, which is kept apart, see @ref private_members) can only be combined when both declarations have the same access and neither declares a type; otherwise the class that combines them raises a \c PARSE-ERROR exception that names it.  This also applies when one of the classes is a system class (a class of %Qore or of a binary module), whatever the order of the parent classes in the <tt><b>inherits</b></tt> clause, ex:
+    @code{.py}
+class U { public { string path = "user"; } }
+# PARSE-ERROR in class X, as with "class X inherits Qore::FtpClient, U {}"
+class X inherits U, Qore::FtpClient {}
+    @endcode
+    Only the members with the same name of two system classes are combined without this check (since %Qore 3.0).
+
     Subclasses can give explicit arguments to their base class constructors using a special syntax (only available to subclass constructors) similar to the C++ syntax for the same purpose as follows:\n
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>[[<b>@ref private_methods "private[:internal|hierarchy]"</b>|<b>@ref public_methods "public"</b>] [<b>@ref deprecated "deprecated"</b>] <b>constructor</b>([</tt><em>@ref data_type_declarations "[param_type]"</em> <em>param_name</em> <tt>[=</tt> <em>@ref expressions "default_initialization_expression"</em><tt>], ...]) [: </tt><em>parent_class_name</em><tt>(</tt><em>args...</em><tt>), ...] {</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>}]</tt>
