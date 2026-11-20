@@ -14272,8 +14272,7 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
     nested_lowering.shared_obe_handler_fns = &getObeHandlerFns();
     if (aot_mode) {
         // the nested function shares the AOT context of the function being lowered: its slot tables
-        nested_lowering.setAOTMode(aot_slots);
-        nested_lowering.setAOTDirectClosureFastEntry(aot_direct_closure_fast_entry);
+        nested_lowering.setAOTMode(aot_slots, aot_direct_closure_fast_entry);
         // and its slot symbols, such as the dispatch functions of its closures (qore#6339)
         nested_lowering.aot_symbol_owner = getAOTSymbolOwner();
     }

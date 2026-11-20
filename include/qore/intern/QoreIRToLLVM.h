@@ -129,21 +129,14 @@ public:
     */
     static size_t expandFloatToIntForTarget(llvm::Module& module, const llvm::Triple& triple);
 
-    //! Enable AOT mode with the given slot map.
-    //! When set, process-specific opcodes emit _aot helper calls with slot indices
-    //! instead of inttoptr patterns with embedded pointers.
-    void setAOTMode(const AOTSlotMap* slots) {
+    //! Use the image's slot indices for AOT helper calls instead of process-local pointers.
+    /** Init functions have no native closure dispatch definitions (#6336). Source-debug callers must
+        also enter closures through the runtime, where an attached debugger can step into them (#6805).
+    */
+    void setAOTMode(const AOTSlotMap* slots, bool direct_closure_fast_entry) {
         aot_mode = true;
         aot_slots = slots;
-    }
-
-    //! Control immediate-closure dispatch lowering in AOT mode.
-    /** Init-function compilation does not emit native closure bodies, so its
-        lowerers must use the generic runtime helper instead of declaring a
-        dispatch symbol that will not be defined: neither the direct fast entry
-        nor the native closure call ABI (qore#6336). */
-    void setAOTDirectClosureFastEntry(bool v) {
-        aot_direct_closure_fast_entry = v;
+        aot_direct_closure_fast_entry = direct_closure_fast_entry;
     }
 
     //! Sets the name of the native function generated for the IR function, if not its own name

@@ -2927,6 +2927,10 @@ add_executable(qore-hash-lookup-test examples/test/qore/misc/hash_lookup.cpp)
 target_include_directories(qore-hash-lookup-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-hash-lookup-test PRIVATE libqore)
+add_executable(qore-aot-dot-target-test examples/test/ir/aot_dot_target.cpp)
+target_include_directories(qore-aot-dot-target-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-dot-target-test PRIVATE libqore)
 add_executable(qore-aot-ir-instruction-test examples/test/ir/aot_ir_instruction_validation.cpp)
 target_include_directories(qore-aot-ir-instruction-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)

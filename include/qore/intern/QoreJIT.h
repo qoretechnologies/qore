@@ -758,7 +758,7 @@ DLLLOCAL bool qore_ir_resolve_batch_function_summaries(
             const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*,
             BatchCalleeInfo>& batch_callees,
-        bool collect_body_dependency_provenance = false);
+        bool collect_body_dependency_provenance = false, bool preserve_debug_calls = false);
 
 //! Fuse exact fixed aggregate return projections in an owned compilation IR.
 DLLLOCAL size_t qore_ir_fuse_batch_aggregate_return_projections(

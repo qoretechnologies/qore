@@ -124,3 +124,58 @@ IS is();
 is.srun();
 KC kc();
 kc.run();
+
+# The public static and private instance variants have identical signatures. Calls from
+# another class and from the top level see the static method. The class's own closures
+# see the instance method, including a closure in a static method.
+final class Twin {
+    private:internal string pick(int x) { return "instance"; }
+    static string pick(int x) { return "static"; }
+    string inside() { return (string sub () { return self.pick(1); })(); }
+    static string insideStatic(Twin t) { return (string sub () { return t.pick(1); })(); }
+}
+class OtherCaller {
+    string outside(Twin t) { return (string sub () { return t.pick(1); })(); }
+}
+Twin twin();
+OtherCaller other();
+printf("twins: %s %s %s %s\n", twin.inside(), Twin::insideStatic(twin),
+    other.outside(twin), twin.pick(1));
+
+# The compiler can select the method family before it knows which overload will run.
+final class Family {
+    private:internal string pick(int n) { return "instance int"; }
+    private:internal string pick(string s) { return "instance string"; }
+    static string pick(auto x) { return "static"; }
+    string inside(auto x) { return (string sub () { return self.pick(x); })(); }
+}
+Family f();
+printf("late: %s %s %s\n", f.inside(1), f.inside("s"), f.pick(1));
+
+# Both initializers bind the instance method with the access of the declaring class.
+class InitBase {
+    private { string value; }
+    constructor(string v) { value = v; }
+    string getBase() { return value; }
+}
+final class InitTwin inherits InitBase {
+    private:internal string pick(int x) { return "instance"; }
+    static string pick(int x) { return "static"; }
+    private { string saved = self.pick(2); }
+    constructor() : InitBase(self.pick(1)) {}
+    string getSaved() { return saved; }
+}
+InitTwin it();
+printf("init: %s %s %s\n", it.getBase(), it.getSaved(), it.pick(1));
+
+final class PrivateTwin {
+    private string pick(int x) { return "instance"; }
+    static string pick(int x) { return "static"; }
+    string inside() { return (string sub () { return self.pick(1); })(); }
+}
+class PrivateTwinCaller {
+    string outside(PrivateTwin t) { return (string sub () { return t.pick(2); })(); }
+}
+PrivateTwin pt();
+PrivateTwinCaller ptc();
+printf("private: %s %s %s\n", pt.inside(), ptc.outside(pt), pt.pick(2));

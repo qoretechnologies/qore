@@ -3972,44 +3972,11 @@ static bool write_expr_dot_eval_target(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
-    // Reconstruct an inline QoreDotEvalOperatorNode from class_path + method_name
-    // + is_pseudo + target expression + args list. The write side is in
-    // classifyAndWriteExpr in QoreAOTBinary.cpp.
-    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
-    const char* method_name_ref = ctx.reader.readStringRef(ctx.ptr);
-    // the binding of the arguments of a named call is written first (see qore_aot_named_call_arg_prefix())
-    std::string method_ref_storage = method_name_ref ? method_name_ref : "";
-    QoreAOTNamedCallArgs named;
-    if (qore_aot_parse_named_call_arg_prefix(method_ref_storage, named)) {
-        ctx.error = "invalid named call arguments in inline DOT_EVAL_TARGET expression";
+    QoreAOTDotTarget identity;
+    if (!qore_aot_read_dot_target(ctx.reader, ctx.ptr, ctx.end, ctx.pgm, false, identity, ctx.error)) {
         return QoreValue();
     }
-    if (method_name_ref) {
-        method_name_ref = method_ref_storage.c_str();
-    }
-    std::string method_name_storage;
-    const char* method_name = method_name_ref;
-    // the explicit type arguments of the call, if any (qore#5865)
-    const char* type_args = qore_aot_find_call_type_args(method_name_ref);
-    // the variant resolved at parse time ("<variant class>\n<signature>"), if any (issue #5823)
-    const char* variant_ref = nullptr;
-    // the variant comes before the type arguments, whose marker starts with a newline: a call without a variant has
-    // the marker right after the method name
-    std::string variant_ref_storage;
-    if (method_name_ref) {
-        const char* sig_sep = strchr(method_name_ref, '\n');
-        if (sig_sep) {
-            method_name_storage.assign(method_name_ref, sig_sep - method_name_ref);
-            method_name = method_name_storage.c_str();
-            if (!type_args) {
-                variant_ref = sig_sep + 1;
-            } else if (sig_sep < type_args) {
-                variant_ref_storage.assign(sig_sep + 1, type_args - sig_sep - 1);
-                variant_ref = variant_ref_storage.c_str();
-            }
-        }
-    }
-    uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ctx.ptr);
+    const char* method_name = identity.name.c_str();
 
     // Target expression
     std::string target_err;
@@ -4041,64 +4008,27 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
         }
     }
 
-    if (!method_name || !*method_name) {
-        ctx.error = "DOT_EVAL_TARGET: empty method name";
-        if (pln) {
-            pln->deref();
-        }
-        target.discard(nullptr);
-        return QoreValue();
-    }
-
     // Build MethodCallNode with parse_args list; call resolveParseArgs() to
     // populate the evaluated args list so AbstractMethodCallNode::exec can find
     // them at runtime (parseInit is never re-run for AOT-deserialized nodes).
     MethodCallNode* mc = new MethodCallNode(&loc_builtin, strdup(method_name), pln);
 
-    // Try to resolve class + method for optimized dispatch. For regular
-    // (non-pseudo) calls these are pure optimizations: if left null,
-    // AbstractMethodCallNode::exec() falls back to dynamic method lookup on
-    // the target object's runtime class, and QoreDotEvalOperatorNode::
-    // evalWithBase() falls back to pseudo_classes_eval() for non-object base
-    // types.  For pseudo calls, we only tag the node as pseudo when we can
-    // resolve both class and method — otherwise the dynamic
-    // pseudo_classes_eval() path handles it correctly without needing
-    // the pseudo flag set.
-    const QoreClass* resolved_qc = nullptr;
-    const QoreMethod* resolved_m = nullptr;
-    if (class_path && *class_path) {
-        resolved_qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, is_pseudo != 0);
-        if (resolved_qc) {
-            resolved_m = resolved_qc->findMethod(method_name);
-            if (!resolved_m) {
-                resolved_m = resolved_qc->findStaticMethod(method_name);
-            }
-            if (!resolved_m && !is_pseudo) {
-                // a method of the class whatever its access, which the compiler checked (qore#5975)
-                resolved_m = qore_aot_find_named_method(resolved_qc, method_name);
-            }
+    if (identity.method) {
+        mc->parseSetClassAndMethod(identity.receiver, identity.method);
+        if (identity.flags & QORE_AOT_DOT_EVAL_TARGET_PSEUDO) {
+            mc->setPseudo(identity.receiver->getTypeInfo());
+        }
+        if (identity.variant) {
+            mc->setVariant(identity.variant);
         }
     }
-    if (resolved_qc && resolved_m) {
-        // the recorded variant gives the method that the parser bound, which a lookup by name without the class's
-        // context can miss (a private:internal method of the class beside a base class's static method of the same
-        // name: qore#6653), so it is found before the method is set
-        const AbstractQoreFunctionVariant* variant = qore_aot_find_method_variant(ctx.pgm, resolved_m,
-                method_name, variant_ref, is_pseudo != 0);
-        mc->parseSetClassAndMethod(resolved_qc, resolved_m);
-        if (is_pseudo) {
-            mc->setPseudo(resolved_qc->getTypeInfo());
-        }
-        if (variant) {
-            mc->setVariant(variant);
-        }
-    }
-    if (type_args) {
+    if (!identity.type_args.empty()) {
         // the variant is chosen when the call is made: the type arguments have no owner, as for a parsed call whose
         // variant is chosen at run time (qore#5791); they can name the type parameters of the code whose context is
         // being built (qore#5733)
         QoreTypeParamInstantiation inst;
-        if (!qore_aot_decode_call_type_args(ctx.pgm, type_args, nullptr, qore_aot_get_type_param_owner(), inst)) {
+        if (!qore_aot_decode_call_type_args(ctx.pgm, identity.type_args.c_str(), nullptr,
+                qore_aot_get_type_param_owner(), inst)) {
             ctx.error = std::string("cannot resolve the explicit type arguments of the call of method '")
                 + method_name + "' in an inline DOT_EVAL_TARGET expression";
             mc->deref();
@@ -4111,6 +4041,7 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
     }
     mc->resolveParseArgs();
     // the binding has one entry for each argument
+    auto& named = identity.named;
     size_t nargs = mc->getArgs() ? mc->getArgs()->size() : 0;
     if ((named.has_names && named.names.size() != nargs)
             || (named.has_map && named.source_to_param.size() != nargs)) {
