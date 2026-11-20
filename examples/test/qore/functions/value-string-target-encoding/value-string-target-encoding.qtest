@@ -5,8 +5,9 @@
 %modern
 %enable-all-warnings
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires FsUtil
-%requires ../../../../../qlib/QUnit.qm
+%requires QUnit
 %requires ../../../TestInterpreter.qm
 
 # a number, boolean or date converted to a string for a target encoding takes that encoding, also when it is not the

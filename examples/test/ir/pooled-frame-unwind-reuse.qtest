@@ -6,7 +6,8 @@
 %require-types
 %enable-all-warnings
 
-%requires ../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 
 # A pooled IR call frame that a call left by an exception is reused by a later call of the same frame sizes: the later
 # call releases its own locals normally and must not use the function of the earlier call, which can be freed by then
