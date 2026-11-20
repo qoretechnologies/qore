@@ -2320,6 +2320,11 @@ public:
     }
 
     DLLLOCAL ~QoreRuntimeLocationRestoreHelper() {
+        restore();
+    }
+
+    //! restores the location saved at construction now
+    DLLLOCAL void restore() const {
         *cache.loc_ptr = loc;
         *cache.stmt_ptr = statement;
     }

@@ -2789,13 +2789,51 @@ private:
     }
 };
 
+//! Returns true if \a lvar in \a slot_id is a local that the handler \a func declares itself in a slot of the function
+//! that it runs for (not a local of the function that the handler uses), whose value the handler releases (#6002)
+static bool qore_ir_is_handler_own_slot_local(const QoreIRFunction& func, const LocalVar* lvar, uint32_t slot_id) {
+    return lvar && slot_id < func.parent_slot_count
+        && !func.pre_instantiated_locals.count(reinterpret_cast<const void*>(lvar));
+}
+
+//! Returns the local that the handler \a func declares itself in \a slot of the function that it runs for, if any (see
+//! qore_ir_is_handler_own_slot_local())
+/** Only called on the unwind path (a lookup in the function's slots, which allocates nothing), so that a frame keeps
+    no reference for it (qore#6831)
+*/
+static QORE_INTERN_NOINLINE const LocalVar* qore_ir_handler_own_slot_local(const QoreIRFunction& func, size_t slot) {
+    if (slot >= func.parent_slot_count) {
+        return nullptr;
+    }
+    for (auto& [lvar, slot_id] : func.local_var_slots) {
+        if (slot_id == slot && qore_ir_is_handler_own_slot_local(func, lvar, slot_id)) {
+            return lvar;
+        }
+    }
+    return nullptr;
+}
+
 //! A frame leaving by an exception releases each lexical local at its recorded enclosing statement. Keep
 //! the location lookup, saved TLS state and restoration out of both normal cache-release loops.
+/** @param locals the locals of the frame's slots
+    @param own_locals the locals that a handler frame declares in the slots of the function that it shares, which
+    \a locals does not give (qore#6831); null to look them up in the function being unwound
+*/
 template <typename Visit, typename Release>
 static QORE_INTERN_NOINLINE void qore_ir_release_unwinding_slots(const IRCallFrame& frame,
-        const std::vector<const LocalVar*>& locals, const Visit& visit, const Release& release) {
+        const std::vector<const LocalVar*>& locals, const std::vector<const LocalVar*>* own_locals,
+        const Visit& visit, const Release& release) {
     visit([&](size_t i) {
-        IRLocalUnwindLocation location(frame, i < locals.size() ? locals[i] : nullptr);
+        const LocalVar* var = i < locals.size() ? locals[i] : nullptr;
+        if (!var) {
+            if (own_locals) {
+                var = i < own_locals->size() ? (*own_locals)[i] : nullptr;
+            } else if (i < frame.unwinding_function->parent_slot_count) {
+                // only a handler frame has slots of the function that it runs for
+                var = qore_ir_handler_own_slot_local(*frame.unwinding_function, i);
+            }
+        }
+        IRLocalUnwindLocation location(frame, var);
         release(i);
     });
 }
@@ -9175,6 +9213,13 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
     }
     // the frame that execute() pushes for the handler
     run_ctx.ir_frame_index = pool.top;
+    // the locals that the handler declares in the root block of its function are released at the caller's statement
+    // of the function, which its frame gives (also the frame of a handler that runs a handler of its body, which took
+    // it the same way); the frame captured it at its start, as the lowering merges the handler's locations into those
+    // of its function (qore_ir_merge_handler_unwind_locations())
+    if (parent_frame && !handler.handler_ir->local_unwind_locations.empty()) {
+        run_ctx.body_entry_frame = parent_frame;
+    }
     QoreHandlerRunGuard run_guard(run_ctx);
     // a ScopeExit with a result gives whether a value was handed over to the function that takes the values of its
     // handlers: the delta of its count in the runs (#6552)
@@ -10846,7 +10891,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         parent_slot_to_lvar.resize(func.parent_slot_count, nullptr);
         for (auto& [lvar, slot_id] : func.local_var_slots) {
             if (lvar && slot_id < func.parent_slot_count) {
-                if (!func.pre_instantiated_locals.count(reinterpret_cast<const void*>(lvar))) {
+                if (qore_ir_is_handler_own_slot_local(func, lvar, slot_id)) {
                     handler_own_slot[slot_id] = true;
                     if (handler_own_slot_lvar.empty()) {
                         handler_own_slot_lvar.resize(func.parent_slot_count, nullptr);
@@ -11331,7 +11376,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         };
         if (frame.unwinding_function) [[unlikely]] {
-            qore_ir_release_unwinding_slots(frame, func.interpreter_slot_locals, visit, release);
+            qore_ir_release_unwinding_slots(frame, func.interpreter_slot_locals, &handler_own_slot_lvar, visit,
+                release);
         } else {
             visit(release);
         }
@@ -11482,7 +11528,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     } iter_cleanup{active_iterators};
 
     struct SlotCacheCleanup {
-        const IRCallFrame& frame;
+        IRCallFrame& frame;
         IRLocalSlotCache& cache;
         ExceptionSink* xsink;
         const std::vector<const LocalVar*>& slot_locals;
@@ -11500,26 +11546,57 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // they have.  The iterator of a foreach statement that is still running is released at its place among them
         // (see IRActiveIterator)
         ~SlotCacheCleanup() {
-            auto visit = [&](const auto& clear) {
+            if (frame.unwinding_function) [[unlikely]] {
+                releaseUnwinding();
+                // the frame is reused for the next call at its depth, which IRCallFramePool::push() can reset in place
+                // without clearing it: a call that does not unwind must not take the release locations of this
+                // function, which may no longer exist then (qore#6831)
+                frame.unwinding_function = nullptr;
+            } else {
                 for (size_t i = cache.size(); i; --i) {
                     releaseActiveIteratorsFrom(iters, i);
-                    clear(i - 1);
+                    releaseSlot(i - 1);
                 }
-            };
-            auto release = [&](size_t i) {
-                cache.clearSlot(i, xsink);
-                if (i < slot_locals.size() && !(i < ir_only.size() && ir_only[i])) {
-                    releaseFrameRuntimeLocal(slot_locals[i], instantiated, pre_instantiated, xsink);
-                }
-            };
-            if (frame.unwinding_function) [[unlikely]] {
-                qore_ir_release_unwinding_slots(frame, slot_locals, visit, release);
-            } else {
-                visit(release);
             }
             releaseActiveIteratorsFrom(iters, 0);
             // the value of a return that an exception interrupted, after the locals of the frame (#5920)
             cache.releaseHeldReturns(xsink);
+        }
+
+        //! releases the value of a slot, and the value of its local on the runtime stack if the frame instantiated it
+        void releaseSlot(size_t i) {
+            cache.clearSlot(i, xsink);
+            if (i < slot_locals.size() && !(i < ir_only.size() && ir_only[i])) {
+                releaseFrameRuntimeLocal(slot_locals[i], instantiated, pre_instantiated, xsink);
+            }
+        }
+
+        //! releases the slots of a frame that an exception leaves, each at its local's release location
+        //! (QoreIRFunction::local_unwind_locations)
+        /** A handler frame also releases the values of the locals that the handler declares, which are on the runtime
+            stack of the function that it runs for, at their slots' places and release locations, as
+            cleanupLocalCaches() does, not afterwards with the variables that the frame instantiated (qore#6831).  Out
+            of line, as the frame keeps nothing for it: the function of the frame is the one being unwound.
+        */
+        QORE_INTERN_NOINLINE void releaseUnwinding() {
+            const QoreIRFunction& unwound = *frame.unwinding_function;
+            // the slots last first, the iterators of foreach statements still running at their places, as above
+            qore_ir_release_unwinding_slots(frame, slot_locals, nullptr, [this](const auto& clear) {
+                for (size_t i = cache.size(); i; --i) {
+                    releaseActiveIteratorsFrom(iters, i);
+                    clear(i - 1);
+                }
+            }, [&](size_t i) {
+                releaseSlot(i);
+                // only a handler frame has slots of the function that it runs for
+                const LocalVar* own = i < unwound.parent_slot_count ? qore_ir_handler_own_slot_local(unwound, i)
+                    : nullptr;
+                if (own && !own->closureUse()) {
+                    if (LocalVarValue* lvv = thread_try_find_lvar(own)) {
+                        lvv->del(xsink);
+                    }
+                }
+            });
         }
     } slot_cache_cleanup{frame, locals_slot_cache, xsink, func.interpreter_slot_locals, locals_ir_only,
         instantiated_locals, pre_instantiated, active_iterators};
@@ -11773,8 +11850,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // These pointers remain valid for the duration of this function (same thread).
     RuntimeLocationCache rl_cache = get_runtime_location_cache();
     if (!func.local_unwind_locations.empty()) {
-        frame.body_entry_loc = *rl_cache.loc_ptr;
-        frame.body_entry_stmt = *rl_cache.stmt_ptr;
+        // a handler starts at the statement that ran it: its frame takes the caller's statement of the function that
+        // it runs for (qore#6831)
+        QoreHandlerRunContext* run_ctx = handler_frame ? qore_handler_run_context() : nullptr;
+        if (run_ctx && run_ctx->body_entry_frame) {
+            // the frame of the function, which runs the handler, so it is still there
+            frame.body_entry_loc = run_ctx->body_entry_frame->body_entry_loc;
+            frame.body_entry_stmt = run_ctx->body_entry_frame->body_entry_stmt;
+        } else {
+            frame.body_entry_loc = *rl_cache.loc_ptr;
+            frame.body_entry_stmt = *rl_cache.stmt_ptr;
+        }
     }
 
     // Debug hook support

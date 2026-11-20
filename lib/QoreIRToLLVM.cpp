@@ -4000,6 +4000,8 @@ static const std::vector<uint32_t>* qore_ir_landing_pad_catch_returns(const Qore
 // documented in QoreIRToLLVM.h
 llvm::CallInst* QoreIRToLLVM::emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count,
         bool release_returns, const std::vector<uint32_t>* try_returns) {
+    // a handler that runs as a function of its own takes the caller's statement of the function (qore#6831)
+    emitHandlerRunLocation();
     if (handler_function && release_returns) {
         // the handlers of a block of a handler body hand their values to the function that the handler runs for,
         // through the context of the handler's run, where the exception or thread_exit leaves the handler: where a
@@ -5652,6 +5654,18 @@ void QoreIRToLLVM::captureBodyEntryLocation() {
         llvm::IRBuilder<> entry(slots->getParent(), std::next(slots->getIterator()));
         body_entry_loc = entry.CreateLoad(ptr_type, loc_cache_ptr, "body_entry_loc");
         body_entry_stmt = entry.CreateLoad(ptr_type, stmt_cache_ptr, "body_entry_stmt");
+    }
+}
+
+void QoreIRToLLVM::emitHandlerRunLocation() {
+    if (!current_ir_func) {
+        return;
+    }
+    for (const auto& entry : current_ir_func->local_unwind_locations) {
+        if (!entry.second) {
+            emitBodyCleanupLocation();
+            return;
+        }
     }
 }
 
@@ -39283,6 +39297,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // in the cleanups of a return past the inline cap, the values that the handlers hand over
                         // replace the value of the return, which takes it (#6137); the first releases the value of the
                         // return, whose slots finalizeHandlerReturnHoldSites() gives the call
+                        // a handler that runs as a function of its own takes the caller's statement of the function
+                        // (qore#6831)
+                        emitHandlerRunLocation();
                         auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit_return_hold",
                             llvm::FunctionType::get(builder->getInt8Ty(), {i64_type, ptr_type, ptr_type, ptr_type,
                                 ptr_type, i64_type}, false));

@@ -161,6 +161,12 @@ public:
         //! the statement that declares the handler, whose parse options its code runs with, in top-level code whose
         //! statements have different options; nullptr otherwise (see QoreIRLowering::top_level_code_parse_options)
         const AbstractStatement* code_po_statement = nullptr;
+        //! where the handler's own locals are released when an exception leaves the handler: the statement that
+        //! encloses the block that declares the handler, or nullptr for the root block of the function (the caller's
+        //! statement), as in the AST interpreter, which runs the handler when the block ends (qore#6831)
+        const QoreProgramLocation* owner_unwind_loc = nullptr;
+        //! false if the locals of the block that declares the handler have no release location (see owner_unwind_loc)
+        bool owner_unwind_mapped = true;
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
@@ -1124,6 +1130,21 @@ private:
     uint32_t block_counter = 0;
     uint32_t scope_counter = 0;  //!< Counter for generating unique scope IDs within a function
     int statement_block_depth = 0;  //!< Nesting depth for debug block markers
+    //! the release locations of the locals of the blocks being lowered, innermost last: whether the locals of the block
+    //! are mapped (QoreIRFunction::local_unwind_locations) and the statement that they are released at (nullptr: the
+    //! caller's statement), for the handlers that the blocks declare (qore#6831)
+    std::vector<std::pair<bool, const QoreProgramLocation*>> block_unwind_locs;
+    //! set in the lowering of a handler: its root block's locals are released at handler_root_unwind_loc (see
+    //! InlineHandler::owner_unwind_loc), not at the caller's statement of the handler's frame (qore#6831)
+    bool handler_root_unwind_set = false;
+    bool handler_root_unwind_mapped = true;
+    const QoreProgramLocation* handler_root_unwind_loc = nullptr;
+    //! the body of a handler that lowerHandlerAtExit() lowers inline next: its locals are released where those of the
+    //! handler's root block are when it runs as a function of its own (InlineHandler::owner_unwind_loc), not at the
+    //! statement of the exit that runs it (qore#6831); consumed by the next lowerStatementBlock()
+    const StatementBlock* inline_handler_unwind_block = nullptr;
+    bool inline_handler_unwind_mapped = true;
+    const QoreProgramLocation* inline_handler_unwind_loc = nullptr;
     //! True if the root block that this lowering lowers is the body of a handler (on_exit, on_error, on_success)
     /** The body of a handler has the block event of the debugger, as in the AST interpreter, which makes one for the
         block of each handler that it runs: a handler lowered inline is a nested block, which has it, while the body of

@@ -15993,6 +15993,10 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                 qore_rt_catch_unwind(jit_obe_handlers[i].catch_depth, xsink);
             }
             if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
+                // every handler starts in the location of the run, not in the one that the handler before it left:
+                // the caller stored the caller's statement of its function there if a handler's frame takes it as its
+                // body's entry location (QoreIRToLLVM::emitHandlerRunLocation(), qore#6831)
+                loc_restore.restore();
                 // Instantiate exception for on_error blocks as an implicit arg
                 std::unique_ptr<SingleArgvContextHelper> argv_helper;
                 std::unique_ptr<CatchExceptionHelper> ex_helper;
