@@ -29,16 +29,26 @@ print_usage () {
   echo "                           (-b in QORE_TEST_OPTS), is aborted at once.  On Linux, the state, CPU time and"
   echo "                           kernel wait channel of each of its threads are printed when it exceeds it and"
   echo "                           again before it is aborted, with /proc/pressure and the cgroup's cpu.stat and"
-  echo "                           memory.events.  Where perl or setsid is available, the test runs in a process"
-  echo "                           group of its own, and the processes left in it are killed once the test has"
-  echo "                           ended, as they are when a signal ends the run; otherwise the test is signalled"
-  echo "                           alone.  In a run from a terminal, the test is then a background process group:"
-  echo "                           with 'stty tostop', or if it changes the terminal's attributes, it is stopped"
-  echo "                           by SIGTTOU."
+  echo "                           memory.events.  Before any signal, the native call stacks of all threads of"
+  echo "                           every process that descends from the test are printed, each with its process ID"
+  echo "                           and command line (gdb or eu-stack on Linux, sample or lldb on macOS; see"
+  echo "                           QORE_TEST_STACK_TOOLS).  Where perl or setsid is available, the test runs in a"
+  echo "                           process group of its own, and the processes left in it are killed once the test"
+  echo "                           has ended, as they are when a signal ends the run; otherwise the test is"
+  echo "                           signalled alone.  In a run from a terminal, the test is then a background"
+  echo "                           process group: with 'stty tostop', or if it changes the terminal's attributes,"
+  echo "                           it is stopped by SIGTTOU."
   echo "  QORE_TEST_CGROUP         The cgroup directory whose cpu.stat and memory.events are printed then (default:"
   echo "                           the test's cgroup v2 directory under /sys/fs/cgroup)."
   echo "  QORE_TEST_STACK_DUMP_WAIT"
   echo "                           Seconds to wait for those stacks before the test is ended (default: 30)."
+  echo "  QORE_TEST_STACK_TOOLS    The tools that capture the native call stacks of the test's descendant"
+  echo "                           processes, tried in order until one succeeds (default: 'gdb eu-stack' on"
+  echo "                           Linux, 'sample lldb' on macOS); another command is run as '<command> <pid>'."
+  echo "  QORE_TEST_STACK_CAPTURE_WAIT"
+  echo "                           Seconds a capture of one process may take before it is killed (default: 30)."
+  echo "  QORE_TEST_STACK_CAPTURE_TOTAL"
+  echo "                           Seconds all the captures of a test may take together (default: 120)."
   echo "  QORE_TEST_INTERRUPT_WAIT Seconds a test may take to end after a signal ends the run (default: 10); it is"
   echo "                           killed then."
   echo "  CI_NODE_INDEX            Shard index (1-based) for parallel test execution."
@@ -1429,7 +1439,8 @@ TEST_EVENT_TMP=${TMPDIR:-/tmp}
 TEST_EVENT_DIR=$(mktemp -d "${TEST_EVENT_TMP%/}/qore-test-events.XXXXXX") || exit 1
 TEST_EVENT_FIFO="$TEST_EVENT_DIR/events"
 
-# A test that exceeds its time limit is first sent SIGUSR1 when the signal cannot end it (see run_with_watchdog()):
+# A test that exceeds its time limit first has the native call stacks of its descendant processes printed (see
+# capture_descendant_stacks() below), and is then sent SIGUSR1 when the signal cannot end it (see run_with_watchdog()):
 # a QUnit test then prints the call stacks of all its threads and reports it through the event FIFO.  Once it has
 # reported it, has ended, or QORE_TEST_STACK_DUMP_WAIT seconds (default 30) have passed, it is aborted (SIGABRT), so
 # that it dumps core, and sent SIGKILL 60 seconds later.  A test that SIGUSR1 would end, without a core dump and
@@ -1447,6 +1458,144 @@ for opt in $QORE_TEST_OPTS; do
         -b|--disable-signals) TEST_SIGNALS_ENABLED=0 ;;
     esac
 done
+
+# Before a test that exceeds its time limit is sent any signal, the native call stacks of all threads of every process
+# that descends from it (its children, theirs, and so on: the process tree of runner_descendants()) are printed where
+# its output goes, each labelled with the process's ID and command line (qore#6888): the test's own process has its
+# Qore call stacks (SIGUSR1) and its core, but a hang in a program that the test started showed only as a timeout.
+# The tools are tried in the order of QORE_TEST_STACK_TOOLS (default: gdb, then eu-stack, on Linux; sample, then
+# lldb, on macOS, as sample reads the threads of a suspended task, while lldb's attach ends a system call that blocks,
+# such as a read(), with EINTR, which changes what the process does next), the next one when one is not installed or
+# fails; gdb, eu-stack, lldb and sample are run with the options that print every thread's stack, any other command as
+# "<command> <pid>".  Each capture is ended with SIGKILL by the timeout command after QORE_TEST_STACK_CAPTURE_WAIT
+# seconds (default 30), and all of them together take at most QORE_TEST_STACK_CAPTURE_TOTAL seconds (default 120), so
+# a debugger that hangs cannot hold up the run; a tool that is missing, fails or is ended for its time is reported, as
+# is each process left without its stacks.  A debugger that cannot attach prints why (Linux: ptrace restricted by
+# yama's ptrace_scope, or a container without CAP_SYS_PTRACE; macOS: lldb cannot attach to a system binary).
+TEST_STACK_CAPTURE_WAIT=${QORE_TEST_STACK_CAPTURE_WAIT:-30}
+TEST_STACK_CAPTURE_TOTAL=${QORE_TEST_STACK_CAPTURE_TOTAL:-120}
+if [ -n "$QORE_TEST_STACK_TOOLS" ]; then
+    TEST_STACK_TOOLS=$QORE_TEST_STACK_TOOLS
+elif [ "`uname -s`" = Darwin ]; then
+    TEST_STACK_TOOLS="sample lldb"
+else
+    TEST_STACK_TOOLS="gdb eu-stack"
+fi
+
+# Prints the IDs of the processes that descend from the given process, in ascending order: from /proc (or
+# QORE_TEST_PROC) where it exists (runner_descendants()), from ps elsewhere
+test_descendant_processes() {
+    if [ -n "$QORE_TEST_PROC" ] || [ -r /proc/self/stat ]; then
+        runner_descendants $1
+    else
+        ps -A -o pid= -o ppid= 2>/dev/null | awk -v root=$1 '
+            { parent[$1] = $2 }
+            END {
+                found[root] = 1
+                do {
+                    added = 0
+                    for (p in parent) {
+                        if (!(p in found) && (parent[p] in found)) {
+                            found[p] = 1
+                            added = 1
+                        }
+                    }
+                } while (added)
+                for (p in found) {
+                    if (p != root) {
+                        printf "%s ", p
+                    }
+                }
+            }'
+    fi | tr ' ' '\n' | awk 'NF' | sort -n
+}
+
+# Prints the command line of the given process (empty if it has ended); /proc on Linux, where BusyBox ps has no -p
+process_command_line() {
+    if [ -r /proc/self/cmdline ]; then
+        tr '\0' ' ' < /proc/$1/cmdline 2>/dev/null
+    else
+        ps -ww -o command= -p $1 2>/dev/null
+    fi
+}
+
+# Runs the given stack tool on the given process with the given time limit in seconds (see above); its exit code
+runs_stack_tool() {
+    case "$1" in
+        gdb)
+            DEBUGINFOD_URLS= $TIMEOUT_CMD -s KILL $3 gdb -nx -batch -iex "set debuginfod enabled off" -p $2 \
+                -ex "thread apply all bt"
+            ;;
+        eu-stack) DEBUGINFOD_URLS= $TIMEOUT_CMD -s KILL $3 eu-stack -p $2 ;;
+        lldb) $TIMEOUT_CMD -s KILL $3 lldb --no-lldbinit --batch -p $2 -o "thread backtrace all" -o detach ;;
+        sample) $TIMEOUT_CMD -s KILL $3 sample $2 1 -file /dev/stdout ;;
+        *) $TIMEOUT_CMD -s KILL $3 "$1" $2 ;;
+    esac
+}
+
+# Prints the native call stacks of every process that descends from the given test process (see above).  It cannot
+# fail the watchdog, and returns only once every capture has ended.
+capture_descendant_stacks() {
+    stack_pids=`test_descendant_processes $1`
+    if [ -z "$stack_pids" ]; then
+        return 0
+    fi
+    stack_tools=""
+    for tool in $TEST_STACK_TOOLS; do
+        if command -v "$tool" > /dev/null 2>&1; then
+            stack_tools="$stack_tools $tool"
+        fi
+    done
+    if [ -z "$TIMEOUT_CMD" ]; then
+        echo "*** the native call stacks of the processes of test $1 are not captured: there is no timeout command" \
+            "to limit the time of a capture ***"
+        stack_tools=""
+    elif [ -z "$stack_tools" ]; then
+        echo "*** the native call stacks of the processes of test $1 cannot be captured: none of the tools" \
+            "($TEST_STACK_TOOLS) is installed ***"
+    fi
+    stack_end=$((`date +%s` + TEST_STACK_CAPTURE_TOTAL))
+    for pid in $stack_pids; do
+        echo "*** native call stacks of process $pid (a descendant of test $1): `process_command_line $pid` ***"
+        stack_done=0
+        if [ -z "`process_command_line $pid`" ]; then
+            echo "*** process $pid has ended ***"
+            continue
+        fi
+        for tool in $stack_tools; do
+            stack_secs=$((stack_end - `date +%s`))
+            if [ $stack_secs -gt $TEST_STACK_CAPTURE_WAIT ]; then
+                stack_secs=$TEST_STACK_CAPTURE_WAIT
+            fi
+            if [ $stack_secs -le 0 ]; then
+                echo "*** process $pid: not captured, as the captures have taken their ${TEST_STACK_CAPTURE_TOTAL}s" \
+                    "(QORE_TEST_STACK_CAPTURE_TOTAL) ***"
+                stack_done=1
+                break
+            fi
+            # the tool has no terminal input and not the watchdog's event FIFO (descriptor 4)
+            runs_stack_tool $tool $pid $stack_secs < /dev/null 4>&- 2>&1
+            stack_rc=$?
+            case $stack_rc in
+                0)
+                    stack_done=1
+                    break
+                    ;;
+                124|137)
+                    echo "*** process $pid: $tool did not end within ${stack_secs}s and was killed ***"
+                    stack_done=1
+                    break
+                    ;;
+            esac
+            echo "*** process $pid: $tool failed (exit code $stack_rc) ***"
+        done
+        if [ $stack_done -eq 0 ] && [ -n "$stack_tools" ]; then
+            echo "*** process $pid: no tool could capture its call stacks ***"
+        fi
+    done
+    echo "*** end of the native call stacks of the processes of test $1 ***"
+    return 0
+}
 
 # The events that the watchdog of a test reads from the event FIFO, one per line:
 # - "handler <pid>": QUnit has installed its SIGUSR1 handler, which prints the call stacks of the test's threads, in
@@ -1701,6 +1850,7 @@ event $1
         fi
         status=$((status | 1))
         print_test_threads "at its time limit"
+        capture_descendant_stacks $test_pid
         if [ $TEST_SIGNALS_ENABLED -eq 0 ]; then
             echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent (signal handling is" \
                 "disabled) ***"
