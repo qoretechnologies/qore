@@ -485,7 +485,7 @@ int main() {
         }, "runtime location 1 is beyond");
     }
     constexpr unsigned expected_count =
-        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 168 : 158;
+        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 169 : 159;
     if (count != expected_count) {
         fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,
             static_cast<unsigned>(QORE_AOT_BINARY_VERSION));
