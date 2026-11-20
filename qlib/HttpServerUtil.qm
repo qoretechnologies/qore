@@ -153,6 +153,14 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - the persistence and the close notification of a request handler
+      (@ref HttpServer::AbstractHttpRequestHandler::setPersistent() "AbstractHttpRequestHandler::setPersistent()",
+      @ref HttpServer::AbstractHttpRequestHandler::notifyClosed() "notifyClosed()") are kept by the handler only:
+      they were also kept in the module's thread-local data, which is shared by the handlers of every
+      @ref Qore::Program "Program" on a thread, so that another handler that ran on the same thread later, also of
+      another tenant, could report itself persistent and call the callback of the first one; the cleanup of a thread
+      ends the persistence of every handler that set it on the thread, not of the last one only
+      (issue #6847)
     - added @ref HttpServer::http_get_client_exception_info() "http_get_client_exception_info()", the information of
       an exception without its location or call stack, for the error responses of a server with debugging off
       (issue #6780)
@@ -3514,6 +3522,34 @@ public class StreamResponseProducer {
     }
 }
 
+#! The request handlers that set persistence on one thread; internal to the module
+/** Used only by the thread that the handlers set persistence on (issue #6847)
+*/
+class PersistentThreadHandlers {
+    private:internal {
+        #! the handlers: unique hash -> handler
+        hash<string, AbstractHttpRequestHandler> handlers;
+    }
+
+    #! adds a handler
+    add(AbstractHttpRequestHandler handler) {
+        handlers{handler.uniqueHash()} = handler;
+    }
+
+    #! removes a handler; returns @ref True if no handler is left
+    bool del(AbstractHttpRequestHandler handler) {
+        remove handlers{handler.uniqueHash()};
+        return handlers.empty();
+    }
+
+    #! removes and returns all handlers
+    list<AbstractHttpRequestHandler> take() {
+        list<AbstractHttpRequestHandler> rv = handlers.values() ?? ();
+        handlers = {};
+        return rv;
+    }
+}
+
 #! abstract class that all HTTP request handler objects must inherit from
 /** Reimplement handleRequest() in subclasses
 
@@ -3554,27 +3590,36 @@ public class AbstractHttpRequestHandler {
         timeout timeout_ms = HttpServer::DefaultTimeout;
 
         #! thread-local key string for notification callbacks
+        /** @deprecated no longer used: a handler keeps its close notifications itself
+        */
         const string NotificationThreadKey = "_AHRH_pc";
 
         #! thread-local key string for the persistent flag
+        /** @deprecated no longer used: a handler keeps its persistent flags itself
+        */
         const string PersistenceThreadKey = "_AHRH_p";
 
         #! thread-local key string for the handler reference (for cleanup)
+        /** @deprecated no longer used: see @ref staticPersistenceCleanup()
+        */
         const string PersistenceHandlerKey = "_AHRH_ph";
     }
 
     private {
         #! Thread-safe persistence and close-notification tracking by thread ID
         /** These maps track which threads have persistence enabled on this handler
-            and the corresponding close callbacks, bypassing the per-QoreProgram
-            thread-local data issue where \c save_thread_data() /
-            \c get_thread_data() use \c getProgram()->getThreadData(), which can
-            be different across program context boundaries (e.g., a service
-            program registering state that the HTTP server program later closes).
+            and the corresponding close callbacks.  They are the only record of this state: the thread-local data of
+            this module is shared by the handlers of every Program on the thread, so state kept there by one
+            handler would be seen by the next handler that runs on the same thread (issue #6847).
         */
         Mutex _persistent_mutex();
         hash<string, bool> _persistent_threads;
         hash<string, code> _persistent_notifications;
+    }
+
+    private:internal {
+        #! the thread-local key of the handlers that set persistence on the thread (a PersistentThreadHandlers object)
+        const PersistentThreadHandlersKey = "_AHRH_pth";
     }
 
     #! create the object optionally with the given AbstractAuthenticator
@@ -3748,24 +3793,24 @@ public class AbstractHttpRequestHandler {
         @return @ref True "True" if the current connection is in persistent mode
     */
     bool isPersistent() {
-        {
-            _persistent_mutex.lock();
-            on_exit _persistent_mutex.unlock();
-            if (_persistent_threads{string(gettid())}) {
-                return True;
-            }
-        }
-        return boolean(get_thread_data(PersistenceThreadKey));
+        # only this handler's own state counts: persistence that another handler set on the same thread does not make
+        # this handler persistent (issue #6847)
+        _persistent_mutex.lock();
+        on_exit _persistent_mutex.unlock();
+        return _persistent_threads{string(gettid())} ?? False;
     }
 
     #! Removes the calling thread's entry from the per-thread persistence map
-    /** Called by staticPersistenceCleanup() when a thread resource is released
-        without a matching setPersistent(False) call.
+    /** Called when the thread resource of the persistence is released without a matching setPersistent(False) call,
+        and by the server when a persistent connection ends.
     */
     clearPersistentThread() {
-        _persistent_mutex.lock();
-        on_exit _persistent_mutex.unlock();
-        remove _persistent_threads{string(gettid())};
+        {
+            _persistent_mutex.lock();
+            on_exit _persistent_mutex.unlock();
+            remove _persistent_threads{string(gettid())};
+        }
+        unregisterPersistentThread();
     }
 
     #! Returns an optional filter callback for persistent queue request routing
@@ -3872,6 +3917,10 @@ public class AbstractHttpRequestHandler {
     */
     setPersistent(bool p = True) {
         string tid = string(gettid());
+        # the thread's cleanup is registered before the flag is set, so that a flag is never set without it
+        if (p) {
+            registerPersistentThread();
+        }
         {
             _persistent_mutex.lock();
             on_exit _persistent_mutex.unlock();
@@ -3881,36 +3930,25 @@ public class AbstractHttpRequestHandler {
                 remove _persistent_threads{tid};
             }
         }
-        if (p) {
-            # remove any existing thread resource first to avoid the cleanup
-            # callback being triggered when re-registering on a reused pool thread
-            remove_thread_resource(\AbstractHttpRequestHandler::staticPersistenceCleanup());
-            save_thread_data((PersistenceThreadKey: True, PersistenceHandlerKey: self));
-            set_thread_resource(\AbstractHttpRequestHandler::staticPersistenceCleanup());
-        } else {
-            remove_thread_resource(\AbstractHttpRequestHandler::staticPersistenceCleanup());
-            remove_thread_data(PersistenceThreadKey);
-            remove_thread_data(PersistenceHandlerKey);
+        if (!p) {
+            unregisterPersistentThread();
         }
     }
 
     #! calls the argument when the persistent connection is closed
+    /** The callback is kept by this handler for the calling thread; it is called by @ref persistentClosed() of this
+        handler only, never for another handler that runs on the same thread
+
+        @param c the callback to call, or @ref nothing to remove the callback
+    */
     notifyClosed(*code c) {
         string tid = string(gettid());
-        {
-            _persistent_mutex.lock();
-            on_exit _persistent_mutex.unlock();
-            if (c) {
-                _persistent_notifications{tid} = c;
-            } else {
-                remove _persistent_notifications{tid};
-            }
-        }
+        _persistent_mutex.lock();
+        on_exit _persistent_mutex.unlock();
         if (c) {
-            save_thread_data((NotificationThreadKey: c));
-            set_thread_resource(\AbstractHttpRequestHandler::staticNotificationCleanup());
+            _persistent_notifications{tid} = c;
         } else {
-            remove_thread_data(NotificationThreadKey);
+            remove _persistent_notifications{tid};
         }
     }
 
@@ -3991,37 +4029,102 @@ public class AbstractHttpRequestHandler {
     }
 
     #! removes the thread-local data key in case the object is destroyed in another thread
+    /** @deprecated no longer used: a handler keeps its close notifications itself; this method only removes the
+        thread-local data key of older versions of this module
+    */
     static staticNotificationCleanup() {
         remove_thread_data(NotificationThreadKey);
     }
 
-    #! removes the thread-local data key and clears the per-thread persistence map entry
+    #! clears the per-thread persistence of every handler that set persistence on the calling thread
+    /** The thread resource of the persistence makes the same cleanup when the thread's resources are released, so
+        that the thread appears persistent to none of these handlers when it runs other work
+    */
     static staticPersistenceCleanup() {
-        # clear _persistent_threads entry on the handler that set persistence for
-        # this thread; without this, a reused pool thread would still appear
-        # persistent on the handler after thread-resource cleanup
-        *object handler = get_thread_data(PersistenceHandlerKey);
-        if (handler instanceof AbstractHttpRequestHandler) {
-            cast<AbstractHttpRequestHandler>(handler).clearPersistentThread();
+        *hash<auto> reg = remove_thread_data(PersistentThreadHandlersKey){PersistentThreadHandlersKey};
+        remove_thread_data(PersistenceThreadKey, PersistenceHandlerKey);
+        if (reg) {
+            remove_thread_resource(reg.resource);
+            AbstractHttpRequestHandler::persistenceThreadCleanup(reg.handlers);
         }
-        remove_thread_data(PersistenceThreadKey);
-        remove_thread_data(PersistenceHandlerKey);
+    }
+
+    #! records that this handler set persistence on the calling thread, so that the thread's cleanup clears it
+    private:internal registerPersistentThread() {
+        *hash<auto> reg = get_thread_data(PersistentThreadHandlersKey);
+        if (!reg) {
+            PersistentThreadHandlers handlers();
+            code resource = AbstractHttpRequestHandler::makePersistenceThreadCleanup(handlers);
+            set_thread_resource(resource);
+            on_error remove_thread_resource(resource);
+            reg = {"handlers": handlers, "resource": resource};
+            save_thread_data(PersistentThreadHandlersKey, reg);
+        }
+        cast<PersistentThreadHandlers>(reg.handlers).add(self);
+    }
+
+    #! removes the record that this handler set persistence on the calling thread
+    private:internal unregisterPersistentThread() {
+        *hash<auto> reg = get_thread_data(PersistentThreadHandlersKey);
+        if (reg && cast<PersistentThreadHandlers>(reg.handlers).del(self)) {
+            remove_thread_data(PersistentThreadHandlersKey);
+            remove_thread_resource(reg.resource);
+        }
+    }
+
+    #! clears the per-thread persistence of the given handlers on the calling thread
+    /** A handler whose Program or object has been deleted meanwhile is skipped; any other error is raised after all
+        handlers have been processed
+    */
+    private:internal static persistenceThreadCleanup(PersistentThreadHandlers handlers) {
+        # the thread-local data no longer refers to these handlers
+        *hash<auto> reg = get_thread_data(PersistentThreadHandlersKey);
+        if (reg && reg.handlers == handlers) {
+            remove_thread_data(PersistentThreadHandlersKey);
+        }
+        list<AbstractHttpRequestHandler> l = handlers.take();
+        for (int i = 0; i < l.size(); ++i) {
+            try {
+                l[i].clearPersistentThread();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "PROGRAM-ERROR" || ex.err == "OBJECT-ALREADY-DELETED") {
+                    continue;
+                }
+                # the other handlers are cleaned up before the error is raised again
+                PersistentThreadHandlers rest();
+                foreach AbstractHttpRequestHandler handler in (l[(i + 1)..]) {
+                    rest.add(handler);
+                }
+                on_exit AbstractHttpRequestHandler::persistenceThreadCleanup(rest);
+                rethrow;
+            }
+        }
+    }
+
+    #! returns the thread resource that cleans up the given handlers
+    /** The closure is made in a static method, so that it belongs to this module's Program, not to the Program of
+        a handler: the deletion of a handler's Program does not run or refuse the cleanup of the other handlers
+    */
+    private:internal static code makePersistenceThreadCleanup(PersistentThreadHandlers handlers) {
+        # the resource keeps the handlers itself, as the thread-local data of a thread can be cleared before its
+        # resources are released; a closure is used so that each set of handlers has a resource of its own
+        return sub () {
+            AbstractHttpRequestHandler::persistenceThreadCleanup(handlers);
+        };
     }
 
     #! called externally when a persistent connection is closed
+    /** Calls the callback that this handler registered for the calling thread with @ref notifyClosed(), if any
+    */
     nothing persistentClosed() {
+        # only the callback that this handler registered is called, never one that another handler registered on the
+        # same thread (issue #6847)
         *code c;
         {
             _persistent_mutex.lock();
             on_exit _persistent_mutex.unlock();
             c = remove _persistent_notifications{string(gettid())};
         }
-        # Retain the thread-local fallback for compatibility with handler
-        # subclasses compiled against older HttpServerUtil versions.
-        if (!c) {
-            c = get_thread_data(NotificationThreadKey);
-        }
-        remove_thread_data(NotificationThreadKey);
         if (c) {
             try {
                 c();

@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the thread of a dedicated persistent HTTP/1.x connection and the requests that it runs
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#6847: the thread of a dedicated persistent connection runs the requests of the connection one after the
+    other.  When the session's handler keeps the connection dedicated while it ends its persistence, the next request
+    of the connection can be for the handler of another tenant, which then ran on the same thread with the state that
+    the first tenant left there: its user thread context, its persistence and its close notification.  Each tenant is
+    a sandboxed Program with its own handlers; every request of the test runs on the same thread.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerSharedThreadStateTest
+
+#! Upper bound for any wait that a regression turns into a hang
+const HangTimeout = 20s;
+
+class HttpServerSharedThreadStateTest inherits QUnit::Test {
+    public {
+        #! the code of tenant A: a session handler that keeps its connection dedicated, and a second handler
+        const TenantASource = "%requires HttpServerUtil
+%requires Mime
+our *int closed;
+class Session inherits AbstractHttpRequestHandler {
+    bool keepPersistentConnectionDedicated() { return True; }
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string rv = sprintf(\"%d %y\", gettid(), cx.uctx);
+        if (hdr.path =~ /start/) {
+            listener.addUserThreadContext({\"tenant-a\": \"session\"});
+            setPersistent(True);
+        } else if (hdr.path =~ /stop/) {
+            setPersistent(False);
+        }
+        return makeResponse(200, rv, {\"Content-Type\": MimeTypeText});
+    }
+}
+class Other inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string rv = sprintf(\"%d %y\", gettid(), cx.uctx);
+        notifyClosed(sub () { ++closed; });
+        listener.addUserThreadContext({\"tenant-a\": \"other\"});
+        return makeResponse(200, rv, {\"Content-Type\": MimeTypeText});
+    }
+}
+Session sub session() { return new Session(); }
+Other sub other() { return new Other(); }
+int sub get_closed() { return closed ?? 0; }
+";
+
+        #! the code of tenant B: a handler that makes its connection persistent without a close notification
+        const TenantBSource = "%requires HttpServerUtil
+%requires Mime
+class Handler inherits AbstractHttpRequestHandler {
+    public {
+        Queue closed;
+    }
+    constructor(Queue closed) {
+        self.closed = closed;
+    }
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string rv = sprintf(\"%d %y %y\", gettid(), cx.uctx, isPersistent());
+        if (hdr.path =~ /persistent/) {
+            setPersistent(True);
+        } else {
+            listener.addUserThreadContext({\"tenant-b\": \"handler\"});
+        }
+        return makeResponse(200, rv, {\"Content-Type\": MimeTypeText});
+    }
+    nothing persistentClosed() {
+        AbstractHttpRequestHandler::persistentClosed();
+        closed.push(gettid());
+    }
+}
+Handler sub handler(Queue closed) { return new Handler(closed); }
+";
+    }
+
+    constructor() : QUnit::Test("HttpServerSharedThreadState", "1.0") {
+        addTestCase("another tenant's request on a dedicated thread sees none of the session's state",
+            \otherTenantTest());
+        addTestCase("each handler gets back its own thread context on a dedicated thread", \ownContextTest());
+        set_return_value(main());
+    }
+
+    #! returns a new tenant: a sandboxed Program
+    static Program tenant(string name, string src) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(src, name);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+
+    #! returns a started server with the handlers of both tenants and the URL of its listener
+    private string startServer(HttpServer server, Program a, Program b, Queue b_closed) {
+        server.setHandler("a-session", "/a-session", NOTHING, a.callFunction("session"));
+        server.setHandler("a-other", "/a-other", NOTHING, a.callFunction("other"));
+        server.setHandler("b", "/b", NOTHING, b.callFunction("handler", b_closed));
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        assertTrue(server.waitForAsyncIo(HangTimeout), "async I/O is ready");
+        return sprintf("http://127.0.0.1:%d", port);
+    }
+
+    #! sends a request and returns the response body split at the first space: (tid, rest)
+    private list<string> get(HTTPClient client, string path) {
+        hash<auto> resp = client.send(NOTHING, "GET", path);
+        assertEq(200, resp.status_code, path);
+        return (resp.body =~ x/^([0-9]+) (.*)$/) ?? ("", resp.body);
+    }
+
+    otherTenantTest() {
+        Program a = tenant("tenant-a", TenantASource);
+        Program b = tenant("tenant-b", TenantBSource);
+        Queue b_closed();
+        Logger logger("shared-thread-state", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        string url = startServer(server, a, b, b_closed);
+
+        HTTPClient client({"url": url, "timeout": HangTimeout});
+        on_exit client.disconnect();
+        # tenant A's session makes the connection's thread dedicated, then ends its persistence
+        list<string> r1 = get(client, "/a-session/start");
+        list<string> r2 = get(client, "/a-session/stop");
+        # tenant A's second handler leaves a close notification and a user thread context on the thread
+        list<string> r3 = get(client, "/a-other");
+        # tenant B's handler runs on the same thread
+        list<string> r4 = get(client, "/b/persistent");
+        assertEq(r1[0], r2[0], "the session's requests run on the connection's thread");
+        assertEq(r1[0], r3[0], "tenant A's second handler runs on the connection's thread");
+        assertEq(r1[0], r4[0], "tenant B's handler runs on the connection's thread");
+
+        assertEq("null False", r4[1], "tenant B's handler has no user thread context and is not persistent");
+
+        # tenant B's persistent connection closes: B's close notification runs, A's callback is not called
+        client.disconnect();
+        assertEq(int(r1[0]), b_closed.get(HangTimeout), "tenant B's handler is notified on the connection's thread");
+        assertEq(0, a.callFunction("get_closed"), "tenant A's callback is not called for tenant B's handler");
+    }
+
+    ownContextTest() {
+        Program a = tenant("tenant-a", TenantASource);
+        Program b = tenant("tenant-b", TenantBSource);
+        Queue b_closed();
+        Logger logger("shared-thread-state", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        string url = startServer(server, a, b, b_closed);
+
+        HTTPClient client({"url": url, "timeout": HangTimeout});
+        on_exit client.disconnect();
+        list<string> r1 = get(client, "/a-session/start");
+        list<string> r2 = get(client, "/a-session/stop");
+        # tenant B's handler leaves a user thread context of its own
+        list<string> r3 = get(client, "/b");
+        list<string> r4 = get(client, "/b");
+        # tenant A's session gets back its own context
+        list<string> r5 = get(client, "/a-session/check");
+        assertEq(r1[0], r5[0], "every request runs on the connection's thread");
+        assertEq("null", r1[1], "the session starts with no user thread context");
+        assertEq("{tenant-a: \"session\"}", r2[1], "the session sees its own user thread context");
+        assertEq("null False", r3[1], "tenant B's handler sees none of tenant A's user thread context");
+        assertEq("{tenant-b: \"handler\"} False", r4[1], "tenant B's handler sees its own user thread context");
+        assertEq("{tenant-a: \"session\"}", r5[1], "the session sees its own user thread context, none of B's");
+    }
+}
