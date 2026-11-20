@@ -28,7 +28,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_watchdog import STAND_IN_VERSION, stand_in_build  # noqa: E402
+from test_watchdog import STAND_IN_VERSION, end_session, stand_in_build  # noqa: E402
 
 # runs the test file given (the argument ending in .qtest) as a shell script
 QORE_STANDIN = """#!/bin/sh
@@ -89,11 +89,22 @@ class ParallelRunnerTest(unittest.TestCase):
             "QORE_TEST_JOBS": str(jobs),
         }
 
-    def run_runner(self, jobs, extra=None, timeout=60, path=None, preexec_fn=None):
+    def run_runner(self, jobs, extra=None, timeout=60, path=None, preexec_fn=None, end_left=False):
+        """Runs the runner in a session of its own; every process of the session that is left is ended if the run
+        fails or times out, or with end_left once it has ended: a case that kills a shell of the run leaves that
+        shell's watchdog, orphaned, until the test's time limit (#6875)"""
         env = self.runner_env(jobs, path)
         env.update(extra or {})
-        return subprocess.run(["sh", str(ROOT / "run_tests.sh")], cwd=self.root, env=env, capture_output=True,
-                              text=True, timeout=timeout, preexec_fn=preexec_fn)
+        process = subprocess.Popen(["sh", str(ROOT / "run_tests.sh")], cwd=self.root, env=env, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True, start_new_session=True, preexec_fn=preexec_fn)
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except BaseException:
+            end_session(process)
+            raise
+        if end_left:
+            end_session(process)
+        return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
 
     def blocks(self, output):
         """Returns {test name: the lines of its block} and checks that each block is whole"""
@@ -214,7 +225,7 @@ class ParallelRunnerTest(unittest.TestCase):
         # on, instead of waiting for its result
         self.make_test("dies.qtest", "kill -9 $PPID\n")
         self.make_test("ok.qtest", "exit 0\n")
-        result = self.run_runner(2)
+        result = self.run_runner(2, end_left=True)
         self.assertEqual(1, result.returncode, result.stdout + result.stderr)
         self.assertIn("*** the shell that ran ./examples/test/dies.qtest ended without its result ***", result.stdout)
         self.assertIn("Passed 1 out of 2 tests. 1 tests failed.", result.stdout)
@@ -244,7 +255,7 @@ echo "out dies.qtest: killing$shells" > "$SHARED/killed"
 kill -9 $shells
 ''')
         self.make_test("ok.qtest", "exit 0\n")
-        result = self.run_runner(2)
+        result = self.run_runner(2, end_left=True)
         self.assertEqual(1, result.returncode, result.stdout + result.stderr)
         # the test found and killed the shells above it, the one that reports the test included
         self.assertRegex((self.shared / "killed").read_text(), r"^out dies.qtest: killing \d+ \d+")
