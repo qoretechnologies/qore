@@ -868,6 +868,9 @@ const SignalToName = (
     @param signal The signal number to process, see @ref signal_constants for possible values
     @param handler The code to execute when the signal is caught; this should accept an integer argument giving the signal number
 
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set a signal handler,
+    which is process-wide (see @ref sandbox_process_wide_registries)
+
     @note Called by the code of a @ref Qore::Program "Program" whose data is being destroyed (a destructor run when
     the Program is deleted, for example), this function has no effect; see @ref signal_handler_program_lifetime
 
@@ -879,6 +882,10 @@ set_signal_handler(SIGINT, \signal_handler());
     @see @ref signal_handling for more information
 */
 nothing set_signal_handler(softint signal, code handler) [dom=PROCESS;flags=NAMED_ARGS] {
+    // signal handlers are process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("set a signal handler", xsink)) {
+        return QoreValue();
+    }
 #ifdef HAVE_SIGNAL_HANDLING
     // the handlers are indexed by the signal, and the platform must have it (issue #5829)
     if (signal <= 0 || signal >= QORE_SIGNAL_MAX || !QoreSignalManager::isValidSignal((int)signal))
@@ -902,6 +909,9 @@ nothing set_signal_handler(softint signal, code handler) [dom=PROCESS;flags=NAME
 
     @param signal The signal number to process, see @ref signal_constants for possible values
 
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot remove a signal
+    handler, which is process-wide (see @ref sandbox_process_wide_registries)
+
     @par Example:
     @code{.py}
 remove_signal_handler(SIGINT);
@@ -910,6 +920,10 @@ remove_signal_handler(SIGINT);
     @see @ref signal_handling for more information
 */
 nothing remove_signal_handler(softint signal) [dom=PROCESS;flags=NAMED_ARGS] {
+    // signal handlers are process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("remove a signal handler", xsink)) {
+        return QoreValue();
+    }
 #ifdef HAVE_SIGNAL_HANDLING
     if (signal <= 0 || signal >= QORE_SIGNAL_MAX || !QoreSignalManager::isValidSignal((int)signal)) {
         return xsink->raiseException("REMOVE-SIGNAL-HANDLER-ERROR", "" QLLD " is not a valid signal", (int64)signal);
@@ -946,9 +960,16 @@ set_async_io_logger(logger);
 
     @param logger a @ref Qore::LoggerInterfaceBase "LoggerInterfaceBase" object, or @ref nothing "NOTHING" to clear
 
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set or clear the logger,
+    which is process-wide (see @ref sandbox_process_wide_registries)
+
     @since %Qore 3.0
 */
 nothing set_async_io_logger(*LoggerInterfaceBase logger) [dom=PROCESS;flags=NAMED_ARGS] {
+    // the logger is process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("set the async I/O logger", xsink)) {
+        return QoreValue();
+    }
     qore_set_async_io_logger(const_cast<QoreObject*>(logger), xsink);
 }
 
@@ -4357,6 +4378,8 @@ auto get_module_option(string module, string option) [flags=CONSTANT,NAMED_ARGS;
 
 //! set the given module option
 /** @par Example:
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+        which is process-wide (see @ref sandbox_process_wide_registries)
     @code
 set_module_option(mod, opt, val);
     @endcode
@@ -4370,6 +4393,10 @@ set_module_option(mod, opt, val);
     @since %Qore 0.9
  */
 nothing set_module_option(string module, string option, auto value) [dom=PROCESS;flags=NAMED_ARGS] {
+    // module options are process-wide: code that a sandbox governs cannot change them (qore#6744)
+    if (qore_check_process_wide_registration("change the module options", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper mod_str(module, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -4395,11 +4422,19 @@ set_app_registry("custom-expressions", expression_map);
     @param key the registry key
     @param value the value to store; @ref nothing removes the key
 
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+    which is process-wide (see @ref sandbox_process_wide_registries)
+
     @see get_app_registry()
 
     @since %Qore 3.0
  */
 nothing set_app_registry(string key, auto value) [dom=PROCESS;flags=NAMED_ARGS] {
+    // the registry is process-wide, and the callbacks that it can hold run for every Program: refused to sandboxed
+    // code (issue #6743)
+    if (qore_check_process_wide_registration("change the application registry", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper key_str(key, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();

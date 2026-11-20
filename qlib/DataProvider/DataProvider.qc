@@ -976,8 +976,9 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
 
     #! Refuses a change of a process-wide registry or cache of a standard module to sandboxed code
     /** A process-wide registry of a module (of schemes, handlers, lookups, resolvers, serializers, codecs, schemas or
-        types) is used by every caller of the module; sandboxed code
-        (@ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()") therefore cannot register, replace
+        types) is used by every caller of the module; code that may not change a process-wide registry
+        (@ref Qore::SandboxManager::isProcessWideRegistrationAllowed()
+        "SandboxManager::isProcessWideRegistrationAllowed()") therefore cannot register, replace
         or remove its entries, so that one tenant cannot change what the module does for another.  The modules call
         this in every method that changes such a registry; modules register their entries in their initialization,
         which no sandbox governs (see @ref sandbox_module_state).

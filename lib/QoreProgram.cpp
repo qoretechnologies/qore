@@ -7457,15 +7457,13 @@ void qore_run_exit_hook(QoreExitHook& hook) {
 }
 
 int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSink* xsink) {
-    // a hook runs, at the end of the process, with its Program's access and without a sandbox: sandboxed code
-    // cannot register one
-    {
-        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
-        if (policy) {
-            xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered by code that a sandbox "
-                "governs");
-            return -1;
-        }
+    // a hook runs, at the end of the process, with its Program's access and without a sandbox: the exit hooks are
+    // process-wide, so code that is sandboxed or acts for sandboxed code cannot register one, also through a policy
+    // barrier (as qore_check_process_wide_registration() decides, with the exception documented for this API)
+    if (qore_caller_is_sandboxed()) {
+        xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered by code that is sandboxed or acts "
+            "for sandboxed code: the exit hooks are process-wide");
+        return -1;
     }
     QoreProgram* pgm = getProgram();
     assert(pgm);

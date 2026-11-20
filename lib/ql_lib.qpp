@@ -624,8 +624,9 @@ background sub () { while (auto job = jobs.get()) { job(); } }();
 register_exit_hook(sub () { jobs.push(NOTHING); });
     @endcode
 
-    @throw EXIT-HOOK-ERROR a sandbox governs the code that calls this function; or the hooks of the process have
-    started to run; or the hooks of the current Program have started to run, because it is being deleted
+    @throw EXIT-HOOK-ERROR the code that calls this function is sandboxed or acts for sandboxed code, also through a
+    policy barrier or a system-policy capability (the exit hooks are process-wide, see
+    @ref sandbox_process_wide_registries); or the hooks of the process have started to run; or the hooks of the current Program have started to run, because it is being deleted
 
     @see deregister_exit_hook()
 
@@ -2166,6 +2167,8 @@ string get_global_http2_mode() {
     blacklisted, -2 = module already in blacklist
 
     @throw BLACKLIST-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+        which is process-wide (see @ref sandbox_process_wide_registries)
 
     A blacklisted module is refused in every form and however it is loaded: as a binary module, an AOT module, a
     source module or a @ref separated_modules "separated module" (by name, by the path of its file or directory, with
@@ -2177,6 +2180,10 @@ string get_global_http2_mode() {
     @since %Qore 2.1
 */
 int qore_add_module_to_blacklist(string name, string message = "by an API call") [flags=NAMED_ARGS;dom=PROCESS] {
+    // the blacklist is process-wide: code that a sandbox governs cannot change it (qore#6744)
+    if (qore_check_process_wide_registration("change the module blacklist", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper n(name, QCS_DEFAULT, xsink);
     if (*xsink || check_blacklist_name(**n, xsink)) {
         return QoreValue();
@@ -2195,6 +2202,8 @@ int qore_add_module_to_blacklist(string name, string message = "by an API call")
     @throw BLACKLIST-ERROR the module is already loaded or its load is in progress (in any thread), so it cannot be
     blacklisted
     @throw BLACKLIST-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+        which is process-wide (see @ref sandbox_process_wide_registries)
 
     If the given module is already in the blacklist, then no error is raised
 
@@ -2203,6 +2212,10 @@ int qore_add_module_to_blacklist(string name, string message = "by an API call")
     @since %Qore 2.1
 */
 int qore_add_module_to_blacklist_ex(string name, string message = "by an API call") [flags=NAMED_ARGS;dom=PROCESS] {
+    // the blacklist is process-wide: code that a sandbox governs cannot change it (qore#6744)
+    if (qore_check_process_wide_registration("change the module blacklist", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper n(name, QCS_DEFAULT, xsink);
     if (*xsink || check_blacklist_name(**n, xsink)) {
         return QoreValue();

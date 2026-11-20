@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%requires sshutil
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class SshUtilRegistrySandboxTest
+
+#! The process-wide sshutil registry refuses sandboxed code (#6744)
+/** The client identity providers, server host key providers and host key stores of the registry are used for every
+    tenant and can hold credentials: code that a sandbox governs can neither register, replace or remove them, nor get
+    them from the registry.  A provider that the host gives a tenant itself stays usable by the tenant.
+*/
+class SshUtilRegistrySandboxTest inherits QUnit::Test {
+    public {
+        const TenantSource = "%modern
+%requires sshutil
+
+string sub attempt(code c) {
+    try {
+        c();
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+hash<auto> sub run(string client, string server, Qore::SshUtil::AbstractSshClientIdentityProvider own) {
+    return {
+        \"get client identity provider\": attempt(sub () {
+            Qore::SshUtil::SshUtilRegistry::getClientIdentityProvider(client);
+        }),
+        \"get server host key provider\": attempt(sub () {
+            Qore::SshUtil::SshUtilRegistry::getServerHostKeyProvider(server);
+        }),
+        \"get host key store\": attempt(sub () { Qore::SshUtil::SshUtilRegistry::getHostKeyStore(\"x\"); }),
+        \"replace client identity provider\": attempt(sub () {
+            Qore::SshUtil::SshUtilRegistry::registerClientIdentityProvider(client, own, True);
+        }),
+        \"remove client identity provider\": attempt(sub () {
+            Qore::SshUtil::SshUtilRegistry::deregisterClientIdentityProvider(client);
+        }),
+        \"remove server host key provider\": attempt(sub () {
+            Qore::SshUtil::SshUtilRegistry::deregisterServerHostKeyProvider(server);
+        }),
+        \"remove host key store\": attempt(sub () { Qore::SshUtil::SshUtilRegistry::deregisterHostKeyStore(\"x\"); }),
+    };
+}
+
+# calls a capability that trusted code gives the tenant
+auto sub call(code c) {
+    return c();
+}
+
+# a provider that the host gives the tenant itself
+string sub use(Qore::SshUtil::AbstractSshClientIdentityProvider p) {
+    return p.className();
+}
+";
+    }
+
+    constructor() : QUnit::Test("SshUtilRegistrySandbox", "1.0", \ARGV) {
+        addTestCase("the registry refuses sandboxed code", \registryTest());
+        set_return_value(main());
+    }
+
+    registryTest() {
+        string suffix = get_random_string();
+        string client_name = "client-" + suffix;
+        string server_name = "server-" + suffix;
+        SshUtil::FilesystemSshClientIdentityProvider client_provider((), True);
+        SshUtil::FilesystemSshServerHostKeyProvider server_provider(("/tmp/key",));
+        SshUtil::SshUtilRegistry::registerClientIdentityProvider(client_name, client_provider);
+        SshUtil::SshUtilRegistry::registerServerHostKeyProvider(server_name, server_provider);
+        on_exit {
+            SshUtil::SshUtilRegistry::deregisterClientIdentityProvider(client_name);
+            SshUtil::SshUtilRegistry::deregisterServerHostKeyProvider(server_name);
+        }
+
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        p.setSandboxManager(new SandboxManager());
+
+        SshUtil::FilesystemSshClientIdentityProvider tenant_provider((), True);
+        hash<auto> rv = p.callFunction("run", client_name, server_name, tenant_provider);
+        foreach hash<auto> i in (rv.pairIterator()) {
+            assertEq("SANDBOX-REGISTRATION-ERROR", i.value, i.key);
+        }
+        # the host's providers are unchanged
+        assertEq(client_provider, SshUtil::SshUtilRegistry::getClientIdentityProvider(client_name));
+        assertEq(server_provider, SshUtil::SshUtilRegistry::getServerHostKeyProvider(server_name));
+        # nor through a capability of trusted code under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(auto sub () {
+            return SshUtil::SshUtilRegistry::getClientIdentityProvider(client_name);
+        });
+        assertThrows("SANDBOX-REGISTRATION-ERROR", \p.callFunction(), ("call", cap));
+        # a provider that the host gives the tenant is usable by it
+        assertEq("FilesystemSshClientIdentityProvider", p.callFunction("use", client_provider));
+    }
+}

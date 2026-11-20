@@ -930,7 +930,8 @@ public class LlmProviderRegistry {
         };
     }
 
-    private {
+    private:internal {
+        # private:internal: the registry is process-wide, so that only this class changes it (qore#6744)
         #! Provider factories registered by mode string
         static hash<string, AbstractLlmProviderFactory> factory_cache = {};
         #! Tracks the module that registered each factory (by class name)
@@ -950,8 +951,12 @@ public class LlmProviderRegistry {
         @param factory the new provider factory
 
         @throw LLM-CONFIG-ERROR a factory for the same mode is already registered
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerFactory(AbstractLlmProviderFactory factory) [dom=PROCESS_CONTROL] {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the LLM provider factory registry");
         factory_cache_lock.lock();
         on_exit factory_cache_lock.unlock();
 
@@ -973,8 +978,13 @@ public class LlmProviderRegistry {
         call when no factory is registered for the given mode (no-op).
 
         @param mode the mode string previously registered via @ref registerFactory()
+
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static deregisterFactory(string mode) [dom=PROCESS_CONTROL] {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the LLM provider factory registry");
         factory_cache_lock.lock();
         on_exit factory_cache_lock.unlock();
 

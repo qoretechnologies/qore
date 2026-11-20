@@ -38,13 +38,18 @@ public class AwsTextractDataProvider inherits AwsTextractDataProviderCommon {
         });
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = {
             "detect-document-text":
                 Class::forName("AwsTextractDataProvider::AwsTextractDetectDocumentTextDataProvider"),
             "analyze-document":
                 Class::forName("AwsTextractDataProvider::AwsTextractAnalyzeDocumentDataProvider"),
         };
+    }
+
+    private {
     }
 
     constructor(AwsTextractRestClient::AwsTextractRestClientIo rest)

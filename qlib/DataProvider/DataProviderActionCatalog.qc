@@ -2205,15 +2205,17 @@ int id = DataProviderActionCatalog::addCatalogChangeListener(rearm);
 on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         @endcode
 
-        @throw DATA-PROVIDER-LISTENER-ERROR a sandbox governs the caller
+        @throw DATA-PROVIDER-LISTENER-ERROR the caller is sandboxed or acts for sandboxed code (see
+        @ref sandbox_process_wide_registries)
 
         @since %DataProvider 3.11
     */
     static int addCatalogChangeListener(DataProviderCatalogChangeListener listener) {
-        # a listener runs on the threads that change the catalog, of other tenants and of trusted code
-        if (DataProviderActionCatalog::isGoverned()) {
-            throw "DATA-PROVIDER-LISTENER-ERROR", "code that a sandbox governs cannot add a catalog change listener: it "
-                "would run on the threads of other code that changes the catalog";
+        # a listener runs on the threads that change the catalog, of other tenants and of trusted code; decided as
+        # for every process-wide registry (see Qore::SandboxManager::checkProcessWideRegistration())
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            throw "DATA-PROVIDER-LISTENER-ERROR", "code that is sandboxed or acts for sandboxed code cannot add a "
+                "catalog change listener: it would run on the threads of other code that changes the catalog";
         }
         # taken before the listener lock, which is never held while the catalog lock is taken
         int since = getCatalogRevision();

@@ -1547,6 +1547,15 @@
     that it performs for a restricted caller; see @ref sandbox_caller_domains
     (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>).
 
+    @par Process-Wide Registries Refuse Sandboxed Code
+    Process-wide callback, hook and handler registries and the async I/O controller settings refuse changes by sandboxed
+    code (\c SANDBOX-REGISTRATION-ERROR); modules use @ref Qore::SandboxManager::checkProcessWideRegistration(); see
+    @ref sandbox_process_wide_registries (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/6836">issue 6836</a>).  The factory, child data provider
+    and SSH provider registries of the standard modules and the module blacklist and options refuse changes by
+    sandboxed code as well, and the SSH registry does not give it its providers
+    (<a href="https://github.com/qoretechnologies/qore/issues/6744">issue 6744</a>).
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
