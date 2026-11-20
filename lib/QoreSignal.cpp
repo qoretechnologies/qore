@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/SystemEnvironment.h>
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreForkHandlers.h"
@@ -517,6 +518,11 @@ void QoreSignalManager::signal_handler_thread() {
     printd(5, "QoreSignalManager::signal_handler_thread() pid: %d, signal handler thread started (TID %d) "
         "&ptid: %p\n", getpid(), tid, &ptid);
 
+    // Only the runner's direct child reports a termination. Helpers started by the test inherit the
+    // environment and may intentionally terminate without adding anything to their captured stderr.
+    const QoreEnvironmentValue runner_pid("QORE_TEST_SIGNAL_PARENT");
+    const bool trace_termination = runner_pid && runner_pid.str() == std::to_string(getppid());
+
     sigset_t c_mask;
     // the signals to wait for; see getWaitMask()
     sigset_t wait_mask;
@@ -560,7 +566,12 @@ void QoreSignalManager::signal_handler_thread() {
 
 #ifdef HAVE_SIGTIMEDWAIT
             const struct timespec timeout = {0, 500000000};
+#ifdef __linux__
+            siginfo_t info;
+            sig = sigtimedwait(&wait_mask, trace_termination ? &info : nullptr, &timeout);
+#else
             sig = sigtimedwait(&wait_mask, nullptr, &timeout);
+#endif
             int wait_error = sig < 0 ? errno : 0;
 #else
             int wait_error = sigwait(&wait_mask, &sig);
@@ -621,6 +632,22 @@ void QoreSignalManager::signal_handler_thread() {
                     // ends the process, with or without a handler that was removed, unless the process was started
                     // with the signal ignored, as with nohup
                     if (!(sig == SIGTERM ? sigterm_ignored_at_start : sighup_ignored_at_start)) {
+                        if (trace_termination) {
+                            const char* name = sig == SIGTERM ? "SIGTERM" : "SIGHUP";
+#if defined(__linux__) && defined(HAVE_SIGTIMEDWAIT)
+                            // Only user-generated signals identify a sending process.
+                            if ((info.si_code == SI_USER || info.si_code == SI_QUEUE || info.si_code == SI_TKILL)
+                                    && info.si_pid > 0) {
+                                fprintf(stderr, "TEST SIGNAL: terminated by signal (%s): pid %ld received %s "
+                                    "from pid %ld uid %lu; exiting %d\n", info.si_pid == getpid() ? "self" : "external",
+                                    (long)getpid(), name, (long)info.si_pid, (unsigned long)info.si_uid, 128 + sig);
+                            } else
+#endif
+                            {
+                                fprintf(stderr, "TEST SIGNAL: terminated by signal: pid %ld received %s; exiting %d\n",
+                                    (long)getpid(), name, 128 + sig);
+                            }
+                        }
                         qore_exit_process(128 + sig);
                     }
                 } else if (sigismember(&default_wait_mask, sig) != 1) {
