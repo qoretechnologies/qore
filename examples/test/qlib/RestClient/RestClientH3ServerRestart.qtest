@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - QUIC connections over UDP sockets, closed without notice and made again on the same port
+
+/*  RestClientH3ServerRestart.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#6930: a RestClient on http_version "auto" that had upgraded to HTTP/3 kept sending on its QUIC connection
+    after the server restarted, as a server process that is killed sends no CONNECTION_CLOSE and a new one knows
+    nothing of the connection, and the request failed with HTTP3-IDLE-CLOSE when the idle timer expired (75 s).  The
+    connection is now closed when the server sends nothing, not even an acknowledgement, within the connect timeout of
+    the request (HTTP3-PEER-UNRESPONSIVE); an idempotent request is repeated once on a new connection, while another
+    one, which the old server may have processed before it went away, raises the error, and the next request takes a
+    new connection.  The server is stopped as a killed one is with dbg_quic_silent_server_close() (debug
+    builds): it sends no GOAWAY and no CONNECTION_CLOSE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+%requires json
+
+%exec-class RestClientH3ServerRestartTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The connect timeout of the client, which bounds the wait for a server that does not answer a request
+const ConnectTimeout = 1s;
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! Answers each request with its method and body, and counts the requests
+class CountingHandler inherits AbstractHttpRequestHandler {
+    public {
+        Counter requests();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        requests.inc();
+        return makeResponse(200, make_json({"method": hdr.method, "body": body ? string(body) : NOTHING}),
+            {"Content-Type": "application/json"});
+    }
+}
+
+class RestClientH3ServerRestartTest inherits QUnit::Test {
+    constructor() : QUnit::Test("RestClientH3ServerRestartTest", "1.0") {
+        addTestCase("a GET is repeated on a new connection after the server restarted", \restartTest(), "GET");
+        addTestCase("a POST raises the error after the server restarted, and the next request takes a new connection",
+            \restartTest(), "POST");
+        set_return_value(main());
+    }
+
+    #! starts an HTTPS server with HTTP/3 on the given port (0: assigned by the OS); returns the server and its port
+    private list<auto> startServer(int port, CountingHandler handler) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("count", handler);
+        server.waitForAsyncIo();
+        int p = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": port,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+        return (server, p);
+    }
+
+    restartTest(string method) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("a server is stopped as a killed one is only with dbg_quic_silent_server_close()");
+        }
+        CountingHandler first_handler();
+        HttpServer first;
+        int port;
+        (first, port) = startServer(0, first_handler);
+        on_exit if (first) {
+            first.stop();
+        }
+        RestClient rc({
+            "url": "https://127.0.0.1:" + port,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+            "connect_timeout": ConnectTimeout,
+            "serialization": "json",
+        });
+        # the first response offers HTTP/3 (Alt-Svc), which the next request takes
+        for (int i = 0; i < 2; ++i) {
+            assertEq("GET", rc.get("/").body.method);
+        }
+        assertTrue(rc.isHttp3Active(), "the client uses HTTP/3");
+
+        # the server stops as a killed server process does, and a new one serves the port
+        call_function("dbg_quic_silent_server_close", True);
+        {
+            on_exit call_function("dbg_quic_silent_server_close", False);
+            first.stop();
+            delete first;
+        }
+        CountingHandler handler();
+        HttpServer second = startServer(port, handler)[0];
+        on_exit second.stop();
+
+        # the request is sent on the old connection, which the new server does not know: once the server has sent
+        # nothing for the connect timeout, the connection is closed; an idempotent request is repeated on a new one
+        if (method == "GET") {
+            assertEq("GET", rc.get("/").body.method, "the new server answered the request");
+            assertEq(1, handler.requests.getCount(), "the new server received the request once");
+            return;
+        }
+        # a request that is not idempotent is not repeated: the old server may have processed it
+        assertThrows("HTTP3-PEER-UNRESPONSIVE", \rc.post(), ("/", "payload"));
+        assertEq(0, handler.requests.getCount(), "the request was not repeated");
+        # the next request takes a new connection
+        hash<auto> rv = rc.post("/", "payload").body;
+        assertEq("POST", rv.method, "the new server answered the next request");
+        assertEq("payload", parse_json(rv.body), "the request body was sent");
+        assertEq(1, handler.requests.getCount(), "the new server received the next request once");
+    }
+}

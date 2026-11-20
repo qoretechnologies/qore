@@ -660,6 +660,11 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
     // Store the session on qore_socket_private for access via Socket QPP methods
     sock->priv->socket->priv->addQuicSession(quic_session);
 
+    // a request that the peer does not answer at all ends at the connect timeout, not at the idle timeout
+    // (qore#6930)
+    quic_session->setPeerResponseTimeout(handshake_timeout_ns_ > 0 ? (uint64_t)handshake_timeout_ns_
+        : QuicSession::QUIC_DEFAULT_PEER_RESPONSE_TIMEOUT_NS);
+
     // Record the absolute handshake deadline (if a connect_timeout was supplied).
     // Without this, a stalled QUIC handshake over UDP has no transport-level
     // deadline (unlike TCP where the OS eventually returns ETIMEDOUT) — only

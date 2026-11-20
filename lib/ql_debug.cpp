@@ -18276,6 +18276,15 @@ static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeCon
     return *xsink ? QoreValue() : QoreValue(total);
 }
 
+//! Debug-only: server QUIC connections closed from now on send nothing to their peer (qore#6930)
+/** See qore_quic_test_silent_server_close()
+*/
+static QoreValue f_dbg_quic_silent_server_close(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_quic_test_silent_server_close(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
 //! Debug-only: holds back the server's HTTP/3 SETTINGS from the client sessions, or releases them
 /** See qore_quic_test_hold_client_settings()
 */
@@ -27890,6 +27899,9 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
     qns.addBuiltinVariant("dbg_quic_count_datagrams", f_dbg_quic_count_datagrams,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_silent_server_close", f_dbg_quic_silent_server_close,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "silent");
     qns.addBuiltinVariant("dbg_quic_hold_client_settings", f_dbg_quic_hold_client_settings,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");

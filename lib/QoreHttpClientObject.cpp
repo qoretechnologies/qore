@@ -5488,6 +5488,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     }
     // a streamed request body cannot be sent again for a redirect that repeats the request
     bool stream_body = send_callback || is;
+    // set once a request that an HTTP/3 connection did not deliver has been repeated on a new connection (qore#6930)
+    bool undelivered_h3_retried = false;
     bool has_body = stream_body || body_len;
     // the request target of a redirect; already percent-encoded
     std::string redirect_target;
@@ -6784,6 +6786,26 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // at this boundary so the documented error reaches the caller
             q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
             if (!raw_resp || *xsink) {
+                // A request on an HTTP/3 connection whose peer sent nothing before the connection was closed
+                // (HTTP3-PEER-UNRESPONSIVE: within the connect timeout of the request; or HTTP3-IDLE-CLOSE: by the
+                // idle timer) went to a server whose connection state is gone (ex: it restarted).  The server may
+                // still have processed it before it went away, so only an idempotent request is repeated, once, on
+                // a new connection (RFC 9110 section 9.2.2): the next pass takes the Alt-Svc upgrade again, and
+                // falls back to HTTP/1.1 or HTTP/2 if HTTP/3 fails there; another request raises the error, and the
+                // next request takes a new connection (qore#6930); not for a cancelled request, which is reported
+                if (http3_active && !attempted_h3_upgrade && !undelivered_h3_retried && *xsink
+                        && HttpClientConnectionManagerBase::isIdempotentMethod(meth)
+                        && !HttpClientConnectionManagerBase::isCancelPending()) {
+                    QoreStringValueHelper err(xsink->getExceptionErr());
+                    if (!strcmp(err->c_str(), "HTTP3-PEER-UNRESPONSIVE")
+                            || !strcmp(err->c_str(), "HTTP3-IDLE-CLOSE")) {
+                        undelivered_h3_retried = true;
+                        http3_active = false;
+                        dropConnMgr(true);
+                        xsink->clear();
+                        continue;
+                    }
+                }
                 // If this was an Alt-Svc-driven H3 upgrade attempt,
                 // mark the Alt-Svc entry with a backoff and retry
                 // over H1/H2.

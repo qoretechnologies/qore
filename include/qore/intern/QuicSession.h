@@ -854,7 +854,29 @@ public:
         Idle       = 1,  //!< local NGTCP2_ERR_IDLE_CLOSE — our own idle timer expired
         LocalClose = 2,  //!< we sent CONNECTION_CLOSE (in_closing_period)
         PeerClose  = 3,  //!< peer sent CONNECTION_CLOSE (in_draining_period)
+        //! a client connection on which the peer sent nothing for its peer response timeout after a request was
+        //! submitted (see setPeerResponseTimeout()): the peer's connection state is gone (ex: it restarted)
+        Unresponsive = 4,
     };
+
+    //! The peer response timeout of a client connection when its client gives no connect timeout
+    static constexpr uint64_t QUIC_DEFAULT_PEER_RESPONSE_TIMEOUT_NS = 30ULL * NGTCP2_SECONDS;
+
+    //! Sets the peer response timeout of a client connection (qore#6930)
+    /** A request submitted on the connection arms a deadline this long after its submission, which any packet
+        received from the peer disarms: a live peer acknowledges the request within its maximum ACK delay.  If the
+        deadline passes, the peer has not received the request (QUIC acknowledges every packet it receives), so its
+        connection state is gone (ex: the server restarted, which a stateless reset reports only if the server can
+        still compute one), and the connection is closed with @ref CloseReason::Unresponsive, instead of waiting for
+        the idle timeout.  0 disables it; it is at most the connection's idle timeout.
+    */
+    DLLLOCAL void setPeerResponseTimeout(uint64_t timeout_ns);
+
+private:
+    //! arms the deadline for a packet from the peer after a request, if it is not armed (client connections only)
+    DLLLOCAL void armPeerResponseDeadlineLocked();
+
+public:
 
     //! Returns the close cause; @ref CloseReason::Open if still open.
     DLLLOCAL CloseReason getCloseReason() const;
@@ -1880,6 +1902,12 @@ private:
     //! Number of lines written to @ref trace_ring_ so far
     uint64_t trace_count_ = 0;
     ngtcp2_duration local_idle_timeout_ns_ = QUIC_IDLE_TIMEOUT_NS; //!< advertised idle timeout for this session
+    //! the peer response timeout (see setPeerResponseTimeout()); mtx_ must be held to access it
+    uint64_t peer_response_timeout_ns_ = 0;
+    //! the deadline armed by a request for a packet from the peer, 0 if none; mtx_ must be held to access it
+    ngtcp2_tstamp peer_response_deadline_ = 0;
+    //! set when the connection was closed because the peer did not respond (see setPeerResponseTimeout())
+    std::atomic<bool> peer_unresponsive_{false};
     int64_t max_request_body_size_ = 0;             //!< maximum request body size (0 = unlimited); consistent with Http2Session
     //! Maximum size of a client response body received into memory; <= 0 = no limit
     // atomic: set from the thread that polls the session while it can be read by callbacks
@@ -2311,6 +2339,10 @@ DLLLOCAL void qore_quic_test_packets_received(int64_t& client, int64_t& server);
     I/O, so a test controls when they arrive.
 */
 DLLLOCAL void qore_quic_test_hold_client_settings(bool hold);
+
+//! Debug-only: server connections closed from now on send nothing to their peer: no HTTP/3 GOAWAY and no
+//! CONNECTION_CLOSE, as for a server process that is killed (qore#6930)
+DLLLOCAL void qore_quic_test_silent_server_close(bool silent);
 
 //! Debug-only: the number of client sessions whose SETTINGS are held (see qore_quic_test_hold_client_settings())
 DLLLOCAL int64_t qore_quic_test_held_client_settings();
