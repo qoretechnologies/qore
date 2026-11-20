@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-decimal-exact-write.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%requires dataframe
+
+%exec-class DataFrameDecimalExactWriteTest
+
+#! A number written to an Arrow or Parquet decimal128 value, or used as the value of a Parquet filter of a decimal
+#! column, is its exact decimal value when it has one that fits the column, although the display rounding of numbers
+#! removes a run of more than 16 0 or 9 digits in its fraction (ex: 1.00000000000000000001n prints as 1; qore#6837)
+class DataFrameDecimalExactWriteTest inherits QUnit::Test {
+    private {
+        string tmp_dir;
+    }
+
+    constructor() : Test("DataFrameDecimalExactWriteTest", "1.0", \ARGV) {
+        addTestCase("Arrow export of nested decimal values", \nestedTest());
+        addTestCase("Parquet filter value", \filterTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmp_dir = make_tmp_dir("dataframe-decimal-exact-write");
+    }
+
+    globalTearDown() {
+        if (tmp_dir) {
+            remove_tree(tmp_dir);
+        }
+    }
+
+    #! the decimal128 children of a struct and a list column are written from the numbers of the values
+    nestedTest() {
+        list<number> values = (1.00000000000000000001n, -12.3400000000000000000000000001n, 0.99999999999999999999n,
+            number("5.000000000000000000000000000007" + strmul("0", 30)));
+        list<string> expected = ("1.00000000000000000001", "-12.3400000000000000000000000001",
+            "0.99999999999999999999", "5.000000000000000000000000000007");
+        hash<auto> child = {"kind": "decimal128", "precision": 38, "scale": 30};
+        list<hash<auto>> structs = ();
+        foreach number n in (values) {
+            structs += {"a": n};
+        }
+        ColumnarResult cr = ColumnarResult::fromColumnHash({"s": structs},
+            {"s": {"schema": {"kind": "struct", "children": (child + {"name": "a"},)}}});
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromArrowIpc(
+            DataFrame::DataFrame::fromColumnarResult(cr).toArrowIpc());
+        assertEq(expected, map $1.a.toStringRoundTrip(), df.getColumn("s"), "struct");
+        cr = ColumnarResult::fromColumnHash({"l": (values,)},
+            {"l": {"schema": {"kind": "list", "children": (child + {"name": "item"},)}}});
+        df = DataFrame::DataFrame::fromArrowIpc(DataFrame::DataFrame::fromColumnarResult(cr).toArrowIpc());
+        assertEq(expected, map $1.toStringRoundTrip(), df.getColumn("l")[0], "list");
+
+        # a number computed in binary is written as its display string; an exact value that does not fit the scale
+        # too
+        child.scale = 10;
+        cr = ColumnarResult::fromColumnHash({"l": ((0.1n + 0.2n, 1.00000000000000000001n, 1n / 4n),)},
+            {"l": {"schema": {"kind": "list", "children": (child + {"name": "item"},)}}});
+        df = DataFrame::DataFrame::fromArrowIpc(DataFrame::DataFrame::fromColumnarResult(cr).toArrowIpc());
+        assertEq(("0.3", "1", "0.25"), map $1.toStringRoundTrip(), df.getColumn("l")[0], "display string");
+    }
+
+    #! the statistics of the row groups of a decimal column are compared with the exact value of a filter number
+    filterTest() {
+        string path = join_paths(tmp_dir, "exact.parquet");
+        DataFrame::DataFrame src = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"d": (1n, 1.00000000000000000001n, 2n)},
+            {"d": {"schema": {"kind": "decimal128", "precision": 38, "scale": 20}}}));
+        src.writeParquet(path, <ParquetWriteOptions>{"row_group_size": 1});
+        foreach bool stats in ((True, False)) {
+            DataFrame::DataFrame df = DataFrame::DataFrame::readParquet(path, <ParquetReadOptions>{"filters": (
+                {"column": "d", "op": "==", "value": 1.00000000000000000001n},
+            ), "use_statistics": stats});
+            assertEq(("1.00000000000000000001",), map $1.toStringRoundTrip(), df.getColumn("d"),
+                sprintf("statistics: %y", stats));
+        }
+    }
+}

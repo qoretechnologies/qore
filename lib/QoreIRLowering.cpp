@@ -4961,6 +4961,16 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
 
     // Get the block's local variables for cleanup.
     const LVList* lvars = root_top_level ? nullptr : block->getLVList();
+    // The locals of an inner block are destroyed while its enclosing statement is active. The caller's
+    // statement is active at the end of the function body, including when the only exit is an exception.
+    const QoreProgramLocation* enclosing_stmt = root_statement_block ? nullptr : builder.getStatementLocation();
+    if (lvars && !handler_body && (root_statement_block || (enclosing_stmt && enclosing_stmt->start_line > 0))) {
+        for (LocalVar* var : lvars->lv) {
+            if (qore_ir_type_may_hold_object(var->getTypeInfo())) {
+                builder.getFunction()->local_unwind_locations.emplace(var, enclosing_stmt);
+            }
+        }
+    }
 
     // Push lvars to cleanup_stack BEFORE scope entry.
     // This ensures correct reverse ordering on cleanup: scope exit fires before

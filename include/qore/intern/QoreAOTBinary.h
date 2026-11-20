@@ -637,12 +637,27 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        calls of a bound private:internal method and the locals that it can write (qore#6653, qore#6654); native
 //!        code calls the debugger-aware binder for the direct calls and typed native entries of a frame that a
 //!        debugger attached to mid-frame (qore#6601)
+//! v51 (batch AO; the reader refuses v50 and older images, also those that a qcc executable embeds):
+//!      - each serialized IR function appends a u16 count after its catch tables, followed by (u32 local slot, enclosing
+//!        statement location) pairs in strictly increasing slot order; a None location selects the saved caller
+//!        statement (qore#6672)
+//!      - DOT_EVAL_TARGET (kind 35, inline and slot) and DotEvalMethodDirect / InvokeDotEvalMethodDirect (debug and lazy
+//!        IR groups 14/15) encode the parsed instance or static method family and its declaring class independently of
+//!        overload selection (qore#6805)
+//!      - the flags byte of a body-local record has bit 0x04 (QORE_AOT_BODY_LOCAL_NATIVE_ONLY) for an unshadowed root
+//!        declaration that the standard native entry owns; the loader omits the runtime stack value only with a
+//!        matching native-written slot; widths, ordinals and the IR are unchanged (qore#5946)
+//!      - no format change, but the code that a v50 compiler wrote differs (an image must be rebuilt): string literals
+//!        that an earlier compiler folded with the encoding of the source tagged as the default encoding are
+//!        materialized as UTF-8 CONST_STRING values, as the source is decoded as UTF-8 (qore#6816, qore#6815)
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
 constexpr uint16_t QORE_AOT_BATCH_AM_VERSION = 49;
 //! The shared format version for the changes in batch AN (see v50 above).
 constexpr uint16_t QORE_AOT_BATCH_AN_VERSION = 50;
+//! The shared format version for the changes in batch AO (see v51 above).
+constexpr uint16_t QORE_AOT_BATCH_AO_VERSION = 51;
 //! First format version whose static method call references record the class that declares their method (see v49
 //! above, qore#6679): the method name of a STATIC_METHOD_REF or EN_STATIC_METH_REF expression, and the name that
 //! native code passes to qore_rt_create_static_method_call_ref_aot(), is followed by a newline and the class
@@ -651,10 +666,10 @@ constexpr uint16_t QORE_AOT_BATCH_AN_VERSION = 50;
 constexpr uint16_t QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION = 49;
 static_assert(QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION == QORE_AOT_BATCH_AM_VERSION,
     "the format changes of batch AM share one format version (v49)");
-//! Old compiled artifacts must be rebuilt (see v50 above): the reader refuses older images, the program image of a qcc
-//! executable included (qore_aot_run_v3() reads it before anything else); the reader of a v50 image always has the temp
-//! scopes of its IR (qore#6742)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AN_VERSION;
+//! Old compiled artifacts must be rebuilt (see v51 above): the reader refuses older images, the program image of a qcc
+//! executable included (qore_aot_run_v3() reads it before anything else); the reader of a v51 image always has the temp
+//! scopes of its IR (qore#6742) and the local unwind locations of its IR functions (qore#6672)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AO_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -790,7 +805,11 @@ static_assert(QORE_AOT_INLINE_CONSTRUCTOR_BINDING_VERSION == QORE_AOT_BATCH_AM_V
 constexpr uint16_t QORE_AOT_TEMP_SCOPES_VERSION = 50;
 static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
     "the format changes of batch AN share one format version (v50)");
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AN_VERSION;
+//! Serialized IR functions end with a map of local slots to their enclosing statement at destruction (#6672).
+constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
+static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
+    "the format changes of batch AO share one format version (v51)");
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AO_VERSION;
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
@@ -2080,9 +2099,11 @@ public:
     }
 
     //! Returns true if \a n bytes at \a ptr are in the section that is read, if any (see QoreAOTSectionBounds)
-    /** If they are not, the read pointer is set to the end of the section and the read is marked as overrun
+    /** If they are not, the read pointer is set to the end of the section and the read is marked as overrun.
+        Keep the inline readers local to the binary that establishes the section bounds: libqore and its tools
+        each have their own qore_aot_read_bounds.
     */
-    static bool readFits(const uint8_t*& ptr, size_t n) {
+    DLLLOCAL static bool readFits(const uint8_t*& ptr, size_t n) {
         const uint8_t* end = qore_aot_read_bounds.end;
         // a read of another buffer while a section is bounded is a reader that sets no bounds of its own
         assert(!end || ptr >= qore_aot_read_bounds.start);
@@ -2095,7 +2116,7 @@ public:
     }
 
     //! Read an unsigned 8-bit integer from a data pointer
-    static uint8_t readU8(const uint8_t*& ptr) {
+    DLLLOCAL static uint8_t readU8(const uint8_t*& ptr) {
         if (!readFits(ptr, 1)) {
             return 0;
         }
@@ -2103,7 +2124,7 @@ public:
     }
 
     //! Read an unsigned 16-bit integer (little-endian) from a data pointer
-    static uint16_t readU16(const uint8_t*& ptr) {
+    DLLLOCAL static uint16_t readU16(const uint8_t*& ptr) {
         if (!readFits(ptr, 2)) {
             return 0;
         }
@@ -2114,7 +2135,7 @@ public:
     }
 
     //! Read an unsigned 32-bit integer (little-endian) from a data pointer
-    static uint32_t readU32(const uint8_t*& ptr) {
+    DLLLOCAL static uint32_t readU32(const uint8_t*& ptr) {
         if (!readFits(ptr, 4)) {
             return 0;
         }
@@ -2127,7 +2148,7 @@ public:
     }
 
     //! Read an unsigned 64-bit integer (little-endian) from a data pointer
-    static uint64_t readU64(const uint8_t*& ptr) {
+    DLLLOCAL static uint64_t readU64(const uint8_t*& ptr) {
         if (!readFits(ptr, 8)) {
             return 0;
         }
@@ -2140,7 +2161,7 @@ public:
     }
 
     //! Read a signed 64-bit integer (little-endian) from a data pointer
-    static int64_t readI64(const uint8_t*& ptr) {
+    DLLLOCAL static int64_t readI64(const uint8_t*& ptr) {
         if (!readFits(ptr, 8)) {
             return 0;
         }
@@ -2155,7 +2176,7 @@ public:
     }
 
     //! Read a 64-bit float (little-endian, IEEE 754) from a data pointer
-    static double readF64(const uint8_t*& ptr) {
+    DLLLOCAL static double readF64(const uint8_t*& ptr) {
         if (!readFits(ptr, 8)) {
             return 0;
         }
@@ -2170,7 +2191,7 @@ public:
     }
 
     //! Read a string reference (offset into string pool) from a data pointer
-    const char* readStringRef(const uint8_t*& ptr) const {
+    DLLLOCAL const char* readStringRef(const uint8_t*& ptr) const {
         uint32_t offset = readU32(ptr);
         return getString(offset);
     }

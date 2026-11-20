@@ -318,7 +318,11 @@ int qore_value_to_bson_append(bson_t* doc, const char* key, const QoreValue& v_i
         case NT_NUMBER: {
             const QoreNumberNode* num = value.get<const QoreNumberNode>();
             QoreString str;
-            num->toString(str);
+            // the exact decimal value of the number if it has one of at most the 34 digits of a decimal128 value,
+            // otherwise its display string (issue #6837)
+            if (num->getDecimalString(str, 34, -1, xsink)) {
+                return -1;
+            }
             bson_decimal128_t dec;
             if (!bson_decimal128_from_string(str.c_str(), &dec)) {
                 xsink->raiseException("MONGODB-BSON-ERROR", "failed to convert number to decimal128");

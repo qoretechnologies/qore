@@ -16188,7 +16188,14 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         func.local_var_slots.begin(), func.local_var_slots.end());
     std::sort(sorted_slots.begin(), sorted_slots.end(),
         [](const auto& a, const auto& b) { return a.second < b.second; });
+    std::vector<std::pair<uint32_t, const QoreProgramLocation*>> unwind_locations;
     for (auto& [lv, slot_id] : sorted_slots) {
+        if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
+            auto location = func.local_unwind_locations.find(lv);
+            if (location != func.local_unwind_locations.end()) {
+                unwind_locations.emplace_back(slot_id, location->second);
+            }
+        }
         writer.writeStringRef(lv->getName());
         std::string type_path = getLocalTypePathString(lv);
         writer.writeStringRef(type_path.c_str());
@@ -16350,6 +16357,16 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_CATCH_TABLES_VERSION) {
         if (!qore_aot_write_ir_catch_tables(writer, func)) {
             return false;
+        }
+    }
+
+    if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
+        // Entries follow the local slot table's order and share the statement-location table of the blocks.
+        // Their count cannot exceed the slot count checked above.
+        writer.writeU16(static_cast<uint16_t>(unwind_locations.size()));
+        for (const auto& [slot, loc] : unwind_locations) {
+            writer.writeU32(slot);
+            qore_aot_write_stmt_loc(writer, stmt_locs, loc);
         }
     }
 
