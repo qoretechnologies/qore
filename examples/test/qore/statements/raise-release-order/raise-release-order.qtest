@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exception paths of foreach and streaming operators
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class RaiseReleaseOrderTest
+
+#! Values are released in the AST interpreter's order when a statement or an operator raises (qore#5649, #5670, #5714)
+/** The cases: the list of a foreach statement whose loop variable assignment or body raises, which is released before
+    the handlers of the enclosing block run (qore#5649); the elements of a streaming operator whose predicate or
+    consumer raises (takewhile, count, take with a consumer, select, map, any, first), made by an iterator or held in a
+    list, which are released while the statement unwinds, before the handler runs (qore#5670); and the temporaries of a
+    predicate or a map-stage call that raises, of a temporary whose destructor raises, and of a chain receiver in an
+    operand, which are released at the AST interpreter's point (qore#5714).  RaiseReleaseOrder.q gives the output of
+    the AST interpreter in every execution mode, with JIT with synchronous compiles, on the IR tier and compiled with
+    qcc.
+*/
+class RaiseReleaseOrderTest inherits QUnit::Test {
+    public {
+        #! the output of RaiseReleaseOrder.q with the AST interpreter
+        const Expected = "foreach_type_error: +l, body l, ~l, on_exit, caught RUNTIME-TYPE-ERROR, after
+foreach_local_list: +l, body l, on_exit, ~l, caught RUNTIME-TYPE-ERROR, after
+foreach_body_raises: +l, body l, ~l, on_exit, caught BODY, after
+foreach_iterator_raises: +l, body l, ~l, on_exit, caught RUNTIME-TYPE-ERROR, after
+foreach_on_error: +l, body l, ~l, on_error, caught RUNTIME-TYPE-ERROR, after
+s_takewhile(gen): released h3, released h1, released h2, caught SELECT, after
+s_count(gen): released h1, released h2, caught SELECT, after
+s_consumer(gen): released h1, released h2, caught CONSUMER, after
+s_plain_consumer(gen): caught CONSUMER, after
+s_select(gen): released h2, released h1, caught SELECT, after
+s_map(gen): released h1, released h2, caught SELECT, after
+s_any(gen): released h1, released h2, caught SELECT, after
+s_first(gen): released h1, released h2, caught SELECT, after
+s_takewhile(list): released h1, released h2, released h3, caught SELECT, after
+s_count(list): released h1, released h2, caught SELECT, after
+s_consumer(list): released h1, released h2, caught CONSUMER, after
+s_plain_consumer(list): released h1, caught CONSUMER, after
+s_select(list): released h1, released h2, caught SELECT, after
+s_map(list): released h1, released h2, caught SELECT, after
+s_any(list): released h1, released h2, caught SELECT, after
+s_first(list): released h1, released h2, caught SELECT, after
+fmap_n_raises: del 1, del 2, del 3, caught STAGE, after
+map_obj_raises: del h1, del h2, caught STAGE, after
+select_tmp_raises: del 1, del 2, caught PRED, after
+map_select_raises: del 2, del 1, caught PRED, after
+map_mkdt: del h1 (raises), del h1, caught DEL, after
+on_error_dt: del h2, del h1 (raises), on_error, caught DEL, after
+on_error_dt2: del h2 (raises), del h1, on_error, caught DEL, after
+chain_recv: del 1, del 2, [{n: \"1\"}, {n: \"2\"}], after
+";
+
+        #! the orders that the compiled modes had (qore#5649): the AST interpreter's order is another one
+        const ReportedOrders = {
+            "foreach_type_error": "+l, body l, on_exit, ~l, caught RUNTIME-TYPE-ERROR, after",
+        };
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("RaiseReleaseOrderTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/RaiseReleaseOrder.q";
+        addTestCase("the cases tell the reported orders from the AST interpreter's", \reportedOrderTest());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the AST interpreter's release order", \modeTest(), (mode,));
+        }
+        addTestCase(ExecModeHarness::IRTierName + ": the AST interpreter's release order", \irTierTest());
+        addTestCase("jit with synchronous compiles: the AST interpreter's release order", \syncJitTest());
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the AST interpreter's release order", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    reportedOrderTest() {
+        hash<string, string> expected = parseOutput(Expected);
+        foreach hash<auto> i in (ReportedOrders.pairIterator()) {
+            assertTrue(exists expected{i.key}, i.key + " is a case of the script");
+            assertNeq(i.value, expected{i.key}, i.key + ": the reported order is not the AST interpreter's");
+        }
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        checkOutput(mode, output);
+    }
+
+    irTierTest() {
+        string output = ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+            "--exec-mode=tiered %s", libqore_dir, libqore_dir, qore_bin, script));
+        checkOutput(ExecModeHarness::IRTierName, output);
+    }
+
+    #! JIT with its default thresholds and synchronous compiles: the first call of a function runs its native code
+    syncJitTest() {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf(
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=jit %s", libqore_dir, libqore_dir, qore_bin,
+            script), NOTHING, "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_TIMING=1");
+        ExecModeHarness::check_native(r);
+        checkOutput("jit with synchronous compiles", r.out);
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-raise-release-order-");
+        string exe = tmp.path + DirSep + "raise-release-order";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        checkOutput(sprintf("qcc -O%d", opt), output);
+    }
+
+    #! Checks the output of a run against the AST interpreter's, line by line
+    private checkOutput(string mode, string output) {
+        hash<string, string> expected = parseOutput(Expected);
+        hash<string, string> actual = parseOutput(output);
+        assertEq(keys expected, keys actual, mode + ": the cases of the output");
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, actual{i.key}, sprintf("%s: %s as with the AST interpreter", mode, i.key));
+        }
+    }
+
+    #! Returns the lines of an output by their case label
+    private static hash<string, string> parseOutput(string output) {
+        hash<string, string> rv();
+        foreach string line in (output.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            int i = line.find(": ");
+            rv{i > 0 ? line.substr(0, i) : line} = i > 0 ? line.substr(i + 2) : "";
+        }
+        return rv;
+    }
+}

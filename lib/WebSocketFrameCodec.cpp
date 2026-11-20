@@ -32,11 +32,87 @@
 #include <cstdint>
 #include <qore/Qore.h>
 #include <qore/WebSocketFrameCodec.h>
+#include "qore/intern/ql_websocket.h"
+#include "qore/intern/QoreUtf8.h"
 
 #include <openssl/rand.h>
 
 #include <cstring>
 #include <cassert>
+
+// ---------------------------------------------------------------------------
+// the checks of received text and close frames
+// ---------------------------------------------------------------------------
+
+bool q_ws_utf8_valid(const void* data, size_t len) {
+    const char* p = static_cast<const char*>(data);
+    const unsigned char* u = static_cast<const unsigned char*>(data);
+    // ASCII text a word at a time, also between the other characters: most messages are mostly ASCII text, which
+    // this checks at a fraction of the cost of a check a byte at a time; this is on the path of every text message
+    constexpr size_t ascii_high_bit_mask = (~static_cast<size_t>(0) / 0xff) * 0x80;
+    size_t i = 0;
+    while (i < len) {
+        while (len - i >= sizeof(size_t)) {
+            size_t word;
+            memcpy(&word, p + i, sizeof(word));
+            if (word & ascii_high_bit_mask) {
+                break;
+            }
+            i += sizeof(size_t);
+        }
+        while (i < len && u[i] < 0x80) {
+            ++i;
+        }
+        if (i == len) {
+            break;
+        }
+        // the one definition of a valid UTF-8 character (qore#6604): a character cut off by the end of the text is
+        // not valid either
+        long l = q_utf8_char_len(p + i, len - i);
+        if (l <= 0) {
+            return false;
+        }
+        i += l;
+    }
+    return true;
+}
+
+bool q_ws_close_code_valid(uint16_t code) {
+    if (code >= 3000) {
+        return code <= 4999;
+    }
+    // 1004 is reserved; 1005, 1006 and 1015 must not be sent in a close frame (RFC 6455 section 7.4.1)
+    return code >= 1000 && code <= 1014 && code != 1004 && code != WSCC_NoStatusRcvd && code != WSCC_AbnormalClosure;
+}
+
+uint16_t q_ws_parse_close_payload(const void* data, size_t len, uint16_t& code, std::string& reason,
+        const char*& error) {
+    reason.clear();
+    // a close frame without a status code has the close code 1005 (RFC 6455 section 7.1.5)
+    code = WSCC_NoStatusRcvd;
+    if (!len) {
+        return 0;
+    }
+    // the payload starts with a two-byte status code (RFC 6455 section 5.5.1)
+    if (len < 2) {
+        error = "Close frame with a one-byte payload";
+        return WSCC_ProtocolError;
+    }
+    const uint8_t* p = static_cast<const uint8_t*>(data);
+    code = (static_cast<uint16_t>(p[0]) << 8) | p[1];
+    if (!q_ws_close_code_valid(code)) {
+        error = "Invalid close code";
+        return WSCC_ProtocolError;
+    }
+    if (len > 2) {
+        if (!q_ws_utf8_valid(p + 2, len - 2)) {
+            error = "Invalid UTF-8 in a close reason";
+            return WSCC_InvalidPayload;
+        }
+        reason.assign(reinterpret_cast<const char*>(p + 2), len - 2);
+    }
+    return 0;
+}
 
 // ---------------------------------------------------------------------------
 // WebSocketFrameDecoder
@@ -225,6 +301,17 @@ void WebSocketFrameDecoder::compact() {
 
 BinaryNode* WebSocketFrameEncoder::encode(WsOpcode opcode, const void* payload,
         size_t payload_len, bool fin, bool mask, uint8_t rsv) {
+    // the payload of a close frame is at most 125 bytes (RFC 6455 section 5.5): a longer reason is cut to the
+    // characters that fit, so that the reason stays UTF-8 (a converted reason can have more bytes than characters,
+    // qore#6604)
+    if (opcode == WSOP_CLOSE && payload_len > 125) {
+        const uint8_t* p = static_cast<const uint8_t*>(payload);
+        payload_len = 125;
+        // the byte at the cut is not the continuation of a character before it
+        while (payload_len > 2 && (p[payload_len] & 0xC0) == 0x80) {
+            --payload_len;
+        }
+    }
     SimpleRefHolder<BinaryNode> result(new BinaryNode());
 
     // Byte 0: FIN + RSV + Opcode

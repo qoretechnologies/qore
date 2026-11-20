@@ -656,6 +656,18 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
                     unsafe->insert(all_keys.begin(), all_keys.end());
                 }
                 assigned.clear();
+            } else if (inst->opcode == QoreIROpcode::CallAOTHelper) {
+                // an outlined function-body helper can assign, remove or delete the locals that it shares with the
+                // coordinator and can write: a value of the local's type is no longer known after the call, as the
+                // function's own removal would show (qore#6653)
+                const auto* cah = static_cast<const QoreIRCallAOTHelperInstruction*>(inst);
+                for (const LocalVar* lv : cah->written_shared_locals) {
+                    const void* key = reinterpret_cast<const void*>(lv);
+                    if (unsafe) {
+                        unsafe->insert(key);
+                    }
+                    assigned.erase(key);
+                }
             } else if (inst->opcode == QoreIROpcode::LValuePathAssign
                     || inst->opcode == QoreIROpcode::LValuePathCompound
                     || inst->opcode == QoreIROpcode::LValuePathUnary

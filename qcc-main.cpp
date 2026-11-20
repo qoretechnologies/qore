@@ -38,6 +38,7 @@
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/xxhash.h"
 #include "qore/intern/QoreModuleSourceFingerprints.h"
 
@@ -1490,6 +1491,8 @@ static void print_version() {
     printf("qcc (Qore Code Compiler) v%s\n", QCC_VERSION);
     printf("Using Qore library v%s\n", qore_version_string);
     printf("AOT runtime identity: %s\n", qore_aot_runtime_identity);
+    // the version of the format of the images that this qcc writes (a test skips what an earlier format lacks)
+    printf("AOT binary format: %u\n", (unsigned)QORE_AOT_BINARY_VERSION);
     // the build checks the AOT modules with this qcc (QoreMacros.cmake, qore#6598)
     printf("Build checks: module-sources\n");
     printf("Built with LLVM for JIT/AOT compilation\n");

@@ -337,7 +337,7 @@ hash<auto> ProtobufSchema::defaultMessage(string type) {
 
 //! Encodes a Qore hash as a protobuf binary message
 /** @param type the fully-qualified message type name
-    @param data the hash to encode
+    @param data the hash to encode; extension fields are given with their full names (see @ref protobufextensions)
 
     @return the protobuf-encoded binary data
 
@@ -365,7 +365,8 @@ binary ProtobufSchema::encode(string type, hash<auto> data) {
 /** @param type the fully-qualified message type name
     @param data the protobuf-encoded binary data
 
-    @return the decoded message as a hash
+    @return the decoded message as a hash; extension fields that are set are given with their full names in square
+    brackets (see @ref protobufextensions)
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-DECODE-ERROR if parsing fails, or a string map key in the message contains a NUL character,
@@ -397,7 +398,8 @@ hash<auto> ProtobufSchema::decode(string type, binary data) {
     @return the JSON string representation
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
-    @throw PROTOBUF-JSON-ERROR if JSON conversion fails
+    @throw PROTOBUF-JSON-ERROR if JSON conversion fails, or an extension field is set and the module was built with a
+    protobuf version before v22 (see @ref protobufextensions)
     @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
     @ref protobufnesting)
     @throw ENCODING-CONVERSION-ERROR if a string for a \c string field or a string map key cannot be converted to

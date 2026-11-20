@@ -34,6 +34,7 @@
 #include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/ql_websocket.h"
 
 WebSocketStreamFrameState::WebSocketStreamFrameState(Queue* msg_queue_, SendCallback send_cb_,
         bool is_server_)
@@ -219,16 +220,18 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
             }
 
             case WSOP_CLOSE: {
-                // a close frame without a status code has the close code 1005 (RFC 6455 section 7.1.5)
-                uint16_t code = WSCC_NoStatusRcvd;
+                // the close code and reason, checked (qore#6755, qore#6604): a close frame that is not valid fails
+                // the connection (RFC 6455 section 7.1.7) with 1002 or 1007
+                uint16_t code;
                 std::string reason;
-                if (frame.payload && frame.payload->size() >= 2) {
-                    const uint8_t* d = static_cast<const uint8_t*>(frame.payload->getPtr());
-                    code = (static_cast<uint16_t>(d[0]) << 8) | d[1];
-                    if (frame.payload->size() > 2) {
-                        reason.assign(reinterpret_cast<const char*>(d + 2),
-                            frame.payload->size() - 2);
-                    }
+                const char* error = nullptr;
+                uint16_t fail = q_ws_parse_close_payload(frame.payload ? frame.payload->getPtr() : nullptr,
+                    frame.payload ? frame.payload->size() : 0, code, reason, error);
+                if (fail) {
+                    decoder.clear();
+                    fragment_bytes = 0;
+                    setError(error, fail);
+                    break;
                 }
                 close_code = code;
                 close_reason = reason;
@@ -297,6 +300,15 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
         return;
     }
 
+    // a text message that is not valid UTF-8 fails the connection with 1007 before the connection's code sees it (RFC
+    // 6455 section 8.1, qore#6604); a compressed message (RSV1 set, permessage-deflate) is checked once it is
+    // decompressed
+    if (msg_opcode == WSOP_TEXT && !(msg_rsv & 4) && payload && !q_ws_utf8_valid(payload->getPtr(), payload->size())) {
+        setError("a text message of " + std::to_string(payload->size()) + " bytes is not valid UTF-8",
+            WSCC_InvalidPayload);
+        return;
+    }
+
     MessageKind kind = (msg_opcode == WSOP_TEXT) ? MessageKind::Text : MessageKind::Binary;
     pushMessage(kind, payload.release(), msg_rsv);
 }
@@ -326,7 +338,8 @@ void WebSocketStreamFrameState::pushMessage(MessageKind kind, BinaryNode* payloa
     }
     if (kind == MessageKind::Close || kind == MessageKind::Error) {
         h->setKeyValue("code", static_cast<int64_t>(code), &xs);
-        h->setKeyValue("reason", new QoreStringNode(reason ? reason : ""), &xs);
+        // the reason of a close frame is UTF-8 (RFC 6455 section 5.5.1)
+        h->setKeyValue("reason", new QoreStringNode(reason ? reason : "", QCS_UTF8), &xs);
     }
     if (!xs && msg_queue) {
         // the data fed since the last message is reported with this message (issue #5820)

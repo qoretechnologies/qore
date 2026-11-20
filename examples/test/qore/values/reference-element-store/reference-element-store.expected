@@ -1,0 +1,19 @@
+hash<string, reference<*T>> variable: d
+hash<string, reference<*T>> literal: h
+list<reference<*T>> literal: l
+hash<auto>: 5
+list<auto>: 6
+hash: 7
+dynamic key: 8
++=: 18
+negative index: 9
+local hash<auto>: 12
+local list<auto>: 13
+object member: 21
+member in a method: 22
+self member: 23
+type error: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead
+a local as the target: 31
+hash<HD>: 41
+an object member as the target: 42
+a local read again in a loop: [1, 3, 6]

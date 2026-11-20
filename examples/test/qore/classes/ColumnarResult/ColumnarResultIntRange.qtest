@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%disable-warning return-value-ignored
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ColumnarResultIntRangeTest
+
+# enums whose members are converted as their base values
+enum FloatEnum : float {
+    Half = 2.5,
+    Big = 1e300,
+}
+enum NumberEnum : number {
+    Small = -3.9n,
+    Big = 1e30n,
+}
+enum StringEnum : string {
+    Seven = "7",
+    Long = "123456789012",
+    Big = "9223372036854775808",
+}
+
+#! a value outside the range of a 64-bit integer is not stored in a dense integer column (issue #6681)
+/** a float, number or numeric string given for a column that is described as an integer column was converted with
+    the saturating conversion of softint, so that a value of 2^63 was stored as 9223372036854775807, another value than
+    the one given, without an error
+*/
+class ColumnarResultIntRangeTest inherits QUnit::Test {
+    constructor() : Test("ColumnarResultIntRange", "1.0", \ARGV) {
+        addTestCase("values at the limits are stored", \limitsTest());
+        addTestCase("values outside the range raise an error", \outOfRangeTest());
+        set_return_value(main());
+    }
+
+    limitsTest() {
+        int max = 9223372036854775807;
+        int min = -9223372036854775807 - 1;
+        list<auto> values = (max, min, 9223372036854775807n, -9223372036854775808n, 9223372036854775807.9n,
+            -9223372036854775808.9n, "9223372036854775807", "-9223372036854775808", 9223372036854774784.0,
+            -9223372036854775808.0, 1.5, -1.5n, 0.0, 0n, -0.0, 0.4, -0.9n, "7", "-1234567", "0", "12345678901",
+            4611686018427387904n, -4611686018427387904.0);
+        list<auto> expected = (max, min, max, min, max, min, max, min, 9223372036854774784, min, 1, -1, 0, 0, 0, 0, 0,
+            7, -1234567, 0, 12345678901, 4611686018427387904, -4611686018427387904);
+        ColumnarResult r = ColumnarResult::fromColumnHash({"i": values}, {"i": {"native_type": "bigint"}});
+        assertEq(expected, r.toColumnHash().i.toList());
+
+        # an enum member is converted as its base value (issue #6681)
+        r = ColumnarResult::fromColumnHash({"i": (FloatEnum::Half, NumberEnum::Small, StringEnum::Seven,
+            StringEnum::Long)}, {"i": {"native_type": "bigint"}});
+        assertEq((2, -3, 7, 123456789012), r.toColumnHash().i.toList(), "enum members");
+    }
+
+    outOfRangeTest() {
+        float nan = @nan@;
+        foreach auto v in ((9223372036854775808n, -9223372036854775809n, 1e30n, -1e30n, 9223372036854775808.0,
+                -9223372036854777856.0, 1e300, -1e300, 1e308 * 10, -(1e308 * 10), nan, @nan@n, @inf@n, -@inf@n)) {
+            assertThrows("COLUMNAR-RESULT-ERROR", "outside the range of a 64-bit integer",
+                sub () { ColumnarResult::fromColumnHash({"i": (1, v)}, {"i": {"native_type": "bigint"}}); },
+                NOTHING, sprintf("%y", v));
+        }
+        # a numeric string given by a script outside the range is not a numeric string of an integer column
+        foreach auto v in (("9223372036854775808", "-9223372036854775809", StringEnum::Big)) {
+            assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 1",
+                sub () { ColumnarResult::fromColumnHash({"i": (1, v)}, {"i": {"native_type": "bigint"}}); },
+                NOTHING, sprintf("%y", v));
+        }
+        # an enum member outside the range
+        foreach auto v in ((FloatEnum::Big, NumberEnum::Big)) {
+            assertThrows("COLUMNAR-RESULT-ERROR", "outside the range of a 64-bit integer",
+                sub () { ColumnarResult::fromColumnHash({"i": (1, v)}, {"i": {"native_type": "bigint"}}); },
+                NOTHING, sprintf("%y", v));
+        }
+        # a value in another row is reported with its row
+        assertThrows("COLUMNAR-RESULT-ERROR", "row 2", sub () {
+            ColumnarResult::fromColumnHash({"i": (1, 2, 9223372036854775808n)}, {"i": {"native_type": "bigint"}});
+        });
+    }
+}

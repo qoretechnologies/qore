@@ -261,6 +261,7 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         addTestCase("HttpClientIo stream handle", \httpClientIoStreamTest());
         addTestCase("HttpClientIo octets", \httpClientIoOctetsTest());
         addTestCase("HttpClientIo text decoding", \decodeResponseTextTest());
+        addTestCase("HttpClientIo text decoding of bodies that are not valid", \decodeResponseTextInvalidTest());
         addTestCase("no Content-Type", \noContentTypeTest());
         addTestCase("RestClient", \restClientTest());
         addTestCase("RestClientIo", \restClientIoTest());
@@ -568,6 +569,35 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         }
     }
 
+    #! decodeResponseText() gives a body that is not valid in its encoding as HTTPClient does (qore#6604)
+    decodeResponseTextInvalidTest() {
+        int n = 0;
+        foreach string name in (keys TestHandler::Cases) {
+            hash<CharsetCase> c = TestHandler::Cases{name};
+            if (!c.invalid) {
+                continue;
+            }
+            ++n;
+            hash<auto> resp = {"headers": {"content-type": c.content_type}, "body": c.body};
+            if (c.error) {
+                assertThrows(c.error, \HttpClientStreamHandle::decodeResponseText(), (resp,), name);
+                # with "raise", the same
+                assertThrows(c.error, \HttpClientStreamHandle::decodeResponseText(), (resp, "ISO-8859-1", "raise"),
+                    name + " raise");
+            } else {
+                checkBody(HttpClientStreamHandle::decodeResponseText(resp).body, c, name);
+                # with "raise", any text that is not valid raises
+                assertThrows("INVALID-ENCODING", \HttpClientStreamHandle::decodeResponseText(),
+                    (resp, "ISO-8859-1", "raise"), name + " raise");
+            }
+            # with "keep", the text is given in its encoding without a check
+            auto body = HttpClientStreamHandle::decodeResponseText(resp, "ISO-8859-1", "keep").body;
+            assertEq(NT_STRING, body.typeCode(), name + " keep");
+            assertFalse(body.isEncodingValid(), name + " keep");
+        }
+        assertGt(0, n, "there are bodies that are not valid");
+    }
+
     # the text decoding of a response whose body has been received as octets
     decodeResponseTextTest() {
         # a character encoding sent as the content encoding of the body is its charset, as with HTTPClient
@@ -609,6 +639,22 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         }, 0, "ISO-8859-1", False);
         assertEq(<efbbbfc3a4>, resp.body);
         assertEq("text/plain", resp.content_type);
+        # the envelopes of a Connect or gRPC stream are binary data, also when their messages are compressed and the
+        # suffix of the media type names a text codec
+        binary msg = gzip(binary("{\"index\":0}"));
+        binary envelopes = <01> + parse_hex_string(sprintf("%08x", msg.size())) + msg;
+        foreach string ct in ("application/connect+json", "application/grpc+json", "application/grpc-web+json") {
+            resp = HttpClientStreamHandle::normalizeResponseBody({
+                "headers": {"content-type": ct},
+                "body": envelopes,
+            });
+            assertEq(envelopes, resp.body, ct);
+            assertEq(ct, resp.content_type, ct);
+            assertEq(envelopes, HttpClientStreamHandle::decodeResponseText({
+                "headers": {"content-type": ct},
+                "body": envelopes,
+            }, "ISO-8859-1", "raise").body, ct);
+        }
     }
 
     # the cases that REST clients return as decoded, without deserializing them to other values

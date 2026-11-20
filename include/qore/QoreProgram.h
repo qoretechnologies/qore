@@ -1005,8 +1005,12 @@ public:
 
     //! Creates a child Program; \a parent_po are the parent's options as the caller read them for its checks, which the
     //! child inherits (issue #6176); if nullptr, the constructor reads them
+    /** A failure to copy the parent's external data is raised in \a xsink (issue #6786): the Program then has none
+        of the parent's external data, and the caller must delete it without using it; with \a xsink nullptr, the
+        exception is reported as unhandled
+    */
     DLLLOCAL QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr,
-            const QoreParseOptions* parent_po = nullptr);
+            const QoreParseOptions* parent_po = nullptr, ExceptionSink* xsink = nullptr);
 
     
 
@@ -1280,6 +1284,11 @@ private:
     @see
     - QoreProgram::getExternalData()
     - QoreProgram::setExternalData()
+    - AbstractQoreProgramExternalDataEx for data whose callbacks report errors in an ExceptionSink; new code should
+      use it
+
+    @note a C++ exception that copy(), init() or doDeref() lets escape is converted to a %Qore exception (as a
+    safety net only; they must not throw): from copy() or init(), it fails the creation of the child Program
 
     @since %Qore 0.8.13
  */
@@ -1321,6 +1330,116 @@ public:
 
     //! For non-reference counted classes, deletes the object immediately
     virtual void doDeref() = 0;
+};
+
+//! an abstract class for program-specific external data whose callbacks report errors in an ExceptionSink
+/** A binary module derives its Program data from this class instead of AbstractQoreProgramExternalData directly to
+    report the errors of its copy(), init() and doDeref() callbacks as %Qore exceptions; %Qore detects the class at
+    run time (with \c dynamic_cast), so data derived from AbstractQoreProgramExternalData alone keeps working
+    unchanged.
+
+    - copy(QoreProgram*, ExceptionSink*): an exception raised in the sink fails the creation of the child Program
+      with that exception: \c Program::constructor() raises it, and
+      \c ProgramControl::createEvalProgram() returns no Program; the copies of the data of other modules that were
+      already made are then released with doDeref(ExceptionSink*) (or doDeref()) without init() having been called on
+      them, and no init() is called at all.  A copy returned together with an exception is released at once.  A
+      return value of \c nullptr with no exception means that the child does not inherit the data, as before.
+    - init(ExceptionSink*): called on each copy once all copies have been made; an exception raised in the sink fails
+      the creation of the child Program in the same way, and releases all copies.
+    - doDeref(ExceptionSink*): an exception raised in the sink is reported to the code that deletes the Program, as
+      an exception of the deletion (ex: of \c delete or of the end of the scope of the Program object); the data of
+      the other modules is still released.
+
+    @note
+    - the callbacks must raise their errors in the sink and must never let a C++ exception escape; the conversion of
+      an \c AbstractException that %Qore makes for the legacy callbacks of AbstractQoreProgramExternalData is only a
+      safety net for modules that have not been changed yet
+    - a module must accept the release of a copy whose init() never ran (when another module's copy() or init()
+      fails)
+    - the legacy callbacks copy(QoreProgram*), init() and doDeref() are \c final here and call the new ones with a
+      local ExceptionSink, whose exceptions are reported as unhandled exceptions; code that still calls them (ex: a
+      module releasing the data that it removed with QoreProgram::removeExternalData() with doDeref()) should call
+      the new ones instead
+    - a class that overrides only the new copy() or doDeref() hides the legacy overloads for calls made through its
+      own type; add <tt>using AbstractQoreProgramExternalDataEx::copy;</tt> (and \c doDeref) to the class to call
+      them through it
+
+    @code{.cpp}
+class MyModProgramData : public AbstractQoreProgramExternalDataEx {
+public:
+    AbstractQoreProgramExternalData* copy(QoreProgram* child, ExceptionSink* xsink) const override {
+        if (!mymod_can_copy()) {
+            xsink->raiseException("MYMOD-ERROR", "cannot copy the data of the module to the child Program");
+            return nullptr;
+        }
+        return new MyModProgramData(child);
+    }
+
+    void doDeref(ExceptionSink* xsink) override {
+        if (mymod_release(xsink)) {
+            // the error is in xsink; the data is deleted anyway
+        }
+        delete this;
+    }
+};
+    @endcode
+
+    @see @ref module_program_external_data
+
+    @since %Qore 3.0
+*/
+class AbstractQoreProgramExternalDataEx : public AbstractQoreProgramExternalData {
+public:
+    //! Destroys the object
+    /** The base class implementation is empty
+     */
+    DLLEXPORT virtual ~AbstractQoreProgramExternalDataEx();
+
+    //! Returns the data of a new child Program, or raises an exception in \a xsink to fail the child's creation
+    /** Called on the data of the parent when a child Program that inherits it is created, after the child Program
+        has been completely set up; the same conditions apply as for AbstractQoreProgramExternalData::copy()
+
+        @param pgm the new (child) QoreProgram object after setup
+        @param xsink for errors: an exception raised here fails the creation of the child Program with the exception
+
+        @return the data of the child Program, or nullptr if the child does not inherit this data; a value returned
+        with an exception in \a xsink is released with doDeref(ExceptionSink*)
+
+        @note must not let a C++ exception escape
+    */
+    virtual AbstractQoreProgramExternalData* copy(QoreProgram* pgm, ExceptionSink* xsink) const = 0;
+
+    //! Called on each copy made by copy(QoreProgram*, ExceptionSink*) once the copies of all data have been made
+    /** The base class implementation is empty
+
+        @param xsink for errors: an exception raised here fails the creation of the child Program with the
+        exception, and all copies of the child are released
+
+        @note must not let a C++ exception escape
+     */
+    DLLEXPORT virtual void init(ExceptionSink* xsink);
+
+    //! Releases the data; for non-reference counted classes, deletes the object immediately
+    /** Called when the Program that holds the data is deleted, and when the creation of a child Program fails for a
+        copy made for it (whose init() then possibly never ran)
+
+        @param xsink for errors: an exception raised here is reported to the code that deletes the Program
+
+        @note must not let a C++ exception escape
+     */
+    virtual void doDeref(ExceptionSink* xsink) = 0;
+
+    //! Calls copy(QoreProgram*, ExceptionSink*) with a local ExceptionSink
+    /** An exception is reported as an unhandled exception; a copy made together with it is released, and \c nullptr
+        returned
+     */
+    DLLEXPORT AbstractQoreProgramExternalData* copy(QoreProgram* pgm) const final;
+
+    //! Calls init(ExceptionSink*) with a local ExceptionSink, whose exception is reported as an unhandled exception
+    DLLEXPORT void init() final;
+
+    //! Calls doDeref(ExceptionSink*) with a local ExceptionSink, whose exception is reported as an unhandled exception
+    DLLEXPORT void doDeref() final;
 };
 
 typedef std::list<AbstractStatement*> AbstractStatementList_t;
