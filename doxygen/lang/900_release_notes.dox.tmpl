@@ -1549,7 +1549,9 @@
 
     @par Process-Wide Registries Refuse Sandboxed Code
     Process-wide callback, hook and handler registries and the async I/O controller settings refuse changes by sandboxed
-    code (\c SANDBOX-REGISTRATION-ERROR); modules use @ref Qore::SandboxManager::checkProcessWideRegistration(); see
+    code (\c SANDBOX-REGISTRATION-ERROR); modules use @ref Qore::SandboxManager::checkProcessWideRegistration(), and
+    binary modules the new C++ function \c qore_check_process_wide_registration()
+    (\c QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION; module API 2.3); see
     @ref sandbox_process_wide_registries (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>,
     <a href="https://github.com/qoretechnologies/qore/issues/6836">issue 6836</a>).  The factory, child data provider
     and SSH provider registries of the standard modules and the module blacklist and options refuse changes by
