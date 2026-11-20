@@ -1,0 +1,423 @@
+round 0
+static method depth 1, locals read innermost:
+  "1x"
+static method depth 1, reference innermost:
+  2
+  v: 2
+static method depth 1, reference outermost:
+  11
+  v: 11
+static method depth 1, closure innermost:
+  1
+  c: 2
+static method depth 1, assignment innermost:
+  2
+  v: 2
+static method depth 4, locals read innermost:
+  "1x"
+static method depth 4, reference innermost:
+  2
+  v: 2
+static method depth 4, reference outermost:
+  11
+  v: 11
+static method depth 4, closure innermost:
+  1
+  c: 2
+static method depth 4, assignment innermost:
+  2
+  v: 2
+static method depth 5, locals read innermost:
+  "1x"
+static method depth 5, reference innermost:
+  2
+  v: 2
+static method depth 5, reference outermost:
+  11
+  v: 11
+static method depth 5, closure innermost:
+  1
+  c: 2
+static method depth 5, assignment innermost:
+  2
+  v: 2
+static method depth 8, locals read innermost:
+  "1x"
+static method depth 8, reference innermost:
+  2
+  v: 2
+static method depth 8, reference outermost:
+  11
+  v: 11
+static method depth 8, closure innermost:
+  1
+  c: 2
+static method depth 8, assignment innermost:
+  2
+  v: 2
+static method depth 40, locals read innermost:
+  "1x"
+static method depth 40, reference innermost:
+  2
+  v: 2
+static method depth 40, reference outermost:
+  11
+  v: 11
+static method depth 40, closure innermost:
+  1
+  c: 2
+static method depth 40, assignment innermost:
+  2
+  v: 2
+function depth 1, locals read innermost:
+  "1x"
+function depth 1, reference innermost:
+  2
+  v: 2
+function depth 1, reference outermost:
+  11
+  v: 11
+function depth 1, closure innermost:
+  1
+  c: 2
+function depth 1, assignment innermost:
+  2
+  v: 2
+function depth 4, locals read innermost:
+  "1x"
+function depth 4, reference innermost:
+  2
+  v: 2
+function depth 4, reference outermost:
+  11
+  v: 11
+function depth 4, closure innermost:
+  1
+  c: 2
+function depth 4, assignment innermost:
+  2
+  v: 2
+function depth 5, locals read innermost:
+  "1x"
+function depth 5, reference innermost:
+  2
+  v: 2
+function depth 5, reference outermost:
+  11
+  v: 11
+function depth 5, closure innermost:
+  1
+  c: 2
+function depth 5, assignment innermost:
+  2
+  v: 2
+function depth 8, locals read innermost:
+  "1x"
+function depth 8, reference innermost:
+  2
+  v: 2
+function depth 8, reference outermost:
+  11
+  v: 11
+function depth 8, closure innermost:
+  1
+  c: 2
+function depth 8, assignment innermost:
+  2
+  v: 2
+function depth 40, locals read innermost:
+  "1x"
+function depth 40, reference innermost:
+  2
+  v: 2
+function depth 40, reference outermost:
+  11
+  v: 11
+function depth 40, closure innermost:
+  1
+  c: 2
+function depth 40, assignment innermost:
+  2
+  v: 2
+round 1
+static method depth 1, locals read innermost:
+  "1x"
+static method depth 1, reference innermost:
+  2
+  v: 2
+static method depth 1, reference outermost:
+  11
+  v: 11
+static method depth 1, closure innermost:
+  1
+  c: 2
+static method depth 1, assignment innermost:
+  2
+  v: 2
+static method depth 4, locals read innermost:
+  "1x"
+static method depth 4, reference innermost:
+  2
+  v: 2
+static method depth 4, reference outermost:
+  11
+  v: 11
+static method depth 4, closure innermost:
+  1
+  c: 2
+static method depth 4, assignment innermost:
+  2
+  v: 2
+static method depth 5, locals read innermost:
+  "1x"
+static method depth 5, reference innermost:
+  2
+  v: 2
+static method depth 5, reference outermost:
+  11
+  v: 11
+static method depth 5, closure innermost:
+  1
+  c: 2
+static method depth 5, assignment innermost:
+  2
+  v: 2
+static method depth 8, locals read innermost:
+  "1x"
+static method depth 8, reference innermost:
+  2
+  v: 2
+static method depth 8, reference outermost:
+  11
+  v: 11
+static method depth 8, closure innermost:
+  1
+  c: 2
+static method depth 8, assignment innermost:
+  2
+  v: 2
+static method depth 40, locals read innermost:
+  "1x"
+static method depth 40, reference innermost:
+  2
+  v: 2
+static method depth 40, reference outermost:
+  11
+  v: 11
+static method depth 40, closure innermost:
+  1
+  c: 2
+static method depth 40, assignment innermost:
+  2
+  v: 2
+function depth 1, locals read innermost:
+  "1x"
+function depth 1, reference innermost:
+  2
+  v: 2
+function depth 1, reference outermost:
+  11
+  v: 11
+function depth 1, closure innermost:
+  1
+  c: 2
+function depth 1, assignment innermost:
+  2
+  v: 2
+function depth 4, locals read innermost:
+  "1x"
+function depth 4, reference innermost:
+  2
+  v: 2
+function depth 4, reference outermost:
+  11
+  v: 11
+function depth 4, closure innermost:
+  1
+  c: 2
+function depth 4, assignment innermost:
+  2
+  v: 2
+function depth 5, locals read innermost:
+  "1x"
+function depth 5, reference innermost:
+  2
+  v: 2
+function depth 5, reference outermost:
+  11
+  v: 11
+function depth 5, closure innermost:
+  1
+  c: 2
+function depth 5, assignment innermost:
+  2
+  v: 2
+function depth 8, locals read innermost:
+  "1x"
+function depth 8, reference innermost:
+  2
+  v: 2
+function depth 8, reference outermost:
+  11
+  v: 11
+function depth 8, closure innermost:
+  1
+  c: 2
+function depth 8, assignment innermost:
+  2
+  v: 2
+function depth 40, locals read innermost:
+  "1x"
+function depth 40, reference innermost:
+  2
+  v: 2
+function depth 40, reference outermost:
+  11
+  v: 11
+function depth 40, closure innermost:
+  1
+  c: 2
+function depth 40, assignment innermost:
+  2
+  v: 2
+round 2
+static method depth 1, locals read innermost:
+  "1x"
+static method depth 1, reference innermost:
+  2
+  v: 2
+static method depth 1, reference outermost:
+  11
+  v: 11
+static method depth 1, closure innermost:
+  1
+  c: 2
+static method depth 1, assignment innermost:
+  2
+  v: 2
+static method depth 4, locals read innermost:
+  "1x"
+static method depth 4, reference innermost:
+  2
+  v: 2
+static method depth 4, reference outermost:
+  11
+  v: 11
+static method depth 4, closure innermost:
+  1
+  c: 2
+static method depth 4, assignment innermost:
+  2
+  v: 2
+static method depth 5, locals read innermost:
+  "1x"
+static method depth 5, reference innermost:
+  2
+  v: 2
+static method depth 5, reference outermost:
+  11
+  v: 11
+static method depth 5, closure innermost:
+  1
+  c: 2
+static method depth 5, assignment innermost:
+  2
+  v: 2
+static method depth 8, locals read innermost:
+  "1x"
+static method depth 8, reference innermost:
+  2
+  v: 2
+static method depth 8, reference outermost:
+  11
+  v: 11
+static method depth 8, closure innermost:
+  1
+  c: 2
+static method depth 8, assignment innermost:
+  2
+  v: 2
+static method depth 40, locals read innermost:
+  "1x"
+static method depth 40, reference innermost:
+  2
+  v: 2
+static method depth 40, reference outermost:
+  11
+  v: 11
+static method depth 40, closure innermost:
+  1
+  c: 2
+static method depth 40, assignment innermost:
+  2
+  v: 2
+function depth 1, locals read innermost:
+  "1x"
+function depth 1, reference innermost:
+  2
+  v: 2
+function depth 1, reference outermost:
+  11
+  v: 11
+function depth 1, closure innermost:
+  1
+  c: 2
+function depth 1, assignment innermost:
+  2
+  v: 2
+function depth 4, locals read innermost:
+  "1x"
+function depth 4, reference innermost:
+  2
+  v: 2
+function depth 4, reference outermost:
+  11
+  v: 11
+function depth 4, closure innermost:
+  1
+  c: 2
+function depth 4, assignment innermost:
+  2
+  v: 2
+function depth 5, locals read innermost:
+  "1x"
+function depth 5, reference innermost:
+  2
+  v: 2
+function depth 5, reference outermost:
+  11
+  v: 11
+function depth 5, closure innermost:
+  1
+  c: 2
+function depth 5, assignment innermost:
+  2
+  v: 2
+function depth 8, locals read innermost:
+  "1x"
+function depth 8, reference innermost:
+  2
+  v: 2
+function depth 8, reference outermost:
+  11
+  v: 11
+function depth 8, closure innermost:
+  1
+  c: 2
+function depth 8, assignment innermost:
+  2
+  v: 2
+function depth 40, locals read innermost:
+  "1x"
+function depth 40, reference innermost:
+  2
+  v: 2
+function depth 40, reference outermost:
+  11
+  v: 11
+function depth 40, closure innermost:
+  1
+  c: 2
+function depth 40, assignment innermost:
+  2
+  v: 2
