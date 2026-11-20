@@ -307,13 +307,22 @@ A declaration must not turn the module's public API into a bypass, so for each m
   `domains` declaration relaxes, not with those of the restricted caller; the explicit "load everything" APIs
   (`ProviderIndexUtil::tryLoadModule()`, `DataProvider::registerKnownFactories*()`) declare `PROCESS`, but the root
   fix is in the core (add the caller's restrictions to a run-time module load made for it);
+- WebSocketHandler requires HttpServerUtil, not HttpServer, and loads in restricted Programs: it declares
+  `THREAD_CONTROL` for the heartbeat and idle timers that it arms with the `AsyncIoController` builtins for each
+  frame of its HTTP/2 and HTTP/3 streams (#6836: without a controller wrapper per frame).  Undeclared, a restricted
+  Program could not load it (the builtins are tagged `THREAD_CONTROL`), and with the wrapper, which is not tagged,
+  a sandboxed Program restricted with `PO_NO_THREAD_CONTROL` that loaded it first left its Program without thread
+  control, so the builtins' `MODULE_OWNED` check refused its own timers; a closure of the caller's own is still
+  refused (`qlib/WebSocketHandler/WebSocketHandlerRestrictedTimers.qtest`).  As in C3, the module's timers call
+  methods that a caller's subclass may override (the handler's log methods, the connection's close path), as its
+  stream workers already call the caller's `gotMessage()`;
 - the core `AsyncIoController::setLogger()`, `setAutostop()` and `cancelByOwner()` act on the process-wide
   singleton but are only `dom=NETWORK` (`set_async_io_logger()` is `PROCESS`); the AsyncSocketIo wrappers
   `setLogger()` and `setAutostop()` declare `PROCESS`, and the builtins should too (follow-up);
 - **leave undeclared** (refused to restricted loaders) a module that is not meant for them: QLS, QoreRepl,
   DebugUtil, DebugCmdLine, DebugProgramControl, VscDebugAdapter, the servers HttpServer, HttpServerAsyncIo and MllpUtil
   (its listener) with the handlers that require them (A2aServerHandler, GraphQLHandler, McpServerHandler,
-  ServerSentEventHandler, WebSocketHandler, DebugHandler, DebugMcpServer), UrlDownloader (its public `cancel()` cancels the thread running a download with `cancel_thread()`),
+  ServerSentEventHandler, DebugHandler, DebugMcpServer), UrlDownloader (its public `cancel()` cancels the thread running a download with `cancel_thread()`),
   and QoreMLUtils, whose searches reseed the process-wide random number generator with `srand()`.
 
 The audit loads every qlib module, with its own header removed, in a Program restricted with each of the two

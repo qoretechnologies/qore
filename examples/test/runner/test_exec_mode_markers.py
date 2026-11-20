@@ -321,6 +321,9 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   source and as a qcc executable
         # - image-ir-temp-drain (#6742): the script runs in a child process in AST mode and as a qcc executable
         # - WebSocketAsyncTextEncoding (#6619): each case runs in a child process with a default encoding of its own
+        # - WebSocketHandlerRestrictedTimers (#6836, batch AO): a sandboxed restricted Program loads the modules first
+        #   in child processes that set their own execution modes and in a qcc executable, as a module is loaded once
+        #   in a process
         # - globalsetup-stop (#6659): the tests whose global setup stops run in child processes of its own binary
         # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
         # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
@@ -425,6 +428,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-7.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
                                  "examples/test/qlib/WebSocketClient/WebSocketAsyncTextEncoding.qtest",
+                                 "examples/test/qlib/WebSocketHandler/WebSocketHandlerRestrictedTimers.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
                                  "examples/test/qlib/TerminalIoRestrictedLoad/TerminalIoRestrictedLoad.qtest",
                                  "examples/test/qore/classes/Program/entry-cpp-exception/entry-cpp-exception.qtest",
