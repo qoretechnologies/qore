@@ -25774,6 +25774,12 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
 QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
 std::atomic<int64_t> qore_dbg_h2_connection_window_updates[2] = {{0}, {0}};
 std::atomic<bool> qore_dbg_h2_default_connection_window{false};
+std::atomic<bool> qore_dbg_quic_small_client_stream_window{false};
+
+static QoreValue f_dbg_quic_small_client_stream_window(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_quic_small_client_stream_window.exchange(HARD_QORE_VALUE_BOOL(params, 0));
+}
 
 //! keeps (or no longer keeps) the RFC 9113 default connection window (65535) in the HTTP/2 sessions created from now on
 /** For tests that detect lost connection credit by watching the window shrink, which the larger window would hide
@@ -28279,6 +28285,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http_new_connection_wait_clear", f_dbg_http_new_connection_wait_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_small_client_stream_window", f_dbg_quic_small_client_stream_window, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_http2_default_connection_window", f_dbg_http2_default_connection_window, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_http2_connection_window_updates", f_dbg_http2_connection_window_updates, QCF_NO_FLAGS,

@@ -191,6 +191,8 @@ DLLLOCAL extern std::atomic<int64_t> qore_dbg_h2_connection_window_updates[2];
 //! true to keep the RFC 9113 default connection window (65535) in new HTTP/2 sessions, for tests that detect lost
 //! connection credit by watching the window shrink; see dbg_http2_default_connection_window()
 DLLLOCAL extern std::atomic<bool> qore_dbg_h2_default_connection_window;
+//! Use the smaller server stream window on new client-initiated QUIC streams in receive-credit tests.
+DLLLOCAL extern std::atomic<bool> qore_dbg_quic_small_client_stream_window;
 
 //! adds received bytes whose stream credit was deferred, and wakes dbg_http_stream_credit_wait_deferred()
 DLLLOCAL void qore_dbg_stream_credit_deferred(int64_t bytes);
