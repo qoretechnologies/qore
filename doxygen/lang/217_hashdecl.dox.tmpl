@@ -275,6 +275,10 @@ printf("name: %s, id: %d\n", ext.name, ext.id);
 
     @subsection hashdecl_inheritance_rules Inheritance Rules
     - <b>Single inheritance only:</b> A hashdecl can inherit from at most one parent hashdecl
+    - <b>Parent name resolution:</b> A parent hashdecl given without a namespace path is resolved with the namespace
+      of the inheriting hashdecl as the current namespace (see @ref unqualified_symbol_resolution "unqualified symbol
+      resolution"), as the types of its members are; a parent with the name of the inheriting hashdecl is resolved
+      without it, as a hashdecl cannot inherit itself
     - <b>All members public:</b> All inherited members are public (hashdecls have no access modifiers)
     - <b>No member shadowing:</b> Child hashdecls cannot declare a member with the same name as a parent member;
       this will result in a parse error

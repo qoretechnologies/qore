@@ -181,6 +181,15 @@ x=null@endverbatim
     creating an object or a hash that needs one evaluated after the Program has been deleted raises a
     \c PROGRAM-ERROR exception (see @ref hashdecl_initializer_program).
 
+    @anchor program_deletion_constant_objects
+    An object of a class of the Program (a class that its code declares, or one that a module creates in the
+    Program, as module-python does for the classes of the Python modules that it imports) that a constant of the
+    Program holds is deleted when the Program's data is deleted, while only the deleting thread can run code in the
+    Program and its code is intact, also if a value outside the Program, or code of the Program that refers to the
+    constant, still holds it: its destructor runs once and can call the code of the Program, and an exception that it
+    raises is raised by the deletion; a holder outside the Program then holds a deleted object.  Objects of builtin
+    classes and of the classes of binary modules, which do not depend on the Program, are not deleted.
+
     @anchor program_deletion_types
     A value can outlive the Program whose classes, @ref hashdecl "hashdecls" and enums its type names: a value of
     type \c list<*Foo> or \c hash<string, Foo> returned by a function of the Program, an object of a generic class or

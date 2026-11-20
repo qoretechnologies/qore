@@ -55,9 +55,12 @@ public class BflApi {
             "input_video", "video", "start_video", "draft_cache");
     }
     private {
-        static Mutex mutex();
         static *OpenApi3::OpenApi3Schema schema;
         static *RestSchemaActionSet actions;
+    }
+
+    private:internal {
+        static Mutex mutex();
     }
 
     #! Returns a stable submission action for an existing public endpoint path

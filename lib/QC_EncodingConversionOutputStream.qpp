@@ -3,7 +3,7 @@
 /*
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -40,6 +40,12 @@
     latin2Stream.write(latin2Data);     #writes UTF-8 equivalents to destUtf8Stream
     @endcode
 
+    Data written that is not valid in the source encoding raises \c INVALID-ENCODING, unless the
+    \c encoding_errors option of the constructor is \c "latin1" or \c "keep"; a character that the target encoding
+    cannot hold raises \c ENCODING-CONVERSION-ERROR, as does a byte sequence that has the form of a character but
+    is not defined in the source encoding (ex: \c 0x81 in \c CP1252), also with \c "latin1"; \c "keep" also keeps a
+    byte order mark that the other values remove; see @ref encoding_conversion_streams.
+
     @note stream classes are not designed to be accessed from multiple threads; they have been implemented without
     locking for fast and efficient use when used from a single thread.  For methods that would be unsafe to use in
     another thread, any use of such methods in threads other than the thread where the constructor was called will
@@ -59,12 +65,35 @@ qclass EncodingConversionOutputStream [arg=EncodingConversionOutputStream* os; n
     @param output_stream the destination \ref OutputStream to write bytes to
     @param source_encoding the encoding of the characters that will be written to this stream
     @param target_encoding the destination character encoding that will be written to the underlying OutputStream
+    @param encoding_errors what data written that is not valid in the source encoding gives; one of the
+    @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING when it is written,
+    \c "latin1" takes each byte that does not start a valid character of the source encoding (in a Unicode encoding
+    form such as UTF-16 or UTF-32, each byte of a code unit that does not start one) as the ISO-8859-1 character of
+    that byte and converts it to the target encoding, \c "keep" passes the bytes as they are without a check, and is
+    only allowed when the source and target encodings are the same; see @ref encoding_errors
+
     @throw ENCODING-CONVERSION-ERROR if either of the encodings is unsupported
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given, or \c "keep" with different source
+    and target encodings
+
+    @since %Qore 3.0 the \a encoding_errors parameter
  */
 EncodingConversionOutputStream::constructor(Qore::OutputStream[OutputStream] output_stream, string source_encoding,
-        string target_encoding) [flags=NAMED_ARGS] {
+        string target_encoding, *string encoding_errors) [flags=NAMED_ARGS] {
+   qore_encoding_errors_t ee;
+   if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
+      return;
+   }
+   const QoreEncoding* src = QEM.findCreate(source_encoding);
+   const QoreEncoding* dst = QEM.findCreate(target_encoding);
+   if (EncodingConvertor::checkEncodingErrors(src, dst, ee, "EncodingConversionOutputStream", xsink)) {
+      return;
+   }
    SimpleRefHolder<EncodingConversionOutputStream> ecos(new EncodingConversionOutputStream(
-         output_stream.release(), QEM.findCreate(source_encoding), QEM.findCreate(target_encoding), xsink));
+         output_stream.release(), src, dst, xsink, ee));
+   if (*xsink) {
+      return;
+   }
    self->setPrivate(CID_ENCODINGCONVERSIONOUTPUTSTREAM, ecos.release());
    qore_object_private* o = qore_object_private::get(*self);
    const qore_class_private* cls = qore_class_private::get(*QC_ENCODINGCONVERSIONOUTPUTSTREAM);
@@ -74,8 +103,9 @@ EncodingConversionOutputStream::constructor(Qore::OutputStream[OutputStream] out
 //! Flushes any buffered (unwritten) bytes, closes the output stream and releases all resources.
 /** Any methods called on a closed output stream will throw an exception.
 
-    @throw ENCODING-CONVERSION-ERROR the data written ends in the middle of a character or shift sequence; the
-    message gives its byte offset in the data written
+    @throw INVALID-ENCODING the data written ends in the middle of a character or shift sequence and the
+    \a encoding_errors option of the constructor is \c "raise"; the message gives its byte offset in the data
+    written
     @throw OUTPUT-STREAM-CLOSED-ERROR the output stream has already been closed
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
@@ -94,11 +124,29 @@ nothing EncodingConversionOutputStream::close() {
     bos.write(<63>);
     @endcode
 
-    @throw ENCODING-CONVERSION-ERROR an invalid byte sequence was written, or a character that the target encoding
-    cannot hold; the message gives the byte offset of the first one in the data written to the stream
+    @throw INVALID-ENCODING the data written is not valid in the source encoding (a byte sequence that is not a
+    character of the encoding) and the \a encoding_errors option of the constructor is \c "raise"; the message
+    gives the byte offset of the sequence in the data written to the stream
+    @throw ENCODING-CONVERSION-ERROR the data written has a character that the target encoding cannot hold; the
+    message gives the byte offset of the first one in the data written to the stream
     @throw OUTPUT-STREAM-CLOSED-ERROR the output stream has already been closed
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
 nothing EncodingConversionOutputStream::write(binary data) [flags=NAMED_ARGS] {
    os->writeHelper(data, xsink);
+}
+
+//! Returns what data written that is not valid in the source encoding gives
+/** @par Example:
+    @code{.py}
+string encoding_errors = latin2Stream.getEncodingErrors();
+    @endcode
+
+    @return one of the @ref encoding_errors_constants: \c "raise", \c "latin1", or \c "keep"; see
+    @ref encoding_errors
+
+    @since %Qore 3.0
+ */
+string EncodingConversionOutputStream::getEncodingErrors() [flags=CONSTANT] {
+   return new QoreStringNode(q_encoding_errors_name(os->getEncodingErrors()));
 }

@@ -36,6 +36,7 @@
 #include "cppapiuser-module.h"
 #include <qore/QoreSandboxManager.h>
 
+#include <atomic>
 #include <cassert>
 #include <cstring>
 #include <mutex>
@@ -255,6 +256,47 @@ static bool cppapiuser_pending_probe_cmd(const QoreString& cmd, ExceptionSink* x
 static std::mutex module_cmd_lock;
 static std::vector<std::string> module_cmds;
 
+//! the number of objects of the classes that the "owned-constant" command creates whose C++ destructor has run
+static std::atomic<int64> owned_probe_destroyed{0};
+
+//! the destructor of the classes that the "owned-constant" command creates: counts the objects destroyed
+static void owned_probe_destructor(QoreObject*, AbstractPrivateData* data, RuntimeConfig&, ExceptionSink* xsink) {
+    ++owned_probe_destroyed;
+    data->deref(xsink);
+}
+
+//! as owned_probe_destructor(), and raises an exception
+static void owned_probe_raising_destructor(QoreObject* self, AbstractPrivateData* data, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    owned_probe_destructor(self, data, rc, xsink);
+    xsink->raiseException("OWNED-PROBE-DESTRUCTOR", "the destructor of %s raised an exception", self->getClassName());
+}
+
+//! "owned-constant <ns>" or "owned-constant-raising <ns>": creates the class <ns>::OwnedProbe with a C++ destructor in
+//! the Program the command applies to, and the constant <ns>::Obj that holds an object of it, at run time, as
+//! module-python's "import" command creates the classes and constants of a Python module (#6791)
+//! OwnedProbe::name(): returns the name of the class
+static QoreValue owned_probe_name(const QoreMethod&, const void*, QoreObject* self, AbstractPrivateData*,
+        const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
+    return new QoreStringNode(self->getClassName());
+}
+
+static void cppapiuser_owned_constant(const char* ns_name, bool raising, ExceptionSink* xsink) {
+    QoreProgram* pgm = getProgram();
+    // the namespace is added to the Program's root namespace when it is complete, as module-python adds its own
+    QoreNamespace* ns = new QoreNamespace(ns_name);
+    QoreClass* qc = new QoreClass("OwnedProbe", ns_name);
+    qc->setDestructor(raising ? owned_probe_raising_destructor : owned_probe_destructor);
+    qc->addMethod(nullptr, "name", owned_probe_name, Public, QCF_CONSTANT, QDOM_DEFAULT, stringTypeInfo);
+    ns->addSystemClass(qc);
+    ns->addConstant("Obj", new QoreObject(qc, pgm, new AbstractPrivateData));
+    pgm->getRootNS()->addNamespace(ns);
+}
+
+int64 cppapiuser_get_owned_probe_destroyed() {
+    return owned_probe_destroyed.load();
+}
+
 // records the command, with " [sandboxed]" appended when the Program that the command runs in has a sandbox manager
 // (the sandbox that a module such as python gives what the command creates, see QoreSandboxManagerHelper(pgm)); the
 // command "fail" raises an exception instead, and the commands of cppapiuser_pending_probe_cmd() are not recorded
@@ -262,6 +304,14 @@ static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
     assert(xsink);
     if (cmd == "fail") {
         xsink->raiseException("CPPAPIUSER-COMMAND-ERROR", "the command \"fail\" was issued");
+        return;
+    }
+    if (!strncmp(cmd.c_str(), "owned-constant ", 15)) {
+        cppapiuser_owned_constant(cmd.c_str() + 15, false, xsink);
+        return;
+    }
+    if (!strncmp(cmd.c_str(), "owned-constant-raising ", 23)) {
+        cppapiuser_owned_constant(cmd.c_str() + 23, true, xsink);
         return;
     }
     // no C++ exception may leave the module's C callback

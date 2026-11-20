@@ -1871,6 +1871,18 @@ DLLLOCAL bool qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode);
 */
 DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
 
+//! Assigns a value through the reference that an element of a container holds, as the AST interpreter assigns an
+//! element that holds a reference (LValueHelper::doLValue() follows it; qore#6661)
+/** @param cur the element's current value
+    @param val the value assigned, which is referenced for the assignment
+    @param xsink for an exception of the assignment (a type error of the referenced lvalue)
+
+    @return true if \a cur is a reference, through which \a val was assigned (or an exception raised), false if it is
+    not one, and the element takes the value as usual
+*/
+DLLLOCAL bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val,
+        ExceptionSink* xsink);
+
 //! Removes the element with the given index from the value of an lvalue, as the remove operator does
 /** As LValueRemoveHelper::doRemove() does for an index operator with a single index: a list loses the element and
     returns it, a string or a binary object returns the character or the byte at the index and is not changed, and

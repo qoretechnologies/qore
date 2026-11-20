@@ -153,6 +153,33 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     See @ref HttpServer::HttpResponseInfo::after_send "HttpResponseInfo::after_send" for when a response counts as
     sent with each HTTP version and on which thread the callback runs.
 
+    @section httpserver_invalid_text Request Text That Is Not Valid
+
+    Text from the client is checked where it enters the server, before any handler sees it:
+    - a request whose path or query (which must be and decode to valid UTF-8 text), method or HTTP version is not
+      valid text, or whose HTTP/1.x header names have a byte above 0x7f, is answered with \c 400; a header or trailer
+      value that is not valid UTF-8 is given to the handler in ISO-8859-1 with its bytes unchanged, as obs-text
+      (RFC 9110 section 5.5)
+    - a request body that is text is decoded by the rules shared by all HTTP clients and servers (see
+      @ref Qore::decode_http_body() "decode_http_body()"), and a body that is not valid text in its encoding is
+      answered with \c 400 before the handler processes it: a body with a \c Content-Length, a buffered HTTP/2 or
+      HTTP/3 body, an HTTP/1.1 chunked body (read whole and decoded once, so a character can be split over chunks)
+      and a compressed body (decoded after it is decompressed, when the handler's
+      @ref HttpServer::AbstractHttpRequestHandler::decompress_to_string "decompress_to_string" is set); text whose
+      encoding is not declared or defined by its type is decoded in the default text encoding of the server
+      (@ref HttpServer::HttpServer::setDefaultTextEncoding() "HttpServer::setDefaultTextEncoding()") on every path
+    - a body that is not text, such as \c application/octet-stream or \c image/png, also with a \c charset
+      parameter, is binary data and is never refused
+    .
+
+    A chunked body is read when the handler gets it, with
+    @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()",
+    which raises \c HTTP-BODY-ENCODING-ERROR for a body that is not valid text, as does
+    @ref HttpServer::AbstractHttpRequestHandler::decodeRequestText() "AbstractHttpRequestHandler::decodeRequestText()";
+    the server answers this error with \c 400.  An \c INVALID-ENCODING error that a handler raises for text of its own
+    is a server error, answered with \c 500.  A stream handler receives the chunks of an HTTP/1.1 chunked body as
+    they are received, without a check (see @ref HttpServer::AbstractStreamRequest::recvImpl() "AbstractStreamRequest::recvImpl()").
+
     @section httpserverhttp3 HTTP/3 (QUIC) Support
 
     When a TLS listener is added with \c enable_h3 (or when
@@ -243,12 +270,20 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - the error response for an exception of a request handler (400, 413 or 500) gives the error and its description
+      only, without the location of the exception in the server's code, unless debugging is enabled
+      (@ref HttpServer::HttpServer::setDebug() "HttpServer::setDebug()"; issue #6780)
+    - the errors that the server logs give the whole exception with its call stack when debugging is enabled and the
+      location, error and description of the exception otherwise; the errors of a message body that cannot be
+      logged, of a queued persistent handler and of a request processed after its persistent session ended did the
+      opposite, an error clearing the context data of a request lost the text of its message, and an error
+      preprocessing or authenticating a request lost the description of the exception (issues #6793 and #6809)
     - a request whose target (the path or the query, which must be and decode to valid UTF-8 text) or whose method or
       HTTP version is not valid text, whose HTTP/1.x header names have a byte above 0x7f, or whose body (with a
-      \c Content-Length, or buffered over HTTP/2 or HTTP/3) is not valid text in its encoding, is answered with @c 400
-      before any handler sees it, over HTTP/1.x,
+      \c Content-Length, buffered over HTTP/2 or HTTP/3, chunked, or compressed) is not valid text in its encoding, is
+      answered with @c 400 before any handler sees it, over HTTP/1.x,
       HTTP/2 and HTTP/3; a header value that is not valid UTF-8 is given to the handler in ISO-8859-1 with its bytes
-      unchanged, as obs-text (RFC 9110 section 5.5) (issue #6554)
+      unchanged, as obs-text (RFC 9110 section 5.5) (issues #6554 and #6604; see @ref httpserver_invalid_text)
     - a handler path that is a regular expression is compiled when the handler is set
       (@ref HttpServer::HttpServer::setHandler() "HttpServer::setHandler()",
       @ref HttpServer::HttpServer::setDynamicHandler() "HttpServer::setDynamicHandler()",
@@ -1222,6 +1257,14 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         */
         Priv::ExternalConnectionKeeper external_connections();
 
+        #! The maximum number of header values in @ref encoding_preferences_cache and the longest value cached
+        /** The header is chosen by the client, so the cache is emptied when it is full and long values are not cached
+        */
+        const MaxCachedEncodingPreferences = 64;
+        const MaxCachedEncodingHeaderLength = 256;
+    }
+
+    private:internal {
         #! Cached HTTP date header value
         static string cached_date_header;
 
@@ -1245,14 +1288,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Protects @ref encoding_preferences_cache
         static Mutex encoding_preferences_lck();
 
-        #! The maximum number of header values in @ref encoding_preferences_cache and the longest value cached
-        /** The header is chosen by the client, so the cache is emptied when it is full and long values are not cached
-        */
-        const MaxCachedEncodingPreferences = 64;
-        const MaxCachedEncodingHeaderLength = 256;
-    }
-
-    private:internal {
         #! The information about the names of the fields of the configured response headers (\c hdr)
         /** A subclass can change \c hdr after the constructor and while requests are served; each response reads
             \c hdr and this once and compares the headers that this was made for with its own, so that the names are
@@ -1556,25 +1591,21 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     #! Returns a request body received as binary data as a string
     /** Text is decoded by the rules shared by all HTTP clients and servers (see
         @ref Qore::decode_http_body() "decode_http_body()"), with the default text encoding (@ref getDefaultTextEncoding()) as the assumed
-        encoding; a body of another type that is not delivered as binary data is returned in the default text
-        encoding.
+        encoding; a body of another type that is not delivered as binary data is returned with its bytes in the
+        default text encoding, or tagged \c ISO-8859-1 if they are not valid in it (binary data is never refused).
 
         @param hdr the request headers
         @param body the request body
 
-        @throw INVALID-ENCODING the body is not valid text in its encoding; the request is answered with 400 (qore#6554)
+        @throw HTTP-BODY-ENCODING-ERROR the body is text that is not valid in its encoding; the request is answered
+        with 400 (qore#6554, qore#6604)
+
+        @see @ref HttpServer::AbstractHttpRequestHandler::decodeRequestText() "AbstractHttpRequestHandler::decodeRequestText()",
+        which handlers use for the bodies that they read themselves
     */
     private string decodeRequestText(hash<auto> hdr, binary body) {
-        string assumed = getDefaultTextEncoding();
-        auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
-        data rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed);
-        string str = rv.typeCode() == NT_STRING ? rv : body.toString(assumed);
         # text from outside the server is checked where it enters it, before any handler processes it
-        if (!str.isEncodingValid()) {
-            throw "INVALID-ENCODING", sprintf("the request body of %d bytes has an invalid encoding: it is not valid "
-                "text in encoding %s", body.size(), str.encoding());
-        }
-        return str;
+        return AbstractHttpRequestHandler::decodeRequestText(hdr, body, getDefaultTextEncoding());
     }
 
     #! To call a listener's stop callback
@@ -4599,7 +4630,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     try {
                         body = decodeRequestText(hdr, body_data);
                     } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err != "INVALID-ENCODING") {
+                        if (ex.err != "HTTP-BODY-ENCODING-ERROR") {
                             rethrow;
                         }
                         listener.logError("%s: from %s", ex.desc, cx."peer-info".address_desc);
@@ -4641,7 +4672,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 try {
                     body = decodeRequestText(hdr, cx."header-info".body);
                 } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err != "INVALID-ENCODING") {
+                    if (ex.err != "HTTP-BODY-ENCODING-ERROR") {
                         rethrow;
                     }
                     listener.logError("%s: from %s", ex.desc, cx."peer-info".address_desc);
@@ -4836,9 +4867,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             clearContextInfo();
         } catch (hash<ExceptionInfo> ex) {
             # log the error
-            string desc = "error clearing request context data: " + !debug
+            string desc = "error clearing request context data: " + (!debug
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
-                : get_exception_string(ex);
+                : get_exception_string(ex));
             desc += sprintf(": received from %s", cx."peer-info".address_desc);
             listener.logError("%s", desc);
         }
@@ -4987,7 +5018,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     string desc = sprintf("Handler %y preprocessing error from %s: ", cx.handler_name,
                         cx."peer-info".address_desc) + (
                             !debug
-                                ? sprintf("%s: %s: %s", cx.handler_name, get_ex_pos(ex), ex.err, ex.desc)
+                                ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                                 : get_exception_string(ex)
                         );
                     listener.logError("%s", desc);
@@ -5005,7 +5036,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
                             cx."peer-info".address_desc) + (
                                 !debug
-                                    ? sprintf("%s: %s: %s", cx.handler_name, get_ex_pos(ex), ex.err, ex.desc)
+                                    ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                                     : get_exception_string(ex)
                             );
                         listener.logError("%s", desc);
@@ -5030,7 +5061,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     rv = ah;
                 } else {
                     # decode body if applicable; a decoded body that is too large raises HTTP-BODY-TOO-LARGE,
-                    # which is answered with 413
+                    # which is answered with 413, and text that is not valid in its encoding
+                    # HTTP-BODY-ENCODING-ERROR, which is answered with 400
                     if (body && hdr."content-encoding" && handler.decompress) {
                         # the decompressed octets are text in the charset of the request, decoded as an
                         # uncompressed body is (qore#6618)
@@ -5163,14 +5195,25 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             on_exit if (s.pendingHttpChunkedBody())
                 s.readHTTPChunkedBodyBinary(HttpServer::ReadTimeout);
 
-            int err_code = ex.err == "HTTP-BODY-TOO-LARGE" ? 413 : 500;
+            # a request body that is too large or that is not valid text in its encoding is an error of the client,
+            # raised when the body is decompressed or read here or by the handler with getMessageBody(); an
+            # INVALID-ENCODING error, which a handler raises for its own text, is not (qore#6604)
+            int err_code;
+            switch (ex.err) {
+                case "HTTP-BODY-TOO-LARGE": err_code = 413; break;
+                case "HTTP-BODY-ENCODING-ERROR": err_code = 400; break;
+                default: err_code = 500; break;
+            }
+            # the response gives the client the error and its description; the location of the exception in the
+            # server's code and its call stack only with debugging enabled; the log message has them (qore#6780)
+            string body = debug ? str : sprintf("%s: %s", ex.err, ex.desc);
             if (async_response_out) {
                 # Capture the error response for the async I/O controller to send
                 # Sending synchronously from the handler thread races with the
                 # I/O controller on multiplexed (HTTP/2, HTTP/3) connections
-                async_response_out = buildAsyncErrorResponse(err_code, str, cx, listener, s, !is_multiplexed);
+                async_response_out = buildAsyncErrorResponse(err_code, body, cx, listener, s, !is_multiplexed);
             } else {
-                sendRequestError(listener, \cx, s, err_code, str, NOTHING, NOTHING, cx."response-encoding", head);
+                sendRequestError(listener, \cx, s, err_code, body, NOTHING, NOTHING, cx."response-encoding", head);
             }
             logError("%s", str);
         }
@@ -6460,9 +6503,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         bool no_new_dedicated = False;
         int id;
 
-        #! the test hook that stop() calls once it has marked the listener as stopping (see dbgSetStoppingHook())
-        static *code<nothing(HttpListener)> dbg_stopping_hook;
-
         # socket handler hash
         hash<string, AbstractHttpSocketHandlerInterface> shh;
 
@@ -6514,6 +6554,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             SSL_VERIFY_FAIL_IF_NO_PEER_CERT: "SSL_VERIFY_FAIL_IF_NO_PEER_CERT",
             SSL_VERIFY_CLIENT_ONCE: "SSL_VERIFY_CLIENT_ONCE",
         };
+    }
+
+    private:internal {
+        #! the test hook that stop() calls once it has marked the listener as stopping (see dbgSetStoppingHook())
+        static *code<nothing(HttpListener)> dbg_stopping_hook;
     }
 
     #! Creates the object with the given parameters
@@ -6907,7 +6952,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "INVALID-ENCODING") {
                         lstr += sprintf("error logging msg body: %s: %s", ex.err, ex.desc);
-                        string etxt = serv.getDebug()
+                        string etxt = !serv.getDebug()
                             ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                             : get_exception_string(ex);
                         string str = sprintf("%s: received from %s via %s", etxt, info.address_desc,
@@ -7005,6 +7050,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # ignore if server was deleted
             }
         }
+    }
+
+    #! Returns the encoding assumed for request text without an encoding declaration: the server's default text encoding
+    /** @return the server's default text encoding (@ref HttpServer::HttpServer::getDefaultTextEncoding() "HttpServer::getDefaultTextEncoding()")
+
+        @since HttpServer 1.7
+    */
+    string getDefaultTextEncoding() {
+        return serv ? serv.getDefaultTextEncoding() : "ISO-8859-1";
     }
 
     #! Returns the effective maximum size in bytes of a decompressed request body for this listener
@@ -8887,7 +8941,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
-            string etxt = serv.getDebug()
+            string etxt = !serv.getDebug()
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                 : get_exception_string(ex);
             logError("cid %d: queued persistent handler error: %s", cx.id, etxt);
@@ -9055,7 +9109,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     cleanupMultiplexedBodyStream(s, conn_info.header_info);
                 }
             } catch (hash<ExceptionInfo> ex) {
-                string etxt = serv.getDebug()
+                string etxt = !serv.getDebug()
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                     : get_exception_string(ex);
                 logError("cid %d: error processing orphaned request: %s", cx.id,

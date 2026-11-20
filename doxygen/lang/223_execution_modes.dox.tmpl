@@ -387,7 +387,9 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
       protect a module against deliberate changes, which are made to native code as easily
     - the reader refuses metadata whose structure is invalid (a read beyond its end, an invalid value or reference)
     - the reader checks that the objects that the IR uses are created by the IR, and the IR is verified before it
-      runs: its control flow, and that the values that it uses are defined on the paths that reach their use
+      runs: its control flow, that the values that it uses are defined on the paths that reach their use and are
+      not used after their release, and that the scopes, implicit arguments and contexts that it opens are closed
+      in order and in the same way on every path
 
     IR that fails a check is not run: a module whose metadata fails a check when it is loaded is not loaded
     (\c MODULE-LOAD-ERROR), and IR that is read when it is first needed (the IR of a closure, or the IR that a

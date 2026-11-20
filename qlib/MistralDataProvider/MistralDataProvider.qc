@@ -36,13 +36,16 @@ public class MistralDataProvider inherits MistralDataProviderCommon {
 
     private {
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
-        static Mutex child_lock();
 
         const DefaultChildMap = {
             "chat-completion": Class::forName("MistralDataProvider::MistralChatCompletionDataProvider"),
             "create-embeddings": Class::forName("MistralDataProvider::MistralEmbeddingDataProvider"),
             "ocr": Class::forName("MistralDataProvider::MistralOcrDataProvider"),
         };
+    }
+
+    private:internal {
+        static Mutex child_lock();
     }
 
     constructor(RestClientIo::RestClientIo rest) : MistralDataProviderCommon(rest) {

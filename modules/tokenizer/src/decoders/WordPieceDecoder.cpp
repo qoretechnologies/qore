@@ -24,7 +24,10 @@ WordPieceDecoder::WordPieceDecoder(const QoreHashNode* config, ExceptionSink* xs
         : prefix("##"), cleanup(true) {
     assert(config);
 
-    std::string prefix_str = safeGetStringKey(config, "prefix");
+    std::string prefix_str = configStringKey(config, "prefix", xsink);
+    if (*xsink) {
+        return;
+    }
     if (!prefix_str.empty()) {
         prefix = prefix_str;
     }

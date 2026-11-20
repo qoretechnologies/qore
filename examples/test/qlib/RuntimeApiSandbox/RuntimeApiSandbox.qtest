@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires QoreRagTypes
+%requires EdifactUtil
+%requires WebSocketClient
+%requires ConnectionProvider
+%requires ProviderIndexUtil
+
+%exec-class RuntimeApiSandboxTest
+
+#! sandboxed code cannot disturb other callers through process-wide runtime state (qore#6750)
+/** A tenant, the code of a sandboxed Program, cannot move the process-wide fast clock, set the clock or the waiter of
+    a shared rate limiter (which run on the threads of its other clients), get or place an EDIFACT release in the
+    process-wide registry, name the key of another WebSocket client's calls, or hold a lock that a public class of a
+    standard module keeps for all of its callers.  Before the change, each of these was possible.
+*/
+class RuntimeApiSandboxTest inherits QUnit::Test {
+    public {
+        const TenantSource = "%modern
+%requires QoreRagTypes
+%requires EdifactUtil
+
+string sub call(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub advanceClock() {
+    return call(sub () { qore_test_advance_fast_clock(1); });
+}
+string sub sharedLimiterClock() {
+    return call(sub () {
+        EmbedderRateLimiter limiter = EmbedderRateLimiter::getShared(\"rt-api-sandbox-6750\", 10, 1000);
+        limiter.setClock(int sub () { return 0; });
+    });
+}
+string sub sharedLimiterWaiter() {
+    return call(sub () {
+        EmbedderRateLimiter limiter = EmbedderRateLimiter::getShared(\"rt-api-sandbox-6750\", 10, 1000);
+        limiter.setWaiter(bool sub (int ms) { return False; });
+    });
+}
+string sub ownLimiterClock() {
+    return call(sub () {
+        EmbedderRateLimiter limiter(10, 1000);
+        limiter.setClock(int sub () { return 0; });
+    });
+}
+string sub getRelease(string release, string cache_dir) {
+    return call(sub () { EdifactSchemaRegistry::loadRelease(release, {\"cache_dir\": cache_dir, \"skip_cache_read\": True}); });
+}
+string sub loadRelease(string release, string dir, string cache_dir) {
+    return call(sub () { EdifactSchemaRegistry::loadRelease(release, {\"dir\": dir, \"cache_dir\": cache_dir,
+        \"skip_cache_read\": True}); });
+}
+";
+        #! module, class, lock
+        const LockCases = (
+            ("ConnectionProvider", "ConnectionProvider::FilesystemConnection", "subtype_lck"),
+            ("ProviderIndexUtil", "ProviderIndexUtil::ProviderIndexUtil", "m"),
+        );
+    }
+
+    private {
+        TmpDir tmp("qore-runtime-api-sandbox-");
+        string fixtures = normalize_dir(get_script_dir() + "/../EdifactUtil/fixtures") + DirSep;
+    }
+
+    constructor() : QUnit::Test("runtime API sandbox", "1.0", \ARGV) {
+        addTestCase("fast clock", \fastClockTest());
+        addTestCase("shared rate limiter", \limiterTest());
+        addTestCase("EDIFACT release registry", \edifactTest());
+        addTestCase("WebSocket client call keys", \keyTest());
+        addTestCase("module class locks", \lockTest());
+        set_return_value(main());
+    }
+
+    fastClockTest() {
+        assertEq("PERMISSION-DENIED", getTenant().callFunction("advanceClock"));
+    }
+
+    limiterTest() {
+        Program tenant = getTenant();
+        assertEq("EMBEDDER-RATE-LIMIT-ACCESS-DENIED", tenant.callFunction("sharedLimiterClock"));
+        assertEq("EMBEDDER-RATE-LIMIT-ACCESS-DENIED", tenant.callFunction("sharedLimiterWaiter"));
+        # a limiter of the tenant's own is the tenant's
+        assertEq("ok", tenant.callFunction("ownLimiterClock"));
+    }
+
+    edifactTest() {
+        string cache_dir = tmp.path + "/cache";
+        mkdir(cache_dir);
+        # the host loads a release
+        EdifactSchemaRegistry::loadRelease("D21A", {"dir": fixtures + "D21A" + DirSep, "cache_dir": cache_dir,
+            "skip_cache_read": True, "reload": True});
+        Program tenant = getTenant();
+        # the tenant does not get it from the registry: it gives a directory of its own
+        assertEq("EDIFACT-DIR-ERROR", tenant.callFunction("getRelease", "D21A", cache_dir));
+        # a release that the tenant loads is not placed in the registry for other code
+        string tenant_cache = tmp.path + "/tenant-cache";
+        mkdir(tenant_cache);
+        assertEq("ok", tenant.callFunction("loadRelease", "D00A", fixtures + "D00A" + DirSep, tenant_cache));
+        assertEq(NOTHING, EdifactSchemaRegistry::getRelease("D00A"));
+    }
+
+    keyTest() {
+        string key = WscActionWaitCount::getKey();
+        assertRegex("^wsc-action-call:[0-9]+:[0-9a-f]{32}$", key);
+        assertNeq(key, WscActionWaitCount::getKey());
+    }
+
+    lockTest() {
+        foreach list<string> c in (LockCases) {
+            Program p = getTenant(False);
+            *hash<ExceptionInfo> ex;
+            try {
+                p.parse(sprintf("%%modern\n%%requires %s\nclass Sub inherits %s {\n    static auto get() { return %s; }\n}\n",
+                    c[0], c[1], c[2]), "subclass");
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+            assertEq("PARSE-EXCEPTION", ex.err, sprintf("%s::%s", c[1], c[2]));
+        }
+    }
+
+    #! Returns a tenant: a Program with a sandbox
+    private Program getTenant(*bool parse) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        if (parse ?? True) {
+            p.parse(TenantSource, "tenant");
+        }
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+}

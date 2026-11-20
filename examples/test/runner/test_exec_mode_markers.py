@@ -213,6 +213,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   ISO-8859-1
         # - dataframe-default-encoding-names (#6100): its checks run in child processes whose default character
         #   encodings differ
+        # - default-encoding-tokens (#6604): its checks run in child processes whose default character encodings
+        #   differ
+        # - default-encoding-keys (#6604): its checks run in child processes whose default character encodings
+        #   differ
         # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
         # - ParseStackBoundary-2 (#6047): the module loads that it checks in the primary thread run in child processes
@@ -315,12 +319,17 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   processes, as a module is loaded once in a process
         # - AOTDebugCatchTables (#6733): the program runs in child processes started without an execution mode, from
         #   source and as a qcc executable
+        # - image-ir-temp-drain (#6742): the script runs in a child process in AST mode and as a qcc executable
         # - WebSocketAsyncTextEncoding (#6619): each case runs in a child process with a default encoding of its own
         # - globalsetup-stop (#6659): the tests whose global setup stops run in child processes of its own binary
         # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
+        # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
         #   without an execution mode
+        # - aot-standalone-format-floor (#6699, batch AM v49): its checks run qcc executables in child processes started
+        #   without an execution mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
                                  "examples/test/qore/misc/aot-dependency-domains/aot-dependency-domains.qtest",
@@ -331,6 +340,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/ir/AOTDebugCatchTables.qtest",
+                                 "examples/test/ir/image-ir-temp-drain/image-ir-temp-drain.qtest",
                                  "examples/test/ir/AOTDumpInfoFindCallRef.qtest",
                                  "examples/test/ir/AOTModuleInitException.qtest",
                                  "examples/test/ir/AOTMemberInitNegativeOffsets.qtest",
@@ -402,6 +412,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/user-functional-domains/QlibAllModulesLoad-2.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-restricted-callers.qtest",
                                  "examples/test/qlib/DataProvider/TabularProfilerEncoding.qtest",
+                                 "examples/test/qore/parser/type-name-encoding.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
@@ -421,6 +432,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/QUnit/result-counts.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding-names.qtest",
+                                 "modules/tokenizer/test/default-encoding-tokens.qtest",
+                                 "modules/protobuf/test/default-encoding-keys.qtest",
                                  "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest",
                                  "modules/dataframe/test/dataframe-plugin-exception-handler.qtest",
                                  "modules/dataframe/test/dataframe-inline-mask-subscript.qtest",

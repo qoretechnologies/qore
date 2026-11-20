@@ -15,9 +15,13 @@ public class AwsTextractSchema {
     private {
         static *OpenApi3::OpenApi3Schema schema;
         static hash<string, AbstractDataProviderType> types = {};
-        static Mutex lck();
-        static Mutex legacy_lck();
         static hash<string, HashDataType> legacy_types = {};
+    }
+
+    private:internal {
+        static Mutex lck();
+
+        static Mutex legacy_lck();
     }
 
     #! Returns the compatible document action form with complete nested query and adapter types

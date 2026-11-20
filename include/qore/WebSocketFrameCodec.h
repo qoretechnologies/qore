@@ -159,6 +159,9 @@ public:
         @param mask if true, applies random masking (client->server)
         @param rsv RSV bits (0 for no extensions)
         @return ref'd BinaryNode containing the encoded frame
+
+        @note the payload of a close frame is cut to 125 bytes (RFC 6455 section 5.5), at the start of a UTF-8
+        character of the reason
     */
     static BinaryNode* encode(WsOpcode opcode, const void* payload, size_t payload_len,
         bool fin = true, bool mask = false, uint8_t rsv = 0);

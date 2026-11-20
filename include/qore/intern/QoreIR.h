@@ -5608,6 +5608,10 @@ public:
         one only; not serialized: IR read back closes the innermost one (#5968)
     */
     std::unordered_map<const QoreIRInstruction*, uint32_t> catch_exit_depths;
+    //! true for IR read from an image of a format that does not carry the temp scopes of its instructions
+    //! (QORE_AOT_TEMP_SCOPES_VERSION): their ids are all 0, and the verification does not follow the temp scopes on
+    //! the paths of exceptions (qore#6742)
+    bool temp_scope_ids_unknown = false;
     //! true if the function has a catch block without an exit block whose statements can raise an exception (or
     //! run a thread_exit) that leaves the frame without closing it
     /** Set by the lowering and read by the LLVM lowering, whose exception exits of the frame then close the catch

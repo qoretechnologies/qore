@@ -535,7 +535,13 @@ enum HTTP3Mode : int {
     @ref Qore::BufferedStreamReader "BufferedStreamReader",
     @ref Qore::InputStreamLineIterator "InputStreamLineIterator", @ref Qore::FileLineIterator "FileLineIterator",
     and @ref Qore::ReadOnlyFile::readTextFile() "ReadOnlyFile::readTextFile()"): what text read that is not valid
-    in its @ref character_encoding "character encoding" gives; see @ref encoding_errors
+    in its @ref character_encoding "character encoding" gives; also of the conversion streams
+    (@ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" and
+    @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream"), for their input, where
+    \c "latin1" takes each byte that does not start a valid character (each byte of such a code unit in UTF-16 or
+    UTF-32) as the ISO-8859-1 character of that byte, and
+    \c "keep" passes the bytes as they are (only when the source and target encodings are the same); see
+    @ref encoding_errors
 
     @since %Qore 3.0
  */

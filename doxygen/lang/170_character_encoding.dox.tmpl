@@ -143,6 +143,42 @@
     - the C++ API of \c QoreFile that has no exception sink (\c readLine(QoreString&), \c readUntil(),
       \c getchar()) does not check the text
 
+    @anchor encoding_conversion_streams
+    The conversion streams @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" and
+    @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" check their input in the source
+    encoding in the same way, and take the \c encoding_errors option as an argument of their constructors:
+    - \c "raise" (the default): input that is not valid in the source encoding (also a character or shift sequence
+      cut off by the end of the input) raises \c INVALID-ENCODING when it is read (or written), with the byte offset
+      of the invalid sequence in all of the input of the stream (counting a byte order mark that is removed):
+      <tt>EncodingConversionInputStream::read(): the input is not valid UTF-8: invalid byte sequence at byte offset
+      &lt;n&gt;</tt> (\c peek() for a peek, and <tt>EncodingConversionOutputStream::write(): the data written is
+      not valid ...</tt> or \c close()); a valid character that the target encoding cannot hold raises
+      \c ENCODING-CONVERSION-ERROR, as before
+    - \c "latin1": the text already returned cannot be retagged, so each byte that does not start a valid
+      character of the source encoding is taken as the ISO-8859-1 character of that byte and converted to the target
+      encoding, and the input after it is converted from the next byte (ex: \c UTF-8 \c 61 \c E2 \c 41 converted to
+      \c UTF-8 gives \c "aâA"); in a Unicode encoding form with code units of more than one byte (the \c UTF-16
+      and \c UTF-32 encodings, \c UCS-2 and \c UCS-4), the bytes of a code unit that does not start a valid
+      character are each taken as their ISO-8859-1 character, and the input after it is converted from the next code
+      unit, so that it stays aligned (ex: \c UTF-16LE \c 41 \c 00 \c 00 \c DC \c 42 \c 00, with an unpaired
+      surrogate, gives \c "A", U+0000, U+00DC, \c "B"); a character split between reads or writes is converted
+      when the rest of it is given, and a character cut off by the end of the input gives its bytes as ISO-8859-1
+      characters; if the target encoding cannot hold such a character, \c ENCODING-CONVERSION-ERROR is raised
+    - \c "keep": the bytes are passed as they are without a check, also a \c UTF-16 or \c UTF-32 byte order mark,
+      which \c "raise" and \c "latin1" remove; allowed only when the source and target encodings are the same,
+      otherwise the constructor raises \c ENCODING-ERRORS-ERROR
+
+    Valid input is defined as for the readers: a byte sequence that has the form of a character but is not defined
+    in the source encoding (ex: \c 0x81 in \c CP1252, an unmapped \c Shift_JIS code) is not invalid input, and
+    gives \c ENCODING-CONVERSION-ERROR when it is converted, also with \c "latin1".
+
+    The error raised is that of the first problem in the input (an invalid sequence or a character that the target
+    encoding cannot hold), whatever the size of the reads or writes.
+
+    @ref Qore::convert_encoding() "convert_encoding()" of a string that is already in the encoding given checks it
+    in the same way and raises \c INVALID-ENCODING if it is not valid in it (<tt>convert_encoding(): the string is
+    not valid UTF-8: invalid byte sequence at byte offset &lt;n&gt;</tt>).
+
     Binary reads (\c readBinary(), the \c readi*() and \c readu*() methods) are not text and are not checked.  A
     @ref Qore::DataLineIterator "DataLineIterator" does not check the lines of its string, whose bytes were tagged
     or checked when the string was made.

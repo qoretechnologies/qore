@@ -80,6 +80,8 @@ private:
         ResolvedCallReferenceNode* callback;
         ExceptionSink* xsink;
         const QoreEncoding* encoding;
+        //! the method that parses, for the INVALID-ENCODING exceptions
+        const char* where = "JsonSaxParser::parse()";
     };
 
     //! Check sandbox depth limit - no-op if no sandbox

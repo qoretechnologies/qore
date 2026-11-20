@@ -98,7 +98,9 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
 
         #! If epheremal IDs should be negative
         static bool neg;
+    }
 
+    private:internal {
         #! Sequence for epheremal IDs for types
         static Sequence seq(1);
     }

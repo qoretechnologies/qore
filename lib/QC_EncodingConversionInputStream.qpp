@@ -43,6 +43,12 @@
     }
     @endcode
 
+    Input that is not valid in the source encoding raises \c INVALID-ENCODING when it is read, unless the
+    \c encoding_errors option of the constructor is \c "latin1" or \c "keep"; a character that the target encoding
+    cannot hold raises \c ENCODING-CONVERSION-ERROR, as does a byte sequence that has the form of a character but
+    is not defined in the source encoding (ex: \c 0x81 in \c CP1252), also with \c "latin1"; \c "keep" also keeps a
+    byte order mark that the other values remove; see @ref encoding_conversion_streams.
+
     @note stream classes are not designed to be accessed from multiple threads; they have been implemented without
     locking for fast and efficient use when used from a single thread.  For methods that would be unsafe to use in
     another thread, any use of such methods in threads other than the thread where the constructor was called will
@@ -62,12 +68,35 @@ qclass EncodingConversionInputStream [arg=EncodingConversionInputStream* is; ns=
     @param input_stream the source \ref InputStream to read bytes from
     @param source_encoding the encoding of the characters in the source input stream
     @param target_encoding the destination character encoding
+    @param encoding_errors what input that is not valid in the source encoding gives; one of the
+    @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING when it is read,
+    \c "latin1" takes each byte that does not start a valid character of the source encoding (in a Unicode encoding
+    form such as UTF-16 or UTF-32, each byte of a code unit that does not start one) as the ISO-8859-1 character of
+    that byte and converts it to the target encoding, \c "keep" passes the bytes as they are without a check, and is
+    only allowed when the source and target encodings are the same; see @ref encoding_errors
+
     @throw ENCODING-CONVERSION-ERROR if either of the encodings is unsupported
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given, or \c "keep" with different source
+    and target encodings
+
+    @since %Qore 3.0 the \a encoding_errors parameter
  */
 EncodingConversionInputStream::constructor(Qore::InputStream[InputStream] input_stream, string source_encoding,
-        string target_encoding) [flags=NAMED_ARGS] {
+        string target_encoding, *string encoding_errors) [flags=NAMED_ARGS] {
+   qore_encoding_errors_t ee;
+   if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
+      return;
+   }
+   const QoreEncoding* src = QEM.findCreate(source_encoding);
+   const QoreEncoding* dst = QEM.findCreate(target_encoding);
+   if (EncodingConvertor::checkEncodingErrors(src, dst, ee, "EncodingConversionInputStream", xsink)) {
+      return;
+   }
    SimpleRefHolder<EncodingConversionInputStream> ecis(new EncodingConversionInputStream(
-         input_stream.release(), QEM.findCreate(source_encoding), QEM.findCreate(target_encoding), xsink));
+         input_stream.release(), src, dst, xsink, ee));
+   if (*xsink) {
+      return;
+   }
    self->setPrivate(CID_ENCODINGCONVERSIONINPUTSTREAM, ecis.release());
    qore_object_private* o = qore_object_private::get(*self);
    const qore_class_private* cls = qore_class_private::get(*QC_ENCODINGCONVERSIONINPUTSTREAM);
@@ -89,9 +118,11 @@ EncodingConversionInputStream::constructor(Qore::InputStream[InputStream] input_
     }
     @endcode
 
-    @throw ENCODING-CONVERSION-ERROR if an invalid multibyte sequence is encountered in the input, a character that
-    the target encoding cannot hold, or a character or shift sequence cut off by the end of the input; the
-    message gives the byte offset of the first one in the input stream
+    @throw INVALID-ENCODING the input is not valid in the source encoding (a byte sequence that is not a character
+    of the encoding, or a character or shift sequence cut off by the end of the input) and the \a encoding_errors
+    option of the constructor is \c "raise"; the message gives the byte offset of the sequence in the input stream
+    @throw ENCODING-CONVERSION-ERROR the input has a character that the target encoding cannot hold; the message
+    gives the byte offset of the first one in the input stream
     @throw INPUT-STREAM-ERROR \a limit is not positive
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
@@ -109,11 +140,28 @@ EncodingConversionInputStream::constructor(Qore::InputStream[InputStream] input_
     int nextByte = latin2Stream.peek();
     @endcode
 
-    @throw ENCODING-CONVERSION-ERROR if an invalid multibyte sequence is encountered in the input, a character that
-    the target encoding cannot hold, or a character or shift sequence cut off by the end of the input; the
-    message gives the byte offset of the first one in the input stream
+    @throw INVALID-ENCODING the input is not valid in the source encoding (a byte sequence that is not a character
+    of the encoding, or a character or shift sequence cut off by the end of the input) and the \a encoding_errors
+    option of the constructor is \c "raise"; the message gives the byte offset of the sequence in the input stream
+    @throw ENCODING-CONVERSION-ERROR the input has a character that the target encoding cannot hold; the message
+    gives the byte offset of the first one in the input stream
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
 int EncodingConversionInputStream::peek() {
    return is->peekHelper(xsink);
+}
+
+//! Returns what input that is not valid in the source encoding gives
+/** @par Example:
+    @code{.py}
+string encoding_errors = latin2Stream.getEncodingErrors();
+    @endcode
+
+    @return one of the @ref encoding_errors_constants: \c "raise", \c "latin1", or \c "keep"; see
+    @ref encoding_errors
+
+    @since %Qore 3.0
+ */
+string EncodingConversionInputStream::getEncodingErrors() [flags=CONSTANT] {
+   return new QoreStringNode(q_encoding_errors_name(is->getEncodingErrors()));
 }

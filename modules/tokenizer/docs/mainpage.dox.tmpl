@@ -49,6 +49,45 @@
     - \c ByteFallback — decodes \c \<0xHH\> byte tokens to UTF-8
     - \c Fuse / \c Strip / \c Replace / \c Sequence
 
+    @section tokenizer_text_encoding Text Encodings
+
+    Tokenizers work on UTF-8 text, as their vocabularies, regular expressions and Unicode normalizers do.  Text
+    given to a tokenizer (the text to encode and its text pair, pre-tokenized words, tokens looked up with
+    @ref Qore::Tokenizer::HFTokenizer::tokenToId() "tokenToId()", added tokens, the special tokens and the chat
+    template of @ref Qore::Tokenizer::HFTokenizer::loadConfig() "loadConfig()", and the role and content of chat
+    messages) is checked where it enters the tokenizer:
+    - text that is not valid in its encoding raises an \c INVALID-ENCODING exception that names the method, the text
+      and the byte offset of the first invalid byte sequence, ex: <tt>"HFTokenizer::encode(): the text is not valid
+      UTF-8: invalid byte sequence at byte offset 15"</tt>; the bytes are never tokenized as they are
+    - text in another encoding is converted to UTF-8, so the same text gives the same token IDs in any encoding;
+      the offsets of an encoding (\c offset_mapping) are byte offsets in the UTF-8 form of the text
+
+    A regular expression of a \c Split pre-tokenizer that cannot be matched against the text (ex: a match limit, or
+    text made invalid UTF-8 by a \c Replace normalizer whose pattern matches part of a character) raises
+    \c PRETOKENIZER-MATCH-ERROR; the rest of the text is never left unsplit.
+
+    Decoded text (@ref Qore::Tokenizer::HFTokenizer::decode() "decode()",
+    @ref Qore::Tokenizer::HFTokenizer::decodeBatch() "decodeBatch()") is always valid UTF-8.  Token IDs that give
+    only a part of a character (ex: the first byte-level token of an emoji, when a sequence of IDs is decoded in
+    parts) give bytes that are not valid UTF-8; as in Hugging Face tokenizers, each maximal part of a valid sequence,
+    and each byte that cannot start one, is replaced by the replacement character U+FFFD, and the \c ByteFallback
+    decoder replaces each byte token of a run of byte tokens that is not valid UTF-8 with U+FFFD.
+
+    Tokens (the \c tokens of an encoding, @ref Qore::Tokenizer::HFTokenizer::idToToken() "idToToken()") are UTF-8
+    strings; the keys of @ref Qore::Tokenizer::HFTokenizer::getVocab() "getVocab()" are in the default encoding, as
+    all hash keys are.
+
+    The strings of the configuration given to the
+    @ref Qore::Tokenizer::HFTokenizer::constructor() "constructor" (the vocabulary tokens, merges, unknown token and
+    subword prefix and suffix of the model, the patterns and replacement strings of the normalizers, pre-tokenizers
+    and decoders, the special tokens of the post-processor) are checked and converted to UTF-8 in the same way, so a
+    configuration parsed from JSON text in another encoding or built in another encoding gives the same tokenizer;
+    the token keys (the vocabulary keys of a \c BPE or \c WordPiece model and the special token keys of a
+    \c TemplateProcessing post-processor) are in the default encoding, as \c parse_json() gives them, and are
+    converted to UTF-8 from it.  Such a string or key that is not valid text raises \c INVALID-ENCODING, ex:
+    <tt>"HFTokenizer::constructor(): the vocabulary token is not valid UTF-8: invalid byte sequence at byte offset
+    2"</tt>.
+
     @section tokenizerqlibmodules Qore User Modules
 
     - @ref dataprovidermlintro "DataProviderML" — ML-based data pipeline processors wrapping the ml binary module

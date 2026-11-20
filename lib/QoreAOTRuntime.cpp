@@ -1074,9 +1074,12 @@ std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode*
     if (!fcr || !fcr->getFunction()) {
         return std::string();
     }
-    std::string name = getAOTFunctionRefBaseName(fcr);
+    return qore_aot_encode_function_ref(getAOTFunctionRefBaseName(fcr), fcr->getExplicitTypeParamInstantiation());
+}
+
+std::string qore_aot_encode_function_ref(std::string name, const QoreTypeParamInstantiation* inst) {
     // the explicit type arguments (\f<T>()) follow the name: "\ntypeargs:N\n<type path>..."
-    if (const QoreTypeParamInstantiation* inst = fcr->getExplicitTypeParamInstantiation()) {
+    if (inst) {
         name += aot_ref_type_arg_marker;
         name += std::to_string(inst->type_args.size());
         for (const QoreTypeInfo* type_arg : inst->type_args) {
@@ -4617,9 +4620,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref1 && *ref1) {
                     qc = findAOTClassByPath(pgm, ref1, false);
                     if (qc && ref2 && *ref2) {
-                        method = findAOTStaticMethod(qc, ref2);
-                        if (!method) {
-                            method = qc->findMethod(ref2);
+                        // the method that the image records with the class that declares it (qore#6679)
+                        bool have_class;
+                        method = qore_aot_resolve_static_method_ref_target(pgm, qc, ref2, have_class);
+                        if (!have_class) {
+                            method = findAOTStaticMethod(qc, ref2);
+                            if (!method) {
+                                method = qc->findMethod(ref2);
+                            }
                         }
                     }
                 }
@@ -7590,6 +7598,17 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     // function takes the instructions' own (qore_ir_set_deserialized_statement_locations())
     if (stmt_locs && !qore_aot_read_stmt_loc(reader, ptr, pgm, owner_func, *stmt_locs, *inst, loc_file, error)) {
         return nullptr;
+    }
+    // the temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742); an earlier image has none (see
+    // QoreIRFunction::temp_scope_ids_unknown)
+    if (reader.getHeader().version >= QORE_AOT_TEMP_SCOPES_VERSION) {
+        if (!qore_aot_read_varu32(ptr, end, inst->temp_scope_id)
+                || !qore_aot_read_varu32(ptr, end, inst->unwind_inner_temp_scope_id)) {
+            error = "truncated or invalid temp scope of an IR instruction";
+            return nullptr;
+        }
+    } else if (owner_func) {
+        owner_func->temp_scope_ids_unknown = true;
     }
 
     return inst;
@@ -16750,7 +16769,10 @@ extern "C" DLLEXPORT void qore_aot_script_begin_batch(QoreProgram* tpgm) {
         AbstractQoreProgramExternalData* removed =
             tpgm->removeExternalData(kAotScriptBatchKey);
         if (removed) {
-            removed->doDeref();
+            // the C function has no sink: an exception is reported as unhandled (issue #6786)
+            ExceptionSink xsink;
+            qore_ext_data_deref(removed, &xsink);
+            xsink.handleExceptions();
         }
     }
     tpgm->setExternalData(kAotScriptBatchKey, new AotScriptBatchState(tpgm));

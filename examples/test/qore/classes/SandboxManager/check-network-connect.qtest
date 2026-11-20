@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the sandbox network policy applied to resolved socket addresses
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class CheckNetworkConnectTest
+
+#! SandboxManager::checkNetworkConnect() applies the network policy of a connection without connecting (qore#6745)
+class CheckNetworkConnectTest inherits QUnit::Test {
+    public {
+        const Source = "%modern
+string sub check(string host, int port) {
+    try {
+        SandboxManager::checkNetworkConnect(host, port);
+        return \"allowed\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub connect(int port) {
+    try {
+        Socket s();
+        s.connectINET(\"127.0.0.1\", port, 5s);
+        return \"connected\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("SandboxManager::checkNetworkConnect()", "1.0", \ARGV) {
+        addTestCase("the policy of the caller's sandbox", \policyTest());
+        addTestCase("a connection that the policy denies is denied by the check", \connectTest());
+        addTestCase("no sandbox", \noSandboxTest());
+        set_return_value(main());
+    }
+
+    policyTest() {
+        Program p = getProgram(8080);
+        assertEq("allowed", p.callFunction("check", "127.0.0.1", 8080));
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("check", "127.0.0.1", 8081));
+        # a host name: every address that it resolves to is checked
+        assertEq("allowed", p.callFunction("check", "localhost", 8080));
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("check", "localhost", 8081));
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("check", "127.0.0.1", 0));
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("check", "127.0.0.1", 65536));
+
+        SandboxManager sm();
+        sm.blockLocalhost();
+        Program local(PO_NO_CHILD_PO_RESTRICTIONS);
+        local.parse(Source, "check");
+        local.setSandboxManager(sm);
+        assertEq("NETWORK-ACCESS-DENIED", local.callFunction("check", "127.0.0.1", 80));
+    }
+
+    #! the check raises what a connection would: a listener the sandbox denies is refused both ways, and nothing connects
+    connectTest() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", 0, True);
+        int port = listener.getSocketInfo().port;
+        listener.listen();
+        on_exit listener.close();
+
+        Program p = getProgram(port + 1 > 65535 ? port - 1 : port + 1);
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("connect", port));
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("check", "127.0.0.1", port));
+        # the check made no connection
+        assertFalse(listener.isDataAvailable(0));
+    }
+
+    noSandboxTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(Source, "check");
+        # no policy applies, so no name is resolved either
+        assertEq("allowed", p.callFunction("check", "no-such-host.invalid", 80));
+    }
+
+    private Program getProgram(int port) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(Source, "check");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkAllowedPort(port);
+        p.setSandboxManager(sm);
+        return p;
+    }
+}

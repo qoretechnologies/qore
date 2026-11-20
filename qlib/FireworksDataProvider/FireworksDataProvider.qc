@@ -36,7 +36,6 @@ public class FireworksDataProvider inherits FireworksDataProviderCommon {
 
     private {
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
-        static Mutex child_lock();
 
         const DefaultChildMap = {
             "chat-completion":
@@ -45,6 +44,10 @@ public class FireworksDataProvider inherits FireworksDataProviderCommon {
             "create-embeddings":
                 Class::forName("FireworksDataProvider::FireworksEmbeddingDataProvider"),
         };
+    }
+
+    private:internal {
+        static Mutex child_lock();
     }
 
     constructor(RestClientIo::RestClientIo rest) : FireworksDataProviderCommon(rest) {

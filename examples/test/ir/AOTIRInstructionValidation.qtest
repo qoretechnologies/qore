@@ -31,7 +31,7 @@ class AOTIRInstructionValidationTest inherits QUnit::Test {
         int rc;
         string output = backquote(prefix + shellQuote(native) + " 2>&1", \rc);
         assertEq(0, rc, output);
-        assertEq("PASS: 156 AOT IR instruction validation checks\n", output);
+        assertEq("PASS: 158 AOT IR instruction validation checks\n", output);
     }
 
     private static string shellQuote(string value) {

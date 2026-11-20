@@ -405,12 +405,13 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     later parent class a public method of the same name, a call from outside the class hierarchy calls the public
     method, also when the method is looked up at run time (on an object whose class is not known when parsing, such as
     a value of type \c object, through @ref Qore::call_object_method() "call_object_method()", or through a
-    @ref call_reference "call reference" created from such a value); a call from inside the class hierarchy calls the
-    private method.  A private method overrides the methods of the same name of the parent classes of its class: a
-    call from outside the class hierarchy through a variable of a parent class, or resolved at run time, on an object
-    of the class raises \c METHOD-IS-PRIVATE instead of calling them, as it does when no method of the name can be
-    called (\c BASE-CLASS-IS-PRIVATE when the method is reached
-    only through private inheritance).\n\n
+    @ref call_reference "call reference" created from such a value); a call from the class of the private method, one
+    of its parent classes or one of its subclasses calls the private method.  Code of another parent class of the
+    object cannot call the private method, so a call there skips it as well and calls the first method of the name
+    that it can call, such as its own.  A private method overrides the methods of the same name of the parent classes
+    of its class: a call from outside the class hierarchy through a variable of a parent class, or resolved at run
+    time, on an object of the class raises \c METHOD-IS-PRIVATE instead of calling them, as it does when no method of
+    the name can be called (\c BASE-CLASS-IS-PRIVATE when the method is reached only through private inheritance).\n\n
     The body and the default argument values of a @ref qore_functions "function" are always outside every class and resolved in the function's namespace, also when the function is called from a method of the class, so they cannot call the class's private methods, rely on its private inheritance or see the method's local variables; a @ref closure "closure" declared in a method is inside the method's class.
 
     @subsection synchronized_methods Synchronized Methods
@@ -810,6 +811,9 @@ lock();
     Class inheritance is a powerful concept for easily extending and reusing object-oriented code, but is also subject to some limitations. This section explains how class inheritance works in %Qore.
 
     Classes inherit the methods of a parent class by using the <tt><b>inherits</b></tt> keyword as specified above.  Multiple inheritance is supported; a single %Qore class can inherit one or more classes.  When a class is inherited by another class, it is called a base class or parent class.  @ref private_inheritance "Private inheritance" is specified by including the <tt><b>private</b></tt> access modifier before the inherited class's name.  When a class is privately inherited, it means that the inherited class's public declarations (members, constants, methods, etc) are treated as private in the context of accesses outside the class hierarchy.
+
+    @anchor parent_class_name_resolution
+    A parent class given without a namespace path is resolved as an unqualified class name in the class's code is: the namespace of the inheriting class is the current namespace of @ref unqualified_symbol_resolution "unqualified symbol resolution", so a class declared directly in that namespace is found before a class of the same name in another namespace, whether the parent is declared before or after the inheriting class.  A class of the same name in a parent namespace is not preferred; to inherit it, give its @ref namespace_paths "namespace path".  As a class cannot inherit itself, a parent with the name of the inheriting class is resolved without the current namespace (so <tt>namespace N { class C inherits C {} }</tt> inherits a class \c C of the root namespace, as does <tt>class C&lt;T&gt; inherits C&lt;int&gt;</tt> in \c N).
 
     To limit access of a base class to only the directly inheriting class, use the <tt><b>private:internal</b></tt> access modifier.  Classes inherited with <tt><b>private:internal</b></tt> are not accessible to the hierarchy in general but rather only to the directly inheriting class.
 

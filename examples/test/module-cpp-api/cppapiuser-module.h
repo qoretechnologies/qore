@@ -73,6 +73,8 @@ DLLLOCAL QoreListNode* cppapiuser_get_module_cmds();
 
 //! returns the number of times the C++ destructor of the class of the "pending-*" module commands has run
 DLLLOCAL int64 cppapiuser_pending_probe_destroyed();
+//! returns the number of objects of the classes of the "owned-constant" command whose C++ destructor has run
+DLLLOCAL int64 cppapiuser_get_owned_probe_destroyed();
 
 #include "QC_ProgramContextProbe.h"
 #include "QC_SerializationIndexProbe.h"

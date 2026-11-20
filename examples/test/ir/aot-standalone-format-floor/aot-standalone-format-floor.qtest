@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks run qcc executables in child processes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AotStandaloneFormatFloorTest
+
+#! a standalone qcc executable whose embedded image has an older or a newer AOT format is refused when it starts
+/** A qcc executable embeds the image of its program (the AOT metadata, header magic "QORD" followed by the format
+    version as a little-endian u16) and reads it when it starts, before any module is loaded or any record of the
+    image is used.  An executable built by an older qcc must not run with a newer libqore whose format floor it is
+    below: its records (e.g. constructor expression records of the format before the floor) would otherwise be read
+    as the current format.  The test compiles a program, checks that it runs, and then stamps the embedded image with
+    the format version before and after the one that it was written with:
+    - the version before: refused with exit code 2 and a message to rebuild the artifact (each batch's format bump
+      sets the minimum version that the reader accepts to the version that it writes, so the version before is
+      always below the floor);
+    - the version after: refused with exit code 2 and a message to update Qore.
+    On macOS the patched executable is signed again (ad hoc), as the system does not run an executable whose
+    signature no longer matches.
+*/
+class AotStandaloneFormatFloorTest inherits QUnit::Test {
+    public {
+        #! the magic of an AOT image, as it is written (QORE_AOT_BINARY_MAGIC, little endian)
+        const Magic = <514f5244>;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("standalone AOT format floor", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        addTestCase("older format refused", \olderFormatTest());
+        addTestCase("newer format refused", \newerFormatTest());
+        set_return_value(main());
+    }
+
+    olderFormatTest() {
+        hash<auto> r = runStamped(-1);
+        assertEq(2, r.rc, r.out);
+        assertRegex("AOT-ERROR: the AOT-compiled program .* cannot be loaded", r.out);
+        assertTrue(r.out.find(sprintf("unsupported binary format version %d (supported %d-%d); rebuild the artifact "
+            "with this version of qcc", r.version - 1, r.version, r.version)) >= 0, r.out);
+        assertFalse(r.out.find("standalone program ran") >= 0, r.out);
+    }
+
+    newerFormatTest() {
+        hash<auto> r = runStamped(1);
+        assertEq(2, r.rc, r.out);
+        assertRegex("AOT-ERROR: the AOT-compiled program .* cannot be loaded", r.out);
+        assertTrue(r.out.find(sprintf("unsupported binary format version %d", r.version + 1)) >= 0, r.out);
+        assertTrue(r.out.find("please update your Qore installation") >= 0, r.out);
+        assertFalse(r.out.find("standalone program ran") >= 0, r.out);
+    }
+
+    #! compiles the program, checks that it runs, stamps its image with the format version + delta and runs it
+    /** @return a hash: \c version: the format version that qcc wrote; \c rc: the exit code of the stamped
+        executable; \c out: its output (stdout and stderr)
+    */
+    private hash<auto> runStamped(int delta) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("aot-standalone-format-floor-");
+        string exe = tmp.path + "/aot-standalone-format-floor";
+        int rc;
+        string out = backquote(sprintf("%s %s -O0 -o %s %s/aot-standalone-format-floor.q 2>&1", env, qcc_bin, exe,
+            dir), \rc);
+        assertEq(0, rc, "qcc: " + out);
+        assertTrue(is_file(exe), "qcc wrote the executable: " + out);
+        out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
+        assertEq(0, rc, out);
+        assertEq("standalone program ran: 42\n", out);
+
+        binary image = ReadOnlyFile::readBinaryFile(exe);
+        # the format version of each embedded image header; a program has one image
+        list<int> offsets;
+        *int version;
+        int pos = 0;
+        while ((pos = image.find(Magic, pos)) >= 0) {
+            int v = getU16(image, pos + 4);
+            # a header has a plausible version; other occurrences of the bytes are not headers
+            if (v >= 9 && v < 1000) {
+                if (!exists version) {
+                    version = v;
+                }
+                if (v == version) {
+                    offsets += pos + 4;
+                }
+            }
+            pos += Magic.size();
+        }
+        assertTrue(exists version, "the executable embeds an AOT image");
+        assertEq(1, offsets.size(), sprintf("one embedded image header with version %y", version));
+
+        int stamped = version + delta;
+        binary patched = image;
+        foreach int off in (offsets) {
+            patched = patched.substr(0, off) + parse_hex_string(sprintf("%02x%02x", stamped & 0xff, stamped >> 8))
+                + patched.substr(off + 2);
+        }
+        assertEq(image.size(), patched.size());
+        {
+            File f();
+            f.open2(exe, O_CREAT | O_WRONLY | O_TRUNC, 0755);
+            f.write(patched);
+            f.close();
+        }
+        chmod(exe, 0755);
+        if (PlatformOS == "Darwin") {
+            out = backquote(sprintf("codesign -f -s - %s 2>&1", exe), \rc);
+            assertEq(0, rc, "codesign: " + out);
+        }
+        out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
+        return {"version": version, "rc": rc, "out": out};
+    }
+
+    #! returns the little-endian u16 at the offset of the binary
+    private static int getU16(binary b, int offset) {
+        return get_byte(b, offset) | (get_byte(b, offset + 1) << 8);
+    }
+}

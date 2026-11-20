@@ -177,7 +177,9 @@ public class PineconeSchema {
 
         #! The action set built from the inference description and its manifest
         static *RestSchemaActions::RestSchemaActionSet inference_set;
+    }
 
+    private:internal {
         #! Serializes construction of the schemas and the action sets
         static Mutex lck();
     }

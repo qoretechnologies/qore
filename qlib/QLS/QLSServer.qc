@@ -431,14 +431,8 @@ public class QLSServer {
         #! Process-local cache for immutable standard module URI lists and lazily built symbol indexes
         static hash<auto> stdModuleIndexCache = {};
 
-        #! Lock protecting standard module index cache initialization
-        static Mutex stdModuleIndexCacheMutex();
-
         #! Process-local cache for immutable builtin metadata and lookup indexes
         static hash<auto> builtinMetadataCache = {};
-
-        #! Lock protecting builtin metadata cache initialization
-        static Mutex builtinMetadataCacheMutex();
 
         #! Whether files are indexed between requests instead of before responding to requests; set by main()
         bool backgroundIndexing = False;
@@ -518,6 +512,12 @@ public class QLSServer {
     }
 
     private:internal {
+        #! Lock protecting standard module index cache initialization
+        static Mutex stdModuleIndexCacheMutex();
+
+        #! Lock protecting builtin metadata cache initialization
+        static Mutex builtinMetadataCacheMutex();
+
         #! The log file; a File object can be written from any thread, unlike a stream
         *File logFh;
     }

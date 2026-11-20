@@ -5042,9 +5042,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(QoreAOTC
     }
 
     ClassAccess access = Public;
-    const QoreMethod* method = qc->findStaticMethod(method_name, access);
-    if (!method) {
-        method = qc->findMethod(method_name, access);
+    // a reference that the compiler resolved records the class that declares its method, which is called whatever
+    // other parent class has a method of the name (qore#6679); a deferred reference has the name only
+    bool have_class;
+    const QoreMethod* method = qore_aot_resolve_static_method_ref_target(pgm, qc, method_name, have_class);
+    std::string name_buf;
+    if (have_class) {
+        name_buf = qore_aot_static_method_ref_target_name(method_name);
+        method_name = name_buf.c_str();
+        if (method) {
+            // the access of the method from the named class: its own, or private if it is inherited through a
+            // private parent class
+            bool priv = false;
+            if (method->getClass() != qc) {
+                qc->getClass(*method->getClass(), priv);
+            }
+            access = priv ? Private : method->getAccess();
+        }
+    } else {
+        method = qc->findStaticMethod(method_name, access);
+        if (!method) {
+            method = qc->findMethod(method_name, access);
+        }
     }
     if (!method) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
@@ -5203,13 +5222,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
         // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference();
         // by the method's own name, also when the name has the class references of the "\x01" and "\x02" forms below
         const char* pseudo_name = method_name;
+        // the name without the class that declares a static method (qore#6679)
+        std::string static_name;
         if (method_name[0] == '\x01') {
             const char* end = strchr(method_name + 1, '\x01');
             if (!end) {
                 xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "invalid AOT object method reference");
                 return toBits(QoreValue());
             }
-            pseudo_name = end + 1;
+            static_name = qore_aot_static_method_ref_target_name(end + 1);
+            pseudo_name = static_name.c_str();
         } else if (method_name[0] == '\x02') {
             const QoreClass* declared_class;
             const QoreMethod* parse_method;
@@ -5237,8 +5259,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
             pgm = getProgram();
         }
         const QoreClass* qc = pgm ? qore_aot_resolve_class_ref(pgm, class_ref.c_str()) : nullptr;
-        ClassAccess access = Public;
-        const QoreMethod* method = qc ? qc->findStaticMethod(mname, access) : nullptr;
+        // the method that the compiler resolved, given with the class that declares it if that is not the declared
+        // class (qore_aot_encode_static_method_ref_target(), qore#6679)
+        bool have_class = false;
+        const QoreMethod* method = qc ? qore_aot_resolve_static_method_ref_target(pgm, qc, mname, have_class) : nullptr;
+        std::string name_buf;
+        if (have_class) {
+            name_buf = qore_aot_static_method_ref_target_name(mname);
+            mname = name_buf.c_str();
+        } else if (qc) {
+            ClassAccess access = Public;
+            method = qc->findStaticMethod(mname, access);
+        }
         if (!method) {
             xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "cannot resolve reference to static method "
                 "%s::%s()", qc ? qc->getName() : class_ref.c_str(), mname);
@@ -8610,6 +8642,13 @@ static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key
     if (!class_ctx) {
         helper.vl.addMemberNotification(obj, key);
     }
+    // a member that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+    if (const ReferenceNode* ref = helper.getReference()) {
+        helper.clearPtr();
+        if (helper.doLValue(ref, false)) {
+            return;
+        }
+    }
 
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
     helper.assign(stored);
@@ -8644,7 +8683,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
             }
             h = stored.get<QoreHashNode>();
         }
-        qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+        // an element that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+        if (!qore_assign_through_element_reference(h->getKeyValue(key), val, xsink)) {
+            qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+        }
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
         // LValueHelper::doHashLValue() including hashdecl error behavior.
@@ -8702,7 +8744,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             }
             h = stored.get<QoreHashNode>();
         }
-        qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+        // an element that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+        if (!qore_assign_through_element_reference(h->getKeyValue(key), val, xsink)) {
+            qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+        }
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
         // LValueHelper::doHashLValue() including hashdecl error behavior.
@@ -8806,6 +8851,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
 
         // an assignment past the end of a list whose element type does not take NOTHING would leave a gap:
         // setEntry() refuses it (qore#6435)
+        // an element that holds a reference is assigned through it, as the AST interpreter assigns it, before the
+        // value is checked against the element type (qore#6661)
+        if (static_cast<size_t>(index) < l->size()
+                && qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink)) {
+            return *xsink ? toBits(QoreValue()) : val_bits;
+        }
         // Apply element type coercion if the list has a typed value type
         // (e.g. list<softint> converts "50" → 50 before storing)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
@@ -8901,6 +8952,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         }
         // an assignment past the end of a list whose element type does not take NOTHING would leave a gap:
         // setEntry() refuses it (qore#6435)
+        // an element that holds a reference is assigned through it, as the AST interpreter assigns it, before the
+        // value is checked against the element type (qore#6661)
+        if (static_cast<size_t>(index) < l->size()
+                && qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink)) {
+            return *xsink ? toBits(QoreValue()) : val_bits;
+        }
         // Apply element type coercion if the list has a typed value type
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
@@ -19627,6 +19684,66 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot_consume_args(
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
+struct AOTDirectCallTypeParams {
+    const QoreTypeParamInstantiation* old = nullptr;
+    bool restore = false;
+
+    //! the explicit instantiation with the type parameters of the calling generic code resolved
+    QoreTypeParamInstantiation resolved;
+    //! the instantiation made current (the explicit instantiation, or \a resolved), or the explicit one given
+    const QoreTypeParamInstantiation* effective;
+
+    explicit AOTDirectCallTypeParams(
+            const QoreTypeParamInstantiation* inst) : effective(inst) {
+        if (inst && !inst->empty()) {
+            // resolved before the callee's instantiation is made current: the call below, which infers the
+            // callee's type arguments again, must see the resolved type arguments, as the type parameters of
+            // the caller can no longer be resolved once the callee's instantiation is current
+            if (qore_resolve_explicit_type_param_instantiation(*inst, resolved)) {
+                inst = &resolved;
+                effective = &resolved;
+            }
+            old = runtime_set_type_param_instantiation(inst);
+            restore = true;
+        }
+    }
+
+    ~AOTDirectCallTypeParams() {
+        if (restore) {
+            runtime_set_type_param_instantiation(old);
+        }
+    }
+};
+
+// The low bit requests the cached environment override check. Each Program with a debugger
+// contributes two. The regular call needs just one load in place of checking the override.
+extern DLLLOCAL std::atomic<unsigned> qore_aot_direct_call_mode;
+#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+constinit std::atomic<unsigned> qore_aot_direct_call_mode{1};
+
+void qore_aot_debug_program_change(bool attached) {
+    if (attached) {
+        qore_aot_direct_call_mode.fetch_add(2, std::memory_order_release);
+    } else {
+        assert(qore_aot_direct_call_mode.load(std::memory_order_relaxed) >= 2);
+        qore_aot_direct_call_mode.fetch_sub(2, std::memory_order_release);
+    }
+}
+
+DLLLOCAL QORE_INTERN_NOINLINE bool qore_aot_prelinked_override(unsigned mode) {
+    if (!(mode & 1u)) {
+        return false;
+    }
+    if (qore_rt_aot_disable_prelinked_calls()) {
+        return true;
+    }
+    qore_aot_direct_call_mode.fetch_and(~1u, std::memory_order_relaxed);
+    return false;
+}
+#else
+DLLLOCAL bool qore_aot_prelinked_override(unsigned mode);
+#endif
+
 template <bool CONSUME>
 static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOTContext* ctx, int32_t slot,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
@@ -19634,43 +19751,34 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
         return toBits(QoreValue());
     }
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-    if (qore_rt_aot_disable_prelinked_calls()) {
-        return qore_rt_call_slot_dynamic_fallback(ctx, slot, args, arg_cleanups, nargs, xsink,
-            "qore_rt_call_direct_aot", "function", "QORE_AOT_DISABLE_PRELINKED_CALLS");
+    unsigned mode = qore_aot_direct_call_mode.load(std::memory_order_acquire);
+    if (mode) [[unlikely]] {
+        if (qore_aot_prelinked_override(mode)) {
+            return qore_rt_call_slot_dynamic_fallback(ctx, slot, args, arg_cleanups, nargs, xsink,
+                "qore_rt_call_direct_aot", "function", "QORE_AOT_DISABLE_PRELINKED_CALLS");
+        }
+        if (mode >= 2) {
+            const QoreAOTCallTarget& target = ctx->call_targets[slot];
+            const UserVariantBase* uvb = target.uvb ? target.uvb
+                : target.variant ? target.variant->getUserVariantBase() : nullptr;
+            if (uvb) {
+                QoreSourceProgramHolder holder(xsink);
+                QoreProgram* pgm = qore_rt_function_execution_program(target.pgm, getProgram(), uvb, holder, xsink);
+                if (!pgm && *xsink) {
+                    return toBits(QoreValue());
+                }
+                if (pgm && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+                    AOTDirectCallTypeParams type_params(target.explicit_type_param_instantiation);
+                    return qore_rt_call_function_direct_impl(target.func, target.variant, target.pgm, args,
+                        arg_cleanups, nargs, xsink, type_params.effective);
+                }
+            }
+        }
     }
 
     // Use pre-resolved call target (populated during buildAOTContext) to avoid per-call dynamic_cast
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
-    struct TypeParamContextHelper {
-        const QoreTypeParamInstantiation* old = nullptr;
-        bool restore = false;
-
-        //! the explicit instantiation with the type parameters of the calling generic code resolved
-        QoreTypeParamInstantiation resolved;
-        //! the instantiation made current (the explicit instantiation, or \a resolved), or the explicit one given
-        const QoreTypeParamInstantiation* effective;
-
-        explicit TypeParamContextHelper(
-                const QoreTypeParamInstantiation* inst) : effective(inst) {
-            if (inst && !inst->empty()) {
-                // resolved before the callee's instantiation is made current: the call below, which infers the
-                // callee's type arguments again, must see the resolved type arguments, as the type parameters of
-                // the caller can no longer be resolved once the callee's instantiation is current
-                if (qore_resolve_explicit_type_param_instantiation(*inst, resolved)) {
-                    inst = &resolved;
-                    effective = &resolved;
-                }
-                old = runtime_set_type_param_instantiation(inst);
-                restore = true;
-            }
-        }
-
-        ~TypeParamContextHelper() {
-            if (restore) {
-                runtime_set_type_param_instantiation(old);
-            }
-        }
-    } type_param_context(target.explicit_type_param_instantiation);
+    AOTDirectCallTypeParams type_param_context(target.explicit_type_param_instantiation);
 
     // Fast path: pre-resolved user variant — inline the call_fast logic to avoid double
     // check_stack and extra function call overhead (critical for tight recursive calls)
@@ -19907,6 +20015,90 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         return qore_rt_call_direct_aot_consume_impl(ctx, slot, args, arg_cleanups, nargs, xsink);
     }
     return qore_rt_call_direct_aot_impl_t<false>(ctx, slot, args, arg_cleanups, nargs, xsink);
+}
+
+// The native caller has already published the callee's stack location. The ordinary binder will
+// publish that same call with a frame of locals. Present its original caller and call site for
+// the duration of binding and execution, then restore the native frame for the caller's epilogue.
+class AOTDebugCallFrame {
+public:
+    explicit AOTDebugCallFrame(const UserVariantBase& uvb) : frame(get_runtime_stack_location()) {
+        if (qore_is_aot_native_call_frame(frame) && frame->getCallName() == uvb.getCallName()) {
+            stmt = get_runtime_statement();
+            loc = get_runtime_location();
+            update_runtime_stack_location(frame->getNext());
+            update_runtime_statement_location(frame->getStatement(), &frame->getLocation());
+        } else {
+            frame = nullptr;
+        }
+    }
+
+    ~AOTDebugCallFrame() {
+        if (frame) {
+            update_runtime_statement_location(stmt, loc);
+            update_runtime_stack_location(frame);
+        }
+    }
+
+    AOTDebugCallFrame(const AOTDebugCallFrame&) = delete;
+    AOTDebugCallFrame& operator=(const AOTDebugCallFrame&) = delete;
+
+private:
+    const QoreStackLocation* frame;
+    const AbstractStatement* stmt = nullptr;
+    const QoreProgramLocation* loc = nullptr;
+};
+
+// The fast entry can have its caller's context. Resolve the standard native symbol in the
+// executing Program on the debug path, including when several variants have the same name.
+extern "C" DLLEXPORT uint64_t qore_rt_debug_aot_fast_function(const char* name, AotFunctionPtr standard,
+        const uint64_t* args, const uint8_t* kinds, unsigned count, ExceptionSink* xsink) {
+    QoreProgram* pgm = getProgram();
+    QoreTypeParamInstantiation inst;
+    const FunctionEntry* fe = qore_aot_resolve_function_ref(pgm, name, nullptr, inst.type_args);
+    if (fe) {
+        QoreFunction* f = fe->getFunction();
+        QoreFunctionIterator vi(*f);
+        size_t variants = 0;
+        while (vi.next()) {
+            if (!(++variants % 100) && qore_check_cancel(xsink, "AOT debugger overload lookup")) {
+                return toBits(QoreValue());
+            }
+            const AbstractQoreFunctionVariant* v = vi.getVariant();
+            const UserVariantBase* uvb = v->getUserVariantBase();
+            if (!uvb || uvb->getCachedAOTFunction() != standard) {
+                continue;
+            }
+            ReferenceHolder<QoreListNode> argv(count ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+            if (count) {
+                qore_list_private::get(**argv)->reserve(count);
+            }
+            for (unsigned i = 0; i < count; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "AOT debugger argument binding")) {
+                    return toBits(QoreValue());
+                }
+                QoreValue arg;
+                switch (static_cast<BatchCalleeParamKind>(kinds[i])) {
+                    case BatchCalleeParamKind::Boxed: arg = fromBits(args[i]).refSelf(); break;
+                    case BatchCalleeParamKind::NativeInt: arg = QoreValue(static_cast<int64>(args[i])); break;
+                    case BatchCalleeParamKind::NativeBool: arg = QoreValue(static_cast<bool>(args[i])); break;
+                    case BatchCalleeParamKind::NativeFloat: {
+                        double d;
+                        memcpy(&d, &args[i], sizeof(d));
+                        arg = QoreValue(d);
+                        break;
+                    }
+                }
+                qore_list_private::get(**argv)->pushIntern(arg);
+            }
+            inst.owner = uvb->getUserSignature();
+            AOTDebugCallFrame frame(*uvb);
+            return toBits(f->evalFunctionTmpArgs(v, *argv, pgm, rc_get_current_ref(), xsink,
+                inst.empty() ? nullptr : &inst));
+        }
+    }
+    xsink->raiseException("AOT-ERROR", "could not find the debugger body of the compiled function '%s'", name);
+    return toBits(QoreValue());
 }
 
 extern "C" DLLEXPORT QoreAOTContext* qore_rt_get_aot_call_target_context(
