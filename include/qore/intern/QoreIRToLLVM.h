@@ -1585,7 +1585,7 @@ private:
     // is cached at runtime.  Emit a guarded fast-entry call with a normal AOT
     // helper fallback for linked/source-stripped cases where the fast entry is
     // visible but the callee context is not cached.
-    llvm::Value* emitAotBatchFastEntryOrFallback(llvm::Module& module,
+    DLLLOCAL llvm::Value* emitAotBatchFastEntryOrFallback(llvm::Module& module,
             llvm::Function* llvm_func, const QoreIRInstruction* inst,
             int32_t slot, llvm::Function* fast_fn,
             const BatchCalleeInfo& callee_info,
@@ -2965,7 +2965,7 @@ private:
     // call-argument temporaries after callee parameter instantiation.
     // With given_slots, the cleanup slots of the temporaries that the call gives are returned in it by argument
     // (nullptr for an argument whose slot is not given or is the slot of a read through a reference).
-    llvm::Value* buildArgCleanupArray(const QoreIRInstruction* inst, int arg_start,
+    DLLLOCAL llvm::Value* buildArgCleanupArray(const QoreIRInstruction* inst, int arg_start,
             llvm::Function* llvm_func, int nargs, bool& has_cleanup,
             int borrowed_prefix = 0, std::vector<llvm::Value*>* given_slots = nullptr);
 

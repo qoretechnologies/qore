@@ -477,7 +477,6 @@ static bool isFastMethodCallEligible(
 #include <llvm/IR/IntrinsicsX86.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
-#include <llvm/Transforms/Utils/Cloning.h>
 #include <limits>
 #include <string_view>
 #include <llvm/Support/raw_ostream.h>
@@ -9469,69 +9468,6 @@ llvm::Function* QoreIRToLLVM::ownedFastEntry(llvm::Function* fast_fn,
         module);
     fn->setCallingConv(fast_fn->getCallingConv());
     return fn;
-}
-
-// documented in QoreIRToLLVM.h
-bool QoreIRToLLVM::materializeOwnedFastEntries(llvm::Module& module, std::string& error) {
-    std::vector<llvm::Function*> decls;
-    for (llvm::Function& f : module) {
-        // not a cancellation point: this only collects pointers, bounded by the module's size
-        if (f.isDeclaration() && f.getName().contains(QORE_OWNED_FAST_ENTRY_INFIX)) {
-            decls.push_back(&f);
-        }
-    }
-    for (llvm::Function* decl : decls) {
-        llvm::StringRef name = decl->getName();
-        size_t pos = name.rfind(QORE_OWNED_FAST_ENTRY_INFIX);
-        llvm::StringRef mask = name.substr(pos + strlen(QORE_OWNED_FAST_ENTRY_INFIX));
-        llvm::Function* fast_fn = module.getFunction(name.substr(0, pos));
-        if (!fast_fn || fast_fn->isDeclaration() || fast_fn->getFunctionType() != decl->getFunctionType()
-                || mask.size() > fast_fn->arg_size()) {
-            error = "internal error: the fast entry of '" + name.str() + "' is not defined in the module";
-            return false;
-        }
-        llvm::ValueToValueMapTy vmap;
-        llvm::Function* owned = llvm::CloneFunction(fast_fn, vmap);
-        // the references that the prologue takes to the arguments that the callers hand over
-        std::vector<bool> taken(mask.size(), false);
-        std::vector<llvm::Instruction*> erase;
-        for (llvm::BasicBlock& bb : *owned) {
-            for (llvm::Instruction& inst : bb) {
-                if (!inst.getMetadata(QORE_FAST_ENTRY_ARG_REF_MD)) {
-                    continue;
-                }
-                auto* call = llvm::cast<llvm::CallInst>(&inst);
-                auto* arg = llvm::dyn_cast<llvm::Argument>(call->getArgOperand(0));
-                assert(arg);
-                if (arg && arg->getArgNo() < mask.size() && mask[arg->getArgNo()] == '1') {
-                    assert(!taken[arg->getArgNo()]);
-                    taken[arg->getArgNo()] = true;
-                    erase.push_back(call);
-                }
-            }
-        }
-        for (size_t i = 0; i < mask.size(); ++i) {
-            if (mask[i] == '1' && !taken[i]) {
-                owned->eraseFromParent();
-                error = "internal error: the fast entry '" + fast_fn->getName().str()
-                    + "' takes no reference to argument " + std::to_string(i) + " that its caller hands over";
-                return false;
-            }
-        }
-        for (llvm::Instruction* inst : erase) {
-            inst->eraseFromParent();
-        }
-        std::string owned_name = name.str();
-        decl->replaceAllUsesWith(owned);
-        decl->eraseFromParent();
-        owned->setName(owned_name);
-        owned->setLinkage(llvm::Function::InternalLinkage);
-#ifdef DEBUG
-        // the module was verified before the copies were made
-        assert(!llvm::verifyFunction(*owned, &llvm::errs()));
-#endif
-    }
-    return true;
 }
 
 //! Returns true if the call \a inst calls a variant known when it is compiled, none of whose parameters takes its
