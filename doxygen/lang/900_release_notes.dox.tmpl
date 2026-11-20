@@ -2576,9 +2576,10 @@
     - the members of a class inherited with @ref private_inheritance "private:internal" are accessible on objects of
       the inheriting class only in that class, the declaring class and the classes between them, and a member that a
       class also reaches through a public base class is public there (issue #6640)
-    - a name in a class resolves to a member only if the class can access it: a member reached only through a base
-      class that a base class inherits with @ref private_inheritance "private:internal" is not a candidate
-      (issue #6667)
+    - a bare name in a class resolves only to a visible declaration, so a script that uses an ancestor's
+      @ref pitfalls_private_internal "private:internal member" or a member hidden by
+      @ref private_inheritance "private:internal inheritance" gets a parse error if no other declaration matches
+      (issues #6667 and #6873)
     - a member of a class inherited with @ref private_inheritance "private:internal" is assigned with the type of its
       own declaration in a class that also has a member of the same name from another base class (issue #6670)
     - \c self.<member> and \c $.<member> for a member that a class reaches only through a base class that one of
