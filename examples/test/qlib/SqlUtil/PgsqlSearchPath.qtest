@@ -12,6 +12,7 @@
 %requires PgsqlSqlUtil
 %requires QUnit
 %requires ./PgsqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -72,7 +73,13 @@ class PgsqlSearchPathTest inherits QUnit::Test {
 
         {
             on_exit cleanup();
-            setup();
+            # a database that cannot be connected to fails a test case of its own (qore#6934)
+            *string precondition = TestRun::guardSetup(\setup());
+            if (precondition) {
+                connstr = NOTHING;
+                admin = NOTHING;
+                addTestCase("the database can be connected to", sub () { fail(precondition); });
+            }
             set_return_value(main());
         }
     }
@@ -99,7 +106,11 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         if (admin.getDriverName() != "pgsql") {
             throw "PGSQL-ERROR", sprintf("cannot run the PostgreSQL tests with driver %y", admin.getDriverName());
         }
-        admin.open();
+        try {
+            admin.open();
+        } catch (hash<ExceptionInfo> ex) {
+            TestRun::failUnreachable(connstr, ex);
+        }
 
         # the run's schema, and a decoy schema dropped with it
         run_schema = PgsqlRunSchema::setup(connstr, "SearchPath");
@@ -269,7 +280,7 @@ class PgsqlSearchPathTest inherits QUnit::Test {
             ds.rollback();
             ds.close();
         }
-        if (admin) {
+        if (admin && admin.isOpen()) {
             admin.rollback();
             # the schemas with quoted names; the run's schema and the decoy are dropped by teardown()
             if (other_schema) {

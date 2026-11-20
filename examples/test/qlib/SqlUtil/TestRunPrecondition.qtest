@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ./TestRunIsolation.qm
+%requires ../../TestInterpreter.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class TestRunPreconditionTest
+
+#! The precondition failure of a database test whose datasource string is set but cannot be connected to (qore#6934)
+/** TestRunIsolation::TestRun describes the datasource of the failure with its driver, host and port only: its user,
+    password and database are masked whatever their values, also in the driver's error, as are those of every other
+    \c QORE_DB_CONNSTR* datasource string; the reason names the variable and how to fix it
+*/
+class TestRunPreconditionTest inherits QUnit::Test {
+    public {
+        #! a datasource string whose user, password and database differ from each other and from the rest
+        const Connstr = "pgsql:preuser7/prepass7@predb7%127.0.0.1:1";
+        #! another one, in another variable
+        const OtherConnstr = "oracle:othuser7/othpass7@othdb7%127.0.0.1:1";
+        #! what must never be in a reason
+        const Secrets = ("preuser7", "prepass7", "predb7", "othuser7", "othpass7", "othdb7");
+    }
+
+    constructor() : QUnit::Test("TestRunPrecondition", "1.0", \ARGV) {
+        addTestCase("a datasource is described by its driver, host and port only", \describe());
+        addTestCase("the reason names the variable, the masked datasource, the error and the fix", \reason());
+        addTestCase("openOrFail() fails the test case when no connection can be opened", \openOrFail());
+        addTestCase("guardSetup() returns the precondition failure of a setup", \guardSetup());
+        addTestCase("an unset or empty variable is not a datasource", \unset());
+        set_return_value(main());
+    }
+
+    describe() {
+        assertEq("pgsql:****/****@****%127.0.0.1:1", TestRun::describeDatasource(Connstr));
+        # a user, password and database that are the same value are masked as when they differ
+        assertEq("mysql:****/****@****", TestRun::describeDatasource("mysql:same/same@same"));
+        assertEq("mysql:****/****@****%dbhost", TestRun::describeDatasource("mysql:u/p@d%dbhost"));
+        assertEq("<unparsable>", TestRun::describeDatasource("this is not a datasource"));
+    }
+
+    reason() {
+        # the module reads its datasource strings from its environment at its start: a child process has them
+        string out = backquote(sprintf("QORE_DB_CONNSTR_PRECOND_TEST=%s QORE_DB_CONNSTR_PRECOND_OTHER=%s %s %s 2>&1",
+            shellQuote(Connstr), shellQuote(OtherConnstr), TestInterpreter::qore_interpreter(),
+            get_script_dir() + "/TestRunPrecondition/reason.q"));
+        string reason = "precondition failure: QORE_DB_CONNSTR_PRECOND_TEST is set to \"pgsql:****/****@****"
+            "%127.0.0.1:1\", but no connection to its database can be opened: DBI:TEST:CONNECT-ERROR: ****@**** "
+            "(****) failed; the admin ****@**** (****) too; start the server or unset QORE_DB_CONNSTR_PRECOND_TEST";
+        assertEq("reason: " + reason + "\n"
+            "variable: QORE_DB_CONNSTR_PRECOND_TEST\n"
+            "other: QORE_DB_CONNSTR_PRECOND_OTHER\n"
+            "none: the datasource string\n"
+            "raised: TEST-EXCEPTION: " + reason + "\n", out);
+        checkMasked(out);
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    openOrFail() {
+%ifdef NoPgsql
+        testSkip("no pgsql module");
+%endif
+        setenv("QORE_DB_CONNSTR_PRECOND_TEST", Connstr);
+        on_exit unsetenv("QORE_DB_CONNSTR_PRECOND_TEST");
+        try {
+            TestRun::openOrFail("QORE_DB_CONNSTR_PRECOND_TEST");
+            assertTrue(False, "no connection can be opened to port 1");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("TEST-EXCEPTION", ex.err);
+            assertRegex("(?s)^precondition failure: QORE_DB_CONNSTR_PRECOND_TEST is set to \"pgsql:\\*\\*\\*\\*/\\*\\*\\*\\*"
+                "@\\*\\*\\*\\*%127\\.0\\.0\\.1:1\", but no connection to its database can be opened: DBI:PGSQL:ERROR: .*; "
+                "start the server or unset QORE_DB_CONNSTR_PRECOND_TEST$", ex.desc);
+            checkMasked(ex.desc);
+        }
+    }
+
+    guardSetup() {
+        hash<ExceptionInfo> ex = <ExceptionInfo>{"err": "DBI:TEST:CONNECT-ERROR", "desc": "refused", "type": "System"};
+        *string reason = TestRun::guardSetup(sub () { TestRun::failUnreachable(Connstr, ex); });
+        assertRegex("^precondition failure: .* refused; start the server or unset ", reason);
+        assertEq(NOTHING, TestRun::guardSetup(sub () {}));
+        # any other exception is raised
+        assertThrows("OTHER-ERROR", sub () { TestRun::guardSetup(sub () { throw "OTHER-ERROR"; }); });
+    }
+
+    unset() {
+        unsetenv("QORE_DB_CONNSTR_PRECOND_UNSET");
+        assertThrows("DATASOURCE-ERROR", "QORE_DB_CONNSTR_PRECOND_UNSET is not set",
+            \TestRun::openOrFail(), "QORE_DB_CONNSTR_PRECOND_UNSET");
+        setenv("QORE_DB_CONNSTR_PRECOND_UNSET", "");
+        on_exit unsetenv("QORE_DB_CONNSTR_PRECOND_UNSET");
+        assertThrows("DATASOURCE-ERROR", "QORE_DB_CONNSTR_PRECOND_UNSET is not set",
+            \TestRun::openOrFail(), "QORE_DB_CONNSTR_PRECOND_UNSET");
+    }
+
+    private checkMasked(string reason) {
+        foreach string secret in (Secrets) {
+            assertEq(-1, reason.find(secret), "masked: " + secret);
+        }
+    }
+}

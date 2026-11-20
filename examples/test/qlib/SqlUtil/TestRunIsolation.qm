@@ -170,6 +170,145 @@ public class TestRun {
         return text;
     }
 
+    #! Returns a datasource string for messages: its driver, host and port, with its user, password and database
+    #! always masked, whatever their values
+    /** A masked user, password or database that showed only when it equals another value would tell the reader
+        that it does, so all three are masked unconditionally; the host and the port are kept, as they are what a
+        connection error is about
+
+        @param connstr the datasource string; one that cannot be parsed is described as \c "<unparsable>"
+
+        @return the description, ex: <tt>mysql:****&#47;****@****%%127.0.0.1:3306</tt>
+    */
+    static string describeDatasource(string connstr) {
+        hash<auto> config;
+        try {
+            config = parse_datasource(connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            return "<unparsable>";
+        }
+        string shown = sprintf("%s:****/****@****", config.type ?? "?");
+        if (config.host) {
+            shown += "%" + config.host;
+            if (config.port) {
+                shown += ":" + config.port;
+            }
+        }
+        return shown;
+    }
+
+    #! Returns the reason to report when the database of a datasource string set in an environment variable cannot
+    #! be connected to
+    /** @param var the name of the environment variable
+        @param connstr the datasource string
+        @param ex the exception of the connection
+
+        @return <tt>precondition failure: </tt><em>var</em><tt> is set to "</tt><em>datasource</em><tt>", but no
+        connection to its database can be opened: </tt><em>error</em>, with the datasource described by
+        describeDatasource() and the user, password and database of the datasource masked in the error as well
+    */
+    static string getPreconditionFailure(string var, string connstr, hash<ExceptionInfo> ex) {
+        string desc = ex.desc ?? "";
+        # the user, password and database of this datasource string and of every other one in a QORE_DB_CONNSTR*
+        # variable, as a driver's error can name those of another connection (ex: the admin connection of an
+        # isolation module); the longest first, so that one that contains another is masked whole
+        list<string> secrets = ();
+        foreach string cs in ((connstr,) + (map ENV{$1}, keys ENV, $1 =~ /^QORE_DB_CONNSTR/ && ENV{$1}.typeCode()
+                == NT_STRING)) {
+            try {
+                hash<auto> config = parse_datasource(cs);
+                secrets += select (config.user, config.pass, config.db), $1;
+            } catch (hash<ExceptionInfo> pex) {
+            }
+        }
+        foreach string secret in (sort_descending(secrets, int sub (string a, string b) {
+                return a.size() <=> b.size(); })) {
+            desc = replace(desc, secret, "****");
+        }
+        return TestRun::maskSecrets(sprintf("precondition failure: %s is set to %y, but no connection to its "
+            "database can be opened: %s: %s; start the server or unset %s", var, TestRun::describeDatasource(connstr),
+            ex.err, desc, var), connstr);
+    }
+
+    #! Returns the name of the environment variable that a datasource string was given in
+    /** @param connstr the datasource string
+
+        @return the name of the first \c QORE_DB_CONNSTR* environment variable, in alphabetical order, whose value is
+        the datasource string, or <tt>"the datasource string"</tt> if none is
+    */
+    static string getVariable(string connstr) {
+        foreach string var in (sort(keys ENV)) {
+            if (var =~ /^QORE_DB_CONNSTR/ && ENV{var} == connstr) {
+                return var;
+            }
+        }
+        return "the datasource string";
+    }
+
+    #! Fails the current test case because the database of a datasource string cannot be connected to
+    /** For the isolation modules, which are given the datasource string of an environment variable: the variable is
+        found by its value (getVariable())
+
+        @param connstr the datasource string
+        @param ex the exception of the connection
+
+        @throw TEST-EXCEPTION always, with the reason of getPreconditionFailure(), which QUnit reports as a failure
+        of the current test case
+    */
+    static failUnreachable(string connstr, hash<ExceptionInfo> ex) {
+        throw "TEST-EXCEPTION", TestRun::getPreconditionFailure(TestRun::getVariable(connstr), connstr, ex);
+    }
+
+    #! Returns an open datasource for the datasource string in an environment variable, or fails the test case
+    /** A database outage is not a reason to skip: when the variable is set and no connection can be opened, this
+        raises \c TEST-EXCEPTION, which QUnit reports as a failure of the current test case, with the reason of
+        getPreconditionFailure() (qore#6885, qore#6934)
+
+        @param var the name of the environment variable
+        @param connstr the datasource string to open, ex: that of a run's own database or schema given by an
+        isolation module for the variable's string; the variable's value if not given
+
+        @return the open datasource
+
+        @throw TEST-EXCEPTION no connection can be opened; a datasource string that cannot be parsed, a driver that
+        cannot be loaded or a variable that is not set raise their own exceptions
+    */
+    static Datasource openOrFail(string var, *string connstr) {
+        connstr = connstr ?? getenv(var) ?? ENV{var};
+        if (!connstr) {
+            throw "DATASOURCE-ERROR", sprintf("%s is not set", var);
+        }
+        Datasource ds(connstr);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            throw "TEST-EXCEPTION", TestRun::getPreconditionFailure(var, connstr, ex);
+        }
+        return ds;
+    }
+
+    #! Runs the database setup of a test outside its test cases, and returns the precondition failure it raised
+    /** A test that sets up its database in its constructor, before QUnit runs its test cases, cannot fail a test
+        case there: it runs the setup with this function, and when it returns a reason, adds a test case that fails
+        with it (ex: <tt>addTestCase("the database can be connected to", sub () { fail(reason); })</tt>), so that a
+        database that cannot be connected to is a failure of the test, not an unhandled exception
+
+        @param setup the setup code
+
+        @return the precondition failure (getPreconditionFailure()) if the setup raised one, else no value; any
+        other exception is raised
+    */
+    static *string guardSetup(code setup) {
+        try {
+            setup();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "TEST-EXCEPTION" && ex.desc =~ /^precondition failure: /) {
+                return ex.desc;
+            }
+            rethrow;
+        }
+    }
+
     #! Returns the letters and digits of a string, in lower case, at most the given number of them
     static string getLabel(string str, int max) {
         string label = str.lwr();
