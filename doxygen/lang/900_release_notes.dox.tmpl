@@ -2515,6 +2515,9 @@
       it uses as an encoding name: a name that is not known resolves to a known encoding or a label that data may
       select, registers only a plain name that iconv converts, and otherwise gives the encoding
       \c "X-QORE-UNREGISTERED" (<a href="https://github.com/qoretechnologies/qore/issues/6826">issue 6826</a>)
+    - @ref Qore::Serializable::deserialize() "Serializable::deserialize()" reads serialized data in a process whose
+      @ref default_encoding "default character encoding" is not \c UTF-8, where it raised
+      \c DESERIALIZATION-ERROR for the header (<tt>expecting 'QS', got 'QS'</tt>; issue #6722)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)

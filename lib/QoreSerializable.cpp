@@ -57,8 +57,12 @@ static int qore_check_deserialized_name(const QoreString& name, const char* what
     return q_check_no_nul(name.c_str(), name.size(), what, "names in serialized data", "DESERIALIZATION-ERROR", xsink);
 }
 
-static QoreString QoreSerializationTypeString("QS");
-static QoreString QoreSerializationVersionString("1.2");
+// the header is raw bytes, compared as bytes: a static QoreString took the default encoding of the time of its
+// initialization, which depends on the order of the initialization of the translation units and is not the default
+// encoding of the process when it is set with --charset or QORE_CHARSET, so the header of a stream could not match it
+// (qore#6722)
+static constexpr char QoreSerializationTypeString[] = "QS";
+static constexpr char QoreSerializationVersionString[] = "1.2";
 
 static std::vector<std::string> serialization_versions = {
     "1.0",
@@ -142,15 +146,15 @@ static bool has_bin(const QoreString& str) {
     return false;
 }
 
-static int binary_string_deserialization_error(const char* type, const QoreString& expected, ExceptionSink* xsink) {
+static int binary_string_deserialization_error(const char* type, const char* expected, ExceptionSink* xsink) {
     xsink->raiseException("DESERIALIZATION-ERROR", "stream data does not match expected %s string value '%s'; read " \
-        "binary (non-string) data instead", type, expected.c_str());
+        "binary (non-string) data instead", type, expected);
     return -1;
 }
 
-static int check_deserialization_string(const QoreString& str, const QoreString& expected, const char* type,
+static int check_deserialization_string(const QoreString& str, const char* expected, const char* type,
     ExceptionSink* xsink) {
-    if (str != expected) {
+    if (!(str == expected)) {
         bool bin = has_bin(str);
 
         if (bin) {
@@ -166,10 +170,10 @@ static int check_deserialization_string(const QoreString& str, const QoreString&
                 }
                 xsink->raiseException("DESERIALIZATION-ERROR", "expecting %s string value '%s' from " \
                     "stream; got '%s...' (string length %ld truncated to %d characters for display) instead", type,
-                    expected.c_str(), tmp->c_str(), str.size(), QORE_SERIALIZATION_STRING_ERROR_MAX_LEN);
+                    expected, tmp->c_str(), str.size(), QORE_SERIALIZATION_STRING_ERROR_MAX_LEN);
             } else {
                 xsink->raiseException("DESERIALIZATION-ERROR", "expecting %s string value '%s' from " \
-                    "stream; got '%s' instead", type, expected.c_str(), str.c_str());
+                    "stream; got '%s' instead", type, expected, str.c_str());
             }
         }
         return -1;
@@ -1665,11 +1669,11 @@ int QoreSerializable::serializeValueToStream(const QoreValue val, OutputStream& 
     }
 
     // write header to output stream
-    stream.write(QoreSerializationTypeString.c_str(), QoreSerializationTypeString.size() + 1, xsink);
+    stream.write(QoreSerializationTypeString, sizeof(QoreSerializationTypeString), xsink);
     if (*xsink) {
         return -1;
     }
-    stream.write(QoreSerializationVersionString.c_str(), QoreSerializationVersionString.size() + 1, xsink);
+    stream.write(QoreSerializationVersionString, sizeof(QoreSerializationVersionString), xsink);
     if (*xsink) {
         return -1;
     }
