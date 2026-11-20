@@ -29,7 +29,6 @@
     information.
 */
 
-#include "qore/intern/BarewordNode.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreIR.h"
 

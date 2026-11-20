@@ -323,6 +323,9 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   source and as a qcc executable
         # - image-ir-temp-drain (#6742): the script runs in a child process in AST mode and as a qcc executable
         # - WebSocketAsyncTextEncoding (#6619): each case runs in a child process with a default encoding of its own
+        # - WebSocketHandlerRestrictedTimers (#6836, batch AO): a sandboxed restricted Program loads the modules first
+        #   in child processes that set their own execution modes and in a qcc executable, as a module is loaded once
+        #   in a process
         # - globalsetup-stop (#6659): the tests whose global setup stops run in child processes of its own binary
         # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
         # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
@@ -428,6 +431,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-7.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
                                  "examples/test/qlib/WebSocketClient/WebSocketAsyncTextEncoding.qtest",
+                                 "examples/test/qlib/WebSocketHandler/WebSocketHandlerRestrictedTimers.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
                                  "examples/test/qlib/TerminalIoRestrictedLoad/TerminalIoRestrictedLoad.qtest",
                                  "examples/test/qore/classes/Program/entry-cpp-exception/entry-cpp-exception.qtest",
@@ -440,7 +444,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest",
                                  "modules/dataframe/test/dataframe-plugin-exception-handler.qtest",
                                  "modules/dataframe/test/dataframe-inline-mask-subscript.qtest",
-                                 "modules/dataframe/test/parquet-memory-pool.qtest"]),
+                                 "modules/dataframe/test/parquet-memory-pool.qtest",
+                                 "examples/test/qore/functions/value-string-target-encoding/value-string-target-encoding.qtest"]),
                          sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):
