@@ -4768,6 +4768,9 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     if (src->ssl_capture_remote_cert) {
         dst->ssl_capture_remote_cert = true;
     }
+    // the placement of the fields of the HTTP messages read (qore#6761)
+    dst->http_fields_at_top_level.store(src->http_fields_at_top_level.load(std::memory_order_relaxed),
+        std::memory_order_relaxed);
     // Copy ALPN protocols from the listener socket to the accepted socket so that
     // SSL handshakes on the accepted socket correctly negotiate HTTP/2 via ALPN
     if (!src->alpn_protocols.empty()) {

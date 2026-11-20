@@ -183,6 +183,9 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
         bool auth_retry = False;
         #! True once a proxy authentication challenge for a CONNECT request was answered
         bool proxy_connect_answered = False;
+        #! the transport error of the last connection attempt that was retried, which a timeout of the connection then
+        #! reports (qore#6849)
+        *hash<auto> retried_error;
         #! The deadline for the response, if any, as a wall-clock date: only for subclasses that set it (deprecated)
         /** The operation keeps its deadline on the monotonic clock (@ref deadline_us), so that a change of the system
             clock does not end the request early or late (#6455).  A subclass that sets this member, as subclasses of
@@ -381,7 +384,9 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
     #! Continues the operation
     /** @return a poll hash while the operation needs more I/O, @ref nothing once the output is available
 
-        @throw HTTPCLIENT-TIMEOUT the response was not received in time
+        @throw HTTPCLIENT-TIMEOUT the response was not received in time; a timeout while connecting after a retried
+        connection attempt gives the error of that attempt (\c last_attempt_error in its argument, with the origin as
+        \c url)
         @throw HTTPCLIENT-CONNECT-ERROR the connection could not be established
         @throw SOCKET-SSL-ERROR certificate verification failed; certificate refusals are not retried
         @throw NETWORK-ACCESS-DENIED the @ref sandboxing "sandbox" denies a connection; denials are not retried
@@ -410,6 +415,10 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
                         && mgr.resendRequest(rf.getOrigin(), rf.getMethod(), stream, ex, \resend)) {
                     cancelStream();
                     resendRequest();
+                    # a request resent for a connection error gives it if its next connection times out
+                    if (HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                        retried_error = ex;
+                    }
                     continue;
                 }
                 cancelStream();
@@ -850,6 +859,8 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         redirecting = False;
         auth_retry = False;
         failures = 0;
+        # a new request has no attempt before it, unless its caller records the error that it resends for
+        remove retried_error;
         state = ST_CONNECTING;
     }
 
@@ -858,8 +869,21 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
     private checkDeadline() {
         *int d = getDeadlineUs();
         if (d && clock_get_monotonic_us() >= d) {
-            throw "HTTPCLIENT-TIMEOUT", sprintf("timed out waiting for the %s from %s", state == ST_CONNECTING
+            string desc = sprintf("timed out waiting for the %s from %s", state == ST_CONNECTING
                 ? "connection" : "response", opts.connect_only ? rf.getOrigin() : rf.getRequestUrl());
+            # a connection that was not established after a retried attempt gives the error of that attempt
+            if (state == ST_CONNECTING && retried_error) {
+                throw "HTTPCLIENT-TIMEOUT", sprintf("%s; the attempt before failed with %s: %s", desc,
+                    retried_error.err ?? "UNKNOWN", retried_error.desc ?? "unknown"), {
+                    "url": rf.getOrigin(),
+                    "last_attempt_error": {
+                        "err": retried_error.err,
+                        "desc": retried_error.desc,
+                        "arg": retried_error.arg,
+                    },
+                };
+            }
+            throw "HTTPCLIENT-TIMEOUT", desc;
         }
         timeout io_timeout = mgr.getIoTimeout();
         if (io_timeout > 0 && state == ST_RECEIVING && stream
@@ -896,6 +920,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
             return;
         }
         if (++failures <= (opts.max_connect_retries ?? mgr.getMaxRequestRetries())) {
+            retried_error = err;
             return;
         }
         throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN",

@@ -1946,7 +1946,6 @@ struct IRCallFrame {
         one depth missed the in-place reset on every call and paid more than the plain reset)
     */
     QORE_INTERN_ALWAYS_INLINE void reset(size_t reserve_size, size_t local_slot_count) {
-        unwinding_function = nullptr;
         if (hasSizes(reserve_size, local_slot_count)) {
             resetInPlace(reserve_size, local_slot_count);
         } else {
@@ -1955,6 +1954,9 @@ struct IRCallFrame {
     }
 
     QORE_INTERN_ALWAYS_INLINE void resetInPlace(size_t reserve_size, size_t local_slot_count) {
+        // per-call state of the previous call of a pooled frame (#6672): a frame that the last call left by an exception
+        // has its function here, which a later call must not use to release its own locals
+        unwinding_function = nullptr;
         // Do NOT iterate values[] and discard — slots may hold borrowed (non-owning)
         // references intentionally stored by opcodes like ListGetInt/HashGetKey. These
         // are not added to `cleanup` because the caller doesn't own them; the container
@@ -2008,6 +2010,7 @@ struct IRCallFrame {
     }
 
     QORE_INTERN_NOINLINE void resetResize(size_t reserve_size, size_t local_slot_count) {
+        unwinding_function = nullptr;
         // Do NOT iterate values[] and discard — slots may hold borrowed (non-owning)
         // references intentionally stored by opcodes like ListGetInt/HashGetKey. These
         // are not added to `cleanup` because the caller doesn't own them; the container
@@ -2168,6 +2171,7 @@ struct IRCallFramePool {
         if (top < frames.size() && frames[top]->hasSizes(reserve_size, local_slot_count)) {
             IRCallFrame& frame = *frames[top++];
             frame.resetInPlace(reserve_size, local_slot_count);
+            assert(!frame.unwinding_function);
             return frame;
         }
         return pushOther(reserve_size, local_slot_count);
@@ -2198,6 +2202,7 @@ private:
         }
         IRCallFrame& frame = *frames[top++];
         frame.reset(reserve_size, local_slot_count);
+        assert(!frame.unwinding_function);
         return frame;
     }
 };

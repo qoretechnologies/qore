@@ -52,8 +52,16 @@ while (True) {
     @endcode
 
     @see @ref basic_usage
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 string line(string prompt) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("read a line with the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     char * ret = linenoise(prompt->c_str());
@@ -72,8 +80,16 @@ string line(string prompt) {
     if it hits the maximum history size.
 
     @param line a string to be added
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 int history_add(string line) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("add to the history of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     return linenoiseHistoryAdd(line->c_str());
@@ -82,8 +98,16 @@ int history_add(string line) {
 //! Set size of the history
 /**
     @param len a new size
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 int history_set_max_len(int len) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("change the history size of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     return linenoiseHistorySetMaxLen(len);
@@ -108,8 +132,16 @@ int history_get_max_len() {
     @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow the file to be written
     @throw SANDBOX-PATH-ERROR the sandbox of the calling program cannot resolve the path
     @throw LINENOISE-HISTORY-SAVE-ERROR
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing history_save(string filename) [dom=FILESYSTEM] {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("save the history of the line editor", xsink)) {
+        return QoreValue();
+    }
     // a path with a NUL character would name the file before the NUL character
     if (q_check_path(*filename, "LINENOISE-HISTORY-SAVE-ERROR", xsink)) {
         return QoreValue();
@@ -138,8 +170,16 @@ nothing history_save(string filename) [dom=FILESYSTEM] {
     @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow the file to be read
     @throw SANDBOX-PATH-ERROR the sandbox of the calling program cannot resolve the path
     @throw LINENOISE-HISTORY-LOAD-ERROR
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing history_load(string filename) [dom=FILESYSTEM] {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("load the history of the line editor", xsink)) {
+        return QoreValue();
+    }
     // a path with a NUL character would name the file before the NUL character
     if (q_check_path(*filename, "LINENOISE-HISTORY-LOAD-ERROR", xsink)) {
         return QoreValue();
@@ -160,7 +200,15 @@ nothing history_load(string filename) [dom=FILESYSTEM] {
 }
 
 //! Clear the history
+/** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
+*/
 nothing history_free() {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("clear the history of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     linenoiseHistoryFree();
@@ -173,8 +221,16 @@ nothing history_free() {
     @return list a list with histroy items. 0 index is the oldest.
 
     @see @ref history_handling
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 list<auto> history() {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("read the history of the line editor", xsink)) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreListNode> ret(new QoreListNode(autoTypeInfo), xsink);
 
     LinenoiseLockHelper al;
@@ -254,8 +310,16 @@ Linenoise::preload_buffer("        ");
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing preload_buffer(string text) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("preload the buffer of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     linenoisePreloadBuffer(text->c_str());
@@ -279,8 +343,16 @@ Linenoise::set_auto_dedent("    ", "}");
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing set_auto_dedent(string indent_str, string dedent_char) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("change the auto-dedent setting of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     char32_t dc = 0;
@@ -354,8 +426,16 @@ Linenoise::set_mask_mode(False);
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing set_mask_mode(bool enable) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("change the mask mode of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     if (enable) {
@@ -381,8 +461,16 @@ Linenoise::set_menu_complete(True);
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing set_menu_complete(bool enable) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("change the menu completion setting of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     linenoiseSetMenuComplete(enable ? 1 : 0);
@@ -401,8 +489,16 @@ Linenoise::set_completion_case_insensitive(True);
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing set_completion_case_insensitive(bool enable) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("change the completion setting of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     linenoiseSetCompletionCaseInsensitive(enable ? 1 : 0);
@@ -423,8 +519,16 @@ Linenoise::set_filename_completion(True);
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing set_filename_completion(bool enable) [dom=FILESYSTEM] {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("change the filename completion setting of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     linenoiseSetFilenameCompletion(enable ? 1 : 0);
@@ -455,8 +559,16 @@ try {
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 *string line_with_timeout(string prompt, int timeout_ms) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("read a line with the line editor", xsink)) {
+        return QoreValue();
+    }
     if (timeout_ms <= 0) {
         xsink->raiseException("LINENOISE-TIMEOUT-ERROR",
                               "timeout_ms must be > 0; got %d", (int)timeout_ms);
@@ -556,8 +668,16 @@ Linenoise::set_right_prompt();  # clear the right prompt
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing set_right_prompt(*string prompt) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("set the right prompt of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     if (prompt && prompt->strlen() > 0) {
@@ -797,8 +917,16 @@ Linenoise::edit_stop(sid);
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 int edit_start(string prompt) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("start an editing session of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     linenoiseState* state = linenoiseEditStart(prompt->c_str());
@@ -841,8 +969,16 @@ if (rv == 1) {
     @throw LINENOISE-SESSION-ERROR invalid session ID
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 int edit_feed(int session, int byte_val) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("use an editing session of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     auto it = activeSessions.find(session);
@@ -877,8 +1013,16 @@ if (Linenoise::edit_feed(sid, byte_val) == 1) {
     @throw LINENOISE-SESSION-ERROR invalid session ID
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 *string edit_get_line(int session) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("use an editing session of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     auto it = activeSessions.find(session);
@@ -907,8 +1051,16 @@ if (Linenoise::edit_feed(sid, byte_val) == 1) {
     @throw LINENOISE-SESSION-ERROR invalid session ID
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing edit_stop(int session) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("use an editing session of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     auto it = activeSessions.find(session);
@@ -941,8 +1093,16 @@ int fd = Linenoise::edit_fd(sid);
     @throw LINENOISE-SESSION-ERROR invalid session ID
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 int edit_fd(int session) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("use an editing session of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     auto it = activeSessions.find(session);
@@ -975,8 +1135,16 @@ printf("buffer: '%s' cursor=%d len=%d\n", buf.text, buf.cursor, buf.len);
     @throw LINENOISE-SESSION-ERROR invalid session ID
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 hash<auto> edit_get_buffer(int session) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("use an editing session of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     auto it = activeSessions.find(session);
@@ -1014,8 +1182,16 @@ Linenoise::edit_set_silent(sid, True);
     @throw LINENOISE-SESSION-ERROR invalid session ID
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 nothing edit_set_silent(int session, bool silent) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("use an editing session of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     auto it = activeSessions.find(session);
@@ -1052,8 +1228,16 @@ if (rv != 0) {
     @throw LINENOISE-SESSION-ERROR invalid session ID
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot use the line editor,
+    which is process-wide (see @ref linenoise_sandbox)
  */
 int edit_key_type(int session) {
+    // the line editor, its history, settings and editing sessions are process-wide: refused to sandboxed code
+    // (qore#6846)
+    if (qore_check_process_wide_registration("use an editing session of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     auto it = activeSessions.find(session);

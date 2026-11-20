@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%include StackGuardCaseTest.qc
+%include CallStackGuard.qc
+
+%exec-class CallStackGuardPart4
+
+#! runs part 4 of 4 of the cases of CallStackGuardBase
+class CallStackGuardPart4 inherits CallStackGuardBase {
+    constructor() : CallStackGuardBase("CallStackGuardPart4", 4) {
+    }
+}

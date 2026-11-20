@@ -4341,11 +4341,11 @@ struct RuntimeFindContextCallableMethodLookup : InternalEdgeCutForContext {
 
     LookupVisit visit(const BCNode& n, qore_class_private& priv) {
         const QoreMethod* m = runtime_find_local_committed_method(priv, name, Static);
-        LookupVisit r = (m && class_ctx == &priv) ? LookupVisit::Found
-            : runtime_context_method_visit(priv, m, class_ctx);
+        bool own = priv.isClassContext(class_ctx);
+        LookupVisit r = (m && own) ? LookupVisit::Found : runtime_context_method_visit(priv, m, class_ctx);
         if (r == LookupVisit::Found) {
             rv = m;
-            if (class_ctx != &priv && *access < m->getAccess()) {
+            if (!own && *access < m->getAccess()) {
                 *access = m->getAccess();
             }
         }
@@ -4419,7 +4419,7 @@ struct ParseFindContextCallableMethodLookup : ParseMethodEdgeCut {
     LookupVisit visit(const BCNode& n, qore_class_private& priv) {
         priv.initialize();
         const QoreMethod* m = Static ? priv.parseFindLocalStaticMethod(name) : priv.parseFindLocalMethod(name);
-        LookupVisit r = (m && class_ctx == &priv) ? LookupVisit::Found
+        LookupVisit r = (m && priv.isClassContext(class_ctx)) ? LookupVisit::Found
             : parse_context_method_visit(priv, m, class_ctx);
         if (r == LookupVisit::Found) {
             rv = m;
@@ -6428,7 +6428,7 @@ const QoreMethod* qore_class_private::parseFindNormalMethodIntern(const char* mn
     }
     //printd(5, "qore_class_private::parseFindNormalMethodIntern() this: %p '%s' mname: '%s' NOT FOUND\n", this, name.c_str(), mname);
     if (scl) {
-        m = scl->parseFindNormalMethod(mname, class_ctx, class_ctx == this);
+        m = scl->parseFindNormalMethod(mname, class_ctx, isClassContext(class_ctx));
         if (m && doParseMethodAccess(m, class_ctx)) {
             return m;
         }
@@ -6443,7 +6443,7 @@ const QoreMethod* qore_class_private::parseFindStaticMethodIntern(const char* mn
     if (m && doParseMethodAccess(m, class_ctx))
         return m;
     if (scl) {
-        m = scl->parseFindStaticMethod(mname, class_ctx, class_ctx == this);
+        m = scl->parseFindStaticMethod(mname, class_ctx, isClassContext(class_ctx));
         if (m && doParseMethodAccess(m, class_ctx))
             return m;
     }
@@ -6461,12 +6461,13 @@ const QoreMethod* qore_class_private::parseFindContextCallableMethod(const char*
     // the first method of the name that the class context can call; otherwise the method found, whose call raises
     // the error that it raised before
     const QoreMethod* cm = is_static ? parseFindLocalStaticMethod(nme) : parseFindLocalMethod(nme);
-    LookupVisit r = (cm && class_ctx == this) ? LookupVisit::Found : parse_context_method_visit(*this, cm, class_ctx);
+    bool own = isClassContext(class_ctx);
+    LookupVisit r = (cm && own) ? LookupVisit::Found : parse_context_method_visit(*this, cm, class_ctx);
     if (r == LookupVisit::Found) {
         return cm;
     }
     if (r == LookupVisit::Descend && scl) {
-        if ((cm = scl->parseFindContextCallableMethod(nme, class_ctx, class_ctx == this, is_static))) {
+        if ((cm = scl->parseFindContextCallableMethod(nme, class_ctx, own, is_static))) {
             return cm;
         }
     }
@@ -6482,7 +6483,7 @@ const QoreMethod* qore_class_private::parseResolveSelfMethodIntern(const QorePro
     if (m && doMethodAccess(m, qore_method_private::getAccess(*m), class_ctx))
         return m;
     if (scl) {
-        m = scl->parseResolveSelfMethod(loc, nme, class_ctx, this == class_ctx);
+        m = scl->parseResolveSelfMethod(loc, nme, class_ctx, isClassContext(class_ctx));
         if (m && doMethodAccess(m, qore_method_private::getAccess(*m), class_ctx))
             return m;
     }
@@ -7361,6 +7362,8 @@ const QoreMethod* qore_class_private::runtimeFindCommittedMethodForEval(const ch
     // and getMethodForEval() then does not look the method up again (qore#6759)
     const QoreMethod* m = findLocalCommittedMethod(nme);
     if (m) {
+        // another copy of this class's declaration as the class context (see isClassContext()) finds the method below
+        // as well
         if (class_ctx == this) {
             return m;
         }
@@ -7381,8 +7384,10 @@ const QoreMethod* qore_class_private::runtimeFindCommittedMethodForEval(const ch
     if (!scl) {
         return nullptr;
     }
-    // access already checked in subclasses, do not need to check again
-    return scl->runtimeFindCommittedMethod(nme, access, class_ctx, class_ctx == this);
+    // access already checked in subclasses, do not need to check again; the private:internal parent classes are
+    // searched for the class context of this class, also when it is another copy of its declaration, as by
+    // runtimeFindCommittedMethodIntern() (qore#6671)
+    return scl->runtimeFindCommittedMethod(nme, access, class_ctx, isClassContext(class_ctx));
 }
 
 const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProgram* pgm,
@@ -7530,7 +7535,8 @@ const QoreMethod* qore_class_private::runtimeFindContextCallableCommittedMethod(
         return nullptr;
     }
     const QoreMethod* m = runtime_find_local_committed_method(*this, nme, is_static);
-    if (m && class_ctx == this) {
+    bool own = isClassContext(class_ctx);
+    if (m && own) {
         return m;
     }
     LookupVisit r = runtime_context_method_visit(*this, m, class_ctx);
@@ -7541,7 +7547,7 @@ const QoreMethod* qore_class_private::runtimeFindContextCallableCommittedMethod(
     if (r == LookupVisit::Skip || !scl) {
         return nullptr;
     }
-    return scl->runtimeFindContextCallableCommittedMethod(nme, access, class_ctx, class_ctx == this, is_static);
+    return scl->runtimeFindContextCallableCommittedMethod(nme, access, class_ctx, own, is_static);
 }
 
 const QoreMethod* qore_class_private::runtimeFindPublicCommittedMethod(const char* nme, int mask) const {

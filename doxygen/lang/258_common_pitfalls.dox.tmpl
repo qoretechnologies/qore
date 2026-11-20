@@ -31,7 +31,7 @@
     |a hash key that is present tests as absent|the key's value is an empty hash or list, which is @ref False|@ref hash_key_presence_tests
     |a value compares equal to both a real value and "missing"|@ref NULL is not @ref NOTHING; <tt>exists NULL</tt> is @ref True|@ref null
     |a method override is silently ignored|another branch of the <tt>inherits</tt> clause is listed first|@ref multiple_inheritance_order
-    |a subclass reads a parent member as empty, with no error|the member is <tt>private:internal</tt> and is invisible to subclasses|@ref pitfalls_private_internal
+    |a bare name in a subclass cannot be resolved to a parent member|the member is <tt>private:internal</tt> and is invisible to subclasses|@ref pitfalls_private_internal
     |an interval drifts by an hour, or exceeds a remote limit only in some time zones|\c D and \c M are calendar components, not fixed durations|@ref date_time_arithmetic_calendar_components
     |<tt>PARSE-EXCEPTION: hard keyword 'enum' cannot be used after '.'</tt>|a dot member name collided with a @ref keywords "hard keyword"|@ref pitfalls_keywords
     |<tt>PARSE-EXCEPTION: 'C()' names class 'C', not a function</tt>|an object constructor was written without \c new|@ref pitfalls_new
@@ -127,10 +127,11 @@
     @subsection pitfalls_private private is not private
     In %Qore, <tt><b>private</b></tt> restricts access to the class hierarchy — it is what other
     languages call <i>protected</i> — so a <tt><b>private</b></tt> method can be overridden by a
-    subclass.  <tt><b>private:internal</b></tt> is the genuinely private form.  A subclass that
-    references a <tt>private:internal</tt> parent member gets no parse error: the name simply does
-    not resolve to that member, so a loop over it iterates zero times and a lookup always reports
-    "not found".  See @ref private_methods.
+    subclass.  Only the declaring class can access its <tt><b>private:internal</b></tt> members.
+    In a subclass, a bare name used in a read or assignment must resolve to a declaration visible
+    there.  If the parent's <tt>private:internal</tt> member is the only declaration with that
+    name, parsing fails.  Use an accessible method of the parent to read or update its member.
+    See @ref private_methods.
 
     @section pitfalls_threading Threading
 

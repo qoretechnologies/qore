@@ -263,8 +263,11 @@ declaration digests.  `MODULE_DOMAINS` section (33).  AOT identity changes (gene
 WebhookSupport declare `[dom=PROCESS_CONTROL]` (those with `isSandboxed()`/`checkNotSandboxed()`/`checkRegistration()`
 refusals, `registerFactory()`, and the builder/scheme setters guarded in module init); the `isSandboxed()` refusals
 stay (a sandbox does not imply `PO_NO_PROCESS_CONTROL`).  The 150 modules that call them declare
-`domains = "PROCESS_CONTROL"`.  Not tagged (no refusal today, decision pending):
-`AbstractDataProvider::registerChild()`, `DataProviderActionCatalog::registerLazyValue()`, `addCatalogChangeListener()`.
+`domains = "PROCESS_CONTROL"`.
+The base and concrete static `registerChild()` methods and both catalog change listener mutations declare
+`PROCESS_CONTROL` (#5844). Static methods do not inherit the base declaration. `registerLazyValue()` remains a
+module-initialization API: governed initializers build the value eagerly. Read-only catalog lookups keep their
+existing domains.
 
 ### qlib module audit (PO_NO_PROCESS_CONTROL, PO_NO_THREAD_CONTROL)
 
@@ -280,8 +283,8 @@ A declaration must not turn the module's public API into a bypass, so for each m
   (`background`, timers and tasks: the scheduling builtins are `MODULE_OWNED` and refuse a restricted caller's own
   code, and `background` in module code is checked against the module's options, see `222_sandboxing.dox.tmpl`),
   thread data it keeps, waits between retries or polls (`usleep()`, `sleep()`: these let a caller wait, as
-  `Counter::waitForZero()` with a timeout already does; decided (David, 2026-11-12): modules that wait declare `PROCESS`; the `%ifdef` workaround code stays for a
-  module loaded by its path, where the declaration does not apply (C1);
+  `Counter::waitForZero()` with a timeout already does; decided (David, 2026-11-12): modules that wait declare `PROCESS`;
+  a module loaded from outside a process-wide module directory inherits the loader's restrictions (C1);
 - **guard** module code that would use a capability for its caller: QUnit exits the process for a usage error and
   installs its `SIGUSR1` handler only if no Program in the call stack restricts process control
   (`QUnit::Priv::callersMayControlProcess()`), as `ConnectionSchemeCache::deregisterScheme()` and
@@ -291,9 +294,7 @@ A declaration must not turn the module's public API into a bypass, so for each m
   DiscordWebSocketClient do), and for a sandboxed caller (a Qorus interface has a `SandboxManager`) the
   `MODULE_OWNED` checks of the builtins refuse the caller's own code and timers; a Program restricted only with
   parse options has no such composition, so its closures can run on module threads (C4: kept as designed and
-  documented, David 2026-11-12: parse options restrict a Program's own code, a `SandboxManager` contains it); modules with
-  `%ifdef PO_NO_THREAD_CONTROL` workarounds (QoreAgentStrategies, QoreStructuredExtraction, WebSocketClient, ...)
-  do not declare `THREAD_CONTROL`, which would disable the workaround (C1);
+  documented, David 2026-11-12: parse options restrict a Program's own code, a `SandboxManager` contains it);
 - C3, accepted (David, 2026-11-12; documented in `222_sandboxing.dox.tmpl`): DataProvider declares `THREAD_CONTROL` for its own `background` threads, but its default
   `*Async()` methods and `DataProviderPipeline` run the caller's code (overrides, callbacks) on them; the same holds
   for overridable methods that other declared modules run on their threads (`HttpServerUtil`'s
@@ -307,20 +308,30 @@ A declaration must not turn the module's public API into a bypass, so for each m
   `domains` declaration relaxes, not with those of the restricted caller; the explicit "load everything" APIs
   (`ProviderIndexUtil::tryLoadModule()`, `DataProvider::registerKnownFactories*()`) declare `PROCESS`, but the root
   fix is in the core (add the caller's restrictions to a run-time module load made for it);
+- WebSocketHandler requires HttpServerUtil, not HttpServer, and loads in restricted Programs: it declares
+  `THREAD_CONTROL` for the heartbeat and idle timers that it arms with the `AsyncIoController` builtins for each
+  frame of its HTTP/2 and HTTP/3 streams (#6836: without a controller wrapper per frame).  Undeclared, a restricted
+  Program could not load it (the builtins are tagged `THREAD_CONTROL`), and with the wrapper, which is not tagged,
+  a sandboxed Program restricted with `PO_NO_THREAD_CONTROL` that loaded it first left its Program without thread
+  control, so the builtins' `MODULE_OWNED` check refused its own timers; a closure of the caller's own is still
+  refused (`qlib/WebSocketHandler/WebSocketHandlerRestrictedTimers.qtest`).  As in C3, the module's timers call
+  methods that a caller's subclass may override (the handler's log methods, the connection's close path), as its
+  stream workers already call the caller's `gotMessage()`;
 - the core `AsyncIoController::setLogger()`, `setAutostop()` and `cancelByOwner()` act on the process-wide
   singleton but are only `dom=NETWORK` (`set_async_io_logger()` is `PROCESS`); the AsyncSocketIo wrappers
   `setLogger()` and `setAutostop()` declare `PROCESS`, and the builtins should too (follow-up);
 - **leave undeclared** (refused to restricted loaders) a module that is not meant for them: QLS, QoreRepl,
   DebugUtil, DebugCmdLine, DebugProgramControl, VscDebugAdapter, the servers HttpServer, HttpServerAsyncIo and MllpUtil
   (its listener) with the handlers that require them (A2aServerHandler, GraphQLHandler, McpServerHandler,
-  ServerSentEventHandler, WebSocketHandler, DebugHandler, DebugMcpServer), UrlDownloader (its public `cancel()` cancels the thread running a download with `cancel_thread()`),
+  ServerSentEventHandler, DebugHandler, DebugMcpServer), UrlDownloader (its public `cancel()` cancels the thread running a download with `cancel_thread()`),
   and QoreMLUtils, whose searches reseed the process-wide random number generator with `srand()`.
 
 The audit loads every qlib module, with its own header removed, in a Program restricted with each of the two
 options, in a process of its own (so that no earlier load hides a use), and lists the uses in the module's own files.
 
-Follow-up (per module, needs approval): modules with `%ifdef PO_NO_PROCESS_CONTROL` / `PO_NO_THREAD_CONTROL`
-workarounds (e.g. `WebSocketClient`) can declare the domains instead.
+The poller, WebSocket, SSE, Discord, parallel-dispatch and extraction modules use the same source for all
+loaders. A copy loaded outside the module path under a thread restriction is refused at parse time if it uses
+`background`. Supplying a start callback at construction does not affect that parse.
 
 ## Performance
 
@@ -340,7 +351,5 @@ nets ~0 (`CodeEvaluationHelper` marker +2.1M, `execValue()` +0.76M, `findVariant
 ## Review findings (independent review, 2026-11-11)
 
 Fixed: marker leak to later calls (take always clears; argument evaluation hides it), `get_call_reference()` static
-reference without creator, creator capture now uses the effective options, the per-call TLS cost.  Open decisions:
-the qlib modules with `%ifdef PO_NO_PROCESS_CONTROL` workarounds that now declare `domains` (their workarounds are
-inactive when loaded from the module path), and run-time-resolved calls of a trusted module's own declared code for a
-sandboxed caller (refused: sandbox restrictions are composed into module code at run time).
+reference without creator, creator capture now uses the effective options, the per-call TLS cost.  Open decisions at the
+time of review included run-time-resolved calls of a trusted module's own declared code for a sandboxed caller (refused: sandbox restrictions are composed into module code at run time).

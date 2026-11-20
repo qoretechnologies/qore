@@ -17,7 +17,8 @@
 
 %exec-class ModuleOwnProgramStatePart2
 
-#! runs part 2 of 2 of the cases of ModuleOwnProgramStateBase: their AOT forms
+#! runs part 2 of 4 of the cases of ModuleOwnProgramStateBase: the AOT forms of the Mapper and
+#! DataProvider modules in every mode
 class ModuleOwnProgramStatePart2 inherits ModuleOwnProgramStateBase {
     constructor() : ModuleOwnProgramStateBase("ModuleOwnProgramStatePart2", 2) {
     }

@@ -16,6 +16,7 @@
 class JsonSchemaPathNulTest inherits QUnit::Test {
     constructor() : QUnit::Test("JsonSchema path NUL characters", "1.0", \ARGV) {
         addTestCase("JsonSchema::load()", \testLoad());
+        addTestCase("NUL characters in a schema and in validated strings", \testNulText());
         set_return_value(main());
     }
 
@@ -33,6 +34,23 @@ class JsonSchemaPathNulTest inherits QUnit::Test {
                 label + ": the description gives the offset of the NUL character");
             assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
         }
+    }
+
+    #! the whole schema text and the whole string values are used: a NUL character does not end them (issue #6841)
+    testNulText() {
+        # text after the schema's JSON is refused, also after a NUL byte
+        assertThrows("JSON-SCHEMA-ERROR", sub () { JsonSchema s("{\"type\":\"string\"}\x00{garbage"); });
+        # a string value is validated with its NUL characters
+        JsonSchema max("{\"maxLength\":1}");
+        assertFalse(max.validate("a\x00bcd"), "maxLength counts the characters after a NUL character");
+        assertTrue(max.validate("a"));
+        JsonSchema c("{\"const\":\"a\"}");
+        assertFalse(c.validate("a\x00b"), "const compares the whole string");
+        assertTrue(c.validate("a"));
+        JsonSchema nul("{\"const\":\"a\\u0000b\"}");
+        assertTrue(nul.validate("a\x00b"), "a string with a NUL character matches its schema");
+        # json_pointer_escape() keeps the characters after a NUL character
+        assertEq("a\x00~1b~0", json_pointer_escape("a\x00/b~"));
     }
 
     testLoad() {

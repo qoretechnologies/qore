@@ -415,6 +415,59 @@ module Schema {
     A reference naming a definition that does not exist raises \c DATA-SCHEMA-ERROR at load,
     naming the table, the entry and what it asked for.
 
+    @section schema_data_schema_issues Checking a Definition for Every Problem
+
+    @ref Schema::DataSchemaLoader::loadHash() "DataSchemaLoader::loadHash()" raises an exception for the first problem
+    it finds.  An editor of a definition can instead call
+    @ref Schema::DataSchemaLoader::loadHashChecked() "DataSchemaLoader::loadHashChecked()", which runs the same checks
+    with validation and returns every problem found, each with the dotted path of the node it concerns (the keys of
+    the hashes from the top of the definition, and the index of a list element, separated by \c "."), in the order of
+    the nodes in the definition, in a @ref Schema::DataSchemaCheckInfo "DataSchemaCheckInfo" hash; the normalized
+    definition is returned only if no error was found.
+
+    @par Example: Reporting every problem of a definition
+    @code{.py}
+%requires Schema
+
+hash<DataSchemaCheckInfo> info = DataSchemaLoader::loadHashChecked(parse_yaml(ReadOnlyFile::readTextFile(path)));
+foreach hash<DataSchemaIssueInfo> issue in (info.issues) {
+    printf("%s: %s at %s: %s\n", issue.severity, issue.code, issue.path ?? "<schema>", issue.message);
+}
+    @endcode
+
+    A definition with an unknown column type, a primary key column that the table does not declare and a misplaced
+    \c sequence_columns gives, for example:
+    @verbatim
+error: UNKNOWN-TYPE at tables.customers.columns.amount.type: table "customers" column "amount": unknown type "money"; ...
+error: UNKNOWN-PRIMARY-KEY-COLUMN at tables.customers.primary_key.columns.1: table "customers" primary key references unknown column "missing"
+error: UNKNOWN-KEY at tables.customers.sequence_columns: table "customers": unknown key "sequence_columns"; "sequence_columns" belongs under "auto_triggers" ...
+    @endverbatim
+
+    The message of an error that @ref Schema::DataSchemaLoader::loadHash() "loadHash()" raises with a code of the
+    loader (\c DATA-SCHEMA-VALIDATION-ERROR or \c DATA-SCHEMA-ERROR) is that of its exception; for a value of a type
+    that the loader does not read (\c INVALID-VALUE), @ref Schema::DataSchemaLoader::loadHash() "loadHash()" raises
+    the exception of the code that reads it, and the errors of the meta-schema, which it joins in one message, are given one by one.  A
+    warning concerns what @ref Schema::DataSchemaLoader::loadHash() "loadHash()" accepts but is likely wrong.  The
+    codes of the problems:
+
+    |!Code|!Severity|!Problem|!Path
+    |\c MISSING-KEY|error|a required key is missing: \c schema, \c schema.name, \c schema.version or a table's \c columns|the missing key
+    |\c UNKNOWN-KEY|error|a key that is not valid where it is (at the top level, in a table, its \c auto_triggers, a shorthand column or the reference data); the message says where a misplaced key belongs|the key
+    |\c INVALID-VALUE|error|a value of a type that the loader does not read: \c schema, \c tables, a table, its \c columns, one of its columns or its \c auto_triggers, the shared \c columns or \c indexes or one of their definitions, \c reference_data or one of its categories is not a hash, a <tt>$use</tt> is not a string, or a primary key column is not a string; the value is skipped, so that the other problems are reported|the value
+    |\c INVALID-DEFINITION|error|a value of a type that none of the checks expects raised an exception, whose code and description the message gives; the checks after it in the same phase (validation or normalization) were not made|none
+    |\c META-SCHEMA|error|the definition does not conform to the meta-schema (with the \c json module); the meta-schema reports any problem in a table at the table, so the error is given only if no other check found an error at or below its node|the node
+    |\c UNKNOWN-SHARED-DEFINITION|error|a table entry draws with <tt>$use</tt> from a shared definition that the schema does not declare|the <tt>$use</tt> key
+    |\c NESTED-SHARED-DEFINITION|error|a table entry draws from a shared definition that itself draws from another|the <tt>$use</tt> key
+    |\c UNKNOWN-TYPE|error|a column's \c type is not a key of @ref Schema::ColumnTypeMap "ColumnTypeMap"|the \c type key
+    |\c MISSING-TYPE|error|a column sets neither \c type nor \c driver (nor \c qore_type or \c native_type)|the column
+    |\c UNKNOWN-PRIMARY-KEY-COLUMN|error|the primary key names a column that the table does not declare|the element of \c primary_key.columns
+    |\c SCALE-IGNORED|warning|a \c scale with a type other than \c number, the only type that uses it|the \c scale key
+    |\c MISSING-SIZE|warning|a \c varchar column without a \c size, which some databases reject (ex: Oracle)|the missing \c size key
+
+    A key that contains a \c "." gives a path that cannot be told from that of a nested key (ex: a table named
+    \c "s.t"); the paths are not escaped.  The checks of the database that the schema is aligned with (whether a
+    database accepts a type, for example) are not made here.
+
     See <tt>design/data-schema-format.md</tt> in the Qore source for the complete format specification.
 */
 /** @page schema_upgrades Schema Upgrades and Migrations
@@ -956,6 +1009,10 @@ module Schema {
 
 
     @section schema_v1_9_0 Schema Module v1.9.0
+    - added @ref Schema::DataSchemaLoader::loadHashChecked() "DataSchemaLoader::loadHashChecked()", which reports
+      every problem of a data schema definition, as an error or a warning with the dotted path of its node, instead
+      of an exception for the first one; see @ref schema_data_schema_issues
+      (<a href="https://github.com/qoretechnologies/qore/issues/6825">issue 6825</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the output of
       alignments and migrations is left out when the module's code has no terminal I/O
       (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)

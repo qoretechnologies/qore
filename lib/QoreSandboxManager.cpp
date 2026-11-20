@@ -693,18 +693,28 @@ struct qore_net_security_private {
         return false;
     }
 
-    // Returns the address that the rules are applied to: an IPv4-mapped IPv6 address carries an IPv4 address, and a
-    // connection to an unspecified address (0.0.0.0 or ::) goes to the local host
+    // Returns the address that the rules are applied to: an IPv4-mapped IPv6 address carries an IPv4 address, as does
+    // an address of the NAT64 well-known prefix (64:ff9b::/96) or of 6to4 (2002::/16, the IPv4 address of its site;
+    // qore#6858), and a connection to an unspecified address (0.0.0.0 or ::) goes to the local host
     static const struct sockaddr* normalizeAddr(const struct sockaddr* addr, struct sockaddr_storage& storage,
             bool unspecified_as_loopback) {
         if (addr->sa_family == AF_INET6) {
             const struct sockaddr_in6* sin6 = reinterpret_cast<const struct sockaddr_in6*>(addr);
-            if (IN6_IS_ADDR_V4MAPPED(&sin6->sin6_addr)) {
+            const unsigned char* a6 = sin6->sin6_addr.s6_addr;
+            static const unsigned char nat64_prefix[12] = {0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0};
+            // the offset of the embedded IPv4 address, or -1
+            int v4_offset = -1;
+            if (IN6_IS_ADDR_V4MAPPED(&sin6->sin6_addr) || !memcmp(a6, nat64_prefix, sizeof(nat64_prefix))) {
+                v4_offset = 12;
+            } else if (a6[0] == 0x20 && a6[1] == 0x02) {
+                v4_offset = 2;
+            }
+            if (v4_offset >= 0) {
                 storage = {};
                 struct sockaddr_in* sin = reinterpret_cast<struct sockaddr_in*>(&storage);
                 sin->sin_family = AF_INET;
                 sin->sin_port = sin6->sin6_port;
-                memcpy(&sin->sin_addr, &sin6->sin6_addr.s6_addr[12], sizeof(sin->sin_addr));
+                memcpy(&sin->sin_addr, a6 + v4_offset, sizeof(sin->sin_addr));
                 addr = reinterpret_cast<const struct sockaddr*>(&storage);
             } else if (unspecified_as_loopback && IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr)) {
                 storage = {};
@@ -861,11 +871,28 @@ void QoreNetworkSecurityManager::blockPrivateNetworks() {
     addDeniedIPRange("172.16.0.0/12", &xsink);    // RFC 1918 Class B
     addDeniedIPRange("192.168.0.0/16", &xsink);   // RFC 1918 Class C
     addDeniedIPRange("169.254.0.0/16", &xsink);   // Link-local (includes cloud metadata)
+    // the other ranges that are not public unicast destinations (qore#6858)
+    // "This network" (0.0.0.0/8), which reaches the local host on common platforms; 0.0.0.0 itself is not in it: a
+    // connection to it is checked as a connection to the local host (normalizeAddr()), and a bind to it is a bind on
+    // all interfaces, which the denied ranges do not decide: the range is added as the blocks of 0.0.0.1/32 up to
+    // 0.128.0.0/9
+    for (int prefix = 32; prefix >= 9; --prefix) {
+        uint32_t start = 1u << (32 - prefix);
+        char cidr[32];
+        snprintf(cidr, sizeof cidr, "%u.%u.%u.%u/%d", (start >> 24) & 0xff, (start >> 16) & 0xff, (start >> 8) & 0xff,
+            start & 0xff, prefix);
+        addDeniedIPRange(cidr, &xsink);
+    }
+    addDeniedIPRange("100.64.0.0/10", &xsink);    // Shared address space (carrier-grade NAT)
+    addDeniedIPRange("224.0.0.0/4", &xsink);      // Multicast
+    addDeniedIPRange("240.0.0.0/4", &xsink);      // Reserved, and the limited broadcast address
 
     // IPv6 private networks
     addDeniedIPRange("::1/128", &xsink);          // Localhost
     addDeniedIPRange("fe80::/10", &xsink);        // Link-local
     addDeniedIPRange("fc00::/7", &xsink);         // Unique local addresses
+    addDeniedIPRange("ff00::/8", &xsink);         // Multicast (qore#6858)
+    // an IPv6 address that embeds an IPv4 address (IPv4-mapped, NAT64, 6to4) is judged by the IPv4 address
 
     assert(!xsink);  // These should never fail
 }

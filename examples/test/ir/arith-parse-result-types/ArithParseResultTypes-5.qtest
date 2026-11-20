@@ -15,7 +15,7 @@
 
 %exec-class ArithParseResultTypesPart5
 
-#! runs part 5 of 5 of the cases of ArithParseResultTypesBase: the container and list cases
+#! runs part 5 of 7 of the cases of ArithParseResultTypesBase: the container and list cases
 class ArithParseResultTypesPart5 inherits ArithParseResultTypesBase {
     constructor() : ArithParseResultTypesBase("ArithParseResultTypesPart5", 5) {
     }

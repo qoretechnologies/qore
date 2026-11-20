@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a module of caller-program.qtest: module code that other module code calls
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+module CallerProbeB {
+    version = "1.0";
+    desc = "caller Program probe B";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CallerProbeB {
+#! returns the ID of the caller Program of this module code
+public *int sub probe() {
+    return SandboxManager::getCallerProgramId();
+}
+}

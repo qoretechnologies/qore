@@ -98,6 +98,8 @@ public:
             return QoreValue();
         }
         SandboxScope sandbox_scope(sandbox_context);
+        // the task's code has the caller of the code that submitted it as its caller (qore#6852)
+        QoreCallerProgramScope caller_scope(&caller);
         return code->invoke(0, xsink);
     }
 
@@ -111,6 +113,7 @@ public:
             QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
             QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
             SandboxScope sandbox_scope(sandbox_context);
+            QoreCallerProgramScope caller_scope(&caller);
             cancelCode->invoke(0, xsink).discard(xsink);
         }
     }
@@ -122,6 +125,8 @@ protected:
     const QoreSandboxContext sandbox_context;
     //! The run-time parse options of the submitting code (qore#6208)
     const QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::capture();
+    //! the caller Program of the code that submitted the task (qore#6852)
+    const QoreCallerProgramCapture caller;
 
     //! Applies the sandbox of the submitting thread while the object exists, if a sandbox governed it
     /** Without one, the sandbox lookups of the worker resolve normally, so a task created by sandboxed code (a

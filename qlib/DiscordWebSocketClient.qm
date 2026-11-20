@@ -1435,15 +1435,11 @@ hash<auto> h = ws.getInfo();
             remove hb;
         }
         # the heartbeat thread sets the record's TID itself
-%ifdef PO_NO_THREAD_CONTROL
-        start_thread(DiscordWebSocketClient::heartbeatRunner(h));
-%else
         if (start_thread) {
             start_thread(DiscordWebSocketClient::heartbeatRunner(h));
         } else {
             background DiscordWebSocketClient::heartbeatMain(h);
         }
-%endif
     }
 
     #! Returns the code that runs the heartbeat thread of a record

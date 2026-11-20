@@ -101,16 +101,31 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Functional Domains for Standard Module Sources
+    Restricted Programs now get a parse error when explicitly loading standard module sources outside the
+    process-wide module path if the source needs a denied @ref function_domains "functional domain".
+
+    @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
+    HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
+    (\c body, \c path, \c status_code, ...) is no longer given at its top level, where the other fields stay for now
+    (deprecated; see @ref Qore::Socket::setHttpFieldsAtTopLevel() "Socket::setHttpFieldsAtTopLevel()" and
+    @ref httpclient_response_fields; issues #6761, #6811, #6851, #6869).
+
+    @par RestClient Requires the HTTP Fields at the Top Level of a Response
+    @ref restclientintro "RestClient" and the clients built on it raise \c RESTCLIENT-ERROR for the HTTPClient option
+    \c http_fields_at_top_level set to @ref False, as they read the fields of a response at its top level (see
+    @ref restclientv2_7; issue #6869).
+
     @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
     get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
     (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
 
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
-    The static members in which public classes of the standard modules keep state shared by all of their callers
-    (caches of objects and connections, the host's callbacks and loggers) are \c private:internal, so no subclass can
-    read them (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6748">issue
-    6748</a>).
+    The static members in which public classes of the standard modules keep state shared by all of their callers, and
+    the options of an HTTP listener with its TLS keys, are \c private:internal, so no subclass can read them (see
+    @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6748">issue 6748</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/6848">issue 6848</a>).
 
     @par Sandboxed Code Cannot Change the Process-Wide Registries of Standard Modules
     The registries of schemes, location handlers, lookups, resolvers, serializers, codecs, schemas, types and YAML tag
@@ -1574,6 +1589,12 @@
     sandboxed code as well, and the SSH registry does not give it its providers
     (<a href="https://github.com/qoretechnologies/qore/issues/6744">issue 6744</a>).
 
+    @par The Caller Program of Library Code
+    Library code can identify the %Program whose code it serves, also through other module code, threads and thread
+    pool tasks, to record the owner of an object it creates: @ref Qore::SandboxManager::getCallerProgramId(), and
+    \c qore_get_caller_program_id() and \c qore_get_caller_program() in the C++ API (\c QORE_HAVE_CALLER_PROGRAM)
+    (<a href="https://github.com/qoretechnologies/qore/issues/6852">issue 6852</a>).
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
@@ -1760,6 +1781,8 @@
     - @ref dataproviderintro "DataProvider" module
       - the process-wide registration and setter APIs declare the \c PROCESS @ref function_domains "functional domain"
         (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
+      - code parsed with \c PO_NO_PROCESS_CONTROL can no longer call \c registerChild(), \c addCatalogChangeListener(),
+        or \c removeCatalogChangeListener(); these APIs now declare the \c PROCESS_CONTROL @ref function_domains "functional domain"
       - added DPQL, the Data Provider Query Language (see @ref dataprovider_dpql)
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool
@@ -1856,6 +1879,10 @@
       - the iterators and the read data provider take the \c "encoding_errors" option (see @ref encoding_errors)
         (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
       - see @ref fixedlengthutil_v1_7 for all changes
+
+    - @ref fsutilintro "FsUtil" module
+      - @ref FsUtil::remove_tree() and @ref FsUtil::TmpDir can remove entries whose names use a different
+        encoding from the process
 
     - @ref ftpclientdataproviderintro "FtpClientDataProvider" module
       - the \c get-file request takes the \c encoding_errors field for text (see @ref encoding_errors)
@@ -2033,6 +2060,13 @@
         and logs
       - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - a connection that offers OAuth2 with a key as the fallback and is configured with the key does not use the
+        default OAuth2 grant type (<a href="https://github.com/qoretechnologies/qore/issues/6901">issue 6901</a>)
+      - a client with invalid OAuth2 options raises an error when it is created also when it does not connect; an
+        empty required option counts as missing, so such a connection is reported as down, and an unconnected
+        asynchronous client of a connection that awaits authorization is created without logging in (see
+        @ref restclientv2_7 for every change in behavior;
+        <a href="https://github.com/qoretechnologies/qore/issues/6906">issue 6906</a>)
       - see @ref restclientv2_7 for all changes
 
     - @ref restschemavalidatorintro "RestSchemaValidator" and @ref swaggerintro "Swagger" modules
@@ -2582,9 +2616,10 @@
     - the members of a class inherited with @ref private_inheritance "private:internal" are accessible on objects of
       the inheriting class only in that class, the declaring class and the classes between them, and a member that a
       class also reaches through a public base class is public there (issue #6640)
-    - a name in a class resolves to a member only if the class can access it: a member reached only through a base
-      class that a base class inherits with @ref private_inheritance "private:internal" is not a candidate
-      (issue #6667)
+    - a bare name in a class resolves only to a visible declaration, so a script that uses an ancestor's
+      @ref pitfalls_private_internal "private:internal member" or a member hidden by
+      @ref private_inheritance "private:internal inheritance" gets a parse error if no other declaration matches
+      (issues #6667 and #6873)
     - a member of a class inherited with @ref private_inheritance "private:internal" is assigned with the type of its
       own declaration in a class that also has a member of the same name from another base class (issue #6670)
     - \c self.<member> and \c $.<member> for a member that a class reaches only through a base class that one of
@@ -2613,6 +2648,10 @@
       parameter that is not valid raises \c INVALID-PATH-COMPONENT then, instead of failing each request with a 500
       response; a content type that a request accepts is no longer taken as a regular expression (see @ref http1_7,
       @ref swagger_2_6 and @ref restschemavalidator_2_5; issue #6603)
+    - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: state that a request
+      handler leaves on a server thread (its persistence, its close notification and its user thread context) is
+      kept for that handler only, so that a handler of another tenant that runs on the same thread later neither sees
+      nor uses it (see @ref httputil1_6 and @ref http1_7; issue #6847)
     - \c UNREFERENCED-VARIABLE warnings ignored the code's own warning directives when the code was committed, and
       qcc and qore could disagree; a @ref disable-warning "%disable-warning" or @ref enable-warning "%enable-warning"
       directive now applies to the variables declared after it (issue #6589)
@@ -2652,6 +2691,8 @@
       interpreters, instead of \c NOTHING (issue #6244)
     - performance: a run-time check of an object against a parameterized class type visits each ancestor once, so
       its cost grows linearly with the depth of a diamond class hierarchy instead of exponentially (issue #6449)
+    - @ref include "%include" resolves quoted relative filenames using the same search order as unquoted filenames
+      (issue #6833)
     - the conditional parse directives (<tt>%%ifdef</tt>, <tt>%%ifndef</tt>, <tt>%%if</tt>, <tt>%%elif</tt>) on a line
       that ends with CRLF are read, and the scanner no longer writes source text that it cannot read to standard
       output: such text is a parse error (issue #6512)

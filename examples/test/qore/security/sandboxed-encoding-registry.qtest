@@ -20,9 +20,16 @@ class SandboxedEncodingRegistryTest inherits QUnit::Test {
     private {
         SandboxManager sm();
         Program sandboxed;
+        #! a plain name that iconv converts both ways on this platform (see sandboxedKnown())
+        *string plain_name;
     }
 
     const Unregistered = "X-QORE-UNREGISTERED";
+
+    #! plain names that are in no table of Qore's; which of them iconv converts depends on the platform's iconv
+    /** glibc converts all of them; musl and the libiconv of macOS only some (musl has no EBCDIC code page but 1047)
+    */
+    const PlainNames = ("IBM037", "IBM500", "CP1047", "CP858", "CP860", "CP863", "CP865");
 
     #! the code of the sandboxed and restricted Programs
     const Source = "%modern
@@ -91,9 +98,30 @@ string sub conv(string name) {
         assertEq("ISO-8859-1", sandboxed.callFunction("enc", "ISO-8859-1"));
         # a label of the fixed table selects its encoding
         assertEq("Shift_JIS", sandboxed.callFunction("enc", "x-sjis"));
-        # a plain name that iconv converts both ways (bounded by iconv's names)
-        assertEq("IBM037", sandboxed.callFunction("enc", "IBM037"));
-        assertEq("CONVERTED", sandboxed.callFunction("conv", "IBM037"));
+        # a plain name that iconv converts both ways (bounded by iconv's names) resolves, and any other gives the
+        # shared encoding; which plain names iconv converts depends on the platform, so the expectation is taken from
+        # trusted code's conversion, made after the sandboxed code's, which must not find the name registered already
+        foreach string name in (PlainNames) {
+            string enc = sandboxed.callFunction("enc", name);
+            string conv = sandboxed.callFunction("conv", name);
+            bool supported = iconvConverts(name);
+            assertEq(supported ? name : Unregistered, enc, name);
+            assertEq(supported ? "CONVERTED" : "ENCODING-CONVERSION-ERROR", conv, name);
+            if (supported && !plain_name) {
+                plain_name = name;
+            }
+        }
+        assertTrue(exists plain_name, sprintf("iconv converts one of %y", PlainNames));
+    }
+
+    #! returns True if iconv converts the given name both ways, as trusted code converts it
+    private static bool iconvConverts(string name) {
+        try {
+            string str = convert_encoding("abc", name);
+            return convert_encoding(str, "UTF-8") == "abc";
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
     }
 
     #! any other name gives the shared encoding, which cannot be converted
@@ -111,7 +139,10 @@ string sub conv(string name) {
         foreach string n in (("U!TF-8", "UTF-8#$%", "!utf-8", "U-T-F-8", "U..T__F--8", "UTF8")) {
             assertEq("UTF-8", sandboxed.callFunction("enc", n), n);
         }
-        assertEq("IBM037", sandboxed.callFunction("enc", "IBM!037"));
+        # another spelling of a plain name that iconv converts (see sandboxedKnown())
+        if (plain_name) {
+            assertEq(plain_name, sandboxed.callFunction("enc", plain_name.substr(0, 2) + "!" + plain_name.substr(2)));
+        }
         list<string> spellings = sandboxed.callFunction("spellings", 1000);
         assertEq(("UTF-8",), keys (map {$1: True}, spellings), "every spelling gives UTF-8");
         # a NUL character in a name

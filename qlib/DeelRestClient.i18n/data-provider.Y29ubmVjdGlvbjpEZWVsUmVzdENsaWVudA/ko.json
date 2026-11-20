@@ -4,8 +4,8 @@
     "ko": {
       "messages": {
         "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.desc": {
-          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.",
-          "message": "글로벌 인력 관리용 Deel REST API에 대한 연결.\n\nDeel은 전 세계 계약자 및 정규직 직원 고용, 관리, 지급을 위한 글로벌 HR 플랫폼입니다. 이 통합은 계약, 근무 시간표, 청구 조정, 근로자, 휴가, 법적 실체, 청구서, 이벤트 트리거를 지원합니다."
+          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.\n\n**Authentication** is OAuth2 (authorization code with refresh tokens) with an app registered in Deel's Developer Center, or an **API token** as the fallback.",
+          "message": "글로벌 인력 관리용 Deel REST API에 대한 연결.\n\nDeel은 전 세계 계약자 및 정규직 직원 고용, 관리, 지급을 위한 글로벌 HR 플랫폼입니다. 이 통합은 계약, 근무 시간표, 청구 조정, 근로자, 휴가, 법적 실체, 청구서, 이벤트 트리거를 지원합니다.\n\n**인증**은 Deel Developer Center에 등록한 앱을 사용하는 OAuth2(갱신 토큰을 포함한 인증 코드) 또는 대체 수단인 **API 토큰**으로 수행합니다."
         },
         "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.display_name": {
           "source": "Deel REST Connection",
