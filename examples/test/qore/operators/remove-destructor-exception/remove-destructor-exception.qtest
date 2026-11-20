@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT/AOT compilation of exception dispatch from destructors run by the remove operator
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%exec-class RemoveDestructorExceptionTest
+
+#! qore#6823: an exception that a destructor raises when "remove" releases the removed value is caught by the
+#! enclosing try statement in every execution mode
+/** In IR and tiered execution, the exception escaped the catch block when the removed local was captured by a
+    closure and a hash literal followed the remove: the remove instruction left the exception pending, and the
+    instruction of the hash literal, which has no exception handler, left the frame with it.
+*/
+class RemoveDestructorExceptionTest inherits QUnit::Test {
+    public {
+        const Expected = "captured_hash_arg: caught DTOR-ERR
+captured_hash_decl: caught DTOR-ERR
+captured_hash_literal: caught DTOR-ERR
+uncaptured_hash_arg: caught DTOR-ERR
+plain_local_hash_arg: caught DTOR-ERR
+captured_last_statement: caught DTOR-ERR
+hash_member_hash_arg: caught DTOR-ERR
+list_element_hash_arg: caught DTOR-ERR
+after_catch: 2
+top_level: caught DTOR-ERR
+done
+";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC_BIN ?? ENV.QORE_QCC_EXECUTABLE ?? libdir + "/qcc";
+        string worker = get_script_dir() + "/remove-destructor-exception-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("RemoveDestructorException", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("interpreted and JIT modes", \checkModes());
+        addTestCase("qcc executables", \checkAot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    checkModes() {
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            assertEq(Expected, ExecModeHarness::run(prefix + quote(qore_bin)
+                + " -b --enable-debug --exec-mode=" + mode + " " + quote(worker)), mode);
+        }
+        assertEq(Expected, ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + quote(worker)), "tiered-ir");
+    }
+
+    checkAot() {
+        if (!is_executable(qcc_bin)) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-remove-dtor-exception-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "remove-dtor" + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " "
+                + quote(worker));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable");
+            assertEq(Expected, ExecModeHarness::run_any(prefix + quote(exe) + " -b --enable-debug"), "AOT " + opt);
+        }
+    }
+}
