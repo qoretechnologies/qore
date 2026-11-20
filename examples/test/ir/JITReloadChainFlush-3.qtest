@@ -17,7 +17,7 @@
 
 %exec-class JITReloadChainFlushPart3
 
-#! runs part 3 of 3 of the cases of JITReloadChainFlushBase: a function under the threshold and the entry block
+#! runs part 3 of 5 of the cases of JITReloadChainFlushBase: a function under the threshold and the entry block
 class JITReloadChainFlushPart3 inherits JITReloadChainFlushBase {
     constructor() : JITReloadChainFlushBase("JITReloadChainFlushPart3", 3) {
     }
