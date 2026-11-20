@@ -98,6 +98,7 @@ class typed_hash_decl_private {
     template <class> friend class QoreTypeOwnerOf;
 friend class typed_hash_decl_member_iterator;
 friend class TypedHashDecl;
+friend class QoreTombstoneBuilder;
 public:
     //! creates a hashdecl declared in the current Program, which is its source Program
     DLLLOCAL typed_hash_decl_private(const QoreProgramLocation* loc) : loc(loc), orig(this) {
@@ -497,6 +498,19 @@ public:
             }
         }
         return type_params.size();
+    }
+
+    //! Adds the concrete declarations of this generic hashdecl that its cache holds, referenced (issue #6419)
+    /** For the tombstones made while every declaration of a deleted Program is alive (QoreTypeOwnerBatch); the caller
+        releases the references
+    */
+    DLLLOCAL void getTypeOwnerCachedDecls(std::vector<QoreTypeOwner*>& owners) const {
+        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        for (auto& i : parameterized_hashdecl_cache) {
+            typed_hash_decl_private* p = get(*i.second);
+            p->ref();
+            owners.push_back(&p->type_owner);
+        }
     }
 
     DLLLOCAL bool isParameterizedHashDecl() const {

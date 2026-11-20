@@ -87,6 +87,42 @@
           "source": "Character encoding for the input file (and output data)",
           "message": "입력 파일(및 출력 데이터)의 문자 인코딩"
         },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "인코딩 오류"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "문자 인코딩에서 유효하지 않은 텍스트의 처리 방식"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What input text that is not valid in its character encoding gives: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` reads the invalid text (a whole line, for data read by line) as `ISO-8859-1`, and `keep` keeps it in the input encoding without a check",
+          "message": "문자 인코딩에서 유효하지 않은 입력 텍스트의 처리 방식입니다. `raise`(기본값)는 `INVALID-ENCODING` 오류를 발생시키고, `latin1`은 유효하지 않은 텍스트(줄 단위로 읽는 데이터의 경우 줄 전체)를 `ISO-8859-1`로 읽으며, `keep`은 검사 없이 입력 인코딩으로 유지합니다"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.display_name": {
+          "source": "Raise an Error",
+          "message": "오류 발생"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOnJhaXNl.desc": {
+          "source": "Raise an `INVALID-ENCODING` error for text that is not valid; the default",
+          "message": "유효하지 않은 텍스트에 대해 `INVALID-ENCODING` 오류를 발생시킵니다. 기본값입니다"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.display_name": {
+          "source": "Read as Latin-1",
+          "message": "Latin-1로 읽기"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmxhdGluMQ.desc": {
+          "source": "Read text that is not valid (a whole line, for data read by line) as `ISO-8859-1`, with its bytes",
+          "message": "유효하지 않은 텍스트(줄 단위로 읽는 데이터의 경우 줄 전체)를 그 바이트 그대로 `ISO-8859-1`로 읽습니다"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.display_name": {
+          "source": "Keep Without a Check",
+          "message": "검사 없이 유지"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2RpbmdfZXJyb3Jz.allowed-value.c3RyaW5nOmtlZXA.desc": {
+          "source": "Keep the text in the input encoding as read, without a check",
+          "message": "텍스트를 읽은 그대로 검사 없이 입력 인코딩으로 유지합니다"
+        },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
           "message": "줄 끝 문자"

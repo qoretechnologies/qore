@@ -42,6 +42,7 @@
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/QorePseudoMethods.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <string>
 #include <vector>
@@ -1350,8 +1351,13 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
     if (method) {
         printd(5, "SelfFunctionCallNode::parseInitCall() this: %p resolved '%s' to %p (abstract: %d)\n", this,
             method->getName(), method, qore_method_private::get(*method)->isAbstract());
-        // issue #3070: make sure that abstract method calls are resolved at runtime
-        if (qore_method_private::get(*method)->isAbstract()) {
+        // issue #3070: make sure that abstract method calls are resolved at runtime; also a call of a method that has
+        // concrete variants beside abstract variants that the class of the method does not implement, unless the call
+        // was resolved to a concrete variant at parse time: another parent class of the class of the object can
+        // implement the abstract variants (issue #6161)
+        if (qore_method_private::get(*method)->isAbstract()
+            || (!variant && qore_class_private::get(*method->getClass())->hasUnimplementedAbstractVariants(
+                method->getName()))) {
             assert(!variant);
             is_abstract = true;
             // the class of the object implements the method, also when it inherits the implementation from another
@@ -1963,7 +1969,7 @@ NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args,
     variant = qore_method_private::get(*constructor)->getFunction()->runtimeFindVariant(&xsink, args, false, nullptr,
         object_type_info);
 
-    ExceptionSink* pxs = pgm->getParseExceptionSink();
+    ExceptionSink* pxs = qore_program_ops(pgm).getParseExceptionSink();
     if (pxs) {
         pxs->assimilate(xsink);
     } else {
@@ -2122,10 +2128,19 @@ QORE_INTERN_ALWAYS_INLINE QoreValue ScopedObjectCallNode::evalCommon(LexicalSema
             return QoreValue();
         }
         const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
+        const AbstractQoreFunctionVariant* ctor_variant = variant;
+        if (!aot_constructor_signature.empty()) {
+            ctor_variant = qore_aot_find_constructor_variant(qc, aot_constructor_signature.c_str());
+            if (!ctor_variant) {
+                xsink->raiseException("AOT-CONSTRUCTOR-ERROR", "cannot resolve '%s::constructor%s'",
+                    qc->getName(), aot_constructor_signature.c_str());
+                return QoreValue();
+            }
+        }
         // the location of this call is the location of the call stack frame of the constructor; set after the class
         // is resolved, so that no code runs between the call site and the frame that takes it
         QoreRcCallSiteHelper call_site(rc, loc);
-        return qore_class_private::execConstructorWithPolicy<Lexical>(policy, *qc, rc, variant, args, xsink, oti);
+        return qore_class_private::execConstructorWithPolicy<Lexical>(policy, *qc, rc, ctor_variant, args, xsink, oti);
     }
     const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
     // the location of this call is the location of the call stack frame of the constructor
@@ -2321,6 +2336,8 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     : QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
                 )
             : parse_get_class_priv();
+        // the class context before the private-access check of the first class, for the other classes with the name
+        qore_class_private* scope_class_ctx = class_ctx;
 
         // see if this is a call to a base class method if bare refs are allowed
         // and we're parsing in a class context and the class found is in the
@@ -2367,7 +2384,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             // link time exactly as the qualified spelling of the same call is.
             const QoreMethod* loaded_method = nullptr;
             QoreClass* loaded_qc = qore_root_ns_private::parseFindClassWithStaticMethod(scope->get(0),
-                scope->getIdentifier(), class_ctx, &loaded_method);
+                scope->getIdentifier(), class_ctx, &loaded_method, false);
             if (loaded_qc && loaded_method
                     && qore_aot_clean_source_symbol_path(loaded_qc->getNamespacePath().c_str())
                         != qore_aot_clean_source_symbol_path(deferred_source_receiver_path.c_str())) {
@@ -2429,6 +2446,32 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 assert(!n);
             }
 
+            // no function or constant either: another class with the name that has the static method is used, as
+            // for "Class::name" constants and static variables (issue #1527)
+            // a function of another source of an AOT group is resolved at link time
+            if (!defer_source_static_receiver && !defer_source_function && scope->size() == 2) {
+                const QoreMethod* other_method = nullptr;
+                QoreClass* other_qc = nullptr;
+                // with bare references in a class, a method of a parent class with the name, as for the first class
+                if (pc && scope_class_ctx) {
+                    other_qc = qore_root_ns_private::parseFindParentClassWithMethod(scope->get(0),
+                        scope->getIdentifier(), scope_class_ctx, other_method);
+                }
+                if (!other_qc) {
+                    other_qc = qore_root_ns_private::parseFindClassWithStaticMethod(scope->get(0),
+                        scope->getIdentifier(), scope_class_ctx, &other_method);
+                }
+                if (other_qc && other_method) {
+                    qc = other_qc;
+                    method = other_method;
+                    class_ctx = scope_class_ctx
+                            && qore_class_private::parseCheckPrivateClassAccess(*qc, scope_class_ctx)
+                        ? scope_class_ctx : nullptr;
+                }
+            }
+        }
+
+        if (!method) {
             // A namespace-qualified class call (Ns::C()) reaches the static-call parser.  A real
             // function with that name was resolved above, so a class match here is just as precise
             // as the unqualified C() case.

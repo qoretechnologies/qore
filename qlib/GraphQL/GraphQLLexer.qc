@@ -390,7 +390,22 @@ public class GraphQLLexer {
                 }
                 pos += 4;
                 int code = hex.toInt(16);
-                return chr(code);
+                # the escape is a Unicode code point, which is given in UTF-8; chr() gave one byte, which is not
+                # text for a code point above 0x7f (qore#6554)
+                if (code >= 0xd800 && code <= 0xdbff) {
+                    # a high surrogate must be followed by an escaped low surrogate: the pair is one code point
+                    string low = (pos + 6 <= len) ? src.substr(pos, 6) : "";
+                    if (low !~ /^\\u[dD][c-fC-F][0-9A-Fa-f]{2}$/) {
+                        throwSyntax(sprintf("invalid unicode escape \\u%s: a high surrogate without a low "
+                            "surrogate", hex), start_line, start_col);
+                    }
+                    pos += 6;
+                    code = 0x10000 + ((code - 0xd800) << 10) + (low.substr(2).toInt(16) - 0xdc00);
+                } else if (code >= 0xdc00 && code <= 0xdfff) {
+                    throwSyntax(sprintf("invalid unicode escape \\u%s: a low surrogate without a high surrogate",
+                        hex), start_line, start_col);
+                }
+                return code.toUnicode();
             }
             default:
                 throwSyntax(sprintf("invalid escape sequence \\%s", e), start_line, start_col);

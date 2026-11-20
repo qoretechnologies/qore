@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - libprotobuf extension fields and their JSON support as built on macOS
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The extension fields of a proto2 message are converted to and from hashes with their full names in square brackets,
+# as in protobuf's JSON and text formats (issue #6720).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires protobuf
+
+%exec-class ProtobufExtensionsTest
+
+class ProtobufExtensionsTest inherits QUnit::Test {
+    public {
+        const Proto = "syntax = \"proto2\";\n"
+            "package test;\n"
+            "message Sub {\n"
+            "  optional string s = 1;\n"
+            "}\n"
+            "message M {\n"
+            "  optional string name = 1;\n"
+            "  optional M child = 2;\n"
+            "  extensions 100 to 199;\n"
+            "}\n"
+            "message Other {\n"
+            "  optional int32 x = 1;\n"
+            "}\n"
+            "extend M {\n"
+            "  optional int32 ext_num = 100;\n"
+            "  optional string ext_str = 101;\n"
+            "  repeated int32 ext_list = 102;\n"
+            "  optional Sub ext_sub = 103;\n"
+            "}\n"
+            "message Holder {\n"
+            "  extend M {\n"
+            "    repeated string nested_ext = 150;\n"
+            "  }\n"
+            "}\n";
+
+        # the wire data of M: name "a", ext_num 7 (field 100) and ext_str "x" (field 101)
+        const Wire = <0a0161a00607aa060178>;
+
+        const Full = {
+            "name": "a",
+            "[test.ext_num]": 7,
+            "[test.ext_str]": "x",
+            "[test.ext_list]": (1, 2),
+            "[test.ext_sub]": {"s": "y"},
+            "[test.Holder.nested_ext]": ("p", "q"),
+        };
+    }
+
+    constructor() : QUnit::Test("ProtobufExtensionsTest", "1.0", \ARGV) {
+        addTestCase("decoded extension fields", \testDecode());
+        addTestCase("encoded extension fields", \testEncode());
+        addTestCase("unknown extension fields", \testUnknown());
+        addTestCase("JSON", \testJson());
+        set_return_value(main());
+    }
+
+    testDecode() {
+        ProtobufSchema schema(Proto);
+        hash<auto> h = schema.decode("test.M", Wire);
+        assertEq("a", h.name);
+        assertEq(7, h."[test.ext_num]");
+        assertEq("x", h."[test.ext_str]");
+        # only the extension fields that are set are given
+        assertFalse(h.hasKey("[test.ext_list]"));
+        assertFalse(h.hasKey("[test.ext_sub]"));
+        assertFalse(schema.defaultMessage("test.M").hasKey("[test.ext_num]"));
+        # the decoded hash encodes to the same data
+        assertEq(Wire, schema.encode("test.M", h));
+    }
+
+    testEncode() {
+        ProtobufSchema schema(Proto);
+        hash<auto> h = schema.decode("test.M", schema.encode("test.M", Full));
+        assertEq(NOTHING, h.child);
+        h -= "child";
+        assertEq(Full, h);
+
+        # an extension field can also be given with its full name alone
+        assertEq(schema.encode("test.M", {"name": "a", "[test.ext_num]": 7}),
+            schema.encode("test.M", {"name": "a", "test.ext_num": 7}));
+
+        # in a nested message
+        h = schema.decode("test.M", schema.encode("test.M", {"child": {"[test.ext_num]": 3}}));
+        assertEq(3, h.child."[test.ext_num]");
+    }
+
+    testUnknown() {
+        ProtobufSchema schema(Proto);
+        assertThrows("PROTOBUF-FIELD-ERROR", \schema.encode(), ("test.M", {"[test.nope]": 1}));
+        # an extension of another message type
+        assertThrows("PROTOBUF-FIELD-ERROR", \schema.encode(), ("test.Other", {"[test.ext_num]": 1}));
+        assertThrows("PROTOBUF-FIELD-ERROR", \schema.encode(), ("test.Other", {"test.ext_num": 1}));
+        # a field name is not an extension
+        assertThrows("PROTOBUF-FIELD-ERROR", \schema.encode(), ("test.M", {"[name]": "a"}));
+    }
+
+    testJson() {
+        ProtobufSchema schema(Proto);
+        # a message without extension fields
+        assertEq({"name": "a", "child": NOTHING}, schema.fromJson("test.M", schema.toJson("test.M", {"name": "a"})));
+
+        # protobuf's JSON support has extension fields since v22; before, they would be left out of the output, so
+        # the conversion raises an error, as the parser does for them
+        string json;
+        try {
+            json = schema.toJson("test.M", Full);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PROTOBUF-JSON-ERROR", ex.err);
+            assertRegex("extension field '\\[test\\.", ex.desc);
+            assertThrows("PROTOBUF-JSON-ERROR", \schema.toJson(), ("test.M", {"child": {"[test.ext_num]": 3}}),
+                "an extension field in a nested message");
+            assertThrows("PROTOBUF-JSON-ERROR", \schema.fromJson(), ("test.M", "{\"[test.ext_num]\": 7}"));
+            return;
+        }
+        assertRegex("\"\\[test\\.ext_num\\]\":7", json);
+        hash<auto> h = schema.fromJson("test.M", json);
+        h -= "child";
+        assertEq(Full, h);
+    }
+}

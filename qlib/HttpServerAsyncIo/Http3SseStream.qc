@@ -348,9 +348,8 @@ public class Http3SseStream inherits AbstractSseConnection {
             delay_ms = 1;
         }
         int generation = heartbeat_generation;
-        AsyncSocketIo::AsyncSocketIoController controller =
-            AsyncSocketIo::getGlobalAsyncIoController();
-        heartbeat_timer_id = controller.addTimerDelay(milliseconds(delay_ms),
+        # the static API: no controller wrapper per frame (issue #6836)
+        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(delay_ms),
             sub () { self.handleHeartbeatTimer(generation); });
     }
 
@@ -358,9 +357,8 @@ public class Http3SseStream inherits AbstractSseConnection {
         ++heartbeat_generation;
         if (heartbeat_timer_id) {
             try {
-                AsyncSocketIo::AsyncSocketIoController controller =
-                    AsyncSocketIo::getGlobalAsyncIoController();
-                controller.cancelTimer(heartbeat_timer_id);
+                # the static API: no controller wrapper per frame (issue #6836)
+                Qore::AsyncIoController::cancelTimer(timer_id: heartbeat_timer_id);
             } catch (hash<ExceptionInfo> ex) {
             }
             remove heartbeat_timer_id;

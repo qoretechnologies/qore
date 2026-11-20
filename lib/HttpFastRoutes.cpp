@@ -71,6 +71,7 @@ const HttpFastReason HttpFastReasons[] = {
 
 const char* const HttpFastFallbackNames[] = {
     "no_route", "not_http_1_1", "body", "expect", "upgrade", "connection", "pipelined", "stale", "no_rule",
+    "invalid_text",
 };
 
 static_assert(sizeof(HttpFastFallbackNames) / sizeof(HttpFastFallbackNames[0])
@@ -588,6 +589,10 @@ std::shared_ptr<const HttpFastResponse> HttpFastRoutes::chooseRoute(const HttpFa
     auto it = snap->find(std::string(path));
     if (it == snap->end()) {
         return fail(HttpFastFallback::NoRoute);
+    }
+    // the normal path answers the request with 400, so a route never answers it (qore#6554)
+    if (req.invalid_text) {
+        return fail(HttpFastFallback::InvalidText);
     }
 
     if (!h2 && req.http_version != "1.1") {

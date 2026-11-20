@@ -68,21 +68,36 @@ qclass FileLineIterator [arg=FileLineIterator* i; ns=Qore; vparent=AbstractLineI
     @param line_separator the optional end of line character(s) to use to detect lines in the file; if this string is not passed, then the end of line character(s) are detected automatically, and can be either \c "\n", \c "\r", or \c "\r\n" (the last one is only automatically detected when not connected to a terminal device in order to keep the I/O from stalling); if this string is passed and has a different @ref character_encoding "character encoding" from this object's (as determined by the \c encoding parameter), then it will be converted to the FileLineIterator's @ref character_encoding "character encoding"
     @param trim_line if @ref True the string return values for the lines iterated will be trimmed of the line separator bytes
     @param nonblocking_open if @ref True, then the \c O_NONBLOCK flag will be set in the call to <tt>open() (2)</tt>
+    @param encoding_errors what a line read that is not valid in the @ref character_encoding "character encoding"
+    gives; one of the @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING,
+    \c "latin1" tags the whole line ISO-8859-1 with its bytes, \c "keep" tags it with the encoding without a
+    check; see @ref encoding_errors; lines
+    are checked in the encoding of the file, also when they are converted to UTF-8 (a line tagged ISO-8859-1 is then
+    returned as its bytes read as ISO-8859-1 characters, converted to UTF-8); an \c INVALID-ENCODING exception
+    raised by FileLineIterator::next() gives the line number
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the \a line_separator argument has a different @ref character_encoding "character encoding" from the File's and an error occurs during encoding conversion
     @throw ILLEGAL-EXPRESSION FileLineIterator::constructor() cannot be called with a TTY target when @ref no-terminal-io "%no-terminal-io" is set
     @throw FILE-OPEN2-ERROR the path contains a NUL character; see @ref path_nul_characters
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
 
-    @since %Qore 0.9.3 added the \a nonblocking_open flag
+    @since
+    - %Qore 0.9.3 added the \a nonblocking_open flag
+    - %Qore 3.0 added the \a encoding_errors parameter; lines in an encoding that is not ASCII-compatible are read
+      in it and then converted to UTF-8
  */
 FileLineIterator::constructor(string path, *string encoding, *string line_separator, bool trim_line = True,
-        *bool nonblocking_open) [flags=NAMED_ARGS] {
+        *bool nonblocking_open, *string encoding_errors) [flags=NAMED_ARGS] {
+    qore_encoding_errors_t ee;
+    if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
+        return;
+    }
     if (line_separator && line_separator->empty())
         line_separator = 0;
     int flags = nonblocking_open ? O_NONBLOCK : 0;
 
     SimpleRefHolder<FileLineIterator> fli(new FileLineIterator(xsink, path,
-        encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, line_separator, trim_line, flags));
+        encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, line_separator, trim_line, flags, ee));
     if (*xsink)
         return;
 
@@ -94,7 +109,7 @@ FileLineIterator::constructor(string path, *string encoding, *string line_separa
     self->setPrivate(CID_FILELINEITERATOR, fli.release());
 }
 
-//! Creates a new FileLineIterator object, based on the same object being iterated in the original object (the original file is reopened)
+//! Creates a new FileLineIterator object, based on the same object being iterated in the original object (the original file is reopened, and the @ref encoding_errors "encoding_errors" option is copied)
 /** @par Example:
     @code{.py}
 FileLineIterator ni = i.copy();
@@ -126,6 +141,10 @@ while (i.next()) {
     printf("line: %y\n", i.getValue());
 }
     @endcode
+
+    @throw INVALID-ENCODING the line read is not valid in the @ref character_encoding "character encoding" and the
+    @ref encoding_errors "encoding_errors" option is \c "raise" (the default); the message gives the line number;
+    see @ref encoding_errors
 
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
@@ -212,6 +231,21 @@ string FileLineIterator::getEncoding() [flags=CONSTANT] {
     return new QoreStringNode(i->getEncoding()->getCode());
 }
 
+//! Returns what a line read that is not valid in the @ref character_encoding "character encoding" of the file gives
+/** @par Example:
+    @code{.py}
+string encoding_errors = i.getEncodingErrors();
+    @endcode
+
+    @return one of the @ref encoding_errors_constants: \c "raise", \c "latin1", or \c "keep"; see
+    @ref encoding_errors
+
+    @since %Qore 3.0
+ */
+string FileLineIterator::getEncodingErrors() [flags=CONSTANT] {
+    return new QoreStringNode(q_encoding_errors_name(i->getEncodingErrors()));
+}
+
 //! Returns @ref True "True" if the FileLineIterator is connected to a terminal device, @ref False "False" if not
 /** @return @ref True "True" if the FileLineIterator is connected to a terminal device, @ref False "False" if not
 
@@ -266,7 +300,9 @@ hash<StatInfo> FileLineIterator::hstat() [flags=CONSTANT] {
 }
 
 //! Reset the iterator instance to its initial state
-/** Reset the iterator instance to its initial state
+/** Reset the iterator instance to its initial state: the file is opened again, so the next line is the first
+    line of the file as it is then (an exception is raised if it cannot be opened, and the iterator is left as it
+    was)
 
    @par Example
    @code{.py}

@@ -56,6 +56,11 @@ struct QoreAOTLazyClosureIR;
 struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
+//! Enter a standard native body with its private root declarations visible to frame inspection.
+DLLLOCAL uint64_t qore_aot_call_body(AotFunctionPtr fn, QoreAOTContext* ctx, ExceptionSink* xsink);
+
+//! Bind the native entry once when the variant's context is published.
+DLLLOCAL AotFunctionPtr qore_aot_bind_body(AotFunctionPtr fn, QoreAOTContext* ctx);
 
 // these data structures are all private to the library
 
@@ -258,6 +263,12 @@ public:
         return i < paramReadOnlyList.size() && paramReadOnlyList[i];
     }
 
+    //! Returns the typed callable type of the signature (code<ReturnType(ParamTypes...)>), made once (qore#6660)
+    /** Called at run time only, when the types of the signature are resolved: the type of a closure or call
+        reference, and the fast check of a callable for the typed callable type it has
+    */
+    DLLLOCAL const QoreTypeInfo* getRuntimeCodeTypeInfo() const;
+
 protected:
     unsigned short num_param_types = 0,    // number of parameters that have type information
         min_param_types = 0;                // minimum number of parameters with type info (without default args)
@@ -276,6 +287,8 @@ protected:
 
     bool declares_type_parameters = false;
     mutable std::atomic<signed char> type_param_substitution_cache {-1};
+    //! the typed callable type of the signature; see getRuntimeCodeTypeInfo()
+    mutable std::atomic<const QoreTypeInfo*> runtime_code_type_cache {nullptr};
 
     DLLLOCAL QORE_INTERN_NOINLINE bool computeTypeParameterSubstitution() const;
 };
@@ -713,7 +726,10 @@ public:
     DLLLOCAL int resolveTypes();
 
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
-        if (resolved) {
+        // a signature read from an AOT image has its parameter types and no parse types before it is resolved: its
+        // abstract signature is made from its types, so that the variants of a method are told apart when they are
+        // added to their class (issue #6161)
+        if (resolved || parseTypeList.size() < typeList.size()) {
             AbstractFunctionSignature::addAbstractParameterSignature(str);
             return;
         }
@@ -1166,7 +1182,8 @@ protected:
     bool restore_stack = false;
     bool restore_runtime_ctx = false;
     bool restore_receiver_type_info = false;
-    bool restore_type_param_instantiation = false;
+    //! the generic state of the frame (GF_*), which only generic calls set: the destructor tests it once
+    uint8_t generic_frame = 0;
     bool restore_rtflags = false;
     //! true while the variant's evaluation has borrowed module_po_override; see borrowPoOverride()
     bool po_override_borrowed = false;
@@ -1255,6 +1272,23 @@ protected:
         without an explicit receiver keep their code
     */
     DLLLOCAL QORE_INTERN_NOINLINE void substituteCallerReceiverTypeParams(const QoreFunction* func);
+
+    //! the frame restores the caller's type parameter instantiation
+    static constexpr uint8_t GF_RESTORE_TYPE_PARAM_INSTANTIATION = 1;
+    //! the call runs generic code with a parameterized receiver whose type arguments name user declarations, or with
+    //! such inferred type arguments: it holds types read through derived types (the type arguments, the substituted
+    //! types), so the waits of the thread are not quiescent while it runs (issue #6419; see QoreTypeUnsafeFrameHelper)
+    static constexpr uint8_t GF_TYPE_UNSAFE = 2;
+
+    //! Marks the frame as holding types read through derived types (GF_TYPE_UNSAFE), once; out of line, as only
+    //! generic calls get there
+    DLLLOCAL __attribute__((noinline, cold)) void markTypeUnsafe();
+
+    //! Sets the receiver of a call with an object and no receiver type: the type that the object was instantiated
+    //! with (a parameterized class type, which marks the frame if its type arguments name user declarations), or the
+    //! type of its class, as qore_get_object_receiver_type_info(), which the compiler inlined here; the test of the
+    //! receiver is in the branch of the instantiated type only (issue #6419)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void setObjectReceiverTypeInfo(const QoreObject* self);
 
     //! the call entry; LexicalInvocation: a legacy AST call with a non-default semantic policy; NAMED: a named call
     //! whose variant is resolved at run time by parameter name (arg_names is set)
@@ -1794,6 +1828,8 @@ protected:
     mutable std::mutex aot_lazy_function_ir_mutex;
     //! Lock-free call guard; publishes aot_lazy_function_ir before first invocation.
     mutable std::atomic<bool> has_aot_lazy_function_ir{false};
+    //! Initialized before cached_aot_ctx is published. cached_aot_fn remains the native symbol for lookup.
+    mutable AotFunctionPtr aot_body_entry = nullptr;
 
     template <typename Completion = QoreCallCompletion>
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
@@ -2115,7 +2151,7 @@ public:
             // just sees 0 (NOTHING bits) + xsink set, matching the behavior
             // of the check-based path.
             try {
-                return cached_aot_fn(ctx, xsink);
+                return aot_body_entry(ctx, xsink);
             } catch (const QoreJITException&) {
                 return 0;
             }
@@ -2676,6 +2712,20 @@ public:
                 return;
         ilist.push_back(INode(ancestor, access));
         noteAncestor(*ancestor);
+    }
+
+    //! gives an ancestor in the inheritance list the access of another path to its class if it is less restrictive
+    /** A class reached through several paths of the hierarchy has the access of the least restrictive one (qore#6498)
+    */
+    DLLLOCAL void lowerAncestorAccess(const QoreFunction* ancestor, ClassAccess access) {
+        for (INode& i : ilist) {
+            if (i.func == ancestor) {
+                if (access < i.access) {
+                    i.access = access;
+                }
+                return;
+            }
+        }
     }
 
     // resolves all types in signatures and return types in pending variants; called during the "parseInit" phase

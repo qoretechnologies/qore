@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A compressed request body is decoded with the charset of its Content-Type, as an uncompressed body is, not with
+    the encoding of the socket (qore#6618)
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerCompressedBodyCharsetTest
+
+#! returns the request body it receives as UTF-8 text, and its encoding
+class TextHandler inherits AbstractHttpRequestHandler {
+    constructor() {
+        decompress_to_string = True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string rv = body.typeCode() == NT_STRING
+            ? sprintf("%s:%s", body.encoding(), convert_encoding(body, "UTF-8"))
+            : sprintf("binary:%s", body.toHex());
+        return makeResponse(200, rv, {"Content-Type": MimeTypeText + ";charset=utf-8"});
+    }
+}
+
+class HttpServerCompressedBodyCharsetTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+
+        # the text of the bodies: a character that is encoded differently in each charset
+        const Text = "größe €";
+    }
+
+    constructor() : Test("HttpServerCompressedBodyCharsetTest", "1.0") {
+        addTestCase("a compressed body is decoded with its charset", \serverTest());
+        addTestCase("a compressed body is decoded as the same body uncompressed", \declaredInBodyTest());
+        addTestCase("getMessageBody() decodes a compressed body with its charset", \getMessageBodyTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("compressed-body-charset-test", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        server.setHandler("text", "/text", NOTHING, new TextHandler());
+        url = "http://localhost:"
+            + server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    serverTest() {
+        foreach string enc in (("ISO-8859-15", "UTF-16LE", "UTF-8")) {
+            binary octets = binary(convert_encoding(Text, enc));
+            string ct = MimeTypeText + ";charset=" + enc.lwr();
+            foreach string ce in (("gzip", "deflate", "identity")) {
+                binary payload = ce == "gzip" ? gzip(octets) : (ce == "deflate" ? compress(octets) : octets);
+                hash<auto> resp = post(payload, ce, ct);
+                assertEq(200, resp.status_code, ce + " " + enc);
+                assertEq(enc + ":" + Text, resp.body, ce + " " + enc);
+            }
+            # the same body without Content-Encoding is decoded the same way
+            hash<auto> resp = post(octets, NOTHING, ct);
+            assertEq(enc + ":" + Text, resp.body, "uncompressed " + enc);
+        }
+    }
+
+    #! the encoding of these bodies is declared in the body, not in the Content-Type: the socket's encoding (UTF-8 for
+    #! XML, ISO-8859-1 for text) was wrong for the compressed body
+    declaredInBodyTest() {
+        hash<string, binary> cases = {
+            "application/xml": binary("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><a>")
+                + binary(convert_encoding("größe</a>", "ISO-8859-1")),
+            # a byte order mark
+            MimeTypeText: <fffe> + binary(convert_encoding(Text, "UTF-16LE")),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            string plain = post(i.value, NOTHING, i.key).body;
+            assertRegex("^(ISO-8859-1|UTF-16LE):", plain, i.key);
+            foreach string ce in (("gzip", "deflate")) {
+                assertEq(plain, post(ce == "gzip" ? gzip(i.value) : compress(i.value), ce, i.key).body, i.key + " " + ce);
+            }
+        }
+    }
+
+    getMessageBodyTest() {
+        TextHandler h();
+        # a socket whose encoding is UTF-8: the body's charset applies, not the socket's encoding
+        Socket s();
+        s.setEncoding("UTF-8");
+        binary octets = binary(convert_encoding(Text, "ISO-8859-15"));
+        *data body = h.getMessageBody(s, {"content-encoding": "gzip", "content-type": "text/plain;charset=iso-8859-15"},
+            gzip(octets));
+        assertEq(Type::String, body.type());
+        assertEq("ISO-8859-15", body.encoding());
+        assertEq(Text, convert_encoding(body, "UTF-8"));
+        # without a charset, the socket's encoding is assumed, as before
+        body = h.getMessageBody(s, {"content-encoding": "gzip", "content-type": "text/plain"}, gzip(binary(Text)));
+        assertEq(Text, body);
+    }
+
+    private hash<auto> post(binary body, *string ce, string ct) {
+        HTTPClient c({"url": url});
+        hash<auto> hdr = {"Content-Type": ct};
+        if (ce) {
+            hdr."Content-Encoding" = ce;
+        }
+        return c.send(body, "POST", "/text", hdr);
+    }
+}

@@ -289,8 +289,10 @@ public class SharePointRecordTableDataProvider inherits SharePointDataProviderBa
         foreach hash<auto> p in (where_cond.pairIterator()) {
             # the key is a field path: only a key that is one column without a dot can be named in OData, where a
             # dot in a property path is a cast to a type, and a column name is an identifier; any other is evaluated
-            # locally; an identifier is ASCII, and a key with an invalid encoding does not match
-            if (!AbstractDataProvider::isPlainFieldPath(p.key) || p.key !~ /^[A-Za-z_][A-Za-z0-9_]*\z/) {
+            # locally; an identifier is ASCII, and a key with an invalid encoding is not one (it is tested before the
+            # match, which raises INVALID-ENCODING for it)
+            if (!AbstractDataProvider::isPlainFieldPath(p.key) || !p.key.isEncodingValid()
+                    || p.key !~ /^[A-Za-z_][A-Za-z0-9_]*\z/) {
                 return;
             }
             # a value with no OData literal (such as a hash or a list, which is an operator expression) is evaluated

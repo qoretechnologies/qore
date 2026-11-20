@@ -38,6 +38,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreException.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #include <cstdio>
 
@@ -400,7 +401,7 @@ int SqlMutationContext::dispatch(const SqlMutationEvent& ev, const Datasource& d
     }
     if (ev.driver_xsink && *ev.driver_xsink) {
         // the exception is read without being consumed; the driver outcome is not affected
-        QoreException* e = ev.driver_xsink->getException();
+        QoreException* e = qore_exception_sink_ops(ev.driver_xsink).getException();
         if (e) {
             ph->setKeyValueIntern("ex", e->makeExceptionObject());
         }

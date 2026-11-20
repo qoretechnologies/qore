@@ -183,6 +183,9 @@ auto v = pgm.callFunction("eval");
     allow, given or from this Program (see @ref modern_option_consistency)
     @throw PROGRAM-ERROR this Program is being parsed, or has been deleted
 
+    @note if a binary module cannot copy its data in this %Program to the new %Program, the exception of the module
+    is raised, and no %Program is created
+
     @since %Qore 3.0
 */
 Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [flags=NAMED_ARGS] {
@@ -228,9 +231,15 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
     QoreProgram* pgm;
     {
         InheritAllUserCodeHelper all_user_code;
-        pgm = new QoreProgram(p, po, false, nullptr, &parent_po);
+        pgm = new QoreProgram(p, po, false, nullptr, &parent_po, xsink);
     }
     copy_holder.release();
+    if (*xsink) {
+        // a module could not copy its external data to the new Program, which must not run without it: the
+        // exception of the module is raised, and the Program is deleted unused (issue #6786)
+        qore_program_private::deleteFailedChild(pgm, xsink);
+        return QoreValue();
+    }
     if (restricted) {
         qore_program_private::lockCreatorRestrictions(*pgm, restrictions);
     }

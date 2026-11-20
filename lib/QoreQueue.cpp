@@ -202,8 +202,12 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
                 rc = QORE_COND_RESULT_TIMEOUT;
             } else {
                 incWaitingIntern(read_waiting);
-                // Use interruptible wait for sandbox support
-                rc = read_cond.waitWithInterrupt(l, cond_timeout, xsink);
+                {
+                    // a quiescent wait: no type read through a derived type is held across it (issue #6419)
+                    QoreTypeQuiescentWaitHelper qwh;
+                    // Use interruptible wait for sandbox support
+                    rc = read_cond.waitWithInterrupt(l, cond_timeout, xsink);
+                }
                 decWaitingIntern(read_waiting);
             }
             // Check for interrupt

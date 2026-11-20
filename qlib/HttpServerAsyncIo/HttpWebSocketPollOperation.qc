@@ -617,6 +617,16 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             return;
         }
 
+        # the C++ operation failed the connection for a frame that is not valid (for example a text message that is
+        # not valid UTF-8, or a close frame with a close code that must not be received) and sent its close frame
+        # (qore#6604, qore#6755)
+        if (frame_type == "error") {
+            if (handler) {
+                handler.logError("WebSocket connection failed with close code %d: %s", frame.code, frame.reason);
+            }
+            return;
+        }
+
         # Data frames (text/binary) — apply extensions and dispatch
         if (frame_type == "text" || frame_type == "binary") {
             int op = frame_type == "text" ? WSOP_Text : WSOP_Binary;
@@ -666,6 +676,14 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             try {
                 call_object_method(wsc, "applyIncomingExtensions", \msg, ext_ctx);
             } catch (hash<ExceptionInfo> ex) {
+                # a text message that is not valid UTF-8 (qore#6554): RFC 6455 section 8.1
+                if (ex.err == "WEBSOCKET-INVALID-PAYLOAD") {
+                    if (handler) {
+                        handler.logError("WebSocket message rejected: %s", ex.desc);
+                    }
+                    sendClose(WSCC_InvalidData, "Invalid UTF-8 in a text message");
+                    return;
+                }
                 if (ex.err != "WEBSOCKET-MESSAGE-TOO-BIG") {
                     rethrow;
                 }

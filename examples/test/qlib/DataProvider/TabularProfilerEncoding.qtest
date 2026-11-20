@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes of its own binary with a default encoding of their own
+
+/*  The DataProvider module loads and profiles a sheet in a process whose default encoding is not UTF-8 (issue #6663):
+    the AOT module failed to initialize TabularProfiler::EmptyMarkerSet, whose keys "—", "–" and "…" ISO-8859-1 cannot
+    hold, and fell back to its source.  The helper loads the module from the module path that the test has, which
+    run_tests.sh starts with the AOT modules of the build.
+
+    A sheet whose text ISO-8859-1 cannot represent ("—", "✓", CJK, Greek and Cyrillic text) is profiled in such a
+    process as in a UTF-8 process (issue #6666): the profiler raised ENCODING-CONVERSION-ERROR, as it held the text in
+    hash keys and converted it with toString(), both in the encoding of the process; the empty markers that it cannot
+    represent are reported under their code points ("U+2014" for "—"); a binary cell whose bytes are not UTF-8 is read
+    in the encoding of the process, or written as its hex digits if that cannot read it either.
+*/
+
+%modern
+
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class TabularProfilerEncodingTest
+
+class TabularProfilerEncodingTest inherits QUnit::Test {
+    private {
+        #! the markers and the type of each column that the helper prints
+        const Expected = (
+            "markers 0: null",
+            "markers 1: {n/a: 1, -: 1, N/A: 1}",
+            "markers 2: {TBD: 1}",
+            "markers 3: null",
+            "type 0: string",
+            "type 1: string",
+            "type 2: string",
+            "type 3: bool",
+        );
+
+        #! parts of the profiles that profile-unrepresentable.q prints, in each process encoding
+        const ExpectedParts = (
+            "\"name\": \"Лист\"",
+            "\"totals_rows\": [7]",
+            "\"header\": \"日本\"",
+            "\"header\": \"Δelta\"",
+            "\"header\": \"Flag\", \"type\": \"bool\"",
+            "\"bool_true\": [\"✓\"], \"bool_false\": [\"✗\"]",
+            "\"empty_is_false\": True, \"counter_examples\": [], \"bool_true\": [\"✓\"], \"bool_false\": []",
+            "\"currency_position\": \"before\", \"currency\": \"€\"",
+            "\"counter_examples\": [{\"row\": 5, \"value\": \"—x\"}]",
+            "{\"code\": \"duplicate_header\", \"col\": 9, \"detail\": \"δELTA\"}",
+            "{\"code\": \"formulas\", \"detail\": [\"CONCAT\"]}",
+            "\"named_ranges\": {\"r\": \"'日本'!$A$1:$B$2\"}",
+        );
+
+        #! parts of each profile by its label
+        const ExpectedLabelParts = {
+            "redacted": (
+                "\"two_values\": [\"xx\", \"xx\"]",
+                "[\"X9\", \"…\", \"xxx xxxx xx xxx xxxx xxx…\", \"✓\", \"x\", \"−€9.99\", \"✓\", \"xx\", \"9\", \"x\"]",
+            ),
+            "unredacted": (
+                "\"two_values\": [\"日本\", \"中国\"]",
+                "[\"A5\", \"—\", \"x\", \"✓\", \"e\", \"€1.00\", \"✓\", \"日本\", \"5\", \"é\"]",
+            ),
+            "from_hash": (
+                "\"two_values\": [\"xx\", \"xx\"]",
+            ),
+        };
+
+        #! the reported empty markers of the "Note" column by process encoding
+        const ExpectedMarkers = {
+            "UTF-8": "\"empty_markers\": {\"—\": 2, \"–\": 1, \"…\": 1, \"n/a\": 1}",
+            "ISO-8859-1": "\"empty_markers\": {\"U+2014\": 2, \"U+2013\": 1, \"U+2026\": 1, \"n/a\": 1}",
+        };
+
+        #! parts of the profile of binary cells by process encoding: bytes that are not UTF-8 are read in ISO-8859-1,
+        #! and in a UTF-8 process, which cannot read them, they are written as their hex digits
+        const ExpectedBinaryParts = {
+            "UTF-8": (
+                "\"header\": \"<fffe>\"",
+                "\"samples\": [[\"<xxxx>\", \"x\"], [\"xx\", \"x\"], [\"<x9>\", \"x\"], [\"xx\", \"x\"]]",
+            ),
+            "ISO-8859-1": (
+                "\"header\": \"ÿþ\"",
+                "\"samples\": [[\"xx\", \"x\"], [\"xx\", \"x\"], [\"x\", \"x\"], [\"xx\", \"x\"]]",
+            ),
+        };
+
+        #! parts of the profile of a currency in text in ISO-8859-1, in each process encoding
+        const ExpectedIsoCurrencyParts = (
+            "\"type\": \"number\"",
+            "\"currency_position\": \"before\", \"currency\": \"£\"",
+            "\"samples\": [[\"£9\"], [\"£9.99\"]]",
+        );
+
+        #! the profiles that profile-unrepresentable.q printed by process encoding
+        hash<string, hash<string, string>> profiles;
+    }
+
+    constructor() : Test("TabularProfilerEncodingTest", "1.0") {
+        foreach string charset in (("ISO-8859-1", "UTF-8")) {
+            addTestCase("profile with the default encoding " + charset, \profileTest(), charset);
+            addTestCase("profile unrepresentable text with the default encoding " + charset,
+                \unrepresentableTest(), charset);
+        }
+        addTestCase("unrepresentable text is profiled as in UTF-8", \unrepresentableSameTest());
+        set_return_value(main());
+    }
+
+    profileTest(string charset) {
+        string helper = get_script_dir() + "profiler-encoding" + DirSep + "profile-in-encoding.q";
+        int rc;
+        string output = backquote(sprintf("%s --charset=%s %s 2>&1", TestInterpreter::qore_interpreter(), charset,
+            helper), \rc);
+        if (m_options.verbose > 1) {
+            printf("%s", output);
+        }
+        assertEq(0, rc, output);
+        # an AOT module that cannot initialize falls back to its source with a warning
+        assertNRegex("BINARY-MODULE-SOURCE-FALLBACK.*DataProvider|ENCODING-CONVERSION-ERROR", output);
+        list<string> lines = select output.split("\n"), $1 =~ /^(module:|markers |type |default )/;
+        assertRegex("^module: (qmod|source)$", lines[0] ?? "", output);
+        assertEq(Expected, lines[1..8], charset);
+        assertEq("default " + charset, lines[9], "the helper's default encoding");
+    }
+
+    unrepresentableTest(string charset) {
+        hash<string, string> p = getProfiles(charset);
+        assertEq(("redacted", "unredacted", "from_hash", "binary", "binary_bool", "iso_currency"), keys p);
+        foreach hash<auto> i in (p{"redacted", "unredacted", "from_hash"}.pairIterator()) {
+            foreach string part in (ExpectedParts + ExpectedLabelParts{i.key} + ExpectedMarkers{charset}) {
+                assertTrue(i.value.find(part) >= 0, sprintf("%s %s: %s", charset, i.key, part));
+            }
+        }
+        foreach string part in (ExpectedBinaryParts{charset}) {
+            assertTrue(p.binary.find(part) >= 0, sprintf("%s binary: %s", charset, part));
+        }
+        assertTrue(p.binary_bool.find("\"header\": \"Flag\", \"type\": \"bool\"") >= 0,
+            sprintf("%s binary_bool: %s", charset, p.binary_bool));
+        assertTrue(p.binary_bool.find("\"bool_true\": [\"Sí\"], \"bool_false\": [\"no\"]") >= 0,
+            sprintf("%s binary_bool: %s", charset, p.binary_bool));
+        foreach string part in (ExpectedIsoCurrencyParts) {
+            assertTrue(p.iso_currency.find(part) >= 0, sprintf("%s iso_currency: %s", charset, part));
+        }
+    }
+
+    unrepresentableSameTest() {
+        # binary cells whose bytes are not UTF-8 are read in the encoding of the process
+        hash<string, string> utf8 = getProfiles("UTF-8") - "binary";
+        # the documented form of the markers that ISO-8859-1 cannot represent is the only other difference
+        hash<string, string> iso = map {$1.key: replace($1.value, ExpectedMarkers."ISO-8859-1",
+            ExpectedMarkers."UTF-8")}, (getProfiles("ISO-8859-1") - "binary").pairIterator();
+        assertEq(utf8, iso);
+    }
+
+    #! returns the profiles that profile-unrepresentable.q prints in a process with a default encoding
+    private hash<string, string> getProfiles(string charset) {
+        if (profiles{charset}) {
+            return profiles{charset};
+        }
+        string helper = get_script_dir() + "profiler-encoding" + DirSep + "profile-unrepresentable.q";
+        int rc;
+        string output = backquote(sprintf("%s --charset=%s %s 2>&1", TestInterpreter::qore_interpreter(), charset,
+            helper), \rc);
+        if (m_options.verbose > 1) {
+            printf("%s", output);
+        }
+        assertEq(0, rc, output);
+        assertNRegex("BINARY-MODULE-SOURCE-FALLBACK.*DataProvider|ENCODING-CONVERSION-ERROR", output);
+        assertRegex("(?m)^default " + charset + "$", output, "the helper's default encoding");
+        hash<string, string> rv = {};
+        foreach string line in (output.split("\n")) {
+            *list<*string> m = (line =~ x/^(\w+) ([0-9a-f]+)$/);
+            if (m) {
+                rv{m[0]} = binary_to_string(parse_hex_string(m[1]), "UTF-8");
+            }
+        }
+        if (m_options.verbose > 2) {
+            printf("%s: %N\n", charset, rv);
+        }
+        return profiles{charset} = rv;
+    }
+}

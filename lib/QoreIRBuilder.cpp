@@ -345,6 +345,7 @@ void QoreIRBuilder::setFunction(QoreIRFunction* n_func) {
     temp_scope_id_stack.clear();
     exception_temp_scope_id = 0;
     exception_temp_scope_id_stack.clear();
+    stmt_loc = nullptr;
 }
 
 void QoreIRBuilder::setBlock(QoreIRBasicBlock* n_block) {
@@ -457,7 +458,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstString(const std::string& valu
     inst->loc = loc;
     inst->result = func->createValue();
     inst->constant.kind = QoreIRConstant::Kind::String;
-    inst->constant.string_value = value;
+    inst->constant.setStringValue(value);
     QoreIRValueFacts facts;
     facts.type_info = stringTypeInfo;
     facts.assigned_state = QoreIRAssignedState::Assigned;
@@ -1804,6 +1805,26 @@ QoreIRInstruction* QoreIRBuilder::createHandlerReturn(QoreIRValue value, const Q
     auto inst = append<QoreIRInstruction>(QoreIROpcode::HandlerReturn);
     if (value.isValid()) {
         inst->operands.push_back(value);
+    }
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createTakeHandedOverReturn(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::TakeHandedOverReturn);
+    if (value.isValid()) {
+        inst->operands.push_back(value);
+    }
+    // a reference of its own to a value of any type, the value that a handler handed over or the operand
+    inst->result = func->createValue();
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createReleaseHandedOverReturn(const QoreProgramLocation* loc, QoreIRValue result) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseHandedOverReturn);
+    if (result.isValid()) {
+        inst->operands.push_back(result);
     }
     inst->loc = loc;
     return inst;

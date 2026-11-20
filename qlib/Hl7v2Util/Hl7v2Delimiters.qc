@@ -64,11 +64,11 @@ public namespace Hl7v2Util {
 
         #! Sets delimiter values from MSH-1 and MSH-2
         set(string field_separator, string encoding_characters) {
-            if (field_separator.size() != 1) {
+            if (field_separator.length() != 1) {
                 throw "HL7V2-DELIMITER-ERROR", sprintf("MSH-1 field separator must be one character: %y",
                     field_separator);
             }
-            if (encoding_characters.size() < 4) {
+            if (encoding_characters.length() < 4) {
                 throw "HL7V2-DELIMITER-ERROR", sprintf("MSH-2 encoding characters must have at least four "
                     "characters: %y", encoding_characters);
             }
@@ -81,7 +81,7 @@ public namespace Hl7v2Util {
 
         #! Parses delimiter values from an MSH segment
         parseMshSegment(string msh_segment) {
-            if (msh_segment.size() < 8 || msh_segment.substr(0, 3) != "MSH") {
+            if (msh_segment.length() < 8 || msh_segment.substr(0, 3) != "MSH") {
                 throw "HL7V2-DELIMITER-ERROR", "invalid MSH segment for delimiter parsing";
             }
             set(msh_segment[3], msh_segment.substr(4, 4));
@@ -149,8 +149,7 @@ public namespace Hl7v2Util {
         */
         string escape(string str) {
             list<string> parts = ();
-            for (int i = 0; i < str.size(); i++) {
-                string ch = str[i];
+            foreach string ch in (str.splitChars()) {
                 if (ch == field_separator) {
                     push parts, escape_character + "F" + escape_character;
                 } else if (ch == component_separator) {
@@ -176,23 +175,16 @@ public namespace Hl7v2Util {
 
         #! Unescapes a scalar HL7 field value
         string unescape(string str) {
+            # the pieces between escape characters are text and escape codes in turn: text, code, text, ...; an
+            # even number of pieces is an escape sequence without its closing escape character
+            list<string> pieces = str.split(escape_character, False, True);
+            if (!(pieces.size() % 2)) {
+                throw "HL7V2-ESCAPE-ERROR", sprintf("unterminated HL7 escape sequence in field value "
+                    "of length %d", str.length());
+            }
             list<string> parts = ();
-            for (int i = 0; i < str.size(); i++) {
-                string ch = str[i];
-                if (ch != escape_character) {
-                    push parts, ch;
-                    continue;
-                }
-
-                int end = str.find(escape_character, i + 1);
-                if (end < 0) {
-                    throw "HL7V2-ESCAPE-ERROR", sprintf("unterminated HL7 escape sequence in field value "
-                        "of length %d", str.size());
-                }
-
-                string code = str.substr(i + 1, end - i - 1);
-                push parts, decodeEscapeCode(code);
-                i = end;
+            for (int i = 0; i < pieces.size(); ++i) {
+                push parts, (i % 2) ? decodeEscapeCode(pieces[i]) : pieces[i];
             }
             return parts.join("");
         }

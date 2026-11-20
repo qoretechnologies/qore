@@ -378,6 +378,14 @@ public class ValueMask {
     }
 
     private {
+        #! The hour tokens
+        const HourTokens = {"HH": True, "H": True, "hh": True, "h": True};
+
+        #! The numeric month tokens
+        const NumericMonthTokens = {"MM": True, "M": True};
+    }
+
+    private:internal {
         #! The time zones read, by region; access protected with zone_lock
         static hash<string, TimeZone> zones = {};
 
@@ -389,12 +397,6 @@ public class ValueMask {
 
         #! Protects masks
         static Mutex mask_lock();
-
-        #! The hour tokens
-        const HourTokens = {"HH": True, "H": True, "hh": True, "h": True};
-
-        #! The numeric month tokens
-        const NumericMonthTokens = {"MM": True, "M": True};
     }
 
     #! Parses a date or time mask

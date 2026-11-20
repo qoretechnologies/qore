@@ -498,12 +498,28 @@ list l = db.getAlignSql(schema_hash);
         AbstractDatabase::checkDriverOptions(\schema_hash.sequence_map, drv);
         AbstractDatabase::checkDriverOptions(\schema_hash.sequences, drv);
 
+        # the tables that table_map renames: a source that exists to a target that does not; an existing target is
+        # aligned as described and the source is left as it is (issue #6729)
+        AbstractDatabase::checkDriverOptions(\schema_hash.table_map, drv);
+        hash<string, Table> table_renames = {};
+        # each source and target name; iterating the hash itself gave the hash, so any table_map raised an error
+        foreach hash<auto> th in (schema_hash.table_map.pairIterator()) {
+            if (th.value.typeCode() != NT_STRING)
+                throw "SCHEMA-DESCRIPTION-ERROR", sprintf("table_map %y value is not a string in the schema description hash; got type %y instead (%y)", th.key, th.value.type(), th.value);
+
+            Table t(ds, th.key);
+            if (t.checkExistence() && !(new Table(ds, th.value)).checkExistence()) {
+                table_renames{th.value} = t;
+            }
+        }
+
         # create template tables; every section of a schema description is optional; no SQL is run before the
         # foreign constraints of the templates are checked below
         if (schema_hash.tables) {
             table_cache.populate(ds, schema_hash.tables, copt);
+            *hash<string, bool> renamed = map {$1: True}, keys table_renames;
             opt.foreign_constraint_alignment = getForeignConstraintAlignmentUnlocked(schema_hash, table_cache,
-                opt.db_table_cache);
+                opt.db_table_cache, renamed);
             # a template whose foreign constraint would not reference a unique key is refused before any SQL
             opt.foreign_constraint_alignment.checkTemplates();
         }
@@ -521,7 +537,9 @@ list l = db.getAlignSql(schema_hash);
                 throw "SCHEMA-DESCRIPTION-ERROR", sprintf("sequence_map %y value is not a string in the schema description hash; got type %y instead (%y)", key, value.type(), value);
 
             *AbstractSequence seq = getSequence(key);
-            if (seq) {
+            # a sequence is renamed only when the target does not exist; an existing target is aligned as described
+            # (issue #6729)
+            if (seq && !getSequence(value)) {
                 l += AbstractDatabase::doCallback(opt, seq.getRenameSql(value), AC_Rename, "sequence", key, NOTHING, value);
                 # remove sequence from list since we know it exists
                 remove schema_hash.sequences{value};
@@ -557,17 +575,15 @@ list l = db.getAlignSql(schema_hash);
         }
 
         # rename any tables
-        AbstractDatabase::checkDriverOptions(\schema_hash.table_map, drv);
-        # each source and target name; iterating the hash itself gave the hash, so any table_map raised an error
-        foreach hash<auto> th in (schema_hash.table_map.pairIterator()) {
-            if (th.value.typeCode() != NT_STRING)
-                throw "SCHEMA-DESCRIPTION-ERROR", sprintf("table_map %y value is not a string in the schema description hash; got type %y instead (%y)", th.key, th.value.type(), th.value);
-
-            Table t(ds, th.key);
-            if (t.checkExistence()) {
-                l += AbstractDatabase::doCallback(opt, t.getRenameSql(th.value), AC_Rename, "table", th.key, NOTHING, th.value);
-                opt.db_table_cache.add(th.value, t);
+        foreach hash<auto> th in (table_renames.pairIterator()) {
+            Table t = th.value;
+            # a table that the schema describes is renamed by its alignment below, which reads it under its name
+            # before the rename: the rename is not made twice (issue #6721)
+            if (!schema_hash.tables{th.key}) {
+                l += AbstractDatabase::doCallback(opt, t.getRenameSql(th.key), AC_Rename, "table", t.getName(),
+                    NOTHING, th.key);
             }
+            opt.db_table_cache.add(th.key, t);
         }
 
         # now process DB tables
@@ -615,18 +631,20 @@ list l = db.getAlignSql(schema_hash);
     /** The tables of the schema that exist in the database are read with their foreign constraints and stored in the
         table cache for the database, before any table is aligned, so that the foreign constraints that reference a
         table are known whatever the order of the tables; a table that the schema renames (\c table_map) is not
+        read under its new name, which it does not have before the rename
 
         @param schema_hash the schema description
         @param table_cache the template tables of the schema
         @param db_table_cache the cache of the tables in the database
+        @param renamed the new names of the tables that \c table_map renames: a target that exists is not renamed
+        onto, and is read as any other table of the schema (issue #6729)
 
         @return the foreign constraints of the tables of the schema alignment
 
         @since SqlUtil 3.11.0
     */
     private SchemaForeignConstraintAlignment getForeignConstraintAlignmentUnlocked(hash<auto> schema_hash,
-            Tables table_cache, Tables db_table_cache) {
-        hash<string, bool> renamed = map {$1: True}, schema_hash.table_map.iterator(), $1.typeCode() == NT_STRING;
+            Tables table_cache, Tables db_table_cache, *hash<string, bool> renamed) {
         hash<string, AbstractTable> live = {};
         foreach string name in (schema_hash.tables.keyIterator()) {
             if (renamed{name}) {
@@ -873,6 +891,69 @@ list l = db.getDropSchemaSql(schema_hash);
         return AbstractDatabase::normalizeViewSource(live.src) == AbstractDatabase::normalizeViewSource(tmpl.src);
     }
 
+    #! Returns @ref True if the query of a view can be given to a probe of the database to normalize it
+    /** A driver that normalizes the query of a view of a schema description by making a view of it (a probe; see
+        viewSourceEqualImpl()) gives the database only a query that can be nothing but one \c select or \c with
+        statement: one that starts with \c select or \c with (after any opening parentheses) and has no statement
+        separator (\c ";"), comment (\c "--", \c "/*" or \c "#"), dollar quote (\c "$") outside of its quoted
+        literals and names, and no backslash, which can change where a literal ends (qore#6578).  A query that is
+        not accepted is not given to the database: it is compared as text, so a view with it is created again by the
+        alignment.
+
+        @param src the query of the view
+        @param backtick_quotes @ref True if \c "`" quotes names (MySQL); otherwise it is an ordinary character
+
+        @return @ref True if the query can be given to a probe
+
+        @since SqlUtil 3.11.0
+    */
+    static bool viewProbeSourceSafe(string src, bool backtick_quotes = False) {
+        # the bytes are read in UTF-8, in which the bytes of ASCII characters are only those characters
+        src = convert_encoding(src, "UTF-8");
+        src =~ s/\s*;\s*$//;
+        trim src;
+        if (src !~ /^\(*\s*(select|with)\b/i || src.find("\\") != -1) {
+            return False;
+        }
+        # the characters that decide are ASCII, so the bytes of the query are read
+        binary b = binary(src);
+        int len = b.size();
+        int i = 0;
+        while (i < len) {
+            int c = b[i];
+            # a quoted literal or name: '...', "...", `...`, with a doubled quote as a quote in it
+            if (c == 0x27 || c == 0x22 || (c == 0x60 && backtick_quotes)) {
+                ++i;
+                while (True) {
+                    if (i >= len) {
+                        # an unterminated quote
+                        return False;
+                    }
+                    if (b[i] == c) {
+                        if (i + 1 < len && b[i + 1] == c) {
+                            i += 2;
+                            continue;
+                        }
+                        break;
+                    }
+                    ++i;
+                }
+                ++i;
+                continue;
+            }
+            # ";", "#", "$"
+            if (c == 0x3b || c == 0x23 || c == 0x24) {
+                return False;
+            }
+            # "--", "/*"
+            if (i + 1 < len && ((c == 0x2d && b[i + 1] == 0x2d) || (c == 0x2f && b[i + 1] == 0x2a))) {
+                return False;
+            }
+            ++i;
+        }
+        return True;
+    }
+
     #! Returns the query of a view with its whitespace collapsed, trimmed and without a trailing semicolon
     /** @since SqlUtil 3.11.0
     */
@@ -918,7 +999,9 @@ list l = db.getDropSchemaSql(schema_hash);
                     "hash; got type %y instead (%y)", type + "_map", key, value.type(), value);
 
             *AbstractFunction f = get(key);
-            if (f) {
+            # an object is renamed only when the target does not exist; an existing target is aligned as described
+            # (issue #6729)
+            if (f && !get(value)) {
                 list tl = AbstractDatabase::doCallback(opt, f.getRenameSql(value), AC_Rename, type, key, NOTHING,
                     value);
                 if (tl)

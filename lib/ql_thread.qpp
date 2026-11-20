@@ -48,6 +48,7 @@
 #include "qore/intern/HttpFastRoutes.h"
 #include "qore/intern/QoreThreadScratch.h"
 #include "qore/intern/QC_ThreadCapabilityScope.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <pthread.h>
 #include <thread>
@@ -334,7 +335,12 @@ assert(!thread_list().find(tid));
 */
 bool thread_join(int tid, *timeout limit) [dom=THREAD_CONTROL] {
     int64 ms = limit == 0 ? -1 : (limit < 0 ? 0 : limit);
-    int rc = thread_list.joinThread(tid, ms, xsink);
+    int rc;
+    {
+        // a quiescent wait: no type read through a derived type is held across it (issue #6419)
+        QoreTypeQuiescentWaitHelper qwh;
+        rc = thread_list.joinThread(tid, ms, xsink);
+    }
     if (*xsink) {
         return false;
     }
@@ -1770,7 +1776,7 @@ static void parallel_wait_for_workers(ParallelExecState& state, ExceptionSink* x
         // waiting — if we got here due to thread cancellation, the flag is still set,
         // causing immediate return and a tight CPU loop.  The void overload uses plain
         // cond.wait(), blocking until workers call dec() and the count reaches zero.
-        state.counter.waitForZero();
+        qore_counter_ops(state.counter).waitForZero();
     }
 }
 
@@ -2509,8 +2515,18 @@ int qore_test_local_var_stack_size() {
 
 //! Moves the clock that FastCell and FastResponseSlot ages are measured by forward, so that a test need not wait
 /** @param ms the time to move the clock forward by, in milliseconds
+
+    @throw PERMISSION-DENIED the calling code is sandboxed: the clock is process-wide, and moving it expires the cached
+    data of every caller (qore#6750)
 */
 nothing qore_test_advance_fast_clock(softint ms) {
+    {
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+        if (governing) {
+            xsink->raiseException("PERMISSION-DENIED", "sandboxed code cannot move the process-wide fast clock");
+            return QoreValue();
+        }
+    }
     if (ms < 0) {
         xsink->raiseException("FASTCELL-ERROR", "the clock cannot move backward (" QLLD " ms)", (int64)ms);
         return QoreValue();

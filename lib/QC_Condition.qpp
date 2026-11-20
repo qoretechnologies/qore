@@ -45,7 +45,12 @@ static int condition_wait_impl(Condition* c, AbstractSmartLock* lock, int64 time
     // a single wait for the timeout (none if it is not positive): a cancellation request or program interrupt wakes
     // it at once, and it is raised with the lock held again (see VLockCancellationPoint)
     VLockCancellationPoint cancel_point(getVLock(), "condition wait");
-    int rc = c->wait(lock, timeout_ms > 0 ? timeout_ms : 0, xsink);
+    int rc;
+    {
+        // a quiescent wait: no type read through a derived type is held across it (issue #6419)
+        QoreTypeQuiescentWaitHelper qwh;
+        rc = c->wait(lock, timeout_ms > 0 ? timeout_ms : 0, xsink);
+    }
     if (*xsink) {
         return -1;
     }

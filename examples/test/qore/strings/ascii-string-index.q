@@ -208,9 +208,8 @@ foreach string key in (("ascii", "2-byte at start", "3-byte in middle")) {
 }
 
 # text that is not valid UTF-8: the offsets before the invalid bytes are characters, the others raise exceptions as
-# without the cache; the length counts each byte that does not start a complete character as one character
-# (qore#6597)
-sub check_invalid(string s, int valid_chars, int length, string label) {
+# without the cache; counting the characters also diagnoses invalid text
+sub check_invalid(string s, int valid_chars, string label) {
     for (int how = 0; how < 3; ++how) {
         # reading invalid text fills the cache up to the invalid bytes before it raises the exception
         try {
@@ -219,7 +218,12 @@ sub check_invalid(string s, int valid_chars, int length, string label) {
             expect_same(ex.err, "INVALID-ENCODING", label, "prime");
         }
         for (int pass = 0; pass < 2; ++pass) {
-            expect_same(s.length(), length, label, "length()");
+            try {
+                int n = s.length();
+                fail(label, sprintf("length() returned %d", n));
+            } catch (hash<ExceptionInfo> ex) {
+                expect_same(ex.err, "INVALID-ENCODING", label, "length()");
+            }
             for (int i = -s.size() - 2; i < s.size() + 2; ++i) {
                 ++checks;
                 try {
@@ -244,20 +248,18 @@ sub check_invalid(string s, int valid_chars, int length, string label) {
 
 {
     string a20 = ascii.substr(0, 20);
-    check_invalid(binary_to_string(binary(a20) + <c3>, "UTF-8"), 20, 21, "truncated 2-byte at end");
-    check_invalid(binary_to_string(binary(a20) + <e9> + binary("cd"), "UTF-8"), 20, 23, "invalid 3-byte in middle");
-    check_invalid(binary_to_string(binary(a20) + <f09f98>, "UTF-8"), 20, 23, "truncated 4-byte at end");
-    check_invalid(binary_to_string(<c3> + binary(a20), "UTF-8"), 0, 21, "invalid at start");
-    # a continuation byte on its own is a character of one byte
-    string s = binary_to_string(binary(a20) + <80> + binary("xy"), "UTF-8");
-    for (int how = 0; how < 3; ++how) {
-        prime(s, how);
-        expect_same(s.length(), 23, "continuation byte", "length()");
-        expect_same(binary(s.substr(20, 1)), <80>, "continuation byte", "substr(20, 1)");
-        expect_same(s[21], "x", "continuation byte", "[21]");
-        expect_same(s[-1], "y", "continuation byte", "[-1]");
-        expect_same(s[23], NOTHING, "continuation byte", "[23]");
-    }
+    check_invalid(binary_to_string(binary(a20) + <c3>, "UTF-8"), 20, "truncated 2-byte at end");
+    check_invalid(binary_to_string(binary(a20) + <e9> + binary("cd"), "UTF-8"), 20, "invalid 3-byte in middle");
+    check_invalid(binary_to_string(binary(a20) + <f09f98>, "UTF-8"), 20, "truncated 4-byte at end");
+    check_invalid(binary_to_string(<c3> + binary(a20), "UTF-8"), 0, "invalid at start");
+    # the bytes that RFC 3629 does not allow are invalid as the other invalid sequences are (qore#6604): a continuation byte on its own, an overlong form, a surrogate, a
+    # code point above U+10FFFF and a byte that UTF-8 does not use
+    check_invalid(binary_to_string(binary(a20) + <80> + binary("xy"), "UTF-8"), 20, "continuation byte");
+    check_invalid(binary_to_string(binary(a20) + <c0af> + binary("xy"), "UTF-8"), 20, "overlong 2-byte");
+    check_invalid(binary_to_string(binary(a20) + <e080af> + binary("xy"), "UTF-8"), 20, "overlong 3-byte");
+    check_invalid(binary_to_string(binary(a20) + <eda080> + binary("xy"), "UTF-8"), 20, "surrogate");
+    check_invalid(binary_to_string(binary(a20) + <f4908080> + binary("xy"), "UTF-8"), 20, "above U+10FFFF");
+    check_invalid(binary_to_string(binary(a20) + <f5808080> + binary("xy"), "UTF-8"), 20, "byte F5");
 }
 
 # one string read from several threads at once, each thread in another order

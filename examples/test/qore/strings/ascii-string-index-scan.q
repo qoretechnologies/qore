@@ -54,6 +54,20 @@ int sub loop_backward(int n) {
     return scanned() - start;
 }
 
+#! returns the bytes scanned by a loop that reads a character of an ASCII string literal in every iteration
+/** A string literal that is ASCII text has its ASCII prefix known in every execution mode, so that its characters are
+    read without scanning it (in IR and JIT code, the literal is a new string at every evaluation: qore#6625)
+*/
+int sub loop_literal(int n) {
+    int start = scanned();
+    int c = 0;
+    for (int i = 0; i < n; ++i) {
+        c += "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"[i & 63].size();
+    }
+    check("literal", c, n);
+    return scanned() - start;
+}
+
 #! returns the bytes scanned by a read at each of the offsets of a string whose ASCII text is known
 hash<string, int> sub reads_at(list<int> offsets) {
     string src = strmul("d", offsets.last() + 1);
@@ -88,6 +102,7 @@ foreach int n in ((50000, 200000)) {
     printf("index %d %d\n", n, loop_index(n));
     printf("length %d %d\n", n, loop_length(n));
     printf("backward %d %d\n", n, loop_backward(n));
+    printf("literal %d %d\n", n, loop_literal(n));
 }
 hash<string, int> reads = reads_at(offsets);
 foreach hash<auto> i in (reads.pairIterator()) {

@@ -40,6 +40,7 @@
 #include "qore/intern/FunctionList.h"
 #include "qore/intern/GlobalVariableList.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/vector_map"
 #include "qore/QoreRWLock.h"
 
@@ -502,6 +503,9 @@ public:
 
     //! Adds the user class, hashdecl and enum declarations of the namespace and its subnamespaces (issue #5790)
     DLLLOCAL void getTypeOwners(std::vector<QoreTypeOwner*>& owners);
+    //! Adds the user declarations that a rollback of the pending parse removes: the pending ones of the namespace tree
+    //! and every one of the namespaces it added (issue #6419)
+    DLLLOCAL void getRollbackTypeOwners(std::vector<QoreTypeOwner*>& owners);
     //! marks the class lists of the namespace tree as owned by a Program releasing its values; see QoreClassList::setVarsReleased()
     DLLLOCAL void setVarsReleased();
     //DLLLOCAL void deleteClearData(ExceptionSink* xsink);
@@ -1951,7 +1955,7 @@ protected:
             qore_ns_private::parseCommit();
         }
         // exceptions can be thrown when performing runtime initialization
-        qore_ns_private::parseCommitRuntimeInit(getProgram()->getParseExceptionSink());
+        qore_ns_private::parseCommitRuntimeInit(qore_program_ops(getProgram()).getParseExceptionSink());
     }
 
     DLLLOCAL ConstantEntry* parseFindOnlyConstantEntryIntern(const char* cname, qore_ns_private*& ns) {
@@ -2137,7 +2141,16 @@ protected:
             const NamedScope& name, bool error);
     DLLLOCAL QoreClass* parseFindScopedClassWithMethodIntern(const NamedScope& name, unsigned& matched);
     DLLLOCAL QoreClass* parseFindClassWithStaticMethodIntern(const char* cname, const char* mname,
-            const qore_class_private* class_ctx, const QoreMethod** method);
+            const qore_class_private* class_ctx, const QoreMethod** method, bool all_classes = true);
+
+    // returns the first class with the name, in the order of unqualified class resolution, for which check()
+    // returns true (issue #1527)
+    DLLLOCAL QoreClass* parseFindClassWithMember(const char* cname, const std::function<bool(QoreClass*)>& check,
+            bool all_classes = true);
+
+    // resolves "Class::name" as a constant or static variable of any class with the name (issue #1527)
+    DLLLOCAL QoreValue parseResolveClassConstantInAnyClass(const QoreProgramLocation* loc, const char* cname,
+            const char* name, const QoreTypeInfo*& typeInfo, bool& found);
 
     DLLLOCAL QoreClass* parseFindClassIntern(const char* cname) {
         assert(cname);
@@ -2550,6 +2563,14 @@ protected:
     DLLLOCAL void parseAddNamespaceIntern(QoreNamespace* nns);
 
 public:
+    // adds the class being parsed and its parent classes with the name, depth-first in declaration order (issue #1527)
+    DLLLOCAL static void parseGetParentClassesWithName(const char* cname, std::vector<QoreClass*>& parents);
+
+    // returns the first of them that the context has private access to with a method with the name (static first,
+    // not copy()), and the method (issue #1527)
+    DLLLOCAL static QoreClass* parseFindParentClassWithMethod(const char* cname, const char* mname,
+            const qore_class_private* class_ctx, const QoreMethod*& method);
+
     RootQoreNamespace* rns;
     QoreNamespace* qoreNS;
     //! owning program object
@@ -3158,9 +3179,11 @@ public:
         return getRootNS()->rpriv->parseFindScopedClassWithMethodInternError(loc, name, error);
     }
 
+    //! \a all_classes false: only the classes of unqualified class resolution, as for a call deferred in an AOT parse
     DLLLOCAL static QoreClass* parseFindClassWithStaticMethod(const char* cname, const char* mname,
-            const qore_class_private* class_ctx, const QoreMethod** method = nullptr) {
-        return getRootNS()->rpriv->parseFindClassWithStaticMethodIntern(cname, mname, class_ctx, method);
+            const qore_class_private* class_ctx, const QoreMethod** method = nullptr, bool all_classes = true) {
+        return getRootNS()->rpriv->parseFindClassWithStaticMethodIntern(cname, mname, class_ctx, method,
+            all_classes);
     }
 
     DLLLOCAL static TypedefEntry* parseFindTypedef(const NamedScope& name) {

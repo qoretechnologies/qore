@@ -12,6 +12,7 @@
 %requires FsUtil
 %requires ../../../TestBuildTools.qm
 %requires ../../../TestInterpreter.qm
+%requires ../../../QoreBuildTree.qm
 
 %exec-class LibqoreDlopenTest
 
@@ -84,9 +85,12 @@ public class LibqoreDlopenTest inherits QUnit::Test {
         if (!TestBuildTools::find_command(cc[0])) {
             testSkip(sprintf("no C compiler to build the program: %y is not available", cc[0]));
         }
+        # a sanitizer build of libqore needs the same sanitizer in the program that loads it, whose runtime cannot be
+        # loaded with the library (qore#6682)
+        list<string> sanitize = QoreBuildTree::sanitizer_flags(dirname(lib));
         int status;
-        string output = backquote(sprintf("%s -o %s %s -ldl 2>&1", (map quote($1), cc).join(" "), quote(exe),
-            quote(get_script_dir() + "/libqore_dlopen.c")), \status);
+        string output = backquote(sprintf("%s -o %s %s -ldl%s 2>&1", (map quote($1), cc).join(" "), quote(exe),
+            quote(get_script_dir() + "/libqore_dlopen.c"), sanitize ? " " + sanitize.join(" ") : ""), \status);
         assertEq(0, status, output);
         output = backquote(quote(exe) + " " + quote(lib) + " 2>&1", \status);
         assertEq(0, status, output);

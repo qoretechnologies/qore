@@ -125,7 +125,9 @@ public class KlaviyoSchema {
 
         #! The action set built from the schema and the manifest
         static *RestSchemaActionSet action_set;
+    }
 
+    private:internal {
         #! Serializes construction of the schema and the action set
         static Mutex lck();
     }
@@ -141,9 +143,9 @@ public class KlaviyoSchema {
         manifest names them, so a set built before they exist would fail to resolve them.
     */
     static RestSchemaActionSet getActionSet() {
-        KlaviyoCodecs::register();
         AutoLock al(lck);
         if (!action_set) {
+            KlaviyoCodecs::register();
             action_set = new RestSchemaActionSet(KlaviyoSchema::getSchemaIntern(),
                 KlaviyoManifest::Manifest, KlaviyoManifest::ReferenceData,
                 NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);

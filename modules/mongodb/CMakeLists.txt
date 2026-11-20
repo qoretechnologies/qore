@@ -146,6 +146,14 @@ target_link_libraries(qore-mongodb-bson-array-test PRIVATE
     $<TARGET_LINKER_FILE:libqore> ${MONGODB_LIBRARIES})
 add_dependencies(qore-mongodb-bson-array-test libqore MONGODB_QPP_GENERATED_FILES)
 
+# The strings converted to and from BSON with a default encoding that is not UTF-8 (issue #6615)
+add_executable(qore-mongodb-bson-encoding-test EXCLUDE_FROM_ALL
+    test/bson-encoding.cpp src/bson_conversion.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/QC_ObjectId.cpp)
+target_link_libraries(qore-mongodb-bson-encoding-test PRIVATE
+    $<TARGET_LINKER_FILE:libqore> ${MONGODB_LIBRARIES})
+add_dependencies(qore-mongodb-bson-encoding-test libqore MONGODB_QPP_GENERATED_FILES)
+
 if (DOXYGEN_FOUND)
     # Add MongoDB logo SVG to the module docs (reuse the logo from MongoDbDataProvider)
     file(APPEND ${CMAKE_BINARY_DIR}/modules/mongodb/Doxyfile

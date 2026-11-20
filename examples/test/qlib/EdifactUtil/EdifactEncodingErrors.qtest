@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires EdifactUtil
+
+%exec-class EdifactEncodingErrorsTest
+
+#! Tests the encoding_errors option of the EDIFACT readers (issue #6604)
+public class EdifactEncodingErrorsTest inherits QUnit::Test {
+    public {
+        #! A UTF-8 (UNOY) interchange whose FTX segment has the ISO-8859-1 byte of "é", which is not valid UTF-8
+        const Data = binary("UNB+UNOY:3+SENDER+RECEIVER+260122:1200+REF001'UNH+1+ORDERS:D:96A:UN'FTX+AAA+++Caf")
+            + <e9> + binary("'UNT+3+1'UNZ+1+REF001'");
+    }
+
+    constructor() : Test("EdifactEncodingErrorsTest", "1.0") {
+        addTestCase("iterators", \iteratorTest());
+        addTestCase("read data provider", \dataProviderTest());
+        set_return_value(main());
+    }
+
+    private iteratorTest() {
+        TmpDir dir();
+        string path = dir.path + DirSep + "data.edi";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Data);
+        }
+        # the iterators read all of the text and split it into segments when they are created; the segments are
+        # parsed as they are iterated
+        foreach code get_iterator in (
+                AbstractIterator sub (*hash<auto> opts) {
+                    return new EdifactIterator(new BinaryInputStream(Data), {"encoding": "UTF-8"} + opts);
+                },
+                AbstractIterator sub (*hash<auto> opts) {
+                    return new EdifactFileIterator(path, {"encoding": "UTF-8"} + opts);
+                }) {
+            assertThrows("INVALID-ENCODING", "not valid UTF-8", get_iterator);
+            assertThrows("INVALID-ENCODING", "not valid UTF-8", get_iterator, {"encoding_errors": "raise"});
+            # the bytes read as ISO-8859-1 give "é", and the segments are parsed (issue #6697)
+            checkSegments(get_iterator({"encoding_errors": "latin1"}));
+            # the text kept without a check cannot be split into segments: the invalid bytes are found when its
+            # characters are processed
+            assertThrows("INVALID-ENCODING", "invalid UTF-8 encoding encountered", get_iterator,
+                {"encoding_errors": "keep"});
+            assertThrows("ENCODING-ERRORS-ERROR", get_iterator, {"encoding_errors": "ignore"});
+            # data in a single-byte encoding has no invalid bytes
+            checkSegments(get_iterator({"encoding": "ISO-8859-1"}));
+        }
+    }
+
+    #! Checks the segments of the data read with its byte <e9> as "é"
+    private checkSegments(AbstractIterator i) {
+        list<hash<auto>> segs = map $1, i;
+        assertEq(("UNB", "UNH", "FTX", "UNT", "UNZ"), map $1.tag, segs);
+        assertEq((("AAA",), ("",), ("",), ("Café",)), segs[2].data_elements);
+    }
+
+    private dataProviderTest() {
+        hash<DataProviderOptionInfo> info = EdifactReadDataProvider::ConstructorOptions.encoding_errors;
+        assertEq("raise", info.default_value);
+        assertEq(("raise", "latin1", "keep"), map $1.value, info.allowed_values);
+
+        assertThrows("INVALID-ENCODING", sub () {
+            new EdifactReadDataProvider({"stream": new BinaryInputStream(Data), "encoding": "UTF-8"});
+        });
+        EdifactReadDataProvider prov({"stream": new BinaryInputStream(Data), "encoding": "UTF-8",
+            "encoding_errors": "latin1"});
+        list<hash<auto>> rows = map $1, prov.searchRecords();
+        assertEq(("UNB", "UNH", "FTX", "UNT", "UNZ"), map $1.tag, rows);
+        assertEq((("AAA",), ("",), ("",), ("Café",)), rows[2].data_elements);
+
+        assertThrows("INVALID-ENCODING", "invalid UTF-8 encoding encountered", sub () {
+            new EdifactReadDataProvider({"stream": new BinaryInputStream(Data), "encoding": "UTF-8",
+                "encoding_errors": "keep"});
+        });
+    }
+}

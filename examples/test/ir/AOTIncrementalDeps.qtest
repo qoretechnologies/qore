@@ -757,7 +757,7 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         string dump = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, object));
         string rv = "";
         foreach string line in (dump.split("\n")) {
-            if (line.find(" U ") != -1 && line.find("_fast") != -1) {
+            if (line.find(" U ") != -1 && line =~ /_fast_h[0-9a-f]{16}$/) {
                 rv += trim(line) + "\n";
             }
         }

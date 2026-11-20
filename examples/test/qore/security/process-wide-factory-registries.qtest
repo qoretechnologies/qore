@@ -1,0 +1,355 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreLlmTypes
+%requires QoreRagTypes
+%requires QoreMediaUtils
+%requires QoreSpeechUtils
+%requires DataProvider
+%requires reflection
+%requires Util
+%requires RestClientIo
+
+%exec-class ProcessWideFactoryRegistriesTest
+
+#! Process-wide factory registries refuse registrations, replacements and removals by sandboxed code (#6744)
+/** The factories and child data providers of a process-wide registry are used for every tenant, with that tenant's
+    configuration and data; code that a sandbox governs therefore cannot register, replace or remove them, and the
+    storage of a registry cannot be written by a sandboxed subclass of its class (it is \c private:internal).  The
+    registries guarded since #6747 keep their error codes, decided by the same rule.  Before the change, a sandboxed
+    tenant could register or replace a factory that other tenants then used, or remove one that they relied on.
+*/
+class ProcessWideFactoryRegistriesTest inherits QUnit::Test {
+    public {
+        #! the tenant's code: each function returns the error code of the attempt, or "registered"
+        const TenantSource = "%modern
+%requires QoreLlmTypes
+%requires QoreRagTypes
+%requires QoreMediaUtils
+%requires QoreSpeechUtils
+%requires DataProvider
+
+class TenantLlmFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() { return \"t6744-llm\"; }
+    string getDisplayName() { return \"tenant\"; }
+    QoreLlmUtils::AbstractLlmProvider create(hash<QoreLlmUtils::LlmBackendConfig> config) { throw \"TENANT\"; }
+}
+
+class TenantEmbedderFactory inherits QoreRagUtils::AbstractEmbedderFactory {
+    string getType() { return \"t6744-emb\"; }
+    string getDisplayName() { return \"tenant\"; }
+    QoreRagUtils::AbstractEmbedder create(hash<QoreRagUtils::EmbedderConfig> config) { throw \"TENANT\"; }
+}
+
+class TenantImageFactory inherits QoreMediaUtils::AbstractImageGeneratorFactory {
+    string getMode() { return \"t6744-img\"; }
+    string getDisplayName() { return \"tenant\"; }
+    QoreMediaUtils::AbstractImageGenerator create(hash<QoreMediaUtils::ImageGeneratorConfig> config) {
+        throw \"TENANT\";
+    }
+}
+
+class TenantTranscriberFactory inherits QoreSpeechUtils::AbstractTranscriberFactory {
+    string getMode() { return \"t6744-stt\"; }
+    string getDisplayName() { return \"tenant\"; }
+    QoreSpeechUtils::AbstractTranscriber create(hash<QoreSpeechUtils::TranscriberConfig> config) {
+        throw \"TENANT\";
+    }
+}
+
+string sub attempt(code c) {
+    try {
+        c();
+        return \"registered\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+hash<auto> sub run(string host_llm_mode) {
+    return {
+        \"llm register\": attempt(sub () {
+            QoreLlmUtils::LlmProviderRegistry::registerFactory(new TenantLlmFactory());
+        }),
+        \"llm remove host's\": attempt(sub () { QoreLlmUtils::LlmProviderRegistry::deregisterFactory(host_llm_mode); }),
+        \"embedder register\": attempt(sub () {
+            QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(new TenantEmbedderFactory());
+        }),
+        \"embedder remove\": attempt(sub () { QoreRagUtils::RagProviderRegistry::deregisterEmbedderFactory(\"x\"); }),
+        \"reranker remove\": attempt(sub () { QoreRagUtils::RagProviderRegistry::deregisterRerankerFactory(\"x\"); }),
+        \"vector store remove\": attempt(sub () {
+            QoreRagUtils::RagProviderRegistry::deregisterVectorStoreFactory(\"x\");
+        }),
+        \"chunker remove\": attempt(sub () { QoreRagUtils::RagProviderRegistry::deregisterChunkerFactory(\"x\"); }),
+        \"image register\": attempt(sub () {
+            QoreMediaUtils::MediaProviderRegistry::registerImageGeneratorFactory(new TenantImageFactory());
+        }),
+        \"video remove\": attempt(sub () {
+            QoreMediaUtils::MediaProviderRegistry::deregisterVideoGeneratorFactory(\"x\");
+        }),
+        \"transcriber register\": attempt(sub () {
+            QoreSpeechUtils::SpeechProviderRegistry::registerTranscriberFactory(new TenantTranscriberFactory());
+        }),
+        \"synthesizer remove\": attempt(sub () {
+            QoreSpeechUtils::SpeechProviderRegistry::deregisterSynthesizerFactory(\"x\");
+        }),
+        \"type entry add\": attempt(sub () {
+            auto root = DataProvider::DataProvider::getTypeRoot();
+            root.addChild(\"t6744\");
+        }),
+        \"type entry clear\": attempt(sub () { auto root = DataProvider::DataProvider::getTypeRoot(); root.clear(); }),
+        \"type entry lock all\": attempt(sub () {
+            auto root = DataProvider::DataProvider::getTypeRoot();
+            root.lockAll();
+        }),
+        \"type ID sequence\": attempt(sub () { DataProvider::DataProviderTypeEntry::setEpheremalIdStart(5); }),
+        \"module blacklist\": attempt(sub () { qore_add_module_to_blacklist(\"t6744\"); }),
+        \"module option\": attempt(sub () { set_module_option(\"t6744\", \"opt\", 1); }),
+    };
+}
+
+# calls a capability that trusted code gives the tenant
+auto sub call(code c) {
+    return c();
+}
+
+string sub child(string provider) {
+    return attempt(sub () {
+        call_function(provider + \"::\" + provider + \"::registerChild\", \"t6744\",
+            Class::forName(provider + \"::\" + provider));
+    });
+}
+
+string sub code_child(string provider) {
+    return attempt(sub () {
+        call_function(provider + \"::\" + provider + \"::registerChild\", \"t6744\", sub () {});
+    });
+}
+";
+    }
+
+    constructor() : QUnit::Test("process-wide factory registries", "1.0", \ARGV) {
+        addTestCase("registries refuse changes by sandboxed code", \registriesTest());
+        addTestCase("child data provider registries refuse changes by sandboxed code", \childRegistriesTest());
+        addTestCase("a trusted caller never builds a tenant's child class", \childCaptureTest());
+        addTestCase("the storage of a registry is not reachable by a sandboxed subclass", \storageTest());
+        addTestCase("trusted code serving sandboxed code under a policy barrier cannot either", \barrierTest());
+        addTestCase("trusted code still registers and removes", \trustedTest());
+        set_return_value(main());
+    }
+
+    private Program tenant() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+
+    registriesTest() {
+        # a factory of the host, which the tenant must not be able to remove
+        HostLlmFactory host_factory();
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(host_factory);
+        on_exit QoreLlmUtils::LlmProviderRegistry::deregisterFactory(host_factory.getMode());
+
+        hash<auto> rv = tenant().callFunction("run", host_factory.getMode());
+        foreach hash<auto> i in (rv.pairIterator()) {
+            string expected = i.key =~ /^type entry/ ? "DATA-PROVIDER-REGISTRATION-DENIED"
+                : "SANDBOX-REGISTRATION-ERROR";
+            assertEq(expected, i.value, i.key);
+        }
+        # the host's factory is still the one that every tenant gets, and the tenant's ones were not registered
+        assertEq(host_factory, QoreLlmUtils::LlmProviderRegistry::getFactory(host_factory.getMode()));
+        assertNothing(QoreLlmUtils::LlmProviderRegistry::getFactory("t6744-llm"));
+        assertNothing(QoreRagUtils::RagProviderRegistry::getEmbedderFactory("t6744-emb"));
+        assertNothing(QoreMediaUtils::MediaProviderRegistry::getImageGeneratorFactory("t6744-img"));
+        assertNothing(QoreSpeechUtils::SpeechProviderRegistry::getTranscriberFactory("t6744-stt"));
+        assertNothing(DataProvider::DataProvider::getTypeRoot().getChild("t6744"));
+    }
+
+    childRegistriesTest() {
+        # every child data provider registry of the standard modules: a child class that a tenant registered would
+        # be created for every caller that browses the provider, with that caller's connection
+        string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+        int tested;
+        int browsed;
+        foreach hash<auto> site in (ProcessWideFactoryRegistriesTest::getChildRegistrySites(qlib)) {
+            try {
+                load_module(site.module);
+            } catch (hash<ExceptionInfo> ex) {
+                # a module whose dependencies are not available here
+                continue;
+            }
+            string cls = site.module + "::" + site.cls;
+            # the tenant registers a subclass of its own, or a generator
+            string arg = site.code ? "sub (string name, auto conn) {}" : "Class::forName(\"T6744\")";
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parse(sprintf("%%modern\n%%requires %s\n%s"
+                "string sub t() { try { %s::registerChild(\"t6744\", %s); return \"registered\"; } "
+                "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n", site.module,
+                site.code ? "" : sprintf("class T6744 inherits %s {}\n", cls), cls, arg), site.file);
+            p.setSandboxManager(new SandboxManager());
+            assertEq("SANDBOX-REGISTRATION-ERROR", p.callFunction("t"), cls);
+            ++tested;
+            # trusted code that browses the provider does not see the tenant's child
+            object dp;
+            try {
+                dp = Class::forName(cls).newObject();
+            } catch (hash<ExceptionInfo> ex) {
+                # the provider needs a connection or options
+                continue;
+            }
+            assertFalse(inlist("t6744", dp.getChildProviderNames() ?? ()), cls + ": child names");
+            ++browsed;
+        }
+        # most of the modules load without external dependencies
+        assertGt(25, tested, "the child data provider registries that were tested");
+        assertGt(0, browsed, "the providers that trusted code browsed");
+    }
+
+    childCaptureTest() {
+        try {
+            load_module("PerplexityDataProvider");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("PerplexityDataProvider is not available: " + ex.desc);
+        }
+        # a tenant's child class would be built for a trusted caller, with the trusted caller's REST client
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%modern
+%requires PerplexityDataProvider
+our *string captured;
+class T6744Capture inherits PerplexityDataProvider::PerplexityDataProvider {
+    constructor(*RestClientIo::RestClientIo rest) : PerplexityDataProvider(rest) {
+        captured = rest ? rest.className() : \"none\";
+    }
+}
+string sub reg() {
+    try {
+        PerplexityDataProvider::PerplexityDataProvider::registerChild(\"t6744-capture\",
+            Class::forName(\"T6744Capture\"));
+        return \"registered\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+*string sub got() { return captured; }
+", "tenant");
+        p.setSandboxManager(new SandboxManager());
+        assertEq("SANDBOX-REGISTRATION-ERROR", p.callFunction("reg"));
+
+        # trusted code browses the provider with its own client: a placeholder URL, no connection is made
+        RestClientIo::RestClientIo rest({"url": "http://t6744.invalid:1/"});
+        object dp = Class::forName("PerplexityDataProvider::PerplexityDataProvider").newObject(rest);
+        assertFalse(inlist("t6744-capture", dp.getChildProviderNames() ?? ()));
+        try {
+            auto c = dp.getChildProvider("t6744-capture");
+            assertNothing(c, "a child was built for the name");
+        } catch (hash<ExceptionInfo> ex) {
+            # an unknown child
+        }
+        assertNothing(p.callFunction("got"), "the tenant's constructor did not run");
+    }
+
+    #! Returns the static registerChild() methods of the data providers of the standard modules
+    /** The class of each is the base name of its file, in the namespace of its module, whose name is that of its
+        directory
+    */
+    private static list<hash<auto>> getChildRegistrySites(string qlib) {
+        list<hash<auto>> rv = ();
+        Dir top();
+        top.chdir(qlib);
+        foreach string dir in (top.listDirs() ?? ()) {
+            Dir d();
+            d.chdir(qlib + "/" + dir);
+            foreach string file in (d.listFiles("\\.qc$") ?? ()) {
+                string src = ReadOnlyFile::readTextFile(qlib + "/" + dir + "/" + file);
+                *list<*string> m = (src =~ x/^\s*static\s+registerChild\s*\(\s*string\s+\w+\s*,\s*([\w:]+)/m);
+                if (!m || dir == "DataProvider") {
+                    continue;
+                }
+                rv += {"module": dir, "cls": file.substr(0, -3), "file": file, "code": m[0] == "code"};
+            }
+        }
+        return rv;
+    }
+
+    storageTest() {
+        foreach hash<auto> i in ({
+                "LlmProviderRegistry": "class T inherits QoreLlmUtils::LlmProviderRegistry { "
+                    "static set() { factory_cache{\"t6744\"} = NOTHING; } }",
+                "RagProviderRegistry": "class T inherits QoreRagUtils::RagProviderRegistry { "
+                    "static set() { embedder_cache{\"t6744\"} = NOTHING; } }",
+                "OpenAiDataProvider": "%requires OpenAiDataProvider\n"
+                    "class T inherits OpenAiDataProvider::OpenAiDataProvider { "
+                    "static set() { childMap{\"t6744\"} = NOTHING; } }",
+            }.pairIterator()) {
+            Program p(PO_NEW_STYLE);
+            p.setSandboxManager(new SandboxManager());
+            try {
+                p.parse("%modern\n%requires QoreLlmTypes\n%requires QoreRagTypes\n" + i.value, "subclass");
+                assertTrue(False, i.key + ": a sandboxed subclass reached the registry's storage");
+            } catch (hash<ExceptionInfo> ex) {
+                # the member is not accessible in the subclass
+                assertEq("PARSE-EXCEPTION", ex.err, sprintf("%s: %s", i.key, ex.desc));
+            }
+        }
+    }
+
+    barrierTest() {
+        # trusted infrastructure that changes the registries for its callers, under a policy barrier
+        HostLlmFactory host_factory();
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(host_factory);
+        on_exit QoreLlmUtils::LlmProviderRegistry::deregisterFactory(host_factory.getMode());
+        hash<string, code> caps = {
+            "llm remove": SandboxManager::createSystemPolicyCall(sub () {
+                QoreLlmUtils::LlmProviderRegistry::deregisterFactory(host_factory.getMode());
+            }),
+            "embedder remove": SandboxManager::createSystemPolicyCall(sub () {
+                QoreRagUtils::RagProviderRegistry::deregisterEmbedderFactory("x");
+            }),
+            "module option": SandboxManager::createSystemPolicyCall(sub () {
+                set_module_option("t6744", "opt", 1);
+            }),
+        };
+        Program p = tenant();
+        foreach hash<auto> i in (caps.pairIterator()) {
+            assertThrows("SANDBOX-REGISTRATION-ERROR", \p.callFunction(), ("call", i.value), i.key);
+        }
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", \p.callFunction(), ("call",
+            SandboxManager::createSystemPolicyCall(sub () {
+                auto root = DataProvider::DataProvider::getTypeRoot();
+                root.addChild("t6744");
+            })));
+        # the host's factory is still registered
+        assertEq(host_factory, QoreLlmUtils::LlmProviderRegistry::getFactory(host_factory.getMode()));
+        assertNothing(DataProvider::DataProvider::getTypeRoot().getChild("t6744"));
+    }
+
+    trustedTest() {
+        HostLlmFactory host_factory();
+        QoreLlmUtils::LlmProviderRegistry::registerFactory(host_factory);
+        assertEq(host_factory, QoreLlmUtils::LlmProviderRegistry::getFactory(host_factory.getMode()));
+        QoreLlmUtils::LlmProviderRegistry::deregisterFactory(host_factory.getMode());
+        assertNothing(QoreLlmUtils::LlmProviderRegistry::getFactory(host_factory.getMode()));
+    }
+}
+
+#! a factory that the host registers
+class HostLlmFactory inherits QoreLlmUtils::AbstractLlmProviderFactory {
+    string getMode() {
+        return "h6744-llm";
+    }
+
+    string getDisplayName() {
+        return "host";
+    }
+
+    QoreLlmUtils::AbstractLlmProvider create(hash<QoreLlmUtils::LlmBackendConfig> config) {
+        throw "HOST";
+    }
+}

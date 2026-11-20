@@ -12,6 +12,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires ../../../TestInterpreter.qm
+%requires ../../../QoreBuildTree.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -652,10 +653,12 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         TmpDir tmp("modern-option-consistency-stale-");
         string exe = tmp.path + "/host";
         *list<*string> target = Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/;
+        # a sanitizer build of libqore needs the same sanitizer in the hosts (qore#6682)
+        string flags = ((target ? (target[0],) : ()) + QoreBuildTree::sanitizer_flags(libdir)).join(" ");
         string out = ExecModeHarness::run_any(sprintf("%s -std=c++17 -I%s/include -I%s/include "
             "%s/stale-artifact-host.cpp "
             "-L%s -Wl,-rpath,%s -lqore %s -o %s 2>&1", cxx, root, libdir, dir, libdir, libdir,
-            target ? target[0] : "", exe));
+            flags, exe));
         assertTrue(is_file(exe), "compile host: " + out);
         out = ExecModeHarness::run_any(sprintf("%s %s", env, exe));
         assertRegex("STALE-REFUSED: PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; "
@@ -669,7 +672,7 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         # the entry points of an AOT executable
         string run_exe = tmp.path + "/run-host";
         string run_out = ExecModeHarness::run_any(sprintf("%s -std=c++17 -I%s/include -I%s/include %s/stale-run-host.cpp -L%s "
-            "-Wl,-rpath,%s -lqore %s -o %s 2>&1", cxx, root, libdir, dir, libdir, libdir, target ? target[0] : "",
+            "-Wl,-rpath,%s -lqore %s -o %s 2>&1", cxx, root, libdir, dir, libdir, libdir, flags,
             run_exe));
         assertTrue(is_file(run_exe), "compile run host: " + run_out);
         foreach string entry in (("v1", "v3")) {

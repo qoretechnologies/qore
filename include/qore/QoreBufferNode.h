@@ -470,14 +470,6 @@ public:
      */
     DLLEXPORT QoreBufferNode* copy(ExceptionSink* xsink = nullptr) const;
 
-    //! Creates a deep copy of the buffer with preserved or widened element nullability.
-    /** This can widen a non-nullable buffer<T> to buffer<*T> by adding an all-valid validity bitmap.
-        @param n_nullable_elements true if the copied buffer should have nullable elements
-        @param xsink optional exception sink for cooperative cancellation
-        @return a new buffer with the requested nullability and copied values
-     */
-    DLLLOCAL QoreBufferNode* copy(bool n_nullable_elements, ExceptionSink* xsink = nullptr) const;
-
     //! Returns the number of elements in the buffer.
     /** @return the buffer length
      */
@@ -700,13 +692,6 @@ public:
      */
     DLLEXPORT QoreBufferNode* view(size_t offset, size_t count) const;
 
-    //! Returns true if this buffer can be mutated without breaking ordinary value-copy semantics.
-    /** Zero-copy views intentionally alias their root buffer and are ignored by this check. Ordinary references to
-        the same root buffer still force copy-on-write before mutation.
-        @return true if direct element mutation should update this buffer's shared storage
-     */
-    DLLLOCAL bool isUniqueForMutation() const;
-
     //! Creates a deep copy of an inclusive element range, supporting reverse ranges.
     /** @param start first element to copy
         @param stop final element to copy
@@ -724,6 +709,8 @@ protected:
     DLLEXPORT virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
 private:
+    friend class qore_buffer_node_private;
+
     QoreBufferElementType element_type;
     bool nullable_elements;
     int32_t decimal_precision = 38;
@@ -753,51 +740,9 @@ private:
         const void* device_data, const uint8_t* device_validity, std::shared_ptr<const void> owner,
         int64_t null_count, const QoreBufferDeviceInfo& device_info,
         QoreBufferDeviceCopyToHostCallback copy_to_host, int32_t decimal_precision, int32_t decimal_scale);
-    DLLLOCAL static QoreBufferNode* wrapExternalStorageImpl(QoreBufferElementType element_type,
-        bool nullable_elements, size_t offset, size_t length, const void* data, const uint8_t* validity,
-        std::shared_ptr<const void> owner, int64_t null_count, bool has_decimal_metadata,
-        int32_t decimal_precision, int32_t decimal_scale, ExceptionSink* xsink);
-    DLLLOCAL static QoreBufferNode* wrapExternalDeviceStorageImpl(QoreBufferElementType element_type,
-        bool nullable_elements, size_t length, const void* device_data, const uint8_t* device_validity,
-        std::shared_ptr<const void> owner, int64_t null_count, const QoreBufferDeviceInfo& device_info,
-        QoreBufferDeviceCopyToHostCallback copy_to_host, bool has_decimal_metadata,
-        int32_t decimal_precision, int32_t decimal_scale, ExceptionSink* xsink);
-    DLLLOCAL void normalizeDecimalMetadata();
     DLLLOCAL bool isView() const {
         return view_parent;
     }
-    DLLLOCAL QoreBufferNode* storageRoot();
-    DLLLOCAL const QoreBufferNode* storageRoot() const;
-    DLLLOCAL size_t physicalIndex(size_t index) const;
-    DLLLOCAL uint8_t* dataBytes();
-    DLLLOCAL const uint8_t* dataBytes() const;
-    DLLLOCAL uint8_t* validityBytes();
-    DLLLOCAL const uint8_t* validityBytes() const;
-    DLLLOCAL uint64_t* stringOffsets();
-    DLLLOCAL const uint64_t* stringOffsets() const;
-    DLLLOCAL char* stringBytes();
-    DLLLOCAL const char* stringBytes() const;
-    DLLLOCAL size_t dataByteSize(size_t n_length) const;
-    DLLLOCAL void resizeStorage(size_t n_length);
-    DLLLOCAL int materializeDeviceStorageUnlocked(ExceptionSink* xsink);
-    DLLLOCAL int materializeDeviceStorage(ExceptionSink* xsink);
-    DLLLOCAL int detachExternalStorage(ExceptionSink* xsink);
-    DLLLOCAL int ensureOwnedStorage(ExceptionSink* xsink);
-    DLLLOCAL bool getValidityBit(size_t index) const;
-    DLLLOCAL void setValidityBit(size_t index, bool valid);
-    DLLLOCAL bool getBoolBit(size_t index) const;
-    DLLLOCAL void setBoolBit(size_t index, bool value);
-    DLLLOCAL QoreBufferDecimal128 getDecimalStorage(size_t index) const;
-    DLLLOCAL void setDecimalStorage(size_t index, QoreBufferDecimal128 value);
-    DLLLOCAL void setNull(size_t index);
-    DLLLOCAL int assignStringStorage(const std::vector<std::string>& values, const std::vector<uint8_t>& nulls,
-        ExceptionSink* xsink);
-    DLLLOCAL int assignStringRange(const QoreBufferNode& source, size_t offset, size_t count, bool reverse,
-        ExceptionSink* xsink);
-    DLLLOCAL int assignStringList(const QoreListNode* list, ExceptionSink* xsink);
-    DLLLOCAL int fillString(QoreValue value, ExceptionSink* xsink);
-    DLLLOCAL int setStringValue(size_t index, QoreValue value, ExceptionSink* xsink);
-    DLLLOCAL int setValue(size_t index, QoreValue value, ExceptionSink* xsink);
 };
 
 #endif

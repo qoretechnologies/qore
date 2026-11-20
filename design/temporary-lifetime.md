@@ -352,12 +352,10 @@ interpreter releases it:
 
 - the operator's source read from a local is released after the operator, as a temporary source is
   (`FunctionalSourceRelease`): a plain read (`qore_ir_is_plain_local_read()`) holds a reference of the frame, while
-  the AST interpreter's operator borrows the variable's value; a read through a reference, one of a closure-bound or a
-  top-level local, and one of a local whose type admits a reference (an untyped local, which a caller's or the
-  function's reference can be stored in: `qore_ir_local_may_hold_reference()`) still live until the statement ends, so
-  the value of an operator over an untyped local is still released at the end of the statement in the compiled modes
-  (the lowering does not know yet whether the function creates a reference; this and the other remaining differences
-  are qore#5959); a local whose type holds no object (a scalar, or a list or hash of scalars) is not released early
+  the AST interpreter's operator borrows the variable's value; a read through a reference, or from a closure-bound or top-level
+  local, keeps its value until the statement ends. For a local that can hold a reference, the release distinguishes
+  a plain read from a read through a reference at that execution of the load (qore#5959);
+  a local whose type holds no object (a scalar, or a list or hash of scalars) is not released early
   either, as its release cannot be observed and would only cost instructions; a source of a list type, or of a list or
   NOTHING, gives a new container or NOTHING, never the source's value; any other source, and every fold, gives the
   operator's value a reference of its own (`RefSelf`) before the source is released, and the value's own slot then
@@ -439,7 +437,9 @@ left its slot for the exit Phi's at each element.
 
 A streaming operator that stops before its iterator is exhausted (`take` at its count, `takewhile` at an element,
 `first`, `any`, `all`) releases the element it stopped at and its iterator when it returns, and its source like map
-and select (`lowerWithSourceRelease()`).
+and select (`lowerWithSourceRelease()`). For a fused `first` over a direct local, the iterator takes its own source
+reference. `ReleasePlainLocalRead` then releases the load's extra reference if the local held an ordinary value.
+A value read through a reference remains a temporary of the enclosing statement (#6638).
 
 `examples/test/ir/streaming-element-cleanup/` compares the release order with the AST interpreter's in every mode
 and with AOT.

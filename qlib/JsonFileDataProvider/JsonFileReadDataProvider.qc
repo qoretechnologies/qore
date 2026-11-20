@@ -33,6 +33,11 @@ public namespace JsonFileDataProvider {
     - A single object: returned as one record
     - An array of non-object values: each element is wrapped in \c {"value": element}
 
+    The text read from a file or a stream is checked in its encoding: the \c encoding_errors option says what text
+    that is not valid gives (\c "raise", the default, raises \c INVALID-ENCODING; see @ref encoding_errors); text
+    kept with \c "keep" is parsed by @ref Qore::Json::parse_json() "parse_json()", which raises \c INVALID-ENCODING
+    for it
+
     @par Example
     @code{.py}
     JsonFileReadDataProvider provider({"path": "data.json"});
@@ -110,6 +115,7 @@ public class JsonFileReadDataProvider inherits DataProvider::AbstractDataProvide
                     },
                 ),
             },
+            "encoding_errors": EncodingErrorsOptionInfo,
         };
     }
 
@@ -125,6 +131,9 @@ public class JsonFileReadDataProvider inherits DataProvider::AbstractDataProvide
 
         #! The encoding
         string encoding;
+
+        #! What text read that is not valid in its encoding gives; see @ref encoding_errors
+        string encoding_errors;
     }
 
     #! Creates the provider from constructor options
@@ -150,6 +159,7 @@ public class JsonFileReadDataProvider inherits DataProvider::AbstractDataProvide
             throw "JSON-FILE-READ-ERROR", "one of `path`, `stream`, or `data` must be provided";
         }
         encoding = copts.encoding ?? DefaultEncoding;
+        encoding_errors = copts.encoding_errors ?? ENCODING_ERRORS_RAISE;
     }
 
     #! Returns the data provider name
@@ -222,7 +232,7 @@ public class JsonFileReadDataProvider inherits DataProvider::AbstractDataProvide
         } else {
             is = FileLocationHandler::getBinaryStreamFromLocation(path);
         }
-        StreamReader reader(is, encoding);
+        StreamReader reader(is, encoding, encoding_errors);
         *string content = reader.readString(-1);
         if (!exists content) {
             throw "JSON-FILE-READ-ERROR", "empty input from stream";

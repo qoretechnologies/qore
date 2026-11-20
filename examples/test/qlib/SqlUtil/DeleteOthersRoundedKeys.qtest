@@ -1,0 +1,409 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class DeleteOthersRoundedKeysTest
+
+#! the delete_others upsert option keeps the row of an input key that the column rounds (issue #6635); also the key
+#! columns of other forms (#6675: CHAR padding, #6674: names in another case, with the select-first upsert)
+/** a key value that the column rounds when it stores it (a date with fractional seconds in a column with whole
+    seconds, a number with more decimals than the column, a float in an integer column) was not found by the lookup
+    of the input keys that matched no row, as the bound value was compared with the rounded one, so the row that the
+    upsert had just written was deleted; runs on SQLite, and on PostgreSQL, MySQL, Oracle and SQL Server when
+    \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL, \c QORE_DB_CONNSTR_ORACLE and \c QORE_DB_CONNSTR_FREETDS are
+    set
+*/
+class DeleteOthersRoundedKeysTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dbs;
+        hash<string, string> skips = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "mssql": "QORE_DB_CONNSTR_FREETDS is not set",
+        };
+    }
+
+    constructor() : Test("DeleteOthersRoundedKeys", "1.0", \ARGV) {
+        addTestCase("SQLite: rounded keys", \sqliteTest());
+        addTestCase("PostgreSQL: rounded keys", \pgsqlTest());
+        addTestCase("MySQL: rounded keys", \mysqlTest());
+        addTestCase("Oracle: rounded keys", \oracleTest());
+        addTestCase("SQL Server: rounded keys", \mssqlTest());
+        addTestCase("CHAR keys", \charKeysTest());
+        addTestCase("mixed-case key columns", \mixedCaseKeyTest());
+        addTestCase("select-first upsert with mixed-case columns", \mixedCaseSelectFirstTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "DeleteOthersRoundedKeys");
+            dbs.pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%else
+        skips.pgsql = "no pgsql module";
+%endif
+%ifndef NoMysql
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            connect("mysql", *string sub () { return MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL,
+                "DeleteOthersRoundedKeys"); });
+        }
+%else
+        skips.mysql = "no mysql module";
+%endif
+%ifndef NoOracle
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            connect("oracle", *string sub () { return OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE,
+                "DeleteOthersRoundedKeys"); });
+        }
+%else
+        skips.oracle = "no oracle module";
+%endif
+%ifndef NoFreetds
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            connect("mssql", *string sub () { return MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS,
+                "DeleteOthersRoundedKeys"); });
+        }
+%else
+        skips.mssql = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        foreach string k in (keys dbs) {
+            dbs{k}.rollback();
+        }
+        remove dbs;
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            MysqlRunDatabase::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            OracleRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            MssqlRunDatabase::teardown();
+        }
+    }
+
+    private connect(string db, code get_connstr) {
+        try {
+            Datasource ds(get_connstr());
+            ds.open();
+            dbs{db} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skips{db} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        # SQLite stores the values as they are given: nothing is rounded, and the rows are kept as well
+        check(ds, "sqlite", (
+            {"type": "timestamp", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "numeric(10,2)", "key": 1.005n, "other": 5n},
+            # "integer primary key" would be the rowid, which takes only integers
+            {"type": "int", "key": 1.4, "other": 5},
+        ));
+    }
+
+    pgsqlTest() {
+        Datasource ds = getDs("pgsql");
+        check(ds, "pgsql", (
+            {"type": "timestamp(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "timestamptz(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "numeric(10,2)", "key": 1.005n, "other": 5n},
+            {"type": "integer", "key": 1.4, "other": 5},
+            {"type": "bigint", "key": 1.6, "other": 5},
+            # a number is rounded half up, a float to the nearest even: each is found as it was stored
+            {"type": "integer", "key": 2.5n, "other": 2},
+            {"type": "integer", "key": 2.5, "other": 3},
+            {"type": "real", "key": 1.1, "other": 5.5},
+            {"type": "numeric(10,2)", "key": 1.005n, "other": 5n, "composite": True},
+        ));
+    }
+
+    mysqlTest() {
+        Datasource ds = getDs("mysql");
+        check(ds, "mysql", (
+            {"type": "datetime(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "decimal(10,2)", "key": 1.005n, "other": 5n},
+            {"type": "int", "key": 1.4, "other": 5},
+            # a number is bound as a string, which an int column rounds; the other row is the truncated value
+            {"type": "int", "key": 1.5n, "other": 1},
+            {"type": "int", "key": -1.5n, "other": -1},
+            {"type": "int unsigned", "key": 2.5n, "other": 2},
+            {"type": "float", "key": 1.1, "other": 5.5},
+            {"type": "int", "key": 1.5n, "other": 1, "composite": True},
+        ));
+    }
+
+    oracleTest() {
+        Datasource ds = getDs("oracle");
+        check(ds, "oracle", (
+            {"type": "timestamp(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "date", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "number(10,2)", "key": 1.005n, "other": 5n},
+            {"type": "integer", "key": 1.4, "other": 5},
+            {"type": "integer", "key": 1.5n, "other": 1},
+            {"type": "float(10)", "key": 1.2345, "other": 5.5},
+            # CHAR keys are padded by Oracle: exact keys are found too (issue #6675)
+            {"type": "char(5)", "key": "a", "other": "b"},
+            {"type": "nchar(5)", "key": "a", "other": "b"},
+            {"type": "char(5 char)", "key": "a", "other": "b", "composite": True},
+            {"type": "timestamp(0) with local time zone", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "number(10,2)", "key": 1.005n, "other": 5n, "composite": True},
+        ));
+    }
+
+    mssqlTest() {
+        Datasource ds = getDs("mssql");
+        check(ds, "mssql", (
+            {"type": "datetime2(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "numeric(10,2)", "key": 1.005n, "other": 5n},
+            {"type": "int", "key": 1.4, "other": 5},
+            # truncated (1)
+            {"type": "int", "key": 1.6, "other": 5},
+            {"type": "datetime", "key": 2026-01-01T10:00:00.0015, "other": 2025-01-01T10:00:00},
+            {"type": "smalldatetime", "key": 2026-01-01T10:00:30.5, "other": 2025-01-01T10:00:00},
+            {"type": "datetimeoffset(0)", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
+            {"type": "real", "key": 1.1, "other": 5.5},
+            {"type": "money", "key": 1.00005, "other": 5.5},
+            {"type": "numeric(10,2)", "key": 1.005n, "other": 5n, "composite": True},
+        ));
+    }
+
+    #! fixed-length character keys: a padded value is matched, and a cast never truncates a longer one (issue #6675)
+    charKeysTest() {
+        if (dbs.oracle) {
+            Datasource ds = dbs.oracle;
+            on_exit ds.rollback();
+            # a key longer than the column, with update-only: it matches no row, so both rows are deleted; a cast to
+            # the column's length would truncate it to the first row's key and keep that row
+            AbstractTable t = createCharTable(ds, "dork_c1", "char(5)", ("abcde", "b"));
+            on_exit dropTable(ds, "dork_c1");
+            *hash<string, int> rh = t.upsertFromIterator(({"k": "abcdefg", "v": 2},).iterator(),
+                AbstractTable::UpsertUpdateOnly, {"delete_others": True});
+            assertEq(2, rh.deleted, "oracle: an overlong key matches no row");
+            assertEq(0, t.rowCount());
+            # a multibyte key in a column with a length in bytes
+            t = createCharTable(ds, "dork_c2", "char(3 byte)", ("b",));
+            on_exit dropTable(ds, "dork_c2");
+            rh = t.upsertFromIterator(({"k": "é", "v": 2},).iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True});
+            assertEq(1, rh.deleted, "oracle: a multibyte key");
+            assertEq(("é",), map trim($1.k), t.selectRows());
+            # an overlong NCHAR key of characters above U+FFFF, which count as two UTF-16 code units: no row is kept
+            t = createCharTable(ds, "dork_c4", "nchar(1000)", (strmul("😀", 500),));
+            on_exit dropTable(ds, "dork_c4");
+            rh = t.upsertFromIterator(({"k": strmul("😀", 501), "v": 2},).iterator(), AbstractTable::UpsertUpdateOnly,
+                {"delete_others": True});
+            assertEq(1, rh.deleted, "oracle: an overlong NCHAR key of supplementary characters");
+            assertEq(0, t.rowCount());
+        }
+        if (dbs.pgsql) {
+            Datasource ds = dbs.pgsql;
+            on_exit ds.rollback();
+            # a key given with trailing spaces is the stored key: only the other row is deleted
+            AbstractTable t = createCharTable(ds, "dork_c3", "char(5)", ("a", "b"));
+            on_exit dropTable(ds, "dork_c3");
+            *hash<string, int> rh = t.upsertFromIterator(({"k": "a  ", "v": 2},).iterator(),
+                AbstractTable::UpsertAuto, {"delete_others": True});
+            assertEq(1, rh.deleted, "pgsql: a key with trailing spaces");
+            assertEq(("a",), map trim($1.k), t.selectRows());
+        }
+        if (!dbs.oracle && !dbs.pgsql) {
+            testSkip("no Oracle or PostgreSQL connection");
+        }
+    }
+
+    #! returns the datasources of the mixed-case cases: SQLite when the sqlite3 module is available, and the servers
+    #! connected (issue #6723)
+    private hash<string, Datasource> getMixedCaseDatasources() {
+        hash<string, Datasource> h();
+        if (dbs) {
+            h = dbs;
+        }
+%ifndef NoSqlite3
+        h = {"sqlite": new Datasource("sqlite3:x@:memory:")} + h;
+%endif
+        if (!h) {
+            testSkip("no sqlite3 module and no database connection");
+        }
+        return h;
+    }
+
+    #! a key column with a mixed-case name: the rows read are matched by the column, whatever the case of the names
+    #! that the driver gives (issue #6674)
+    mixedCaseKeyTest() {
+        hash<string, Datasource> h = getMixedCaseDatasources();
+        foreach string db in (keys h) {
+            # PostgreSQL folds an unquoted name to lower case: there is no mixed-case name to test
+            if (db == "pgsql") {
+                continue;
+            }
+            Datasource ds = h{db};
+            on_exit ds.rollback();
+            ds.exec("create table dork_mk (MixK int not null, v int, primary key (MixK))");
+            ds.commit();
+            on_exit dropTable(ds, "dork_mk");
+            AbstractTable t = new Table(ds, "dork_mk").getTable();
+            string col = t.getPrimaryKey().keys()[0];
+            map t.insert({col: $1, "v": 1}), (1, 5);
+            *hash<string, int> rh = t.upsertFromIterator(({col: 1, "v": 2},).iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True});
+            assertEq(1, rh.deleted, db + ": the other row is deleted");
+            assertEq((1,), (map $1.toInt(), t.select({"columns": col}).firstValue()), db + ": the input's row remains");
+
+            # a composite key with names in different cases, a key given as a string (found by the lookup), and the
+            # rows given to the info callback
+            ds.exec("create table dork_mk2 (MixK int not null, lowk int not null, UPK varchar(10) not null, v int, "
+                "primary key (MixK, lowk, UPK))");
+            ds.commit();
+            on_exit dropTable(ds, "dork_mk2");
+            t = new Table(ds, "dork_mk2").getTable();
+            list<string> kl = t.getPrimaryKey().keys();
+            map t.insert({kl[0]: $1, kl[1]: $1, kl[2]: "a", "v": 1}), (1, 2, 5);
+            list<auto> cb_deleted = ();
+            code cb = sub (string table_name, hash<auto> row, int result) {
+                if (result == AbstractTable::UR_Deleted) {
+                    cb_deleted += row.size();
+                }
+            };
+            rh = t.upsertFromIterator(({kl[0]: 1, kl[1]: 1, kl[2]: "a", "v": 2}, {kl[0]: "2", kl[1]: 2, kl[2]: "a",
+                "v": 2}).iterator(), AbstractTable::UpsertAuto, {"delete_others": True, "info_callback": cb});
+            assertEq(1, rh.deleted, db + ": composite key: the other row is deleted");
+            assertEq(2, t.rowCount(), db + ": composite key: the input's rows remain");
+            # the callback is given the whole row
+            assertEq((4,), cb_deleted, db + ": the info callback");
+        }
+    }
+
+    #! the select-first upsert compares the row read with the input by the columns' names in any case: a row whose
+    #! values are unchanged is not updated again (issue #6674)
+    mixedCaseSelectFirstTest() {
+        hash<string, Datasource> h = getMixedCaseDatasources();
+        foreach string db in (keys h) {
+            # PostgreSQL folds an unquoted name to lower case: there is no mixed-case name to test
+            if (db == "pgsql") {
+                continue;
+            }
+            Datasource ds = h{db};
+            on_exit ds.rollback();
+            ds.exec("create table dork_sf (MixK int not null, Val int, lv int, primary key (MixK))");
+            ds.commit();
+            on_exit dropTable(ds, "dork_sf");
+            AbstractTable t = new Table(ds, "dork_sf").getTable();
+            # the names as the table's description gives them
+            list<string> cl = t.describe().keys();
+            hash<auto> row = {cl[0]: 1, cl[1]: 2, cl[2]: 3};
+            assertEq(AbstractTable::UR_Inserted, t.upsert(row, AbstractTable::UpsertSelectFirst), db + ": inserted");
+            assertEq(AbstractTable::UR_Unchanged, t.upsert(row, AbstractTable::UpsertSelectFirst), db + ": unchanged");
+            row{cl[1]} = 4;
+            assertEq(AbstractTable::UR_Updated, t.upsert(row, AbstractTable::UpsertSelectFirst), db + ": updated");
+            # NULL values
+            hash<auto> nrow = {cl[0]: 2, cl[1]: NULL, cl[2]: NULL};
+            assertEq(AbstractTable::UR_Inserted, t.upsert(nrow, AbstractTable::UpsertSelectFirst), db + ": NULL");
+            assertEq(AbstractTable::UR_Unchanged, t.upsert(nrow, AbstractTable::UpsertSelectFirst),
+                db + ": NULL unchanged");
+            # a row with only the key column
+            assertEq(AbstractTable::UR_Unchanged, t.upsert({cl[0]: 1}, AbstractTable::UpsertSelectFirst),
+                db + ": key only");
+        }
+    }
+
+    private AbstractTable createCharTable(Datasource ds, string name, string type, list<string> keys_in) {
+        ds.exec(sprintf("create table %s (k %s not null, v integer, primary key (k))", name, type));
+        ds.commit();
+        AbstractTable t = new Table(ds, name).getTable();
+        map t.insert({"k": $1, "v": 1}), keys_in;
+        return t;
+    }
+
+    private static dropTable(Datasource ds, string name) {
+        ds.rollback();
+        ds.exec("drop table " + name);
+        ds.commit();
+    }
+
+    private Datasource getDs(string db) {
+        if (!dbs{db}) {
+            testSkip(skips{db});
+        }
+        return dbs{db};
+    }
+
+    #! for each key type: a table with a row of another key; the input row's key is rounded by the column; after the
+    #! upsert with delete_others, the input's row remains and the other one is deleted
+    private check(Datasource ds, string db, list<hash<auto>> cases) {
+        on_exit ds.rollback();
+        int n = 0;
+        foreach hash<auto> c in (cases) {
+            ++n;
+            string name = sprintf("dork_%d", n);
+            string desc = sprintf("%s: %s %y%s", db, c.type, c.key, c.composite ? " (composite)" : "");
+            # a composite key: the rounded column and a string column, which is not converted
+            hash<auto> extra = c.composite ? {"s": "a"} : {};
+            ds.exec(sprintf("create table %s (k %s not null, %sv integer, primary key (k%s))", name, c.type,
+                c.composite ? "s varchar(10) not null, " : "", c.composite ? ", s" : ""));
+            on_exit {
+                ds.rollback();
+                ds.exec("drop table " + name);
+                ds.commit();
+            }
+            ds.commit();
+            AbstractTable t = new Table(ds, name).getTable();
+            t.insert({"k": c.other, "v": 1} + extra);
+            *hash<string, int> rh = t.upsertFromIterator(({"k": c.key, "v": 2} + extra,).iterator(),
+                AbstractTable::UpsertAuto, {"delete_others": True});
+            *list<hash<auto>> rows = t.selectRows();
+            assertEq(1, rows.size(), desc + ": the rows that remain");
+            assertEq(2, rows[0].v, desc + ": the input's row remains");
+            assertEq(1, rh.deleted, desc + ": the other row is deleted");
+            # the key as the database stored it, given again, deletes nothing
+            rh = t.upsertFromIterator(({"k": rows[0].k, "v": 3} + extra,).iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True});
+            assertEq(NOTHING, rh.deleted, desc + ": nothing more is deleted");
+            assertEq(1, t.rowCount(), desc + ": one row");
+        }
+    }
+}

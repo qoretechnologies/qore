@@ -1,0 +1,237 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class UpsertNothingToUpdateTest
+
+#! an upsert with no column to update leaves an existing row unchanged (issue #6692)
+/** a row with only the key columns, or whose other columns are all omitted with the \c omit_update option, gave an
+    update statement without columns (a syntax error) with the auto, update-first and update-only strategies on SQLite
+    and MySQL and with update-only on PostgreSQL; an update-only upsert inserted the row on SQL Server and raised
+    \c UPSERT-ERROR on Oracle; runs on SQLite, and on PostgreSQL, MySQL, Oracle and SQL Server when
+    \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL, \c QORE_DB_CONNSTR_ORACLE and \c QORE_DB_CONNSTR_FREETDS are
+    set
+*/
+class UpsertNothingToUpdateTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dbs;
+        hash<string, string> skips = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "mssql": "QORE_DB_CONNSTR_FREETDS is not set",
+        };
+
+        const Strategies = {
+            "auto": AbstractTable::UpsertAuto,
+            "update-first": AbstractTable::UpsertUpdateFirst,
+            "select-first": AbstractTable::UpsertSelectFirst,
+            "insert-first": AbstractTable::UpsertInsertFirst,
+            "insert-only": AbstractTable::UpsertInsertOnly,
+            "update-only": AbstractTable::UpsertUpdateOnly,
+        };
+    }
+
+    constructor() : Test("UpsertNothingToUpdate", "1.0", \ARGV) {
+        addTestCase("SQLite", \sqliteTest());
+        addTestCase("PostgreSQL", \pgsqlTest());
+        addTestCase("MySQL", \mysqlTest());
+        addTestCase("Oracle", \oracleTest());
+        addTestCase("SQL Server", \mssqlTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "UpsertNothingToUpdate");
+            dbs.pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%else
+        skips.pgsql = "no pgsql module";
+%endif
+%ifndef NoMysql
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            connect("mysql", *string sub () { return MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL,
+                "UpsertNothingToUpdate"); });
+        }
+%else
+        skips.mysql = "no mysql module";
+%endif
+%ifndef NoOracle
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            connect("oracle", *string sub () { return OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE,
+                "UpsertNothingToUpdate"); });
+        }
+%else
+        skips.oracle = "no oracle module";
+%endif
+%ifndef NoFreetds
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            connect("mssql", *string sub () { return MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS,
+                "UpsertNothingToUpdate"); });
+        }
+%else
+        skips.mssql = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        foreach string k in (keys dbs) {
+            dbs{k}.rollback();
+        }
+        remove dbs;
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            MysqlRunDatabase::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            OracleRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            MssqlRunDatabase::teardown();
+        }
+    }
+
+    private connect(string db, code get_connstr) {
+        try {
+            Datasource ds(get_connstr());
+            ds.open();
+            dbs{db} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skips{db} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        check(new Datasource("sqlite3:x@:memory:"), "sqlite");
+    }
+
+    pgsqlTest() {
+        check(getDs("pgsql"), "pgsql");
+    }
+
+    mysqlTest() {
+        check(getDs("mysql"), "mysql");
+    }
+
+    oracleTest() {
+        check(getDs("oracle"), "oracle");
+    }
+
+    mssqlTest() {
+        check(getDs("mssql"), "mssql");
+    }
+
+    private Datasource getDs(string db) {
+        if (!dbs{db}) {
+            testSkip(skips{db});
+        }
+        return dbs{db};
+    }
+
+    #! for each strategy, with all other columns omitted from the update and with only the key columns: an existing
+    #! row is unchanged, and a new row is inserted except by an update-only upsert
+    private check(Datasource ds, string db) {
+        on_exit ds.rollback();
+        string name = "untu_t";
+        ds.exec(sprintf("create table %s (k integer not null, s varchar(10) not null, v integer, primary key (k, s))",
+            name));
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table " + name);
+            ds.commit();
+        }
+        AbstractTable t = new Table(ds, name).getTable();
+        foreach hash<auto> st in (Strategies.pairIterator()) {
+            foreach string how in (("omit_update", "key columns only")) {
+                string desc = sprintf("%s: %s: %s", db, st.key, how);
+                t.del();
+                t.insert({"k": 1, "s": "a", "v": 1});
+                bool omit = how == "omit_update";
+                code upsert = omit
+                    ? t.getUpsertClosure({"k": 1, "s": "a", "v": 5}, st.value, {"omit_update": "v"})
+                    : t.getUpsertClosure({"k": 1, "s": "a"}, st.value);
+                int rc1;
+                int rc2;
+                try {
+                    rc1 = upsert(omit ? {"k": 1, "s": "a", "v": 5} : {"k": 1, "s": "a"});
+                    rc2 = upsert(omit ? {"k": 2, "s": "a", "v": 6} : {"k": 2, "s": "a"});
+                } catch (hash<ExceptionInfo> ex) {
+                    fail(sprintf("%s: %s: %s", desc, ex.err, ex.desc));
+                }
+                assertEq(AbstractTable::UR_Unchanged, rc1, desc + ": an existing row is unchanged");
+                hash<auto> rows = getRows(t);
+                if (st.key == "update-only") {
+                    assertEq(AbstractTable::UR_Unchanged, rc2, desc + ": a new row");
+                    assertEq({"1": 1}, rows, desc + ": no row is inserted");
+                } else {
+                    assertEq(AbstractTable::UR_Inserted, rc2, desc + ": a new row");
+                    assertEq({"1": 1, "2": omit ? 6 : NULL}, rows, desc + ": the new row is inserted");
+                }
+            }
+            # a row of list values (bulk DML) with nothing to update: the existing row is unchanged, and the new row is
+            # inserted except by an update-only upsert
+            string desc = sprintf("%s: %s: row of list values", db, st.key);
+            t.del();
+            t.insert({"k": 1, "s": "a", "v": 1});
+            try {
+                assertEq(AbstractTable::UR_Verified, t.getUpsertClosure({"k": (1,), "s": "a", "v": (5,)}, st.value,
+                    {"omit_update": "v"})({"k": (1, 3), "s": "a", "v": (5, 8)}), desc);
+            } catch (hash<ExceptionInfo> ex) {
+                fail(sprintf("%s: %s: %s", desc, ex.err, ex.desc));
+            }
+            assertEq(st.key == "update-only" ? {"1": 1} : {"1": 1, "3": 8}, getRows(t), desc + ": rows");
+        }
+        # upsert() and upsertFromIterator() as well
+        t.del();
+        t.insert({"k": 1, "s": "a", "v": 1});
+        assertEq(AbstractTable::UR_Unchanged, t.upsert({"k": 1, "s": "a", "v": 7}, AbstractTable::UpsertUpdateFirst,
+            {"omit_update": "v"}), db + ": upsert()");
+        *hash<string, int> rh = t.upsertFromIterator(({"k": 1, "s": "a"}, {"k": 3, "s": "a"}).iterator(),
+            AbstractTable::UpsertUpdateOnly);
+        assertEq({"unchanged": 2}, rh, db + ": upsertFromIterator()");
+        assertEq(1, t.rowCount(), db + ": upsertFromIterator(): no row is inserted");
+    }
+
+    private hash<auto> getRows(AbstractTable t) {
+        return map {$1.k.toString(): $1.v === NULL ? NULL : $1.v.toInt()}, t.selectRows({"orderby": "k"});
+    }
+}

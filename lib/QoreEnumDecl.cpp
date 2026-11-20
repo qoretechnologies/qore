@@ -60,7 +60,7 @@ qore_type_t QoreTypeSpec::getType() const {
             return NT_REFERENCE;
         case QTS_ENUM:
             // Enum types return the base type of the enum
-            return QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+            return QoreTypeInfo::getBaseType(uEd()->getBaseTypeInfo());
         case QTS_TYPEPARAM:
         case QTS_WILDCARD:
         case QTS_INITIALIZER_FILTER:

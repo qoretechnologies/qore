@@ -67,7 +67,8 @@ public:
         if (!database) {
             return nullptr;
         }
-        return new QoreStringNode(mongoc_database_get_name(database));
+        // the name given to MongoClient::getDatabase(), which was checked and converted to UTF-8
+        return new QoreStringNode(mongoc_database_get_name(database), QCS_UTF8);
     }
 
     //! Get a collection handle
@@ -87,12 +88,11 @@ public:
             xsink->raiseException("MONGODB-DATABASE-ERROR", "failed to list collections: %s", error.message);
             return nullptr;
         }
-        ReferenceHolder<QoreListNode> list(new QoreListNode(stringTypeInfo), xsink);
-        for (int i = 0; names[i]; i++) {
-            list->push(new QoreStringNode(names[i]), xsink);
-        }
+        // the names from the server are UTF-8 text, checked where they enter the program
+        QoreListNode* list = mongo_utf8_string_list(names, "MongoDatabase::listCollectionNames()", "collection name",
+            xsink);
         bson_strfreev(names);
-        return list.release();
+        return list;
     }
 
     //! Create a collection

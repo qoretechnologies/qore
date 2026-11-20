@@ -296,6 +296,7 @@ class __attribute__((may_alias)) QoreValue {
 #else
 class QoreValue {
 #endif
+    friend class qore_value_ops;
     friend class ValueHolder;
     friend class ValueOptionalRefHolder;
     friend class ValueEvalRefHolder;
@@ -406,9 +407,6 @@ private:
         return reinterpret_cast<AbstractQoreNode*>(payload());
     }
 
-    //! Hard comparison; an exception raised comparing nodes is discarded if xsink is nullptr (internal use only)
-    DLLLOCAL bool isEqualHardIntern(const QoreValue& other, ExceptionSink* xsink) const;
-
     //! Returns the node owned by this value, whether held as a pointer or as an opaque reference
     /** Returns nullptr for every other representation.  This is the single place that knows an
         opaque reference owns its payload, so that all of QoreValue's reference-counting paths
@@ -428,14 +426,7 @@ private:
     //! Returns the internal node pointer without reference count change
     DLLLOCAL AbstractQoreNode* takeNodeIntern();
 
-    //! Encodes a node as an opaque reference of the given kind, taking a reference to the node
-    DLLLOCAL static QoreValue makeOpaqueIntern(AbstractQoreNode* n, uint64_t opaque_tag);
 
-    //! Records one more strong reference held through this opaque value with its Program
-    DLLLOCAL void opaqueRegister() const;
-
-    //! Records that one strong reference held through this opaque value has been released
-    DLLLOCAL void opaqueDeregister() const;
 
     //! Aborts in debug builds if a string-typed get<T>() is applied to an inline short string
     /** An inline short string has no AbstractQoreNode, so get<T>() must return nullptr for it even
@@ -1202,9 +1193,6 @@ public:
     //! Evaluates the value and returns the result with deref flag
     DLLEXPORT QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const;
 
-    //! Evaluates the value with RuntimeConfig and returns the result with deref flag
-    DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
-
     // ========================================================================
     // Type information
     // ========================================================================
@@ -1509,6 +1497,7 @@ public:
 
 //! evaluates an AbstractQoreNode and dereferences the stored value in the destructor
 class ValueEvalRefHolder : public ValueOptionalRefHolder {
+    friend class qore_value_eval_ref_holder_ops;
 public:
     //! creates the object with with no evaluation
     DLLEXPORT ValueEvalRefHolder(ExceptionSink* xs);
@@ -1531,19 +1520,10 @@ public:
     //! evaluates the argument (gets RuntimeConfig from TLS), returns -1 for error, 0 = OK
     DLLEXPORT int eval(const QoreValue exp);
 
-    //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
-    DLLLOCAL int eval(RuntimeConfig& rc, const AbstractQoreNode* exp);
-
-    //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
-    DLLLOCAL int eval(RuntimeConfig& rc, const QoreValue exp);
 
 protected:
-    //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
-    DLLLOCAL int evalIntern(RuntimeConfig& rc, const AbstractQoreNode* exp);
 
-    //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
-    DLLLOCAL int evalIntern(RuntimeConfig& rc, const QoreValue& exp);
-};
+    };
 
 //! evaluates an AbstractQoreNode and dereferences the stored value in the destructor
 class ValueEvalOptimizedRefHolder : public ValueEvalRefHolder {

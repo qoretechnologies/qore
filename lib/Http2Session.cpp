@@ -73,6 +73,7 @@ static bool http2DebugEnabled() {
 
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/HttpStreamConsumeHook.h"
+#include "qore/intern/qore_string_private.h"
 #if NGHTTP2_VERSION_NUM >= 0x013c00  // 1.60.0
 #define QORE_USE_NGHTTP2_MEM_SEND2 1
 #endif
@@ -1908,6 +1909,8 @@ bool Http2Session::serveFastRoute(Http2StreamInfo& stream) {
     view.has_transfer_encoding = find("transfer-encoding") != nullptr;
     view.has_expect = find("expect") != nullptr;
     view.has_upgrade = find("upgrade") != nullptr || find("http2-settings") != nullptr;
+    // a target that the normal path refuses with 400 (qore#6554)
+    view.invalid_text = !qore_http_target_text_valid(stream.path.data(), stream.path.size());
 
     HttpFastFallback why;
     std::shared_ptr<const HttpFastResponse> response = routes->matchH2(view, why);

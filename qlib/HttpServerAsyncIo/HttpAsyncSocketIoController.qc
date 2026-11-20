@@ -147,10 +147,7 @@ public class HttpAsyncSocketIoController {
         AsyncSocketIoController controller;
 
         #! Thread pool for request handler dispatch
-        ThreadPool handler_pool;
-
-        #! Handoff queue for handler-pool tasks
-        Queue handler_task_queue();
+        Priv::HttpHandlerPool handler_pool;
 
         #! Thread pool configuration for recreation after stop()
         hash<auto> pool_opts;
@@ -270,11 +267,7 @@ public class HttpAsyncSocketIoController {
             throw "HTTP-SERVER-INIT-ERROR", sprintf("io_operation_timeout (%y) must be greater than zero",
                 io_operation_timeout);
         }
-        self.handler_pool = new ThreadPool(
-            opts.max_handler_threads ?? 0,
-            opts.min_idle_handler_threads ?? 0,
-            opts.max_idle_handler_threads ?? 0,
-        );
+        self.handler_pool = new Priv::HttpHandlerPool(opts);
     }
 
     #! Updates the logger used for HTTP-level async I/O diagnostics
@@ -309,11 +302,7 @@ public class HttpAsyncSocketIoController {
             # Recreate handler pool if it was stopped (stop() doesn't recreate to avoid
             # leaving worker threads running that would block process exit)
             if (pool_stopped) {
-                handler_pool = new ThreadPool(
-                    pool_opts.max_handler_threads ?? 0,
-                    pool_opts.min_idle_handler_threads ?? 0,
-                    pool_opts.max_idle_handler_threads ?? 0,
-                );
+                handler_pool = new Priv::HttpHandlerPool(pool_opts);
                 pool_stopped = False;
             }
         }
@@ -827,12 +816,18 @@ public class HttpAsyncSocketIoController {
 
         # Wait for in-flight handler tasks to complete; the stopping flag prevents
         # them from submitting new operations to the controller
-        if (Priv::running_handler_pool === handler_pool) {
+        Priv::HttpHandlerPool pool = handler_pool;
+        if (Priv::running_handler_pool === pool) {
+            Counter peers = pool.active;
+            # This task resumes when stop returns. Other tasks that enter stop also surrender their count.
+            if (Priv::handler_task_count) {
+                Priv::handler_task_count = NOTHING;
+                peers.dec();
+            }
             # this thread runs a task of the handler pool (a request stopped its server, or released the last
             # reference to it): the pool's stop waits for all of its workers, this one included, whose task ends only
             # when this stop has returned, so the pool is stopped in a thread of its own, which waits for them
             # (qore#6508)
-            ThreadPool pool = handler_pool;
             *LoggerInterface stop_logger = logger;
             try {
                 background sub () {
@@ -849,10 +844,12 @@ public class HttpAsyncSocketIoController {
                 # no thread can be started (a thread limit): the pool is stopped when it is destroyed
                 logShutdownException("stopping handler pool", ex);
             }
+            # Only started handlers count. A queued callback can require this very worker to return first.
+            peers.waitForZero();
             pool_stopped = True;  # Mark for recreation in start()
         } else {
             try {
-                handler_pool.stopWait();
+                pool.stopWait();
                 pool_stopped = True;  # Mark for recreation in start()
             } catch (hash<ExceptionInfo> ex) {
                 logShutdownException("stopping handler pool", ex);
@@ -1042,8 +1039,8 @@ public class HttpAsyncSocketIoController {
         no-ops; subclasses such as the HttpServer integration override them to
         capture and restore framework-specific thread-local data.
 
-        The ThreadPool task itself is a no-argument method reference; the
-        target/body pair is handed off through \c handler_task_queue.  This
+        The ThreadPool task takes no arguments. The pool hands off the
+        target/body pair through its queue.  This
         avoids submitting a wrapper closure that captures request-local values
         and can lose delayed dispatch state under heavy async scheduling.
 
@@ -1055,8 +1052,9 @@ public class HttpAsyncSocketIoController {
         @throw any exception raised by ThreadPool::submit() (e.g. when stopping)
     */
     submitToHandlerPool(HttpAsyncTarget target, code<nothing()> body) {
-        handler_pool.submit(\runHandlerPoolTask());
-        handler_task_queue.push({"target": target, "body": body});
+        Priv::HttpHandlerPool pool = handler_pool;
+        pool.submit(handlerTaskRunner(pool));
+        pool.tasks.push({"target": target, "body": body});
     }
 
     #! Takes the handler-pool thread that runs the calling task out of the handler pool
@@ -1076,10 +1074,33 @@ public class HttpAsyncSocketIoController {
         return pool ? pool.detachCurrentThread() : False;
     }
 
-    private runHandlerPoolTask() {
+    #! Binds the worker to this generation of the pool, including its handoff queue. The request and body are
+    #! handed off separately so the submitted closure captures neither.
+    private code<nothing()> handlerTaskRunner(Priv::HttpHandlerPool pool) {
+        return sub () { runHandlerPoolTask(pool); };
+    }
+
+    private runHandlerPoolTask(Priv::HttpHandlerPool pool) {
+        # ThreadPool clears thread-local variables after releasing the submitted callable. Leaving the pool
+        # identity installed also recognizes a stop in a destructor run by that release.
+        Priv::running_handler_pool = pool;
+        Counter count = pool.active;
+        count.inc();
+        Priv::handler_task_count = count;
+        on_exit {
+            if (Priv::handler_task_count) {
+                Priv::handler_task_count = NOTHING;
+                count.dec();
+            }
+        }
+        runHandlerBody(pool);
+    }
+
+    #! The handoff, body, target and dispatch context are released before this worker drops its active count.
+    private runHandlerBody(Priv::HttpHandlerPool pool) {
         hash<auto> task;
         try {
-            task = handler_task_queue.get(10s);
+            task = pool.tasks.get(10s);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "handler-pool task handoff failed: %s: %s",
                 ex.err, ex.desc);
@@ -1095,13 +1116,8 @@ public class HttpAsyncSocketIoController {
         }
 
         auto save = target.saveDispatchContext();
-        # the pool that runs this task, which a stop of the controller in this task does not wait for (see
-        # stopIntern())
-        Priv::running_handler_pool = handler_pool;
         on_exit {
-            # a dispatch that the task did not end (an exception that it did not expect) is not this thread's any more
             Priv::running_dispatch = NOTHING;
-            Priv::running_handler_pool = NOTHING;
             target.restoreDispatchContext(save);
         }
         body();
@@ -1726,6 +1742,10 @@ public class HttpAsyncSocketIoController {
     #! Returns the total number of operations in all I/O controller caches (useful for testing cleanup)
     /** This method returns the sum of cache sizes across all I/O threads. A non-zero value
         after connections are closed indicates a cache leak (poll operations not properly cancelled).
+
+        @throw PERMISSION-DENIED code that is sandboxed or acts for sandboxed code cannot call this method, which
+        counts the operations of every caller of the process-wide controller (see
+        @ref sandbox_process_wide_registries)
     */
     int getTotalCacheSize() {
         return controller.getCacheSize();
@@ -6034,9 +6054,22 @@ public class HttpAsyncSocketIoController {
 
 #! @cond nodoc
 namespace Priv {
-#! The handler pool whose task the current thread runs (see HttpAsyncSocketIoController::runHandlerPoolTask())
-/** A stop of the controller in that task does not wait for the pool, which would wait for this worker (qore#6508)
-*/
+#! The pool and its queue stay together until the last worker of that generation returns.
+class HttpHandlerPool inherits ThreadPool {
+    public {
+        Queue tasks();
+        Counter active();
+    }
+
+    constructor(hash<auto> opts) : ThreadPool(opts.max_handler_threads ?? 0,
+            opts.min_idle_handler_threads ?? 0, opts.max_idle_handler_threads ?? 0) {
+    }
+}
+
+#! The active-task counter for this worker's pool. A stop in the worker releases its share before waiting for peers.
+thread_local *Counter handler_task_count;
+
+#! The pool whose worker runs the task, including the destruction of the submitted callable.
 thread_local *ThreadPool running_handler_pool;
 
 #! The counter of the HTTP/1.1 dispatch that the current thread runs in the handler pool

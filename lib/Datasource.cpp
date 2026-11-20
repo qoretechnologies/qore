@@ -926,6 +926,23 @@ int qore_dbi_check_connect_path(Datasource* ds, const char* path, int mode, Exce
     return 0;
 }
 
+int qore_dbi_check_connect_address(Datasource* ds, const char* hostname, const struct sockaddr* addr,
+        socklen_t len, ExceptionSink* xsink) {
+    assert(ds && addr);
+    // the same managers as the check of the destinations before the connection (checkConnectTargets())
+    QoreDsRestrictingManagers managers;
+    if (qore_ds_private::get(*ds)->getRestrictingManagers(managers, xsink)) {
+        return -1;
+    }
+    for (QoreSandboxManager* sm : managers.get()) {
+        if (!(hostname ? sm->checkNetworkAccess(hostname, addr, len, QSEC_NET_TCP, xsink)
+                : sm->checkNetworkAccess(addr, len, QSEC_NET_TCP, xsink))) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 bool qore_dbi_connect_restricted(Datasource* ds) {
     assert(ds);
     QoreDsRestrictingManagers managers;
@@ -1574,7 +1591,8 @@ public:
         for (QoreDbiForkObject* o = head; o; o = o->fork_next) {
             o->forkChild();
         }
-        l.reinitAfterFork();
+        // held by this thread since prepare(): released (issue #6817)
+        l.unlock();
     }
 
 private:

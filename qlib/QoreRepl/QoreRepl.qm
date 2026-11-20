@@ -120,6 +120,12 @@ repl.reset();  # Cancel this unfinished block; evaluated variables remain availa
 repl.eval("/threads");  # Commands are available again at the primary prompt.
     @endcode
 
+    @anchor qorerepl_history_encoding
+    The interactive REPL keeps command history in UTF-8 and writes its history file with a UTF-8 byte order mark.
+    It reads older, unmarked files in the process charset. Open an unmarked file in its original charset to
+    migrate it. If decoding fails, that session leaves the existing file in place. Older readers may display the
+    marker and interpret timestamp lines and individual lines of multiline commands as separate entries.
+
     @subsection qorerepl_save Saving and Loading Code
 
     Use @c /save followed by a filename to export the session's entered Qore code.

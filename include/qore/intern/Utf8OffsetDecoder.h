@@ -73,18 +73,24 @@ public:
         @param add_char called as \c add_char(size_t pos, int64 offset) for each character decoded, with the byte
         position of the character in \a out and its byte offset in the input
         @param xsink if given, the conversion is a cancellation point, and a cancellation is raised here
+        @param latin1 if true, the first byte of an invalid byte sequence is decoded as the ISO-8859-1 character of
+        that byte, and the bytes after it are decoded again (the \c "latin1" \c encoding_errors option), so that -1 is
+        not returned
 
         @return 0 for OK, -1 for an invalid byte sequence, whose offset is given by errorOffset() (no exception is
         raised), or -2 if the conversion was cancelled (the exception has been raised)
     */
     template <typename F>
-    DLLLOCAL int decode(const char* buf, size_t len, std::string& out, F add_char, ExceptionSink* xsink = nullptr) {
+    DLLLOCAL int decode(const char* buf, size_t len, std::string& out, F add_char, ExceptionSink* xsink = nullptr,
+            bool latin1 = false) {
         for (size_t i = 0; i < len; ++i) {
             pending.push_back(buf[i]);
             ++offset;
             char* in = &pending[0];
             size_t in_left = pending.size();
             bool produced = false;
+            // true if an invalid byte has been substituted and the bytes after it decoded again
+            bool substituted = false;
             while (in_left) {
                 char obuf[64];
                 char* op = obuf;
@@ -108,7 +114,18 @@ public:
                 }
                 // the invalid sequence starts at the first byte that was not converted
                 errOffset = pendingStart + (in - &pending[0]);
-                return -1;
+                if (!latin1) {
+                    return -1;
+                }
+                int subst_rc = substitute(static_cast<size_t>(in - &pending[0]), out, add_char, xsink);
+                if (subst_rc) {
+                    return subst_rc;
+                }
+                substituted = true;
+                break;
+            }
+            if (substituted) {
+                continue;
             }
             size_t used = pending.size() - in_left;
             if (used) {
@@ -121,6 +138,23 @@ public:
             }
         }
         return 0;
+    }
+
+    //! decodes the first byte of an incomplete character or shift sequence at the end of the input as the ISO-8859-1
+    //! character of that byte, and decodes the bytes after it again
+    /** For the \c "latin1" \c encoding_errors option: a character cut off by the end of the input is invalid input.
+
+        @param out the UTF-8 text decoded is appended here
+        @param add_char as for decode()
+        @param xsink as for decode()
+
+        @return 0 for OK, -2 if the conversion was cancelled (the exception has been raised)
+    */
+    template <typename F>
+    DLLLOCAL int substituteFirstPending(std::string& out, F add_char, ExceptionSink* xsink = nullptr) {
+        assert(!pending.empty());
+        errOffset = pendingStart;
+        return substitute(0, out, add_char, xsink);
     }
 
     //! returns true if bytes of an incomplete character or shift sequence have been given
@@ -155,6 +189,37 @@ private:
     int64 charStart = 0;
     //! the byte offset of an invalid byte sequence
     int64 errOffset = 0;
+
+    //! decodes the pending byte at the given position as the ISO-8859-1 character of that byte
+    /** The pending bytes before it have been converted; the bytes after it are decoded again after it.  The shift
+        state of the conversion is the state after the bytes converted, as iconv leaves it at an invalid sequence.
+
+        @return 0 for OK, -2 if the conversion was cancelled (the exception has been raised)
+    */
+    template <typename F>
+    DLLLOCAL int substitute(size_t pos, std::string& out, F& add_char, ExceptionSink* xsink) {
+        assert(pos < pending.size());
+        int64 bad = pendingStart + static_cast<int64>(pos);
+        unsigned char b = static_cast<unsigned char>(pending[pos]);
+        std::string rest = pending.substr(pos + 1);
+        pending.clear();
+        // the bytes after the substituted byte are given again, which counts them again
+        offset = bad + 1;
+        pendingStart = offset;
+        add_char(out.size(), bad);
+        if (b < 0x80) {
+            out.push_back(static_cast<char>(b));
+        } else {
+            out.push_back(static_cast<char>(0xc0 | (b >> 6)));
+            out.push_back(static_cast<char>(0x80 | (b & 0x3f)));
+        }
+        charStart = offset;
+        if (rest.empty()) {
+            return 0;
+        }
+        // the bytes after it are fewer than the bytes before, so the recursion ends
+        return decode(rest.data(), rest.size(), out, add_char, xsink, true);
+    }
 
     //! appends UTF-8 output, calling add_char for each character in it
     template <typename F>

@@ -45,6 +45,7 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -108,6 +109,9 @@ private:
 struct HierarchyWalkFrame {
     const BCList* list;
     size_t next;
+    //! the most restrictive access of the edges of the path to the list (the walks of the inheritance lists of
+    //! methods; qore#6498): Public (0) where a walk gives no value
+    ClassAccess access;
 };
 
 //! The classes visited by the walk of a lookup in a class hierarchy (qore#6522)
@@ -211,9 +215,16 @@ struct LookupWalkFrame {
       \a n from the class \a parent (nullptr: from the class where the lookup starts, with the flags of the call)
     - LookupVisit visit(const BCNode& n, qore_class_private& priv): the search of a class itself, which keeps the
       match
-    - ClassAccess* access: if not nullptr, raised to the most restrictive access of the edges of the path to the
-      match, as the recursion does on its way back
+    - ClassAccess* access: if not nullptr, raised to the access of the path to the match, as the recursion does on
+      its way back: the most restrictive access of the edges of the path or, if the class of the match is reached
+      through several paths, that of the least restrictive of them (lookup_walk(); qore#6498)
     - static constexpr bool CheckValid: if true, the base classes of a class whose list is not valid are not searched
+    - bool outsideCaller(const BCList& list) const (optional): true if the caller cannot use a match reached through a
+      path that is not public: such a match is then searched for again through the public paths (lookup_walk();
+      qore#6498)
+
+    The walk gives the class of the match and the access of its path to the found() of the visitor
+    (LookupWalkVisitor).
 */
 
 //! follows the first base class of each class from \a list; returns true if a match was found (qore#6522)
@@ -244,9 +255,7 @@ QORE_INTERN_ALWAYS_INLINE bool lookup_first_path(const BCList& list, V& v, size_
         ClassAccess access = path_access < n.access ? n.access : path_access;
         LookupVisit r = v.visit(n, *priv);
         if (r == LookupVisit::Found) {
-            if (v.access && *v.access < access) {
-                *v.access = access;
-            }
+            v.found(*priv, access);
             return true;
         }
         if (r == LookupVisit::Skip || !priv->scl || (V::CheckValid && !priv->scl->valid)) {
@@ -323,9 +332,7 @@ QORE_INTERN_NOINLINE bool lookup_full_after_first_miss(const BCList& list, V& v,
         ClassAccess access = f.access < n.access ? n.access : f.access;
         LookupVisit r = v.visit(n, *priv);
         if (r == LookupVisit::Found) {
-            if (v.access && *v.access < access) {
-                *v.access = access;
-            }
+            v.found(*priv, access);
             return true;
         }
         if (r == LookupVisit::Descend && priv->scl && (!V::CheckValid || priv->scl->valid)) {
@@ -363,9 +370,7 @@ int lookup_plain(const BCList& l, size_t start, const qore_class_private* parent
         ClassAccess access = path_access < n.access ? n.access : path_access;
         LookupVisit r = v.visit(n, *priv);
         if (r == LookupVisit::Found) {
-            if (v.access && *v.access < access) {
-                *v.access = access;
-            }
+            v.found(*priv, access);
             return 1;
         }
         if (r == LookupVisit::Descend && priv->scl && (!V::CheckValid || priv->scl->valid)) {
@@ -475,7 +480,7 @@ struct InternalEdgeCutForContext {
     bool allow_internal;
 
     bool cut(const BCNode& n, const qore_class_private* parent) const {
-        return n.access >= Internal && !(parent ? class_ctx == parent : allow_internal);
+        return n.access >= Internal && !(parent ? parent->isClassContext(class_ctx) : allow_internal);
     }
 };
 
@@ -488,7 +493,7 @@ struct ParseMethodEdgeCut {
 
     bool cut(const BCNode& n, const qore_class_private* parent) const {
         return n.access > Public && (!class_ctx
-            || (n.access == Internal && !(parent ? class_ctx == parent : allow_internal)));
+            || (n.access == Internal && !(parent ? parent->isClassContext(class_ctx) : allow_internal)));
     }
 };
 
@@ -509,6 +514,44 @@ static QoreForkThreadLock class_id_fork_handler(classIDSeq, QFLR_LEAF, "class_id
 uint64_t qore_class_next_allocation_id() {
     static std::atomic<uint64_t> seq{0};
     return seq.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
+QoreClassDataLock qore_class_data_locks[QoreClassDataLockCount];
+
+namespace {
+//! the fork handler of the class data locks, which are leaf locks never held together (see QoreForkHandlers.h)
+/** Every construction of an object through a copied QoreClass handle (refClass()) takes one, so a child created with
+    fork() while another thread held one could not construct an object of the class (qore#6732)
+*/
+class ClassDataLocksForkHandler : public QoreForkHandler {
+public:
+    ClassDataLocksForkHandler() : QoreForkHandler(QFLR_LEAF, "class_data_locks") {
+    }
+
+    void prepare() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (QoreClassDataLock& l : qore_class_data_locks) {
+                l.m.lock();
+            }
+        }
+    }
+
+    void parent() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (size_t i = QoreClassDataLockCount; i; --i) {
+                qore_class_data_locks[i - 1].m.unlock();
+            }
+        }
+    }
+
+    void child() noexcept override {
+        for (QoreClassDataLock& l : qore_class_data_locks) {
+            new (&l.m) std::mutex();
+        }
+    }
+};
+
+ClassDataLocksForkHandler class_data_locks_fork_handler;
 }
 
 static std::atomic<uint64_t> qore_method_dispatch_epoch{1};
@@ -559,6 +602,18 @@ std::atomic<qore_class_private::dbg_source_program_taken_t> qore_class_private::
 //! Returns the Program that a method of the class runs in; \a holder keeps the source Program for the call
 /** The holder must be declared before the CodeEvaluationHelper that enters the Program; see QoreSourceProgramHolder
 */
+bool qore_class_private::ownedByProgram(const QoreProgram* pgm) const {
+    if (ns_copy) {
+        return false;
+    }
+    // as qore_get_method_pgm_context(): the source Program, or else the Program of the class's namespace
+    const QoreProgram* owner = spgm.load();
+    if (!owner) {
+        owner = ns ? ns->getProgram() : nullptr;
+    }
+    return owner == pgm;
+}
+
 QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
         QoreProgram* explicit_pgm) {
     const qore_class_private* c = qore_class_private::get(cls);
@@ -1046,6 +1101,9 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
                 if (!m) {
                     m = new QoreMethod(qc.cls, new NormalUserMethod(qc.cls, i->first.c_str()), false);
                     qc.hm[m->getName()] = m;
+                    // the method of the class also has the variants that the parent classes define: the concrete
+                    // variants of the class that declares the abstract variant are found through it (issue #6161)
+                    scl->parseAddAncestors(m);
                 }
                 qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
                 continue;
@@ -1097,6 +1155,9 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
                 if (!m) {
                     m = new QoreMethod(qc.cls, new NormalUserMethod(qc.cls, i->first.c_str()), false);
                     qc.hm[m->getName()] = m;
+                    // the method of the class also has the variants that the parent classes define: the concrete
+                    // variants of the class that declares the abstract variant are found through it (issue #6161)
+                    scl->addAncestors(m);
                 }
                 qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
                 continue;
@@ -1359,6 +1420,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         deref_source_program(old.deref_source_program),
         from_module(old.from_module),
         lang(old.lang) {
+    // the bare references option of the declaration (issue #3286)
+    parse_abr = old.parse_abr;
     hierarchy_initialized = old.hierarchy_initialized;
     system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
 
@@ -1369,6 +1432,9 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     scl = old.scl ? new BCList(*old.scl) : nullptr;
 
     //printd(5, "qore_class_private::qore_class_private() old name: %s (%p) new name: %s (%p)\n", old.name.c_str(), old.name.c_str(), name.c_str(), name.c_str());
+
+    // the copy of a class of another namespace outlives the Program it is in (see ownedByProgram())
+    ns_copy = true;
 
     // copy methods and maintain method pointers
     for (auto& i : old.hm) {
@@ -1500,6 +1566,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
                 || (ns && ns->getProgram() != old.spgm.load()))),
         from_module(old.from_module),
         lang(old.lang) {
+    // the bare references option of the declaration (issue #3286)
+    parse_abr = old.parse_abr;
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");
     // the copy is committed: a later parse must not write its parse state (issue #6106)
     hierarchy_initialized = old.hierarchy_initialized;
@@ -1542,6 +1610,9 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     scl = old.scl ? new BCList(*old.scl) : nullptr;
 
     //printd(5, "qore_class_private::qore_class_private() old name: %s (%p) new name: %s (%p)\n", old.name.c_str(), old.name.c_str(), name.c_str(), name.c_str());
+
+    // the copy of a class of another namespace outlives the Program it is in (see ownedByProgram())
+    ns_copy = true;
 
     // copy methods and maintain method pointers
     for (auto& i : old.hm) {
@@ -1740,6 +1811,12 @@ void qore_class_private::retireTypeOwner() {
 }
 
 void qore_class_private::getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
+    // the bounds and defaults of the type parameters, which the tombstone of the class is made from (issue #6419)
+    for (const type_vec_t* v : {&type_param_bound_types, &type_param_default_types}) {
+        for (const QoreTypeInfo* ti : *v) {
+            qore_type_owner_add_name(names, ti, &type_owner);
+        }
+    }
     for (auto& i : members.getList()) {
         if (i.second) {
             qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
@@ -1888,6 +1965,54 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
     return 0;
 }
 
+bool qore_class_private::checkInheritedInternalMemberContext(const qore_class_private* class_ctx,
+        const qore_class_private* decl) const {
+    if (class_ctx == this) {
+        return true;
+    }
+    ClassAccess ca;
+    return getClass(*class_ctx, ca) && (!decl || class_ctx == decl || class_ctx->getClass(*decl, ca));
+}
+
+bool qore_class_private::runtimeCanUseMember(const char* mem, const qore_class_private* class_ctx) const {
+    const QoreMemberInfo* info = runtimeGetMemberInfo(mem, class_ctx);
+    return !info || runtimeCheckMemberAccess(info, class_ctx);
+}
+
+bool qore_class_private::runtimeCheckMemberAccessContext(const QoreMemberInfo* info,
+        const qore_class_private* class_ctx) const {
+    // the context of the code of a class imported into a child Program is the class it was parsed in, a copy of the
+    // declaration of this class (qore#6671)
+    if (isClassContext(class_ctx)) {
+        return true;
+    }
+    if (info->access == Internal) {
+        return info->local() || checkInheritedInternalMemberContext(class_ctx, info->getClass());
+    }
+    // a private member is reachable only from the class that declares it and its subclasses, as a private method is
+    // (issue #6760); a member that is not accessible in this class (Inaccessible) is used only through the storage
+    // that the class context has for it (getClassContext()), which runtimeGetMemberInfo() checked
+    if (info->access != Private) {
+        return true;
+    }
+    return checkPrivateMemberContext(class_ctx, info->getClass());
+}
+
+bool qore_class_private::runtimeHasMemberStorageContext(const char* mem,
+        const qore_class_private* class_ctx) const {
+    const QoreMemberInfo* info = members.find(mem);
+    return info && info->getClassContext(class_ctx);
+}
+
+bool qore_class_private::checkPrivateMemberContext(const qore_class_private* class_ctx,
+        const qore_class_private* decl) {
+    if (!decl) {
+        return true;
+    }
+    ClassAccess ca;
+    return class_ctx->getClass(*decl, ca) != nullptr;
+}
+
 int qore_class_private::initializeMembers() {
     // nothing is resolved again for a committed user class (see parseInitPartial())
     if (!parse_resolve_class_members && !(committed && !sys)) {
@@ -1957,6 +2082,207 @@ static void inherit_builtin_member_gates(qore_class_private& cls, const qore_cla
     // Notifications and user-defined gates retain their existing non-inherited semantics.
     if (!cls.parseHasMemberGate() && base.memberGate && base.memberGate->isBuiltin()) {
         cls.memberGate = base.memberGate;
+    }
+}
+
+// the class with an accessible constant with the name that "Class::name" or the unscoped name finds, as
+// qore_class_private::parseFindConstantValueIntern() does, without initializing any constant; \a top is true when the
+// name is used in this class: then its private:internal constants and parent classes are visible
+const qore_class_private* qore_class_private::parseFindConstantOwnerNoInit(const char* cname, bool top) const {
+    std::vector<const qore_class_private*> seen;
+    return parseFindConstantOwnerNoInit(cname, top, seen);
+}
+
+const qore_class_private* qore_class_private::parseFindConstantOwnerNoInit(const char* cname, bool top,
+        std::vector<const qore_class_private*>& seen) const {
+    // a class reached again through another path of a diamond gives the same result (the first path wins)
+    if (!top) {
+        if (std::find(seen.begin(), seen.end(), this) != seen.end()) {
+            return nullptr;
+        }
+        seen.push_back(this);
+    }
+    const ConstantEntry* ce = constlist.findEntry(cname);
+    if (ce && (top || ce->getAccess() < Internal)) {
+        return this;
+    }
+    if (scl && scl->valid) {
+        for (auto& i : *scl) {
+            if (!i->sclass || (i->access >= Internal && !top)) {
+                continue;
+            }
+            if (const qore_class_private* owner = i->sclass->priv->parseFindConstantOwnerNoInit(cname, false,
+                    seen)) {
+                return owner;
+            }
+        }
+    }
+    return nullptr;
+}
+
+// the kinds of declaration with the name that are visible in this class
+qore_class_private::name_kinds_t qore_class_private::parseGetNameKinds(const char* n) const {
+    name_kinds_t rv;
+    if (parse_abr) {
+        ClassAccess access = Public;
+        const qore_class_private* mqc = nullptr;
+        if (parseFindMemberNoInit(n, mqc, access, true)) {
+            rv.member = mqc ? mqc : this;
+        }
+    }
+    rv.constant = parseFindConstantOwnerNoInit(n, true);
+    ClassAccess access = Public;
+    const QoreClass* vqc = nullptr;
+    if (parseFindStaticVar(n, vqc, access) && vqc) {
+        rv.var = vqc->priv;
+    }
+    return rv;
+}
+
+// adds the names of the constants, members and static variables of the class and its parent classes
+void qore_class_private::parseGetHierarchyNames(std::set<std::string>& names,
+        std::vector<const qore_class_private*>& seen) const {
+    if (std::find(seen.begin(), seen.end(), this) != seen.end()) {
+        return;
+    }
+    seen.push_back(this);
+    ConstConstantListIterator cli(constlist);
+    while (cli.next()) {
+        names.insert(cli.getName());
+    }
+    for (auto& i : members.getList()) {
+        names.insert(i.first);
+    }
+    for (auto& i : vars.member_list) {
+        names.insert(i.first);
+    }
+    if (scl && scl->valid) {
+        for (auto& i : *scl) {
+            if (i->sclass) {
+                i->sclass->priv->parseGetHierarchyNames(names, seen);
+            }
+        }
+    }
+}
+
+// issue #3286: the language-traps warning for a name that is a constant and a member or static variable in the class
+// hierarchy; an unscoped name in the class refers to a member (with bare references), then to a constant, then to a
+// static variable (see qore_root_ns_private::parseResolveBarewordIntern()), and a class-scoped name to a constant
+// before a static variable; the warning is raised in the class that introduces the clash: the class that declares
+// one of them, or that inherits them from different parent classes
+void qore_class_private::parseCheckNameKindClashes(QoreProgram* pgm) {
+    if (!pgm || !pgm->checkWarning(QP_WARN_LANGUAGE_TRAPS)) {
+        return;
+    }
+
+    // the names declared in the class, and, with more than one parent class, the names of the hierarchy
+    std::set<std::string> names;
+    {
+        ConstantListIterator cli(constlist);
+        while (cli.next()) {
+            names.insert(cli.getName());
+        }
+    }
+    for (auto& i : members.getList()) {
+        names.insert(i.first);
+    }
+    for (auto& i : vars.member_list) {
+        names.insert(i.first);
+    }
+    // the inherited names too when the parents can combine them differently: more than one parent, or a parent
+    // declared with another bare references option
+    bool inherited_names = false;
+    if (scl && scl->valid) {
+        inherited_names = scl->size() > 1;
+        for (auto& i : *scl) {
+            if (i->sclass && i->sclass->priv->parse_abr != parse_abr) {
+                inherited_names = true;
+                break;
+            }
+        }
+    }
+    if (inherited_names) {
+        std::vector<const qore_class_private*> seen;
+        for (auto& i : *scl) {
+            if (i->sclass) {
+                i->sclass->priv->parseGetHierarchyNames(names, seen);
+            }
+        }
+    }
+
+    for (auto& n : names) {
+        name_kinds_t k = parseGetNameKinds(n.c_str());
+        // a constant and a member or static variable
+        if (!k.constant || k.count() < 2) {
+            continue;
+        }
+        // the location of the clashing declaration of this class, if it has one
+        const QoreProgramLocation* wloc = nullptr;
+        bool own = false;
+        if (k.constant == this) {
+            own = true;
+            const ConstantEntry* ce = constlist.findEntry(n.c_str());
+            wloc = ce ? ce->loc : nullptr;
+        } else if (k.member == this) {
+            own = true;
+            const QoreMemberInfo* mi = members.find(n.c_str());
+            wloc = mi ? mi->loc : nullptr;
+        } else if (k.var == this) {
+            own = true;
+            const QoreVarInfo* vi = vars.find(n.c_str());
+            wloc = vi ? vi->loc : nullptr;
+        }
+        if (!own) {
+            // inherited: reported in the parent class that has the same clash already
+            bool in_parent = false;
+            for (auto& i : *scl) {
+                if (i->sclass && i->sclass->priv->parseGetNameKinds(n.c_str()) == k) {
+                    in_parent = true;
+                    break;
+                }
+            }
+            if (in_parent) {
+                continue;
+            }
+        }
+
+        std::string cpath = cls->getNamespacePath();
+        auto decl = [&n](const char* kind, const qore_class_private* owner) -> std::string {
+            return std::string("the ") + kind + " '" + owner->cls->getNamespacePath() + "::" + n + "'";
+        };
+        std::string winner, hidden;
+        if (k.member) {
+            winner = decl("member", k.member);
+        } else {
+            winner = decl("constant", k.constant);
+        }
+        if (k.member && k.constant) {
+            hidden = decl("constant", k.constant) + " (reached as '" + k.constant->cls->getNamespacePath(true) + "::"
+                + n + "')";
+        }
+        if (k.var) {
+            if (!hidden.empty()) {
+                hidden += " and ";
+            }
+            hidden += decl("static variable", k.var);
+            // "Owner::v" used in this class finds a constant of the owner's hierarchy that this class reaches first
+            if (k.var->parseFindConstantOwnerNoInit(n.c_str(), k.var == this)) {
+                // a class-scoped name finds a constant before a static variable too
+                hidden += " (it is not reached by name: a constant with the name is visible in its class as well)";
+            } else {
+                hidden += " (reached as '" + k.var->cls->getNamespacePath(true) + "::" + n + "')";
+            }
+        }
+
+        QoreDiagnosticMetadata metadata("CLASS-CONSTANT-SHADOWS-MEMBER",
+            "in a class, an unscoped name refers to a member, then to a constant, then to a static variable");
+        metadata.addFact("class", cpath.c_str());
+        metadata.addFact("name", n.c_str());
+        metadata.addSuggestion("rename one of the declarations");
+        QoreStringNode* desc = new QoreStringNodeMaker("in class '%s', the name '%s' refers to %s; it does not "
+            "refer to %s", cpath.c_str(), n.c_str(), winner.c_str(), hidden.c_str());
+        qore_program_private::makeParseWarning(pgm, wloc ? *wloc : *loc, QP_WARN_LANGUAGE_TRAPS, "LANGUAGE-TRAP",
+            desc, metadata);
     }
 }
 
@@ -2121,6 +2447,11 @@ int qore_class_private::initializeIntern() {
                 err = -1;
             }
         }
+    }
+
+    // issue #3286: a constant and a member or static variable with the same name in the class hierarchy
+    if (!sys) {
+        parseCheckNameKindClashes(pgm);
     }
 
     if (has_sig_changes) {
@@ -2659,7 +2990,7 @@ static QORE_INTERN_NOINLINE void qore_release_failed_construction(QoreObject* se
     } else {
         // Preserve partial-construction cleanup: release native private data without executing the destructors
         // of this class or its already-constructed base classes.
-        self->obliterate(xsink);
+        qore_object_ops(self).obliterate(xsink);
     }
 }
 
@@ -3253,10 +3584,27 @@ void BCNode::setClassPointer(QoreClass* qc) {
 
 int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
     if (!sclass) {
+        // issue #6710: a parent class name is resolved in the namespace of the class that inherits it, as any other
+        // class name in the class's code is; the hierarchy is resolved outside of that namespace (for all classes at
+        // once, or when a class is first reached from code anywhere), where the current parse namespace is another
+        // one, so that an unqualified name would find a class of the same name in another namespace first
+        OptionalNamespaceParseContextHelper onspch(qore_class_private::get(*cls)->ns);
         // the parent class is named without type arguments (qore#6082)
         const bool raw_parent = !parsed_type;
         if (parsed_type) {
-            QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, raise_error);
+            QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, false);
+            if (qc && parsed_type->cscope->size() == 1
+                && qore_class_private::get(*qc) == qore_class_private::get(*cls)) {
+                // issue #6710: a class cannot inherit itself, so the name of the class in its own namespace names
+                // another class of the name: it is resolved without the current namespace, as it was before (ex:
+                // "namespace N { class C<T> inherits C<int> {} }" inherits a class C of the root namespace)
+                NamespaceParseContextHelper nspch(nullptr);
+                qc = qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, false);
+            }
+            if (!qc && raise_error) {
+                // raises the parse error for the class that cannot be found
+                qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, true);
+            }
             if (qc) {
                 assert(qc->priv);
                 if (!qc->hasTypeParameters()) {
@@ -3339,8 +3687,17 @@ int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
         } else {
             // issue #3005: cstr may be nullptr in case of a previous parse error
             if (cstr) {
-                // if the class cannot be found, qore_root_ns_private::parseFindClass() will throw the appropriate exception
-                sclass = qore_root_ns_private::parseFindClass(loc, cstr, raise_error);
+                sclass = qore_root_ns_private::parseFindClass(loc, cstr, false);
+                if (sclass && qore_class_private::get(*sclass) == qore_class_private::get(*cls)) {
+                    // issue #6710: a class cannot inherit itself, so the name of the class in its own namespace
+                    // names another class of the name: it is resolved without the current namespace, as it was
+                    // before (ex: "namespace N { class C inherits C {} }" inherits a class C of the root namespace)
+                    NamespaceParseContextHelper nspch(nullptr);
+                    sclass = qore_root_ns_private::parseFindClass(loc, cstr, false);
+                }
+                if (!sclass && raise_error) {
+                    parse_error(*loc, "reference to undefined class '%s'", cstr);
+                }
                 if (sclass) {
                     assert(sclass->priv);
                     printd(5, "BCNode::tryResolveClass() %s inheriting %s (%p)\n", cls->getName(), cstr, sclass);
@@ -3839,6 +4196,29 @@ struct ParseFindVarLookup : InternalEdgeCut {
     }
 };
 
+//! true if the class context \a ctx can access the private declarations of the class whose base class list is \a list,
+//! as qore_class_private::runtimeCheckPrivateClassAccess() checks (qore#6498)
+/** The class itself, one of its ancestors, or a class that it is an ancestor of
+*/
+static bool lookup_context_in_hierarchy(const BCList& list, const qore_class_private* ctx) {
+    if (ctx->scl == &list) {
+        return true;
+    }
+    for (auto& i : list.sml) {
+        if (qore_class_private::get(*i.first)->equal(*ctx)) {
+            return true;
+        }
+    }
+    if (ctx->scl) {
+        for (auto& i : ctx->scl->sml) {
+            if (qore_class_private::get(*i.first)->scl == &list) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 //! BCList::runtimeFindCommittedMethod() and BCList::runtimeFindCommittedStaticMethod(): as
 //! qore_class_private::runtimeFindCommittedMethodIntern() and runtimeFindCommittedStaticMethodIntern()
 template <bool Static>
@@ -3859,6 +4239,122 @@ struct RuntimeFindCommittedMethodLookup : InternalEdgeCutForContext {
             return LookupVisit::Found;
         }
         return LookupVisit::Descend;
+    }
+
+    //! a caller outside the hierarchy cannot call a method reached through a private path (qore#6498): one without a
+    //! class context, or with the class context of another hierarchy (a call reference made there)
+    bool outsideCaller(const BCList& list) const {
+        return !class_ctx || !lookup_context_in_hierarchy(list, class_ctx);
+    }
+};
+
+//! the search of a class for the method of a name that a caller outside the class hierarchy can call (qore#6704)
+/** \a m is the class's own committed method of the name, if any.  A public method with an implementation is the
+    match.  A private method overrides the methods of the name of the parent classes of its class, which are then not
+    called in its place (qore#6062): they are not searched.  The other methods (none, a private:internal method,
+    which the run-time lookups do not see from outside its class, and an abstract method, which another class of the
+    hierarchy implements) leave the parent classes to be searched
+*/
+static LookupVisit runtime_public_method_visit(const QoreMethod* m) {
+    if (!m) {
+        return LookupVisit::Descend;
+    }
+    ClassAccess ma = m->getAccess();
+    if (ma == Public) {
+        return qore_method_private::get(*m)->isAbstract() ? LookupVisit::Descend : LookupVisit::Found;
+    }
+    return ma == Private ? LookupVisit::Skip : LookupVisit::Descend;
+}
+
+//! the committed method of the name of the class itself (as qore_class_private::findLocalCommittedMethod() and
+//! findLocalCommittedStaticMethod()) for the cold lookup of the method that a caller outside the class hierarchy calls
+//! (qore#6704)
+/** Not inlined, and separate from those, so that the inlining of those in the hot run-time lookups is not changed
+*/
+static QORE_INTERN_NOINLINE const QoreMethod* runtime_find_local_committed_method(const qore_class_private& priv,
+        const char* name, bool is_static) {
+    const QoreMethod* m = is_static ? priv.parseFindLocalStaticMethod(name) : priv.parseFindLocalMethod(name);
+    return m && !qore_method_private::get(*m)->getFunction()->committedEmpty() ? m : nullptr;
+}
+
+//! BCList::runtimeFindPublicCommittedMethod(): a public method reached through public edges only (qore#6704)
+template <bool Static>
+struct RuntimeFindPublicCommittedMethodLookup {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access = nullptr;
+    const char* name;
+    const QoreMethod* rv = nullptr;
+
+    RuntimeFindPublicCommittedMethodLookup(const char* name) : name(name) {
+    }
+
+    bool cut(const BCNode& n, const qore_class_private* parent) const {
+        return n.access > Public;
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        const QoreMethod* m = runtime_find_local_committed_method(priv, name, Static);
+        LookupVisit r = runtime_public_method_visit(m);
+        if (r == LookupVisit::Found) {
+            rv = m;
+        }
+        return r;
+    }
+};
+
+//! the search of a class for the method of a name that code of the class context \a class_ctx can call (qore#6759)
+/** \a m is the class's own committed method of the name, if any, and \a class_ctx is not the class \a priv itself.
+    As qore_class_private::doRuntimeMethodAccess(): a public method is the match, and a private:internal method is the
+    match only from its own class, otherwise the parent classes are searched.  A private method is the match if the
+    class context can access the private declarations of its class; otherwise it cannot be called there, and it
+    overrides the methods of the name of the parent classes of its class (as for a caller outside the class hierarchy;
+    qore#6062): they are not searched
+*/
+static LookupVisit runtime_context_method_visit(const qore_class_private& priv, const QoreMethod* m,
+        const qore_class_private* class_ctx) {
+    if (!m) {
+        return LookupVisit::Descend;
+    }
+    ClassAccess ma = m->getAccess();
+    if (ma == Public) {
+        return LookupVisit::Found;
+    }
+    if (ma >= Internal) {
+        return priv.equal(*class_ctx) ? LookupVisit::Found : LookupVisit::Descend;
+    }
+    return priv.runtimeCheckPrivateClassAccess(class_ctx) ? LookupVisit::Found : LookupVisit::Skip;
+}
+
+//! BCList::runtimeFindContextCallableCommittedMethod(): as RuntimeFindCommittedMethodLookup, without a private
+//! method that the class context cannot call (qore#6759)
+template <bool Static>
+struct RuntimeFindContextCallableMethodLookup : InternalEdgeCutForContext {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access;
+    const char* name;
+    const QoreMethod* rv = nullptr;
+
+    RuntimeFindContextCallableMethodLookup(const char* name, ClassAccess& access,
+            const qore_class_private* class_ctx, bool allow_internal)
+            : InternalEdgeCutForContext{class_ctx, allow_internal}, access(&access), name(name) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        const QoreMethod* m = runtime_find_local_committed_method(priv, name, Static);
+        LookupVisit r = (m && class_ctx == &priv) ? LookupVisit::Found
+            : runtime_context_method_visit(priv, m, class_ctx);
+        if (r == LookupVisit::Found) {
+            rv = m;
+            if (class_ctx != &priv && *access < m->getAccess()) {
+                *access = m->getAccess();
+            }
+        }
+        return r;
+    }
+
+    //! as RuntimeFindCommittedMethodLookup::outsideCaller() (qore#6498)
+    bool outsideCaller(const BCList& list) const {
+        return !lookup_context_in_hierarchy(list, class_ctx);
     }
 };
 
@@ -3884,6 +4380,51 @@ struct ParseFindMethodLookup : ParseMethodEdgeCut {
             return LookupVisit::Found;
         }
         return LookupVisit::Descend;
+    }
+};
+
+//! the search of a class at parse time for the method of a name that code of the class context \a class_ctx can
+//! call: as runtime_context_method_visit() with the parse-time access of the method (qore#6759)
+/** As qore_class_private::doParseMethodAccess(), a private:internal method is not found: the parent classes are
+    searched
+*/
+static LookupVisit parse_context_method_visit(const qore_class_private& priv, const QoreMethod* m,
+        const qore_class_private* class_ctx) {
+    if (!m) {
+        return LookupVisit::Descend;
+    }
+    ClassAccess ma = qore_method_private::getAccess(*m);
+    if (ma == Public) {
+        return LookupVisit::Found;
+    }
+    if (ma >= Internal) {
+        return LookupVisit::Descend;
+    }
+    return priv.parseCheckPrivateClassAccess(class_ctx) ? LookupVisit::Found : LookupVisit::Skip;
+}
+
+//! BCList::parseFindContextCallableMethod(): as ParseFindMethodLookup, without a private method that the class
+//! context cannot call (qore#6759)
+template <bool Static>
+struct ParseFindContextCallableMethodLookup : ParseMethodEdgeCut {
+    static constexpr bool CheckValid = true;
+    ClassAccess* access = nullptr;
+    const char* name;
+    const QoreMethod* rv = nullptr;
+
+    ParseFindContextCallableMethodLookup(const char* name, const qore_class_private* class_ctx, bool allow_internal)
+            : ParseMethodEdgeCut{class_ctx, allow_internal}, name(name) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        priv.initialize();
+        const QoreMethod* m = Static ? priv.parseFindLocalStaticMethod(name) : priv.parseFindLocalMethod(name);
+        LookupVisit r = (m && class_ctx == &priv) ? LookupVisit::Found
+            : parse_context_method_visit(priv, m, class_ctx);
+        if (r == LookupVisit::Found) {
+            rv = m;
+        }
+        return r;
     }
 };
 
@@ -4090,17 +4631,118 @@ struct FindConstantEntryLookup : NoEdgeCut {
     }
 };
 
+//! the visitor of a walk: the visitor \a V of a lookup, with the class of its match and the access of the path to it
+//! (qore#6498)
+/** @tparam Limited if true, the walk does not follow an edge whose access is more restrictive than \a limit
+*/
+template <typename V, bool Limited = false>
+struct LookupWalkVisitor : V {
+    using V::V;
+
+    //! the class of the match
+    const qore_class_private* match = nullptr;
+    //! the most restrictive access of the edges of the path to the match
+    ClassAccess match_access = Public;
+    //! if Limited: the most restrictive access of an edge that the walk follows
+    ClassAccess limit = Public;
+
+    bool cut(const BCNode& n, const qore_class_private* parent) const {
+        if constexpr (Limited) {
+            if (n.access > limit) {
+                return true;
+            }
+        }
+        return V::cut(n, parent);
+    }
+
+    void found(const qore_class_private& priv, ClassAccess access) {
+        match = &priv;
+        match_access = access;
+    }
+};
+
+//! the search for a path to the class \a target over the edges that the lookup \a V follows, with a limit on the
+//! access of the edges (qore#6498)
+template <typename V>
+struct LookupPathVisitor : LookupWalkVisitor<V, true> {
+    using LookupWalkVisitor<V, true>::LookupWalkVisitor;
+
+    const qore_class_private* target = nullptr;
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        return &priv == target ? LookupVisit::Found : LookupVisit::Descend;
+    }
+};
+
+//! runs the walk of a lookup; returns true if a match was found (qore#6522)
+template <typename W>
+QORE_INTERN_ALWAYS_INLINE bool lookup_run(const BCList& list, W& v) {
+    size_t depth;
+    bool entered;
+    if (lookup_first_path(list, v, depth, entered)) {
+        return true;
+    }
+    return lookup_after_first_miss(list, v, depth, entered);
+}
+
+//! the end of a lookup whose match was found through a path that is not public: a class reached through several
+//! paths has the access of the least restrictive of them (qore#6498)
+/** A caller outside the hierarchy (outsideCaller()) uses the first match through the public paths, if there is one,
+    as the parse-time lookups without a class context do (they do not follow a private edge); otherwise the match gets
+    the access of the least restrictive path to its class over the edges that the lookup follows.  Not inlined: it is
+    not reached in the common case (a match through a public path)
+
+    @param initial the access given to the lookup (for outsideCaller() only)
+*/
+template <typename V, typename... Args>
+QORE_INTERN_NOINLINE auto lookup_walk_restricted(const BCList& list, LookupWalkVisitor<V>& v, ClassAccess initial,
+        Args... args) -> decltype(v.rv) {
+    assert(v.access && v.match_access > Public);
+    if constexpr (requires { v.outsideCaller(list); }) {
+        if (v.outsideCaller(list)) {
+            // the access that the visitor gave the match (the method's own access)
+            ClassAccess match_access = *v.access;
+            *v.access = initial;
+            LookupWalkVisitor<V, true> pv(args...);
+            pv.limit = Public;
+            if (lookup_run(list, pv)) {
+                return pv.rv;
+            }
+            // only paths that are not public reach a match
+            *v.access = match_access < v.match_access ? v.match_access : match_access;
+            return v.rv;
+        }
+    }
+    // the least restrictive path to the class of the match: each limit from Public up to the access of the path found
+    ClassAccess access = v.match_access;
+    for (unsigned limit = Public; limit < access; ++limit) {
+        LookupPathVisitor<V> pv(args...);
+        pv.limit = static_cast<ClassAccess>(limit);
+        pv.target = v.match;
+        if (lookup_run(list, pv)) {
+            access = pv.match_access;
+            break;
+        }
+    }
+    if (*v.access < access) {
+        *v.access = access;
+    }
+    return v.rv;
+}
+
 //! the lookup of a hierarchy with a diamond (or not known to have none): not inlined, so that the lookups of the
 //! common hierarchy without one run the recursion as before
 template <typename V, typename... Args>
 QORE_INTERN_NOINLINE auto lookup_walk(const BCList& list, Args... args) -> decltype(V(args...).rv) {
-    V v(args...);
-    size_t depth;
-    bool entered;
-    if (lookup_first_path(list, v, depth, entered)) {
-        return v.rv;
+    LookupWalkVisitor<V> v(args...);
+    ClassAccess initial = Public;
+    if constexpr (requires { v.outsideCaller(list); }) {
+        initial = *v.access;
     }
-    lookup_after_first_miss(list, v, depth, entered);
+    if (lookup_run(list, v) && v.access && v.match_access > Public) {
+        // the arguments are given with their types: the visitors keep references to the out-parameters
+        return lookup_walk_restricted<V, Args...>(list, v, initial, args...);
+    }
     return v.rv;
 }
 }
@@ -4180,6 +4822,39 @@ const QoreMethod* BCList::runtimeFindCommittedStaticMethod(const char* name, Cla
             return m;
     }
     return nullptr;
+}
+
+// called at run time, only when a lookup found a method that the caller cannot call (qore#6704)
+const QoreMethod* BCList::runtimeFindPublicCommittedMethod(const char* name, bool is_static) const {
+    // the walk searches each class once, also in a hierarchy without a diamond
+    return is_static
+        ? lookup_walk<RuntimeFindPublicCommittedMethodLookup<true>, const char*>(*this, name)
+        : lookup_walk<RuntimeFindPublicCommittedMethodLookup<false>, const char*>(*this, name);
+}
+
+// called at run time, only when a lookup from a class context found a method that the class context cannot call
+// (qore#6759)
+const QoreMethod* BCList::runtimeFindContextCallableCommittedMethod(const char* name, ClassAccess& access,
+        const qore_class_private* class_ctx, bool allow_internal, bool is_static) const {
+    // the walk searches each class once, also in a hierarchy without a diamond
+    return is_static
+        ? lookup_walk<RuntimeFindContextCallableMethodLookup<true>, const char*, ClassAccess&,
+            const qore_class_private*, bool>(*this, name, access, class_ctx, allow_internal)
+        : lookup_walk<RuntimeFindContextCallableMethodLookup<false>, const char*, ClassAccess&,
+            const qore_class_private*, bool>(*this, name, access, class_ctx, allow_internal);
+}
+
+// called at parse time, only when a lookup from a class context found a method that the class context cannot call
+// (qore#6759)
+const QoreMethod* BCList::parseFindContextCallableMethod(const char* name, const qore_class_private* class_ctx,
+        bool allow_internal, bool is_static) {
+    if (!valid) {
+        return nullptr;
+    }
+    // the walk searches each class once, also in a hierarchy without a diamond
+    return is_static
+        ? lookup_walk<ParseFindContextCallableMethodLookup<true>>(*this, name, class_ctx, allow_internal)
+        : lookup_walk<ParseFindContextCallableMethodLookup<false>>(*this, name, class_ctx, allow_internal);
 }
 
 const QoreMethod* BCList::parseFindNormalMethod(const char* name, const qore_class_private* class_ctx,
@@ -4562,16 +5237,23 @@ void BCList::addAncestors(QoreMethod* m) {
         QoreClass* qc = n.sclass;
         assert(qc);
         QORE_CLASS_HIERARCHY_WALK_STEP();
+        // the most restrictive access of the edges of the path to the class: the access of its method in the list
+        // (qore#6498)
+        ClassAccess path_access = f.access < n.access ? n.access : f.access;
+        const QoreMethod* w = qc->priv->findLocalCommittedMethod(name);
         if (!visited.insert(qc->priv).second) {
+            // a class reached again: its method has the least restrictive access of the paths to it (qore#6498)
+            if (w) {
+                mf->lowerAncestorAccess(qore_method_private::get(*w)->getFunction(), path_access);
+            }
             continue;
         }
 
-        const QoreMethod* w = qc->priv->findLocalCommittedMethod(name);
         if (w) {
-            mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), n.access);
+            mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), path_access);
         }
         if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0});
+            stack.push({qc->priv->scl, 0, path_access});
         }
     }
 }
@@ -4593,16 +5275,23 @@ void BCList::addStaticAncestors(QoreMethod* m) {
         QoreClass* qc = n.sclass;
         assert(qc);
         QORE_CLASS_HIERARCHY_WALK_STEP();
+        // the most restrictive access of the edges of the path to the class: the access of its method in the list
+        // (qore#6498)
+        ClassAccess path_access = f.access < n.access ? n.access : f.access;
+        const QoreMethod* w = qc->priv->findLocalCommittedStaticMethod(name);
         if (!visited.insert(qc->priv).second) {
+            // as in addAncestors() (qore#6498)
+            if (w) {
+                mf->lowerAncestorAccess(qore_method_private::get(*w)->getFunction(), path_access);
+            }
             continue;
         }
 
-        const QoreMethod* w = qc->priv->findLocalCommittedStaticMethod(name);
         if (w) {
-            mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), n.access);
+            mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), path_access);
         }
         if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0});
+            stack.push({qc->priv->scl, 0, path_access});
         }
     }
 }
@@ -4633,20 +5322,28 @@ void BCList::parseAddAncestors(QoreMethod* m) {
         QORE_CLASS_HIERARCHY_WALK_STEP();
         // each ancestor is visited once: a class reached through another path of a diamond hierarchy has been added
         // with its own ancestors already, at its first position (issue #6488)
+        // the most restrictive access of the edges of the path to the class: the access of its method in the list
+        // (qore#6498)
+        ClassAccess path_access = f.access < n.access ? n.access : f.access;
+        const QoreMethod* w = qc->priv->parseFindLocalMethod(name);
         if (!visited.insert(qc->priv).second) {
+            // a class reached again: its method has the least restrictive access of the paths to it (qore#6498)
+            if (w) {
+                qore_method_private::get(*m)->getFunction()->lowerAncestorAccess(
+                    qore_method_private::get(*w)->getFunction(), path_access);
+            }
             continue;
         }
 
-        const QoreMethod* w = qc->priv->parseFindLocalMethod(name);
         //printd(5, "BCList::parseAddAncestors(%p %s) this: %p qc: %p w: %p\n", m, name, this, qc, w);
 
         if (w) {
             qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                n.access);
+                path_access);
         }
 
         if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0});
+            stack.push({qc->priv->scl, 0, path_access});
         }
     }
 }
@@ -4671,18 +5368,26 @@ void BCList::parseAddStaticAncestors(QoreMethod* m) {
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
         // each ancestor is visited once, as in parseAddAncestors() (issue #6488)
+        // the most restrictive access of the edges of the path to the class: the access of its method in the list
+        // (qore#6498)
+        ClassAccess path_access = f.access < n.access ? n.access : f.access;
+        const QoreMethod* w = qc->priv->parseFindLocalStaticMethod(name);
         if (!visited.insert(qc->priv).second) {
+            // as in parseAddAncestors() (qore#6498)
+            if (w) {
+                qore_method_private::get(*m)->getFunction()->lowerAncestorAccess(
+                    qore_method_private::get(*w)->getFunction(), path_access);
+            }
             continue;
         }
 
-        const QoreMethod* w = qc->priv->parseFindLocalStaticMethod(name);
         if (w) {
             qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                n.access);
+                path_access);
         }
 
         if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0});
+            stack.push({qc->priv->scl, 0, path_access});
         }
     }
 }
@@ -5568,7 +6273,7 @@ const QoreMethod* qore_class_private::parseFindNormalMethod(const char* nme, con
             return m;
     }
 
-    return parseFindNormalMethodIntern(nme, class_ctx);
+    return parseCheckContextCallableMethod(nme, parseFindNormalMethodIntern(nme, class_ctx), class_ctx, false);
 }
 
 const QoreMethod* qore_class_private::parseFindStaticMethod(const char* nme, const qore_class_private* class_ctx) {
@@ -5579,7 +6284,7 @@ const QoreMethod* qore_class_private::parseFindStaticMethod(const char* nme, con
             return m;
     }
 
-    return parseFindStaticMethodIntern(nme, class_ctx);
+    return parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx), class_ctx, true);
 }
 
 const QoreMethod* qore_class_private::parseFindAnyMethod(const char* nme, const qore_class_private* class_ctx) {
@@ -5593,7 +6298,7 @@ const QoreMethod* qore_class_private::parseFindAnyMethod(const char* nme, const 
     }
 
     if (!m) {
-        m = parseFindNormalMethodIntern(nme, class_ctx);
+        m = parseCheckContextCallableMethod(nme, parseFindNormalMethodIntern(nme, class_ctx), class_ctx, false);
     }
 
     //printd(5, "qore_class_private::parseFindAnyMethod() cls: '%s' nme: '%s' class_ctx: %p m: %p (%s::%s) %s\n",
@@ -5602,10 +6307,19 @@ const QoreMethod* qore_class_private::parseFindAnyMethod(const char* nme, const 
 
     if (m && strcmp(nme, "constructor") && strcmp(nme, "destructor") && strcmp(nme, "copy")
         && ((qore_method_private::getAccess(*m) == Public) || class_ctx)) {
+        // a normal method that the class context cannot call: a static method of the name that it can call is called
+        // instead, as at run time (qore#6759)
+        if (parseContextCannotCall(m, class_ctx)) {
+            const QoreMethod* sm = parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx),
+                class_ctx, true);
+            if (sm && !parseContextCannotCall(sm, class_ctx)) {
+                return sm;
+            }
+        }
         return m;
     }
 
-    m = parseFindStaticMethodIntern(nme, class_ctx);
+    m = parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx), class_ctx, true);
     return m && ((qore_method_private::getAccess(*m) == Public) || class_ctx) ? m : nullptr;
 }
 
@@ -5625,12 +6339,23 @@ const QoreMethod* qore_class_private::parseFindAnyMethodStaticFirst(const char* 
     }
 
     if (!m)
-        m = parseFindStaticMethodIntern(nme, class_ctx);
+        m = parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx), class_ctx, true);
 
-    if (m && ((qore_method_private::getAccess(*m) == Public) || class_ctx))
+    if (m && ((qore_method_private::getAccess(*m) == Public) || class_ctx)) {
+        // a static method that the class context cannot call: a normal method of the name that it can call is called
+        // instead (qore#6759)
+        if (parseContextCannotCall(m, class_ctx) && strcmp(nme, "constructor") && strcmp(nme, "destructor")
+                && strcmp(nme, "copy")) {
+            const QoreMethod* nm = parseCheckContextCallableMethod(nme, parseFindNormalMethodIntern(nme, class_ctx),
+                class_ctx, false);
+            if (nm && !parseContextCannotCall(nm, class_ctx)) {
+                return nm;
+            }
+        }
         return m;
+    }
 
-    m = parseFindNormalMethodIntern(nme, class_ctx);
+    m = parseCheckContextCallableMethod(nme, parseFindNormalMethodIntern(nme, class_ctx), class_ctx, false);
 
     if (m && (!strcmp(nme, "constructor") || !strcmp(nme, "destructor") || !strcmp(nme, "copy"))) {
         m = nullptr;
@@ -5725,6 +6450,29 @@ const QoreMethod* qore_class_private::parseFindStaticMethodIntern(const char* mn
     return nullptr;
 }
 
+const QoreMethod* qore_class_private::parseFindContextCallableMethod(const char* nme, const QoreMethod* m,
+        const qore_class_private* class_ctx, bool is_static) {
+    assert(m && class_ctx);
+    // as the run-time lookup (runtimeFindCallableCommittedMethod()), these methods are not looked up further
+    if (parseCheckPrivateClassAccess(*m->getClass(), class_ctx) || !strcmp(nme, "constructor")
+            || !strcmp(nme, "destructor") || !strcmp(nme, "copy")) {
+        return m;
+    }
+    // the first method of the name that the class context can call; otherwise the method found, whose call raises
+    // the error that it raised before
+    const QoreMethod* cm = is_static ? parseFindLocalStaticMethod(nme) : parseFindLocalMethod(nme);
+    LookupVisit r = (cm && class_ctx == this) ? LookupVisit::Found : parse_context_method_visit(*this, cm, class_ctx);
+    if (r == LookupVisit::Found) {
+        return cm;
+    }
+    if (r == LookupVisit::Descend && scl) {
+        if ((cm = scl->parseFindContextCallableMethod(nme, class_ctx, class_ctx == this, is_static))) {
+            return cm;
+        }
+    }
+    return m;
+}
+
 const QoreMethod* qore_class_private::parseResolveSelfMethodIntern(const QoreProgramLocation* loc, const char* nme,
         const qore_class_private* class_ctx) {
     const QoreMethod* m = parseFindLocalMethod(nme);
@@ -5790,7 +6538,7 @@ int qore_class_private::parseCheckClassHierarchyMembers(const char* mname, const
     }
     if (l_mi.access != b_mi.access || l_mi.parseHasTypeInfo() || b_mi.parseHasTypeInfo()) {
         // raise an exception only if parse exceptions are enabled
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             qore_program_private::makeParseException(getProgram(), *l_mi.loc, "PARSE-ERROR",
                 new QoreStringNodeMaker("class '%s' cannot be combined with class '%s' in the same hierarchy because "
                     "member '%s' is accessible from class '%s' from more than one declaration in the hierarchy",
@@ -5823,6 +6571,23 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
     for (auto& i : qc.members.getList()) {
         QoreMemberInfo* mi = members.find(i.first);
         if (mi) {
+            // qore#6523: the same declaration reached through another path of the hierarchy is the same member, with
+            // the least restrictive access of the paths
+            if (!mi->local() && mi->getClass()->equal(*i.second->getClass())) {
+                ClassAccess mi_access = (i.second->access == Internal)
+                    ? Inaccessible
+                    : QORE_MAX(i.second->access, access);
+                if (mi->access == Inaccessible && mi_access < Inaccessible) {
+                    // the member is accessible through the new path: it replaces the copy that is not
+                    i.second->parseInit(i.first, selfid);
+                    QoreMemberInfo* nmi = new QoreMemberInfo(*i.second, this, access);
+                    nmi->mergeDeclarationPath(*mi, Inaccessible);
+                    std::unique_ptr<QoreMemberInfo> old(members.replace(i.first, nmi));
+                } else {
+                    mi->mergeDeclarationPath(*i.second, mi_access);
+                }
+                continue;
+            }
             // issue #2970: if the member is declared as private:internal in this class
             // or if the current or new member are inaccessible, add contextual access information
             // so that the member can be properly accessed from base classes
@@ -5844,6 +6609,17 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                     "other: '%s' context access\n", this, name.c_str(), qc.name.c_str(), i.first, privpub(mi->access),
                     privpub(i.second->access));
                 mi->addContextAccess(*i.second);
+                continue;
+            } else if (i.second->access == Inaccessible && mi->access < Internal
+                    && !mi->getClass()->equal(*i.second->getClass())) {
+                // issue #6614: the mirror of the swap above, for the members imported in the other order: the
+                // accessible member imported first is the member of this class, and the hidden member, a
+                // private:internal member of another declaration, which is separate from it, is reached from the
+                // class that declares it, so that the hierarchy is the same whatever the order of its parent classes
+                printd(5, "qore_class_private::parseImportMembers() this: %p keeping '%s' <- '%s::%s' this: '%s' " \
+                    "other: '%s' context access\n", this, name.c_str(), qc.name.c_str(), i.first, privpub(mi->access),
+                    privpub(i.second->access));
+                mi->addContextAccess(*i.second->getClass()->members.find(i.first));
                 continue;
             }
 
@@ -6371,7 +7147,7 @@ QoreClass::QoreClass(const QoreClass& old) : priv(old.priv) {
     bool vars = priv->varRef();
 
     // ensure atomicity when writing to qcrefs
-    AutoLocker al(priv->gate.asl_lock);
+    std::lock_guard<std::mutex> al(priv->dataLock());
     priv->qcrefs[this] = 1;
     if (vars) {
         priv->var_ref_wrappers.insert(this);
@@ -6413,7 +7189,7 @@ QoreClass::~QoreClass() {
     if (priv) {
         {
             // ensure atomicity when writing to qcrefs
-            AutoLocker al(priv->gate.asl_lock);
+            std::lock_guard<std::mutex> al(priv->dataLock());
             qc_ref_map_t::iterator i = priv->qcrefs.find(this);
             if (i != priv->qcrefs.end()) {
                 // a wrapper with outstanding pointer references must not be deleted directly; it must be released
@@ -6520,7 +7296,17 @@ bool qore_class_private::runtimeHasCallableMethod(const char* m, int mask) const
         w = runtimeFindCommittedStaticMethod(m, access, class_ctx);
     }
 
-    return !w || (!class_ctx && (access > Public)) ? false : true;
+    if (!w) {
+        return false;
+    }
+    if (access == Public) {
+        return true;
+    }
+    // a caller outside the class hierarchy can call the method that it calls instead (qore#6704), and code of a
+    // class context the method that it can call instead of a private method of a class that it cannot access
+    // (qore#6759)
+    w = runtimeFindCallableCommittedMethod(m, w, access, class_ctx, mask);
+    return class_ctx ? runtimeContextCanCallMethod(*w, class_ctx) : access == Public;
 }
 
 const QoreMethod* qore_class_private::runtimeFindCommittedStaticMethod(const char* nme, ClassAccess& access,
@@ -6569,7 +7355,34 @@ const QoreMethod* qore_class_private::runtimeFindCommittedMethodForEval(const ch
             }
         }
     }
-    return runtimeFindCommittedMethodIntern(nme, access, class_ctx);
+    // as runtimeFindCommittedMethodIntern(), except that a private method of this class (the object's class) found
+    // with a class context does not raise the access: the class context of a call is checked against the object's
+    // class, so it can access its private methods (otherwise the variant search of the call refuses them as before),
+    // and getMethodForEval() then does not look the method up again (qore#6759)
+    const QoreMethod* m = findLocalCommittedMethod(nme);
+    if (m) {
+        if (class_ctx == this) {
+            return m;
+        }
+        ClassAccess ma = m->getAccess();
+        if (ma == Public) {
+            return m;
+        }
+        if (ma == Private) {
+            if (!class_ctx) {
+                access = Private;
+            }
+            return m;
+        }
+        if (doRuntimeMethodAccess(m, access, ma, class_ctx)) {
+            return m;
+        }
+    }
+    if (!scl) {
+        return nullptr;
+    }
+    // access already checked in subclasses, do not need to check again
+    return scl->runtimeFindCommittedMethod(nme, access, class_ctx, class_ctx == this);
 }
 
 const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProgram* pgm,
@@ -6611,7 +7424,9 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
         // Keep the owning Program alive and select its context without claiming parse ownership.
         // A module loader can own parsing while waiting for an initializer in this thread, so
         // runtime readers must only take the committed namespace's read lock, never its parse lock.
-        ProgramRuntimeParseAccessHelper pch(xsink, lookup_pgm ? lookup_pgm : getProgram());
+        // The lookup runs none of the Program's code: a Program that refuses runtime entry while code is parsed in
+        // it is entered without its context (qore#6752)
+        ProgramRuntimeParseAccessHelper pch(xsink, lookup_pgm ? lookup_pgm : getProgram(), true);
         if (*xsink) {
             return nullptr;
         }
@@ -6621,25 +7436,133 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
             && !(w = runtimeFindCommittedStaticMethod(nme, access, class_ctx))) {
             return nullptr;
         }
+        // the access of the method found includes its own: a private method has it as well (it is private when all
+        // its variants are, see QoreMethod::isPrivate())
+        assert(class_ctx || access > Public || !w->isPrivate());
+        // a caller outside the class hierarchy calls the method that it can call, as the parse-time lookup finds it
+        // (qore#6704), and code of a class context the method that it can call (qore#6759); one test in the common
+        // case
+        if (access > Public) {
+            if (!class_ctx) {
+                w = runtimeFindCallableCommittedMethod(nme, w, access, class_ctx);
+                // a method that the caller cannot call: no method of the name can be called from outside the class
+                // hierarchy
+                if (access > Public) {
+                    return raiseInaccessibleMethodError(nme, w, xsink);
+                }
+            } else {
+                // a private method of the class context itself or of the object's class does not raise the access
+                // (see runtimeFindCommittedMethodForEval()): the common case of a private method called in its class
+                // hierarchy, such as the implementation of a private abstract method, is not looked up again
+                w = runtimeFindCallableCommittedMethod(nme, w, access, class_ctx);
+            }
+        }
     }
 
     //printd(5, "QoreClass::getMethodForEval() %s::%s() found method %p class %s\n", name.c_str(), nme, w, w->getClassName());
 
-    // check for illegal explicit call
-    if (w == constructor || w == destructor) {
+    // check for illegal explicit call: the constructor or destructor of the class that declares the method, which
+    // can be a base class of this class, as for a destructor that only a base class declares (qore#6783)
+    if (qore_class_private::isConstructorOrDestructor(*w)) {
         xsink->raiseException("ILLEGAL-EXPLICIT-METHOD-CALL", "explicit calls to ::%s() methods are not allowed", nme);
         return nullptr;
     }
 
-    if (w->isPrivate() && !class_ctx) {
-        xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s() is private and cannot be accessed externally", name.c_str(), nme);
-        return nullptr;
-    } else if ((access > Public) && !class_ctx) {
-        xsink->raiseException("BASE-CLASS-IS-PRIVATE", "%s() is a method of a privately-inherited class %s", nme, name.c_str());
+    return w;
+}
+
+const QoreMethod* qore_class_private::raiseInaccessibleMethodError(const char* nme, const QoreMethod* w,
+        ExceptionSink* xsink) const {
+    // check for illegal explicit call first, as for a method that can be called
+    if (w == constructor || w == destructor) {
+        xsink->raiseException("ILLEGAL-EXPLICIT-METHOD-CALL", "explicit calls to ::%s() methods are not allowed", nme);
+    } else if (w->isPrivate()) {
+        xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s() is private and cannot be accessed externally",
+            name.c_str(), nme);
+    } else {
+        xsink->raiseException("BASE-CLASS-IS-PRIVATE", "%s() is a method of a privately-inherited class %s", nme,
+            name.c_str());
+    }
+    return nullptr;
+}
+
+const QoreMethod* qore_class_private::runtimeFindCallableCommittedMethod(const char* nme, const QoreMethod* w,
+        ClassAccess& access, const qore_class_private* class_ctx, int mask) const {
+    assert(w && access > Public);
+    if (!class_ctx) {
+        if (const QoreMethod* pw = runtimeFindPublicCommittedMethod(nme, mask)) {
+            access = Public;
+            return pw;
+        }
+        return w;
+    }
+    // the special methods are not looked up further, as by runtimeFindPublicCommittedMethod()
+    if (runtimeContextCanCallMethod(*w, class_ctx) || !strcmp(nme, "constructor") || !strcmp(nme, "destructor")
+            || !strcmp(nme, "copy")) {
+        return w;
+    }
+    // the first method of the name that the class context can call: a normal method, then a static method, as the
+    // lookups search them; otherwise the method found, whose call raises the error that it raised before
+    for (bool is_static : {false, true}) {
+        if (!(mask & (is_static ? QCCM_STATIC : QCCM_NORMAL))) {
+            continue;
+        }
+        ClassAccess a = Public;
+        if (const QoreMethod* cw = runtimeFindContextCallableCommittedMethod(nme, a, class_ctx, is_static)) {
+            access = a;
+            return cw;
+        }
+    }
+    return w;
+}
+
+bool qore_class_private::runtimeContextCanCallMethod(const QoreMethod& m, const qore_class_private* class_ctx) {
+    assert(class_ctx);
+    // a private:internal method is found only from its own class
+    return m.getAccess() == Public || runtimeCheckPrivateClassAccess(*m.getClass(), class_ctx);
+}
+
+const QoreMethod* qore_class_private::runtimeFindContextCallableCommittedMethod(const char* nme,
+        ClassAccess& access, const qore_class_private* class_ctx, bool is_static) const {
+    assert(class_ctx);
+    access = Public;
+    if (!initialized) {
         return nullptr;
     }
+    const QoreMethod* m = runtime_find_local_committed_method(*this, nme, is_static);
+    if (m && class_ctx == this) {
+        return m;
+    }
+    LookupVisit r = runtime_context_method_visit(*this, m, class_ctx);
+    if (r == LookupVisit::Found) {
+        access = m->getAccess();
+        return m;
+    }
+    if (r == LookupVisit::Skip || !scl) {
+        return nullptr;
+    }
+    return scl->runtimeFindContextCallableCommittedMethod(nme, access, class_ctx, class_ctx == this, is_static);
+}
 
-    return w;
+const QoreMethod* qore_class_private::runtimeFindPublicCommittedMethod(const char* nme, int mask) const {
+    // as the parse-time lookup, which does not resolve a call of these methods to a normal method
+    if (!strcmp(nme, "constructor") || !strcmp(nme, "destructor") || !strcmp(nme, "copy")) {
+        return nullptr;
+    }
+    for (bool is_static : {false, true}) {
+        if (!(mask & (is_static ? QCCM_STATIC : QCCM_NORMAL))) {
+            continue;
+        }
+        const QoreMethod* m = runtime_find_local_committed_method(*this, nme, is_static);
+        LookupVisit r = runtime_public_method_visit(m);
+        if (r == LookupVisit::Found) {
+            return m;
+        }
+        if (r == LookupVisit::Descend && scl && (m = scl->runtimeFindPublicCommittedMethod(nme, is_static))) {
+            return m;
+        }
+    }
+    return nullptr;
 }
 
 bool qore_class_private::runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const {
@@ -7048,7 +7971,7 @@ bool qore_class_private::isSandboxedCode() const {
         return qore_program_is_sandboxed(p);
     }
     // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram())
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
     p = spgm.load();
     return p ? qore_program_is_sandboxed(p) : released_sandboxed.load();
 }
@@ -7072,7 +7995,7 @@ void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, Exc
                 if (destructor) {
                     destructor->priv->evalSystemDestructor(self, rc, &de);
                 } else {
-                    self->defaultSystemDestructor(classID, &de);
+                    qore_object_ops(self).defaultSystemDestructor(classID, &de);
                 }
             }
         }
@@ -7088,7 +8011,7 @@ void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, Exc
                 if (destructor) {
                     destructor->priv->evalDestructor(self, rc, &de);
                 } else {
-                    self->defaultSystemDestructor(classID, &de);
+                    qore_object_ops(self).defaultSystemDestructor(classID, &de);
                 }
             }
         }
@@ -7117,7 +8040,7 @@ void qore_class_private::execBaseClassDestructor(QoreObject* self, RuntimeConfig
             if (destructor) {
                 destructor->priv->evalDestructor(self, rc, &de);
             } else {
-                self->defaultSystemDestructor(classID, &de);
+                qore_object_ops(self).defaultSystemDestructor(classID, &de);
             }
         }
     }
@@ -7140,7 +8063,7 @@ void qore_class_private::execBaseClassSystemDestructor(QoreObject* self, Runtime
             if (destructor) {
                 destructor->priv->evalSystemDestructor(self, rc, &de);
             } else {
-                self->defaultSystemDestructor(classID, &de);
+                qore_object_ops(self).defaultSystemDestructor(classID, &de);
             }
         }
     }
@@ -8531,7 +9454,7 @@ int qore_class_private::checkExistingVarMember(const char* dname, const QoreMemb
     // if the var was previously declared public
     if (mi->access != oaccess) {
         // raise an exception only if parse exceptions are enabled
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNode;
             desc->sprintf("class '%s' ", name.c_str());
             desc->concat("cannot declare ");
@@ -8546,7 +9469,7 @@ int qore_class_private::checkExistingVarMember(const char* dname, const QoreMemb
         }
         return -1;
     } else if ((mi && mi->parseHasTypeInfo()) || (omi && omi->parseHasTypeInfo())) {
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNode;
             desc->sprintf("%s %s ", privpub(mi->access), var ? "static variable" : "member");
             desc->sprintf("'%s' was already declared in ", dname);
@@ -8631,6 +9554,22 @@ bool qore_class_private::runtimeCheckPrivateClassAccess(const qore_class_private
     ClassAccess access = Public;
     //printd(5, "runtimeCheckPrivateClassAccess() qc: %p '%s' test: %p '%s' okl: %d okr: %d\n", qc, qc->name.c_str(), this, name.c_str(), qc->getClassIntern(*this, access, true), (scl && scl->getClass(*qc, access, true)));
     return qc->getClassIntern(*this, access, true) || (scl && scl->getClass(*qc, access, true));
+}
+
+bool qore_class_private::runtimeCheckMethodVariantAccess(const QoreMethod& m, const AbstractQoreFunctionVariant* v,
+        const qore_class_private* class_ctx) {
+    assert(v);
+    ClassAccess va = METHV_const(v)->getAccess();
+    if (va == Public) {
+        return true;
+    }
+    // the class context of the call is checked again against the method's class, as CodeEvaluationHelper does it:
+    // a context related only to the class of the object (another of its parent classes) has no access
+    if (!class_ctx || !runtimeCheckPrivateClassAccess(*m.getClass(), class_ctx)) {
+        return false;
+    }
+    // a private:internal variant only from the class that declares it (see IList::getFunction())
+    return va != Internal || METHV_const(v)->getClassPriv()->equal(*class_ctx);
 }
 
 qore_type_result_e qore_class_private::parseCheckCompatibleClass(const qore_class_private& oc, bool& may_not_match) const {
@@ -8719,7 +9658,7 @@ qore_type_result_e qore_class_private::runtimeCheckCompatibleClassIntern(const q
 
 QoreValue qore_class_private::setKeyValue(const std::string& key, QoreValue val) {
     // ensure atomicity when reading from or writing to kvmap
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
 
     kvmap_t::iterator i = kvmap.lower_bound(key);
     if (i != kvmap.end() && i->first == key) {
@@ -8733,7 +9672,7 @@ QoreValue qore_class_private::setKeyValue(const std::string& key, QoreValue val)
 
 QoreValue qore_class_private::setKeyValueIfNotSet(const std::string& key, QoreValue val) {
     // ensure atomicity when reading from or writing to kvmap
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
 
     kvmap_t::iterator i = kvmap.lower_bound(key);
     if (i != kvmap.end() && i->first == key) {
@@ -8749,7 +9688,7 @@ QoreValue qore_class_private::setKeyValueIfNotSet(const std::string& key, QoreVa
 
 bool qore_class_private::setKeyValueIfNotSet(const std::string& key, const char* val) {
     // ensure atomicity when reading from or writing to kvmap
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
 
     kvmap_t::iterator i = kvmap.lower_bound(key);
     if (i != kvmap.end() && i->first == key) {
@@ -8765,7 +9704,7 @@ bool qore_class_private::setKeyValueIfNotSet(const std::string& key, const char*
 
 QoreValue qore_class_private::getReferencedKeyValue(const std::string& key) const {
     // ensure atomicity when reading from or writing to kvmap
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
 
     kvmap_t::const_iterator i = kvmap.find(key);
     if (i == kvmap.end()) {
@@ -8776,7 +9715,7 @@ QoreValue qore_class_private::getReferencedKeyValue(const std::string& key) cons
 
 QoreValue qore_class_private::getReferencedKeyValue(const char* key) const {
     // ensure atomicity when reading from or writing to kvmap
-    AutoLocker al(gate.asl_lock);
+    std::lock_guard<std::mutex> al(dataLock());
 
     kvmap_t::const_iterator i = kvmap.find(key);
     if (i == kvmap.end()) {
@@ -10083,7 +11022,7 @@ int UserCopyVariant::parseInit(QoreFunction* f) {
         if (typeInfo) {
             if (QoreTypeInfo::parseReturns(typeInfo, &parent_class) == QTI_NOT_EQUAL) {
                 // raise parse exception if parse exceptions have not been suppressed
-                if (getProgram()->getParseExceptionSink()) {
+                if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                     QoreStringNode* desc = new QoreStringNode("the copy constructor will be passed ");
                     QoreTypeInfo::getThisType(parent_class.getTypeInfo(), *desc);
                     desc->concat(", but the object's parameter was defined expecting ");
@@ -10128,7 +11067,7 @@ void BuiltinCopyVariantBase::evalCopyImpl(LexicalSemanticPolicy policy, const Qo
         }
     }
 
-    old->evalCopyMethodWithPrivateData(thisclass, this, self, ceh.getRuntimeConfig(), xsink);
+    qore_object_ops(old).evalCopyMethodWithPrivateData(thisclass, this, self, ceh.getRuntimeConfig(), xsink);
 }
 
 template <bool Lexical>
@@ -10210,11 +11149,18 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     //printd(5, "DestructorMethodFunction::evalDestructor() %s::%s() o: %p, v: %d, ct: %d\n", getClassName(),
     //  getName(), self, self->isValid(),ct);
     QoreSourceProgramHolder spgm_holder(xsink);
+    QoreProgram* pgm_ctx = qore_get_method_pgm_context(thisclass, spgm_holder);
+    // a native destructor runs without the context of a Program that refuses runtime entry while code is parsed in it
+    // (qore#6752); declared after the holder, so that the thread leaves the Program before the holder releases it
+    // (a builtin variant is native code; a user variant, also of AOT-compiled code, has the call type CT_USER)
+    QoreNativeDestructorProgramEntry native_entry;
+    if (pgm_ctx && ct == CT_BUILTIN && native_entry.runWithoutContext(pgm_ctx, xsink)) {
+        pgm_ctx = nullptr;
+    }
     // a destructor is called by no call expression: its frame is located where the code that runs it is, and it can
     // run between a call site and the frame that takes it, as when a temporary value is released
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "destructor", (QoreListNode*)nullptr, self,
-        qore_class_private::get(thisclass), ct, false, nullptr,
-        qore_get_method_pgm_context(thisclass, spgm_holder), nullptr, nullptr, 0, true);
+        qore_class_private::get(thisclass), ct, false, nullptr, pgm_ctx, nullptr, nullptr, 0, true);
     if (*xsink) return;
 
     DESMV_const(variant)->evalDestructor(thisclass, self, rc, xsink);
@@ -10907,8 +11853,11 @@ const QoreMethod* QoreStaticMethodIterator::getMethod() const {
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls) :
     QoreMemberInfoBaseAccess(old, old.access),
     accessors(old.accessors),
-    // the new class owner is in the initial position
-    decl_cls(cls),
+    // the new class owner is in the initial position for a member that it declares; a member that it inherits keeps
+    // the class that declares it, as its inheritance list and its context map do, or an object of a subclass of the
+    // copy, which is a class imported into another Program, would have no storage entry for the code of the declaring
+    // class (qore#6671)
+    decl_cls(old.is_local ? cls : old.decl_cls),
     cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(old.is_local) {
@@ -10967,9 +11916,7 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi) {
 
     // copy context map
     if (mi.cls_context_map) {
-        for (auto& i : *mi.cls_context_map) {
-            cls_context_map->insert(cls_context_map_t::value_type(i.first, i.second));
-        }
+        mergeContextMap(mi);
         member_info_list->insert(member_info_list->begin(), mi.member_info_list->begin(), mi.member_info_list->end());
     }
 
@@ -10990,7 +11937,7 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi, const qore_class
 #ifdef DEBUG
     bool inserted = false;
 #endif
-    // the classes where the member is accessible; the order does not matter, as each is mapped to qc
+    // the classes where the member is accessible; the order does not matter, as each is mapped to the same storage
     std::vector<const qore_class_private*> classes;
     if (mi.decl_cls) {
         classes.push_back(mi.decl_cls);
@@ -10998,8 +11945,17 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi, const qore_class
     for (const QoreMemberClassNode* node = mi.cls_list.get(); node; node = node->next.get()) {
         classes.push_back(node->cls);
     }
+    // the class can be in our cls_context_map already when its class is inherited multiple times in the hierarchy:
+    // the declaration is one member of the object, so that the storage of the other path is used for every class
+    // context of the declaration (qore#6523)
     for (const qore_class_private* i : classes) {
-        // the class can be in our cls_context_map already with a class that's inherited multiple times in the hierarchy
+        cls_context_map_t::const_iterator ci = cls_context_map->find(i);
+        if (ci != cls_context_map->end()) {
+            qc = ci->second;
+            break;
+        }
+    }
+    for (const qore_class_private* i : classes) {
         cls_context_map_t::iterator ci = cls_context_map->lower_bound(i);
         if (ci == cls_context_map->end() || ci->first != i) {
             //printd(5, "QoreMemberInfo::addContextAccess() this: %p inserting cls %p '%s' -> %p '%s'\n", this, i,
@@ -11009,14 +11965,7 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi, const qore_class
             inserted = true;
 #endif
         }
-#ifdef DEBUG
-        else {
-            //printd(5, "QoreMemberInfo::addContextAccess() this: %p skipping cls %p '%s' (-> %p '%s'); already inserted\n", this, i, i->name.c_str(), qc, qc->name.c_str());
-            if (ci != cls_context_map->end()) {
-                assert(ci->second == qc);
-            }
-        }
-#endif
+        assert(cls_context_map->find(i)->second == qc);
     }
 #ifdef DEBUG
     if (inserted) {
@@ -11026,23 +11975,157 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi, const qore_class
 #endif
 }
 
+const QoreTypeInfo* QoreMemberInfo::getStorageTypeInfoIntern(const char* mem,
+        const qore_class_private* storage_cls) const {
+    // the member of the class that holds the storage is its own declaration, unless another declaration of the
+    // hierarchy shares that storage
+    const QoreMemberInfo* own = storage_cls->members.find(mem);
+    return (own && own->getClass() == storage_cls) ? own->getTypeInfo() : getTypeInfo();
+}
+
 void QoreMemberInfo::addContextMap(const QoreMemberInfo& mi) {
     if (!mi.cls_context_map) {
         return;
     }
-    if (!cls_context_map) {
-        cls_context_map = new cls_context_map_t;
-        assert(!member_info_list);
-        member_info_list = new member_info_list_t;
+    mergeContextMap(mi);
+}
+
+void QoreMemberInfo::mergeContextMap(const QoreMemberInfo& mi) {
+    if (!mi.cls_context_map) {
+        return;
     }
+    // the class contexts of this declaration of an accessible member use the standard object data: an entry of the
+    // other map for one of them is not copied (qore#6523)
+    std::set<const qore_class_private*> own_ctx;
+    if (access < Inaccessible) {
+        getDeclarationContexts(own_ctx);
+    }
+    // the entries of the other map, grouped by their storage: a class context accesses one declaration of the
+    // member, and the declaration has one storage, so that a group is one declaration
+    std::map<const qore_class_private*, std::vector<const qore_class_private*>> groups;
     for (auto& i : *mi.cls_context_map) {
-        // an entry already present is kept, as addContextAccess() keeps it; it gives the same storage
-        cls_context_map_t::iterator ci = cls_context_map->lower_bound(i.first);
-        if (ci == cls_context_map->end() || ci->first != i.first) {
-            cls_context_map->insert(ci, i);
-        } else {
-            assert(ci->second == i.second);
+        groups[i.second].push_back(i.first);
+    }
+    for (auto& g : groups) {
+        // a declaration that this map has already (reached through another path of the hierarchy) keeps its storage
+        // for the class contexts of every path
+        const qore_class_private* storage = g.first;
+        bool own = false;
+        for (const qore_class_private* i : g.second) {
+            if (own_ctx.count(i)) {
+                own = true;
+                break;
+            }
+            if (cls_context_map) {
+                cls_context_map_t::const_iterator ci = cls_context_map->find(i);
+                if (ci != cls_context_map->end()) {
+                    storage = ci->second;
+                    break;
+                }
+            }
         }
+        if (own) {
+            continue;
+        }
+        if (!cls_context_map) {
+            cls_context_map = new cls_context_map_t;
+            assert(!member_info_list);
+            member_info_list = new member_info_list_t;
+        }
+        for (const qore_class_private* i : g.second) {
+            // insert() keeps an entry that is already present
+            cls_context_map->insert(cls_context_map_t::value_type(i, storage));
+        }
+    }
+}
+
+void QoreMemberInfo::dropDeclarationContexts() {
+    assert(access < Inaccessible);
+    if (!cls_context_map) {
+        return;
+    }
+    std::set<const qore_class_private*> own_ctx;
+    getDeclarationContexts(own_ctx);
+    for (const qore_class_private* i : own_ctx) {
+        cls_context_map->erase(i);
+    }
+}
+
+void QoreMemberInfo::getDeclarationContexts(std::set<const qore_class_private*>& ctx) const {
+    // the classes where the declaration is accessible
+    if (decl_cls) {
+        ctx.insert(decl_cls);
+    }
+    for (const QoreMemberClassNode* node = cls_list.get(); node; node = node->next.get()) {
+        ctx.insert(node->cls);
+    }
+    // a member that is not accessible in this class has storage of its own: each class context that the declaration's
+    // class context is mapped to uses it, as the class contexts of other paths merged into it (mergeDeclarationPath())
+    if (access == Inaccessible && cls_context_map && decl_cls) {
+        cls_context_map_t::const_iterator i = cls_context_map->find(decl_cls);
+        if (i != cls_context_map->end()) {
+            for (auto& j : *cls_context_map) {
+                if (j.second == i->second) {
+                    ctx.insert(j.first);
+                }
+            }
+        }
+    }
+}
+
+void QoreMemberInfo::mergeDeclarationPath(const QoreMemberInfo& mi, ClassAccess mi_access) {
+    assert(!is_local);
+    assert(access < Inaccessible || mi_access == Inaccessible);
+    // the class contexts of the declaration through the other path
+    std::set<const qore_class_private*> mi_ctx;
+    mi.getDeclarationContexts(mi_ctx);
+
+    if (access < Inaccessible) {
+        // the member is accessible: every class context of the declaration uses the standard object data, and the
+        // classes of the other path are classes where the member is accessible, so that a subclass that does not
+        // inherit it accessibly maps them to its storage too
+        if (mi_access < access) {
+            access = mi_access;
+        }
+        std::set<const qore_class_private*> own_ctx;
+        getDeclarationContexts(own_ctx);
+        // the list is shared with the copies of the member in the base classes: new nodes are made after the first
+        // one (the class of this member: the last class where it is accessible)
+        assert(cls_list);
+        std::shared_ptr<QoreMemberClassNode> rest = cls_list->next;
+        bool added = false;
+        for (const qore_class_private* i : mi_ctx) {
+            if (!own_ctx.count(i)) {
+                rest = std::make_shared<QoreMemberClassNode>(i, std::move(rest));
+                added = true;
+            }
+        }
+        if (added) {
+            cls_list = std::make_shared<QoreMemberClassNode>(cls_list->cls, std::move(rest));
+        }
+        dropDeclarationContexts();
+        // the entries of the other declarations of the member (private:internal members that it hides)
+        mergeContextMap(mi);
+        return;
+    }
+
+    // neither path makes the member accessible: the entries of the other map are merged, those of this declaration
+    // with the storage of this path
+    mergeContextMap(mi);
+    // the class contexts of the other path that have no entry there (the member is accessible in the base class of
+    // the other path) use the storage of this one (or the standard object data, as the class contexts of this path, if
+    // they have no entry)
+    if (!cls_context_map) {
+        return;
+    }
+    cls_context_map_t::const_iterator s = cls_context_map->find(decl_cls);
+    if (s == cls_context_map->end()) {
+        return;
+    }
+    const qore_class_private* storage = s->second;
+    for (const qore_class_private* i : mi_ctx) {
+        // insert() keeps an entry that is already present
+        cls_context_map->insert(cls_context_map_t::value_type(i, storage));
     }
 }
 
@@ -11164,7 +12247,7 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
 
         // throw a type exception only if parse exceptions are enabled
         if (!QoreTypeInfo::parseAccepts(assignmentTypeInfo, argTypeInfo)) {
-            if (getProgram()->getParseExceptionSink()) {
+            if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* desc = new QoreStringNode("initialization expression for ");
                 desc->sprintf("%s member '%s' returns ", privpub(access), name);
                 QoreTypeInfo::getThisType(argTypeInfo, *desc);
@@ -11236,7 +12319,7 @@ int QoreVarInfo::parseInit(const char* name) {
 
         // throw a type exception only if parse exceptions are enabled
         if (!QoreTypeInfo::parseAccepts(assignmentTypeInfo, argTypeInfo)) {
-            if (getProgram()->getParseExceptionSink()) {
+            if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* desc = new QoreStringNode("initialization expression for ");
                 desc->sprintf("%s class static variable '%s' returns ", privpub(access), name);
                 QoreTypeInfo::getThisType(argTypeInfo, *desc);
@@ -11539,6 +12622,7 @@ QoreParseClass::QoreParseClass(const QoreProgramLocation* loc) {
 
     priv = new qore_class_private(this, std::move(name), std::move(path), QDOM_DEFAULT);
     priv->loc = loc;
+    priv->parse_abr = (bool)(parse_get_parse_options() & PO_ALLOW_BARE_REFS);
 }
 
 class qore_parent_class_iterator_private {

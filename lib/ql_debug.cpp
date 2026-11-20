@@ -107,6 +107,8 @@
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -372,7 +374,53 @@ static QoreValue f_dbg_type_retirement_info(const QoreListNode* params, RuntimeC
     h->setKeyValue("oldest pending epoch", static_cast<int64>(info.oldest_pending_epoch), xsink);
     h->setKeyValue("newest pending epoch", static_cast<int64>(info.newest_pending_epoch), xsink);
     h->setKeyValue("min active epoch", static_cast<int64>(info.min_active_epoch), xsink);
+    h->setKeyValue("freed declarations", static_cast<int64>(info.freed_declarations), xsink);
+    h->setKeyValue("tombstone classes", static_cast<int64>(info.tombstone_classes), xsink);
+    h->setKeyValue("tombstone hashdecls", static_cast<int64>(info.tombstone_hashdecls), xsink);
+    h->setKeyValue("tombstone enums", static_cast<int64>(info.tombstone_enums), xsink);
     return h.release();
+}
+
+//! Frees the retired declarations that can be freed now and returns their number (issue #6419)
+/** The calling thread runs Qore code: it is quiescent for the scan, as a builtin's quiescent wait makes it, so that
+    the items that only it holds back are freed
+*/
+static QoreValue f_dbg_type_retirement_free(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    size_t freed;
+    {
+        QoreTypeQuiescentWaitHelper qwh;
+        freed = qore_type_retirement_free();
+    }
+    return static_cast<int64>(freed + qore_type_retirement_free());
+}
+
+//! Waits until a thread has entered a number of builtin waits (issue #6419); returns false on timeout
+static QoreValue f_dbg_type_wait_entered(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    int tid = static_cast<int>(HARD_QORE_VALUE_INT(params, 0));
+    int64 count = HARD_QORE_VALUE_INT(params, 1);
+    int64 timeout_ms = HARD_QORE_VALUE_INT(params, 2);
+    return qore_type_dbg_wait_entered(tid, count, timeout_ms);
+#else
+    return false;
+#endif
+}
+
+//! Returns the number of builtin waits that a thread has entered, or -1 if there is no such thread (issue #6419)
+/** With dbg_type_wait_entered(), a test makes sure that a thread waits in a given wait: the thread takes its count
+    before the wait, and another thread waits for one more
+*/
+static QoreValue f_dbg_type_wait_entries(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    return qore_type_dbg_wait_entries(static_cast<int>(HARD_QORE_VALUE_INT(params, 0)));
+#else
+    return -1;
+#endif
+}
+
+//! Returns the number of frames of the calling thread that hold a type read through a derived type (issue #6419)
+static QoreValue f_dbg_type_unsafe_frames(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_type_unsafe_frames());
 }
 
 //! Returns the threads that the retired declarations and derived types wait for: each thread that runs Qore code
@@ -433,7 +481,7 @@ static QoreValue f_dbg_cyclic_type_declarations(const QoreListNode* params, Runt
 }
 
 static QoreValue f_dbg_global_vars(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    return getProgram()->getVarList();
+    return qore_program_ops(getProgram()).getVarList();
 }
 
 // --- C++ unit tests for AsyncIoControllerPriv (debug builds only) ---
@@ -11682,7 +11730,7 @@ public:
             }
             xsink->raiseException("DEBUGGER-ERROR", "raised by the debugger at line %d", line);
             LineColumn ex;
-            if (const QoreException* e = xsink->getException()) {
+            if (const QoreException* e = qore_exception_sink_ops(xsink).getException()) {
                 ex = {e->start_line, e->start_column};
             }
             std::lock_guard<std::mutex> lg(m);
@@ -13242,6 +13290,22 @@ struct UtServerReleaseGuard {
 // Deterministic lock-order regression fixture.  Pool checkout calls
 // tryReserveStream() while holding pool_lock_; this connection pauses in the
 // capacity query so a concurrent close callback can be timed independently.
+//! the longest wait for a thread of the close callback tests to reach a point: a hang guard only
+constexpr int UT_CLOSE_CALLBACK_HANG_GUARD_MS = 30000;
+
+//! waits until the flag is set; the limit is a hang guard only
+static bool ut_wait_for_flag(const std::atomic<bool>& flag) {
+    auto deadline = std::chrono::steady_clock::now()
+        + std::chrono::milliseconds(UT_CLOSE_CALLBACK_HANG_GUARD_MS);
+    while (!flag.load(std::memory_order_acquire)) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
+}
+
 class UtBlockingPoolConnection : public HttpClientConnectionBase {
 public:
     DLLLOCAL UtBlockingPoolConnection()
@@ -13375,7 +13439,7 @@ static void ut_manager_close_callback_does_not_wait_for_pool(UnitTestCounters& c
         reservation_done.store(true, std::memory_order_release);
     });
 
-    bool entered = conn->waitForCapacityCheck(1000);
+    bool entered = conn->waitForCapacityCheck(UT_CLOSE_CALLBACK_HANG_GUARD_MS);
     UT_ASSERT(c, entered, "pool checkout reaches paused connection capacity check");
 
     std::thread callback([&] {
@@ -13383,13 +13447,12 @@ static void ut_manager_close_callback_does_not_wait_for_pool(UnitTestCounters& c
         callback_done.store(true, std::memory_order_release);
     });
 
-    // The close callback must finish while checkout still owns pool_lock_.
-    // Before the queue-based fix it waits on pool_lock_ here, reproducing the
-    // same ABBA edge that stalls the global AsyncIoController thread.
-    for (int i = 0; i < 100 && !callback_done.load(std::memory_order_acquire); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
-    UT_ASSERT(c, callback_done.load(std::memory_order_acquire),
+    // The close callback must finish while checkout still owns pool_lock_,
+    // which it holds until the capacity check is released below.  Before the
+    // queue-based fix it waits on pool_lock_ here, reproducing the same ABBA
+    // edge that stalls the global AsyncIoController thread: it would never
+    // finish, and the hang guard ends the wait.
+    UT_ASSERT(c, ut_wait_for_flag(callback_done),
         "close callback does not wait for the connection pool lock");
     UT_ASSERT(c, !reservation_done.load(std::memory_order_acquire),
         "pool checkout remains paused while close callback completes");
@@ -13426,19 +13489,20 @@ static void ut_manager_close_callback_lifetime_handshake(UnitTestCounters& c) {
         callback_done.store(true, std::memory_order_release);
     });
 
-    bool entered = mgr->waitForCallback(1000);
+    bool entered = mgr->waitForCallback(UT_CLOSE_CALLBACK_HANG_GUARD_MS);
     UT_ASSERT(c, entered, "close hook enters manager callback");
     std::thread detach([&] {
         detach_started.store(true, std::memory_order_release);
         conn->setManager(nullptr);
         detach_done.store(true, std::memory_order_release);
     });
-    for (int i = 0; i < 100
-            && !detach_started.load(std::memory_order_acquire); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    UT_ASSERT(c, detach_started.load(std::memory_order_acquire),
+    // the start of the thread is waited for, however long it takes
+    UT_ASSERT(c, ut_wait_for_flag(detach_started),
         "manager detach starts while callback is active");
+    // The callback is held until it is released below, so the detach cannot
+    // finish before then, however the threads are scheduled: the pause only
+    // gives a detach that would not wait the time to finish, and a slow
+    // machine can only make the check miss such a regression, never fail it.
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     UT_ASSERT(c, !detach_done.load(std::memory_order_acquire),
         "manager detach waits for the active close callback");
@@ -19582,6 +19646,117 @@ static QoreValue f_dbg_fork_while_parse_scope_active(const QoreListNode* params,
     return ut_wait_child(pid);
 }
 
+//! Debug-only test hook: fork() while another thread holds the lock that constructing an object takes for a class
+/** Another thread holds the data lock of the class of \a obj (see qore_class_private::dataLock()), and releases it
+    when the prepare handlers of fork() reach the class data locks (as dbg_fork_while_handler_held()), so fork()
+    waits for it if a fork handler covers the lock.  The child constructs an object of the class with its handle in
+    the Program \a pgm, a copy for a class that the Program inherited, which takes the lock (refClass(),
+    qore#6732): it runs \a child, which constructs one (the deserialization of an object finds the class in the
+    Program and constructs it with that handle) and exits with the value that it returns (99 if it raised an
+    exception), or without \a child it finds the class \a cname in \a pgm (QoreProgram::findClass()) and constructs
+    an object with QoreClass::execConstructor() and that handle as the object's class, as module-python does, and
+    exits with 0 if it was constructed.  The parent reports a child that has not ended after 60 seconds as hung, and
+    kills it.  DEBUG builds only.
+
+    @return a hash: \c copy: True if the handle that the child uses is a copy, \c hang: True if the child did not end,
+    \c status: its exit status (-1 if it hung or did not exit normally)
+
+    @throw DBG-FORK-ERROR the class was not found, or fork() failed
+*/
+static QoreValue f_dbg_fork_while_class_lock_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    const QoreObject* pobj = get_param_value(params, 1).get<const QoreObject>();
+    QoreStringNodeValueHelper cname(get_param_value(params, 2));
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 3).get<const ResolvedCallReferenceNode>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(pobj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    const qore_class_private* priv = qore_class_private::get(*obj->getClass());
+    const QoreClass* found = pgm->findClass(cname->c_str(), xsink);
+    if (!found) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-FORK-ERROR", "no class '%s' in the Program", cname->c_str());
+        }
+        return QoreValue();
+    }
+    bool is_copy = found != qore_class_private::get(*found)->cls;
+    ForkHoldTest t;
+    t.target = "class_data_locks";
+    // with ThreadSanitizer, the striped leaf locks are not acquired before fork() (QFLM_STRIPED), so the lock is not
+    // held across it either: TSan reports the reset of a lock held by another thread in the child
+    std::thread holder([&t, priv]() {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            priv->dataLock().lock();
+        }
+        std::unique_lock<std::mutex> ul(t.m);
+        t.held = true;
+        t.cv.notify_all();
+        t.cv.wait(ul, [&t] { return t.release; });
+        ul.unlock();
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            priv->dataLock().unlock();
+        }
+    });
+    {
+        std::unique_lock<std::mutex> ul(t.m);
+        t.cv.wait(ul, [&t] { return t.held; });
+    }
+    fork_hold_test = &t;
+    qore_fork_prepare_hook = fork_hold_hook;
+    pid_t pid = fork();
+    if (!pid) {
+        ExceptionSink child_xsink;
+        int status;
+        if (child_code) {
+            ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+            status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        } else {
+            // the object is constructed with the copy, as module-python constructs one
+            ReferenceHolder<QoreObject> o(found->execConstructor(*found, nullptr, true, &child_xsink),
+                &child_xsink);
+            status = child_xsink || !o ? 99 : 0;
+        }
+        child_xsink.clear();
+        _exit(status);
+    }
+    int fork_errno = errno;
+    qore_fork_prepare_hook = nullptr;
+    fork_hold_test = nullptr;
+    {
+        // releases the holder if the prepare handlers did not (no handler covers the lock, or fork() failed)
+        std::lock_guard<std::mutex> lg(t.m);
+        t.release = true;
+        t.cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    // a hang detector, not a timing check: a child that does not wait for the lock ends at once
+    bool hang = true;
+    int status = 0;
+    for (int i = 0; i < 600; ++i) {
+        if (waitpid(pid, &status, WNOHANG) == pid) {
+            hang = false;
+            break;
+        }
+        usleep(100000);
+    }
+    if (hang) {
+        kill(pid, SIGKILL);
+        waitpid(pid, &status, 0);
+    }
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("copy", is_copy, nullptr);
+    h->setKeyValue("hang", hang, nullptr);
+    h->setKeyValue("status", hang ? -1 : (WIFEXITED(status) ? WEXITSTATUS(status) : -1), nullptr);
+    return h;
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -20465,6 +20640,7 @@ static void ut_parse_find_variant_no_args_type_param_inst(UnitTestCounters& c) {
     UT_ASSERT(c, ext, "the generic function is found");
     if (ext) {
         const QoreFunction* func = reinterpret_cast<const QoreFunction*>(ext);
+        // a lookup, which runs no code of the Program, so the Program is only made current (qore#6185)
         QoreProgramContextHelper pch(pgm);
         QoreTypeParamInstantiation inst;
         const AbstractQoreFunctionVariant* variant = func->parseFindVariantNoDiagnostics(type_vec_t(), nullptr,
@@ -24918,6 +25094,42 @@ void dbg_hold_closure_var_deref_hook(const char* name) {
     }
 }
 
+//! the hold armed by dbg_hold_removed_object_scan()
+struct RemovedObjectScanHold {
+    std::mutex m;
+    Counter* held = nullptr;
+    Counter* release = nullptr;
+};
+
+RemovedObjectScanHold removed_object_scan_hold;
+
+//! runs in the thread that checks a removed object, with no lock of the objects held; disarms itself
+void dbg_hold_removed_object_scan_hook() {
+    RemovedObjectScanHold& h = removed_object_scan_hold;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.held) {
+            return;
+        }
+        held = h.held;
+        release = h.release;
+        h.held = nullptr;
+        h.release = nullptr;
+        qore_dbg_removed_object_scan_hook.store(nullptr);
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+    if (xsink) {
+        printd(0, "dbg_hold_removed_object_scan(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+
 //! the collections of closure-bound variables counted by dbg_count_closure_var_collections()
 struct ClosureVarCollections {
     std::mutex m;
@@ -24967,6 +25179,38 @@ static QoreValue f_dbg_hold_closure_var_deref(const QoreListNode* params, Runtim
     h.held = held.release();
     h.release = release.release();
     qore_dbg_closure_var_decide_hook.store(dbg_hold_closure_var_deref_hook);
+    return QoreValue();
+}
+
+//! holds the next thread that checks whether an object removed from an object in a recursive set needs a scan
+/** The hold is taken once, in qore_removed_object_needs_scan(), after the check has found the removed object in the
+    set of the object that it was removed from (by comparing the pointers) and before it reads the set, with no lock
+    of the objects held: another thread can then recompute the set (#6792).
+
+    @param held decremented once the checking thread is held
+    @param release the checking thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_removed_object_scan(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<Counter> held(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    RemovedObjectScanHold& h = removed_object_scan_hold;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a removed object scan hold is already armed");
+        return QoreValue();
+    }
+    h.held = held.release();
+    h.release = release.release();
+    qore_dbg_removed_object_scan_hook.store(dbg_hold_removed_object_scan_hook);
     return QoreValue();
 }
 
@@ -27503,6 +27747,15 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_type_retirement_info", f_dbg_type_retirement_info, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_type_retirement_free", f_dbg_type_retirement_free, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_type_unsafe_frames", f_dbg_type_unsafe_frames, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_type_wait_entered", f_dbg_type_wait_entered, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_type_wait_entries", f_dbg_type_wait_entries, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
     qns.addBuiltinVariant("dbg_type_retirement_blockers", f_dbg_type_retirement_blockers, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_live_type_declarations", f_dbg_live_type_declarations, QCF_NO_FLAGS,
@@ -28032,6 +28285,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_hold_removed_object_scan", f_dbg_hold_removed_object_scan,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
     qns.addBuiltinVariant("dbg_count_closure_var_collections", f_dbg_count_closure_var_collections,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_get_closure_var_collections", f_dbg_get_closure_var_collections,
@@ -28176,6 +28432,10 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo);
     qns.addBuiltinVariant("dbg_release_parse_start_gate", f_dbg_release_parse_start_gate, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fork_while_class_lock_held", f_dbg_fork_while_class_lock_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 4, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", objectTypeInfo,
+        QORE_PARAM_NO_ARG, "pgm", stringTypeInfo, QORE_PARAM_NO_ARG, "cname", codeOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "child");

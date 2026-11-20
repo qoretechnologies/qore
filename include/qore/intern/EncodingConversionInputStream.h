@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2023 - 2024 Qore Technologies, sro
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -42,12 +42,50 @@ class EncodingConversionInputStream : public TransformInputStream {
 
 public:
    DLLLOCAL EncodingConversionInputStream(InputStream *is, const QoreEncoding *srcEncoding,
-         const QoreEncoding *dstEncoding, ExceptionSink *xsink)
-         : TransformInputStream(is, new EncodingConvertor(srcEncoding, dstEncoding, xsink)) {
+         const QoreEncoding *dstEncoding, ExceptionSink *xsink,
+         qore_encoding_errors_t mode = qore_encoding_errors_t::RAISE)
+         : EncodingConversionInputStream(is, new EncodingConvertor(srcEncoding, dstEncoding, xsink, mode,
+            "EncodingConversionInputStream", "input"), mode) {
    }
 
    DLLLOCAL const char *getName() override {
       return "EncodingConversionInputStream";
+   }
+
+   //! returns the encoding_errors option of the stream
+   DLLLOCAL qore_encoding_errors_t getEncodingErrors() const {
+      return mode;
+   }
+
+   DLLLOCAL int64 peek(ExceptionSink* xsink) override {
+      // errors in the input are reported for the method called
+      MethodHelper mh(conv, "peek");
+      return TransformInputStream::peek(xsink);
+   }
+
+private:
+   //! the convertor, owned by the base class
+   EncodingConvertor* conv;
+   qore_encoding_errors_t mode;
+
+   //! sets the name of the method of the stream for errors in the input, and restores it
+   class MethodHelper {
+   public:
+      DLLLOCAL MethodHelper(EncodingConvertor* conv, const char* meth) : conv(conv), old(conv->getMethod()) {
+         conv->setMethod(meth);
+      }
+
+      DLLLOCAL ~MethodHelper() {
+         conv->setMethod(old);
+      }
+
+   private:
+      EncodingConvertor* conv;
+      const char* old;
+   };
+
+   DLLLOCAL EncodingConversionInputStream(InputStream *is, EncodingConvertor* conv, qore_encoding_errors_t mode)
+         : TransformInputStream(is, conv), conv(conv), mode(mode) {
    }
 };
 

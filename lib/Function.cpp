@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreTypeDeclPin.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -85,6 +86,8 @@
 #include <unordered_set>
 
 #include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 static bool qore_is_non_optional_soft_type(const QoreTypeInfo* ti) {
     return ti == softBigIntTypeInfo
@@ -1638,8 +1641,14 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     if (restore_receiver_type_info) {
         runtime_set_receiver_type_info(old_receiver_type_info);
     }
-    if (restore_type_param_instantiation) {
-        runtime_set_type_param_instantiation(old_type_param_instantiation);
+    // one test for the calls that are not generic
+    if (generic_frame) {
+        if (generic_frame & GF_RESTORE_TYPE_PARAM_INSTANTIATION) {
+            runtime_set_type_param_instantiation(old_type_param_instantiation);
+        }
+        if (generic_frame & GF_TYPE_UNSAFE) {
+            qore_type_unsafe_frame_add(-1);
+        }
     }
     if (returnTypeInfo != (const QoreTypeInfo*)-1) {
         saveReturnTypeInfo(returnTypeInfo);
@@ -1811,19 +1820,54 @@ static const QoreTypeInfo* qore_merge_inferred_class_receiver(const QoreTypeInfo
     return qore_get_parameterized_class_type(rpti->getBaseClass(), args, rpti->isOrNothing());
 }
 
+void CodeEvaluationHelper::markTypeUnsafe() {
+    if (!(generic_frame & GF_TYPE_UNSAFE)) {
+        generic_frame |= GF_TYPE_UNSAFE;
+        qore_type_unsafe_frame_add(1);
+    }
+}
+
+QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::setObjectReceiverTypeInfo(const QoreObject* self) {
+    // as qore_get_object_receiver_type_info()
+    if (const QoreTypeInfo* ti = self->getInstantiatedTypeInfo()) {
+        receiver_type_info = ti;
+        // a parameterized receiver (Box<Foo>): the call substitutes its type arguments, which it reads through the
+        // derived type (issue #6419)
+        if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(ti)) {
+            markTypeUnsafe();
+        }
+    } else {
+        receiver_type_info = self->getClass()->getTypeInfo();
+    }
+}
+
 void CodeEvaluationHelper::substituteCallerReceiverTypeParams(const QoreFunction* func) {
     assert(receiver_type_info);
-    // the type's cached flag decides it after its first test
-    if (receiver_type_info->getContainsTypeParameterCache()
-            && qore_type_contains_type_parameter(receiver_type_info)) {
-        receiver_type_info = qore_substitute_type_params_if_needed(receiver_type_info);
-        // code that runs without an instantiation of its type parameters (a static method of G<T> called as G::m(),
-        // whose code calls id(v)) binds those of the method's class to the types of the arguments, as G::id(v)
-        // made there does (qore#6186)
-        if (qore_type_contains_type_parameter(receiver_type_info)) {
-            if (const QoreTypeInfo* inferred = qore_merge_inferred_class_receiver(receiver_type_info,
-                    func->runtimeInferClassReceiverTypeInfo(getArgs(), receiver_type_info))) {
-                receiver_type_info = inferred;
+    // the type's cached flags decide it after its first test, in one test: a receiver that can contain a type
+    // parameter, or a parameterized receiver whose type arguments name user declarations; a plain class receiver,
+    // the type of the object's class, which the object keeps, is neither (issue #6419)
+    signed char flags = receiver_type_info->getContainsTypeParameterCache();
+    if (flags) {
+        // the call substitutes the type arguments of a parameterized receiver (Box<Foo>), which it reads through the
+        // derived type (issue #6419); a value not known yet is tested here too
+        if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(receiver_type_info)) {
+            markTypeUnsafe();
+        }
+        if (!(flags & QoreTypeInfo::QTI_CTP_UNSAFE_RECEIVER && !(flags & 1))
+                && qore_type_contains_type_parameter(receiver_type_info)) {
+            receiver_type_info = qore_substitute_type_params_if_needed(receiver_type_info);
+            // code that runs without an instantiation of its type parameters (a static method of G<T> called as
+            // G::m(), whose code calls id(v)) binds those of the method's class to the types of the arguments, as
+            // G::id(v) made there does (qore#6186)
+            if (qore_type_contains_type_parameter(receiver_type_info)) {
+                if (const QoreTypeInfo* inferred = qore_merge_inferred_class_receiver(receiver_type_info,
+                        func->runtimeInferClassReceiverTypeInfo(getArgs(), receiver_type_info))) {
+                    receiver_type_info = inferred;
+                }
+            }
+            // the substituted receiver (Box<T> with T as Foo)
+            if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(receiver_type_info)) {
+                markTypeUnsafe();
             }
         }
     }
@@ -1853,7 +1897,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
         // out of line, so that the calls without a receiver keep their code (qore#6308)
         substituteCallerReceiverTypeParams(func);
     } else if (self) {
-        receiver_type_info = qore_get_object_receiver_type_info(self);
+        setObjectReceiverTypeInfo(self);
     }
 
 #ifdef QORE_MANAGE_STACK
@@ -2125,9 +2169,9 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
             xsink2.clear();
             // A rejected generic variant may have installed its own instantiation. Restore the caller
             // before the replacement entry, which can be nongeneric and need no instantiation at all.
-            if (restore_type_param_instantiation) {
+            if (generic_frame & GF_RESTORE_TYPE_PARAM_INSTANTIATION) {
                 runtime_set_type_param_instantiation(old_type_param_instantiation);
-                restore_type_param_instantiation = false;
+                generic_frame &= ~GF_RESTORE_TYPE_PARAM_INSTANTIATION;
                 old_type_param_instantiation = nullptr;
             }
 #ifdef DEBUG
@@ -2274,9 +2318,9 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     variant_needs_type_param_substitution = sig && sig->needsTypeParameterSubstitution();
     if (!variant_needs_type_param_substitution && !variant->isUser()) {
         type_param_instantiation.clear();
-        if (restore_type_param_instantiation) {
+        if (generic_frame & GF_RESTORE_TYPE_PARAM_INSTANTIATION) {
             runtime_set_type_param_instantiation(old_type_param_instantiation);
-            restore_type_param_instantiation = false;
+            generic_frame &= ~GF_RESTORE_TYPE_PARAM_INSTANTIATION;
             old_type_param_instantiation = nullptr;
         }
         return 0;
@@ -2285,9 +2329,9 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     const UserSignature* generic_sig = qore_get_variant_generic_signature(variant);
     if (!generic_sig) {
         type_param_instantiation.clear();
-        if (restore_type_param_instantiation) {
+        if (generic_frame & GF_RESTORE_TYPE_PARAM_INSTANTIATION) {
             runtime_set_type_param_instantiation(old_type_param_instantiation);
-            restore_type_param_instantiation = false;
+            generic_frame &= ~GF_RESTORE_TYPE_PARAM_INSTANTIATION;
             old_type_param_instantiation = nullptr;
         }
         return 0;
@@ -2329,10 +2373,20 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
             getCallName().c_str(), sig ? sig->getSignatureText() : "");
         return -1;
     }
+    // the inferred type arguments can be read through the arguments' derived types: a frame whose type arguments
+    // name user declarations holds them (issue #6419)
+    if (!(generic_frame & GF_TYPE_UNSAFE)) {
+        for (const QoreTypeInfo* arg : type_param_instantiation.type_args) {
+            if (qore_type_needs_decl_pin(arg)) {
+                markTypeUnsafe();
+                break;
+            }
+        }
+    }
 
-    if (!restore_type_param_instantiation) {
+    if (!(generic_frame & GF_RESTORE_TYPE_PARAM_INSTANTIATION)) {
         old_type_param_instantiation = runtime_set_type_param_instantiation(&type_param_instantiation);
-        restore_type_param_instantiation = true;
+        generic_frame |= GF_RESTORE_TYPE_PARAM_INSTANTIATION;
     } else {
         runtime_set_type_param_instantiation(&type_param_instantiation);
     }
@@ -5373,7 +5427,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
                 if (rc == QTI_NOT_EQUAL) {
                     ok = false;
-                    if (ilist.size() == 1 && aqf->vlist.singular() && pgm->getParseExceptionSink()) {
+                    if (ilist.size() == 1 && aqf->vlist.singular() && qore_program_ops(pgm).getParseExceptionSink()) {
                         return doSingleVariantTypeException(loc, pi, *i, aqf->className(), getName(), sig, t, a,
                             receiver_type_info, &candidate_inst);
                     }
@@ -5479,7 +5533,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
     if (!variant && pvariant) {
         variant = pvariant;
-    } else if (!variant && !runtime_match && pmatch == -1 && pgm->getParseExceptionSink()) {
+    } else if (!variant && !runtime_match && pmatch == -1 && qore_program_ops(pgm).getParseExceptionSink()) {
         name_vec_t accessibleParamNames;
         if (named_callable_cnt) {
             last_class = 0;
@@ -5621,7 +5675,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 "CALL-WITH-TYPE-ERRORS", desc);
         }
 
-        if (pgm->getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
+        if (qore_program_ops(pgm).getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
                 best_binding.arg_types, receiver_type_info, &best_type_param_inst) && !err) {
             err = -1;
         }
@@ -5672,7 +5726,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
     };
     auto conflict_error = [&] (const AbstractQoreFunctionVariant* bind_variant,
             const AbstractQoreFunctionVariant* conflict) {
-        if (!pgm->getParseExceptionSink()) {
+        if (!qore_program_ops(pgm).getParseExceptionSink()) {
             return;
         }
         QoreStringNode* desc = new QoreStringNode("named call '");
@@ -6768,7 +6822,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     if (rc == QTI_NOT_EQUAL) {
                         ok = false;
                         // raise a detailed parse exception immediately if there is only one variant
-                        if (ilist.size() == 1 && aqf->vlist.singular() && pgm->getParseExceptionSink()) {
+                        if (ilist.size() == 1 && aqf->vlist.singular() && qore_program_ops(pgm).getParseExceptionSink()) {
                             return doSingleVariantTypeException(loc, pi, *i, aqf->className(), getName(), sig, t, a,
                                 receiver_type_info, &candidate_inst);
                         }
@@ -6918,7 +6972,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
             type_param_inst->clear();
         }
     }
-    if (!variant && !runtime_match && pmatch == -1 && pgm->getParseExceptionSink()) {
+    if (!variant && !runtime_match && pmatch == -1 && qore_program_ops(pgm).getParseExceptionSink()) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
         do_call_str(*desc, this, argTypeInfo, explicit_type_args, receiver_type_info);
         desc->concat("' can be found; ");
@@ -6982,7 +7036,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                 "CALL-WITH-TYPE-ERRORS", desc);
         }
 
-        if (pgm->getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
+        if (qore_program_ops(pgm).getParseExceptionSink() && qore_check_date_subtype_args(loc, variant, aqf->className(), getName(),
                 argTypeInfo, receiver_type_info, &best_type_param_inst) && !err) {
             err = -1;
         }
@@ -7734,6 +7788,7 @@ QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) co
 
 void UserVariantBase::registerPrecompiledAOTFunction(
         AotFunctionPtr fn, QoreAOTContext* ctx, const QoreProgramLocation* body_loc) {
+    aot_body_entry = qore_aot_bind_body(fn, ctx);
     QoreAOTContext* old_ctx = cached_aot_ctx.exchange(ctx, std::memory_order_acq_rel);
     if (old_ctx != ctx) {
         delete old_ctx;
@@ -7818,6 +7873,7 @@ bool UserVariantBase::ensureAOTContext(const char* name, ExceptionSink* xsink) c
         return false;
     }
 
+    aot_body_entry = qore_aot_bind_body(cached_aot_fn, ctx);
     cached_aot_ctx.store(ctx, std::memory_order_release);
     aot_lazy_function_ir.reset();
     aot_lazy_function_ir_index = 0;
@@ -7827,7 +7883,7 @@ bool UserVariantBase::ensureAOTContext(const char* name, ExceptionSink* xsink) c
 
 const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
     if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
-        return ctx->all_body_locals;
+        return ctx->runtime_body_locals;
     }
     const QoreIRFunction* ir = getCachedIR();
     assert(ir);
@@ -7866,7 +7922,7 @@ void UserVariantBase::publishIRContextFlags(const IRContextFlags& flags) const {
 
 const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
     if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
-        return ctx->all_body_locals;
+        return ctx->runtime_body_locals;
     }
     const QoreIRFunction* ir = getCachedIR();
     assert(ir);
@@ -7915,7 +7971,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
             }
         }
 
-        delete ir->cached_pre_instantiated;
+        // the set replaces the previous one (setCachedPreInstantiated())
         auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
         for (unsigned i = 0; i < signature.numParams(); ++i) {
             if (signature.lv[i]) {
@@ -7939,7 +7995,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
                 cached_pre_inst->insert(lv);
             }
         }
-        ir->cached_pre_instantiated = cached_pre_inst;
+        ir->setCachedPreInstantiated(cached_pre_inst);
     }
     // Publish only fully initialized IR, and publish it exactly once.  The release
     // store in the CAS is what orders every mutation above against the acquire load in
@@ -8694,7 +8750,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             cached_pre_inst->insert(lv);
         }
     }
-    func->cached_pre_instantiated = cached_pre_inst;
+    func->setCachedPreInstantiated(cached_pre_inst);
 
     // Build param_slot_ids: maps param index → slot_id for direct param passing.
     // Also build param_local_vars for type information access during direct param processing.
@@ -9603,8 +9659,7 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
             const AbstractStatement* old_stmt;
             const QoreProgramLocation* old_loc;
             QoreParseOptions old_po;
-            swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(), call_po, old_stmt, old_loc,
-                old_po);
+            enter_compiled_body_options(xsink, call_po, old_stmt, old_loc, old_po);
 
             QoreValue ir_return_value;
             bool ok = false;
@@ -9621,10 +9676,16 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
                 std::string error;
                 ok = QoreJIT::instance().executeWithFallback(*ir, ir_return_value, xsink, error,
                     ir->cached_pre_instantiated);
+                // the check is also taken while a debugger has native frames to report, whose returns make their
+                // exit events here (issue #6602)
                 if (!*xsink && qore_jit_deopt_requested()) {
-                    ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr, nullptr, nullptr,
-                        ir->cached_pre_instantiated, (!self && signature.selfid) ? signature.selfid : nullptr,
-                        statements, pgm);
+                    bool deopt = qore_jit_take_guard_deopt();
+                    if (deopt) {
+                        ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr, nullptr, nullptr,
+                            ir->cached_pre_instantiated, (!self && signature.selfid) ? signature.selfid : nullptr,
+                            statements, pgm);
+                    }
+                    qore_jit_debug_frame_return(this, ir_return_value, deopt, xsink);
                 }
             } else {
                 ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr, nullptr, nullptr,
@@ -9679,7 +9740,7 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
             if (val.isNothing()) {
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                 if (*xsink) {
-                    xsink->overrideLocation(*signature.getParseLocation());
+                    qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
                     xsink->appendLastDescription(": block missing return statement");
                 }
             } else {
@@ -9847,11 +9908,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             }
 
             if (!gate || (gate->enter(xsink) >= 0)) {
-                // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
-                // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
-                // are never accessed by AST callbacks).
+                // Instantiate the locals that the compiled body accesses through the runtime stack.
                 const std::vector<LocalVar*>& body_locals = aot_ctx
-                    ? aot_ctx->all_body_locals
+                    ? aot_ctx->runtime_body_locals
                     : ir->ast_visible_body_locals;
 
                 // Instantiate AST-visible body locals so that AST Invoke callbacks
@@ -9867,15 +9926,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                 }
 
-                // Swap in the variant's parse options and set runtime_loc to the
-                // function's parse location so that nested function/method calls
-                // (via CodeEvaluationHelper) report this function's source
-                // location as the caller.
+                // The body runs with the callee's options. Its entry location is the caller's statement.
                 const AbstractStatement* old_stmt;
                 const QoreProgramLocation* old_loc;
                 QoreParseOptions old_po;
-                swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(), po,
-                    old_stmt, old_loc, old_po);
+                enter_compiled_body_options(xsink, po, old_stmt, old_loc, old_po);
 
                 // Note: We used to isolate from outer AST stack location chain by nulling it,
                 // but this caused crashes when exceptions are thrown from builtins called during
@@ -9893,7 +9948,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // through to the normal xsink-set path below.
                 try {
                     if (aot_ctx && cached_aot_fn) {
-                        result_bits = cached_aot_fn(aot_ctx, xsink);
+                        result_bits = aot_body_entry(aot_ctx, xsink);
                     } else {
                         assert(jit_fn);
                         result_bits = jit_fn(xsink);
@@ -9907,25 +9962,34 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // and evalTiered falls through to AST.  In JIT, the guard sets a
                 // thread-local flag and returns NOTHING via error_return_block.
                 // Body locals are still instantiated, so AST can re-execute.
+                // the check is also taken while a debugger has native frames to report, whose returns make their
+                // exit events here (issue #6602)
                 if (!*xsink && qore_jit_deopt_requested()) {
-                    printd(2, "evalTiered JIT-DEOPT: '%s' — falling back to AST\n", name);
-                    static constinit QoreLazyValue<bool> debug_deopt_setting([]() -> bool {
-                        QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
-                        const char* debug_env = debug_env_holder.c_str();
-                        return debug_env && strstr(debug_env, "deopt");
-                    });
-                    const bool debug_deopt = debug_deopt_setting.get();
-                    if (debug_deopt) {
-                        fprintf(stderr, "[DEOPT-JIT->AST] Function '%s' deopting from JIT to AST\n",
-                                name ? name : "<unknown>");
-                        fflush(stderr);
+                    bool deopt = qore_jit_take_guard_deopt();
+                    if (deopt) {
+                        printd(2, "evalTiered JIT-DEOPT: '%s' — falling back to AST\n", name);
+                        static constinit QoreLazyValue<bool> debug_deopt_setting([]() -> bool {
+                            QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
+                            const char* debug_env = debug_env_holder.c_str();
+                            return debug_env && strstr(debug_env, "deopt");
+                        });
+                        const bool debug_deopt = debug_deopt_setting.get();
+                        if (debug_deopt) {
+                            fprintf(stderr, "[DEOPT-JIT->AST] Function '%s' deopting from JIT to AST\n",
+                                    name ? name : "<unknown>");
+                            fflush(stderr);
+                        }
+                        if (pgm) {
+                            pgm->recordIRFallback("JIT guard failure");
+                        }
+                        if (statements) {
+                            val = statements->exec(xsink);
+                        }
+                    } else {
+                        // a bit cast, not memcpy(), which a fortified C library checks (see QoreJITIncludes.h)
+                        val = std::bit_cast<QoreValue>(result_bits);
                     }
-                    if (pgm) {
-                        pgm->recordIRFallback("JIT guard failure");
-                    }
-                    if (statements) {
-                        val = statements->exec(xsink);
-                    }
+                    qore_jit_debug_frame_return(this, val, deopt, xsink);
                 } else {
                     // a bit cast, not memcpy(), which a fortified C library checks (see QoreJITIncludes.h)
                     val = std::bit_cast<QoreValue>(result_bits);
@@ -9984,7 +10048,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                     if (*xsink) {
-                        xsink->overrideLocation(*signature.getParseLocation());
+                        qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
                         xsink->appendLastDescription(": block missing return statement");
                     }
                 } else {
@@ -10027,15 +10091,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                 }
 
-                // Swap in the variant's parse options and set runtime_loc to the
-                // function's parse location for the duration of IR execution. The
-                // IR interpreter updates runtime_loc per-instruction, but this
-                // ensures correct location from the start.
+                // The body runs with the callee's options. Its entry location is the caller's statement.
                 const AbstractStatement* old_stmt;
                 const QoreProgramLocation* old_loc;
                 QoreParseOptions old_po;
-                swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(), po,
-                    old_stmt, old_loc, old_po);
+                enter_compiled_body_options(xsink, po, old_stmt, old_loc, old_po);
 
                 // Note: We do NOT isolate from outer stack location chain here.
                 // CodeEvaluationHelper RAII properly manages the stack location chain
@@ -10139,7 +10199,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                     if (*xsink) {
-                        xsink->overrideLocation(*signature.getParseLocation());
+                        qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
                         xsink->appendLastDescription(": block missing return statement");
                     }
                 } else {
@@ -10241,7 +10301,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             : signature.getReturnTypeInfo();
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
         if (*xsink) {
-            xsink->overrideLocation(*signature.getParseLocation());
+            qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
             xsink->appendLastDescription(": block missing return statement");
         }
     }
@@ -10389,7 +10449,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
         // issue #3255: make sure any exception reflects the signature location
         if (*xsink) {
-            xsink->overrideLocation(*signature.getParseLocation());
+            qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
             xsink->appendLastDescription(": block missing return statement");
         }
     }

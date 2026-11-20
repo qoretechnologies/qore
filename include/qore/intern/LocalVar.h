@@ -1015,6 +1015,11 @@ public:
             // body on a worker thread, the variable must be found via the runtime closure environment —
             // instantiating a new CVV on the worker thread would create a separate copy invisible to the
             // declaring function's thread.
+            // only in the current Program's own thread-local data (qore#6185)
+            if (checkThreadLocalDataOwner(xsink)) {
+                needs_deref = false;
+                return QoreValue();
+            }
             const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
             val = thread_try_find_closure_var(name.c_str());
         }
@@ -1075,6 +1080,14 @@ public:
         reference whose target does not exist (nothing to remove; no exception is raised)
     */
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
+        return getLValueInline(lvh, for_remove, initial_assignment);
+    }
+
+    //! getLValue(), always inlined: for the JIT runtime's assignments to local variables, which inlined getLValue()
+    //! until the size of their unity chunk changed the compiler's choice; getLValue() itself is left to the compiler,
+    //! which calls it from the IR interpreter's large function (issue #6419)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int getLValueInline(LValueHelper& lvh, bool for_remove,
+            bool initial_assignment) const {
         LocalVarLValueLookup rc = tryGetLValue(lvh, for_remove, initial_assignment);
         if (rc == LocalVarLValueLookup::Found) {
             return 0;
@@ -1113,7 +1126,11 @@ public:
         return val.getLValue(lvh, false, ti, rti);
     }
 
-    DLLLOCAL LocalVarLValueLookup tryGetLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
+    // always inlined, as the compiler did at both call sites (getLValue() and the IR interpreter's lvalue lookup)
+    // until the size of the unity chunks that compile them changed its choice: the assignments to local variables of
+    // the AST interpreter then took about 20 more instructions (issue #6419)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE LocalVarLValueLookup tryGetLValue(LValueHelper& lvh, bool for_remove,
+            bool initial_assignment) const {
         //printd(5, "LocalVar::tryGetLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
         //  getName(), for_remove, closure_use, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));
         if (read_only && !initial_assignment) {
@@ -1140,7 +1157,11 @@ public:
 
         ClosureVarValue* val = findClosureVarValue();
         if (!val && !thread_has_runtime_closure_env()) {
-            // Only lazily instantiate when NOT inside a closure body (see eval() comment)
+            // Only lazily instantiate when NOT inside a closure body (see eval() comment), and only in the current
+            // Program's own thread-local data (qore#6185)
+            if (checkThreadLocalDataOwner(lvh.vl.xsink)) {
+                return LocalVarLValueLookup::Error;
+            }
             const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
             val = thread_try_find_closure_var(name.c_str());
         }
@@ -1390,6 +1411,14 @@ public:
     DLLLOCAL const LocalVar* getParseScopePrev() const {
         return parse_scope_prev;
     }
+
+    //! Checks that the thread has local data, and that it is that of the current Program
+    /** If not, raises \c PROGRAM-THREAD-LOCAL-ERROR (qore#6185).  It is only called where the variable is not found,
+        so that a variable access costs nothing more.
+
+        @return 0 if the data is that of the current Program, -1 if an exception was raised
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkThreadLocalDataOwner(ExceptionSink* xsink) const;
 
 private:
     std::string name;

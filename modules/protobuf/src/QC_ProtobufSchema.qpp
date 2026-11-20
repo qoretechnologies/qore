@@ -315,7 +315,8 @@ list<string> ProtobufSchema::messageTypes() {
 
 //! Returns a default (zero-valued) message as a Qore hash
 /** @param type the fully-qualified message type name
-    @return a hash with all fields set to their default values
+    @return a hash with all fields set to their default values; message fields have no value (see
+    @ref protobufnesting)
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
 
@@ -336,13 +337,20 @@ hash<auto> ProtobufSchema::defaultMessage(string type) {
 
 //! Encodes a Qore hash as a protobuf binary message
 /** @param type the fully-qualified message type name
-    @param data the hash to encode
+    @param data the hash to encode; extension fields are given with their full names (see @ref protobufextensions)
 
     @return the protobuf-encoded binary data
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-FIELD-ERROR if a hash key doesn't match a field
     @throw PROTOBUF-ENCODE-ERROR if serialization fails
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
+    @throw ENCODING-CONVERSION-ERROR if a string for a \c string field or a string map key cannot be converted to
+    UTF-8
+
+    @note a protobuf string is UTF-8 text: the strings for \c string fields are converted to UTF-8 from their
+    encodings, and string map keys from the default encoding (the encoding of hash keys)
 
     @since %protobuf 1.0
 */
@@ -357,11 +365,22 @@ binary ProtobufSchema::encode(string type, hash<auto> data) {
 /** @param type the fully-qualified message type name
     @param data the protobuf-encoded binary data
 
-    @return the decoded message as a hash
+    @return the decoded message as a hash; extension fields that are set are given with their full names in square
+    brackets (see @ref protobufextensions)
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-DECODE-ERROR if parsing fails, or a string map key in the message contains a NUL character,
     which a hash key cannot hold
+    @throw INVALID-ENCODING if a string field or a string map key of a \c proto2 message is not valid UTF-8 (a
+    \c proto3 message with such a string fails to parse, \c PROTOBUF-DECODE-ERROR); a \c bytes field holds data
+    that is not text
+    @throw ENCODING-CONVERSION-ERROR if a string map key cannot be held in the default encoding, the encoding of hash
+    keys (ex: \c "€" with an \c ISO-8859-1 default encoding)
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
+
+    @note the strings of the hash returned are tagged UTF-8; string map keys are converted to the default encoding
+    (the encoding of hash keys), as parse_json() converts its keys
 
     @since %protobuf 1.0
 */
@@ -379,7 +398,15 @@ hash<auto> ProtobufSchema::decode(string type, binary data) {
     @return the JSON string representation
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
-    @throw PROTOBUF-JSON-ERROR if JSON conversion fails
+    @throw PROTOBUF-JSON-ERROR if JSON conversion fails, or an extension field is set and the module was built with a
+    protobuf version before v22 (see @ref protobufextensions)
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
+    @throw ENCODING-CONVERSION-ERROR if a string for a \c string field or a string map key cannot be converted to
+    UTF-8
+
+    @note the strings for \c string fields are converted to UTF-8 from their encodings and string map keys from the
+    default encoding, as in encode(); the JSON string returned is tagged UTF-8
 
     @since %protobuf 1.0
 */
@@ -398,8 +425,16 @@ string ProtobufSchema::toJson(string type, hash<auto> data) {
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-JSON-ERROR if JSON parsing fails
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
     @throw PROTOBUF-DECODE-ERROR if a string map key in the message contains a NUL character, which a hash key cannot
     hold, so the message cannot be decoded to a hash
+    @throw INVALID-ENCODING if \a json is not valid text in its encoding
+    @throw ENCODING-CONVERSION-ERROR if \a json cannot be converted to UTF-8, or a string map key of the message
+    cannot be held in the default encoding, the encoding of hash keys
+
+    @note \a json is checked in its own encoding and converted to UTF-8 (the encoding libprotobuf parses); the strings
+    of the hash returned are tagged UTF-8, and string map keys are converted to the default encoding, as in decode()
 
     @since %protobuf 1.0
 */

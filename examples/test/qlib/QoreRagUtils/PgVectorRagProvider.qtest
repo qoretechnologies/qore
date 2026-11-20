@@ -558,12 +558,12 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         AbstractConnection conn = get_connection(conn_name);
         Qore::SQL::AbstractDatasource ds = conn.get();
         string table = "qore_rag_mgmt_" + get_random_string(8).lwr();
-        try {
-            ds.exec("CREATE EXTENSION IF NOT EXISTS vector");
-            ds.commit();
-        } catch (hash<ExceptionInfo> ex) {
+        # an extension is an object of the whole database, which a test does not create: concurrent PostgreSQL
+        # tests set up their search_path with the extensions installed at their start; vector is installed by the
+        # database setup (examples/test/docker_test/postgres_lib.sh) (issue #6717)
+        if (!ds.selectRow("select 1 as x from pg_catalog.pg_extension where extname = 'vector'")) {
             ds.rollback();
-            testSkip("pgvector is not available: " + ex.desc);
+            testSkip("the vector extension is not installed in the database");
         }
         ds.exec(sprintf("CREATE TABLE %s (id text PRIMARY KEY, embedding vector(3), payload jsonb)", table));
         ds.commit();
@@ -596,7 +596,8 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         assertEq("b", groups[0].value);
         assertEq(2, groups[0].count);
         assertEq(2026-11-03T10:00:00, groups[0].last_write);
-        assertEq(("b", NOTHING, "a"), map $1.value, groups);
+        # records without the key sort last among the groups of the same count
+        assertEq(("b", "a", NOTHING), map $1.value, groups);
         assertEq((), store.summarizeBy("k", {"payload_eq": {"scope": "none"}}));
 
         assertEq(2, store.deleteByFilter({"payload_eq": {"k": "b"}}));

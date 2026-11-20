@@ -33,6 +33,8 @@ static bool check(QoreProgram* pgm, const OpcodeCase& test, bool nested) {
         inst->result = fn.createValue();
         block->instructions.push_back(std::move(inst));
     }
+    // the instruction is in a function that can run (qore#6468)
+    block->instructions.push_back(std::make_unique<QoreIRReturnInstruction>());
     fn.blocks.push_back(std::move(block));
     QoreAOTBinaryWriter writer;
     uint32_t section = writer.beginSection(QoreAOTSectionType::TOPLEVEL);

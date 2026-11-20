@@ -1,0 +1,256 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class AlignUniqueToPrimaryKeyTest
+
+#! A schema alignment turns a unique constraint into the primary key on the same columns (issue #6734)
+/** The unique constraint's index was taken as the base of the primary key ("using index"), but it is dropped with the
+    constraint (or that another constraint uses): the alignment SQL failed on PostgreSQL ("index does not exist",
+    "already associated with a constraint") and Oracle (ORA-01418); runs on PostgreSQL, MySQL, Oracle and SQL Server
+    when \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL, \c QORE_DB_CONNSTR_ORACLE and \c QORE_DB_CONNSTR_FREETDS
+    are set
+*/
+class AlignUniqueToPrimaryKeyTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dbs;
+        hash<string, string> skips = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "mssql": "QORE_DB_CONNSTR_FREETDS is not set",
+        };
+    }
+
+    constructor() : Test("AlignUniqueToPrimaryKey", "1.0", \ARGV) {
+        addTestCase("PostgreSQL", \pgsqlTest());
+        addTestCase("MySQL", \mysqlTest());
+        addTestCase("Oracle", \oracleTest());
+        addTestCase("SQL Server", \mssqlTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "AlignUniqueToPrimaryKey");
+            dbs.pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%else
+        skips.pgsql = "no pgsql module";
+%endif
+%ifndef NoMysql
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            connect("mysql", *string sub () { return MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL,
+                "AlignUniqueToPrimaryKey"); });
+        }
+%else
+        skips.mysql = "no mysql module";
+%endif
+%ifndef NoOracle
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            connect("oracle", *string sub () { return OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE,
+                "AlignUniqueToPrimaryKey"); });
+        }
+%else
+        skips.oracle = "no oracle module";
+%endif
+%ifndef NoFreetds
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            connect("mssql", *string sub () { return MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS,
+                "AlignUniqueToPrimaryKey"); });
+        }
+%else
+        skips.mssql = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        foreach string k in (keys dbs) {
+            dbs{k}.rollback();
+        }
+        remove dbs;
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            MysqlRunDatabase::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            OracleRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            MssqlRunDatabase::teardown();
+        }
+    }
+
+    private connect(string db, code get_connstr) {
+        try {
+            Datasource ds(get_connstr());
+            ds.open();
+            dbs{db} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skips{db} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    pgsqlTest() {
+        check(getDs("pgsql"), "pgsql");
+    }
+
+    mysqlTest() {
+        check(getDs("mysql"), "mysql");
+    }
+
+    oracleTest() {
+        check(getDs("oracle"), "oracle");
+    }
+
+    mssqlTest() {
+        check(getDs("mssql"), "mssql");
+    }
+
+    private Datasource getDs(string db) {
+        if (!dbs{db}) {
+            testSkip(skips{db});
+        }
+        return dbs{db};
+    }
+
+    private dropTables(Datasource ds, list<string> names) {
+        ds.rollback();
+        foreach string n in (names) {
+            try {
+                ds.exec("drop table " + n);
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
+            }
+        }
+    }
+
+    #! the schema of the tables: aupk_b has a primary key on k, aupk_c a foreign constraint referencing aupk_b (k)
+    private hash<auto> getSchema(*hash<auto> b_keys, *bool fk) {
+        hash<auto!> bdesc = {
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "k": {"qore_type": Type::Int, "notnull": True},
+            },
+        };
+        bdesc += b_keys ?? {"primary_key": {"name": "aupk_b_pk", "columns": ("k",)}};
+        hash<auto!> cdesc = {"columns": {"id": {"qore_type": Type::Int}, "k": {"qore_type": Type::Int}}};
+        if (fk ?? True) {
+            cdesc.foreign_constraints = {"aupk_c_fk": {"columns": ("k",), "table": "aupk_b",
+                "target_columns": ("k",)}};
+        }
+        return {"tables": {"aupk_b": bdesc, "aupk_c": cdesc}};
+    }
+
+    #! creates the tables as described
+    private create(Datasource ds, hash<auto> schema) {
+        map ds.exec($1), (new Database(ds)).getDatabase().getAlignSql(schema);
+        ds.commit();
+    }
+
+    private list<auto> alignAndRun(Datasource ds, string db) {
+        list<auto> sql = (new Database(ds)).getDatabase().getAlignSql(getSchema());
+        try {
+            map ds.exec($1), sql;
+            ds.commit();
+        } catch (hash<ExceptionInfo> ex) {
+            ds.rollback();
+            fail(sprintf("%s: the alignment SQL fails: %s: %s; SQL: %y", db, ex.err, ex.desc, sql));
+        }
+        return sql;
+    }
+
+    private check(Datasource ds, string db) {
+        on_exit ds.rollback();
+        on_exit dropTables(ds, ("aupk_c", "aupk_b"));
+
+        # a unique constraint on the primary key's columns, referenced by a foreign constraint
+        dropTables(ds, ("aupk_c", "aupk_b"));
+        create(ds, getSchema({"unique_constraints": {"aupk_b_uk": {"columns": ("k",)}}}));
+        assertTrue((new Table(ds, "aupk_b")).getTable().getConstraints().hasKey("aupk_b_uk"), db + ": set up");
+        list<auto> sql = alignAndRun(ds, db);
+        assertEq((), (select sql, $1 =~ /using index aupk_b_uk/i), db + ": the primary key is not based on the "
+            "unique constraint's index: " + sprintf("%y", sql));
+        AbstractTable b = (new Table(ds, "aupk_b")).getTable();
+        assertEq(("k",), b.getPrimaryKey().keys(), db + ": the primary key is created");
+        assertFalse(b.getConstraints().hasKey("aupk_b_uk"), db + ": the unique constraint is dropped");
+        assertTrue((new Table(ds, "aupk_c")).getTable().getForeignConstraints().hasKey("aupk_c_fk"),
+            db + ": the foreign constraint references the primary key");
+        assertEq((), (new Database(ds)).getDatabase().getAlignSql(getSchema()), db + ": nothing is left to align");
+
+        # a unique constraint that the template keeps, with a primary key on the same columns (Oracle refuses both on the
+        # same columns: ORA-02261)
+        if (db != "oracle") {
+            dropTables(ds, ("aupk_c", "aupk_b"));
+            create(ds, getSchema({"unique_constraints": {"aupk_b_uk": {"columns": ("k",)}}}, False));
+            hash<auto> keep = getSchema({"primary_key": {"name": "aupk_b_pk", "columns": ("k",)},
+                "unique_constraints": {"aupk_b_uk": {"columns": ("k",)}}}, False);
+            list<auto> ksql = (new Database(ds)).getDatabase().getAlignSql(keep);
+            try {
+                map ds.exec($1), ksql;
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
+                fail(sprintf("%s: the alignment SQL fails: %s: %s; SQL: %y", db, ex.err, ex.desc, ksql));
+            }
+            b = (new Table(ds, "aupk_b")).getTable();
+            assertEq(("k",), b.getPrimaryKey().keys(), db + ": the primary key is added beside the unique constraint");
+            assertTrue(b.getConstraints().hasKey("aupk_b_uk"), db + ": the unique constraint is kept");
+            assertEq((), (new Database(ds)).getDatabase().getAlignSql(keep), db + ": nothing is left to align");
+        }
+
+        # Oracle: a unique constraint that uses an index of another name
+        if (db == "oracle") {
+            dropTables(ds, ("aupk_c", "aupk_b"));
+            create(ds, getSchema({}, False));
+            ds.exec("alter table aupk_b add constraint aupk_b_uk unique (k) using index (create unique index "
+                "aupk_b_ix2 on aupk_b (k))");
+            ds.commit();
+            sql = alignAndRun(ds, db);
+            assertEq((), (select sql, $1 =~ /using index aupk_b_ix2/i), db + ": the primary key is not based on the "
+                "constraint's index of another name: " + sprintf("%y", sql));
+            assertEq(("k",), (new Table(ds, "aupk_b")).getTable().getPrimaryKey().keys(), db + ": primary key");
+            assertEq((), (new Database(ds)).getDatabase().getAlignSql(getSchema()), db + ": nothing is left to align");
+        }
+
+        # a unique index that no constraint uses: the primary key may still be based on it
+        dropTables(ds, ("aupk_c", "aupk_b"));
+        create(ds, getSchema({"indexes": {"aupk_b_ix": {"columns": ("k",), "unique": True}}}, False));
+        alignAndRun(ds, db);
+        assertEq(("k",), (new Table(ds, "aupk_b")).getTable().getPrimaryKey().keys(),
+            db + ": the primary key is created on a plain unique index");
+        assertEq((), (new Database(ds)).getDatabase().getAlignSql(getSchema()),
+            db + ": nothing is left to align after a plain unique index");
+    }
+}

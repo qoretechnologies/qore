@@ -581,7 +581,95 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      flow requests (a u8 mask: bit 0 break, bit 1 continue, bit 2 return, then the u16 block index of each path in
 //!      that order), and the flags of a block record have the bit 0x10 for a block of such a path (#6200, #6201).  A
 //!      v9-v45 image has none: a request at a step event of its code returns from the function.
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
+//! v47 (batch AK; one format version for the format changes of the batch, one line each):
+//!      - each serialized IR instruction ends with its runtime location (QoreIRInstruction::stmt_loc), the location of
+//!        the innermost statement whose code it is: a u8 (QoreAOTStmtLocTag): 0 none, 1 the one of the instruction
+//!        written before it in its function, 2 an earlier entry of the function's statement location table (a u32
+//!        index), 3 a new entry (start line, end line and file, as the instruction's own location), so that the IR
+//!        rebuilt from the image (debug IR, closure bodies without native code, handler and background helper IR)
+//!        locates an exception at the statement, as all other code does; a v9-v46 image has none, and its IR takes
+//!        the location of each instruction (qore#6646)
+//! v48 (batch AL; the reader refuses v47 and older images):
+//!      - the block cleanups of a return statement that run handlers out of line past the inline cap have a ScopeExit
+//!        with flag bit 2 (hand_over_return), whose handlers hand the values of their returns to the frame's
+//!        handed-over return, and the return takes it with TakeHandedOverReturn (QoreIROpcode 441), or a return in a
+//!        handler that replaces it releases it with ReleaseHandedOverReturn (442); native code calls
+//!        qore_rt_exec_on_block_exit_return_hold(), qore_rt_take_handed_over_return() and
+//!        qore_rt_release_handed_over_return(); a ScopeExit outside return cleanups can produce a boolean that
+//!        branches to the handed-over return if a handler returned (#6137, #6552)
+//!      - ReleaseHandedOverReturn (442) can have one operand, the result of a ScopeExit past the inline cap, which it
+//!        only clears; the ScopeExit with flag bit 2 can have a result: whether its handlers handed a value over (#6552)
+//!      - debug IR can encode ReleasePlainLocalRead (opcode 443, Base group, one operand) to release a functional
+//!        operator's source after a plain local read (#5959); the maximum opcode in the AOT header is 443
+//!      - IR functions have their catch-exit depths and catch-cleanup results after their blocks, as (u16 block, u16
+//!        instruction, u32 value) entries, so that a module's debug IR closes its catch blocks as the IR it was made
+//!        from (qore#6733)
+//!      - the method name of an object method reference (OBJ_METHOD_REF_EXPR and EN_OBJ_METH_REF expressions, and the
+//!        name that native code passes to qore_rt_create_object_method_ref_aot()) is
+//!        "\x02<declared class reference>\x01<method class reference>\x01<method name>" for a normal method of a
+//!        parent class that the compiler resolved for the receiver's declared class (qore_aot_object_method_ref_name(),
+//!        qore#6680); an earlier reader would take it for the name of a method that does not exist
+//! v49 (batch AM; the reader refuses v48 and older images, also those that a qcc executable embeds):
+//!      - the class string of a NEW_OBJECT expression (also the base class constructor calls that a SCOPED_NEW_OBJECT
+//!        record gives) of a call with named arguments starts with the named-call prefix that gives the binding of
+//!        its arguments (qore_aot_named_call_arg_prefix()) and ends with a line feed and the key of the constructor
+//!        variant that the call selected by parameter name (its parameter types and ellipsis), so that the arguments
+//!        keep their source evaluation order and bind to the selected overload (qore_aot_inline_constructor_ref(),
+//!        qore#6699); a v48 reader would take the string for a class name or bind the arguments by position
+//!      - static method call references in compiled code, also one through an object, record the class that declares
+//!        the method (name + LF + declaring-class ref when it differs from the written class; qore#6679)
+//!      - no format change, but the code and the IR that a v48 compiler wrote differ (an image must be rebuilt):
+//!        the accumulator of a fold is released once the fold's value has a reference of its own (qore#6442); the
+//!        exception targets of the handlers that a ScopeExit runs after it has closed its scope and of the end of a try
+//!        statement (qore#6658); the location of an exception raised by a summary that replaces a call in native code
+//!        (qore#6673)
+//! v50 (batch AN; the reader refuses v49 and older images, also those that a qcc executable embeds):
+//!      - each serialized IR instruction ends, after its runtime location, with its temp scope id and the id of the
+//!        innermost temp scope that an exception at it unwinds (two varu32: QoreIRInstruction::temp_scope_id and
+//!        unwind_inner_temp_scope_id), so that the IR rebuilt from an image (debug IR, closure bodies without native
+//!        code, handler and background helper IR) drains the temp scopes on the paths of exceptions as the IR that the
+//!        compiler lowered, and the IR verification follows them; a v49 image has none, and its temp scope ids are all
+//!        0 (qore#6742)
+//!      - no format change, but the code and the IR that a v49 compiler wrote differ (an image must be rebuilt): an
+//!        indexed map no longer releases an element after its read becomes borrowed (qore#5959); the cleanups of a
+//!        return past the handler cap keep the return's value when one of them raises (qore#6762, qore#6763); a closure
+//!        that an outlined helper creates finds the coordinator's locals that it captures, and an outlined helper's
+//!        calls of a bound private:internal method and the locals that it can write (qore#6653, qore#6654); native
+//!        code calls the debugger-aware binder for the direct calls and typed native entries of a frame that a
+//!        debugger attached to mid-frame (qore#6601)
+//! v51 (batch AO; the reader refuses v50 and older images, also those that a qcc executable embeds):
+//!      - each serialized IR function appends a u16 count after its catch tables, followed by (u32 local slot, enclosing
+//!        statement location) pairs in strictly increasing slot order; a None location selects the saved caller
+//!        statement (qore#6672)
+//!      - DOT_EVAL_TARGET (kind 35, inline and slot) and DotEvalMethodDirect / InvokeDotEvalMethodDirect (debug and lazy
+//!        IR groups 14/15) encode the parsed instance or static method family and its declaring class independently of
+//!        overload selection (qore#6805)
+//!      - the flags byte of a body-local record has bit 0x04 (QORE_AOT_BODY_LOCAL_NATIVE_ONLY) for an unshadowed root
+//!        declaration that the standard native entry owns; the loader omits the runtime stack value only with a
+//!        matching native-written slot; widths, ordinals and the IR are unchanged (qore#5946)
+//!      - no format change, but the code that a v50 compiler wrote differs (an image must be rebuilt): string literals
+//!        that an earlier compiler folded with the encoding of the source tagged as the default encoding are
+//!        materialized as UTF-8 CONST_STRING values, as the source is decoded as UTF-8 (qore#6816, qore#6815)
+//! The shared format version for the changes in batch AL (see v48 above).
+constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
+//! The shared format version for the changes in batch AM (see v49 above).
+constexpr uint16_t QORE_AOT_BATCH_AM_VERSION = 49;
+//! The shared format version for the changes in batch AN (see v50 above).
+constexpr uint16_t QORE_AOT_BATCH_AN_VERSION = 50;
+//! The shared format version for the changes in batch AO (see v51 above).
+constexpr uint16_t QORE_AOT_BATCH_AO_VERSION = 51;
+//! First format version whose static method call references record the class that declares their method (see v49
+//! above, qore#6679): the method name of a STATIC_METHOD_REF or EN_STATIC_METH_REF expression, and the name that
+//! native code passes to qore_rt_create_static_method_call_ref_aot(), is followed by a newline and the class
+//! reference of the class that declares the method when that is not the class that the reference names
+//! (qore_aot_encode_static_method_ref_target())
+constexpr uint16_t QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION = 49;
+static_assert(QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION == QORE_AOT_BATCH_AM_VERSION,
+    "the format changes of batch AM share one format version (v49)");
+//! Old compiled artifacts must be rebuilt (see v51 above): the reader refuses older images, the program image of a qcc
+//! executable included (qore_aot_run_v3() reads it before anything else); the reader of a v51 image always has the temp
+//! scopes of its IR (qore#6742) and the local unwind locations of its IR functions (qore#6672)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AO_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -667,10 +755,73 @@ constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
 constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
 //! First format version whose debug IR has the paths of a debugger's flow requests (see v46 above).
 constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
+//! The format version of the format changes of batch AK (see v47 above)
+/** Each change of the batch adds its line to the v47 history above and, if it needs one, a feature version of its own
+    that a static_assert keeps equal to this one
+*/
+constexpr uint16_t QORE_AOT_BATCH_AK_VERSION = 47;
+//! First format version whose serialized IR instructions have their runtime locations (see v47 above)
+/** The locations of the statements of an IR function form a table of the function, whose entries are written where
+    an instruction first has them; the IR of a handler, a closure or a background helper written in an instruction of
+    the function has a table of its own.  The reader gives the instructions with the same entry the same location, so
+    that the IR interpreter and native code store the location only where the statement changes, as for IR lowered
+    from the code (qore#6646)
+*/
+constexpr uint16_t QORE_AOT_STATEMENT_LOCATIONS_VERSION = 47;
+static_assert(QORE_AOT_STATEMENT_LOCATIONS_VERSION == QORE_AOT_BATCH_AK_VERSION,
+    "the format changes of batch AK share one format version (v47)");
+//! First format version whose return statements can take the values that handlers run out of line past the inline
+//! cap handed over (see v48 above, #6137)
+constexpr uint16_t QORE_AOT_HANDED_OVER_RETURN_VERSION = 48;
+static_assert(QORE_AOT_HANDED_OVER_RETURN_VERSION == QORE_AOT_BATCH_AL_VERSION,
+    "the format changes of batch AL share one format version (v48)");
+//! First format version whose IR functions record their catch-exit depths and catch-cleanup results (qore#6733)
+/** QoreIRFunction::catch_exit_depths and catch_cleanup_results (#5968, #6079) are written after the blocks of the
+    function as (block index, instruction index, value) entries, the index of an instruction being that of the
+    written IR (in which a PushTempMarkPair is two instructions); a change of batch AL (see v48 above)
+*/
+constexpr uint16_t QORE_AOT_CATCH_TABLES_VERSION = 48;
+static_assert(QORE_AOT_CATCH_TABLES_VERSION == QORE_AOT_BATCH_AL_VERSION,
+    "the format changes of batch AL share one format version (v48)");
+//! First format version whose object method references can give the method resolved for the receiver's declared
+//! class (see v48 above, qore#6680); a reader of an earlier image reads plain method names.
+constexpr uint16_t QORE_AOT_INHERITED_OBJECT_METHOD_REF_VERSION = 48;
+static_assert(QORE_AOT_INHERITED_OBJECT_METHOD_REF_VERSION == QORE_AOT_BATCH_AL_VERSION,
+    "the format changes of batch AL share one format version (v48)");
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_DEBUG_FLOW_VERSION;
+//! First format version whose inline constructor records give the binding of named arguments and the constructor
+//! variant that they selected (see v49 above, qore#6699)
+constexpr uint16_t QORE_AOT_INLINE_CONSTRUCTOR_BINDING_VERSION = 49;
+static_assert(QORE_AOT_INLINE_CONSTRUCTOR_BINDING_VERSION == QORE_AOT_BATCH_AM_VERSION,
+    "the format changes of batch AM share one format version (v49)");
+//! The format version from which the IR of an image carries the temp scopes of its instructions (qore#6742)
+/** QoreIRInstruction::temp_scope_id and QoreIRInstruction::unwind_inner_temp_scope_id are written after the runtime
+    location of each instruction, so that the IR interpreter drains the temp scopes of IR read from an image on the
+    paths of exceptions as it does those of IR that it lowered, and the verification of the IR follows them.  Part of
+    the format bump of batch AN (see v50 above).
+*/
+constexpr uint16_t QORE_AOT_TEMP_SCOPES_VERSION = 50;
+static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
+    "the format changes of batch AN share one format version (v50)");
+//! Serialized IR functions end with a map of local slots to their enclosing statement at destruction (#6672).
+constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
+static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
+    "the format changes of batch AO share one format version (v51)");
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AO_VERSION;
+
+//! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
+enum class QoreAOTStmtLocTag : uint8_t {
+    //! the instruction has no runtime location (code outside the statements of the function)
+    None = 0,
+    //! the runtime location of the instruction written before it in its function
+    Previous = 1,
+    //! an entry of the statement location table of the function: its u32 index follows
+    Entry = 2,
+    //! a new entry of the table, which takes the next index: its start line, end line and file follow
+    New = 3,
+};
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -1225,7 +1376,7 @@ enum class QoreAOTValueTag : uint8_t {
 };
 
 //! Returns true if a string constant cannot be an AOTExprKind::CONST_STRING (see format version 24)
-/** which is text in the default encoding up to its first null byte; such a string is a CONST_VALUE
+/** which is UTF-8 text up to its first null byte; such a string is a CONST_VALUE
 */
 inline bool qore_aot_string_needs_value(const char* str, size_t len, const QoreEncoding* enc) {
     return enc != QCS_UTF8 || memchr(str, '\0', len);
@@ -1948,9 +2099,11 @@ public:
     }
 
     //! Returns true if \a n bytes at \a ptr are in the section that is read, if any (see QoreAOTSectionBounds)
-    /** If they are not, the read pointer is set to the end of the section and the read is marked as overrun
+    /** If they are not, the read pointer is set to the end of the section and the read is marked as overrun.
+        Keep the inline readers local to the binary that establishes the section bounds: libqore and its tools
+        each have their own qore_aot_read_bounds.
     */
-    static bool readFits(const uint8_t*& ptr, size_t n) {
+    DLLLOCAL static bool readFits(const uint8_t*& ptr, size_t n) {
         const uint8_t* end = qore_aot_read_bounds.end;
         // a read of another buffer while a section is bounded is a reader that sets no bounds of its own
         assert(!end || ptr >= qore_aot_read_bounds.start);
@@ -1963,7 +2116,7 @@ public:
     }
 
     //! Read an unsigned 8-bit integer from a data pointer
-    static uint8_t readU8(const uint8_t*& ptr) {
+    DLLLOCAL static uint8_t readU8(const uint8_t*& ptr) {
         if (!readFits(ptr, 1)) {
             return 0;
         }
@@ -1971,7 +2124,7 @@ public:
     }
 
     //! Read an unsigned 16-bit integer (little-endian) from a data pointer
-    static uint16_t readU16(const uint8_t*& ptr) {
+    DLLLOCAL static uint16_t readU16(const uint8_t*& ptr) {
         if (!readFits(ptr, 2)) {
             return 0;
         }
@@ -1982,7 +2135,7 @@ public:
     }
 
     //! Read an unsigned 32-bit integer (little-endian) from a data pointer
-    static uint32_t readU32(const uint8_t*& ptr) {
+    DLLLOCAL static uint32_t readU32(const uint8_t*& ptr) {
         if (!readFits(ptr, 4)) {
             return 0;
         }
@@ -1995,7 +2148,7 @@ public:
     }
 
     //! Read an unsigned 64-bit integer (little-endian) from a data pointer
-    static uint64_t readU64(const uint8_t*& ptr) {
+    DLLLOCAL static uint64_t readU64(const uint8_t*& ptr) {
         if (!readFits(ptr, 8)) {
             return 0;
         }
@@ -2008,7 +2161,7 @@ public:
     }
 
     //! Read a signed 64-bit integer (little-endian) from a data pointer
-    static int64_t readI64(const uint8_t*& ptr) {
+    DLLLOCAL static int64_t readI64(const uint8_t*& ptr) {
         if (!readFits(ptr, 8)) {
             return 0;
         }
@@ -2023,7 +2176,7 @@ public:
     }
 
     //! Read a 64-bit float (little-endian, IEEE 754) from a data pointer
-    static double readF64(const uint8_t*& ptr) {
+    DLLLOCAL static double readF64(const uint8_t*& ptr) {
         if (!readFits(ptr, 8)) {
             return 0;
         }
@@ -2038,7 +2191,7 @@ public:
     }
 
     //! Read a string reference (offset into string pool) from a data pointer
-    const char* readStringRef(const uint8_t*& ptr) const {
+    DLLLOCAL const char* readStringRef(const uint8_t*& ptr) const {
         uint32_t offset = readU32(ptr);
         return getString(offset);
     }
@@ -2091,6 +2244,34 @@ static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int line) {
     negative lines in stack traces) as soon as a location is built from it.  Only the 0xffff sentinel is read back
     as -1, and only for the signed call sites.
 */
+//! Writes an unsigned 32-bit value in 7-bit groups, least significant first (a small value takes one byte)
+static inline void qore_aot_write_varu32(QoreAOTBinaryWriter& writer, uint32_t v) {
+    while (v >= 0x80) {
+        writer.writeU8(static_cast<uint8_t>(v | 0x80));
+        v >>= 7;
+    }
+    writer.writeU8(static_cast<uint8_t>(v));
+}
+
+//! Reads a value written by qore_aot_write_varu32(); returns false if it is truncated or too long
+static inline bool qore_aot_read_varu32(const uint8_t*& ptr, const uint8_t* end, uint32_t& v) {
+    v = 0;
+    for (unsigned shift = 0; shift < 35; shift += 7) {
+        if (ptr >= end) {
+            return false;
+        }
+        uint8_t b = *ptr++;
+        if (shift == 28 && (b & 0xf0)) {
+            return false;
+        }
+        v |= static_cast<uint32_t>(b & 0x7f) << shift;
+        if (!(b & 0x80)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
         bool signed_legacy = true) {
     if (reader.getHeader().version >= 11) {
@@ -2665,12 +2846,24 @@ bool readEmbeddedSource(const uint8_t* data, uint32_t size, const char*& source,
 
 // ---- Slot Map Serialization (Phase 5) ----
 
-//! Expression identity kinds for serialized slot maps
 //! AOTExprKind::DOT_EVAL_TARGET flag: a pseudo-method call
 constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_PSEUDO = (1 << 0);
 //! AOTExprKind::DOT_EVAL_TARGET flag: the call is dispatched by name; the class, method and variant recorded are those
 //! resolved at parse time, used only by the check of the call's target (issue #5824)
 constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH = (1 << 1);
+//! AO v51 (#6805): kind 35 and direct/invoke instruction groups 14/15 store the parsed method family here.
+//! A bound family appends its declaring-class StringRef even when overload selection is deferred.
+//! The name-dispatch bit belongs only to slot records for the separate CheckCallTarget operation.
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_INSTANCE = 0x04;
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_STATIC = 0x08;
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_FAMILY = 0x0c;
+
+inline bool qore_aot_valid_dot_target_flags(uint8_t flags, bool slot) {
+    const uint8_t allowed = QORE_AOT_DOT_EVAL_TARGET_PSEUDO | QORE_AOT_DOT_EVAL_TARGET_FAMILY
+        | (slot ? QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH : 0);
+    return !(flags & ~allowed) && (flags & QORE_AOT_DOT_EVAL_TARGET_FAMILY) != QORE_AOT_DOT_EVAL_TARGET_FAMILY;
+}
+
 
 enum class AOTExprKind : uint8_t {
     UNSUPPORTED        = 0,   //!< Compile-time-only invalid marker; never serialized in new AOT output
@@ -2709,7 +2902,7 @@ enum class AOTExprKind : uint8_t {
     CONST_NOTHING      = 32,  //!< Nothing constant: no data
     LIST_LITERAL       = 33,  //!< List literal: count(u8) + [value(AOTExprKind)] * N
     CONST_NULL         = 34,  //!< NULL constant: no data
-    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name[\nvariant_class\nvariant_sig], flags=QORE_AOT_DOT_EVAL_TARGET_*
+    DOT_EVAL_TARGET    = 35,  //!< Receiver class, encoded method, flags, and declaring class when bound
     FUNC_CALL_REF      = 36,  //!< Function call reference (\func): ref1=function_name
     BOUND_METHOD_REF   = 37,  //!< Bound method reference (\method): ref1=class_path, ref2=method_name
     STATIC_METHOD_REF  = 38,  //!< Static method reference (\Class::method): ref1=class_path, ref2=method_name
@@ -3061,7 +3254,7 @@ struct AOTExprSlotId {
     AOTExprKind kind = AOTExprKind::UNSUPPORTED; //!< expression kind; UNSUPPORTED is compile-time-only
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
-    std::string ref3;        //!< kind-specific: instantiated object type path for NEW_OBJECT
+    std::string ref3;        //!< instantiated type for NEW_OBJECT or declaring class for a bound DOT_EVAL_TARGET
     uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: QORE_AOT_DOT_EVAL_TARGET_*)
     QoreAOTCallRelocationTargetKind call_relocation_kind = QoreAOTCallRelocationTargetKind::NONE;
     std::string reloc_qore_path; //!< canonical symbol-index path for safe direct-call relocation
@@ -3072,12 +3265,16 @@ struct AOTExprSlotId {
     const name_vec_t* arg_names = nullptr; //!< For CALLREF_CALL_NAMED: the names of the arguments (interned)
 };
 
+//! In the body-local record's flags byte: the runtime wrapper may omit the value slot.
+constexpr uint8_t QORE_AOT_BODY_LOCAL_NATIVE_ONLY = 0x04;
+
 //! Identity for a body local variable (needed for instantiation management)
 struct AOTBodyLocalId {
     std::string name;        //!< variable name
     std::string type_path;   //!< type path
     bool is_closure = false; //!< true if closure variable
     bool read_only = false;  //!< true if read-only binding
+    bool native_only = false; //!< the standard native entry owns the value
     uint32_t slot_id = UINT32_MAX; //!< local slot id when available
     const void* local_var_ptr = nullptr; //!< compile-time only: pointer to LocalVar for identity matching
 };
@@ -5039,6 +5236,27 @@ typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t
 */
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
     const AOTExprWriteFunc& writeExpr);
+
+//! Writes the catch-exit depths and the catch-cleanup results of an IR function, after its blocks (see
+//! QORE_AOT_CATCH_TABLES_VERSION, qore#6733)
+/** Each table is a u32 count and (u16 block index, u16 instruction index, u32 value) entries sorted by position; the
+    index of an instruction is that of the written IR, in which a PushTempMarkPair is two instructions.
+
+    @return true on success, false (with the serialization error set) if an instruction is out of the format's range
+*/
+bool qore_aot_write_ir_catch_tables(QoreAOTBinaryWriter& writer, const QoreIRFunction& func);
+
+//! Reads the tables that qore_aot_write_ir_catch_tables() wrote into the IR function read (qore#6733)
+/** @param ptr the data pointer, advanced past the tables
+    @param end the end of the data
+    @param func the function read, whose blocks and instructions are complete
+    @param error receives the error message if an entry is malformed: an index beyond the blocks or the instructions
+    of a block, or an instruction given twice
+
+    @return true on success, false otherwise
+*/
+bool qore_aot_read_ir_catch_tables(const uint8_t*& ptr, const uint8_t* end, QoreIRFunction& func,
+    std::string& error);
 
 //! The handler functions written or read in the IR of a function (see QORE_AOT_SHARED_HANDLER_VERSION, #6087)
 /** A handler function shared by several handlers (QoreIROnBlockExitInstruction::handler_ir) is written in full once,

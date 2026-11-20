@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - character counts validate text with the platform iconv
 
 # Copyright 2026 Qore Technologies, s.r.o.
 
@@ -8,115 +9,84 @@
 %requires QUnit
 %exec-class StringLengthInvalidEncodingTest
 
-#! the character count of a string that is not valid in its encoding (qore#6597)
-/** Each byte of a byte sequence that is not valid in the encoding of the string counts as one character, in every
-    form of the count: the count stopped at the first such sequence and was less than the number of characters of the
-    string.
-*/
+#! Language character counts validate the string in its declared encoding.
 class StringLengthInvalidEncodingTest inherits QUnit::Test {
-    constructor() : Test("string length of invalid strings", "1.0", \ARGV) {
-        addTestCase("length forms", \lengthForms());
-        addTestCase("short literals", \shortLiterals());
-        addTestCase("compiled int expressions", \intExpressions());
-        addTestCase("other encodings", \otherEncodings());
-        addTestCase("valid strings are unaffected", \validStrings());
+    constructor() : Test("checked character counts", "1.0", \ARGV) {
+        addTestCase("invalid text", \invalidText());
+        addTestCase("expression paths", \expressionPaths());
+        addTestCase("stateful encoding", \statefulEncoding());
+        addTestCase("valid text", \validText());
         set_return_value(main());
     }
 
-    #! returns a string tagged as UTF-8 with the given bytes
-    private static string utf8(string hex) {
-        return binary_to_string(parse_hex_string(hex), "UTF-8");
-    }
-
-    #! returns the strings to check with their expected counts
-    private static hash<string, int> cases() {
-        return {
-            # a truncated two-byte character at the end
-            "61c3": 2,
-            # an invalid byte before a two-byte character: "a", 0xff, "é"
-            "61ffc3a9": 3,
-            # an invalid byte after a two-byte character: "é", 0xff, "a"
-            "c3a9ff61": 3,
-            # a truncated three-byte character at the end: "a", "é", 0xe2 0x82
-            "61c3a9e282": 4,
-            # ASCII text and an invalid byte at the end
-            "616263ff": 4,
-            # only invalid bytes
-            "fffe": 2,
-        };
-    }
-
-    lengthForms() {
-        foreach hash<auto> i in (cases().pairIterator()) {
-            string s = utf8(i.key);
-            assertEq(i.value, length(s), i.key + " length()");
-            assertEq(i.value, s.length(), i.key + " <string>::length()");
-            assertEq(i.value, elements s, i.key + " elements");
-            # a string in a hash and the length of a concatenation
-            hash<auto> h = {"k": s};
-            assertEq(i.value, h.k.length(), i.key + " hash value");
-            assertEq(i.value + 1, length(s + "z"), i.key + " concatenation");
-            assertEq(i.value + 1, ("z" + s).length(), i.key + " concatenation method");
-            # the bytes at the end of a part can make a character with the next part: the length of a concatenation
-            # is the length of the concatenated string
-            string c = s + "€";
-            assertEq(length(c), length(s + "€"), i.key + " concatenation with a non-ASCII part");
-            assertEq(c.length(), (s + "€").length(), i.key + " concatenation method with a non-ASCII part");
-            # the count is never less than the number of characters before the invalid bytes, nor more than the bytes
-            assertTrue(s.length() <= s.size(), i.key + " bytes");
-            # character offsets into the string still raise INVALID-ENCODING (qore#6595)
-            assertThrows("INVALID-ENCODING", sub () { string r = s[0..]; });
-        }
-    }
-
-    #! short literals, which compiled code can keep in the value itself
-    shortLiterals() {
-        assertEq(3, "a\xffé".length());
-        assertEq(3, length("é\xffa"));
-        assertEq(2, elements "\xff\xfe");
-        assertEq(3, "ab\xff".length());
-        string s = "a\xffé";
-        assertEq(3, s.length());
-        # the elements of a buffer of strings are short strings, which compiled code counts on its own
-        buffer<string> buf = new buffer<string>(("a\xffé", "ab\xff", "\xff\xfe", "a\xc3"));
-        assertEq(3, buf[0].length());
-        assertEq(3, length(buf[1]));
-        assertEq(2, elements buf[2]);
-        assertEq(2, buf[3].length());
-        string c = buf[3] + "€";
-        assertEq(length(c), length(buf[3] + "€"));
-        assertEq(c.length(), (buf[3] + "€").length());
-    }
-
-    #! functions whose integer result compiled code can compute natively
-    intExpressions() {
-        code f = int sub (string s) { return s.length() + 1; };
-        foreach hash<auto> i in (cases().pairIterator()) {
-            assertEq(i.value + 1, f(utf8(i.key)), i.key);
-            assertEq(i.value * 2, plusLength(utf8(i.key), utf8(i.key)), i.key);
-        }
-    }
-
-    private static int plusLength(string a, string b) {
+    private static int sumLengths(string a, string b) {
         return a.length() + b.length();
     }
 
-    #! a string in another multi-byte encoding
-    otherEncodings() {
-        # a Shift_JIS character, a lead byte without a valid second byte, two ASCII characters
-        string sj = binary_to_string(parse_hex_string("82a0822741"), "SHIFT_JIS");
-        assertEq(4, sj.length());
-        # a string in a single-byte encoding has one character per byte
-        string l = binary_to_string(parse_hex_string("e9ff41"), "ISO-8859-1");
-        assertEq(3, l.length());
+    invalidText() {
+        foreach string s in (("a\xffé", "a long UTF-8 string\xff", binary_to_string(<82a0822741>, "SHIFT_JIS"),
+                binary_to_string(<80>, "SHIFT_JIS"), binary_to_string(<a0>, "SHIFT_JIS"),
+                binary_to_string(<fd>, "SHIFT_JIS"), binary_to_string(<f040>, "SHIFT_JIS"),
+                binary_to_string(<f040>, "SHIFT-JIS"), binary_to_string(<827f>, "SHIFT_JIS"), binary_to_string(<82>, "SHIFT_JIS"),
+                binary_to_string(<4180>, "US-ASCII"), binary_to_string(<00dc>, "UTF-16LE"),
+                binary_to_string(<d8000041>, "UTF-16BE"),
+                binary_to_string(<00110000>, "UTF-32BE"))) {
+            assertThrows("INVALID-ENCODING", auto sub () { return length(s); });
+            assertThrows("INVALID-ENCODING", auto sub () { return s.length(); });
+            assertThrows("INVALID-ENCODING", auto sub () { return elements s; });
+            assertTrue(s.size() > 0);
+            assertEq(s.size(), strlen(s));
+        }
     }
 
-    validStrings() {
+    expressionPaths() {
+        string s = "a\xffé";
+        hash<auto> h = {"k": s};
+        buffer<string> buf = new buffer<string>((s, s));
+        code<int(string)> f = int sub (string a) { return a.length() + 1; };
+        assertThrows("INVALID-ENCODING", auto sub () { return h.k.length(); });
+        assertThrows("INVALID-ENCODING", auto sub () { return length(buf[0]); });
+        assertThrows("INVALID-ENCODING", auto sub () { return elements buf[1]; });
+        assertThrows("INVALID-ENCODING", auto sub () { return elements "\xff"; });
+        assertThrows("INVALID-ENCODING", auto sub () { return f(s); });
+        assertThrows("INVALID-ENCODING", auto sub () { return sumLengths(s, s); });
+        assertThrows("INVALID-ENCODING", auto sub () { return (s + "z").length(); });
+        assertThrows("INVALID-ENCODING", auto sub () { return length("z" + s); });
+        assertThrows("INVALID-ENCODING", sub () { length(s); });
+        assertThrows("INVALID-ENCODING", sub () { s.length(); });
+        assertThrows("INVALID-ENCODING", sub () { int unused = elements s; });
+        bool evaluated = False;
+        code<int()> later = int sub () { evaluated = True; return 1; };
+        assertThrows("INVALID-ENCODING", int sub () { return s.length() + later(); });
+        assertFalse(evaluated);
+        int sum = 0;
+        for (int i = 0; i < sum; ++i) {
+            sum += s.length() + length(s);
+        }
+        assertEq(0, sum);
+    }
+
+    statefulEncoding() {
+        string s = binary_to_string(<1b244224>, "ISO-2022-JP");
+        assertThrows("INVALID-ENCODING", \length(), (s,));
+        assertEq(3, length(convert_encoding("日本!", "ISO-2022-JP")));
+    }
+
+    validText() {
+        # Roman/control bytes (including NUL), kana, and two-byte characters with low and high trail bytes.
+        assertEq(7, length(binary_to_string(<007f41a1df814082a0>, "SHIFT_JIS")));
+        assertEq(2, length(binary_to_string(<a1fa40>, "CP932")));
+        # 0x80 is not a character of CP932 (issue #6665)
+        assertThrows("INVALID-ENCODING", \length(), (binary_to_string(<80fa40>, "CP932"),));
         assertEq(0, "".length());
-        assertEq(3, "abc".length());
-        assertEq(4, "aébü".length());
-        assertEq(4, length("aébü"));
+        assertEq(3, length("abc"));
         assertEq(4, elements "aébü");
-        assertEq(2, "€a".length());
+        assertEq(3, length(binary_to_string(<e9ff41>, "ISO-8859-1")));
+        assertEq(3, length(binary_to_string(<610062>, "US-ASCII")));
+        assertEq(2, length(binary_to_string(<41003dd800de>, "UTF-16LE")));
+        string lead = binary_to_string(<61e2>, "UTF-8");
+        string tail = binary_to_string(<82ac>, "UTF-8");
+        assertEq(2, length(lead + tail));
+        assertEq(2, (lead + tail).length());
     }
 }

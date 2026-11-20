@@ -182,7 +182,7 @@ public class GoogleApiParentDataProvider inherits GoogleDataProviderBase {
             }
         } else {
             GoogleDataProviderBase::getRequestInfo(api);
-            *hash<auto> h = info_map{api}.resources;
+            *hash<auto> h = GoogleDataProviderBase::getSchemaInfo(api).resources;
             foreach string seg in (resource_path) {
                 if (!h{seg}) {
                     throw "GOOGLE-API-ERROR", sprintf("API %y resource %y is invalid at %y; known resources at "

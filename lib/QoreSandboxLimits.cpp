@@ -37,6 +37,7 @@
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <algorithm>
 #include <cassert>
@@ -260,8 +261,9 @@ public:
     */
     void forkChild() {
         started = stopping = false;
-        cond.reinitAfterFork();
-        lck.reinitAfterFork();
+        qore_condition_ops(cond).reinitAfterFork();
+        // released, so that ThreadSanitizer sees the release (issue #6817)
+        lck.unlock();
     }
 
     QoreThreadLock lck;

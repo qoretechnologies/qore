@@ -143,8 +143,13 @@ struct TryModuleError {
 
 #define YYLTYPE class QoreParserLocation
 
+class ExceptionSink;
+
 //! The state of a parse that the parser shares with its scanner
 struct QoreParseState {
+   explicit QoreParseState(ExceptionSink& xsink) : xsink(xsink) {}
+   ExceptionSink& xsink;
+
    //! The token or grammar rule currently constructing executable source nodes.
    LexicalSemanticPolicy semantic_policy;
    //! true if the parse stops at an error, and the scanner ends the input
@@ -170,16 +175,22 @@ struct QoreParseState {
    //! true if the parentheses of the last expression in parentheses are those of a list: (a, b), not ((a, b)), so
    //! that its elements are the arguments of a call (issue #1867)
    bool paren_list = false;
-   //! for each source file that the scanner reads and that has not ended, the first byte of the line that the last
-   //! block read ends in, or -1 if it ends with a newline: a file whose last line is a parse directive without a
-   //! newline gets one at its end, as the rules of the parse directives end with a newline (qore_scanner_read(),
-   //! issue #2740)
-   std::map<FILE*, int> file_line_first;
+   struct FileInput {
+      int line = 1;
+      int line_first = -1;   //!< first byte on the current line, for a directive at EOF
+      char partial[4];       //!< prefix of a UTF-8 character split across scanner reads
+      unsigned partial_size = 0;
+   };
+   std::map<FILE*, FileInput> files;
    //! for each file included with %include whose scan has not ended, the end of the last token of the including file
    //! (its last line and column), where the scan of the including file resumes: the location of a token starts at the
    //! end of the last one, so the scan of an included file starts at its first line and column (issue #6561)
    std::vector<std::pair<int, int>> include_resume_loc;
 };
+
+//! Returns zero for valid source, the first malformed line, or -1 if cancellation raised an exception.
+DLLLOCAL int qore_invalid_source_utf8_line(const char* text, size_t size, ExceptionSink& xsink,
+        bool* final_directive = nullptr);
 
 //! returns the description of a syntax error on a line that starts with % and \a name, which no parse directive's
 //! rule matched: an unknown parse directive, with the closest one, or one with invalid syntax (issue #56)

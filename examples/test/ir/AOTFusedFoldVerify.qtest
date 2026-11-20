@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks compile with qcc and run the compiled module in child processes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTFusedFoldVerifyTest
+
+#! qore#6549: the fold of a fused pipeline is lowered to IR in SSA form, which the verification of IR read from an AOT
+#! module (qore#6468) accepts
+/** The phis that merge the flags of the fold took a constant that only the block that starts the accumulator defines
+    as the incoming value of the other path.  qcc verifies the IR that it writes with QORE_AOT_VERIFY_WRITTEN_IR set
+    (in a debug build always), as the reader of the module verifies it, and refuses the module otherwise; the fixture
+    of the verification (AOTIRVerify.qtest) refuses a phi of the old shape.
+
+    qore#6641: a hash map whose value is $# released the index of its loop before the loop incremented it, a use of a
+    value after its release, which the verification refuses.
+*/
+class AOTFusedFoldVerifyTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTFusedFoldVerifyTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("the IR of the fold of a fused pipeline passes the verification", \testFold());
+        addTestCase("the IR of a hash map of $# passes the verification (qore#6641)", \testHashMapIndex());
+
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    testFold() {
+        TmpDir tmp("qore-aot-fused-fold-");
+        string mod = tmp.path + "/FusedFoldProbe.qm";
+        write(mod, "%modern
+module FusedFoldProbe {
+    version = \"1.0\";
+    desc = \"qore#6549\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+}
+
+public namespace FusedFoldProbe {
+public string sub indented(list<string> code_lines, int indent) {
+    return (map $1.substr(indent), code_lines).join(\"\\n\");
+}
+
+public string sub joined(list<int> values) {
+    return (map $1.toString(), values).join(\",\");
+}
+}
+");
+        string qmod = tmp.path + "/FusedFoldProbe.qmod";
+        int rc;
+        string out = backquote(sprintf("QORE_AOT_VERIFY_WRITTEN_IR=1 %s -o %s %s 2>&1", qcc_bin, qmod, mod), \rc);
+        assertEq(0, rc, out);
+        assertTrue(is_file(qmod), out);
+
+        # the module is loaded, its IR read and verified, and the functions give the folded results
+        string script = tmp.path + "/run.q";
+        write(script, "%modern
+%requires FusedFoldProbe
+printf(\"%y\\n\", indented((\"  a\", \"  bc\", \"  d\"), 2));
+printf(\"%y\\n\", joined((1, 2, 3)));
+printf(\"%y\\n\", joined(()));
+");
+        string module_dir = tmp.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        out = backquote(sprintf("QORE_MODULE_DIR='%s' %s %s 2>&1", module_dir, qore_bin, script), \rc);
+        assertEq(0, rc, out);
+        assertEq("\"a\nbc\nd\"\n\"1,2,3\"\n\"\"\n", out);
+    }
+
+    testHashMapIndex() {
+        TmpDir tmp("qore-aot-hash-map-index-");
+        string mod = tmp.path + "/HashMapIndexProbe.qm";
+        write(mod, "%modern
+module HashMapIndexProbe {
+    version = \"1.0\";
+    desc = \"qore#6641\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+}
+
+public namespace HashMapIndexProbe {
+public hash<auto> sub fromList(list<string> names) {
+    return map {$1: $#}, names;
+}
+
+public hash<auto> sub fromIterator(list<string> names) {
+    return map {$1: $#}, names.iterator();
+}
+}
+");
+        string qmod = tmp.path + "/HashMapIndexProbe.qmod";
+        int rc;
+        string out = backquote(sprintf("QORE_AOT_VERIFY_WRITTEN_IR=1 %s -o %s %s 2>&1", qcc_bin, qmod, mod), \rc);
+        assertEq(0, rc, out);
+        assertTrue(is_file(qmod), out);
+
+        string script = tmp.path + "/run.q";
+        write(script, "%modern
+%requires HashMapIndexProbe
+printf(\"%y\\n\", fromList((\"a\", \"b\")));
+printf(\"%y\\n\", fromIterator((\"a\", \"b\")));
+");
+        string module_dir = tmp.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        out = backquote(sprintf("QORE_MODULE_DIR='%s' %s %s 2>&1", module_dir, qore_bin, script), \rc);
+        assertEq(0, rc, out);
+        assertEq("{a: 0, b: 1}\n{a: 0, b: 1}\n", out);
+    }
+}

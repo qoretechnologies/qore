@@ -61,6 +61,7 @@
 #include <optional>
 #include "qore/intern/QoreDeferredRelease.h"
 #include "qore/intern/QoreCompletionAnalysis.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -395,7 +396,7 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                         std::unique_ptr<SingleArgvContextHelper> argv_helper;
                         std::unique_ptr<CatchExceptionHelper> ex_helper;
                         if (type == OBE_Error) {
-                            QoreException* except = xsink->getException();
+                            QoreException* except = qore_exception_sink_ops(xsink).getException();
                             assert(except);
                             ex_helper.reset(new CatchExceptionHelper(except));
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
@@ -403,7 +404,13 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                         {
                             // the handler is a statement of its own
                             QoreStatementTempScope temps(&obe_xsink);
-                            nrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
+                            // a handler that completes normally keeps the return of a handler that ran before it
+                            // (#6677), whose value a return in a later handler replaces (#5992); otherwise the block
+                            // takes the request of the last handler run (a debugger's break or continue: #6201)
+                            int hrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
+                            if (hrc || nrc != RC_RETURN) {
+                                nrc = hrc;
+                            }
                         }
                         if (type == OBE_Error) {
                             if (qore_es_private::get(obe_xsink)->rethrown) {
@@ -909,7 +916,8 @@ void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
         // locals of the context) are instantiated by the code of their blocks, as in the code that was parsed, and a
         // closure-bound one that the Program instantiated was found by the instantiation of its block, which then
         // pushed no variable of its own, so that the closures of all iterations of a loop shared it (#5869)
-        std::unordered_set<const LocalVar*> body_locals(ctx->all_body_locals.begin(), ctx->all_body_locals.end());
+        const auto& declared = ctx->getDeclaredBodyLocals();
+        std::unordered_set<const LocalVar*> body_locals(declared.begin(), declared.end());
         std::vector<LocalVar*> top_locals;
         for (int i = 0; i < ctx->num_locals; ++i) {
             if (ctx->locals[i] && !body_locals.count(ctx->locals[i])) {
@@ -1028,7 +1036,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 }
             }
             std::vector<LocalVar*> nested_locals;
-            for (LocalVar* lv : cached_toplevel_aot_ctx->all_body_locals) {
+            for (LocalVar* lv : cached_toplevel_aot_ctx->runtime_body_locals) {
                 if (toplevel_set.count(lv) == 0 && !lv->closureUse()) {
                     lv->instantiate(runtime_parse_options);
                     nested_locals.push_back(lv);
@@ -1041,7 +1049,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 // (QoreIROpcode::SetCodeParseOptions); they are restored when it ends (qore#6293)
                 ToplevelCodeParseOptionsHelper code_po(runtime_parse_options);
                 try {
-                    result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+                    result_bits = qore_aot_call_body(cached_toplevel_aot_fn, cached_toplevel_aot_ctx, xsink);
                 } catch (const QoreJITException&) {
                     // The raise site has already populated xsink. Keep the normal
                     // top-level cleanup and Qore exception propagation path intact.
@@ -1372,8 +1380,9 @@ int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const 
 
         // Clear any pending deopt request from top-level JIT execution.
         // Top-level code handles guard failures internally (e.g., via
-        // try-catch) and must not propagate deopt to subsequent calls.
-        qore_jit_deopt_requested();
+        // try-catch) and must not propagate deopt to subsequent calls; the request of a debugger for the exit events of
+        // the native frames that were running when it attached is kept for them (issue #6602)
+        qore_jit_clear_deopt_request();
     } else {
         // suppress_guard_deopt=true: top-level code must not deopt on
         // guard failure because re-executing the entire block from the

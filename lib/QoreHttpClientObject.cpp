@@ -463,11 +463,11 @@ static QoreValue process_binary_body(const BinaryNode* bin, const char* content_
             if (*xsink || !decoded) {
                 return QoreValue();
             }
-            return qore_decode_http_body(content_type, *decoded, assumed);
+            return qore_decode_http_response_body(content_type, *decoded, assumed, xsink);
         }
     }
 
-    return qore_decode_http_body(content_type, bin, assumed);
+    return qore_decode_http_response_body(content_type, bin, assumed, xsink);
 }
 
 //! Decodes the content coding of a response body that is delivered as it is received
@@ -1997,6 +1997,7 @@ struct qore_httpclient_priv {
             // events reported for the client's requests identify the socket the client now owns
             event_sink->setId(active->getObjectIDForEvents());
             std::swap(active->assume_http_encoding, old->assume_http_encoding);
+            std::swap(active->assume_http_encoding_resolved, old->assume_http_encoding_resolved);
             active->enc.store(old->enc.load());
 
             proxy_connected = false;
@@ -3080,7 +3081,7 @@ struct qore_httpclient_priv {
 
     //! Returns the encoding assumed for text response bodies whose encoding is not determined otherwise
     DLLLOCAL const QoreEncoding* getAssumedHttpEncoding() const {
-        return QEM.findCreate(msock->socket->priv->getAssumedEncoding());
+        return QEM.findCreate(msock->socket->priv->getAssumedEncodingResolved());
     }
 
     //! Returns the Content-Type used to decode a response body
@@ -6557,13 +6558,19 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 channel->close();
                                 return nullptr;
                             }
-                            cb_data = qore_decode_http_body(body_ct, decoded ? *decoded : *accumulated_body,
-                                getAssumedHttpEncoding());
+                            cb_data = qore_decode_http_response_body(body_ct,
+                                decoded ? *decoded : *accumulated_body, getAssumedHttpEncoding(), xsink);
                         } else if (resp_content_encoding.empty()) {
-                            cb_data = qore_decode_http_body(body_ct, *accumulated_body, getAssumedHttpEncoding());
+                            cb_data = qore_decode_http_response_body(body_ct, *accumulated_body,
+                                getAssumedHttpEncoding(), xsink);
                         } else {
                             // Unknown encoding — pass raw binary
                             cb_data = accumulated_body.release();
+                        }
+                        // a body that is not valid in its encoding (qore#6554)
+                        if (*xsink) {
+                            channel->close();
+                            return nullptr;
                         }
                         ReferenceHolder<QoreListNode> args(
                             new QoreListNode(autoTypeInfo), xsink);
@@ -8647,9 +8654,14 @@ public:
         }
         // the decoded octets take the form the media type calls for, decoded by the rules shared by all HTTP
         // clients; see qore_get_http_body_charset()
-        SimpleRefHolder<SimpleValueQoreNode> decoded(qore_decode_http_body(
+        SimpleRefHolder<SimpleValueQoreNode> decoded(qore_decode_http_response_body(
             content_type.empty() ? nullptr : content_type.c_str(), decompressed ? *decompressed : bin,
-            request->body_enc));
+            request->body_enc, xsink));
+        if (!decoded) {
+            // a body that is not valid in its encoding (qore#6554), as a body that cannot be decompressed
+            request->decode_state = -1;
+            return -1;
+        }
         request->decoded_body = decoded.release();
         request->decode_state = 1;
         return 0;

@@ -124,6 +124,8 @@ public string sub value() {
         addTestCase("the host registering into a restricted Program with no sandbox is trusted",
             \directOwnRestrictedTest());
         addTestCase("a module that sandboxed code registers is initialized under its sandbox", \probeSandboxedTest());
+        addTestCase("sandboxed code that may not use uncontrolled APIs cannot load a module's native code",
+            \nativeSandboxedTest());
         addTestCase("a module registered while a library module is initialized has the loader's sandbox",
             \liftSandboxedTest());
         set_return_value(main());
@@ -379,6 +381,18 @@ public string sub value() {
         checkTenantRefused(runScenario("probe-sandboxed", True), ("register: loaded",
             "use: value=static=True,init=True", "other-sandbox-register: refused", "other-require: refused"),
             "ProbeMod", 2);
+    }
+
+    nativeSandboxedTest() {
+        # the sandboxes of the other scenarios allow uncontrolled APIs, so that their code may load the .qmod files
+        # of the file mode from outside the module path; this one has the default policy (issue #6776)
+        hash<auto> out = runScenario("native-sandboxed");
+        assertEq(("register: loaded", "use: value=own"), AOTStaticModuleShadowingTest::steps(out.static),
+            "static: " + out.static);
+        assertEq(("register: refused",), AOTStaticModuleShadowingTest::steps(out.file), "file: " + out.file);
+        assertRegex("LOAD-MODULE-ERROR: cannot load binary module '[^']*/qmod/TenantMod\\.qmod': code that a sandbox "
+            "governs or whose functional domains are restricted can load native code only from the module path",
+            out.file, "file: " + out.file);
     }
 
     liftSandboxedTest() {

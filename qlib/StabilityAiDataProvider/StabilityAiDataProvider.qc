@@ -37,11 +37,16 @@ public class StabilityAiDataProvider inherits StabilityAiDataProviderCommon {
         });
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = {
             "generate-image":
                 Class::forName("StabilityAiDataProvider::StabilityAiGenerateImageDataProvider"),
         };
+    }
+
+    private {
     }
 
     constructor(StabilityAiRestClient::StabilityAiRestClientIo rest)

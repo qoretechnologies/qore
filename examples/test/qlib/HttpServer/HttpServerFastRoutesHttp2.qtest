@@ -238,6 +238,13 @@ class HttpServerFastRoutesHttp2Test inherits QUnit::Test {
         hash<auto> p = client.restPost("/post", "x");
         assertEq("handler", p.body, "POST takes the normal path");
         assertTrue(hs.getFastRouteInfo().fallbacks.no_route > 0);
+
+        # a target that is not valid text is answered by the normal path with 400 (qore#6554)
+        int invalid_before = hs.getFastRouteInfo().fallbacks.invalid_text;
+        hash<auto> it = get("/post?q=%FF");
+        assertEq(400, it.status_code);
+        assertEq(invalid_before + 1, hs.getFastRouteInfo().fallbacks.invalid_text);
+        assertEq("fast", get("/post?q=caf%C3%A9").body);
     }
 
     testLarge() {
