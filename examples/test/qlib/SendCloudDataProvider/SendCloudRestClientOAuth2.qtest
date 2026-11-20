@@ -150,6 +150,8 @@ public class SendCloudRestClientOAuth2Test inherits QUnit::Test {
         });
         assertEq("none", basic.getExtendedInfo().oauth2_grant_type);
         assertFalse(basic.getFeatures(){RestConnection::RCF_OAUTH2} ?? False);
+        assertTrue(basic.getInfo().up);
+        assertFalse(basic.needsAuth());
     }
 
     #! The keys win over OAuth2: they are sent by HTTP Basic Auth and the OAuth2 options are removed

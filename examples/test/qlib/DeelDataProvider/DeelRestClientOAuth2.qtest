@@ -155,6 +155,9 @@ public class DeelRestClientOAuth2Test inherits QUnit::Test {
         hash<auto> info = conn.getInfo();
         assertTrue(info.up);
         assertFalse(conn.getFeatures(){RestConnection::RCF_OAUTH2} ?? False);
+        # nor does it need authorization (qore#6901)
+        assertFalse(conn.needsAuth());
+        assertEq("none", conn.getExtendedInfo().oauth2_grant_type);
         # the defaults are applied to the connection, but not to the options of its clients (qore#6901)
         assertEq("authorization_code", conn.opts.oauth2_grant_type);
         assertNothing(conn.getConnectionOptions().oauth2_grant_type);

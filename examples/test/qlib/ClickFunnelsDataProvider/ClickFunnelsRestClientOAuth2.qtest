@@ -181,6 +181,9 @@ public class ClickFunnelsRestClientOAuth2Test inherits QUnit::Test {
         hash<auto> info = conn.getInfo();
         assertTrue(info.up);
         assertFalse(conn.getFeatures(){RestConnection::RCF_OAUTH2} ?? False);
+        # nor does it need authorization (qore#6901)
+        assertFalse(conn.needsAuth());
+        assertEq("none", conn.getExtendedInfo().oauth2_grant_type);
         hash<auto> client_opts = ClickFunnelsRestClientBase::getOptions(conn.getConnectionOptions());
         assertEq("Bearer api-token-1", client_opts.headers.Authorization);
         assertEq("https://acme.myclickfunnels.com/api/v2", client_opts.url);
