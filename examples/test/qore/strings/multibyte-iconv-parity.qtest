@@ -67,7 +67,9 @@ class MultiByteIconvParityTest inherits QUnit::Test {
         int available = 0;
         list<string> lenient = ();
         foreach string line in (lines[1..]) {
-            if (line =~ / unavailable$/) {
+            # an encoding that iconv does not know, or decodes but cannot encode (musl's EUC-KR), is not probed and has
+            # no character functions
+            if (line =~ / (unavailable|decode-only)$/) {
                 continue;
             }
             # EUC-TW: handled without the character functions of a family, so its conversions are not validated

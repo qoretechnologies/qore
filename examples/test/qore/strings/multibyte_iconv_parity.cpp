@@ -36,7 +36,8 @@
     bytes, so that the test can tell the known differences of an iconv implementation from others (glibc decodes the
     byte 0x80 of Big5, Big5-HKSCS and CP950 as U+0080, Apple's libiconv the Shift_JIS sequences of the lead bytes
     0xf0 - 0xf9, the user-defined area of CP932; neither is a character of the encoding, and isEncodingValid()
-    refuses them), or "<encoding> unavailable" if the platform's iconv does not know the encoding, or "<encoding>
+    refuses them), or "<encoding> unavailable" if the platform's iconv does not know the encoding, "<encoding>
+    decode-only" if it decodes but cannot encode it (such an encoding is not probed), or "<encoding>
     no-character-functions" for an encoding that Qore handles without the character functions of a family (its
     conversions are not validated: EUC-TW, whose characters of four bytes are handled as stateful text).  The test
     that runs it (multibyte-iconv-parity.qtest) decides which differences are allowed on the platform.
@@ -122,6 +123,13 @@ int main(int argc, char** argv) {
         }
         if (!enc->isMultiByte()) {
             iconv_close(cd);
+            // an encoding that iconv decodes but cannot encode is not probed either (musl's EUC-KR, GB18030, Big5)
+            iconv_t ecd = iconv_open(enc->getCode(), "UTF-8");
+            if (ecd == reinterpret_cast<iconv_t>(static_cast<intptr_t>(-1))) {
+                std::printf("%s decode-only\n", name);
+                continue;
+            }
+            iconv_close(ecd);
             std::printf("%s no-character-functions\n", name);
             continue;
         }

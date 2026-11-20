@@ -224,10 +224,13 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
             assertEq("ENCODING-CONVERSION-ERROR", ex.err, data.toHex());
             assertRegex("byte offset 1", ex.desc, data.toHex());
         }
-        # CP932 has the user-defined area
+        # CP932 has the user-defined area (its character functions are selected by name; isEncodingValid() is a
+        # conversion, which needs an iconv that has CP932: musl's has not)
         string s = binary_to_string(<41f04042>, "CP932");
-        assertTrue(s.isEncodingValid());
         assertEq(3, s.length());
+        if (converts("CP932")) {
+            assertTrue(s.isEncodingValid());
+        }
     }
 
     otherInvalidTest() {
