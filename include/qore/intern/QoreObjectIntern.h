@@ -48,6 +48,7 @@
 #include "qore/intern/RSection.h"
 #include "qore/intern/RSet.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #define OS_OK            0
 #define OS_DELETED      -1
@@ -1021,9 +1022,9 @@ private:
 
 public:
     DLLLOCAL qore_object_lock_handoff_helper(qore_object_private* n_pobj, AutoVLock& n_vl) : pobj(n_pobj), vl(n_vl) {
-        if (pobj->obj == vl.getObject()) {
-            assert(vl.getRWL() == &pobj->rml);
-            vl.clear();
+        if (pobj->obj == qore_auto_vlock_ops(vl).getObject()) {
+            assert(qore_auto_vlock_ops(vl).getRWL() == &pobj->rml);
+            qore_auto_vlock_ops(vl).clear();
             return;
         }
 
@@ -1047,7 +1048,7 @@ public:
     }
 
     DLLLOCAL void stayLocked() {
-        vl.set(pobj->obj, &pobj->rml);
+        qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
         pobj = nullptr;
     }
 };

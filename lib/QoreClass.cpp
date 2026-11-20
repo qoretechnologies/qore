@@ -46,6 +46,7 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -1423,7 +1424,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     // the bare references option of the declaration (issue #3286)
     parse_abr = old.parse_abr;
     hierarchy_initialized = old.hierarchy_initialized;
-    system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
+    system_constructor = old.system_constructor ? qore_method_ops(old.system_constructor).copy(cls) : nullptr;
 
     // set pointer to new copy
     old.new_copy = cls;
@@ -1601,7 +1602,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str(), instance_serial);
     owns_ornothingtypeinfo = true;
 
-    system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
+    system_constructor = old.system_constructor ? qore_method_ops(old.system_constructor).copy(cls) : nullptr;
 
     // set pointer to new copy
     old.new_copy = cls;
@@ -1616,7 +1617,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
     // copy methods and maintain method pointers
     for (auto& i : old.hm) {
-        QoreMethod* nf = i.second->copy(cls);
+        QoreMethod* nf = qore_method_ops(i.second).copy(cls);
 
         hm[nf->getName()] = nf;
         if (i.second == old.constructor)
@@ -1641,7 +1642,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
     // copy static methods
     for (auto& i : old.shm) {
-        QoreMethod* nf = i.second->copy(cls);
+        QoreMethod* nf = qore_method_ops(i.second).copy(cls);
         shm[nf->getName()] = nf;
     }
 
@@ -6759,9 +6760,9 @@ const char* QoreMethod::getClassName() const {
     return priv->parent_class->getName();
 }
 
-void QoreMethod::assign_class(const QoreClass* p_class) {
-    assert(!priv->parent_class);
-    priv->parent_class = p_class;
+void qore_method_ops::assign_classImpl(QoreMethod* b, const QoreClass* p_class) {
+    assert(!b->priv->parent_class);
+    b->priv->parent_class = p_class;
 }
 
 QoreValue QoreMethod::execManaged(QoreObject* self, const QoreListNode* args, ExceptionSink* xsink) const {
@@ -6789,12 +6790,12 @@ method_type_e QoreMethod::getMethodType() const {
 }
 
 // only called for ::methodGate() and ::memberGate() which cannot be overloaded
-bool QoreMethod::inMethod(const QoreObject* self) const {
-    return ::runtime_in_object_method(priv->func->getName(), self);
+bool qore_method_ops::inMethodImpl(QoreMethod* b, const QoreObject* self) {
+    return ::runtime_in_object_method(b->priv->func->getName(), self);
 }
 
-QoreMethod* QoreMethod::copy(const QoreClass* p_class) const {
-    return new QoreMethod(p_class, priv->func->copy(p_class), priv->static_flag);
+QoreMethod* qore_method_ops::copyImpl(QoreMethod* b, const QoreClass* p_class) {
+    return new QoreMethod(p_class, b->priv->func->copy(p_class), b->priv->static_flag);
 }
 
 const QoreTypeInfo* QoreMethod::getUniqueReturnTypeInfo() const {
@@ -7673,7 +7674,7 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
     assert(nme);
     printd(5, "qore_class_private::evalMemberGate() member: %s\n", nme);
     // do not run memberGate method if we are already in it...
-    if (!memberGate || memberGate->inMethod(self))
+    if (!memberGate || qore_method_ops(memberGate).inMethod(self))
         return QoreValue();
 
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -7719,7 +7720,7 @@ int qore_class_private::checkMethodForEval(const QoreObject* self, const char* n
     }
     QoreClass* qc = nullptr;
     if (pseudo_classes_find_method(NT_OBJECT, nme, qc)
-            || (methodGate && !methodGate->inMethod(const_cast<QoreObject*>(self)))) {
+            || (methodGate && !qore_method_ops(methodGate).inMethod(const_cast<QoreObject*>(self)))) {
         return 0;
     }
     xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined and no pseudo-method " \
@@ -7849,7 +7850,7 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
                     if (call_args.needsDeref() && (!Lexical || ref->getType() == NT_RUNTIME_CLOSURE)) {
                         return qore_invoke_call_ref_given_args(ref, *call_args, xsink);
                     }
-                    if constexpr (Lexical) return ref->invokeLexical(*call_args, xsink, policy);
+                    if constexpr (Lexical) return qore_resolved_call_reference_node_ops(ref).invokeLexical(*call_args, xsink, policy);
                     else return ref->invoke(*call_args, xsink);
                 }
             }
@@ -7867,7 +7868,7 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
         }
         return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self,
             *call_args);
-    } else if (qcp.methodGate && !qcp.methodGate->inMethod(self)) { // call methodGate with unknown method name and arguments
+    } else if (qcp.methodGate && !qore_method_ops(qcp.methodGate).inMethod(self)) { // call methodGate with unknown method name and arguments
         // the object is checked again after the arguments (issue #6056)
         QoreListNodeEvalOptionalRefHolder call_args(xsink);
         if (qore_eval_missing_method_args(self, nme, args, class_ctx, call_args, xsink)) {
@@ -11324,7 +11325,7 @@ void qore_raise_deleted_missing_method_call_after_args(QoreObject* self, const c
     // the target that qore_eval_missing_method() chooses: a member holding a call reference, then a pseudo-method,
     // then methodGate()
     const qore_class_private* qcp = qore_class_private::get(*self->getClass());
-    bool gate = qcp->methodGate && !qcp->methodGate->inMethod(self);
+    bool gate = qcp->methodGate && !qore_method_ops(qcp->methodGate).inMethod(self);
     if (gate) {
         // the class context that a read of the member would use (runtimeGetCallableMemberInfo() clears it if it
         // cannot access the private members of the object's class)

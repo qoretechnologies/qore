@@ -33,6 +33,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -749,7 +750,7 @@ void QoreSignalManager::signal_handler_thread() {
     delete_signal_thread();
 
     // run thread cleanup handlers
-    tclist.exec();
+    qore_thread_cleanup_list_ops(tclist).exec();
 
     // clean up thread-local storage before exiting (issue #5085)
     qore_thread_local_storage_cleanup();

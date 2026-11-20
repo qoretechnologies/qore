@@ -405,10 +405,6 @@ private:
     //! private implementation of the class
     struct qore_url_private* priv;
 
-    DLLLOCAL void zero();
-    DLLLOCAL void reset();
-    DLLLOCAL void parseIntern(const char* url, ExceptionSink* xsink);
-
     //! this function is not implemented; it is here as a private function in order to prohibit it from being used
     DLLLOCAL QoreURL(const QoreURL&);
 

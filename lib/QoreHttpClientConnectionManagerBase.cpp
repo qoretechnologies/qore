@@ -51,6 +51,7 @@
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHttpManagerSysEnvOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #ifdef DEBUG
 std::atomic<void (*)(HttpClientConnectionBase*)> qore_http_manager_new_connection_hook{nullptr};
@@ -217,7 +218,7 @@ struct HttpClientConnectionManagerBase::SandboxScan {
             return true;
         }
         ExceptionSink xs;
-        if (!conn->checkSandboxUse(policy, &xs)) {
+        if (!qore_http_client_connection_base_ops(conn).checkSandboxUse(policy, &xs)) {
             allowed = true;
             return true;
         }
@@ -943,7 +944,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                         adopted_priv, host, port,
                         opts_.max_streams_per_connection, xsink, this, connect_timeout_us, connect_deadline_us);
                     if (conn) {
-                        conn->inheritOpener(**h1);
+                        qore_http_client_connection_base_ops(conn).inheritOpener(**h1);
                     }
                     // Fall through: any xsink raised here is handled by
                     // the post-switch error block, and the holder will
@@ -1658,7 +1659,7 @@ QoreHashNode* qore_http_manager_ops::requestOnceImpl(HttpClientConnectionManager
     if (!rv->getKeyValue("status_message").getType()) {
         int code = (int)rv->getKeyValue("status_code").getAsBigInt();
         if (code > 0) {
-            const char* msg = QoreHttpClientObject::getHttpStatusMessage(code);
+            const char* msg = qore_http_client_object_ops::getHttpStatusMessage(code);
             rv->setKeyValue("status_message",
                 new QoreStringNode(msg), xsink);
         }

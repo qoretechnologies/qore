@@ -48,6 +48,7 @@
 
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 extern QoreModuleManager QMM;
 
 // records the Program whose code creates an independent Program: it inherits no code or namespaces from that code,
@@ -688,14 +689,14 @@ const DomainStringMap = qore(pomaps.getStringToDomainMap());
 
     @since %Qore 0.8.13
  */
-const ParseOptionCmdCodeMap = qore(ParseOptionMap::getCodeToStringMap());
+const ParseOptionCmdCodeMap = qore(qore_parse_option_map_ops::getCodeToStringMap());
 
 //! Maps from parse option strings to parse option integer codes. Names are in form used in script or on command line, e.g. new-style.
 /** @see ParseOptionCmdCodeMap for the reverse mapping
 
     @since %Qore 0.8.13
  */
-const ParseOptionCmdStringMap = qore(ParseOptionMap::getStringToCodeMap());
+const ParseOptionCmdStringMap = qore(qore_parse_option_map_ops::getStringToCodeMap());
 
 //! Prohibits the use of the '$' character in variable names, method calls, and object member references
 /** This option should probably be named \c "PO_REQUIRE_BARE_REFS" as it is an error to use the \c "$" character when this option is set

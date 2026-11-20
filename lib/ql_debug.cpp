@@ -111,6 +111,7 @@
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreHttpManagerSysEnvOps.h"
 #include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -15177,8 +15178,8 @@ static void ut_connection_sandbox_use(UnitTestCounters& c) {
 
     // a connection opened without a sandbox and still being made
     ReferenceHolder<HttpClientConnectionBase> conn(new HttpClientConnectionBase, &xsink);
-    UT_ASSERT_EQ(c, 0, conn->checkSandboxUse(nullptr, &xsink), "code without a sandbox may use any connection");
-    UT_ASSERT_EQ(c, 1, conn->checkSandboxUse(*allow, &xsink),
+    UT_ASSERT_EQ(c, 0, qore_http_client_connection_base_ops(conn).checkSandboxUse(nullptr, &xsink), "code without a sandbox may use any connection");
+    UT_ASSERT_EQ(c, 1, qore_http_client_connection_base_ops(conn).checkSandboxUse(*allow, &xsink),
         "a sandbox cannot decide on a connection still being made for code without one");
     UT_ASSERT(c, !xsink.isException(), "an undecided connection raises no exception");
 
@@ -15188,18 +15189,18 @@ static void ut_connection_sandbox_use(UnitTestCounters& c) {
         d->add("localhost", sa, sizeof(addr), QSEC_NET_TCP);
         conn->setDestinations(d);
     }
-    UT_ASSERT_EQ(c, 0, conn->checkSandboxUse(*allow, &xsink), "a sandbox that allows the destination may use it");
+    UT_ASSERT_EQ(c, 0, qore_http_client_connection_base_ops(conn).checkSandboxUse(*allow, &xsink), "a sandbox that allows the destination may use it");
     UT_ASSERT(c, !xsink.isException(), "an allowed connection raises no exception");
-    UT_ASSERT_EQ(c, -1, conn->checkSandboxUse(*deny, &xsink), "a sandbox that denies the destination may not");
+    UT_ASSERT_EQ(c, -1, qore_http_client_connection_base_ops(conn).checkSandboxUse(*deny, &xsink), "a sandbox that denies the destination may not");
     UT_ASSERT(c, ut_take_exception(xsink, "NETWORK-ACCESS-DENIED"), "the denial is NETWORK-ACCESS-DENIED");
-    UT_ASSERT_EQ(c, 0, conn->checkSandboxUse(nullptr, &xsink), "code without a sandbox may still use it");
+    UT_ASSERT_EQ(c, 0, qore_http_client_connection_base_ops(conn).checkSandboxUse(nullptr, &xsink), "code without a sandbox may still use it");
 
     // a sandbox tightened after the connection was made applies to the next use
     {
         SimpleRefHolder<QoreSandboxManager> tightened(ut_new_sandbox(true));
-        UT_ASSERT_EQ(c, 0, conn->checkSandboxUse(*tightened, &xsink), "allowed before the sandbox is tightened");
+        UT_ASSERT_EQ(c, 0, qore_http_client_connection_base_ops(conn).checkSandboxUse(*tightened, &xsink), "allowed before the sandbox is tightened");
         UT_ASSERT_EQ(c, 0, tightened->network().addDeniedIPRange("127.0.0.0/8", &xsink), "denied range added");
-        UT_ASSERT_EQ(c, -1, conn->checkSandboxUse(*tightened, &xsink), "denied after the sandbox is tightened");
+        UT_ASSERT_EQ(c, -1, qore_http_client_connection_base_ops(conn).checkSandboxUse(*tightened, &xsink), "denied after the sandbox is tightened");
         UT_ASSERT(c, ut_take_exception(xsink, "NETWORK-ACCESS-DENIED"), "the tightened sandbox denies it");
     }
 
@@ -15210,17 +15211,17 @@ static void ut_connection_sandbox_use(UnitTestCounters& c) {
         ut_with_sandbox(*opener, [&]() {
             sconn = new HttpClientConnectionBase;
         });
-        UT_ASSERT_EQ(c, 0, sconn->checkSandboxUse(*opener, &xsink),
+        UT_ASSERT_EQ(c, 0, qore_http_client_connection_base_ops(sconn).checkSandboxUse(*opener, &xsink),
             "code under the same sandbox may use a connection still being made for it");
-        UT_ASSERT_EQ(c, 1, sconn->checkSandboxUse(*allow, &xsink),
+        UT_ASSERT_EQ(c, 1, qore_http_client_connection_base_ops(sconn).checkSandboxUse(*allow, &xsink),
             "another sandbox cannot decide on a connection still being made for another one");
-        UT_ASSERT_EQ(c, 0, sconn->checkSandboxUse(nullptr, &xsink), "code without a sandbox may use it");
+        UT_ASSERT_EQ(c, 0, qore_http_client_connection_base_ops(sconn).checkSandboxUse(nullptr, &xsink), "code without a sandbox may use it");
 
         // a connection that takes over the socket of another one was opened for the same code
         ReferenceHolder<HttpClientConnectionBase> taken(new HttpClientConnectionBase, &xsink);
-        UT_ASSERT_EQ(c, 1, taken->checkSandboxUse(*opener, &xsink), "opened without a sandbox before inheriting");
-        taken->inheritOpener(**sconn);
-        UT_ASSERT_EQ(c, 0, taken->checkSandboxUse(*opener, &xsink), "opened for the same code after inheriting");
+        UT_ASSERT_EQ(c, 1, qore_http_client_connection_base_ops(taken).checkSandboxUse(*opener, &xsink), "opened without a sandbox before inheriting");
+        qore_http_client_connection_base_ops(taken).inheritOpener(**sconn);
+        UT_ASSERT_EQ(c, 0, qore_http_client_connection_base_ops(taken).checkSandboxUse(*opener, &xsink), "opened for the same code after inheriting");
         UT_ASSERT(c, !xsink.isException(), "no exception for connections being made");
     }
 
@@ -15235,10 +15236,10 @@ static void ut_connection_sandbox_use(UnitTestCounters& c) {
         d->add("proxy", sa, sizeof(addr), QSEC_NET_TCP);
         d->addUnresolved("target.example", QSEC_NET_TCP);
         pconn->setDestinations(d);
-        UT_ASSERT_EQ(c, 1, pconn->checkSandboxUse(*allow, &xsink),
+        UT_ASSERT_EQ(c, 1, qore_http_client_connection_base_ops(pconn).checkSandboxUse(*allow, &xsink),
             "a sandbox cannot decide on a proxy destination that was not resolved");
         UT_ASSERT(c, !xsink.isException(), "an unresolved destination raises no exception");
-        UT_ASSERT_EQ(c, -1, pconn->checkSandboxUse(*deny, &xsink),
+        UT_ASSERT_EQ(c, -1, qore_http_client_connection_base_ops(pconn).checkSandboxUse(*deny, &xsink),
             "a denied proxy is reported over an unresolved destination");
         UT_ASSERT(c, ut_take_exception(xsink, "NETWORK-ACCESS-DENIED"), "the proxy is denied");
 
@@ -15247,10 +15248,10 @@ static void ut_connection_sandbox_use(UnitTestCounters& c) {
         d->add("proxy", sa, sizeof(addr), QSEC_NET_TCP);
         d->add("target.example", reinterpret_cast<const struct sockaddr*>(&target), sizeof(target), QSEC_NET_TCP);
         pconn->setDestinations(d);
-        UT_ASSERT_EQ(c, 0, pconn->checkSandboxUse(*allow, &xsink), "the proxy and its destination are allowed");
+        UT_ASSERT_EQ(c, 0, qore_http_client_connection_base_ops(pconn).checkSandboxUse(*allow, &xsink), "the proxy and its destination are allowed");
         SimpleRefHolder<QoreSandboxManager> no_target(ut_new_sandbox(true));
         UT_ASSERT_EQ(c, 0, no_target->network().addDeniedIPRange("127.0.0.2/32", &xsink), "denied range added");
-        UT_ASSERT_EQ(c, -1, pconn->checkSandboxUse(*no_target, &xsink),
+        UT_ASSERT_EQ(c, -1, qore_http_client_connection_base_ops(pconn).checkSandboxUse(*no_target, &xsink),
             "a sandbox that allows the proxy but not its destination may not use the connection");
         UT_ASSERT(c, ut_take_exception(xsink, "NETWORK-ACCESS-DENIED"), "the destination is denied");
     }
@@ -15267,12 +15268,12 @@ static void ut_connection_sandbox_use(UnitTestCounters& c) {
         d->add(path, reinterpret_cast<const struct sockaddr*>(&un), sizeof(un), QSEC_NET_UNIX);
         uconn->setDestinations(d);
         SimpleRefHolder<QoreSandboxManager> both(ut_new_sandbox(true, true));
-        UT_ASSERT_EQ(c, 0, uconn->checkSandboxUse(*both, &xsink), "the socket is allowed by both policies");
+        UT_ASSERT_EQ(c, 0, qore_http_client_connection_base_ops(uconn).checkSandboxUse(*both, &xsink), "the socket is allowed by both policies");
         UT_ASSERT(c, !xsink.isException(), "an allowed socket raises no exception");
-        UT_ASSERT_EQ(c, -1, uconn->checkSandboxUse(*allow, &xsink), "the filesystem policy denies the socket file");
+        UT_ASSERT_EQ(c, -1, qore_http_client_connection_base_ops(uconn).checkSandboxUse(*allow, &xsink), "the filesystem policy denies the socket file");
         UT_ASSERT(c, ut_take_exception(xsink, "FILESYSTEM-ACCESS-DENIED"), "the socket file is denied");
         SimpleRefHolder<QoreSandboxManager> no_net(ut_new_sandbox(false, true));
-        UT_ASSERT_EQ(c, -1, uconn->checkSandboxUse(*no_net, &xsink), "the network policy denies the socket");
+        UT_ASSERT_EQ(c, -1, qore_http_client_connection_base_ops(uconn).checkSandboxUse(*no_net, &xsink), "the network policy denies the socket");
         UT_ASSERT(c, ut_take_exception(xsink, "NETWORK-ACCESS-DENIED"), "the socket is denied");
     }
 #endif
@@ -20526,7 +20527,7 @@ static QoreValue f_dbg_ds_arm_connection_abort(const QoreListNode* params, Runti
         return QoreValue();
     }
     if (mds) {
-        mds->getOrCreateMutationContext()->dbgArmFault(op_id ? op_id.c_str() : nullptr, when);
+        qore_datasource_ops(mds).getOrCreateMutationContext()->dbgArmFault(op_id ? op_id.c_str() : nullptr, when);
         return QoreValue();
     }
 

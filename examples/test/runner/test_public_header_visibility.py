@@ -36,13 +36,15 @@ CLASS_HEAD = re.compile(r"\b(?:class|struct)\s+(?:DLLEXPORT\s+|DLLLOCAL\s+)?([A-
 
 
 def blank(text):
-    """Comments and string literals become spaces (the offsets stay the same)"""
+    """Comments, string literals and preprocessor directives (with their continuation lines) become spaces (the
+    offsets stay the same): a macro body is not a declaration"""
     def spaces(match):
         return re.sub(r"[^\n]", " ", match.group(0))
 
     text = re.sub(r"/\*.*?\*/", spaces, text, flags=re.S)
     text = re.sub(r"//[^\n]*", spaces, text)
-    return re.sub(r'"(?:\\.|[^"\\\n])*"', spaces, text)
+    text = re.sub(r'"(?:\\.|[^"\\\n])*"', spaces, text)
+    return re.sub(r"(?m)^[ \t]*#(?:[^\n\\]|\\[\s\S])*", spaces, text)
 
 
 def public_headers():
@@ -235,7 +237,10 @@ class PublicHeaderVisibilityTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             header = Path(directory) / "x.h"
-            header.write_text("""class X {
+            header.write_text("""#define MACRO_BODY_IS_NOT_A_DECLARATION(a) \\
+    DLLLOCAL void in_a_macro(int a);
+#define DLLLOCAL __attribute__ ((visibility("hidden")))
+class X {
 public:
     DLLLOCAL void hidden(int a);
     DLLLOCAL void inlined() { }

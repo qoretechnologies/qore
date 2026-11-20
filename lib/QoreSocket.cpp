@@ -54,6 +54,7 @@
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/QoreNetInternal.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/HttpFastRoutes.h"
@@ -15834,15 +15835,15 @@ bool SocketPollSocketOperationBase::abortNeedsClose() const {
     return true;
 }
 
-void SocketPollSocketOperationBase::releaseSocketClaim() {
+void qore_socket_poll_socket_operation_base_ops::releaseSocketClaimImpl(SocketPollSocketOperationBase* b) {
     // a Qore-language operation has no socket of its own
-    if (!sock) {
+    if (!b->sock) {
         return;
     }
-    AutoLocker al(sock->priv->m);
-    if (set_non_block) {
-        sock->priv->clearNonBlock(non_block_direction);
-        set_non_block = false;
+    AutoLocker al(b->sock->priv->m);
+    if (b->set_non_block) {
+        b->sock->priv->clearNonBlock(b->non_block_direction);
+        b->set_non_block = false;
     }
 }
 
@@ -20830,6 +20831,7 @@ QoreValue SocketSendStreamAndReadHeaderPollOperation::getOutput() const {
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock) {

@@ -35,6 +35,7 @@
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreUtf8.h"
 #include "qore/intern/QoreUtf16.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -643,10 +644,10 @@ static bool validateEncoding(const char* encoding) {
       printed and UTF-8 is used, as for an encoding name in LANG that iconv does not know, so that Qore still runs in
       a locale with such an encoding (ex: ja_JP.SJIS)
 */
-void QoreEncodingManager::init(const char* def) {
+void qore_encoding_manager_ops::init(const char* def) {
     // returns the encoding for a valid name that is compatible with ASCII, otherwise prints an error
     auto get_default = [](const char* name, const char* source) -> const QoreEncoding* {
-        const QoreEncoding* enc = findCreate(name);
+        const QoreEncoding* enc = QoreEncodingManager::findCreate(name);
         if (!enc->isAsciiCompat()) {
             fprintf(stderr, "qore: error: character encoding '%s' from %s is not compatible with ASCII and cannot be "
                 "the default character encoding; use an ASCII-compatible encoding such as UTF-8\n", name, source);
@@ -729,15 +730,15 @@ public:
 // returns the canonical name of an encoding that Qore does not know, defined after the table of character set labels
 static std::string qore_canonical_charset_name(const char* name);
 
-const QoreEncoding* QoreEncodingManager::findUnlocked(const char* name) {
+const QoreEncoding* qore_encoding_manager_ops::findUnlocked(const char* name) {
     {
-        encoding_map_t::const_iterator i = emap.find(name);
-        if (i != emap.end())
+        encoding_map_t::const_iterator i = QoreEncodingManager::emap.find(name);
+        if (i != QoreEncodingManager::emap.end())
             return i->second;
     }
 
-    const_encoding_map_t::const_iterator i = amap.find(name);
-    if (i != amap.end())
+    const_encoding_map_t::const_iterator i = QoreEncodingManager::amap.find(name);
+    if (i != QoreEncodingManager::amap.end())
         return i->second;
 
     return 0;
@@ -807,7 +808,7 @@ const QoreEncoding* qore_encoding_manager_private::findByNameKey(const char* key
 const QoreEncoding* QoreEncodingManager::findCreate(const char* name) {
     {
         AutoLocker al(mutex);
-        if (const QoreEncoding* rv = findUnlocked(name)) {
+        if (const QoreEncoding* rv = qore_encoding_manager_ops::findUnlocked(name)) {
             return rv;
         }
     }
@@ -834,7 +835,7 @@ const QoreEncoding* QoreEncodingManager::findCreate(const char* name) {
 
 const QoreEncoding* qore_encoding_manager_private::findCreateTrusted(const char* name) {
     AutoLocker al(QoreEncodingManager::mutex);
-    const QoreEncoding* rv = QoreEncodingManager::findUnlocked(name);
+    const QoreEncoding* rv = qore_encoding_manager_ops::findUnlocked(name);
     if (rv) {
         return rv;
     }
@@ -848,8 +849,8 @@ const QoreEncoding* qore_encoding_manager_private::findCreateTrusted(const char*
     return qcs.release();
 }
 
-const QoreEncoding* QoreEncodingManager::find(const char* name) {
-    AutoLocker al(mutex);
+const QoreEncoding* qore_encoding_manager_ops::find(const char* name) {
+    AutoLocker al(QoreEncodingManager::mutex);
     return findUnlocked(name);
 }
 
@@ -932,11 +933,11 @@ const QoreEncoding* qore_find_untrusted_encoding(const char* name, size_t len) {
     // that used "x-sjis" as a name registered an encoding of that name, which a later lookup of the label gave)
     for (const auto& label : qore_untrusted_charset_labels) {
         if (!strcasecmp(name, label.label)) {
-            const QoreEncoding* enc = QoreEncodingManager::find(label.name);
+            const QoreEncoding* enc = qore_encoding_manager_ops::find(label.name);
             return enc ? enc : qore_encoding_manager_private::findCreateTrusted(label.name);
         }
     }
-    return QoreEncodingManager::find(name);
+    return qore_encoding_manager_ops::find(name);
 }
 
 const QoreEncoding* qore_find_untrusted_encoding(const char* name) {

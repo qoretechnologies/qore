@@ -44,6 +44,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/qore_stdio.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <atomic>
 #include <cerrno>
@@ -324,7 +325,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     }
 
     qore_string_init();
-    QoreHttpClientObject::static_init();
+    qore_http_client_object_ops::static_init();
 
     // initialize random number generator
     if (!(qore_library_options & QLO_DO_NOT_SEED_RNG)) {
@@ -346,7 +347,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     init_qore_threads();
 
     // initialize charset encoding support
-    QEM.init(def_charset);
+    qore_encoding_manager_ops(QEM).init(def_charset);
 
     // init character maps
     init_charmaps();

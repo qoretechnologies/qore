@@ -82,6 +82,7 @@
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreHttpManagerSysEnvOps.h"
 #include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <atomic>
 #include <cassert>
@@ -195,7 +196,7 @@ static std::optional<std::string> get_string_header_value(ExceptionSink* xsink, 
     return std::string(str->c_str());
 }
 
-const char* QoreHttpClientObject::getHttpStatusMessage(int code) {
+const char* qore_http_client_object_ops::getHttpStatusMessage(int code) {
     switch (code) {
         // 1xx: Informational
         case 100: return "Continue";
@@ -1076,7 +1077,7 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const S
             rh->setKeyValue("status_message", sm.refSelf(), xsink);
         } else if (!sc.isNullOrNothing()) {
             rh->setKeyValue("status_message",
-                new QoreStringNode(QoreHttpClientObject::getHttpStatusMessage(
+                new QoreStringNode(qore_http_client_object_ops::getHttpStatusMessage(
                     (int)sc.getAsBigInt())), xsink);
         }
         QoreValue hv = src->getKeyValue("http_version");
@@ -1153,7 +1154,7 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const S
             sm_str = sm_storage.c_str();
         }
         if (!sm_str[0]) {
-            sm_str = QoreHttpClientObject::getHttpStatusMessage(
+            sm_str = qore_http_client_object_ops::getHttpStatusMessage(
                 (int)sc.getAsBigInt());
         }
         const char* ver = "HTTP/1.1";
@@ -3651,7 +3652,7 @@ qore_httpclient_priv::pct_encoding_map_t qore_httpclient_priv::pct_encoding_map 
 };
 
 // static initialization
-void QoreHttpClientObject::static_init() {
+void qore_http_client_object_ops::static_init() {
     // setup static members of QoreHttpClientObject class
     method_map.insert(method_map_t::value_type("OPTIONS", true));
     // Historical compatibility: GET accepts a message body even though it
@@ -3678,7 +3679,7 @@ QoreHttpClientObject::~QoreHttpClientObject() {
 
 void QoreHttpClientObject::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
-        cleanup(xsink);
+        qore_http_client_object_ops(this).cleanup(xsink);
         delete this;
     }
 }
@@ -8883,7 +8884,7 @@ public:
         QoreValue smv = resp->getKeyValue("status_message");
         SimpleRefHolder<QoreStringNode> derived_message(smv.getType() == NT_STRING
             ? nullptr
-            : new QoreStringNode(QoreHttpClientObject::getHttpStatusMessage(code)));
+            : new QoreStringNode(qore_http_client_object_ops::getHttpStatusMessage(code)));
         const QoreStringNode* status_message = smv.getType() == NT_STRING
             ? smv.get<const QoreStringNode>()
             : *derived_message;
@@ -10635,19 +10636,19 @@ void QoreHttpClientObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreVal
     http_priv->setEventQueueUnlocked(xsink, q, arg, with_data);
 }
 
-void QoreHttpClientObject::cleanup(ExceptionSink* xsink) {
+void qore_http_client_object_ops::cleanupImpl(QoreHttpClientObject* b, ExceptionSink* xsink) {
     qore_socket_private* close_priv = nullptr;
     std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
     {
-        AutoLocker al(priv->m);
-        close_priv = http_priv->disconnect_unlocked_prepare_close();
-        old_mgr = http_priv->resetConnMgr();
-        priv->invalidate();
+        AutoLocker al(b->priv->m);
+        close_priv = b->http_priv->disconnect_unlocked_prepare_close();
+        old_mgr = b->http_priv->resetConnMgr();
+        b->priv->invalidate();
     }
     qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
     qore_httpclient_priv::closeReferencedSocket(close_priv);
-    http_priv->getEventSink()->clear(xsink);
-    priv->socket->cleanup(xsink);
+    b->http_priv->getEventSink()->clear(xsink);
+    b->priv->socket->cleanup(xsink);
 }
 
 void QoreHttpClientObject::lock() {

@@ -32,6 +32,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ql_misc.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QC_Program.h"
@@ -4649,7 +4650,7 @@ static QoreValue q_call_function_lexical(const QoreListNode* args, RuntimeConfig
     if constexpr (ByReference) {
         const ResolvedCallReferenceNode* callable = get_param_value(args, 0).get<const ResolvedCallReferenceNode>();
         ProgramCallContextHelper pch(callable->getProgram());
-        return callable->invokeLexical(forwarded_args, xsink, policy);
+        return qore_resolved_call_reference_node_ops(callable).invokeLexical(forwarded_args, xsink, policy);
     } else {
         QoreStringNodeValueHelper name_holder(get_param_value(args, 0));
         const QoreStringNode* name = *name_holder;

@@ -40,6 +40,7 @@
 #include "qore/intern/QC_Serializable.h"
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 // the method and request path are sent as C strings, which would be cut at a NUL character, and the method cannot
 // contain CR or LF, which would end the request line; the path is percent-encoded before it is sent; the request
@@ -691,7 +692,7 @@ delete httpclient;
  */
 HTTPClient::destructor() {
     // have to clear callbacks before destroying
-    client->cleanup(xsink);
+    qore_http_client_object_ops(client).cleanup(xsink);
     client->deref(xsink);
 }
 
