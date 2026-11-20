@@ -287,6 +287,36 @@ public class TestRun {
         return ds;
     }
 
+    #! Skips the current test case with the reason, or fails it if the reason holds a precondition failure
+    /** For a test that records the error of its database setup as the reason to skip its test cases: when the
+        error was the precondition failure of a database that cannot be connected to (getPreconditionFailure()),
+        the test case fails with it instead, as a database outage is not a reason to skip (qore#6934)
+
+        @param reason the reason to skip
+
+        @throw TEST-EXCEPTION the reason holds a precondition failure: the test case fails with it
+        @throw TEST-SKIPPED-EXCEPTION otherwise: the test case is skipped with the reason
+    */
+    static skipOrFail(string reason) {
+        int i = reason.find("precondition failure: ");
+        if (i >= 0) {
+            throw "TEST-EXCEPTION", reason.substr(i);
+        }
+        throw "TEST-SKIPPED-EXCEPTION", reason;
+    }
+
+    #! Raises the exception again if it is a precondition failure (getPreconditionFailure())
+    /** For a test that catches the errors of its database setup to skip: a database that cannot be connected to is
+        not a reason to skip (qore#6934)
+
+        @param ex the exception caught
+    */
+    static rethrowPrecondition(hash<auto> ex) {
+        if (ex.err == "TEST-EXCEPTION" && ex.desc =~ /^precondition failure: /) {
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+
     #! Runs the database setup of a test outside its test cases, and returns the precondition failure it raised
     /** A test that sets up its database in its constructor, before QUnit runs its test cases, cannot fail a test
         case there: it runs the setup with this function, and when it returns a reason, adds a test case that fails

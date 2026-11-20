@@ -19,6 +19,7 @@
 %requires FreetdsSqlUtil
 %requires XdbcFirebirdSqlUtilBase
 %requires JdbcFirebirdSqlUtil
+%requires ./TestRunIsolation.qm
 
 %try-module sqlite3
 %define NoSqlite3
@@ -187,7 +188,7 @@ class SqlUtilRecursiveQueryTest inherits QUnit::Test {
     #! checks recursive queries on a database
     private checkDriver(string driver) {
         if (!dsh{driver}) {
-            testSkip(skip{driver});
+            TestRun::skipOrFail(skip{driver});
         }
         Datasource ds = dsh{driver};
         on_exit {
