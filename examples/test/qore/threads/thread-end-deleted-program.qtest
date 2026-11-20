@@ -129,6 +129,13 @@ class ThreadEndDeletedProgramTest inherits QUnit::Test {
         Counter destroyed(2);
         Counter in_destructor(1);
         Queue release();
+        # the destructors that wait for the release continue in any case, so that a failed check does not leave the
+        # thread waiting
+        bool released;
+        on_exit if (!released) {
+            release.push(True);
+            release.push(True);
+        }
         Counter saved(1);
         {
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES, True);
@@ -150,6 +157,7 @@ class ThreadEndDeletedProgramTest inherits QUnit::Test {
             # the end of the thread runs the first destructor; the Program is deleted at the end of this block
             assertEq(0, in_destructor.waitForZero(120000), "the end of the thread runs a destructor");
         }
+        released = True;
         release.push(True);
         release.push(True);
         assertEq(0, destroyed.waitForZero(120000), "the destructors of the thread's data ran");
@@ -196,6 +204,13 @@ class ThreadEndDeletedProgramTest inherits QUnit::Test {
         Counter own_destroyed(1);
         Counter in_destructor(1);
         Queue release();
+        # the destructors that wait for the release continue in any case, so that a failed check does not leave the
+        # thread waiting
+        bool released;
+        on_exit if (!released) {
+            release.push(True);
+            release.push(True);
+        }
         Counter saved(1);
         {
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES, True);
@@ -213,6 +228,7 @@ class ThreadEndDeletedProgramTest inherits QUnit::Test {
             saved.waitForZero();
             assertEq(0, in_destructor.waitForZero(120000), "the end of the thread runs a destructor");
         }
+        released = True;
         release.push(True);
         assertEq(0, destroyed.waitForZero(120000), "the destructor of the main Program's object ran");
         assertTrue(call_function("dbg_wait_thread_program_data_released", tpd_id, 120000), "the thread has ended");

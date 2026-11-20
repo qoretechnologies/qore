@@ -114,11 +114,12 @@ int sub add(int a, int b) {
             result = p.callFunction("add", 20, 22);
         }();
         tid_set.waitForZero();
-        dp.parked.waitForZero();
-        # the parked thread continues in any case
+        # the parked thread continues in any case, so that a failed check does not leave it waiting
         on_exit if (dp.release.getCount()) {
             dp.release.dec();
         }
+        # a bound for a broken test only
+        assertEq(0, dp.parked.waitForZero(120000), "the thread is parked in the debugger callback");
 
         int status = call_function("dbg_fork_child_bounded", int sub () {
             if (dp.getInterruptedCount()) {
@@ -165,7 +166,12 @@ int sub add(int a, int b) {
             p.callFunction("add", 1, 2);
         }();
         tid_set.waitForZero();
-        dp.parked.waitForZero();
+        # the parked thread continues in any case, so that a failed check does not leave it waiting
+        on_exit if (dp.release.getCount()) {
+            dp.release.dec();
+        }
+        # a bound for a broken test only
+        assertEq(0, dp.parked.waitForZero(120000), "the thread is parked in the debugger callback");
         dp.release.dec();
         done.waitForZero();
 

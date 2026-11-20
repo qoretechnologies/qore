@@ -153,6 +153,10 @@ int sub run_threads(int n) {
             p.callFunction("save", "parked", 42);
             saved = p.callFunction("get", "parked");
         }();
+        # the thread continues in any case, so that a failed check does not leave it waiting
+        on_exit if (go.getCount()) {
+            go.dec();
+        }
         in_program.waitForZero();
 
         call_function("dbg_hold_program_record_change", SiteThreadData, p);
@@ -249,6 +253,10 @@ int sub run_threads(int n) {
             entered.dec();
             go.waitForZero();
         }();
+        # the thread continues in any case, so that a failed check does not leave it waiting
+        on_exit if (go.getCount()) {
+            go.dec();
+        }
         entered.waitForZero();
 
         call_function("dbg_hold_program_record_change", SiteThreadDataCleared, p, tid);
