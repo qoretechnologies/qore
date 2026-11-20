@@ -3659,7 +3659,6 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
     @since %Qore 3.0
 */
 qclass Http1ClientPollOperationBase [
-    private_members=object sock,string goal,auto data_save;
     ns=Qore;
     arg=Http1ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
@@ -3722,10 +3721,10 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setMemberValue("sock", QC_HTTP1CLIENTPOLLOPERATIONBASE,
+        self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE,
             sock_obj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTP1CLIENTPOLLOPERATIONBASE,
+    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
         new QoreStringNode("http1_client"), xsink);
 
     // Set self on the connect op so it can build SocketPollInfo hashes
@@ -3770,7 +3769,7 @@ int Http1ClientPollOperationBase::getIdleTime() [flags=CONSTANT] {
 /** @return the goal string
 */
 string Http1ClientPollOperationBase::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
 }
 
 //! Returns the current state
@@ -4341,5 +4340,5 @@ nothing Http1ClientPollOperationBase::installSseState(int stream_id, Queue[Queue
 /** @return the socket
 */
 Socket Http1ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return self->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
 }

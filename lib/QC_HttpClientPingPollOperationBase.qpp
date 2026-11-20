@@ -445,7 +445,6 @@ const char* HttpClientPingPollOperationPriv::getStateImpl() const {
     @since %Qore 3.0
 */
 qclass HttpClientPingPollOperationBase [
-    private_members=string goal;
     ns=Qore;
     arg=HttpClientPingPollOperationPriv* priv;
     vparent=SocketPollOperationBase<*hash<auto>>
@@ -482,7 +481,7 @@ HttpClientPingPollOperationBase::constructor(object operation, int min_status, i
     inner_obj->ref();
 
     // Set up the Qore goal member
-    self->setMemberValue("goal", QC_HTTPCLIENTPINGPOLLOPERATIONBASE,
+    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
         new QoreStringNode("http-ping"), xsink);
 
     // Create the private data
@@ -517,7 +516,7 @@ HttpClientPingPollOperationBase::copy() {
 /** @return the goal string
 */
 string HttpClientPingPollOperationBase::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
 }
 
 //! Returns the current state of the operation

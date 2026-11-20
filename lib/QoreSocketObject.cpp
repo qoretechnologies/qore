@@ -2718,8 +2718,8 @@ static QoreObject* qore_socket_object_make_poll_op(QoreObject* sock_obj, SocketP
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(sock_obj), xsink);
-        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, new WeakReferenceNode(sock_obj), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode(goal), xsink);
     }
     return *xsink ? nullptr : op_obj.release();
 }

@@ -1160,7 +1160,7 @@ void HttpWebSocketPollOperationPriv::cleanup(ExceptionSink* xsink) {
     @since %Qore 3.0
 */
 qclass HttpWebSocketPollOperationBase [
-    private_members=object sock,string goal,object recv_queue,object send_queue;
+    internal_members=object recv_queue,object send_queue;
     ns=Qore;
     arg=HttpWebSocketPollOperationPriv* priv;
     vparent=SocketPollOperationBase<hash<auto>>
@@ -1180,9 +1180,9 @@ HttpWebSocketPollOperationBase::constructor(Socket[QoreSocketObject] socket) [fl
     QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_qobj) {
-        self->setMemberValue("sock", QC_HTTPWEBSOCKETPOLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+        self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTPWEBSOCKETPOLLOPERATIONBASE,
+    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
         new QoreStringNode("websocket"), xsink);
 
     // Create recv and send queues (unlimited)
@@ -1227,7 +1227,7 @@ HttpWebSocketPollOperationBase::copy() {
 /** @return "websocket"
 */
 string HttpWebSocketPollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
 }
 
 //! Returns the current state
@@ -1457,7 +1457,7 @@ string HttpWebSocketPollOperationBase::getCloseReason() [flags=RET_VALUE_ONLY] {
 /** @return the Socket object
 */
 Socket HttpWebSocketPollOperationBase::getSocket() {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return self->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
 }
 
 //! Queues a pre-encoded raw WebSocket frame for sending

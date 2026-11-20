@@ -2180,7 +2180,6 @@ void Http2ClientPollOperationPriv::installSseState(int32_t stream_id, Queue* que
     @since %Qore 3.0
 */
 qclass Http2ClientPollOperationBase [
-    private_members=object sock,string goal,auto data_save;
     ns=Qore;
     arg=Http2ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
@@ -2236,10 +2235,10 @@ Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setMemberValue("sock", QC_HTTP2CLIENTPOLLOPERATIONBASE,
+        self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE,
             sock_obj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTP2CLIENTPOLLOPERATIONBASE,
+    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
         new QoreStringNode("http2_client_multiplex"), xsink);
 
     // Set self on the connect op so it can build SocketPollInfo hashes
@@ -2279,7 +2278,7 @@ Http2ClientPollOperationBase::destructor() {
 /** @return the goal string
 */
 string Http2ClientPollOperationBase::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
 }
 
 //! Returns the current state
@@ -2966,5 +2965,5 @@ nothing Http2ClientPollOperationBase::installSseState(int stream_id,
 /** @return the socket
 */
 Socket Http2ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return self->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
 }

@@ -100,7 +100,7 @@ public:
     */
     DLLEXPORT QoreObject* getReferencedSocketObject(ExceptionSink* xsink) const {
         assert(self);
-        ValueHolder rv((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
+        ValueHolder rv((*self)->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink), xsink);
         QoreValue v = rv->resolveIndirect();
         if (v.getType() != NT_OBJECT) {
             xsink->raiseException("POLL-ERROR", "'sock' member is no longer an object; got type '%s' instead",

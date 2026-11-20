@@ -3828,8 +3828,8 @@ static QoreValue qore_socket_exec_poll(QoreSocket* s, SocketPollOperationBase* p
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
         return QoreValue();
@@ -3963,8 +3963,8 @@ static QoreSocket* qore_socket_exec_accept_socket(QoreSocket* s, SocketSource* s
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setValue("goal", new QoreStringNode("accepted"), xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("accepted"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -4019,8 +4019,8 @@ static QoreSocket* qore_socket_exec_accept_ssl_socket(QoreSocket* s, SocketSourc
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setValue("goal", new QoreStringNode("accept-ssl"), xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("accept-ssl"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -8261,8 +8261,8 @@ QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const c
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setValue("goal", new QoreStringNode("resolve-addrinfo"), xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("resolve-addrinfo"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -8321,8 +8321,8 @@ QoreFuture* qore_socket_resolve_addrinfo_asyncio_future(ExceptionSink* xsink, co
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setValue("goal", new QoreStringNode("resolve-addrinfo"), xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("resolve-addrinfo"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -8737,8 +8737,8 @@ QoreHashNode* qore_socket_resolve_hostbyaddr_asyncio(ExceptionSink* xsink, const
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setValue("goal", new QoreStringNode("resolve-hostbyaddr"), xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("resolve-hostbyaddr"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -8942,8 +8942,8 @@ QoreFuture* qore_socket_resolve_nameinfo_asyncio_future(ExceptionSink* xsink, co
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setValue("goal", new QoreStringNode("resolve-nameinfo"), xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("resolve-nameinfo"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -11161,8 +11161,8 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         poller->setSelf(*op_obj);
         poller.release();
         if (!*xsink) {
-            op_obj->setValue("sock", poll_obj->objectRefSelf(), xsink);
-            op_obj->setValue("goal", new QoreStringNode("poll"), xsink);
+            op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, poll_obj->objectRefSelf(), xsink);
+            op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("poll"), xsink);
         }
         if (*xsink) {
             cancel_owner();

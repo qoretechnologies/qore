@@ -4243,6 +4243,19 @@ public:
         return info ? info->getClassContext(class_ctx) : nullptr;
     }
 
+#ifdef DEBUG
+    //! returns true if an access to the member in the class context would miss a member that only has private:internal declarations
+    /** this = the object's class; such an access goes to the object's main data, where no declaration of the member
+        is: C++ code that accesses a private:internal member of a system class by name must give the declaring class
+        (QoreObject::getReferencedMemberNoMethod(const char*, const QoreClass*, ExceptionSink*),
+        QoreObject::setMemberValue()); used by the debug assertions of the accesses without a class (qore#6839)
+    */
+    DLLLOCAL bool runtimeMissesInternalOnlyMember(const char* mem, const qore_class_private* class_ctx) const {
+        const QoreMemberInfo* info = members.find(mem);
+        return info && (info->access == Internal || info->access == Inaccessible) && !info->getClassContext(class_ctx);
+    }
+#endif
+
     DLLLOCAL bool runtimeIsMemberInternal(const char* mem) const {
         QoreMemberInfo* info = members.find(mem);
         return info && info->isLocalInternal() ? true : false;

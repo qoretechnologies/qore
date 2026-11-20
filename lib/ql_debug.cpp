@@ -4311,7 +4311,7 @@ static void ut_lent_poll_info_reuse(UnitTestCounters& c) {
     UtPollInfoOp* op = new UtPollInfoOp;
     ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
     op->setSelf(*op_obj);
-    op_obj->setValue("sock", sock2->objectRefSelf(), &xsink);
+    op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock2->objectRefSelf(), &xsink);
     UT_ASSERT(c, !xsink, "the test operation is created");
     if (xsink) {
         xsink.clear();
@@ -4718,12 +4718,12 @@ public:
                 continue;
             }
             accept->setSelf(*op_obj);
-            op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
+            op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj->objectRefSelf(), &xsink);
             UT_ASSERT(c, !xsink, "late accept socket member is initialized");
             if (xsink) {
                 continue;
             }
-            op_obj->setValue("goal", new QoreStringNode("accept"), &xsink);
+            op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("accept"), &xsink);
             UT_ASSERT(c, !xsink, "late accept goal is initialized");
             if (xsink) {
                 continue;
@@ -6965,8 +6965,8 @@ public:
             return;
         }
         recv->setSelf(*op_obj);
-        op_obj->setValue("sock", client_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("recv"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, client_obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("recv"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", client_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -7068,8 +7068,8 @@ public:
         WaitOp* op = new WaitOp(*notifier_obj);
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", notifier_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("wait"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, notifier_obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("wait"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", notifier_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -7338,8 +7338,8 @@ public:
             return;
         }
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("connect"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("connect"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -8142,8 +8142,8 @@ public:
                 // the I/O thread has no current Program
                 ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, pgm, op), &sx);
                 op->setSelf(*op_obj);
-                op_obj->setValue("sock", n_obj->objectRefSelf(), &sx);
-                op_obj->setValue("goal", new QoreStringNode("replacing"), &sx);
+                op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, n_obj->objectRefSelf(), &sx);
+                op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("replacing"), &sx);
                 ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclSocketPollOperationInfo, &sx), &sx);
                 h->setKeyValue("sock", n_obj->objectRefSelf(), &sx);
                 h->setKeyValue("spop", op_obj->objectRefSelf(), &sx);
@@ -8546,8 +8546,8 @@ private:
             ExceptionSink& xsink, const char* key = nullptr, bool replace = false) {
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", notifier_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("extra"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, notifier_obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("extra"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", notifier_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -8609,8 +8609,8 @@ private:
         ReadyOp* op = new ReadyOp(obj);
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("ready"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("ready"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -8692,8 +8692,8 @@ private:
         WaitOp* op = new WaitOp(obj);
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("wait"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("wait"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -8854,8 +8854,8 @@ class AsyncIoStoppingThreadTest {
             return -1;
         }
         accept->setSelf(*op_obj);
-        op_obj->setValue("sock", sock_holder->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("accept"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_holder->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("accept"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", sock_holder->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -9426,8 +9426,8 @@ private:
         WaitOp* op = new WaitOp(*obj, p, worker, sees_close);
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("closed-pollable"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("closed-pollable"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -9569,8 +9569,8 @@ public:
         ZeroHintOp* op = new ZeroHintOp(*sock_obj);
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("zero-hint"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("zero-hint"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -9734,8 +9734,8 @@ public:
         NotifiedOp* op = new NotifiedOp(*notifier_obj, *notifier);
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", notifier_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("stale-readiness"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, notifier_obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("stale-readiness"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", notifier_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -10014,8 +10014,8 @@ public:
         IdleOp* op = new IdleOp(*notifier_obj);
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         op->setSelf(*op_obj);
-        op_obj->setValue("sock", notifier_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("abandoned"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, notifier_obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("abandoned"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", notifier_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -10142,8 +10142,8 @@ public:
             return;
         }
         accept->setSelf(*op_obj);
-        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
-        op_obj->setValue("goal", new QoreStringNode("accept"), &xsink);
+        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj->objectRefSelf(), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("accept"), &xsink);
         UT_ASSERT(c, !xsink, "abandoned-submit accept operation is initialized");
         if (xsink) {
             return;
@@ -18429,8 +18429,8 @@ static QoreValue f_dbg_wait_again_poll_operation(const QoreListNode* params, Run
     DbgWaitAgainPollOperation* op = new DbgWaitAgainPollOperation(obj, events, static_cast<int>(waits), extra);
     ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), xsink);
     op->setSelf(*op_obj);
-    op_obj->setValue("sock", obj->objectRefSelf(), xsink);
-    op_obj->setValue("goal", new QoreStringNode("wait-again"), xsink);
+    op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, obj->objectRefSelf(), xsink);
+    op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("wait-again"), xsink);
     return *xsink ? QoreValue() : QoreValue(op_obj.release());
 }
 

@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+#! The members of the system poll operations are private:internal to SocketPollOperationBase (qore#6839)
+/** A subclass of a system poll operation cannot read or write the socket and goal of the operation, which the
+    system class keeps for itself, and a member of the same name that a subclass declares has storage of its own;
+    a PollPipeline subclass sets its goal with the private method setGoal()
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SystemPollMemberAccessTest
+
+class SystemPollMemberAccessTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SystemPollMemberAccess", "1.0", \ARGV) {
+        addTestCase("a subclass cannot reach the members of the system class", \subclassAccessTest());
+        addTestCase("a member of the same name has storage of its own", \ownStorageTest());
+        addTestCase("setGoal()", \setGoalTest());
+        addTestCase("the members are not shown with the object", \formatTest());
+        set_return_value(main());
+    }
+
+    #! returns the parse error of the code in a child Program, or NOTHING if it parses
+    static *string parseError(string code) {
+        Program p(PO_MODERN);
+        try {
+            p.parse(code, "subclass");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+        return NOTHING;
+    }
+
+    #! parses the code in a child Program and returns the result of its function t()
+    static auto run(string code) {
+        Program p(PO_MODERN);
+        p.parse(code, "subclass");
+        return p.callFunction("t");
+    }
+
+    subclassAccessTest() {
+        # a read and a write of each member by name and through self
+        foreach string mem in ("goal", "sock", "data_save") {
+            foreach string body in ("auto r() { return " + mem + "; }", "w(auto x) { " + mem + " = x; }",
+                    "auto r() { return self." + mem + "; }", "w(auto x) { self." + mem + " = x; }") {
+                string code = "class S inherits PollPipeline { constructor() : PollPipeline(\"g\") {} " + body
+                    + " }";
+                *string err = parseError(code);
+                assertTrue(exists err, code);
+                assertRegex("^PARSE-", err ?? "", code);
+            }
+        }
+    }
+
+    ownStorageTest() {
+        # the system class's goal is not the subclass's member
+        assertEq(("system goal", "subclass goal"), run("class S inherits PollPipeline {
+    private { string goal = \"subclass goal\"; }
+    constructor() : PollPipeline(\"system goal\") {}
+    string getOwnGoal() { return goal; }
+}
+list<string> sub t() { S s(); return (s.getGoal(), s.getOwnGoal()); }"));
+        # in both orders of the parent classes (qore#6772)
+        foreach string parents in ("PollPipeline, Base", "Base, PollPipeline") {
+            string code = "class Base { private { string goal = \"base\"; } string baseGoal() { return goal; } }\n"
+                "class S inherits " + parents + " { constructor() : PollPipeline(\"system\") {} }\n"
+                "list<string> sub t() { S s(); return (s.getGoal(), s.baseGoal()); }";
+            assertEq(("system", "base"), run(code), parents);
+        }
+    }
+
+    setGoalTest() {
+        assertEq("subclass set", run("class S inherits PollPipeline {
+    constructor(string g) : PollPipeline(\"initial\") { setGoal(g); }
+}
+string sub t() { S s(\"subclass set\"); return s.getGoal(); }"));
+        # setGoal() is private: a call from outside the class is refused when it is parsed or when it is made
+        *string err = parseError("string sub t() { PollPipeline p(\"x\"); p.setGoal(\"y\"); return p.getGoal(); }");
+        if (!err) {
+            assertThrows("METHOD-IS-PRIVATE", \run(), "string sub t() { PollPipeline p(\"x\"); p.setGoal(\"y\"); "
+                "return p.getGoal(); }");
+        }
+        PollPipeline p("unchanged");
+        assertThrows("METHOD-IS-PRIVATE", sub () { call_object_method(p, "setGoal", "outside"); });
+        assertEq("unchanged", p.getGoal());
+    }
+
+    formatTest() {
+        PollPipeline p("formatted goal");
+        string str = sprintf("%y", p);
+        assertNRegex("formatted goal", str);
+        assertNRegex("\\bgoal\\b", str);
+    }
+}

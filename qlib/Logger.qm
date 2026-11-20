@@ -2196,7 +2196,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
     constructor(*string name, LoggerLayout layout, string filename, int count = DEFAULT_ROTATION_COUNT,
             string archive = DEFAULT_ARCHIVE_PATTERN, *string encoding)
             : AbstractLoggerAppenderFileRotate(name, layout, encoding), LoggerPattern(filename) {
-        fileName = format(NOTHING);  # no dynamic vars as timestamp
+        setFileName(format(NOTHING));  # no dynamic vars as timestamp
         self.count = count;
         setPattern(archive);
     }
@@ -2259,7 +2259,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
     public processEventImpl(int type, auto params) {
         switch (type) {
             case EVENT_ROTATE:
-                if (count > 0 && is_file(fileName)) {
+                if (count > 0 && is_file(getFileName())) {
                     list<string> fn = ();
                     int i = 0;
                     while (True) {
@@ -2282,11 +2282,10 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
                         writeLifecycleMarker("rotated", sprintf("-> %s", fn[0]));
                     }
                     # issue #4842: rotate atomically
-                    File f(encoding);
                     # first rename old file
-                    rename(fileName, fn[0]);
+                    rename(getFileName(), fn[0]);
                     # reopen file atomically
-                    file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                    getFile().open2(getFileName(), O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
                     if (lifecycleMarkersEnabled()) {
                         writeLifecycleMarker("rotated", sprintf("<- %s", fn[0]));
                     }
@@ -2298,7 +2297,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
                     writeLifecycleMarker("reopening", NOTHING);
                 }
                 # reopen file atomically
-                file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                getFile().open2(getFileName(), O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
                 if (lifecycleMarkersEnabled()) {
                     writeLifecycleMarker("reopened", NOTHING);
                 }
@@ -2315,7 +2314,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
     */
     public string getArchiveFileName(int idx) {
         return format({
-            "filename": fileName,
+            "filename": getFileName(),
             "count": count,
             "index": idx,
         });
@@ -2371,7 +2370,7 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
         patternData.timestamp = now_us();
         patternData.count = count;
         patternData.index = 0;
-        fileName = format(patternData);
+        setFileName(format(patternData));
     }
 
     #! Returns a string for a format field for a pattern-based filename
@@ -2438,13 +2437,13 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
                     }
                 }
                 patternData.index = last_idx;
-                fileName = format(patternData);
+                setFileName(format(patternData));
                 LoggerAppenderFile::processEventImpl(type, params);
                 break;
             case EVENT_ROTATE:
                 if (patternData.count > 0) {
                     # issue #4842: rotate atomically
-                    string old_fn = fileName;
+                    string old_fn = getFileName();
                     patternData.index = (patternData.index + 1) % patternData.count;
                     patternData.timestamp = now_us();
                     string new_fn = format(patternData);
@@ -2452,9 +2451,9 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
                         # written via the still-open fd to old_fn; fileName member is still old_fn
                         writeLifecycleMarker("rotated", sprintf("-> %s", new_fn));
                     }
-                    fileName = new_fn;
+                    setFileName(new_fn);
                     # create new file and reopen atomically
-                    file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                    getFile().open2(getFileName(), O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
                     if (lifecycleMarkersEnabled()) {
                         writeLifecycleMarker("rotated", sprintf("<- %s", old_fn));
                     }
@@ -2537,7 +2536,7 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
     */
     constructor(*string name, LoggerLayout layout, string filename, string archive = DEFAULT_ARCHIVE_PATTERN,
             *string encoding): LoggerAppenderFile(name, layout, filename, encoding), LoggerPattern(filename) {
-        fileName = format(NOTHING);  # no dynamic vars as timestamp
+        setFileName(format(NOTHING));  # no dynamic vars as timestamp
         setPattern(archive);
     }
 
@@ -2606,13 +2605,13 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
                         writeLifecycleMarker("archived", sprintf("-> %s", params));
                     }
                     # issue #4842: do not close the file here, allow it to be reopened atomically
-                    rename(fileName, params);
+                    rename(getFileName(), params);
                     LoggerAppenderFile::processEventImpl(EVENT_OPEN);
                     if (lifecycleMarkersEnabled()) {
                         writeLifecycleMarker("archived", sprintf("<- %s", params));
                     }
                 } else {
-                    rename(fileName, params);
+                    rename(getFileName(), params);
                 }
                 break;
             default:
@@ -2632,7 +2631,7 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
         if (afn == "") {
             throw "LOGGER-ERROR", "Empty target filename";
         }
-        if (normalize_dir(afn) == normalize_dir(fileName)) {
+        if (normalize_dir(afn) == normalize_dir(getFileName())) {
             throw "LOGGER-ERROR", "Source and target path are equal";
         }
         if (is_dir(afn)) {
@@ -2653,7 +2652,7 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
     public string getArchiveFileName() {
         return format({
             "timestamp": now_us(),
-            "filename": fileName,
+            "filename": getFileName(),
         });
     }
 }

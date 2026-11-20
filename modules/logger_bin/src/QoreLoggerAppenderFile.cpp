@@ -50,18 +50,22 @@ void QoreLoggerAppenderFile::init(const QoreStringNode* filename, const QoreEnco
     this->f->ref();
 
     ReferenceHolder<QoreObject> file(new QoreObject(QC_FILE, getProgram(), f.release()), xsink);
-    self->setValue("file", file.release(), xsink);
-    self->setValue("fileName", filename->stringRefSelf(), xsink);
+    self->setMemberValue("file", QC_LOGGERAPPENDERFILE, file.release(), xsink);
+    self->setMemberValue("fileName", QC_LOGGERAPPENDERFILE, filename->stringRefSelf(), xsink);
 }
 
 //! Returns the file object for the appender
 QoreValue QoreLoggerAppenderFile::getFile(ExceptionSink* xsink) const {
-    return self->getReferencedMemberNoMethod("file", xsink);
+    return self->getReferencedMemberNoMethod("file", QC_LOGGERAPPENDERFILE, xsink);
 }
 
 //! Returns the current filename
+void QoreLoggerAppenderFile::setFileName(const QoreStringNode* filename, ExceptionSink* xsink) {
+    self->setMemberValue("fileName", QC_LOGGERAPPENDERFILE, filename->stringRefSelf(), xsink);
+}
+
 QoreValue QoreLoggerAppenderFile::getFileName(ExceptionSink* xsink) const {
-    return self->getReferencedMemberNoMethod("fileName", xsink);
+    return self->getReferencedMemberNoMethod("fileName", QC_LOGGERAPPENDERFILE, xsink);
 }
 
 //! Processes open, close, and log events with the file and ignores all other events
@@ -106,7 +110,7 @@ void QoreLoggerAppenderFile::processEventImpl(ExceptionSink* xsink, int64 type, 
 }
 
 void QoreLoggerAppenderFile::openFile(ExceptionSink* xsink) {
-    ValueHolder fn(self->getReferencedMemberNoMethod("fileName", xsink), xsink);
+    ValueHolder fn(self->getReferencedMemberNoMethod("fileName", QC_LOGGERAPPENDERFILE, xsink), xsink);
     if (*xsink) {
         return;
     }
@@ -157,7 +161,7 @@ void QoreLoggerAppenderFile::writeLifecycleMarker(ExceptionSink* xsink, const ch
 
     QoreStringNodeHolder name(getName());
     // own the reference returned by getReferencedMemberNoMethod so it's released after we read it
-    ValueHolder fname_v(self->getReferencedMemberNoMethod("fileName", xsink), xsink);
+    ValueHolder fname_v(self->getReferencedMemberNoMethod("fileName", QC_LOGGERAPPENDERFILE, xsink), xsink);
     if (*xsink) {
         return;
     }

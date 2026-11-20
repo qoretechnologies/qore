@@ -348,7 +348,6 @@ QoreHashNode* HttpKeepAlivePollOperationPriv::continueHeaderPoll(ExceptionSink* 
     @since %Qore 3.0
 */
 qclass HttpKeepAlivePollOperationBase [
-    private_members=object sock,string goal;
     ns=Qore;
     arg=HttpKeepAlivePollOperationPriv* priv;
     vparent=SocketPollOperationBase<hash<auto>>
@@ -366,9 +365,9 @@ HttpKeepAlivePollOperationBase::constructor(Socket[QoreSocketObject] socket, int
     QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_qobj) {
-        self->setMemberValue("sock", QC_HTTPKEEPALIVEPOLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+        self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTPKEEPALIVEPOLLOPERATIONBASE,
+    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
         new QoreStringNode("keep_alive_idle"), xsink);
 
     sock_ptr->ref();
@@ -398,7 +397,7 @@ HttpKeepAlivePollOperationBase::copy() {
 /** @return "keep_alive_idle" or "keep_alive_header" depending on the current phase
 */
 string HttpKeepAlivePollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
 }
 
 //! Returns the current state
@@ -470,7 +469,7 @@ string HttpKeepAlivePollOperationBase::getPhase() [flags=RET_VALUE_ONLY] {
 nothing HttpKeepAlivePollOperationBase::resetForIdle() {
     priv->resetForIdle();
     // Update the goal member
-    self->setMemberValue("goal", QC_HTTPKEEPALIVEPOLLOPERATIONBASE,
+    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
         new QoreStringNode("keep_alive_idle"), xsink);
 }
 
@@ -478,5 +477,5 @@ nothing HttpKeepAlivePollOperationBase::resetForIdle() {
 /** @return the Socket object
 */
 Socket HttpKeepAlivePollOperationBase::getSocket() {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return self->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
 }

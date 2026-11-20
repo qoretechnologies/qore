@@ -2749,6 +2749,15 @@ int QoreObject::setMemberValue(const char* key, const QoreClass* cls, QoreValue 
     return *xsink ? -1 : 0;
 }
 
+int QoreObject::setInternalMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink) {
+    assert(cls);
+    const qore_class_private* class_ctx = qore_class_private::get(*cls);
+    // the class declares the member with private:internal access, so its storage is the class's own (qore#6839)
+    assert(class_ctx->runtimeIsMemberInternal(key));
+    priv->setValueIntern(class_ctx, key, val, xsink);
+    return *xsink ? -1 : 0;
+}
+
 void QoreObject::deleteMemberValue(const QoreString* key, ExceptionSink* xsink) {
     QoreHashKeyHelper enc(*key, xsink);
     if (!enc)
@@ -2840,6 +2849,11 @@ QoreHashNode* qore_object_ops::getSliceImpl(QoreObject* b, const QoreListNode* v
 }
 
 void QoreObject::setValue(const char* key, QoreValue val, ExceptionSink* xsink) {
+    // a write without a class must not miss a private:internal member that the class context cannot reach: it would
+    // go to the object's main data, where nothing reads it (qore#6839)
+#ifdef DEBUG
+    assert(!qore_class_private::get(*priv->theclass)->runtimeMissesInternalOnlyMember(key, runtime_get_class()));
+#endif
     priv->setValue(key, val, xsink);
 }
 
@@ -2870,6 +2884,11 @@ int64 QoreObject::getMemberAsBigInt(const char* mem, bool& found, ExceptionSink*
 }
 
 QoreValue QoreObject::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
+    // a read without a class must not miss a private:internal member that the class context cannot reach: it would
+    // read the object's main data and give no value (qore#6839)
+#ifdef DEBUG
+    assert(!qore_class_private::get(*priv->theclass)->runtimeMissesInternalOnlyMember(mem, runtime_get_class()));
+#endif
     return priv->getReferencedMemberNoMethod(mem, xsink);
 }
 

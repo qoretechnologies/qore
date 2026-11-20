@@ -1783,7 +1783,7 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
 
     private setup(Pop3Client pop3, bool send_noop) {
         hash<auto> info = pop3.getInfo();
-        goal = send_noop ? "ping" : "connect";
+        setGoal(send_noop ? "ping" : "connect");
 
         bool has_token = info.token.val();
         bool need_stls = !info.ssl && info.tls ? True : False;
@@ -1896,7 +1896,7 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
     /** @return the configured goal, either \c "ping" or \c "connect"
     */
     string getGoal() {
-        return goal;
+        return PollPipeline::getGoal();
     }
 
     #! Returns the current state mapped to Pop3PingState values for backward compatibility
@@ -1944,7 +1944,7 @@ public class Pop3CommandPollOperation inherits Qore::PollPipeline {
         check_line_text(command, "POP3 command", "POP3-SERVER-ERROR");
         data_encoding = get_default_encoding();
         hash<auto> info = pop3.getInfo();
-        goal = "command";
+        setGoal("command");
         multi_response = multi;
         response_queue_id = addQueue();
         if (multi_response) {
@@ -2098,7 +2098,7 @@ public class Pop3ConnectedCommandPollOperation inherits Qore::PollPipeline {
     constructor(Socket sock, string command, bool multi = False) : PollPipeline(sock) {
         check_line_text(command, "POP3 command", "POP3-SERVER-ERROR");
         data_encoding = sock.getEncoding();
-        goal = "connected-command";
+        setGoal("connected-command");
         multi_response = multi;
         response_queue_id = addQueue();
         if (multi_response) {
@@ -2199,7 +2199,7 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
     */
     constructor(Pop3Client pop3) : PollPipeline(my_sock = Pop3StatPollOperation::makeSocket()) {
         hash<auto> info = pop3.getInfo();
-        goal = "stat";
+        setGoal("stat");
         stat_queue_id = addQueue();
         list_queue_id = addQueue();
 
@@ -2378,7 +2378,7 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
             : PollPipeline(sock) {
         map check_line_text($1, "POP3 message ID", "POP3-FETCH-ERROR"), ids;
         msg_ids = ids;
-        goal = "retr";
+        setGoal("retr");
         data_encoding = sock.getEncoding();
 
         # Statically unroll RETR per message

@@ -36,7 +36,7 @@
 /**
     No multi-threading protection is implemented in the class; the @ref Qore::File "File" class is reused
 */
-qclass LoggerAppenderFile [ns=Qore::Logger; arg=QoreLoggerAppenderFile* a; vparent=LoggerAppenderWithLayout; private_members=File file,string fileName,*string encoding];
+qclass LoggerAppenderFile [ns=Qore::Logger; arg=QoreLoggerAppenderFile* a; vparent=LoggerAppenderWithLayout; internal_members=File file,string fileName,*string encoding];
 
 //! Destroys the appender
 /** The private data of the appender, which a Logger can still reference, keeps its filters, queue and layout
@@ -62,7 +62,7 @@ LoggerAppenderFile::constructor(*string name, LoggerLayout layout, string filena
         self->setPrivate(CID_LOGGERAPPENDERFILE, new QoreLoggerAppenderFile(self, layout, filename, qe, xsink));
     }
     if (!*xsink && encoding) {
-        self->setValue("encoding", encoding->stringRefSelf(), xsink);
+        self->setMemberValue("encoding", QC_LOGGERAPPENDERFILE, encoding->stringRefSelf(), xsink);
     }
 }
 
@@ -76,7 +76,7 @@ LoggerAppenderFile::constructor(LoggerLayout layout, string filename, *string en
     const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
     self->setPrivate(CID_LOGGERAPPENDERFILE, new QoreLoggerAppenderFile(self, layout, filename, qe, xsink));
     if (!*xsink && encoding) {
-        self->setValue("encoding", encoding->stringRefSelf(), xsink);
+        self->setMemberValue("encoding", QC_LOGGERAPPENDERFILE, encoding->stringRefSelf(), xsink);
     }
 }
 
@@ -92,6 +92,18 @@ File LoggerAppenderFile::getFile() {
 */
 string LoggerAppenderFile::getFileName() {
     return a->getFileName(xsink);
+}
+
+//! Sets the name of the file that the appender opens next
+/** For subclasses that change the file, such as the rotating and archiving appenders; the file in use is not
+    changed until it is opened again (ex: with openFile() or reopen())
+
+    @param filename the name of the file
+
+    @since logger 1.1 (qore#6839: the file name is a private:internal member of this class)
+*/
+private LoggerAppenderFile::setFileName(string filename) {
+    a->setFileName(filename, xsink);
 }
 
 //! Processes open, close, and log events with the file and ignores all other events
