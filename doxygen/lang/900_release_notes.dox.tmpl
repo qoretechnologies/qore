@@ -2607,6 +2607,10 @@
       parameter that is not valid raises \c INVALID-PATH-COMPONENT then, instead of failing each request with a 500
       response; a content type that a request accepts is no longer taken as a regular expression (see @ref http1_7,
       @ref swagger_2_6 and @ref restschemavalidator_2_5; issue #6603)
+    - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: state that a request
+      handler leaves on a server thread (its persistence, its close notification and its user thread context) is
+      kept for that handler only, so that a handler of another tenant that runs on the same thread later neither sees
+      nor uses it (see @ref httputil1_6 and @ref http1_7; issue #6847)
     - \c UNREFERENCED-VARIABLE warnings ignored the code's own warning directives when the code was committed, and
       qcc and qore could disagree; a @ref disable-warning "%disable-warning" or @ref enable-warning "%enable-warning"
       directive now applies to the variables declared after it (issue #6589)

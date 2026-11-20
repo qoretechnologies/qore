@@ -270,6 +270,11 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - on the thread of a dedicated persistent connection, a request for another handler than the session's (after the
+      session's handler ended its persistence while keeping the connection dedicated, or in the requests processed
+      after a persistent session ended) runs with the thread context of its own handler: it does not see the user
+      thread context that another handler, also of another tenant, left on the thread, and that handler gets back its
+      own (issue #6847)
     - the error response for an exception of a request handler (400, 413 or 500) gives the error and its description
       only, without the location of the exception in the server's code, unless debugging is enabled
       (@ref HttpServer::HttpServer::setDebug() "HttpServer::setDebug()"; issue #6780)
@@ -4761,10 +4766,14 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     /** This method is called by listeners when a request is received.
 
         If async_response_out is provided, captures response info instead of sending
+
+        If thread_contexts is provided (the thread of a dedicated persistent connection), the request runs with the
+        thread context of its handler (issue #6847)
     */
     private handleRequest(RequestHelper request_helper, HttpListener listener, Socket s,
             reference<hash<auto>> cx, hash<auto> hdr, bool head = False, HttpPersistentHandlerInfo phi,
-            hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+            hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out,
+            *HttpHandlerThreadContexts thread_contexts) {
         remove cx."response-sent";
         bool is_http2 = cx."header-info".http2 ?? False;
         bool is_multiplexed = is_http2 || (cx."header-info".http3 ?? False);
@@ -4936,6 +4945,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             if (!handler && defaultHandler) {
                 handler = defaultHandler.obj;
                 cx.handler_name = defaultHandler.name;
+            }
+
+            # on the thread of a dedicated persistent connection, the request runs with the thread context of its
+            # handler, never with that of another handler that ran on the thread (issue #6847)
+            if (thread_contexts) {
+                if (handler) {
+                    cx.uctx = thread_contexts.enter(handler);
+                } else {
+                    remove cx.uctx;
+                }
             }
 
             if (handler && hdr.expect) {
@@ -6472,6 +6491,72 @@ class HttpPersistentHandlerInfo {
             remove handler;
             remove dhh;
         }
+    }
+}
+
+#! Keeps the thread context of each handler apart on the thread of a dedicated persistent connection (issue #6847)
+/** The thread runs the requests of its connection one after the other.  When the session's handler ends its
+    persistence while the connection stays dedicated, or in the requests drained after its persistence ended, a request
+    of the connection can be for another handler, of another tenant.  The values that the server keeps for the handlers
+    in its own thread-local data (the user thread context, and the listener key that the loop removes when it ends)
+    are switched with the handler: each handler sees only the values that it left there, and never those of another
+    handler.  Values that a handler keeps in the thread-local data of another Program are not covered.
+
+    Used only by the thread of the connection.
+*/
+class HttpHandlerThreadContexts {
+    public {
+        #! the thread-local keys that the server keeps for the handlers
+        const Keys = ("uctx", "svc_listener");
+    }
+
+    private:internal {
+        #! the handler of the session
+        *HttpServer::AbstractHttpRequestHandler owner;
+
+        #! the handler whose values are on the thread
+        *HttpServer::AbstractHttpRequestHandler current;
+
+        #! the values of the other handlers: unique hash -> thread-local values
+        hash<string, hash<auto>> saved;
+    }
+
+    #! creates the object for the given session handler, whose values are on the thread
+    constructor(*HttpServer::AbstractHttpRequestHandler owner) {
+        self.owner = owner;
+        current = owner;
+    }
+
+    #! puts the values of the given handler on the thread; returns its user thread context
+    *hash<auto> enter(HttpServer::AbstractHttpRequestHandler handler) {
+        if (handler != current) {
+            # the values on the thread are those of the current handler, or of no handler
+            hash<auto> values = remove_thread_data(Keys);
+            if (current) {
+                saved{current.uniqueHash()} = values;
+            }
+            current = handler;
+            *hash<auto> mine = remove saved{handler.uniqueHash()};
+            # only the keys with a value are restored
+            mine = map {$1.key: $1.value}, mine.pairIterator(), exists $1.value;
+            if (mine) {
+                save_thread_data(mine);
+            }
+        }
+        return get_thread_data("uctx");
+    }
+
+    #! puts the values of the given persistent handler, or else of the session's handler, on the thread
+    restore(*HttpServer::AbstractHttpRequestHandler persistent_handler) {
+        *HttpServer::AbstractHttpRequestHandler handler = persistent_handler ?? owner;
+        if (handler) {
+            enter(handler);
+        }
+    }
+
+    #! releases the values of the handlers that are not on the thread
+    clear() {
+        remove saved;
     }
 }
 
@@ -8644,6 +8729,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # Static listener context template
         hash<auto> cx_listener = getContextTemplate(info);
         *Queue close_ack;
+        # the requests of the connection that this thread runs can be for other handlers than the session's; each
+        # handler runs with its own thread context (issue #6847)
+        HttpHandlerThreadContexts thread_contexts(phi.handler);
 
         # Clean up persistent handler state and thread-local data on exit
         on_exit {
@@ -8656,6 +8744,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
             on_exit remove_thread_data("svc_listener");
             on_exit removeUserThreadContext();
+            on_exit thread_contexts.clear();
             phi.clear();
         }
 
@@ -8710,7 +8799,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         "dedicated mode immediately", cx.id);
                     deregister_fn(sock_key);
                     drainOrphanedPersistentRequests(request_helper, pq, s,
-                        \cx, cx_listener, phi, info, \close_ack);
+                        \cx, cx_listener, phi, info, \close_ack, thread_contexts);
                     return;
                 }
                 # Wait for next request from Queue with idle timeout
@@ -8731,7 +8820,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                                 "exiting dedicated mode", cx.id);
                             deregister_fn(sock_key);
                             drainOrphanedPersistentRequests(request_helper, pq,
-                                s, \cx, cx_listener, phi, info, \close_ack);
+                                s, \cx, cx_listener, phi, info, \close_ack, thread_contexts);
                             return;
                         }
                         continue;
@@ -8783,7 +8872,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     resumeQueuedPersistentEntry(entry);
                     deregister_fn(sock_key);
                     drainOrphanedPersistentRequests(request_helper, pq, s,
-                        \cx, cx_listener, phi, info, \close_ack);
+                        \cx, cx_listener, phi, info, \close_ack, thread_contexts);
                     if (!is_multiplexed && s.isOpen()) {
                         if (end_cx.close) {
                             serv.closeConnectionAfterResponse(s, end_cx, self);
@@ -8866,8 +8955,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 on_exit {
                     resumeQueuedPersistentEntry(entry);
                 }
+                # the thread context of the session's handler is the thread's again after the request
+                on_exit thread_contexts.restore(phi.handler);
                 handleRequest(request_helper, self, s, \cx, req_hdr,
-                    req_hdr.method == "HEAD", phi, info, \async_response);
+                    req_hdr.method == "HEAD", phi, info, \async_response, thread_contexts);
 
                 # If handler took over the socket (dedicated), we're done
                 if (request_helper.isDedicated()) {
@@ -8909,6 +9000,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     cleanupMultiplexedBodyStream(s, conn_info.header_info);
                 }
 
+                # the request has been answered: the checks below see the thread context of the session's handler
+                thread_contexts.restore(phi.handler);
+
                 if (!is_multiplexed && (cx.close || !s.isOpen())) {
                     # the response was sent, and the connection closes after it
                     if (s.isOpen()) {
@@ -8944,7 +9038,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     # Process any requests that were pushed to the queue during the
                     # brief window between the last pq.get() and the deregistration
                     drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
-                        cx_listener, phi, info, \close_ack);
+                        cx_listener, phi, info, \close_ack, thread_contexts);
                     if (!is_multiplexed && !cx.close && s.isOpen()) {
                         serv.returnConnectionToAsyncIo(s, cx, self);
                     }
@@ -8972,7 +9066,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # fresh connection.
             deregister_fn(sock_key);
             drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
-                cx_listener, phi, info, \close_ack);
+                cx_listener, phi, info, \close_ack, thread_contexts);
         }
     }
 
@@ -8993,11 +9087,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @param phi the persistent handler info (persistence already cleared)
         @param info peer info for logging
         @param close_ack receives the completion queue from an orphaned close request
+        @param thread_contexts the thread contexts of the handlers whose requests the thread runs (issue #6847)
     */
     private drainOrphanedPersistentRequests(RequestHelper request_helper, Queue pq,
             Socket s, reference<hash<auto>> cx, hash<auto> cx_listener,
             HttpPersistentHandlerInfo phi, hash<auto> info,
-            reference<*Queue> close_ack) {
+            reference<*Queue> close_ack, HttpHandlerThreadContexts thread_contexts) {
         while (True) {
             *hash<auto> entry;
             try {
@@ -9090,10 +9185,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             on_exit {
                 resumeQueuedPersistentEntry(entry);
             }
+            # the thread context of the session's handler is the thread's again after the request
+            on_exit thread_contexts.restore(phi.handler);
 
             try {
                 handleRequest(request_helper, self, s, \cx, req_hdr,
-                    req_hdr.method == "HEAD", phi, info, \async_response);
+                    req_hdr.method == "HEAD", phi, info, \async_response, thread_contexts);
 
                 if (request_helper.isDedicated()) {
                     return;
