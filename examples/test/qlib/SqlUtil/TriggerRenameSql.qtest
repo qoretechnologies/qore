@@ -19,6 +19,7 @@
 %requires ./PgsqlTestIsolation.qm
 %requires ./MysqlTestIsolation.qm
 %requires ./MssqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module pgsql
 %define NO_PGSQL
@@ -148,7 +149,7 @@ class TriggerRenameSqlTest inherits QUnit::Test {
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+            TestRun::failOrSkipConnect("no DB connection", ex);
         }
         ds.close();
     }

@@ -287,6 +287,69 @@ public class TestRun {
         return ds;
     }
 
+    #! Returns the reason to report for a connection error of a database driver
+    /** The QORE_DB_CONNSTR* variable is found by the driver that raised the error (\c DBI:PGSQL:, \c DBI:MYSQL:,
+        \c DBI:ORACLE: or \c TDS-, the \c freetds and \c sybase drivers): when exactly one variable set for that
+        driver gives a datasource string, the reason is its precondition failure (getPreconditionFailure()), as a
+        database outage is not a reason to skip (qore#6934); else it is the prefix and the error code, without the
+        driver's message, which can name the user and the database
+
+        @param prefix the text of the reason to skip, ex: \c "no DB connection"
+        @param ex the exception of the connection
+
+        @return the reason
+    */
+    static string getConnectFailureReason(string prefix, hash<auto> ex) {
+        if (ex.err == "TEST-EXCEPTION" && ex.desc =~ /^precondition failure: /) {
+            return ex.desc;
+        }
+        *list<string> drivers;
+        if (ex.err =~ /^DBI:PGSQL:/) {
+            drivers = ("pgsql",);
+        } else if (ex.err =~ /^DBI:MYSQL:/) {
+            drivers = ("mysql",);
+        } else if (ex.err =~ /^DBI:ORACLE:/) {
+            drivers = ("oracle",);
+        } else if (ex.err =~ /^TDS-/) {
+            drivers = ("freetds", "sybase");
+        }
+        if (drivers) {
+            list<string> vars = ();
+            foreach string var in (sort(keys ENV)) {
+                if (var !~ /^QORE_DB_CONNSTR/ || !ENV{var}.val() || var =~ /_SYS$/) {
+                    continue;
+                }
+                try {
+                    if (inlist(parse_datasource(ENV{var}).type, drivers)) {
+                        vars += var;
+                    }
+                } catch (hash<ExceptionInfo> pex) {
+                }
+            }
+            # the variable of the driver (ex: QORE_DB_CONNSTR_PGSQL) is the one a test of the driver reads, before
+            # the generic QORE_DB_CONNSTR; variables with the same datasource string are one
+            list<string> own = select vars, $1 =~ /^QORE_DB_CONNSTR_(PGSQL|MYSQL|MARIADB|ORACLE|FREETDS|SYBASE)$/;
+            if (own) {
+                vars = own;
+            }
+            if (vars && (map {ENV{$1}: True}, vars).size() == 1) {
+                return TestRun::getPreconditionFailure(vars[0], ENV{vars[0]}, ex);
+            }
+        }
+        return sprintf("%s: %s", prefix, ex.err);
+    }
+
+    #! Fails the current test case for a connection error of a database driver, or skips it
+    /** @param prefix the text of the reason to skip, ex: \c "no DB connection"
+        @param ex the exception of the connection
+
+        @throw TEST-EXCEPTION the error is that of the datasource string of a variable (getConnectFailureReason())
+        @throw TEST-SKIPPED-EXCEPTION otherwise: the test case is skipped with the prefix and the error code
+    */
+    static failOrSkipConnect(string prefix, hash<auto> ex) {
+        TestRun::skipOrFail(TestRun::getConnectFailureReason(prefix, ex));
+    }
+
     #! Skips the current test case with the reason, or fails it if the reason holds a precondition failure
     /** For a test that records the error of its database setup as the reason to skip its test cases: when the
         error was the precondition failure of a database that cannot be connected to (getPreconditionFailure()),

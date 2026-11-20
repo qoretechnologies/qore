@@ -12,6 +12,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -43,7 +44,7 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
                 Datasource connstr_ds(connstr);
                 connstr_ds.open();
             } catch (hash<ExceptionInfo> ex) {
-                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+                skip_reason = TestRun::getConnectFailureReason("no DB connection", ex);
             }
         }
         addTestCase("a non-PostgreSQL connection has no run schema", \notPgsql());
@@ -70,7 +71,7 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
 
     private checkSkip() {
         if (skip_reason) {
-            testSkip(skip_reason);
+            TestRun::skipOrFail(skip_reason);
         }
     }
 
