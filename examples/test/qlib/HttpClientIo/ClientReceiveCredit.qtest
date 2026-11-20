@@ -369,6 +369,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
                 \testSendLimitDrain(), proto);
         }
         addTestCase("h2: HTTPClient streaming (receive callback) gets every byte", \testHttpClientRecvCallback());
+        addTestCase("h2: a stream whose buffered data was all sent is drained, not gone", \testH2DrainedStreamLive());
         set_return_value(main());
     }
 
@@ -531,8 +532,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
                 written += ChunkSize;
                 continue;
             }
-            # -1: HTTP/2 drops the buffer of a stream once nghttp2 has taken all its data
-            assertNeq(1, w.waitDrain(HangGuard), "the stream drains while the client reads");
+            assertEq(0, w.waitDrain(HangGuard), "the stream drains while the client reads");
             if (w.write(chunk)) {
                 written += ChunkSize;
             } else {
@@ -544,6 +544,38 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         assertEq(0, r.wait(), "the reader ended");
         assertNothing(r.err);
         assertEq(taken + written, r.bytes, "every byte arrives");
+    }
+
+    #! A live HTTP/2 stream whose buffered data nghttp2 has taken is drained, not gone (issue #6908)
+    /** The session drops a stream's buffer once nghttp2 has taken all its data, and the drain wait took the missing
+        buffer for a missing stream (-1), which the server's writers take as a removed stream
+    */
+    testH2DrainedStreamLive() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the client's receipt of the data is known only with dbg_http_stream_credit_wait_deferred()");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr("h2");
+        on_exit delete mgr;
+        hash<auto> s = openStream(mgr);
+        Writer w = s.writer;
+        hash<auto> before = call_function("dbg_http_stream_credit_stats");
+        # less than the stream's window: the client receives all of it without reading
+        binary chunk = binary(strmul("x", ChunkSize));
+        int written = 0;
+        while (written < H2Window / 2) {
+            assertTrue(w.write(chunk), "the server's buffer takes the data");
+            written += ChunkSize;
+        }
+        assertGt(-1, call_function("dbg_http_stream_credit_wait_deferred", before.deferred + written, HangGuard),
+            "the client receives the data");
+        # everything buffered for the stream was sent, and the stream is open
+        assertEq(0, w.waitDrain(HangGuard), "the stream is drained");
+        BodyReader r(s.stream);
+        w.write(chunk);
+        w.end();
+        assertEq(0, r.wait(), "the reader ended");
+        assertNothing(r.err);
+        assertEq(written + ChunkSize, r.bytes, "every byte arrives");
     }
 
     testOneStreamNotRead(string proto) {

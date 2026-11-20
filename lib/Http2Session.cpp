@@ -3620,7 +3620,12 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = pending_body_data.find(stream_id);
     if (it == pending_body_data.end()) {
-        return -1;  // stream not found
+        // the buffer of a stream is dropped once nghttp2 has taken all its data: a stream that nghttp2 still has is
+        // drained, not gone (issue #6908)
+        if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+            return -1;  // stream not found
+        }
+        return 0;
     }
     size_t pending = it->second.data.size() - it->second.offset;
     // a stream with its own limit is drained when the data it refused last fits, as sendStreamData() then takes it
