@@ -111,8 +111,8 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
         LoggerWrapper::setLogger(logger);
     }
 
-    #! Wait for a given period of time
-    static threadWait(date wait_period) [dom=PROCESS_CONTROL] {
+    #! Sleeps on the calling thread for the given interval
+    static threadWait(date wait_period) {
         usleep(wait_period);
     }
 
@@ -172,8 +172,7 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
                                 "future (%y)", reset, diff);
                         }
                         warn("RATE LIMIT: connection sleeping for: %y", diff);
-                        # Waiting for Discord's rate limit is part of the request.
-                        usleep(diff);
+                        threadWait(diff);
                     }
                     continue;
                 }
