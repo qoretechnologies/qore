@@ -2535,6 +2535,8 @@
       interpreters, instead of \c NOTHING (issue #6244)
     - performance: a run-time check of an object against a parameterized class type visits each ancestor once, so
       its cost grows linearly with the depth of a diamond class hierarchy instead of exponentially (issue #6449)
+    - @ref include "%include" resolves quoted relative filenames using the same search order as unquoted filenames
+      (issue #6833)
     - the conditional parse directives (<tt>%%ifdef</tt>, <tt>%%ifndef</tt>, <tt>%%if</tt>, <tt>%%elif</tt>) on a line
       that ends with CRLF are read, and the scanner no longer writes source text that it cannot read to standard
       output: such text is a parse error (issue #6512)
