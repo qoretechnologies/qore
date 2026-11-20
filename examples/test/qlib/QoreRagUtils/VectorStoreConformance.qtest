@@ -16,6 +16,7 @@
 %requires MilvusRestClient
 %requires ChromaRestClient
 %requires WeaviateRestClient
+%requires ../SqlUtil/TestRunIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -308,7 +309,7 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
 %ifdef NoPgsql
         testSkip("no pgsql module");
 %endif
-        Datasource ds((ENV.PGVECTOR_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL));
+        Datasource ds = TestRun::openOrFail(ENV.PGVECTOR_DB_CONNSTR ? "PGVECTOR_DB_CONNSTR" : "QORE_DB_CONNSTR_PGSQL");
         on_exit ds.close();
         # an extension is an object of the whole database, which a test does not create: concurrent PostgreSQL
         # tests set up their search_path with the extensions installed at their start; vector is installed by the

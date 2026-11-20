@@ -12,6 +12,7 @@
 %requires PgsqlSqlUtilBase
 %requires PgsqlSqlUtil
 %requires QUnit
+%requires ./TestRunIsolation.qm
 
 %try-module sqlite3
 %define NoSqlite3
@@ -74,7 +75,11 @@ class SqlUtilSchemaSectionsTest inherits QUnit::Test {
         if (admin.getDriverName() != "pgsql") {
             throw "PGSQL-ERROR", sprintf("cannot run the PostgreSQL tests with driver %y", admin.getDriverName());
         }
-        admin.open();
+        try {
+            admin.open();
+        } catch (hash<ExceptionInfo> ex) {
+            TestRun::failUnreachable(connstr, ex);
+        }
         {
             on_error admin.rollback();
             on_success admin.commit();
@@ -103,7 +108,7 @@ class SqlUtilSchemaSectionsTest inherits QUnit::Test {
         } else {
             unsetenv("PGOPTIONS");
         }
-        if (admin) {
+        if (admin && admin.isOpen()) {
             admin.rollback();
             admin.exec(sprintf("drop schema if exists %s cascade", run_schema));
             admin.commit();
