@@ -6770,10 +6770,6 @@ int qore_push_sandbox_policy_barrier() {
 
 QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     ThreadData* td = thread_data.get();
-    if (capture_budgets && td) {
-        td->sandbox_budgets.capture(budgets);
-        in_build = td->sandbox_budgets.inBuild();
-    }
     // a continuation of work that the module cleanup runs is part of the cleanup (see qore_close_module_programs())
     module_cleanup_delegate = capture_budgets && qore_module_cleanup_delegation();
     ReferenceHolder<QoreSandboxManager> current(find_thread_sandbox_manager_ref_intern(&pgm_id), nullptr);
@@ -6810,11 +6806,16 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
             inherited_only = !qore_scope_creator_is_sandboxed();
         }
     }
+    // the budgets and the isolation are referenced last, after everything else that can throw, as the destructor does
+    // not run then; capture() itself references nothing unless it succeeds, and the managers are still held above
+    if (capture_budgets && td) {
+        td->sandbox_budgets.capture(budgets);
+        in_build = td->sandbox_budgets.inBuild();
+    }
     manager = current.release();
     policy_manager = policy.release();
     provenance_manager = provenance.release();
     provenance_policy_manager = provenance_policy.release();
-    // referenced last, after everything that can throw (the destructor does not run then)
     if (capture_budgets && td) {
         isolation = td->sandbox_budgets.currentIsolation();
         if (isolation) {
