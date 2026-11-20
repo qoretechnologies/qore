@@ -2212,6 +2212,9 @@ void ThreadProgramData::delProgram(QoreProgram* pgm) {
         pgm_set_t::iterator i = pgm_set.find(pgm);
         listed = i != pgm_set.end();
         if (listed) {
+            // the structure of the thread's records is changed under the stripe lock (see
+            // qore_program_private_base::recordLock()), as the thread's Programs can be torn down by other threads
+            std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
             pgm_set.erase(i);
         }
     }
@@ -2268,16 +2271,21 @@ bool ThreadProgramData::saveProgram(bool runtime, bool* first_entry) {
                 throw std::bad_alloc();
             }
 #endif
+            // fork() waits for the change (see qore_program_private_base::recordLock()); the record and the references
+            // that go with it are one change, so that a child process created with fork() releases what it finds
+            std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
+            QORE_DBG_RECORD_CHANGE(QPRS_THREAD_PROGRAMS, qore_program_private::get(*pgm));
             pgm_set.insert(pgm);
+            // the reference belongs to the Program's entry for the thread (see delProgram())
+            ref();
+            pgm->depRef();
         } catch (...) {
             qore_program_private::removeThreadVarData(pgm, this);
             td->tlpd = old_tlpd;
             throw;
         }
+        QORE_DBG_RECORD_CHANGE(QPRS_THREAD_PROGRAMS_DONE, qore_program_private::get(*pgm));
         printd(5, "ThreadProgramData::saveProgram() this: %p pgm: %p\n", this, pgm);
-        // the reference belongs to the Program's entry for the thread (see delProgram())
-        ref();
-        pgm->depRef();
         if (first_entry) {
             *first_entry = true;
         }
@@ -2321,7 +2329,13 @@ QoreHashNode* ThreadProgramData::getThreadDataRef(qore_program_private* root, bo
         return nullptr;
     }
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
-    tld_map.insert(i, tld_map_t::value_type(root, h));
+    {
+        // fork() waits for the change (see qore_program_private_base::recordLock()); the root's stripe lock is not
+        // held here
+        std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
+        QORE_DBG_RECORD_CHANGE(QPRS_THREAD_DATA, root);
+        tld_map.insert(i, tld_map_t::value_type(root, h));
+    }
     if (ref) {
         h->ref();
     }
@@ -2332,7 +2346,9 @@ QoreHashNode* ThreadProgramData::getOrphanThreadDataRef(bool ref) {
     AutoLocker al(pslock);
     tld_map_t::iterator i = tld_map.find(nullptr);
     if (i == tld_map.end()) {
-        i = tld_map.insert(tld_map_t::value_type(nullptr, new QoreHashNode(autoTypeInfo))).first;
+        QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+        std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
+        i = tld_map.insert(tld_map_t::value_type(nullptr, h)).first;
     }
     if (ref) {
         i->second->ref();
@@ -2347,7 +2363,10 @@ QoreHashNode* ThreadProgramData::detachThreadData(qore_program_private* root) {
         return nullptr;
     }
     QoreHashNode* h = i->second;
-    tld_map.erase(i);
+    {
+        std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
+        tld_map.erase(i);
+    }
     return h;
 }
 
@@ -2359,7 +2378,11 @@ void ThreadProgramData::freeAllThreadData(ExceptionSink* xsink) {
             if (tld_map.empty()) {
                 break;
             }
-            m.swap(tld_map);
+            {
+                // the roots' stripe locks are taken below, after this one is released
+                std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
+                m.swap(tld_map);
+            }
             // while this thread holds its pslock and has data in a family, the family's root cannot be freed: the
             // root's teardown needs this lock to free this thread's data
             for (auto& i : m) {
@@ -2384,57 +2407,66 @@ void ThreadProgramData::del(ExceptionSink* xsink) {
         e = ModuleProgramDataCacheEntry();
     }
 
-    // free the thread's thread-local data in all Program families first, as the old per-Program finalization did
-    freeAllThreadData(xsink);
-
-    // first purge all data
-    {
-        SafeDerefHelper sdh(xsink);
-
-        // remove and finalize all thread-local data in all referenced programs
-        {
-            AutoLocker al(pslock);
-            for (auto& i : pgm_set) {
-                qore_program_private::get(*i)->finalizeThreadData(this, sdh);
-            }
-        }
-    }
-
-    // purge thread data in contained programs
+    // the destructors run below can enter Programs again, which records them and the thread's data in them again,
+    // and save thread-local data again: the data is purged until none is left, so that no record of a Program and no
+    // reference to it is left behind
     while (true) {
-        QoreProgram* pgm;
-        {
-            AutoLocker al(pslock);
-            pgm_set_t::iterator i = pgm_set.begin();
-            if (i == pgm_set.end())
-                break;
+        // free the thread's thread-local data in all Program families first, as the old per-Program finalization did
+        freeAllThreadData(xsink);
 
-            pgm = (*i);
-            pgm_set.erase(i);
-        }
-        //printd(5, "ThreadProgramData::del() this: %p pgm: %p\n", this, pgm);
-#ifdef DEBUG
+        // first purge all data
         {
-            dbg_after_unlist_t hook = dbg_after_unlist.load();
-            if (hook) {
-                hook(td->tid, pgm);
+            SafeDerefHelper sdh(xsink);
+
+            // remove and finalize all thread-local data in all referenced programs
+            {
+                AutoLocker al(pslock);
+                for (auto& i : pgm_set) {
+                    qore_program_private::get(*i)->finalizeThreadData(this, sdh);
+                }
             }
         }
+
+        // purge thread data in contained programs
+        while (true) {
+            QoreProgram* pgm;
+            {
+                AutoLocker al(pslock);
+                pgm_set_t::iterator i = pgm_set.begin();
+                if (i == pgm_set.end())
+                    break;
+
+                pgm = (*i);
+                std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
+                pgm_set.erase(i);
+            }
+            //printd(5, "ThreadProgramData::del() this: %p pgm: %p\n", this, pgm);
+#ifdef DEBUG
+            {
+                dbg_after_unlist_t hook = dbg_after_unlist.load();
+                if (hook) {
+                    hook(td->tid, pgm);
+                }
+            }
 #endif
-        // the dependency reference keeps the Program alive for endThread(); once the Program is no longer in
-        // pgm_set, its own teardown cannot release this reference, so it can be the last one
-        bool ended = !qore_program_private::get(*pgm)->endThread(this, xsink);
-        pgm->depDeref();
-        // the reference to this object belongs to the Program's entry for the thread: it is released here only if the
-        // thread removed the entry (endThread() succeeded); otherwise the Program releases it with the entry when its
-        // data is cleared (see delProgram())
-        if (ended) {
-            deref();
+            // the dependency reference keeps the Program alive for endThread(); once the Program is no longer in
+            // pgm_set, its own teardown cannot release this reference, so it can be the last one
+            bool ended = !qore_program_private::get(*pgm)->endThread(this, xsink);
+            pgm->depDeref();
+            // the reference to this object belongs to the Program's entry for the thread: it is released here only if
+            // the thread removed the entry (endThread() succeeded); otherwise the Program releases it with the entry
+            // when its data is cleared (see delProgram())
+            if (ended) {
+                deref();
+            }
+        }
+
+        // the destructors run above can have saved thread-local data or entered a Program again
+        AutoLocker al(pslock);
+        if (pgm_set.empty() && tld_map.empty()) {
+            break;
         }
     }
-
-    // the destructors run above can have saved thread-local data again
-    freeAllThreadData(xsink);
 }
 
 #ifdef DEBUG
