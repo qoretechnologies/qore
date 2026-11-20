@@ -1749,9 +1749,10 @@ event $1
             exit $status
         fi
         status=$((status | 1))
+        # the message printed with the timeout signal, if it is not sent after SIGUSR1
+        timeout_message=""
         watchdog_check_test
         print_test_threads "at its time limit"
-        timeout_message=""
         if [ $TEST_SIGNALS_ENABLED -eq 0 ]; then
             timeout_message="*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent (signal handling is \
 disabled) ***"
