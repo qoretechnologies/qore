@@ -24871,6 +24871,42 @@ void dbg_hold_closure_var_deref_hook(const char* name) {
     }
 }
 
+//! the hold armed by dbg_hold_removed_object_scan()
+struct RemovedObjectScanHold {
+    std::mutex m;
+    Counter* held = nullptr;
+    Counter* release = nullptr;
+};
+
+RemovedObjectScanHold removed_object_scan_hold;
+
+//! runs in the thread that checks a removed object, with no lock of the objects held; disarms itself
+void dbg_hold_removed_object_scan_hook() {
+    RemovedObjectScanHold& h = removed_object_scan_hold;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.held) {
+            return;
+        }
+        held = h.held;
+        release = h.release;
+        h.held = nullptr;
+        h.release = nullptr;
+        qore_dbg_removed_object_scan_hook.store(nullptr);
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+    if (xsink) {
+        printd(0, "dbg_hold_removed_object_scan(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+
 //! the collections of closure-bound variables counted by dbg_count_closure_var_collections()
 struct ClosureVarCollections {
     std::mutex m;
@@ -24920,6 +24956,38 @@ static QoreValue f_dbg_hold_closure_var_deref(const QoreListNode* params, Runtim
     h.held = held.release();
     h.release = release.release();
     qore_dbg_closure_var_decide_hook.store(dbg_hold_closure_var_deref_hook);
+    return QoreValue();
+}
+
+//! holds the next thread that checks whether an object removed from an object in a recursive set needs a scan
+/** The hold is taken once, in qore_removed_object_needs_scan(), after the check has found the removed object in the
+    set of the object that it was removed from (by comparing the pointers) and before it reads the set, with no lock
+    of the objects held: another thread can then recompute the set (#6792).
+
+    @param held decremented once the checking thread is held
+    @param release the checking thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_removed_object_scan(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<Counter> held(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    RemovedObjectScanHold& h = removed_object_scan_hold;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a removed object scan hold is already armed");
+        return QoreValue();
+    }
+    h.held = held.release();
+    h.release = release.release();
+    qore_dbg_removed_object_scan_hook.store(dbg_hold_removed_object_scan_hook);
     return QoreValue();
 }
 
@@ -27985,6 +28053,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_hold_removed_object_scan", f_dbg_hold_removed_object_scan,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
     qns.addBuiltinVariant("dbg_count_closure_var_collections", f_dbg_count_closure_var_collections,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_get_closure_var_collections", f_dbg_get_closure_var_collections,

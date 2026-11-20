@@ -23,6 +23,7 @@ class ColumnarDriverIntColumnTest inherits QUnit::Test {
     constructor() : QUnit::Test("ColumnarDriverIntColumnTest", "1.0", \ARGV) {
         addTestCase("numeric narrowing", \testNumericNarrowing());
         addTestCase("values that a script cannot give", \testUncheckedValues());
+        addTestCase("values outside the range of a 64-bit integer", \testOutOfRange());
         set_return_value(main());
     }
 
@@ -51,5 +52,22 @@ class ColumnarDriverIntColumnTest inherits QUnit::Test {
         # the same values from a script raise an exception
         assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 1 has a string",
             \ColumnarResult::fromColumnHash(), ({"i": values}, {"i": {"native_type": "bigint"}}));
+    }
+
+    # a value of a driver outside the range of a 64-bit integer raises an exception instead of being stored as the
+    # nearest limit (issue #6681: a BIGINT UNSIGNED value of 2^63 described as an integer column)
+    testOutOfRange() {
+        foreach auto v in ((9223372036854775808n, 18446744073709551615n, -9223372036854775809n, "9223372036854775808",
+                "-9223372036854775809", 1e19, -1e19, @nan@, @nan@n)) {
+            assertThrows("COLUMNAR-RESULT-ERROR", "integer column 'i' row 1 has a value outside the range",
+                \cpp_api_columnar_from_driver_column_hash(), ({"i": (1, v)}, {"i": {"native_type": "bigint"}}),
+                sprintf("%y", v));
+        }
+        # the limits themselves are stored
+        int max = 9223372036854775807;
+        int min = -9223372036854775807 - 1;
+        ColumnarResult r = cpp_api_columnar_from_driver_column_hash({"i": (9223372036854775807n, "-9223372036854775808",
+            9223372036854775807.5n, -9223372036854775808.0)}, {"i": {"native_type": "bigint"}});
+        assertEq((max, min, max, min), r.toColumnHash().i.toList());
     }
 }

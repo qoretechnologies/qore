@@ -75,6 +75,11 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         if (version >= QORE_AOT_STATEMENT_LOCATIONS_VERSION) {
             writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
         }
+        // no temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742)
+        if (version >= QORE_AOT_TEMP_SCOPES_VERSION) {
+            writer.writeU8(0);
+            writer.writeU8(0);
+        }
     };
     writer.writeU16(static_cast<uint16_t>(tag_only ? 1 : defined.size() + 2)); // instructions
     for (uint32_t id : defined) {
@@ -111,6 +116,11 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             } else {
                 writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
             }
+        }
+        // no temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742)
+        if (version >= QORE_AOT_TEMP_SCOPES_VERSION) {
+            writer.writeU8(0);
+            writer.writeU8(0);
         }
         writeSimple(O::ReturnNothing, G::Return, 0, [&]() {
             writer.writeU8(0); // no value
@@ -222,6 +232,8 @@ int main() {
         false, false, QORE_AOT_BATCH_AK_VERSION);
     run("AL v48 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 48 ",
         false, false, QORE_AOT_BATCH_AL_VERSION);
+    run("AM v49 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 49 ",
+        false, false, QORE_AOT_BATCH_AM_VERSION);
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);

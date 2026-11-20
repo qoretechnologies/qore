@@ -225,6 +225,15 @@ int typed_hash_decl_private::resolveParseParent() {
     int err = 0;
     {
         HashDeclTypeParamContextHelper hashdecl_type_param_context(this);
+        // issue #6710: the parent is resolved in the namespace of the hashdecl, as its members are (see parseInit()),
+        // and not in the namespace that is current when the hashdecl is initialized, so that an unqualified name does
+        // not find a hashdecl of the same name in another namespace first; a hashdecl cannot inherit itself, so a
+        // parent with its own name names another hashdecl of the name, which is resolved without the hashdecl's
+        // namespace, as it was before (ex: "namespace N { hashdecl H inherits H {...} }" inherits a hashdecl H of the
+        // root namespace)
+        qore_ns_private* root_ns = qore_ns_private::get(*getRootNS());
+        const bool own_name = parse_parent->cscope->size() == 1 && name == parse_parent->cscope->ostr;
+        QoreParseClassHelper qpch(nullptr, ns && !own_name ? ns : root_ns);
         qore_root_ns_private* rns = qore_root_ns_private::get(*getRootNS());
         const bool known_parent_name = rns->parseTryFindHashDecl(*parse_parent->cscope)
             || qore_root_ns_private::parseFindScopedClass(loc, *parse_parent->cscope, false)

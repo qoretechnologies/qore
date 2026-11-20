@@ -20,7 +20,7 @@
 /** Code in a parent class of an object can call the private methods of its own class and of the classes related to
     it, but not those of another parent class of the object (a sibling of its class).  An untyped call there in the
     IR interpreter (and so in the JIT and tiered modes before a method is compiled) called the private method that
-    the AST interpreter and qcc executables refuse, and a typed call fails to parse.  The program covers normal,
+    the AST interpreter and qcc executables refuse, and that a typed call does not call.  The program covers normal,
     static, \c private:internal and \c private:hierarchy methods, calls with arguments, call references,
     call_object_method(), closures (also one run in a background thread), typed calls (parsed in a child Program),
     and the calls that may call the private method (from its own class, the object's class and a subclass); the

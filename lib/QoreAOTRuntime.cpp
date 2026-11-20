@@ -1074,9 +1074,12 @@ std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode*
     if (!fcr || !fcr->getFunction()) {
         return std::string();
     }
-    std::string name = getAOTFunctionRefBaseName(fcr);
+    return qore_aot_encode_function_ref(getAOTFunctionRefBaseName(fcr), fcr->getExplicitTypeParamInstantiation());
+}
+
+std::string qore_aot_encode_function_ref(std::string name, const QoreTypeParamInstantiation* inst) {
     // the explicit type arguments (\f<T>()) follow the name: "\ntypeargs:N\n<type path>..."
-    if (const QoreTypeParamInstantiation* inst = fcr->getExplicitTypeParamInstantiation()) {
+    if (inst) {
         name += aot_ref_type_arg_marker;
         name += std::to_string(inst->type_args.size());
         for (const QoreTypeInfo* type_arg : inst->type_args) {
@@ -2770,6 +2773,22 @@ static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
         *const_cast<QoreMethod*>(variant_method))->getFunction();
     const AbstractQoreFunctionVariant* variant = mfb
         ? mfb->findVariantBySignatureText(method_ref.sig_text) : nullptr;
+    // the method found by name can be of the other kind than the one that the parser bound: a static method of a
+    // base class found first for a call of a private:internal method of the variant's class of the same name, which
+    // a lookup without the class's context does not see; the variant's class's own method of the other kind with the
+    // recorded signature is the one bound (qore#6653)
+    if (!variant && method_ref.variant_class_path && *method_ref.variant_class_path) {
+        if (const QoreClass* variant_qc = findAOTClassByPath(pgm, method_ref.variant_class_path, pseudo)) {
+            if (const QoreMethod* m = findAOTVariantClassLocalMethod(variant_qc, method_ref.method_name,
+                    !method->isStatic())) {
+                MethodFunctionBase* other_mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
+                variant = other_mfb ? other_mfb->findVariantBySignatureText(method_ref.sig_text) : nullptr;
+                if (variant) {
+                    variant_method = m;
+                }
+            }
+        }
+    }
     if (variant) {
         method = variant_method;
     }
@@ -2832,6 +2851,22 @@ static const AbstractQoreFunctionVariant* findAOTStaticMethodVariantByRef(
     MethodFunctionBase* mfb = qore_method_private::get(
         *const_cast<QoreMethod*>(variant_method))->getFunction();
     const AbstractQoreFunctionVariant* variant = findAOTVariantBySignatureText(mfb, method_ref.sig_text);
+    // the method found by name can be of the other kind than the one that the parser bound: a static method of a
+    // base class found first for a self call of a private:internal method of the variant's class of the same name,
+    // which a lookup without the class's context does not see; the variant's class's own method of the other kind
+    // with the recorded signature is the one bound (qore#6653)
+    if (!variant && method_ref.variant_class_path && *method_ref.variant_class_path) {
+        if (const QoreClass* variant_qc = findAOTClassByPath(pgm, method_ref.variant_class_path, pseudo)) {
+            if (const QoreMethod* m = findAOTVariantClassLocalMethod(variant_qc, method_ref.method_name,
+                    !method->isStatic())) {
+                MethodFunctionBase* other_mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
+                variant = findAOTVariantBySignatureText(other_mfb, method_ref.sig_text);
+                if (variant) {
+                    variant_method = m;
+                }
+            }
+        }
+    }
     if (variant) {
         method = variant_method;
     }
@@ -7563,6 +7598,17 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     // function takes the instructions' own (qore_ir_set_deserialized_statement_locations())
     if (stmt_locs && !qore_aot_read_stmt_loc(reader, ptr, pgm, owner_func, *stmt_locs, *inst, loc_file, error)) {
         return nullptr;
+    }
+    // the temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742); an earlier image has none (see
+    // QoreIRFunction::temp_scope_ids_unknown)
+    if (reader.getHeader().version >= QORE_AOT_TEMP_SCOPES_VERSION) {
+        if (!qore_aot_read_varu32(ptr, end, inst->temp_scope_id)
+                || !qore_aot_read_varu32(ptr, end, inst->unwind_inner_temp_scope_id)) {
+            error = "truncated or invalid temp scope of an IR instruction";
+            return nullptr;
+        }
+    } else if (owner_func) {
+        owner_func->temp_scope_ids_unknown = true;
     }
 
     return inst;
@@ -16723,7 +16769,10 @@ extern "C" DLLEXPORT void qore_aot_script_begin_batch(QoreProgram* tpgm) {
         AbstractQoreProgramExternalData* removed =
             tpgm->removeExternalData(kAotScriptBatchKey);
         if (removed) {
-            removed->doDeref();
+            // the C function has no sink: an exception is reported as unhandled (issue #6786)
+            ExceptionSink xsink;
+            qore_ext_data_deref(removed, &xsink);
+            xsink.handleExceptions();
         }
     }
     tpgm->setExternalData(kAotScriptBatchKey, new AotScriptBatchState(tpgm));

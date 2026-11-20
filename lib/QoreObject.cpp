@@ -532,7 +532,8 @@ int qore_object_private::checkMemberAccess(const char* mem, const qore_class_pri
         return theclass->hasPublicMembersInHierarchy() ? QOA_PUB_ERROR : QOA_OK;
     }
     member_class_ctx = info->getClassContext(class_ctx);
-    return ((info->access > Public) && !class_ctx) ? QOA_PRIV_ERROR : QOA_OK;
+    // the member's access in the class context, also through a class inherited with private:internal (issue #6640)
+    return theclass_priv->runtimeCheckMemberAccess(info, class_ctx) ? QOA_OK : QOA_PRIV_ERROR;
 }
 
 // returns true if a lock error has occurred and the transaction should be aborted or restarted; the rsection lock is
@@ -1014,7 +1015,26 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
 
     // return all member data if called inside the class
     if (class_ctx) {
-        QoreHashNode* h = data->copy();
+        const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+        QoreHashNode* h;
+        // only a class with Internal, Inaccessible or contextual member entries can hide a member from a class context
+        if (class_ctx == theclass_priv
+                || (theclass_priv->members.isFrozen() && !theclass_priv->members.hasInternalEntries())) {
+            h = data->copy();
+        } else {
+            // the members that the class context can use on the object: not those that the object's class inherits
+            // through a class inherited with private:internal outside its line (issue #6640)
+            h = new QoreHashNode(autoTypeInfo);
+            ConstHashIterator hi(data);
+            while (hi.next()) {
+                const QoreMemberInfo* info = theclass_priv->runtimeGetMemberInfo(hi.getKey(), class_ctx);
+                if (info && !theclass_priv->runtimeCheckMemberAccess(info, class_ctx)) {
+                    continue;
+                }
+                // not possible for an exception to happen here
+                qore_hash_private::get(*h)->setKeyValueIntern(hi.getKey(), hi.getReferenced());
+            }
+        }
         const QoreHashNode* odata = getInternalData(class_ctx);
         if (odata)
             h->merge(odata, xsink);
@@ -1034,6 +1054,27 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
     }
 
     return h;
+}
+
+#ifdef DEBUG
+std::atomic<qore_dbg_removed_object_scan_hook_t> qore_dbg_removed_object_scan_hook{nullptr};
+#endif
+
+bool qore_removed_object_needs_scan(RObject* o, RObject* root) {
+    RSet* rs = o->rset.load(std::memory_order_acquire);
+    if (!rs || o->refs() <= 1) {
+        return false;
+    }
+    if (!root || rs != root->rset.load(std::memory_order_acquire)) {
+        return true;
+    }
+#ifdef DEBUG
+    // a test holds the thread here, after it compared the sets and before it reads the set (#6792)
+    if (qore_dbg_removed_object_scan_hook_t hook = qore_dbg_removed_object_scan_hook.load()) {
+        hook();
+    }
+#endif
+    return !root->hasInValidSet(*o);
 }
 
 //! scans the objects in a recursive set that a removed value holds, directly or in its lists and hashes (#6335)
@@ -1488,8 +1529,9 @@ int qore_object_private::getLValueResolvedPrehashed(const char* key,
     }
     const qore_class_private* member_class_ctx =
         info.getClassContext(class_ctx);
+    // the type of the declaration whose storage the access uses (issue #6670)
     const QoreTypeInfo* mti = qore_substitute_type_params_if_needed(
-        info.getTypeInfo(),
+        info.getStorageTypeInfo(key, member_class_ctx),
         instantiated_type ? instantiated_type : theclass->getTypeInfo());
 
     qore_object_lock_handoff_helper qolhh(this, lvh.vl);
@@ -1530,7 +1572,7 @@ int qore_object_private::tryAssignScalarMemberResolvedPrehashed(
         return 0;
     }
     const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(
-        info.getTypeInfo(),
+        info.getStorageTypeInfo(key, member_class_ctx),
         instantiated_type ? instantiated_type : theclass->getTypeInfo());
     if (QoreTypeInfo::parseReturns(member_type, expected_type) != QTI_IDENT) {
         return 0;

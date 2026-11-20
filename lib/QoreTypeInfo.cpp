@@ -373,7 +373,7 @@ protected:
     }
 
     virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     virtual const char* getPathImpl() const {
@@ -6290,6 +6290,41 @@ bool QoreTypeInfo::acceptsBrokenSoftNull(const QoreValue& n, LexicalSemanticPoli
     return policy.brokenSoftTypes() && n.getType() == NT_NULL && brokenSoftNullImpl();
 }
 
+void QoreTypeInfo::concatNameConverted(QoreString& str) const {
+    qore_string_private* p = qore_string_private::get(str);
+    const qore_string_private* np = qore_string_private::get(tname);
+    if (!np->len) {
+        return;
+    }
+    // a name in ASCII is the same bytes in an encoding in which every ASCII character is itself
+    bool ascii_identical = qore_encoding_private::get(*p->getEncoding())->isAsciiIdentical();
+    if (ascii_identical && np->isDataAscii()) {
+        p->concat_intern(np->effective_buf(), np->len);
+        return;
+    }
+    ExceptionSink xsink;
+    if (!p->concat(&tname, &xsink)) {
+        return;
+    }
+    xsink.clear();
+    if (!ascii_identical) {
+        return;
+    }
+    // the name has a character that the encoding of the string does not have: its ASCII characters are appended,
+    // with '?' in place of each other character
+    bool utf8 = np->getEncoding() == QCS_UTF8;
+    const char* b = np->effective_buf();
+    for (size_t i = 0; i < np->len; ++i) {
+        unsigned char c = (unsigned char)b[i];
+        if (c < 0x80) {
+            p->concat((char)c);
+        } else if (!utf8 || (c & 0xc0) != 0x80) {
+            // a UTF-8 continuation byte is part of the character whose lead byte was replaced
+            p->concat('?');
+        }
+    }
+}
+
 void QoreTypeInfo::doNonNumericWarning(const QoreProgramLocation* loc, const char* preface) const {
     QoreStringNode* desc = new QoreStringNode(preface);
     getThisTypeImpl(*desc);
@@ -7632,7 +7667,7 @@ const QoreTypeInfo* QoreComplexBufferTypeInfo::getElementTypeInfo() const {
 }
 
 void QoreComplexBufferTypeInfo::getThisTypeImpl(QoreString& str) const {
-    qore_string_private::get(str)->concat(&tname);
+    concatName(str);
 }
 
 QoreValue QoreComplexBufferTypeInfo::getDefaultQoreValueImpl() const {
@@ -7652,7 +7687,8 @@ QoreComplexBufferOrNothingTypeInfo::QoreComplexBufferOrNothingTypeInfo(QoreBuffe
 }
 
 void QoreComplexBufferOrNothingTypeInfo::getThisTypeImpl(QoreString& str) const {
-    str.sprintf("%s or no value (NOTHING)", QoreTypeInfo::getName(getFirstAcceptSpec().spec.getComplexBuffer()));
+    concatName(getFirstAcceptSpec().spec.getComplexBuffer(), str);
+    str.concat(" or no value (NOTHING)");
 }
 
 QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti) : QoreComplexListTypeInfo(q_accept_vec_t {

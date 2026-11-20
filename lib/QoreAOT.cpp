@@ -4931,39 +4931,6 @@ private:
         if (handOverCrossesRegion(first, last)) {
             return fail("handed-over return crosses region boundary");
         }
-        // A closure created in the region that captures both a local of the region (instantiated in the helper)
-        // and a local that the coordinator shares with it cannot find the coordinator's local when it runs ("local
-        // variable ... is not instantiated in the current context"; found by compiling the test scripts with the
-        // outliner's thresholds forced low: qore#6560).  A closure capturing only one of the two kinds works.
-        for (size_t i = first; i <= last; ++i) {
-            for (const auto& inst_ptr : fn.blocks[i]->instructions) {
-                if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CreateClosure) {
-                    continue;
-                }
-                const auto* cci = static_cast<const QoreIRCreateClosureInstruction*>(inst_ptr.get());
-                const QoreClosureParseNode* closure = cci->closure_node
-                    ? cci->closure_node
-                    : qore_get_closure_parse_node(cci->expr.getInternalNode());
-                const LVarSet* vlist = closure ? closure->getVList() : nullptr;
-                if (!vlist) {
-                    continue;
-                }
-                bool captures_region_local = false;
-                bool captures_shared_local = false;
-                for (const LocalVar* lv : *vlist) {
-                    auto it = local_info.find(lv);
-                    if (it != local_info.end() && it->second.min_ref >= first && it->second.max_ref <= last
-                            && body_local_set.count(reinterpret_cast<const void*>(lv))) {
-                        captures_region_local = true;
-                    } else {
-                        captures_shared_local = true;
-                    }
-                }
-                if (captures_region_local && captures_shared_local) {
-                    return fail("closure captures locals of both the region and the coordinator");
-                }
-            }
-        }
         // Classify referenced locals.
         for (const LocalVar* lv : region_locals) {
             auto it = local_info.find(lv);
@@ -5149,6 +5116,8 @@ public:
             region_blocks.push_back({fn->blocks[r.first].get(),
                 fn->blocks[r.last].get(), fn->blocks[r.last + 1].get()});
         }
+        saved_all_body_locals = fn->all_body_locals;
+        all_body_locals_saved = true;
         for (size_t k = 0; k < regions.size(); ++k) {
             transformRegion(regions[k], region_blocks[k], k);
         }
@@ -5276,6 +5245,11 @@ public:
             helper->blocks.clear();
         }
         undo_records.clear();
+        if (all_body_locals_saved) {
+            fn->all_body_locals = std::move(saved_all_body_locals);
+            saved_all_body_locals.clear();
+            all_body_locals_saved = false;
+        }
         undoSplits();
         reattachDebugFlowPaths();
         fn->max_value_id = saved_max_value_id;
@@ -5312,6 +5286,9 @@ private:
 
     QoreIRFunction* fn = nullptr;
     std::vector<UndoRecord> undo_records;
+    //! the coordinator's body locals before the transform, restored by undo() (see transformRegion())
+    std::vector<LocalVar*> saved_all_body_locals;
+    bool all_body_locals_saved = false;
     std::vector<SplitRecord> split_records;
 
     //! The paths of the debugger's flow requests set aside while the function is outlined (#6201)
@@ -5768,6 +5745,19 @@ private:
         helper->specialization_receiver_type_info = fn->specialization_receiver_type_info;
         helper->specialization_type_param_instantiation =
             fn->specialization_type_param_instantiation;
+        // a closure-bound local that only the region references is the helper's: the coordinator, which would take
+        // it for one of its own that no block of its code scopes and push its closure variable at its entry, below
+        // the closure variables of its other locals, does not have it; the helper's scope exit then popped the
+        // closure variable on the top of the stack, another local's, which a closure created later in the helper
+        // could not find (qore#6654)
+        for (const LocalVar* lv : region.contained_locals) {
+            if (lv->closureUse()) {
+                auto i = std::find(fn->all_body_locals.begin(), fn->all_body_locals.end(), lv);
+                if (i != fn->all_body_locals.end()) {
+                    fn->all_body_locals.erase(i);
+                }
+            }
+        }
         for (const LocalVar* lv : region.contained_locals) {
             const void* key = reinterpret_cast<const void*>(lv);
             helper->all_body_locals.push_back(const_cast<LocalVar*>(lv));

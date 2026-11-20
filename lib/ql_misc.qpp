@@ -47,6 +47,8 @@
 
 #include <llvm/Config/llvm-config.h>
 #include "qore/intern/QoreHttpBodyCharset.h"
+#include "qore/intern/StringReaderHelper.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #if defined(__linux__) && defined(HAVE_IO_URING)
 #include "qore/intern/QoreIoUring.h"
@@ -1789,11 +1791,26 @@ string resolve_url(string base, string reference, int options = 0) [flags=PURE,N
 /** The character encoding of text is determined as documented for get_http_body_encoding(); the octets of the body
     are returned as a string in that encoding, without any byte order mark.
 
+    Text that is not valid in its encoding gives what \a encoding_errors says (qore#6604):
+    |!Value|!Text that is not valid in its encoding
+    |\c "raise" (the default)|raises \c INVALID-ENCODING, as a server does for a request body (which it answers with \c 400)
+    |\c "latin1"|is given in \c ISO-8859-1 with its bytes unchanged if it is HTML or other text (or a body without a \c Content-Type), as the declared charset of a page is often wrong and the HTML standard expects one to be sniffed; raises \c INVALID-ENCODING if it is of a structured type (JSON, YAML, XML, form data, server-sent events, CSS, JavaScript), whose data cannot be parsed from its bytes in another encoding; the rule of the HTTP clients of %Qore for a response body
+    |\c "keep"|is given in its encoding without a check
+
+    A body that is not text is binary data, which has no encoding: it is returned as it is, whatever
+    \a encoding_errors says.
+
     @param content_type the \c Content-Type header value, if any
     @param body the body; a content coding such as \c gzip must already have been decoded
     @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+    @param encoding_errors what text that is not valid in its encoding gives: \c "raise", \c "latin1" or \c "keep"
+    (see above)
 
-    @return a string in the encoding of the body if the body is text, otherwise \a body
+    @return a string in the encoding of the body (or \c ISO-8859-1, see \a encoding_errors) if the body is text,
+    otherwise \a body
+
+    @throw INVALID-ENCODING the body is text that is not valid in its encoding (see \a encoding_errors)
+    @throw ENCODING-ERRORS-ERROR \a encoding_errors is not \c "raise", \c "latin1" or \c "keep"
 
     @par Example:
     @code{.py}
@@ -1804,9 +1821,56 @@ data body = decode_http_body(resp.headers."content-type", resp.body);
 
     @since %Qore 3.0
 */
-data decode_http_body(*string content_type, binary body, string assumed_encoding = "ISO-8859-1") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    return qore_decode_http_body(content_type ? content_type->c_str() : nullptr, body,
-        QEM.findCreate(assumed_encoding));
+data decode_http_body(*string content_type, binary body, string assumed_encoding = "ISO-8859-1", string encoding_errors = "raise") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    qore_encoding_errors_t mode;
+    if (q_get_encoding_errors(encoding_errors, mode, xsink)) {
+        return QoreValue();
+    }
+    const char* ct = content_type ? content_type->c_str() : nullptr;
+    const QoreEncoding* assumed = QEM.findCreate(assumed_encoding);
+    switch (mode) {
+        case qore_encoding_errors_t::KEEP:
+            return qore_decode_http_body(ct, body, assumed);
+
+        case qore_encoding_errors_t::LATIN1:
+            // the rule of the HTTP clients for a response body
+            return qore_decode_http_response_body(ct, body, assumed, xsink);
+
+        case qore_encoding_errors_t::RAISE:
+            break;
+    }
+    SimpleRefHolder<SimpleValueQoreNode> rv(qore_decode_http_body(ct, body, assumed));
+    if (rv->getType() == NT_STRING) {
+        const QoreStringNode* str = static_cast<const QoreStringNode*>(*rv);
+        // the check of <string>::isEncodingValid() and of the "latin1" mode: also a byte that is not a character of
+        // a single-byte encoding (ex: 0x81 in windows-1252) is not valid
+        if (!qore_string_encoding_valid(*str)) {
+            QoreStringNode* desc = new QoreStringNodeMaker("decode_http_body(): the HTTP message body is not valid %s",
+                str->getEncoding()->getCode());
+            // the offset of the first invalid byte: in UTF-8 that of the validator of qore_string_encoding_valid(); in
+            // another encoding the one that the conversion to UTF-8 (which qore_string_encoding_valid() makes)
+            // reports, also for a byte that is not a character of a single-byte encoding
+            qore_offset_t offset = -1;
+            if (str->getEncoding() == QCS_UTF8) {
+                offset = q_get_invalid_text_offset(QCS_UTF8, str->c_str(), str->size());
+            } else {
+                QoreString utf8(QCS_UTF8);
+                size_t err_offset = static_cast<size_t>(-1);
+                if (qore_string_private::convert_encoding_intern(str->c_str(), str->size(), str->getEncoding(), utf8,
+                    QCS_UTF8, nullptr, true, true, &err_offset) && err_offset != static_cast<size_t>(-1)) {
+                    offset = static_cast<qore_offset_t>(err_offset);
+                }
+            }
+            if (offset >= 0) {
+                // the offset in the body, with the byte order mark that the string does not have
+                offset += static_cast<qore_offset_t>(body->size() - str->size());
+                desc->sprintf(": invalid byte sequence at byte offset " QLLD, static_cast<int64>(offset));
+            }
+            xsink->raiseException("INVALID-ENCODING", desc);
+            return QoreValue();
+        }
+    }
+    return rv.release();
 }
 
 //! Returns the character set and the media type that an HTTP server reports for the Content-Type of a request

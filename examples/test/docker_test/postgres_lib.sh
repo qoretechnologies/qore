@@ -33,8 +33,11 @@ start_postgres() {
     # make sure we can access the DB
     qore -nX "(new Datasource(\"${QORE_DB_CONNSTR_PGSQL}\")).getServerVersion()"
 
-    # enable pgvector extension if available
+    # enable the extensions that tests use if available: an extension is an object of the whole database, which
+    # concurrent test runs share, so that tests do not create or drop extensions; database-wide objects that a
+    # test creates take a name of its run (PgsqlRunSchema::getAuxName()) (qore#6716, qore#6717)
     psql -Upostgres -h ${QORE_DB_HOST} -c "create extension if not exists vector;" ${QORE_DB_NAME} 2>/dev/null || true
+    psql -Upostgres -h ${QORE_DB_HOST} -c "create extension if not exists postgres_fdw;" ${QORE_DB_NAME} 2>/dev/null || true
 }
 
 setup_postgres_on_host() {
@@ -66,7 +69,9 @@ setup_postgres_on_host() {
 create database ${QORE_DB_NAME} encoding = 'utf8';
 \connect ${QORE_DB_NAME};
 create extension if not exists vector;
+create extension if not exists postgres_fdw;
 create user ${QORE_DB_USER} password 'qore' createrole;
+grant usage on foreign data wrapper postgres_fdw to ${QORE_DB_USER};
 grant create, connect, temp on database ${QORE_DB_NAME} to ${QORE_DB_USER};
 grant select on all tables in schema pg_catalog to ${QORE_DB_USER};
 grant all on schema public to ${QORE_DB_USER};

@@ -33,6 +33,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
@@ -4050,6 +4051,22 @@ RuntimeLocationCache get_runtime_location_cache() {
     };
 }
 
+extern "C" DLLEXPORT int qore_rt_enter_aot_fast_function(ExceptionSink* xsink, QoreNativeEntrySlots* slots) {
+    ThreadData* td = thread_data.get();
+#ifdef QORE_MANAGE_STACK
+    if (check_stack_intern(xsink, td)) {
+        return -1;
+    }
+#endif
+    if (td->current_pgm && qore_program_private::get(*td->current_pgm)->hasDebuggerAttached()) {
+        return 1;
+    }
+    slots->thread_data = td;
+    slots->loc_ptr = &td->runtime_loc;
+    slots->stmt_ptr = &td->runtime_statement;
+    return 0;
+}
+
 void set_parse_file_info(QoreProgramLocation& loc) {
     ThreadData* td = thread_data.get();
     loc.setFile(td->parse_file);
@@ -7348,12 +7365,23 @@ ProgramRuntimeExternalParseContextHelper::operator bool() const {
     return static_cast<bool>(pgm);
 }
 
-ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm)
-        : xsink(xsink), restore(false) {
+ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm,
+        bool read_only) : xsink(xsink), restore(false) {
     ThreadData* td = thread_data.get();
     if (pgm != td->current_pgm) {
-        if (qore_program_private::incThreadCount(*pgm, xsink))
+        bool with_context = true;
+        if (read_only) {
+            // a reader enters a Program that code parsed in it refuses the thread without its context (qore#6752)
+            if (qore_program_private::get(*pgm)->enterForNativeCode(td->tid, with_context, xsink)) {
+                return;
+            }
+        } else if (qore_program_private::incThreadCount(*pgm, xsink)) {
             return;
+        }
+        count_pgm = pgm;
+        if (!with_context) {
+            return;
+        }
 
         restore = true;
         old_pgm = td->current_pgm;
@@ -7367,15 +7395,44 @@ ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* 
 }
 
 ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
-    if (!restore)
+    if (!count_pgm) {
         return;
+    }
 
     ThreadData* td = thread_data.get();
-    QoreProgram* pgm = td->current_pgm;
-    set_thread_current_pgm(td, old_pgm);
-    td->tlpd = old_tlpd;
-    sync_runtime_config_program(td);
-    qore_program_private::decThreadCount(*pgm, td->tid, xsink);
+    if (restore) {
+        assert(td->current_pgm == count_pgm);
+        set_thread_current_pgm(td, old_pgm);
+        td->tlpd = old_tlpd;
+        sync_runtime_config_program(td);
+    }
+    qore_program_private::decThreadCount(*count_pgm, td->tid, xsink);
+}
+
+bool QoreNativeDestructorProgramEntry::runWithoutContext(QoreProgram* p, ExceptionSink* xsink) {
+    assert(!pgm);
+    ThreadData* td = thread_data.get();
+    // the destructor runs in the context of the current Program, which the thread is in, without entering it
+    if (p == td->current_pgm) {
+        return false;
+    }
+    qore_program_private* pp = qore_program_private::get(*p);
+    // a Program that the thread deletes stays allocated until its deletion returns (see
+    // qore_reference_program_needs_entry()), and no parse can start in it meanwhile
+    if (td->pgm_teardown_depth && qore_program_torn_down_by_current_thread(p)) {
+        return pp->parseRefusesEntry(td->tid);
+    }
+    if (!pp->enterWithoutContextIfParseRefused(td->tid)) {
+        return false;
+    }
+    pgm = p;
+    this->xsink = xsink;
+    tid = td->tid;
+    return true;
+}
+
+void QoreNativeDestructorProgramEntry::leave() {
+    qore_program_private::decThreadCount(*pgm, tid, xsink);
 }
 
 bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid) {

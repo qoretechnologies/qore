@@ -49,6 +49,10 @@ list<int> sub safeMap(list<hash<auto>> input) {
     return map $1.value + 1, input;
 }
 
+list<bool> sub mapEnabled(list<hash<auto>> input) {
+    return map $1.enabled === True, input;
+}
+
 list<hash<auto>> sub callBarrier(list<hash<auto>> input) {
     return map throughCall($1), input;
 }
@@ -93,11 +97,15 @@ list<hash<auto>> input = (
 list<hash<auto>> identity = safeIdentity(input);
 list<hash<auto>> selected = safeSelect(input);
 list<int> mapped = safeMap(input);
+list<bool> enabled = mapEnabled(input);
 list<hash<auto>> called = callBarrier(input);
 int scoped = scopedBorrowedRead(input);
 int pushed = scopedInPlacePush();
 int object_pushed = scopedObjectPush();
 input = ();
+if (enabled != (True, False, True)) {
+    throw \"MAP-ERROR\", \"unexpected boolean elements\";
+}
 printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", identity[0].value, identity[2].value,
     selected.size(), selected[1].value, mapped[2], called[1].value, scoped, pushed, object_pushed);
 ";
@@ -125,6 +133,13 @@ string sub runAot() {
     string identity_ir = (compile_out.split("=== IR for safeIdentity(")[1] ?? "").split("\n=====")[0];
     if (identity_ir.find("\n  list.get.value.noref ->") < 0) {
         printf("missing borrowed list read in safeIdentity:\n%s", identity_ir);
+        exit(2);
+    }
+    string enabled_ir = (compile_out.split("=== IR for mapEnabled(")[1] ?? "").split("\n=====")[0];
+    string body = (enabled_ir.split("\nmap.body.")[1] ?? "").split("\nmap.exit.")[0];
+    if (body.find("list.get.value.noref ->") < 0 || body.find("release.owned.temp") >= 0
+            || body.find("check.exception") >= 0) {
+        printf("unexpected borrowed element cleanup in mapEnabled:\n%s", enabled_ir);
         exit(2);
     }
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));

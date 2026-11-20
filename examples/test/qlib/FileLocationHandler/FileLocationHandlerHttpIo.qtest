@@ -233,6 +233,11 @@ public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
         # unless it is passed through
         assertEq(gzip(HttpIoTestHandler::getLargeBody()),
             FileLocationHandler::getBinaryFileFromLocation(url + "/gzip{encoding_passthru=true}"));
+        # a text resource whose content encoding is passed through is not decoded as text in the encoding of its
+        # Content-Type: its octets are given in the assumed encoding (qore#6604)
+        str = FileLocationHandler::getTextFileFromLocation(url + "/gzip-text{encoding_passthru=true}");
+        assertEq("ISO-8859-1", str.encoding());
+        assertEq(gzip(binary("äöü")), binary(str));
         # user information is sent with basic authentication, and invalid characters in the path are encoded
         handler.clear();
         FileLocationHandler::getTextFileFromLocation(sprintf("http://user:pass@127.0.0.1:%d/echo/a b", port));
@@ -530,6 +535,16 @@ public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
         # the shared connection manager is not closed by the handler
         delete h;
         assertEq(200, mgr.request(url, "GET", "/text").status_code);
+
+        # the assumed encoding of a bound HTTPClient is used for text without a charset (qore#6604)
+        {
+            HTTPClient hc({"url": url});
+            hc.setAssumedEncoding("ISO-8859-15");
+            AbstractFileLocationHandler hh = FileLocationHandler::getHttpHandlerForClient(hc);
+            string text = hh.getTextFile("http", "/latin1");
+            assertEq("ISO-8859-15", text.encoding());
+            assertEq(<e4f6fc>, binary(text));
+        }
 
         # the cookie jar of a bound connection manager supplies cookies across redirects
         h = FileLocationHandler::getHttpHandlerForClient(mgr, url);

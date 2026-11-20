@@ -215,14 +215,12 @@ DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, Except
 //! Returns true if an object that a write removed from \a root needs a scan of its own after the root's (#6335)
 /** Not if it is in no recursive set, nor if the removed value holds its only reference (it is freed when the value is
     released), nor if the root's scan reached it (it is in the root's valid set).
+
+    The sets are compared by their pointers with no lock; a set is read only under the root's rsection, which keeps
+    it alive (RObject::hasInValidSet()): another thread can recompute the root's set and free the one loaded here
+    (#6792).
 */
-DLLLOCAL inline bool qore_removed_object_needs_scan(RObject* o, RObject* root) {
-    RSet* rs = o->rset.load(std::memory_order_acquire);
-    if (!rs || o->refs() <= 1) {
-        return false;
-    }
-    return !(root && rs == root->rset.load(std::memory_order_acquire) && rs->active() && !rs->isStale());
-}
+DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 
 class qore_object_private : public RObject {
 public:
@@ -476,7 +474,7 @@ public:
             return has_public_members ? QOA_PUB_ERROR : QOA_OK;
         }
         member_class_ctx = info->getClassContext(class_ctx);
-        return ((info->access > Public) && !class_ctx) ? QOA_PRIV_ERROR : QOA_OK;
+        return theclass_priv->runtimeCheckMemberAccess(info, class_ctx) ? QOA_OK : QOA_PRIV_ERROR;
     }
 
     // must be called in the object read lock
@@ -533,13 +531,14 @@ public:
         const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
         const QoreMemberInfo* mi = theclass_priv->runtimeGetMemberInfo(mem, class_ctx);
         if (mi) {
-            if (mi->access > Public && !class_ctx) {
+            if (!theclass_priv->runtimeCheckMemberAccess(mi, class_ctx)) {
                 doPrivateException(mem, xsink);
                 return -1;
             }
 
             member_class_ctx = mi->getClassContext(class_ctx);
-            typeInfo = qore_substitute_type_params_if_needed(mi->getTypeInfo(),
+            // the type of the declaration whose storage the access uses (issue #6670)
+            typeInfo = qore_substitute_type_params_if_needed(mi->getStorageTypeInfo(mem, member_class_ctx),
                 instantiated_type ? instantiated_type : theclass->getTypeInfo());
             return 0;
         }

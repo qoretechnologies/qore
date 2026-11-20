@@ -1555,6 +1555,25 @@ public:
         return cls_context_map ? cls_context_map->size() : 0;
     }
 
+    //! returns the type of the member that an access in a class context uses (issue #6670)
+    /** @param mem the name of the member
+        @param member_class_ctx the storage of the access, as returned by getClassContext()
+
+        A member held in the storage of another class (\a member_class_ctx) is that class's own declaration, which
+        this member hides in the object's class: its type is the type of that declaration, not of this one
+    */
+    DLLLOCAL const QoreTypeInfo* getStorageTypeInfo(const char* mem,
+            const qore_class_private* member_class_ctx) const {
+        if (member_class_ctx && member_class_ctx != getClass()) {
+            return getStorageTypeInfoIntern(mem, member_class_ctx);
+        }
+        return getTypeInfo();
+    }
+
+    //! returns the type of the declaration of the member in \a storage_cls; see getStorageTypeInfo()
+    DLLLOCAL const QoreTypeInfo* getStorageTypeInfoIntern(const char* mem,
+            const qore_class_private* storage_cls) const;
+
     // issue #2970: marks the member to be accessed with the classes in the argument when
     // accessing the object's data
     DLLLOCAL void addContextAccess(const QoreMemberInfo& mi);
@@ -2753,6 +2772,17 @@ public:
     //! outside the class hierarchy can call (see qore_class_private::runtimeFindPublicCommittedMethod())
     DLLLOCAL const QoreMethod* runtimeFindPublicCommittedMethod(const char* name, bool is_static) const;
 
+    //! finds the first committed method of the name (normal or static as \a is_static) in the parent classes that
+    //! the class context \a class_ctx can call: the method that code of the class context calls (see
+    //! qore_class_private::runtimeFindContextCallableCommittedMethod())
+    DLLLOCAL const QoreMethod* runtimeFindContextCallableCommittedMethod(const char* name, ClassAccess& access,
+            const qore_class_private* class_ctx, bool allow_internal, bool is_static) const;
+
+    //! finds the first method of the name (normal or static as \a is_static) in the parent classes that the class
+    //! context \a class_ctx can call at parse time (see qore_class_private::parseFindContextCallableMethod())
+    DLLLOCAL const QoreMethod* parseFindContextCallableMethod(const char* name, const qore_class_private* class_ctx,
+            bool allow_internal, bool is_static);
+
     DLLLOCAL bool match(const QoreClass* cls);
     DLLLOCAL void execConstructors(QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
@@ -3062,6 +3092,9 @@ public:
     */
     qore_ns_private* ns = nullptr;
     BCList* scl = nullptr;          // base class list
+    //! true if the class is the copy of a class of another namespace (a builtin class, a module's class, a class
+    //! that a Program imports), which outlives the Program the copy is in; see ownedByProgram()
+    bool ns_copy = false;
     //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
     //! the class (issue #3286)
     bool parse_abr = false;
@@ -3996,6 +4029,9 @@ public:
     DLLLOCAL int parseCheckMemberAccess(const QoreProgramLocation* loc, const char* mem,
             const QoreTypeInfo*& memberTypeInfo, int pflag) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
+        // the members of the base classes must be imported to check the access of a member reached through more than
+        // one of them (issue #6640): parseInit() can initialize the class partially without them
+        const_cast<qore_class_private*>(this)->initializeMembers();
 
         const qore_class_private* qc = nullptr;
         ClassAccess access;
@@ -4033,10 +4069,22 @@ public:
 
         memberTypeInfo = omi->getTypeInfo();
 
-        // only raise a parse error for illegal access to private members if there is not memberGate function
-        if ((access > Public) && !parseHasMemberGate() && !parseCheckPrivateClassAccess()) {
+        // only raise a parse error for illegal access to private members if there is not memberGate function; a member
+        // inherited through a class inherited with private:internal only in this class or a class that it inherits
+        // (issue #6640)
+        if ((access > Public) && !parseHasMemberGate()
+                && (!parseCheckPrivateClassAccess() || !parseCheckInheritedInternalMemberAccess(omi, qc, access))) {
             memberTypeInfo = nullptr;
             parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
+            return -1;
+        }
+        // a member that this class reaches only through a base class that one of its base classes inherits with
+        // private:internal (access Inaccessible) cannot be used in this class, only by the classes of that path
+        // (issue #6669)
+        if (access == Inaccessible && !parseHasMemberGate() && parse_get_class_priv() == this) {
+            memberTypeInfo = nullptr;
+            parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
+                "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
             return -1;
         }
         return 0;
@@ -4044,10 +4092,19 @@ public:
 
     DLLLOCAL int parseResolveInternalMemberAccess(const char* mem, const QoreTypeInfo*& memberTypeInfo) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
+        // the members of the base classes must be imported, so that a member that this class cannot access is found
+        // with its access in this class (issue #6667): parseInit() can initialize the class partially without them
+        const_cast<qore_class_private*>(this)->initializeMembers();
 
         const qore_class_private* qc = nullptr;
         ClassAccess access;
         const QoreMemberInfo* omi = parseFindMember(mem, qc, access);
+        // a member that the class cannot access, reached only through a base class inherited with private:internal
+        // by a base class (access Inaccessible in the merged member table), is not a candidate for a name in the
+        // class (issue #6667)
+        if (omi && access == Inaccessible) {
+            omi = nullptr;
+        }
         if (omi) {
             memberTypeInfo = omi->getTypeInfo();
         }
@@ -4058,11 +4115,23 @@ public:
     DLLLOCAL int parseCheckInternalMemberAccess(const char* mem, const QoreTypeInfo*& memberTypeInfo,
             const QoreProgramLocation* loc, int pflag = 0) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
+        // the members of the base classes must be imported, so that a member that this class cannot access is found
+        // with its access in this class (issue #6669): parseInit() can initialize the class partially without them
+        const_cast<qore_class_private*>(this)->initializeMembers();
 
         // throws a parse exception if there are public members and the name is not valid
         const qore_class_private* qc = nullptr;
         ClassAccess access;
         const QoreMemberInfo* omi = parseFindMember(mem, qc, access);
+        // a member that the class cannot access, reached only through a base class inherited with private:internal
+        // by a base class (access Inaccessible in the merged member table), is refused as the name alone is (issue
+        // #6669; see parseResolveInternalMemberAccess())
+        if (omi && access == Inaccessible) {
+            parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
+                "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
+            memberTypeInfo = nullptr;
+            return -1;
+        }
         int rc = 0;
         if (omi) {
             // issue #3355: to handle out of order initialization properly, we need to ensure that the member is
@@ -4175,6 +4244,52 @@ public:
         return info;
     }
 
+    //! returns true if the member found with runtimeGetMemberInfo() can be used in the class context (issue #6640)
+    /** this = the object's class; \a class_ctx as for runtimeGetMemberInfo(): set only if it has private access to
+        this class.  A member that is not public needs a class context; a member that this class inherits through a
+        class that it inherits with \c private:internal (access \c Internal, not declared here) needs the class
+        context of this class, or of a class that this class inherits and that is or inherits the class that declares
+        the member (whose own methods use it on the objects of this class): a subclass of this class, another base
+        class of it or another class with private access to it cannot use it
+    */
+    DLLLOCAL bool runtimeCheckMemberAccess(const QoreMemberInfo* info, const qore_class_private* class_ctx) const {
+        // the usual cases inline, so that the member access stays small enough to be inlined in its callers
+        if (info->access <= Public) {
+            return true;
+        }
+        if (!class_ctx) {
+            return false;
+        }
+        if (info->access != Internal || info->local() || class_ctx == this) {
+            return true;
+        }
+        return checkInheritedInternalMemberContext(class_ctx, info->getClass());
+    }
+
+    //! returns true if \a class_ctx can use a member declared in \a decl that this class inherits through a class
+    //! inherited with \c private:internal: it is this class, or a class that this class inherits and that is or
+    //! inherits \a decl (issue #6640); not inline, as it walks the class hierarchy
+    DLLLOCAL bool checkInheritedInternalMemberContext(const qore_class_private* class_ctx,
+            const qore_class_private* decl) const;
+
+    //! returns true if a member found with parseFindMember() can be used in the parse class context (issue #6640)
+    /** As runtimeCheckMemberAccess() for a member inherited through a class inherited with \c private:internal; the
+        other access rules are checked by the caller
+
+        @param info the member found
+        @param qc the class that declares the member, as returned by parseFindMember()
+        @param access the access of the member in this class, as returned by parseFindMember()
+    */
+    DLLLOCAL bool parseCheckInheritedInternalMemberAccess(const QoreMemberInfo* info, const qore_class_private* qc,
+            ClassAccess access) const {
+        // a private:internal member declared in this class is checked by the caller
+        if (access < Internal || (info->local() && qc == this)) {
+            return true;
+        }
+        const qore_class_private* class_ctx = parse_get_class_priv();
+        return class_ctx && checkInheritedInternalMemberContext(class_ctx, qc);
+    }
+
     //! returns the member that a call of the name made through the code that a member holds may use (qore#6487)
     /** this = the object's class; a call through a member (`o.x(...)` where `x` is a member that holds a closure or a
         call reference) applies the access rules of a read of the member, exactly: the class context is used only if
@@ -4194,7 +4309,7 @@ public:
             class_ctx = nullptr;
         }
         const QoreMemberInfo* info = runtimeGetMemberInfo(mem, class_ctx);
-        if (info && info->access > Public && !class_ctx) {
+        if (info && !runtimeCheckMemberAccess(info, class_ctx)) {
             return nullptr;
         }
         return info;
@@ -4926,6 +5041,39 @@ public:
     }
     */
 
+    //! returns true if the method is the constructor or the destructor of the class that declares it
+    /** user code may not call these methods explicitly; the declaring class can be a base class of the class that
+        a method of the name is looked up in (qore#6783)
+    */
+    DLLLOCAL static bool isConstructorOrDestructor(const QoreMethod& m) {
+        const qore_class_private* qc = get(*m.getClass());
+        return &m == qc->constructor || &m == qc->destructor;
+    }
+
+    //! returns true if the method is the constructor, the destructor or the copy method of the class that declares it
+    /** no call reference can be made to these methods, whose variants are not normal method variants (qore#6783)
+    */
+    DLLLOCAL static bool isNotReferenceable(const QoreMethod& m) {
+        return isConstructorOrDestructor(m) || &m == get(*m.getClass())->copyMethod;
+    }
+
+    //! raises an exception for a call reference to a method that cannot be referenced, and returns -1, or returns 0
+    DLLLOCAL static int checkReferenceable(const QoreMethod& m, ExceptionSink* xsink) {
+        if (!isNotReferenceable(m)) {
+            return 0;
+        }
+        xsink->raiseException("ILLEGAL-CALL-REFERENCE", "cannot make a call reference to %s::%s(), which is called "
+            "only when an object is %s", m.getClassName(), m.getName(),
+            !strcmp(m.getName(), "constructor") ? "created" : (!strcmp(m.getName(), "copy") ? "copied" : "deleted"));
+        return -1;
+    }
+    //! returns true if the class exists only in \a pgm, whose code its methods and destructor run in
+    /** A class that \a pgm declares (its source Program), or one that a module creates at run time in a namespace of
+        \a pgm (with no source Program: its code runs in the Program of its namespace, see
+        qore_get_method_pgm_context()); not the copy of a class of another namespace, such as a builtin class (#6791)
+    */
+    DLLLOCAL bool ownedByProgram(const QoreProgram* pgm) const;
+
     DLLLOCAL const QoreMethod* getMethodForEval(const char* nme, QoreProgram* pgm,
         const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
@@ -5025,9 +5173,14 @@ public:
     DLLLOCAL void execMemberNotification(QoreObject* self, const char* mem, ExceptionSink* xsink) const;
 
     // returns a non-static method if it exists in the local class and has been committed to the class
-    DLLLOCAL QoreMethod* findLocalCommittedMethod(const char* nme);
+    /* not inlined (also the const version): inlined in BCList::runtimeFindCommittedMethod() or in the walk of a
+       lookup, its hash lookup makes the function save its registers and set up a stack protector before it tests
+       whether it searches the hierarchy with a walk, which then costs every lookup of a hierarchy with a diamond
+       (qore#6759)
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QoreMethod* findLocalCommittedMethod(const char* nme);
     // returns a non-static method if it exists in the local class and has been committed to the class
-    DLLLOCAL const QoreMethod* findLocalCommittedMethod(const char* nme) const;
+    DLLLOCAL QORE_INTERN_NOINLINE const QoreMethod* findLocalCommittedMethod(const char* nme) const;
 
     // returns a static method if it exists in the local class and has been committed to the class
     DLLLOCAL QoreMethod* findLocalCommittedStaticMethod(const char* nme);
@@ -5151,6 +5304,33 @@ public:
     DLLLOCAL const QoreMethod* parseResolveSelfMethodIntern(const QoreProgramLocation* loc, const char* nme,
             const qore_class_private* class_ctx);
 
+    //! returns the method that code of the class context calls in place of the method \a m found by a parse-time
+    //! lookup (qore#6759)
+    /** A private method of a class whose private declarations the class context cannot access cannot be called
+        there: the method returned is the first method of the name that the class context can call, as the run-time
+        lookups find it (runtimeFindContextCallableCommittedMethod()), or \a m if there is none
+    */
+    DLLLOCAL const QoreMethod* parseCheckContextCallableMethod(const char* nme, const QoreMethod* m,
+            const qore_class_private* class_ctx, bool is_static) {
+        return parseContextMayNotCall(m, class_ctx) ? parseFindContextCallableMethod(nme, m, class_ctx, is_static)
+            : m;
+    }
+
+    //! returns true if \a m is a private method of another class than the class context, which the class context
+    //! may not be able to call (see parseContextCannotCall())
+    DLLLOCAL static bool parseContextMayNotCall(const QoreMethod* m, const qore_class_private* class_ctx) {
+        return m && class_ctx && m->getAccess() == Private && qore_class_private::get(*m->getClass()) != class_ctx;
+    }
+
+    //! returns true if \a m is a private method that the class context cannot call at parse time (qore#6759)
+    DLLLOCAL static bool parseContextCannotCall(const QoreMethod* m, const qore_class_private* class_ctx) {
+        return parseContextMayNotCall(m, class_ctx) && !parseCheckPrivateClassAccess(*m->getClass(), class_ctx);
+    }
+
+    //! see parseCheckContextCallableMethod()
+    DLLLOCAL const QoreMethod* parseFindContextCallableMethod(const char* nme, const QoreMethod* m,
+            const qore_class_private* class_ctx, bool is_static);
+
     // returns a non-static method if it exists in class hierarchy and has been committed to the class
     // class_ctx is only set if it is present and accessible, so we only need to check for internal access here
     DLLLOCAL const QoreMethod* runtimeFindCommittedStaticMethodIntern(const char* nme, ClassAccess& access,
@@ -5191,6 +5371,10 @@ public:
     DLLLOCAL const QoreMethod* runtimeFindCommittedMethod(const char* nme, ClassAccess& access,
         const qore_class_private* class_ctx) const;
 
+    //! finds the method of the name that a call on an object of the class calls
+    /** As runtimeFindCommittedMethod(), except that a private method of this class (the object's class) found with
+        a class context does not raise \a access (qore#6759)
+    */
     DLLLOCAL const QoreMethod* runtimeFindCommittedMethodForEval(const char* nme, ClassAccess& access,
         const qore_class_private* class_ctx) const;
 
@@ -5207,6 +5391,52 @@ public:
     */
     DLLLOCAL const QoreMethod* runtimeFindPublicCommittedMethod(const char* nme,
             int mask = QCCM_NORMAL | QCCM_STATIC) const;
+
+    //! returns the method of the name that code of the class context calls, or nullptr if there is none
+    /** As runtimeFindCommittedMethodIntern() or runtimeFindCommittedStaticMethodIntern() (\a is_static), but a
+        private method of a class whose private declarations the class context cannot access (a method of another
+        parent class of the object's class than those of the class context's hierarchy) is skipped: it cannot be
+        called there.  Such a method overrides the methods of the name of the parent classes of its class, which are
+        not returned in its place (as for a caller outside the class hierarchy; qore#6062).  Called by the run-time
+        lookups when the method that they found first cannot be called from the class context (qore#6759)
+
+        @param nme the name of the method
+        @param access set to the access of the method returned and of the path to it
+        @param class_ctx the class context of the call, which can access the private declarations of this class
+        @param is_static true to search for a static method, false for a normal method
+    */
+    DLLLOCAL const QoreMethod* runtimeFindContextCallableCommittedMethod(const char* nme, ClassAccess& access,
+            const qore_class_private* class_ctx, bool is_static) const;
+
+    //! returns the method of the name that a run-time lookup calls when the method \a w that it found has an access
+    //! that is not public (\a access), or \a w if no other method is called in its place
+    /** Without a class context, the method that a caller outside the class hierarchy can call
+        (runtimeFindPublicCommittedMethod(); qore#6704); with a class context, the method that the class context can
+        call when \a w is a private method that it cannot call (runtimeFindContextCallableCommittedMethod();
+        qore#6759).  Not inlined: called only for a method found with an access that is not public
+
+        @param nme the name of the method
+        @param w the method found by the lookup
+        @param access the access of the lookup; set to the access of the method returned if it is not \a w
+        @param class_ctx the class context of the call, if it can access the private declarations of this class
+        @param mask the kinds of methods searched: QCCM_NORMAL and / or QCCM_STATIC
+    */
+    DLLLOCAL const QoreMethod* runtimeFindCallableCommittedMethod(const char* nme, const QoreMethod* w,
+            ClassAccess& access, const qore_class_private* class_ctx, int mask = QCCM_NORMAL | QCCM_STATIC) const;
+
+    //! raises the error of a call from outside the class hierarchy of the method \a w, which it cannot call, and
+    //! returns nullptr
+    /** Not inlined: called only when no method of the name can be called from outside the class hierarchy
+        (getMethodForEval())
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE const QoreMethod* raiseInaccessibleMethodError(const char* nme, const QoreMethod* w,
+            ExceptionSink* xsink) const;
+
+    //! returns true if code of the class context can call a method of the method \a m found by a run-time lookup
+    /** A method whose variants are all private needs a class context that can access the private declarations of
+        the method's class (qore#6759); a private:internal method is only found from its own class
+    */
+    DLLLOCAL static bool runtimeContextCanCallMethod(const QoreMethod& m, const qore_class_private* class_ctx);
 
     DLLLOCAL const QoreMethod* runtimeFindAnyCommittedMethod(const char* nme) const {
         ClassAccess access = Public;

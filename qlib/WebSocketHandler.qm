@@ -138,6 +138,26 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - a connection whose setup raises an exception after the connection was registered (for example when its
+      @ref WebSocketHandler::WebSocketConnection "WebSocketConnection" raises one, or an HTTP/2 stream has no data
+      queue) is deregistered, gets
+      @ref WebSocketHandler::WebSocketConnection::connectionClosed() "connectionClosed()" once and is removed from the
+      handler; it was kept by the handler, and connectionClosed() was not called
+      (<a href="https://github.com/qoretechnologies/qore/issues/6794">issue 6794</a>)
+    - a text message from the client that is not valid UTF-8 closes the connection with
+      @ref WebSocketUtil::WSCC_InvalidData "WSCC_InvalidData" (1007) before the connection's code sees it (RFC 6455
+      section 8.1), also in the echo mode of
+      @ref WebSocketHandler::WebSocketConnection::setEchoMode() "WebSocketConnection::setEchoMode()" and before
+      @ref WebSocketHandler::WebSocketConnection::gotRawMessage() "WebSocketConnection::gotRawMessage()" (which gets
+      the compressed payload of a message compressed with permessage-deflate, checked once it is decompressed), as
+      does a close frame whose reason is not valid UTF-8; a close frame with a one-byte payload or a close code that a
+      close frame may not have (RFC 6455 section 7.4) closes it with
+      @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002); the close code is given by
+      @ref WebSocketHandler::WebSocketConnection::getCloseCode() "WebSocketConnection::getCloseCode()", and a close
+      reason is sent in UTF-8
+      (<a href="https://github.com/qoretechnologies/qore/issues/6554">issue 6554</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6755">issue 6755</a>)
     - a connection closed because a message was larger than the maximum message size is reported with its close code
       1009 (Message Too Big) and reason, on HTTP/1.1, HTTP/2 and HTTP/3: added
       @ref WebSocketHandler::WebSocketConnection::getCloseCode() "WebSocketConnection::getCloseCode()" and
@@ -1022,6 +1042,11 @@ public class WebSocketConnection {
 
         @note this base class always returns @ref WSC_Process
 
+        @note A text message that is not valid UTF-8 closes the connection with
+        @ref WebSocketUtil::WSCC_InvalidData "WSCC_InvalidData" (1007) before this method is called (RFC 6455 section
+        8.1); a compressed message (with the RSV1 bit, permessage-deflate) is given here with its compressed payload,
+        and is checked once it is decompressed, after this method
+
         @since %WebSocketHandler 1.5.2
     */
     int gotRawMessage(hash<WsMsgInfo> msg) {
@@ -1594,8 +1619,12 @@ stop();
 
         @note Extensions are applied in reverse order (last extension first)
 
-        @throw WEBSOCKET-INVALID-PAYLOAD a text message is not valid UTF-8 (after the extensions); the connection is
-        closed with @ref WebSocketUtil::WSCC_InvalidData "WSCC_InvalidData" (1007), as RFC 6455 section 8.1 requires
+        @throw WEBSOCKET-INVALID-PAYLOAD a text message is not valid UTF-8 after the extensions; the connection is
+        closed with @ref WebSocketUtil::WSCC_InvalidData "WSCC_InvalidData" (1007), as RFC 6455 section 8.1 requires;
+        a message is checked here when it has the RSV1 bit set (a message compressed with permessage-deflate) or
+        extensions are active: the server checks any other text message when it receives it, before the connection
+        sees it (also @ref WebSocketConnection::gotRawMessage() "gotRawMessage()", which is given the compressed
+        payload of a compressed message)
 
         @since WebSocketHandler 2.3
     */
@@ -1610,8 +1639,10 @@ stop();
             }
         }
         # text from outside the server is checked where it enters it, before the connection's code sees it
-        # (qore#6554)
-        if (ctx.op == WSOP_Text && msg.typeCode() == NT_STRING && !msg.isEncodingValid()) {
+        # (qore#6554): the server checks a message without the RSV1 bit when it receives it, before any extension
+        # (qore#6604), so it is checked here only when an extension can have changed it
+        if (ctx.op == WSOP_Text && (ctx.rsv1 || active_extensions) && msg.typeCode() == NT_STRING
+                && !msg.isEncodingValid()) {
             throw "WEBSOCKET-INVALID-PAYLOAD", sprintf("a text message of %d bytes is not valid UTF-8", msg.size());
         }
     }
@@ -1926,7 +1957,8 @@ class WebSocketStreamProcessor {
             # 1005 and 1006 are never sent in a close frame (RFC 6455 section 7.4.1): the frame has no status code then
             binary body = (code == WSCC_NoStatusRcvd || code == WSCC_AbnormalClosure)
                 ? binary()
-                : code.encodeMsb(2) + reason.toBinary();
+                # the reason of a close frame is UTF-8 (RFC 6455 section 5.5.1; qore#6604)
+                : code.encodeMsb(2) + convert_encoding(reason, "UTF-8").toBinary();
             # the stream's close frame, which is never refused for a full send buffer; a close frame that the
             # stream's frame state sent before ends the close: no second one is sent (issue #6077)
             if (!ctx.sendWebSocketClose(ws_encode_message(body, WSOP_Close))) {
@@ -3123,6 +3155,14 @@ handler.setCloseTimeout(2s);
         *AsyncSocketIo::AsyncSocketIoController async_ctrl = cx."async_ctrl";
         # get new connection object
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
+        # True once the end of an asynchronous HTTP/1.1 connection has been handed to its poll operation, which then
+        # runs finishConnection() when the connection ends (see endAsyncConnection()); set up as soon as the
+        # connection is registered, so that a connection whose setup raises an exception is deregistered, gets
+        # connectionClosed() and is removed too (issue #6794)
+        bool deferred = False;
+        on_exit if (!deferred) {
+            finishConnection(wsc, ws_poll_op, cid);
+        }
         sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
         # Publish the listener id and observe whether the listener has already been stopped.
@@ -3212,6 +3252,9 @@ handler.setCloseTimeout(2s);
             if (max_message_size > 0) {
                 ws_poll_op.setMaxFrameSize(max_message_size);
             }
+            # the RSV bits of the negotiated extensions; another RSV bit fails the connection in C++, also in echo
+            # mode (qore#6604)
+            ws_poll_op.setExtensionRsvMask(pending_extensions{cid}.rsv_mask ?? 0);
             wsc.setWsPollOp(ws_poll_op);
             # Give the poll op references for frame dispatch from worker thread
             call_object_method(ws_poll_op, "setConnection", wsc, self);
@@ -3223,13 +3266,6 @@ handler.setCloseTimeout(2s);
             wsc.setExtensions(ext_data.extensions, ext_data.rsv_mask ?? 0);
             logDebug("WebSocketHandler::startImpl() cid: %y extensions: %y", cx.id,
                 (map $1.getName(), ext_data.extensions));
-        }
-
-        # True once the end of an asynchronous HTTP/1.1 connection has been handed to its poll operation, which then
-        # runs finishConnection() when the connection ends (see endAsyncConnection())
-        bool deferred = False;
-        on_exit if (!deferred) {
-            finishConnection(wsc, ws_poll_op, cid);
         }
 
         # issue #3225: handle exceptions in registered()

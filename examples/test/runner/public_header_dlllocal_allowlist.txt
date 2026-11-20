@@ -200,7 +200,7 @@ include/qore/QoreObject.h|QoreObject|virtual ~QoreObject()
 include/qore/QoreProgram.h|QoreBreakpoint|virtual bool checkBreak() const
 include/qore/QoreProgram.h|QoreBreakpoint|virtual ~QoreBreakpoint()
 include/qore/QoreProgram.h|QoreProgram|QoreProgram& operator=(const QoreProgram&)
-include/qore/QoreProgram.h|QoreProgram|QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr, const QoreParseOptions* parent_po = nullptr)
+include/qore/QoreProgram.h|QoreProgram|QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr, const QoreParseOptions* parent_po = nullptr, ExceptionSink* xsink = nullptr)
 include/qore/QoreProgram.h|QoreProgram|QoreProgram(const QoreProgram&)
 include/qore/QoreProgram.h|QoreProgram|virtual ~QoreProgram()
 include/qore/QoreQueue.h|QoreQueue|TryPushResult tryPush(ExceptionSink* xsink, QoreValue n, bool ignore_max = false)

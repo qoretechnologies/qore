@@ -76,11 +76,12 @@ public:
             // method must be found because we have an instance of AbstractIterator
             assert(getValueMethod);
         }
-        // without a class context that can access the private methods of the class, a method that is not accessible
-        // is skipped for the accessible method of the name, as for a call of the method (qore#6704); one test in the
+        // a method that the caller cannot call is skipped for the method of the name that it can call, as for a call
+        // of the method: without a class context that can access the private methods of the class (qore#6704), or
+        // from a class context that cannot access the class of a private method found (qore#6759); one test in the
         // common case (Public is 0)
-        if (!class_ctx && (next_access | value_access)) {
-            findPublicMethods(cls, fwd, next_access, value_access);
+        if (next_access | value_access) {
+            findCallableMethods(cls, fwd, next_access, value_access, class_ctx);
         }
         nextVariant = getCheckVariant(xsink, op, nextMethod);
         if (!nextVariant)
@@ -141,19 +142,17 @@ public:
         return qore_method_private::evalNormalVariant(*getValueMethod, xsink, rc, obj, getValueVariant, 0);
     }
 
-    //! replaces the iterator methods that a caller outside the class hierarchy cannot call with the methods of their
-    //! names that it calls, if any (qore#6704)
-    DLLLOCAL QORE_INTERN_NOINLINE void findPublicMethods(const qore_class_private* cls, bool fwd,
-            ClassAccess next_access, ClassAccess value_access) {
+    //! replaces the iterator methods that the caller cannot call with the methods of their names that it calls, if
+    //! any (qore#6704, qore#6759)
+    DLLLOCAL QORE_INTERN_NOINLINE void findCallableMethods(const qore_class_private* cls, bool fwd,
+            ClassAccess next_access, ClassAccess value_access, const qore_class_private* class_ctx) {
         if (next_access > Public) {
-            if (const QoreMethod* m = cls->runtimeFindPublicCommittedMethod(fwd ? "next" : "prev", QCCM_NORMAL)) {
-                nextMethod = m;
-            }
+            nextMethod = cls->runtimeFindCallableCommittedMethod(fwd ? "next" : "prev", nextMethod, next_access,
+                class_ctx, QCCM_NORMAL);
         }
         if (value_access > Public) {
-            if (const QoreMethod* m = cls->runtimeFindPublicCommittedMethod("getValue", QCCM_NORMAL)) {
-                getValueMethod = m;
-            }
+            getValueMethod = cls->runtimeFindCallableCommittedMethod("getValue", getValueMethod, value_access,
+                class_ctx, QCCM_NORMAL);
         }
     }
 

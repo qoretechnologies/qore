@@ -2289,6 +2289,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // of a type that the parser did not check, and releases its own value, as the value that the handler's return
         // replaced
         bool handed_over = pending_return_handed_over && !blockHasTerminator(builder.getBlock());
+        // the value of the return before the TakeHandedOverReturn, which an exception in the cleanups interrupts
+        // (#6762)
+        QoreIRValue given = lowered;
         if (handed_over) {
             QoreIRValue taken = builder.createTakeHandedOverReturn(lowered, stmt->loc)->result;
             builder.createReleaseOwnedTemp(lowered, stmt->loc);
@@ -2303,9 +2306,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // statements that can catch the exception (try_return_value_stack, qore#5941); emitBlockCleanups() lowers
         // nothing after such a handler (#6030)
         QoreIRReturnInstruction* ret = builder.createReturn(lowered);
-        // every try statement that the return leaves can catch an exception that interrupts it (qore#5941)
+        // every try statement that the return leaves can catch an exception that interrupts it (qore#5941), the
+        // value given to the TakeHandedOverReturn too, which is the value of the return until it runs (#6762)
         for (std::vector<uint32_t>& try_returns : try_return_value_stack) {
             try_returns.push_back(lowered.id);
+            if (given.id != lowered.id) {
+                try_returns.push_back(given.id);
+            }
         }
         // record the parse-time type of the returned expression: the declared type of a member or otherwise the
         // type recorded for the expression; ParseNode::getTypeInfo() is not used generally, since some nodes (such as
@@ -4607,7 +4614,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // the statements of the catch block are marked for the debugger's exception events (#5816)
         int old_debug_catch_child_depth = debug_catch_child_depth;
         debug_catch_child_depth = debug_nest_depth;
-        bool catch_ok = !try_stmt->getCatchBlock() || lowerStatementBlock(try_stmt->getCatchBlock(), error);
+        bool catch_ok = !try_stmt->getCatchBlock() || lowerStatementBlock(try_stmt->getCatchBlock(), error,
+            catch_exit_block ? nullptr : catch_var);
         debug_catch_child_depth = old_debug_catch_child_depth;
         AnchorCatchInfo exit_catches;
         if (catch_exit_block) {
@@ -4894,7 +4902,7 @@ static bool qore_ir_statement_parse_options_differ(const StatementBlock::stateme
     return false;
 }
 
-bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::string& error) {
+bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::string& error, LocalVar* debug_catch_var) {
     if (!block) {
         error = "null statement block for IR lowering";
         return false;
@@ -5085,10 +5093,18 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // of the statement that contains it (#5921); only code with the statements' debug instructions, which record
         // the statements that the frame is in, uses them
         auto* dbg_block = static_cast<QoreIRDebugStatementInstruction*>(builder.createDebugBlock(block->loc, block));
-        if (lvars && !lvars->lv.empty()
+        if ((debug_catch_var || (lvars && !lvars->lv.empty()))
                 && (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements)) {
             dbg_block->block_locals = std::make_unique<QoreIRDebugBlockLocals>();
-            dbg_block->block_locals->locals = lvars->lv;
+            auto& locals = dbg_block->block_locals->locals;
+            // The catch parameter is declared before the catch body's locals. The debugger releases this list in
+            // reverse order before reporting the enclosing statement, including when the catch has no exit block.
+            if (debug_catch_var) {
+                locals.push_back(debug_catch_var);
+            }
+            if (lvars) {
+                locals.insert(locals.end(), lvars->lv.begin(), lvars->lv.end());
+            }
             // the depth of the statement that contains the block, which the locals are recorded on: the frame can
             // still have the statements of another block of the statement in it whose ends did not run, as with the
             // try block of a catch block (#5999)
@@ -6982,6 +6998,8 @@ bool QoreIRLowering::lowerHandedOverReturn(size_t start_depth, QoreIRValue resul
     }
     // handlers run out of line past the cap in the cleanups can have handed another value over (see the return
     // statement, #6137)
+    // the value of the return before a TakeHandedOverReturn, which an exception in the cleanups interrupts (#6762)
+    QoreIRValue given = value;
     if (pending_return_handed_over) {
         QoreIRValue taken = builder.createTakeHandedOverReturn(value, loc)->result;
         builder.createReleaseOwnedTemp(value, loc);
@@ -6990,9 +7008,13 @@ bool QoreIRLowering::lowerHandedOverReturn(size_t start_depth, QoreIRValue resul
     QoreIRReturnInstruction* ret = builder.createReturn(value);
     // the value can be one of any type (see TakeHandedOverReturn)
     ret->value_parse_type = nullptr;
-    // every try statement that the return leaves can catch an exception that interrupts it (qore#5941)
+    // every try statement that the return leaves can catch an exception that interrupts it (qore#5941), the value
+    // given to the TakeHandedOverReturn too (see the return statement, #6762)
     for (std::vector<uint32_t>& try_returns : try_return_value_stack) {
         try_returns.push_back(value.id);
+        if (given.id != value.id) {
+            try_returns.push_back(given.id);
+        }
     }
     return true;
 }
@@ -21264,8 +21286,13 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // the load, so release it here, where its slot is defined on every path.
         if (!borrow_element && qore_ir_type_may_hold_object(elem_type)) {
             builder.createReleaseOwnedTemp(element_val, map->loc);
-            // A weak list entry may leave this as the last strong reference.
-            builder.createCheckException(map->loc)->exception_target = getCurrentExceptionTarget();
+            // A weak list entry may leave this as the last strong reference. When the result cannot run
+            // a destructor and no implicit context was popped, only the element release needs this check.
+            auto* check = builder.createCheckException(map->loc);
+            check->exception_target = getCurrentExceptionTarget();
+            if (need_result && !needs_context && !qore_ir_type_may_hold_object(expTypeInfo)) {
+                check->release_check = QoreIRReleaseCheck::IndexedElement;
+            }
         }
 
         // Increment index
