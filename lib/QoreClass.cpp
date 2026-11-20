@@ -3483,10 +3483,27 @@ void BCNode::setClassPointer(QoreClass* qc) {
 
 int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
     if (!sclass) {
+        // issue #6710: a parent class name is resolved in the namespace of the class that inherits it, as any other
+        // class name in the class's code is; the hierarchy is resolved outside of that namespace (for all classes at
+        // once, or when a class is first reached from code anywhere), where the current parse namespace is another
+        // one, so that an unqualified name would find a class of the same name in another namespace first
+        OptionalNamespaceParseContextHelper onspch(qore_class_private::get(*cls)->ns);
         // the parent class is named without type arguments (qore#6082)
         const bool raw_parent = !parsed_type;
         if (parsed_type) {
-            QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, raise_error);
+            QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, false);
+            if (qc && parsed_type->cscope->size() == 1
+                && qore_class_private::get(*qc) == qore_class_private::get(*cls)) {
+                // issue #6710: a class cannot inherit itself, so the name of the class in its own namespace names
+                // another class of the name: it is resolved without the current namespace, as it was before (ex:
+                // "namespace N { class C<T> inherits C<int> {} }" inherits a class C of the root namespace)
+                NamespaceParseContextHelper nspch(nullptr);
+                qc = qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, false);
+            }
+            if (!qc && raise_error) {
+                // raises the parse error for the class that cannot be found
+                qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, true);
+            }
             if (qc) {
                 assert(qc->priv);
                 if (!qc->hasTypeParameters()) {
@@ -3569,8 +3586,17 @@ int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
         } else {
             // issue #3005: cstr may be nullptr in case of a previous parse error
             if (cstr) {
-                // if the class cannot be found, qore_root_ns_private::parseFindClass() will throw the appropriate exception
-                sclass = qore_root_ns_private::parseFindClass(loc, cstr, raise_error);
+                sclass = qore_root_ns_private::parseFindClass(loc, cstr, false);
+                if (sclass && qore_class_private::get(*sclass) == qore_class_private::get(*cls)) {
+                    // issue #6710: a class cannot inherit itself, so the name of the class in its own namespace
+                    // names another class of the name: it is resolved without the current namespace, as it was
+                    // before (ex: "namespace N { class C inherits C {} }" inherits a class C of the root namespace)
+                    NamespaceParseContextHelper nspch(nullptr);
+                    sclass = qore_root_ns_private::parseFindClass(loc, cstr, false);
+                }
+                if (!sclass && raise_error) {
+                    parse_error(*loc, "reference to undefined class '%s'", cstr);
+                }
                 if (sclass) {
                     assert(sclass->priv);
                     printd(5, "BCNode::tryResolveClass() %s inheriting %s (%p)\n", cls->getName(), cstr, sclass);

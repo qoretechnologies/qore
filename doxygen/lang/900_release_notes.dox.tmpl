@@ -2425,6 +2425,9 @@
       command, can be destroyed and its pseudo-methods called: its C++ destructor and the method lookup no longer
       raise \c PROGRAM-ERROR; its methods still do
       (<a href="https://github.com/qoretechnologies/qore/issues/6752">issue 6752</a>)
+    - a parent class or hashdecl given without a namespace path in a namespace is resolved in the namespace of the
+      inheriting class or hashdecl (see @ref parent_class_name_resolution and @ref hashdecl_inheritance_rules), where
+      one of the same name in another namespace could be inherited instead (issue #6710)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)
