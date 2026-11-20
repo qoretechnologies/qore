@@ -111,7 +111,7 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         addTestCase("the first error in stateful input", \statefulOrderTest());
         addTestCase("latin1 mode with many invalid bytes", \latin1ManyTest());
         addTestCase("bytes not defined in the source encoding", \undefinedTest());
-        addTestCase("valid input of a multi-byte encoding is converted", \multiByteValidTest());
+        addTestCase("a multi-byte encoding by its other names, and a probed one", \multiByteValidTest());
         set_return_value(main());
     }
 
@@ -220,7 +220,7 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         foreach binary data in (<41812042>, <41f04042>, <41f9fc42>) {
             string s = binary_to_string(data, "Shift_JIS");
             assertFalse(s.isEncodingValid(), data.toHex());
-            *hash<ExceptionInfo> ex = getError(sub () { convert_encoding(s, "UTF-8"); });
+            *hash<ExceptionInfo> ex = getError(string sub () { return convert_encoding(s, "UTF-8"); });
             assertEq("ENCODING-CONVERSION-ERROR", ex.err, data.toHex());
             assertRegex("byte offset 1", ex.desc, data.toHex());
         }
@@ -518,44 +518,75 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
     #! input that the platform's iconv decodes is converted: JOHAB "D9 31" is U+3000, whose trail byte 0x31 is in the
     #! JOHAB range 0x31 - 0x7e (qore#6796, #6665)
     multiByteValidTest() {
-        # the encoding, its bytes, their text, and whether its character functions are those of its definition (the
-        # other names that iconv implementations know get the character functions of the encoding (qore#6796), and
-        # the input of a conversion from an encoding whose family was found by probing, such as glibc's T.61, whose
-        # diacritic prefixes make it look like a double-byte encoding, is left to iconv)
-        list<hash<auto>> cases = (
-            {"enc": "JOHAB", "data": <41d93142>, "text": "A\u{3000}B", "defined": True},
-            {"enc": "MSCP1361", "data": <41d93142>, "text": "A\u{3000}B", "defined": True},
-            # a C1 control character of EUC-JP or EUC-KR
-            {"enc": "EUCJP", "data": <418142>, "text": "A\u{81}B", "defined": True},
-            {"enc": "UJIS", "data": <418142>, "text": "A\u{81}B", "defined": True},
-            {"enc": "eucJP-win", "data": <418142>, "text": "A\u{81}B", "defined": True},
-            {"enc": "OSF00030010", "data": <418142>, "text": "A\u{81}B", "defined": True},
-            {"enc": "EUCKR", "data": <418142>, "text": "A\u{81}B", "defined": True},
-            {"enc": "OSF0004000A", "data": <418142>, "text": "A\u{81}B", "defined": True},
-            {"enc": "T.61", "data": <41804142>, "text": "A\u{80}AB", "defined": False},
+        # an encoding of a multi-byte family whose definition Qore knows, by any name that iconv implementations know
+        # for it, also with conversion flags, has the character functions of its definition, which check the input of
+        # its conversions on every platform (qore#6796): the encoding, its bytes, and the number of characters that
+        # they are, or -1 if they are no characters of the encoding, which its conversions refuse
+        list<list<auto>> defined = (
+            # JOHAB (glibc: also MSCP1361)
+            ("JOHAB", <41d93142>, 3), ("MSCP1361", <41d93142>, 3),
+            # a C1 control character of EUC-JP and EUC-KR (JIS X 0208:1997 Annex 1, KS X 2901); that iconv decodes
+            # it is not checked: glibc's does, musl's EUC-JP refuses it, and musl's EUC-KR is CP949
+            ("EUCJP", <418142>, 3), ("UJIS", <418142>, 3), ("eucJP-win", <418142>, 3), ("OSF00030010", <418142>, 3),
+            ("EUCKR", <418142>, 3), ("OSF0004000A", <418142>, 3),
+            # EUC-CN has no C1 character
+            ("GB2312", <418142>, -1), ("EUC-CN", <418142>, -1), ("CN-GB", <418142>, -1), ("GB2312", <41b0a142>, 3),
+            # glibc's iconv decodes the byte 0x80 of Big5 (also CN-BIG5) as U+0080
+            ("CN-BIG5", <418042>, -1), ("GB18030", <41812042>, -1), ("GB13000", <41814042>, 3),
+            ("MSCP949", <41814142>, 3),
+            # the Shift_JIS forms, also with conversion flags: musl's iconv decodes 81 20 as U+301C, Apple's the
+            # user-defined area f0 - f9 of CP932
+            ("SJIS//IGNORE", <41812042>, -1), ("Shift_JIS//TRANSLIT", <41f04042>, -1), ("MS932", <41f04042>, 3),
+            ("SJIS-WIN", <41f04042>, 3),
         );
         list<string> unavailable = ();
-        foreach hash<auto> c in (cases) {
-            string label = c.enc + " " + c.data.toHex();
-            string s = binary_to_string(c.data, c.enc);
-            string u;
-            try {
-                u = convert_encoding(s, "UTF-8");
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "ENCODING-CONVERSION-ERROR" && ex.desc =~ /cannot convert from/) {
-                    unavailable += c.enc;
-                    continue;
-                }
-                rethrow;
+        foreach list<auto> c in (defined) {
+            string label = c[0] + " " + c[1].toHex();
+            if (!converts(c[0])) {
+                unavailable += c[0];
+                continue;
             }
-            assertEq(c.text, u, label);
-            if (c.defined) {
+            string s = binary_to_string(c[1], c[0]);
+            if (c[2] < 0) {
+                assertFalse(s.isEncodingValid(), label);
+                *hash<ExceptionInfo> ex = getError(string sub () { return convert_encoding(s, "UTF-8"); });
+                assertEq("ENCODING-CONVERSION-ERROR", ex.err, label);
+                assertRegex("byte offset 1", ex.desc, label);
+            } else {
                 assertTrue(s.isEncodingValid(), label);
-                assertEq(c.text.length(), s.length(), label);
+                assertEq(c[2], s.length(), label);
             }
         }
-        if (unavailable.size() == cases.size()) {
+        # the conversions that every iconv that has the encoding decodes
+        foreach list<auto> c in (("JOHAB", <41d93142>, "A\u{3000}B"), ("MSCP1361", <41d93142>, "A\u{3000}B")) {
+            if (converts(c[0])) {
+                assertEq(c[2], convert_encoding(binary_to_string(c[1], c[0]), "UTF-8"), c[0]);
+            }
+        }
+        # the input of a conversion from an encoding whose family was found by probing its conversions is left to
+        # iconv: glibc's T.61 looks like a double-byte encoding (its diacritic prefixes), and its family refuses the C1
+        # control characters, which are characters of T.61, which iconv converts (and so isEncodingValid() accepts)
+        if (converts("T.61")) {
+            string s = binary_to_string(<41804142>, "T.61");
+            assertTrue(s.isEncodingValid());
+            assertEq("A\u{80}AB", convert_encoding(s, "UTF-8"));
+        } else {
+            unavailable += "T.61";
+        }
+        if (unavailable.size() == defined.size() + 1) {
             testSkip("the iconv of the platform has none of the encodings: " + unavailable.join(", "));
+        }
+    }
+
+    #! returns True if the platform's iconv converts from the encoding
+    static bool converts(string enc) {
+        try {
+            return convert_encoding(binary_to_string(<41>, enc), "UTF-8") == "A";
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ENCODING-CONVERSION-ERROR" && ex.desc =~ /cannot convert from/) {
+                return False;
+            }
+            rethrow;
         }
     }
 

@@ -107,9 +107,10 @@ int main(int argc, char** argv) {
     if (encs.empty()) {
         // the encodings, also by other names that iconv knows; EUC-TW has no character functions of a family (its
         // four-byte characters are handled as stateful text), which is reported
-        encs = {"Shift_JIS", "CP932", "EUC-JP", "EUCJP", "eucJP-ms", "eucJP-win", "UJIS", "OSF00030010", "EUC-KR",
-            "EUCKR", "OSF0004000A", "CP949", "UHC", "JOHAB", "MSCP1361", "GBK", "CP936", "GB2312", "GB18030", "Big5",
-            "BIG5HKSCS", "Big5-HKSCS", "CP950", "EUC-TW"};
+        encs = {"Shift_JIS", "SJIS//IGNORE", "CP932", "MS932", "SJIS-WIN", "SJIS-OPEN", "EUC-JP", "EUCJP", "eucJP-ms",
+            "eucJP-win", "UJIS", "OSF00030010", "EUC-KR", "EUCKR", "OSF0004000A", "CP949", "UHC", "MSCP949",
+            "OSF100203B5", "JOHAB", "MSCP1361", "GBK", "CP936", "GB13000", "GB2312", "EUC-CN", "CN-GB", "GB18030",
+            "Big5", "CN-BIG5", "BIG5HKSCS", "Big5-HKSCS", "CP950", "EUC-TW"};
     }
     for (const char* name : encs) {
         const QoreEncoding* enc = QoreEncodingManager::findCreate(name);

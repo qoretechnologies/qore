@@ -38,9 +38,11 @@ class MultiByteIconvParityTest inherits QUnit::Test {
             "BIG5-HKSCS": {"leads": "80", "count": 130},
             "BIG5HKSCS": {"leads": "80", "count": 130},
             "CP950": {"leads": "80", "count": 130},
+            "CN-BIG5": {"leads": "80", "count": 130},
             # Apple's libiconv decodes the user-defined area of CP932 as private use characters: each of the lead
             # bytes 0xf0 - 0xf9 followed by each of the 188 trail bytes
             "SHIFT_JIS": {"leads": "f0,f1,f2,f3,f4,f5,f6,f7,f8,f9", "count": 1880},
+            "SJIS//IGNORE": {"leads": "f0,f1,f2,f3,f4,f5,f6,f7,f8,f9", "count": 1880},
         };
     }
 
