@@ -29,6 +29,14 @@
     send buffer) is the deterministic signal that the server can take no more data.  It does not mean that the client
     has received any of it: the server sends the data asynchronously, so the client's receipt is waited for with
     dbg_http_stream_credit_wait_deferred() in debug builds (see fillStream()).
+
+    Network emulation: the HTTP/3 cases are not meant to pass on a path with netem jitter that is large compared with
+    the RTT (for example "delay 2ms 2ms" on loopback) or with netem "reorder" (which sends a packet without the delay,
+    so it overtakes every packet in flight).  There ngtcp2 declares most packets lost, its retransmissions arrive with
+    the originals, and the receiver's glitch rate limiter (ngtcp2's denial-of-service protection; burst 10000, 330
+    per second) closes the connection with ERR_INTERNAL (rv=-228).  ngtcp2's defaults are kept: on WAN-like paths
+    (RTT 20-100 ms, 0.1-1% loss, jitter of 1-2% of the delay) the limiter was never exhausted (8 runs each, 2026-11).
+    Those runs do not fit the test's time budget at WAN RTTs, as its transfers are sized for loopback.
 */
 
 %modern
