@@ -192,11 +192,13 @@ public:
    /** An encoding of the multi-byte families that %Qore recognizes (Shift_JIS, Big5, GBK, EUC-JP and the others of
        \c charset.cpp), whose character function (QoreEncoding::getCharLen()) is the check of
        <tt><string>::isEncodingValid()</tt> (q_string_invalid_offset()); not UTF-8, a Unicode encoding form or a
-       stateful encoding, which are checked otherwise (qore#6796)
+       stateful encoding, which are checked otherwise; not an encoding whose family was found by probing its
+       conversions, whose character functions are an approximation of its characters (ex: glibc's \c "T.61"), and
+       whose input is left to iconv (see qore_encoding_private::defined_multibyte) (qore#6796)
    */
    DLLLOCAL static bool isStructuredMultiByte(const QoreEncoding* enc) {
       return enc != QCS_UTF8 && enc->isMultiByte() && !isUnicodeForm(enc)
-         && !qore_encoding_private::isStateful(enc);
+         && !qore_encoding_private::isStateful(enc) && qore_encoding_private::get(*enc)->defined_multibyte;
    }
 
    //! Returns true if the platform's iconv rejects values above U+10FFFF and unpaired surrogates in Unicode forms

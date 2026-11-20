@@ -543,6 +543,7 @@ QoreEncodingManager::QoreEncodingManager() {
             mb_getLength<DBCS_get_char_len<&gbk_bytes>>, mb_getByteLen<DBCS_get_char_len<&gbk_bytes>>,
             mb_getCharPos<DBCS_get_char_len<&gbk_bytes>>, DBCS_get_char_len<&gbk_bytes>);
         qore_encoding_private::get(*qcs)->needs_boundary_check = true;
+        qore_encoding_private::get(*qcs)->defined_multibyte = true;
         emap[qcs->getCode()] = qcs;
         QCS_WINDOWS_936 = qcs;
     }
@@ -1581,6 +1582,12 @@ const struct {
     {"Windows-936", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<&gbk_bytes>, 2, false)},
     {"csBig5", QORE_MULTIBYTE_FAMILY("Big5", DBCS_get_char_len<&big5_bytes>, 2, false)},
     {"BIG-FIVE", QORE_MULTIBYTE_FAMILY("Big5", DBCS_get_char_len<&big5_bytes>, 2, false)},
+    // glibc: eucJP-win (eucJP-ms), UJIS and OSF00030010 (EUC-JP), OSF0004000A (EUC-KR), MSCP1361 (JOHAB)
+    {"eucJP-win", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"UJIS", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"OSF00030010", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"OSF0004000A", QORE_MULTIBYTE_FAMILY("EUC-KR", (EUC_get_char_len<true, false>), 2, false)},
+    {"MSCP1361", QORE_MULTIBYTE_FAMILY("JOHAB", DBCS_get_char_len<&johab_bytes>, 2, false)},
 };
 #undef QORE_MULTIBYTE_FAMILY
 
@@ -1813,6 +1820,7 @@ void qore_encoding_private::probe() {
         setCharFunctions(windows_sjis ? form_functions::get<SJIS_get_char_len<true>, nullptr>(1, 2)
             : form_functions::get<SJIS_get_char_len<false>, nullptr>(1, 2));
         needs_boundary_check = true;
+        defined_multibyte = true;
         ascii_compat = false;
         return;
     }
@@ -1934,6 +1942,7 @@ void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
         // an encoding whose definition Qore knows gets the characters of its definition
         if (const multibyte_family* named = get_named_multibyte_family(code)) {
             f = named;
+            defined_multibyte = true;
         }
         fcharlen = f->charlen;
         flength = f->length;
