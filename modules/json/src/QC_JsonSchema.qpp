@@ -258,7 +258,7 @@ bool JsonSchema::validate(auto data, bool throw_on_error = False) {
                 if (error_msg.getType() == NT_STRING) {
                     QoreStringValueHelper error_msg_str(error_msg);
                     msg->concat(": ");
-                    msg->concat(error_msg_str->c_str());
+                    msg->concat(*error_msg_str, xsink);
                 }
             }
         }
