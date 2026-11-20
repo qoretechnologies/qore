@@ -1432,6 +1432,9 @@ public:
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const;
 
 private:
+#ifdef DEBUG
+    friend class QuicPacketPacingTest;
+#endif
     DLLLOCAL QuicSession();
 
     //! Initialize client-side connection

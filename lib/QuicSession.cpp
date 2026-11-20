@@ -2471,6 +2471,8 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
     // while catching any infinite-loop bugs.
     constexpr int MAX_WRITE_ITERATIONS = 4096;
     int iterations = 0;
+    const size_t burst = std::min(QUIC_MAX_WRITE_BURST_BYTES, ngtcp2_conn_get_send_quantum2(conn_));
+    const size_t max_packet = ngtcp2_conn_get_path_max_tx_udp_payload_size2(conn_);
 
     for (;;) {
         if (++iterations > MAX_WRITE_ITERATIONS) {
@@ -2480,16 +2482,10 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
             return -1;
         }
 
-        // Burst cap: limit per-call output to prevent overflowing the peer's
-        // UDP receive buffer.  On Linux, SO_RCVBUF is capped by
-        // net.core.rmem_max (default ~208KB); sending a burst larger than this
-        // causes silent packet loss on localhost, forcing PTO-based recovery
-        // that can take 30+ seconds on slow platforms (QEMU, constrained CI).
-        // 128KB leaves headroom for in-flight data already in the buffer.
-        // Remaining data is sent in the next continuePoll() cycle — since
-        // packets are now in-flight, ngtcp2 sets a PTO timer that bounds the
-        // poll() wait, guaranteeing forward progress.
-        if (total_bytes >= QUIC_MAX_WRITE_BURST_BYTES) {
+        // Leave the next datagram for the next batch if it would exceed ngtcp2's pacing quantum or the
+        // receive-buffer limit. A fresh batch always has room for the path's maximum UDP payload.
+        const size_t space = std::min(sizeof(pkt_buf_), burst - total_bytes);
+        if (total_packets && space < max_packet) {
             ASYNC_IO_TRACE("QuicSession::writePacketsLocked BURST_CAP session=%lld total_packets=%d total_bytes=%zu\n",
                 (long long)getSessionId(), total_packets, total_bytes);
             break;
@@ -2539,7 +2535,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
 
         ngtcp2_ssize ndatalen = -1;
         ngtcp2_ssize nwrite = ngtcp2_conn_writev_stream(
-            conn_, &ps.path, &pi, pkt_buf_, sizeof(pkt_buf_),
+            conn_, &ps.path, &pi, pkt_buf_, space,
             &ndatalen, flags, stream_id,
             reinterpret_cast<const ngtcp2_vec*>(vec),
             static_cast<size_t>(sveccnt), ts);
@@ -2596,13 +2592,14 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 // Connection is shutting down — no more packets can be written.
                 // This is expected after idle timeout or peer-initiated close.
                 pending_write_.store(false, std::memory_order_release);
-                return total_packets;
+                break;
             default:
                 xsink->raiseException("QUIC-WRITE-ERROR",
                     "ngtcp2_conn_writev_stream failed: %s",
                     ngtcp2_strerror(static_cast<int>(nwrite)));
                 return -1;
             }
+            break; // closing or draining
         }
 
         if (ndatalen >= 0 && h3_conn_) {
@@ -2620,13 +2617,13 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 datav.len = dgram_data.size();
                 int accepted = 0;
                 ngtcp2_ssize dg_nwrite = ngtcp2_conn_writev_datagram(
-                    conn_, &ps.path, &pi, pkt_buf_, sizeof(pkt_buf_),
+                    conn_, &ps.path, &pi, pkt_buf_, space,
                     &accepted, NGTCP2_WRITE_DATAGRAM_FLAG_NONE,
                     dgram_id, &datav, 1, ts);
                 if (dg_nwrite < 0) {
                     if (dg_nwrite == NGTCP2_ERR_CLOSING || dg_nwrite == NGTCP2_ERR_DRAINING) {
                         pending_write_.store(false, std::memory_order_release);
-                        return total_packets;
+                        break;
                     }
                     // Non-fatal datagram write error — skip this datagram
                     pending_datagrams_.pop_front();
@@ -2638,6 +2635,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 if (dg_nwrite > 0) {
                     packets.addPacket(pkt_buf_, static_cast<size_t>(dg_nwrite));
                     ++total_packets;
+                    total_bytes += static_cast<size_t>(dg_nwrite);
                     continue;
                 }
             }
@@ -2699,6 +2697,11 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         }
     }
 
+    // Account for the complete batch at its write timestamp, as ngtcp2_conn_write_aggregate_pkt() does.
+    // Its pacing timer is then among the deadlines returned to the poll operation.
+    if (total_packets) {
+        ngtcp2_conn_update_pkt_tx_time(conn_, ts);
+    }
     ASYNC_IO_TRACE("QuicSession::writePacketsLocked EXIT session=%lld total_packets=%d total_bytes=%zu iterations=%d pending_write=%d\n",
         (long long)getSessionId(), total_packets, total_bytes, iterations,
         (int)pending_write_.load(std::memory_order_acquire));

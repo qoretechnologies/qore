@@ -22315,6 +22315,38 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 }
 
 #ifdef DEBUG
+//! A freshly generated QUIC batch has already armed ngtcp2's pacing timer before the poll deadline is read.
+class QuicPacketPacingTest {
+public:
+    static void run(UnitTestCounters& c) {
+        sockaddr_in local = {};
+        local.sin_family = AF_INET;
+        local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        local.sin_port = htons(12345);
+        sockaddr_in peer = local;
+        peer.sin_port = htons(443);
+        ExceptionSink xsink;
+        auto session = QuicSession::createClient(nullptr, &xsink, "localhost", 443,
+            reinterpret_cast<const sockaddr*>(&local), sizeof(local),
+            reinterpret_cast<const sockaddr*>(&peer), sizeof(peer));
+        UT_ASSERT(c, session && !xsink, "QUIC pacing: a client session is created");
+        if (session && !xsink) {
+            QuicPacketBatch packets;
+            auto result = session->processTimerAndWrite(packets, &xsink);
+            UT_ASSERT(c, !result.error && !xsink && !packets.empty(), "QUIC pacing: the client writes its Initial");
+            if (!result.error && !xsink && !packets.empty()) {
+                // No socket or peer is involved. Accounting for the same batch at its own timestamp is a no-op
+                // once the write has accounted for it. Previously this moved the deadline from loss recovery to
+                // pacing. Both deadlines are transport values, independent of how the test thread is scheduled.
+                ngtcp2_conn_update_pkt_tx_time(session->conn_, session->last_tx_ts_);
+                UT_ASSERT_EQ(c, session->getExpiry(), result.next_expiry,
+                    "QUIC pacing: the poll deadline already includes the sent batch");
+            }
+        }
+        xsink.clear();
+    }
+};
+
 //! The datagrams that sendQuicPacketsBatch() counts as sent and does not send are taken back on every return
 /** The datagrams are counted before they are sent, for the QUIC test clock (see qore_quic_test_advance_clock()).  A
     send that failed with nothing sent returned without taking them back, so the clock waited for datagrams that were
@@ -22757,6 +22789,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runOrphanRegistrations(c);
     QoreCaresSocketsTest::run(c);
     QoreCaresCheckTest::run(c);
+    QuicPacketPacingTest::run(c);
     ut_quic_send_batch_take_back(c);
 #ifndef _Q_WINDOWS
     HappyEyeballsLayeredConnectTest::run(c);
