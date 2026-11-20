@@ -997,8 +997,9 @@ compiler's outlining pass no longer calls into it.
 
 Both halves of the binary format belong in the fingerprint, not just the
 writer. The reader checks that a `.qo` is within its supported version
-range. Batch AL sets the minimum to v48, so artifacts from AK (v47) and
-earlier require recompilation. A reader change within the supported range
+range. Batch AN sets the minimum to v50, so artifacts from AM (v49) and
+earlier require recompilation; a qcc executable checks the version of the
+program image that it embeds when it starts, before it reads anything else. A reader change within the supported range
 still needs to invalidate cached artifacts when it changes their interpretation.
 
 `qcc` owns the reusable build-sidecar contract for `.qo` and aggregate outputs.

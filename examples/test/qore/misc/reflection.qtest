@@ -1865,10 +1865,10 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedConstructorVariantCount("TransformOutputStream", ("output_stream", "transform"));
         assertNamedClassMethodVariantCount("TransformOutputStream", "write", ("data",));
         assertNamedConstructorVariantCount("EncodingConversionInputStream",
-            ("input_stream", "source_encoding", "target_encoding"));
+            ("input_stream", "source_encoding", "target_encoding", "encoding_errors"));
         assertNamedClassMethodVariantCount("EncodingConversionInputStream", "read", ("limit",));
         assertNamedConstructorVariantCount("EncodingConversionOutputStream",
-            ("output_stream", "source_encoding", "target_encoding"));
+            ("output_stream", "source_encoding", "target_encoding", "encoding_errors"));
         assertNamedClassMethodVariantCount("EncodingConversionOutputStream", "write", ("data",));
         assertNamedConstructorVariantCount("InputStreamLineIterator",
             ("input_stream", "encoding", "line_separator", "trim_line", "buffer_size", "encoding_errors"));

@@ -1591,7 +1591,8 @@ public:
         for (QoreDbiForkObject* o = head; o; o = o->fork_next) {
             o->forkChild();
         }
-        l.reinitAfterFork();
+        // held by this thread since prepare(): released (issue #6817)
+        l.unlock();
     }
 
 private:

@@ -96,20 +96,30 @@ string sub number_typed(number n) {
 }
 
 #! the dense int64 ColumnarResult column built from floats and numbers, and the column names of the buffer errors
+/** a value outside the range of an int64 is refused with COLUMNAR-RESULT-ERROR instead of saturating (qore#6681)
+*/
 string sub columnar() {
     list<auto> l = ();
     list<auto> v = Floats + Numbers;
     foreach string native_type in (("bigint", "numeric(10,0)")) {
-        ColumnarResult r = ColumnarResult::fromColumnHash({"i": v}, {"i": {"native_type": native_type}});
-        l += sprintf("%y", r.toColumnHash().i.toList());
+        try {
+            ColumnarResult r = ColumnarResult::fromColumnHash({"i": v}, {"i": {"native_type": native_type}});
+            l += sprintf("no exception: %y", r.toColumnHash().i.toList());
+        } catch (hash<ExceptionInfo> ex) {
+            l += ex.err + ": " + ex.desc;
+        }
     }
     {
         list<hash<auto>> rows = ();
         foreach auto x in (v) {
             rows += {"i": x};
         }
-        ColumnarResult r = ColumnarResult::fromRows(rows, {"i": {"native_type": "bigint"}});
-        l += sprintf("%y", r.toColumnHash().i.toList());
+        try {
+            ColumnarResult r = ColumnarResult::fromRows(rows, {"i": {"native_type": "bigint"}});
+            l += sprintf("no exception: %y", r.toColumnHash().i.toList());
+        } catch (hash<ExceptionInfo> ex) {
+            l += ex.err + ": " + ex.desc;
+        }
     }
     try {
         ColumnarResult r = ColumnarResult::fromColumnHash({"col_f": (1.0, "x")}, {"col_f": {"type": NT_FLOAT}});

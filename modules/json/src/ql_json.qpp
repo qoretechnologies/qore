@@ -709,6 +709,8 @@ string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONL
     @throw JSON-PARSE-ERROR syntax error parsing JSON string, for example a number that does not have the form of
     RFC 8259 section 6, such as \c "01", \c ".5", \c "1." or \c "1e", or text after the JSON value; or an object
     key has a NUL character (\c \\u0000), which a hash key cannot hold
+    @throw INVALID-ENCODING the JSON string is not valid in its encoding (ex: a string tagged UTF-8 with bytes that are
+    not valid UTF-8); the description has the byte offset of the first invalid byte sequence
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
     @par Example:
@@ -717,12 +719,20 @@ string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONL
     @note An integer outside the range of an \c int is returned as a \c number, which keeps its value; see
     @ref jsonserializationguide
 
+    @note A JSON string in a multi-byte encoding other than UTF-8 (ex: \c Shift_JIS, \c UTF-16), in an encoding that
+    is not compatible with ASCII (ex: EBCDIC) or in a stateful encoding (ex: \c ISO-2022-JP) is converted to UTF-8 to
+    be parsed, and the strings returned are UTF-8; the byte order mark of a JSON string in the generic \c UTF-16
+    encoding gives its byte order; the strings of a JSON string in UTF-8 or another single-byte encoding compatible
+    with ASCII have its encoding
+
     @see @ref jsonserializationguide
 
     @since
     - json 1.5 as a replacement for deprecated camel-case parseJSON()
     - json 3.0 numbers are parsed as RFC 8259 section 6 defines them, and an integer outside the range of an \c int
       is returned as a \c number
+    - json 3.0 the JSON string must be valid in its encoding, and a JSON string in a multi-byte encoding other than
+      UTF-8, in an encoding not compatible with ASCII or in a stateful encoding is converted to UTF-8 to be parsed
  */
 auto parse_json(string json_str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return parse_json(json_str, xsink);
@@ -740,6 +750,7 @@ nothing parseJSON() [flags=RUNTIME_NOOP,DEPRECATED] {
     @return the %Qore data structure corresponding to the input string
 
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw INVALID-ENCODING the JSON string is not valid in its encoding; see parse_json()
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
     @see @ref jsonserializationguide
@@ -747,7 +758,7 @@ nothing parseJSON() [flags=RUNTIME_NOOP,DEPRECATED] {
     @deprecated use parse_json(); camel-case function names were deprecated in json 1.5
  */
 auto parseJSON(string json_str) [flags=RET_VALUE_ONLY,DEPRECATED] {
-    return parse_json(json_str, xsink);
+    return parse_json(json_str, xsink, "parseJSON()");
 }
 ///@}
 
@@ -1481,6 +1492,7 @@ string jwt_encode(hash<auto> claims, string key, *string algorithm, *hash<auto> 
     @throw JWT-ERROR if decoding fails or verification fails due to missing key/unsupported algorithm
     @throw BASE64-PARSE-ERROR if any token segment is not valid base64url
     @throw JSON-ERROR if decoded header or payload is not valid JSON
+    @throw INVALID-ENCODING if the decoded header or payload is not valid UTF-8 (since json 3.0)
 
     @since json 1.11
 */
@@ -1510,11 +1522,11 @@ hash<auto> jwt_decode(string token, *string key, bool verify_signature = True) [
         return QoreValue();
     }
 
-    ValueHolder header_val(parse_json(*header_json, xsink), xsink);
+    ValueHolder header_val(parse_json(*header_json, xsink, "jwt_decode()", "JWT header"), xsink);
     if (*xsink || !header_val) {
         return QoreValue();
     }
-    ValueHolder payload_val(parse_json(*payload_json, xsink), xsink);
+    ValueHolder payload_val(parse_json(*payload_json, xsink, "jwt_decode()", "JWT payload"), xsink);
     if (*xsink || !payload_val) {
         return QoreValue();
     }

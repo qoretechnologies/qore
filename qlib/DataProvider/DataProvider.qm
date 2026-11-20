@@ -1750,6 +1750,17 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - added optional processing-locality and billing-model metadata to apps and actions: the \c processing
+      (@ref DataProvider::DataProviderProcessingInfo "DataProviderProcessingInfo") and \c billing
+      (@ref DataProvider::DataProviderBillingInfo "DataProviderBillingInfo") fields of
+      @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo" and the action info, whose enumerated values
+      (@ref DataProvider::DataProviderProcessingLocalityValues "DataProviderProcessingLocalityValues",
+      @ref DataProvider::DataProviderBillingModelValues "DataProviderBillingModelValues",
+      @ref DataProvider::DataProviderBillingUnitValues "DataProviderBillingUnitValues") are checked at registration;
+      @ref DataProvider::DataProviderActionCatalog::getActionProcessing() "DataProviderActionCatalog::getActionProcessing()"
+      and @ref DataProvider::DataProviderActionCatalog::getActionBilling() "getActionBilling()" return an action's
+      values over its app's, field by field; rate amounts are not part of the metadata
+      (<a href="https://github.com/qoretechnologies/qore/issues/6736">issue 6736</a>)
     - added @ref DataProvider::EncodingErrorsOptionInfo "EncodingErrorsOptionInfo", the \c encoding_errors option
       of the data providers that read text (see @ref encoding_errors)
       (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
@@ -1815,6 +1826,17 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       instead of its own
     - \c DataProviderBulkRecordIterator::nextImpl(), which is not used, raises \c INVALID-OPERATION instead of
       falling off its end without a return value (issue #5940)
+    - the callbacks of the host and the process-wide state of @ref DataProvider::AbstractDataProvider
+      "AbstractDataProvider" and @ref DataProvider::DataProvider "DataProvider" are no longer visible to subclasses; a
+      subclass resolves dynamic values with the new
+      @ref DataProvider::AbstractDataProvider::valueNeedsResolution() "AbstractDataProvider::valueNeedsResolution()" and
+      @ref DataProvider::AbstractDataProvider::resolveValue() "AbstractDataProvider::resolveValue()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/6748">issue 6748</a>)
+    - added @ref DataProvider::DataProvider::checkSharedRegistration() "DataProvider::checkSharedRegistration()" and
+      @ref DataProvider::DataProvider::mayRegisterShared() "DataProvider::mayRegisterShared()", with which the
+      standard modules refuse changes of their process-wide registries to sandboxed code; the process-wide type cache
+      (@ref DataProvider::DataProvider::getTypeCache() "DataProvider::getTypeCache()") refuses them too
+      (<a href="https://github.com/qoretechnologies/qore/issues/6747">issue 6747</a>)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

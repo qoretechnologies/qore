@@ -34,10 +34,13 @@ public class JinaDataProvider inherits JinaDataProviderCommon {
         };
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
-        static Mutex child_lock();
+    }
 
+    private {
         const DefaultChildMap = {
             "read-url": Class::forName("JinaDataProvider::JinaReaderDataProvider"),
             "search-web": Class::forName("JinaDataProvider::JinaSearchDataProvider"),
@@ -51,6 +54,10 @@ public class JinaDataProvider inherits JinaDataProviderCommon {
             "rerank":
                 Class::forName("JinaDataProvider::JinaRerankDataProvider"),
         };
+    }
+
+    private:internal {
+        static Mutex child_lock();
     }
 
     #! Creates the root provider from an authenticated transport
@@ -75,8 +82,12 @@ public class JinaDataProvider inherits JinaDataProviderCommon {
     /** @param pathname the new child name
         @param cls the provider class
         @throw JINA-CHILD-ERROR the name is already registered
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerChild(string pathname, Reflection::Class cls) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("register a child data provider");
         AutoLock al(child_lock);
         if (childMap{pathname} || JinaSchema::getActionSet().getOperation(pathname)) {
             throw "JINA-CHILD-ERROR", sprintf("child %y already registered", pathname);

@@ -103,6 +103,9 @@ public class BedrockSchema {
     private {
         static list<OpenApi3::OpenApi3Schema> schemas = ();
         static list<RestSchemaActions::RestSchemaActionSet> action_sets = ();
+    }
+
+    private:internal {
         static Mutex lck();
     }
 

@@ -665,79 +665,6 @@ static const AbstractQoreZoneInfo* readAOTDateZone(const char* zone_name) {
     return zone;
 }
 
-//! Return a class path suitable for AOT instruction metadata.
-static std::string instRegistryGetClassPath(const QoreClass* qc, bool pseudo = false) {
-    if (!qc) {
-        return std::string();
-    }
-    // Pseudo-classes are not attached to the namespace tree, so
-    // getNamespacePath() can be empty. getPath() returns the constructor path
-    // used by instRegistryFindPseudoClassByPath() (for example "::Qore::<binary>").
-    return pseudo ? qc->getPath() : qc->getNamespacePath();
-}
-
-static void instRegistryAppendMethodVariantRef(std::string& method_name,
-        const AbstractQoreFunctionVariant* variant, bool pseudo) {
-    if (!variant) {
-        return;
-    }
-    AbstractFunctionSignature* sig = variant->getSignature();
-    if (!sig) {
-        return;
-    }
-    const QoreClass* variant_class = variant->getClass();
-    method_name.push_back('\n');
-    method_name.append(instRegistryGetClassPath(variant_class, pseudo));
-    method_name.push_back('\n');
-    method_name.append(sig->getSignatureText());
-}
-
-struct InstRegistryMethodRef {
-    const char* method_name = nullptr;
-    const char* variant_class_path = nullptr;
-    const char* sig_text = nullptr;
-    std::string method_name_storage;
-    std::string variant_class_storage;
-    std::string encoded_storage;
-    //! the explicit type arguments of the call, starting with QORE_AOT_CALL_TYPE_ARGS_MARKER, if any (qore#5865)
-    std::string type_args;
-
-    InstRegistryMethodRef(const char* encoded) : method_name(encoded) {
-        if (!encoded) {
-            return;
-        }
-        if (const char* type_args_start = qore_aot_find_call_type_args(encoded)) {
-            type_args = type_args_start;
-            encoded_storage.assign(encoded, type_args_start - encoded);
-            encoded = encoded_storage.c_str();
-            method_name = encoded;
-        }
-        const char* first_sep = strchr(encoded, '\n');
-        if (!first_sep) {
-            return;
-        }
-        method_name_storage.assign(encoded, first_sep - encoded);
-        method_name = method_name_storage.c_str();
-
-        const char* payload = first_sep + 1;
-        // the variant's class reference ends the payload's first line, or its second one for a class of a module;
-        // the signature text that follows has the default values of the parameters, whose strings can have newlines
-        // (qore#6026)
-        const char* second_sep = qore_aot_find_class_ref_end(payload);
-        if (!second_sep) {
-            // Backward-compatible form: method_name + "\n" + signature.
-            sig_text = payload;
-            return;
-        }
-
-        variant_class_storage.assign(payload, second_sep - payload);
-        if (!variant_class_storage.empty()) {
-            variant_class_path = variant_class_storage.c_str();
-        }
-        sig_text = second_sep + 1;
-    }
-};
-
 //! Returns the explicit type arguments of the call node of a call instruction read from serialized IR (qore#5865)
 static const QoreTypeParamInstantiation* instRegistryCallTypeArgs(const QoreValue& expr) {
     const auto* call = expr.hasNode() ? dynamic_cast<const FunctionCallBase*>(expr.getInternalNode()) : nullptr;
@@ -748,17 +675,17 @@ static const QoreTypeParamInstantiation* instRegistryCallTypeArgs(const QoreValu
 /** @return false with the error in the context if they cannot be resolved
 */
 template <typename T>
-static bool instRegistrySetMethodTypeArgs(AOTInstReadCtx& ctx, T& ci, const InstRegistryMethodRef& method_ref) {
-    if (method_ref.type_args.empty()) {
+static bool instRegistrySetMethodTypeArgs(AOTInstReadCtx& ctx, T& ci, const QoreAOTDotTarget& target) {
+    if (target.type_args.empty()) {
         return true;
     }
     const UserVariantBase* uvb = ci.variant ? ci.variant->getUserVariantBase() : nullptr;
     auto inst = std::make_unique<QoreTypeParamInstantiation>();
     // the type arguments can name the type parameters of the code whose context is being built (qore#5733)
-    if (!qore_aot_decode_call_type_args(ctx.pgm, method_ref.type_args.c_str(),
+    if (!qore_aot_decode_call_type_args(ctx.pgm, target.type_args.c_str(),
             uvb ? uvb->getUserSignature() : nullptr, qore_aot_get_type_param_owner(), *inst)) {
         ctx.error = std::string("cannot resolve the explicit type arguments of the call of method '")
-            + (method_ref.method_name ? method_ref.method_name : "") + "'";
+            + target.name + "'";
         return false;
     }
     if (!inst->type_args.empty()) {
@@ -770,43 +697,6 @@ static bool instRegistrySetMethodTypeArgs(AOTInstReadCtx& ctx, T& ci, const Inst
 
 static const QoreClass* instRegistryFindClassByPath(QoreProgram* pgm, const char* class_path, bool pseudo) {
     return qore_aot_resolve_class_ref(pgm, class_path, pseudo);
-}
-
-static const QoreMethod* instRegistryFindMethodByName(const QoreClass* qc, const char* method_name) {
-    if (!qc || !method_name || !*method_name) {
-        return nullptr;
-    }
-    const QoreMethod* method = qc->findMethod(method_name);
-    return method ? method : qc->findStaticMethod(method_name);
-}
-
-static const AbstractQoreFunctionVariant* instRegistryFindMethodVariantByRef(
-        QoreProgram* pgm, const QoreMethod*& method, const InstRegistryMethodRef& method_ref,
-        bool pseudo) {
-    if (!method || !method_ref.sig_text) {
-        return nullptr;
-    }
-
-    const QoreMethod* variant_method = method;
-    if (method_ref.variant_class_path && *method_ref.variant_class_path) {
-        const QoreClass* variant_qc = instRegistryFindClassByPath(
-            pgm, method_ref.variant_class_path, pseudo);
-        if (variant_qc) {
-            if (const QoreMethod* m = instRegistryFindMethodByName(
-                    variant_qc, method_ref.method_name)) {
-                variant_method = m;
-            }
-        }
-    }
-
-    MethodFunctionBase* mfb = qore_method_private::get(
-        *const_cast<QoreMethod*>(variant_method))->getFunction();
-    const AbstractQoreFunctionVariant* variant = mfb
-        ? mfb->findVariantBySignatureText(method_ref.sig_text) : nullptr;
-    if (variant) {
-        method = variant_method;
-    }
-    return variant;
 }
 
 static std::string instRegistryGetFunctionCallName(const FunctionCallNode* call) {
@@ -965,12 +855,6 @@ static bool instRegistryResolveGlobalLValueRoot(AOTInstReadCtx& ctx, LVPathStep&
 // which actively hides the root cause (observed symptom: EXPR_TREE blob
 // deserialization errors in handler IR, hours wasted re-probing the writer
 // when the real fault was already known to the reader).
-//
-// The two readDotEvalMethodDirect / readInvokeDotEvalMethodDirect handlers
-// are intentional exceptions: their expr field is optional, the instruction
-// carries method_name + class_path + fallback_method_name for runtime dispatch,
-// and the local `error` is captured-but-ignored by design (see their
-// "Expr read failure is non-fatal" comments).
 
 // ============================================================================
 // Group 0: Base - No extra fields
@@ -1566,12 +1450,12 @@ static bool instRegistryWriteCheckCallTargetExpr(AOTInstWriteCtx& ctx, const Qor
             // the inline form of a method call (AOTExprKind::DOT_EVAL_TARGET): class, method (with its variant),
             // pseudo flag, receiver (none: it is the operand) and no arguments
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_TARGET));
-            std::string class_path = instRegistryGetClassPath(mc->getClass(), mc->isPseudo());
+            std::string class_path = qore_aot_encode_class_ref(mc->getClass(), mc->isPseudo());
             ctx.writer.writeStringRef(class_path.c_str());
-            std::string method_ref = mc->getName() ? mc->getName() : "";
-            instRegistryAppendMethodVariantRef(method_ref, mc->getVariant(), mc->isPseudo());
+            std::string method_ref = qore_aot_dot_method_ref(mc->getName(), mc->getMethod(), mc->getVariant(),
+                mc->isPseudo());
             ctx.writer.writeStringRef(method_ref.c_str());
-            ctx.writer.writeU8(mc->isPseudo() ? 1 : 0);
+            qore_aot_write_dot_target_family(ctx.writer, mc->getMethod(), mc->isPseudo());
             if (!ctx.writeExpr(ctx.writer, QoreValue())) {
                 return false;
             }
@@ -2237,31 +2121,61 @@ static void instRegistryApplyDotEvalPseudoFlags(QoreIRInvokeDotEvalMethodDirectI
     inst.pseudo_base_known_assigned_collection = (flags & 0x80) != 0;
 }
 
-static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
-    auto* ci = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(ctx.inst);
+template <typename T>
+static bool writeDirectDotFields(AOTInstWriteCtx& ctx, const T& ci) {
     // Write NOTHING for expr — dispatch info is in the DOT_EVAL_TARGET slot classification
     // and the instruction's own class_path + method_name fields below
     if (!ctx.writeExpr(ctx.writer, QoreValue())) {
         return false;
     }
-    std::string class_path = instRegistryGetClassPath(ci->qc, ci->pseudo);
-    ctx.writer.writeStringRef(class_path.c_str());
-    // Use resolved method name or fallback_method_name (always set during IR lowering)
-    const char* mname = ci->method ? ci->method->getName() : ci->fallback_method_name;
-    std::string encoded_mname = mname ? mname : "";
-    instRegistryAppendMethodVariantRef(encoded_mname, ci->variant, ci->pseudo);
+    ctx.writer.writeStringRef(qore_aot_encode_class_ref(ci.qc, ci.pseudo).c_str());
+    const char* name = ci.method ? ci.method->getName() : ci.fallback_method_name;
+    std::string encoded_mname = qore_aot_dot_method_ref(name, ci.method, ci.variant, ci.pseudo);
     // the explicit type arguments of the call (obj.method<T>()), which the instruction holds (qore#5865)
-    qore_aot_append_call_type_args(encoded_mname, ci->explicit_type_param_inst);
+    qore_aot_append_call_type_args(encoded_mname, ci.explicit_type_param_inst);
     ctx.writer.writeStringRef(encoded_mname.c_str());
-    ctx.writer.writeU8(ci->pseudo ? 1 : 0);
-    ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
+    qore_aot_write_dot_target_family(ctx.writer, ci.method, ci.pseudo);
+    ctx.writer.writeU8(ci.has_ref_args ? 1 : 0);
     if ((ctx.writer.feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0) {
         ctx.writer.writeU8(instRegistryPackDotEvalPseudoFlags(
-            ci->pseudo_base_known_string, ci->pseudo_base_known_assigned_string,
-            ci->pseudo_arg0_known_string, ci->pseudo_arg0_known_assigned_string,
-            ci->pseudo_arg0_known_assigned_int, ci->pseudo_arg1_known_assigned_int,
-            ci->pseudo_base_safe_value_dispatch,
-            ci->pseudo_base_known_assigned_collection));
+            ci.pseudo_base_known_string, ci.pseudo_base_known_assigned_string,
+            ci.pseudo_arg0_known_string, ci.pseudo_arg0_known_assigned_string,
+            ci.pseudo_arg0_known_assigned_int, ci.pseudo_arg1_known_assigned_int,
+            ci.pseudo_base_safe_value_dispatch,
+            ci.pseudo_base_known_assigned_collection));
+    }
+    return true;
+}
+
+static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
+    return writeDirectDotFields(ctx, *static_cast<const QoreIRDotEvalMethodDirectInstruction*>(ctx.inst));
+}
+
+// These instructions carry evaluated operands and encode NOTHING in the expression field.
+static bool readDirectDotTarget(AOTInstReadCtx& ctx, QoreAOTDotTarget& target, bool invoke) {
+    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, ctx.error);
+    bool nothing = expr.isNothing();
+    expr.discard(nullptr);
+    if (!ctx.error.empty()) {
+        return false;
+    }
+    if (!nothing) {
+        ctx.error = "unexpected expression in direct dot instruction";
+        return false;
+    }
+    if (!qore_aot_read_dot_target(ctx.reader, ctx.ptr, ctx.end, ctx.pgm, false, target, ctx.error)) {
+        return false;
+    }
+    if (target.named.has_names || target.named.has_map) {
+        ctx.error = "unexpected parameter binding in direct dot instruction";
+        return false;
+    }
+    const auto features = ctx.reader.getHeader().feature_flags;
+    size_t tail_size = 1 + ((features & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) ? 1 : 0)
+        + (invoke ? 2 * sizeof(uint16_t) : 0);
+    if (static_cast<size_t>(ctx.end - ctx.ptr) < tail_size) {
+        ctx.error = "truncated direct dot instruction";
+        return false;
     }
     return true;
 }
@@ -2270,35 +2184,26 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
         uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
-    // Expr read failure is non-fatal: the instruction has method_name, class_path,
-    // and fallback_method_name for runtime dispatch. The expr field is only used
-    // as a backup to extract the method name, which fallback_method_name replaces.
-    std::string error;
-    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
-    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
-    InstRegistryMethodRef method_ref(ctx.reader.readStringRef(ctx.ptr));
-    bool pseudo = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    QoreAOTDotTarget target;
+    if (!readDirectDotTarget(ctx, target, false)) {
+        return nullptr;
+    }
+    bool pseudo = target.flags & QORE_AOT_DOT_EVAL_TARGET_PSEUDO;
     bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     uint8_t pseudo_flags = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0
         ? QoreAOTBinaryReader::readU8(ctx.ptr) : 0;
 
-    const QoreClass* qc = instRegistryFindClassByPath(ctx.pgm, class_path, pseudo);
-    const QoreMethod* method = instRegistryFindMethodByName(qc, method_ref.method_name);
-    const AbstractQoreFunctionVariant* variant = instRegistryFindMethodVariantByRef(
-        ctx.pgm, method, method_ref, pseudo);
-    auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, variant, expr, pseudo);
+    auto* ci = new QoreIRDotEvalMethodDirectInstruction(target.method, target.receiver, target.variant,
+        QoreValue(), pseudo);
     ci->has_ref_args = has_ref_args;
     ci->intrinsic = pseudo
-        ? qore_ir_resolve_pseudo_intrinsic(method, qc, method_ref.method_name)
+        ? qore_ir_resolve_pseudo_intrinsic(target.method, target.receiver, target.name.c_str())
         : QoreIRIntrinsic::None;
     instRegistryApplyDotEvalPseudoFlags(*ci, pseudo_flags);
     // Store method name for fallback dynamic dispatch when method ptr is null
-    if (method_ref.method_name && *method_ref.method_name) {
-        ci->fallback_method_name = strdup(method_ref.method_name);
-    }
-    expr.discard(nullptr);
+    ci->fallback_method_name = strdup(target.name.c_str());
     std::unique_ptr<QoreIRInstruction> rv(ci);
-    if (!instRegistrySetMethodTypeArgs(ctx, *ci, method_ref)) {
+    if (!instRegistrySetMethodTypeArgs(ctx, *ci, target)) {
         return nullptr;
     }
     ci->result = QoreIRValue(result_id);
@@ -2313,30 +2218,8 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
 
 static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     auto* ci = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(ctx.inst);
-    // Write NOTHING for expr — dispatch info is in the DOT_EVAL_TARGET slot classification
-    // and the instruction's own class_path + method_name fields below
-    if (!ctx.writeExpr(ctx.writer, QoreValue())) {
+    if (!writeDirectDotFields(ctx, *ci)) {
         return false;
-    }
-    std::string class_path = instRegistryGetClassPath(ci->qc, ci->pseudo);
-    ctx.writer.writeStringRef(class_path.c_str());
-    // Always write method name — extract from AST when method ptr is null
-    // Use resolved method name or fallback_method_name (always set during IR lowering)
-    const char* mname = ci->method ? ci->method->getName() : ci->fallback_method_name;
-    std::string encoded_mname = mname ? mname : "";
-    instRegistryAppendMethodVariantRef(encoded_mname, ci->variant, ci->pseudo);
-    // the explicit type arguments of the call (obj.method<T>()), which the instruction holds (qore#5865)
-    qore_aot_append_call_type_args(encoded_mname, ci->explicit_type_param_inst);
-    ctx.writer.writeStringRef(encoded_mname.c_str());
-    ctx.writer.writeU8(ci->pseudo ? 1 : 0);
-    ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
-    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0) {
-        ctx.writer.writeU8(instRegistryPackDotEvalPseudoFlags(
-            ci->pseudo_base_known_string, ci->pseudo_base_known_assigned_string,
-            ci->pseudo_arg0_known_string, ci->pseudo_arg0_known_assigned_string,
-            ci->pseudo_arg0_known_assigned_int, ci->pseudo_arg1_known_assigned_int,
-            ci->pseudo_base_safe_value_dispatch,
-            ci->pseudo_base_known_assigned_collection));
     }
     auto it_n = ctx.block_idx.find(ci->normal_target);
     ctx.writer.writeU16(it_n != ctx.block_idx.end() ? it_n->second : 0xFFFF);
@@ -2349,35 +2232,27 @@ static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
         uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
-    // Expr read failure is non-fatal (same rationale as readDotEvalMethodDirect)
-    std::string error;
-    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
-    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
-    InstRegistryMethodRef method_ref(ctx.reader.readStringRef(ctx.ptr));
-    bool pseudo = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    QoreAOTDotTarget target;
+    if (!readDirectDotTarget(ctx, target, true)) {
+        return nullptr;
+    }
+    bool pseudo = target.flags & QORE_AOT_DOT_EVAL_TARGET_PSEUDO;
     bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     uint8_t pseudo_flags = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0
         ? QoreAOTBinaryReader::readU8(ctx.ptr) : 0;
     uint16_t normal_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
     uint16_t exception_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
 
-    const QoreClass* qc = instRegistryFindClassByPath(ctx.pgm, class_path, pseudo);
-    const QoreMethod* method = instRegistryFindMethodByName(qc, method_ref.method_name);
-    const AbstractQoreFunctionVariant* variant = instRegistryFindMethodVariantByRef(
-        ctx.pgm, method, method_ref, pseudo);
-    auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, variant, expr,
+    auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(target.method, target.receiver, target.variant, QoreValue(),
         pseudo, ctx.resolveBlock(normal_idx), ctx.resolveBlock(exception_idx));
     ci->has_ref_args = has_ref_args;
     ci->intrinsic = pseudo
-        ? qore_ir_resolve_pseudo_intrinsic(method, qc, method_ref.method_name)
+        ? qore_ir_resolve_pseudo_intrinsic(target.method, target.receiver, target.name.c_str())
         : QoreIRIntrinsic::None;
     instRegistryApplyDotEvalPseudoFlags(*ci, pseudo_flags);
-    if (method_ref.method_name && *method_ref.method_name) {
-        ci->fallback_method_name = strdup(method_ref.method_name);
-    }
-    expr.discard(nullptr);
+    ci->fallback_method_name = strdup(target.name.c_str());
     std::unique_ptr<QoreIRInstruction> rv(ci);
-    if (!instRegistrySetMethodTypeArgs(ctx, *ci, method_ref)) {
+    if (!instRegistrySetMethodTypeArgs(ctx, *ci, target)) {
         return nullptr;
     }
     ci->result = QoreIRValue(result_id);

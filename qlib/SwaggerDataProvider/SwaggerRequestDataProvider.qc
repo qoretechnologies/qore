@@ -68,9 +68,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         self.pio := pio;
         self.op := op;
 
-        if (cb_value_needs_resolution) {
-            resolve_uri = cb_value_needs_resolution(uri_path);
-        }
+        resolve_uri = valueNeedsResolution(uri_path);
 
         # check for any successful response data structure
         foreach hash<auto> i in (op.responses.responses.pairIterator()) {
@@ -416,7 +414,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
     private string getUriPath() {
         string uri_path = self.uri_path;
         if (resolve_uri) {
-            uri_path = cb_resolve_value(uri_path);
+            uri_path = resolveValue(uri_path);
         }
         return uri_path;
     }

@@ -20,7 +20,7 @@ Each handler belongs to one rank (the lock order below) and one mode:
 
 | Mode | Before `fork()` | In the parent | In the child |
 |---|---|---|---|
-| `QFLM_ACQUIRE` | acquires the lock (waits for its holder) | releases it | initializes it again (it is held by the forking thread) |
+| `QFLM_ACQUIRE` | acquires the lock (waits for its holder) | releases it | releases it (it is held by the forking thread); a recursive lock is initialized again |
 | `QFLM_TRY` | acquires the lock only if it is free | releases it if acquired | initializes it again; the owner learns from `wasAcquired()` whether the protected data is consistent |
 | `QFLM_RESET` | nothing | nothing | initializes it again; the owner repairs or abandons the protected data |
 
@@ -38,6 +38,14 @@ Each handler belongs to one rank (the lock order below) and one mode:
   unlocked in the child, so that ThreadSanitizer sees the release: a lock that it considers held for the rest of the
   child's life makes it report a lock order inversion for every lock that the child takes after it and that was taken
   before it in the parent (qore#6177's leaf lock, which the parent takes under a Program's options lock, showed it).
+  The handlers with fork code of their own release such locks in the child too (qore#6817: one that they initialized
+  again made TSan report double locks, and races on every access made under the lock afterwards): the thread list's
+  lock, the signal manager's mutex and the lock of its thread count, the process-wide thread counters, the condition
+  waker's and the external thread reaper's locks, the DBI object registry's, the asynchronous I/O controller
+  singleton's, the sandbox watchdog's and the exit hooks' locks, the counters of `QoreForkCounter`
+  (`qore_counter_ops::releaseAfterFork()`), and the locks that `qore_fork_prepare_thread_lock()` acquired, which
+  `qore_fork_child_thread_lock()` releases.  The striped leaf locks are the exception: they are initialized again in the
+  child (TSan builds do not acquire them before `fork()`, so TSan never considers them held; `QFLM_STRIPED`, below).
   Any other lock is initialized again in the child rather than unlocked: a recursive mutex held by the forking thread
   cannot be unlocked there on glibc (its owner is the parent's thread ID), and a lock that the handler did not
   acquire can be held by a thread that does not exist in the child. It is first reset by assigning its static
@@ -67,7 +75,7 @@ cannot deadlock with a thread that keeps to the order.
 | 500 | thread list (`thread_list.lck`) | ACQUIRE | condition waker, stack lock |
 | 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
 | 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
-| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the registry of the native fast entries of AOT modules, the content hashes of the sources of linked AOT modules, the DBI object registry, the sandbox watchdog's deadline map, the insertion into the value sets of the parse options of Programs (`qore_parse_options_values_mutex`, held only while a value is inserted: a Program's options lock is held across checks and parses and cannot be acquired before `fork()`), the stripe locks of the records of Programs that other threads change at run time (`program_thread_containers`: the containers that record the threads of Programs, the records of a thread's Programs and of its thread-local data, the records of Programs that change at run time and at module load, their breakpoints, and the Programs of debug programs; held only while one of them is changed, under the owner's lock: these locks are per object, and held across waits, user code or other locks, so they cannot be acquired before `fork()`), the set of Programs left allocated at exit (`left_programs`), the count of thread data of debug builds (`tpd_live_count`), and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
+| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the registry of the native fast entries of AOT modules, the content hashes of the sources of linked AOT modules, the DBI object registry, the sandbox watchdog's deadline map, the insertion into the value sets of the parse options of Programs (`qore_parse_options_values_mutex`, held only while a value is inserted: a Program's options lock is held across checks and parses and cannot be acquired before `fork()`), the stripe locks of the records of Programs that other threads change at run time (`program_thread_containers`: the containers that record the threads of Programs, the records of a thread's Programs and of its thread-local data, the records of Programs that change at run time and at module load, their breakpoints, and the Programs of debug programs; held only while one of them is changed, under the owner's lock: these locks are per object, and held across waits, user code or other locks, so they cannot be acquired before `fork()`), the set of Programs left allocated at exit (`left_programs`), the class data locks (`qore_class_data_locks`, which every construction of an object through a copied class handle takes, qore#6732), the count of thread data of debug builds (`tpd_live_count`), and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
 | 1100 | LLVM target initialization (`qore_llvm_initialize_targets()`): held while LLVM registers its targets, once per process | ACQUIRE | — |
 | 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
@@ -78,11 +86,12 @@ leaf, and every lock that reads the environment while held (there are hundreds o
 that creates processes or calls libraries that read the environment holds another lock, which the handlers do not
 acquire (see "The environment" below).
 
-The striped leaf lock arrays (the 64 constant value locks, the 64 opaque target shard locks and the 64 stripe locks
-of the records of Programs) are acquired like other leaf locks, except with ThreadSanitizer: its deadlock
-detector handles at most 128 locks held by one thread, which the stripes alone would exceed, so TSan builds only
-initialize them again in the child (`QFLM_STRIPED`).  The child handler of the stripes of the records of Programs
-releases the locks that the forking thread acquired before `fork()`, and initializes them again in TSan builds.
+The striped leaf lock arrays (the 64 constant value locks, the 64 class data locks, the 64 opaque target shard locks
+and the 64 stripe locks of the records of Programs) are acquired like other leaf locks, except with ThreadSanitizer:
+its deadlock detector handles at most 128 locks held by one thread, which the stripes alone would exceed, so TSan
+builds only initialize them again in the child (`QFLM_STRIPED`). The child handler of the stripes of the records of
+Programs releases the locks that the forking thread acquired before `fork()`, and initializes them again in TSan
+builds.
 
 ### Rules
 
@@ -322,8 +331,8 @@ Besides the locks:
 ## What is not covered
 
 - Per-object locks that a thread of the parent held at the moment of the fork: object r-sections, variable locks,
-  socket, queue and mutex objects, namespaces.  A child that uses an object whose lock was held then waits forever,
-  as before.  The locks of the DBI objects are the exception (see "What the child repairs").
+  socket, queue and mutex objects, namespaces, the gate of the synchronized static methods of a class.  A child that
+  uses an object whose lock was held then waits forever, as before.  The locks of the DBI objects are the exception (see "What the child repairs").
 - The data of a Program that changes only while it is parsed or torn down (its namespaces and code, the statement
   index of the debugger): it is not consistent in a child created while another thread parsed or tore down that
   Program.  The teardown of such a Program does not finish in the child, so the Program, and the references that

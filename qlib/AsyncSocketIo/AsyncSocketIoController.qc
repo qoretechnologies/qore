@@ -53,8 +53,9 @@ public enum IoCommand : string {
     The process should use a single global controller instance, obtained via
     @ref getGlobalAsyncIoController(). This avoids cross-controller deadlocks that
     can occur when object destructors fire on one controller's I/O thread and cancel
-    operations on a different controller. The global controller is created during
-    module initialization with \c autostop=True.
+    operations on a different controller. The global controller is created on first use;
+    when trusted code creates it, it sets \c autostop=True, while sandboxed code leaves the
+    process's setting as it is.
 
     All higher-level components (\c HttpServerAsyncIo::HttpAsyncSocketIoController,
     \c HttpClientIo::HttpClientConnectionManager) use the global controller by
@@ -80,21 +81,39 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Creates the object with an explicit autostop flag
     /** @param autostop if @ref True "True", the I/O thread will automatically stop when all
         operations complete (after a grace period); if @ref False "False", the I/O thread runs
-        until explicitly shut down
-        @param logger an optional logger for diagnostic output
+        until explicitly shut down; the flag is a setting of the process-wide async I/O controller, which is left
+        unchanged for code that is sandboxed or acts for sandboxed code: the object then uses the process's setting
+        (see @ref sandbox_process_wide_registries)
+        @param logger an optional logger for diagnostic output; it is also set as the logger of the process-wide
+        async I/O controller, except for code that is sandboxed or acts for sandboxed code (see
+        @ref sandbox_process_wide_registries)
     */
     constructor(bool autostop, *LoggerInterface logger) : LoggerWrapper(logger) {
-        Qore::AsyncIoController::setAutostop(auto_stop: autostop);
+        # the autostop flag of the global controller is process-wide (issue #6836)
+        if (SandboxManager::isProcessWideRegistrationAllowed()) {
+            Qore::AsyncIoController::setAutostop(auto_stop: autostop);
+        }
         if (logger) {
-            Qore::AsyncIoController::setLogger(logger: logger);
+            setControllerLogger(logger);
         }
     }
 
     #! Creates the object with autostop disabled by default
-    /** @param logger an optional logger for diagnostic output
+    /** @param logger an optional logger for diagnostic output; it is also set as the logger of the process-wide
+        async I/O controller, except for code that is sandboxed or acts for sandboxed code (see
+        @ref sandbox_process_wide_registries)
     */
     constructor(*LoggerInterface logger) : LoggerWrapper(logger) {
         if (logger) {
+            setControllerLogger(logger);
+        }
+    }
+
+    #! Sets the logger of the process-wide controller, unless the caller is sandboxed or acts for sandboxed code
+    /** The object keeps the logger for its own messages in any case
+    */
+    private:internal setControllerLogger(LoggerInterface logger) {
+        if (SandboxManager::isProcessWideRegistrationAllowed()) {
             Qore::AsyncIoController::setLogger(logger: logger);
         }
     }
@@ -119,6 +138,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Sets the autostop flag
     /** @param autostop if @ref True "True", the I/O thread will automatically stop when all
         operations complete (after a 2-second grace period to avoid unnecessary stop/restart cycles)
+
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the autostop
+        flag, which is a setting of the process-wide async I/O controller (see @ref sandbox_process_wide_registries)
     */
     setAutostop(bool autostop = True) [dom=PROCESS_CONTROL] {
         Qore::AsyncIoController::setAutostop(auto_stop: autostop);
@@ -355,8 +377,14 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     #! Sets the logger for the controller
     /** @param logger the logger to use for diagnostic output, or @ref nothing to disable logging
+
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set or clear the
+        logger, which is also the logger of the process-wide async I/O controller (see
+        @ref sandbox_process_wide_registries)
     */
     setLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
+        # checked before the logger is changed: the logger of the global controller is process-wide
+        SandboxManager::checkProcessWideRegistration("set the logger of the async I/O controller");
         LoggerWrapper::setLogger(logger);
         Qore::AsyncIoController::setLogger(logger: logger);
     }
@@ -369,6 +397,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         This setting takes effect when the underlying worker pool is next created.
 
         @param max_workers maximum worker count; \c 0 means automatic sizing
+
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the maximum
+        number of workers, which is a setting of the process-wide async I/O controller (see
+        @ref sandbox_process_wide_registries)
     */
     setMaxCallbackWorkers(int max_workers = 0) [dom=PROCESS_CONTROL] {
         Qore::AsyncIoController::setMaxCallbackWorkers(max_workers: max_workers);

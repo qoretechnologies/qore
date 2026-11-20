@@ -107,6 +107,11 @@ static int get_json_string_token(QoreString& str, const char*& buf, int& line_nu
         }
         if (*buf == '\\') {
             buf++;
+            // an escape sequence at the end of the text is a premature end of the string; the terminating null
+            // character is not passed
+            if (!*buf) {
+                break;
+            }
             if (*buf == '"' || *buf == '/' || *buf == '\\') {
                 str.concat(*buf);
                 ++buf;
@@ -172,7 +177,10 @@ static int get_json_string_token(QoreString& str, const char*& buf, int& line_nu
                         break;
                     }
                 } else {
+                    // a \u that is not followed by four hexadecimal digits is kept as it is, and the text after it
+                    // (where buf is) is parsed: it can be the end of the text, the closing quote or any character
                     str.concat("\\u");
+                    continue;
                 }
             } else { // otherwise just concatenate the characters
                 str.concat('\\');
@@ -836,16 +844,57 @@ static int do_json_value(QoreString* str, QoreValue v, int format, int depth,
     return -1;
 }
 
-QoreValue parse_json(const QoreString* str, ExceptionSink* xsink) {
-    int line_number = 1;
-    const char* buf = str->c_str();
-    const unsigned char* data = reinterpret_cast<const unsigned char*>(buf);
-    if (str->size() >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF) { // Skip UTF-8 BOM.
-        buf = reinterpret_cast<const char*>(data+3);
-    } else if (str->size() >= 2) { // Skip Unicode BOM.
-        if ((data[0] == 0xFE && data[1] == 0xFF) || (data[0] == 0xFF && data[1] == 0xFE)) {
-            buf = reinterpret_cast<const char*>(data+2);
+QoreValue parse_json(const QoreString* str, ExceptionSink* xsink, const char* where, const char* what) {
+    const QoreEncoding* enc = str->getEncoding();
+    size_t skip = 0;
+    if (str->size() >= 2) {
+        const unsigned char* data = reinterpret_cast<const unsigned char*>(str->c_str());
+        bool be = data[0] == 0xFE && data[1] == 0xFF;
+        bool le = data[0] == 0xFF && data[1] == 0xFE;
+        if (enc->isAsciiCompat()) {
+            // in text in an encoding compatible with ASCII, the bytes of a UTF-16 byte order mark at the start are
+            // skipped, as before; they are not checked
+            if (be || le) {
+                skip = 2;
+            }
+        } else if (enc == QCS_UTF16 && (be || le)) {
+            // the byte order mark of text in the generic UTF-16 encoding gives its byte order
+            enc = le ? QCS_UTF16LE : QCS_UTF16BE;
+            skip = 2;
         }
+    }
+    // the text is valid in its encoding where it enters the program (qore#6604); the offset is that in the text
+    qore_offset_t invalid = q_get_invalid_text_offset(enc, str->c_str() + skip, str->size() - skip);
+    if (invalid >= 0) {
+        xsink->raiseException("INVALID-ENCODING", "%s: the %s is not valid %s: invalid byte sequence at byte offset "
+            QLLD, where, what, enc->getCode(), static_cast<int64>(invalid + skip));
+        return QoreValue();
+    }
+    // the parser works on the bytes of the text: in a multi-byte encoding other than UTF-8, a byte of a character can
+    // be an ASCII character (the second byte of Shift_JIS "ソ", 83 5C, is "\\"; UTF-16), so the text is converted
+    TempEncodingHelper utf8;
+    // the text after the bytes skipped, if any, when it is converted, in the encoding of its byte order
+    QoreString rest(enc);
+    if (enc != QCS_UTF8 && (enc->isMultiByte() || !enc->isAsciiCompat())) {
+        // text in a multi-byte encoding other than UTF-8, in an encoding that is not compatible with ASCII (EBCDIC,
+        // UTF-16, UTF-32) or in a stateful encoding (ISO-2022-JP, UTF-7)
+        const QoreString* src = str;
+        if (skip) {
+            rest.concat(str->c_str() + skip, str->size() - skip);
+            src = &rest;
+        }
+        if (!utf8.set(src, QCS_UTF8, xsink)) {
+            return QoreValue();
+        }
+        str = *utf8;
+        skip = 0;
+    }
+
+    int line_number = 1;
+    const char* buf = str->c_str() + skip;
+    const unsigned char* data = reinterpret_cast<const unsigned char*>(buf);
+    if (str->size() - skip >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF) { // Skip UTF-8 BOM.
+        buf += 3;
     }
 
     // Get sandbox manager for depth checks

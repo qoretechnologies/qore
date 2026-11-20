@@ -37,6 +37,15 @@
     \c PROTOBUF-DECODE-ERROR or \c PROTOBUF-JSON-ERROR), and the conversion also stops with
     \c STACK-LIMIT-EXCEEDED if the thread's stack would be exhausted.
 
+    @section protobufextensions Extension Fields
+
+    The extension fields of a \c proto2 message (\c extend) are keys of its hash with their full names in square
+    brackets, as in protobuf's JSON and text formats (ex: \c "[mypackage.my_ext]"); a hash given to the module can
+    also name an extension field with its full name alone (ex: \c "mypackage.my_ext").  A decoded message has the
+    extension fields that are set in it.  In JSON, extension fields are supported when the module is built with
+    protobuf v22 or later; with an earlier version, ProtobufSchema::toJson() raises \c PROTOBUF-JSON-ERROR for a
+    message with an extension field set, instead of leaving it out, and ProtobufSchema::fromJson() refuses one.
+
     @section protobufclasses protobuf Module Classes
 
     - @ref Qore::Protobuf::ProtobufSchema "ProtobufSchema" — the core class for

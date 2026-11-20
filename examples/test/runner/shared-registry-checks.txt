@@ -1,0 +1,19 @@
+# The mutators of process-wide registries of the standard modules that make no check of their own, and why; see
+# test_shared_registry_checks.py (qore#6747).  Format: <category> <path> <name>
+delegates qlib/AssemblyAiDataProvider/AssemblyAiActions.qc AssemblyAiActions::registerActions
+delegates qlib/AwsTextractDataProvider/AwsTextractOperationDataProvider.qc AwsTextractActions::registerNativeActions
+tokens qlib/AzureAuth.qm clearTokenCache
+delegates qlib/BedrockDataProvider/BedrockActions.qc BedrockActions::registerActions
+delegates qlib/BitbucketDataProvider/BitbucketCodecs.qc BitbucketCodecs::register
+delegates qlib/DataProvider/DataProvider.qc DataProvider::registerKnownFactories
+delegates qlib/DataProvider/DataProvider.qc DataProvider::registerKnownTypes
+module-load qlib/DataProvider/DataProviderActionCatalog.qc DataProviderActionCatalog::registerLazyValue
+delegates qlib/DbDataProvider/DbDataProvider.qm registerDbVendorApp
+delegates qlib/DeepSeekDataProvider/DeepSeekActions.qc DeepSeekActions::registerActions
+tokens qlib/GcpAuth.qm clearTokenCache
+delegates qlib/GroqDataProvider/GroqActions.qc GroqActions::registerActions
+delegates qlib/KlaviyoDataProvider/KlaviyoCodecs.qc KlaviyoCodecs::register
+delegates qlib/RestSchemaActions/RestSchemaTablesDataProvider.qc RestSchemaTablesDataProvider::registerRecordActions
+delegates qlib/XeroDataProvider/XeroCodecs.qc XeroCodecs::register
+delegates qlib/YamlTagHandler.qm register_yaml_tag_handler
+delegates qlib/YamlTagHandler.qm unregister_yaml_tag_handler

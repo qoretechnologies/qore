@@ -4,7 +4,9 @@
 
     @tableofcontents
 
-    Every encoding result includes byte-level offset mapping and a special tokens mask:
+    Every encoding result includes byte-level offset mapping and a special tokens mask; the offsets are byte offsets
+    in the UTF-8 form of the text, which for text in another encoding are not its byte offsets (see
+    @ref tokenizer_text_encoding):
 
     @code{.py}
 hash<auto> enc = tok.encode("Hello, world!");

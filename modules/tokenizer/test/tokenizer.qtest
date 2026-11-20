@@ -1158,10 +1158,41 @@ class TokenizerTest inherits QUnit::Test {
     # issue #6617: a PCRE2 match error in a Split pre-tokenizer is raised, not taken as the end of the matches
     splitMatchErrorTest() {
         Tokenizer::HFTokenizer tok = createSplitWordPiece("Isolated");
-        # a string tagged UTF-8 that is not valid UTF-8 (a lone continuation byte) after a delimiter
+        # a string tagged UTF-8 that is not valid UTF-8 (a lone continuation byte) after a delimiter is refused where
+        # it enters the tokenizer (#6604), before it reaches the Split pre-tokenizer
         string bad = binary_to_string(<612d80622d63>, "UTF-8");
-        assertThrows("PRETOKENIZER-MATCH-ERROR", \tok.encode(), bad);
+        assertThrows("INVALID-ENCODING", "HFTokenizer::encode\\(\\): the text is not valid UTF-8: invalid byte "
+            "sequence at byte offset 2", \tok.encode(), bad);
         # valid text is still split
         assertEq(("a", "-", "b", "-", "c"), tok.encode("a-b-c").tokens);
+
+        # a Replace normalizer whose std::regex pattern removes the second byte of "é" (C3 A9) gives the Split
+        # pre-tokenizer text that is not valid UTF-8: the match error is raised
+        hash<auto> config = {
+            "model": {
+                "type": "WordPiece",
+                "vocab": {"[UNK]": 0, "a": 1, "b": 2, "-": 3},
+                "unk_token": "[UNK]",
+                "continuing_subword_prefix": "##",
+            },
+            "normalizer": {
+                "type": "Replace",
+                "pattern": {"Regex": "\\xa9"},
+                "content": "",
+            },
+            "pre_tokenizer": {
+                "type": "Split",
+                "pattern": {"Regex": "-"},
+                "behavior": "Isolated",
+                "invert": False,
+            },
+        };
+        Tokenizer::HFTokenizer cut_tok(config);
+        assertThrows("PRETOKENIZER-MATCH-ERROR", "Split pre-tokenizer: regular expression match error",
+            \cut_tok.encode(), "a-é-b");
+        assertThrows("PRETOKENIZER-MATCH-ERROR", \cut_tok.encodeBatch(), (("a-é-b",),));
+        assertThrows("PRETOKENIZER-MATCH-ERROR", \cut_tok.encodeForModel(), "a-é-b");
+        # text that the normalizer leaves valid is split
+        assertEq(("a", "-", "b"), cut_tok.encode("a-b").tokens);
     }
 }

@@ -287,16 +287,24 @@ public class SpeechProviderRegistry {
         };
     }
 
-    private {
+    private:internal {
+        # private:internal: the registry is process-wide, so that only this class changes it (qore#6744)
         static hash<string, AbstractTranscriberFactory> transcriber_cache = {};
         static hash<string, AbstractSpeechSynthesizerFactory> synthesizer_cache = {};
+    }
+
+    private:internal {
         static Mutex registry_lock();
     }
 
     #! Registers a transcriber factory
     /** @throw SPEECH-CONFIG-ERROR a factory for the same mode is already registered
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerTranscriberFactory(AbstractTranscriberFactory factory) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the speech provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         string mode = factory.getMode();
@@ -310,8 +318,12 @@ public class SpeechProviderRegistry {
 
     #! Registers a speech-synthesizer factory
     /** @throw SPEECH-CONFIG-ERROR a factory for the same mode is already registered
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerSynthesizerFactory(AbstractSpeechSynthesizerFactory factory) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the speech provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         string mode = factory.getMode();
@@ -324,14 +336,24 @@ public class SpeechProviderRegistry {
     }
 
     #! Removes a transcriber factory (intended for tests)
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static deregisterTranscriberFactory(string mode) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the speech provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         remove transcriber_cache{mode};
     }
 
     #! Removes a synthesizer factory (intended for tests)
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static deregisterSynthesizerFactory(string mode) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the speech provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         remove synthesizer_cache{mode};

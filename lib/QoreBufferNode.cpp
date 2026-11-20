@@ -2122,6 +2122,51 @@ int qore_buffer_node_private::setValueImpl(QoreBufferNode* b, size_t index, Qore
     return 0;
 }
 
+int qore_buffer_node_private::takeDecimalImpl(QoreBufferNode* b, const QoreBufferNode* source,
+        const size_t* indices, size_t count, const char* cancel_context, ExceptionSink* xsink) {
+    assert(xsink);
+    assert(b->element_type == QoreBufferElementType::Decimal128);
+    assert(source->element_type == QoreBufferElementType::Decimal128);
+    assert(b->decimal_precision == source->decimal_precision && b->decimal_scale == source->decimal_scale);
+    assert(b->nullable_elements == source->nullable_elements);
+    assert(b->length == count);
+    assert(!b->isView() && !b->external_data && !b->external_device_data);
+    if (!count) {
+        return 0;
+    }
+    if (source->ensureHostStorage(xsink)) {
+        return -1;
+    }
+
+    const qore_buffer_node_private src = view(source);
+    qore_buffer_node_private dst(b);
+    // the absolute value of each element is less than this bound
+    __int128 limit = qore_buffer_decimal_pow10(b->decimal_precision);
+    for (size_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, cancel_context)) {
+            return -1;
+        }
+        size_t index = indices[i];
+        assert(index < source->length);
+        // the elements of the new buffer are valid
+        if (source->nullable_elements && !src.getValidityBit(index)) {
+            dst.setNull(i);
+            continue;
+        }
+        QoreBufferDecimal128 value = src.getDecimalStorage(index);
+        __int128 unscaled = qore_buffer_decimal_storage_to_int128(value);
+        if (unscaled >= limit || unscaled <= -limit) {
+            ValueHolder number(source->getReferencedEntry(index, xsink), xsink);
+            if (*xsink || b->setEntry(i, *number, xsink)) {
+                return -1;
+            }
+            continue;
+        }
+        dst.setDecimalStorage(i, value);
+    }
+    return 0;
+}
+
 bool QoreBufferNode::getAsBoolImpl() const {
     if (qore_get_native_semantic_policy().strictBoolean()) {
         return false;

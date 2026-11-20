@@ -185,11 +185,13 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
         #! first time initialization
         static bool init;
 
-        #! lock for first time initialization
-        static Mutex m();
-
         #! True once the Assistants API deprecation warning has been issued in this process
         static bool assistant_deprecation_warned = False;
+    }
+
+    private:internal {
+        #! lock for first time initialization
+        static Mutex m();
 
         #! lock serializing access to \c assistant_deprecation_warned
         static Mutex deprecation_lock();

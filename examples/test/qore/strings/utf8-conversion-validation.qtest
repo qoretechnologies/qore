@@ -73,7 +73,8 @@ class Utf8ConversionValidationTest inherits QUnit::Test {
         foreach binary payload in (Malformed) {
             binary data = binary("value,count\n\"") + payload + binary("\",1\n");
             InputStream is = new EncodingConversionInputStream(new BinaryInputStream(data), "UTF-8", "UTF-16LE");
-            assertThrows("ENCODING-CONVERSION-ERROR", sub () {
+            # input that is not valid in the source encoding (qoretechnologies/qore#6730)
+            assertThrows("INVALID-ENCODING", sub () {
                 while (is.read(64)) {
                 }
             }, NOTHING, payload.toHex());

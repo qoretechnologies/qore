@@ -1,0 +1,277 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%allow-debugger
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ExternalDataFailureTest
+
+#! Tests the errors of the callbacks of the external data of binary modules (issue #6786)
+/** The cppapiuser test module sets external data derived from AbstractQoreProgramExternalDataEx, whose callbacks
+    raise their errors in an ExceptionSink on request (cpp_api_ext_data_ex_set()), and data derived from
+    AbstractQoreProgramExternalData alone, whose legacy callbacks throw a C++ exception on request
+    (cpp_api_ext_data_legacy_set()); the legacy data is set first, so it is copied first.
+
+    A child Program whose external data cannot be copied is not created: the creation fails with the module's
+    exception, and the copies already made are released, without init() having been called on them.  Before, the
+    exception of the new callbacks could not be reported, and a C++ exception of a legacy copy() escaped from the
+    creation of the Program, after it had been registered.
+*/
+class ExternalDataFailureTest inherits QUnit::Test {
+    constructor() : Test("ExternalDataFailureTest", "1.0", \ARGV) {
+        addTestCase("a failing copy() fails Program::constructor()", \copyFailsProgram());
+        addTestCase("a failing copy() fails createEvalProgram()", \copyFailsEvalProgram());
+        addTestCase("a copy returned with an exception is released", \copyWithException());
+        addTestCase("a failing init() fails the creation and releases all copies", \initFails());
+        addTestCase("a failing release is reported to the code that deletes the Program", \derefFails());
+        addTestCase("the legacy callbacks", \legacyCallbacks());
+        addTestCase("a child that does not inherit the data is unaffected", \noInherit());
+        addTestCase("a copy fails while children are created in several threads", \concurrentFailure());
+        addTestCase("the legacy entry points of the new class", \exLegacyEntryPoints());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        cpp_api_ext_data_ex_remove();
+        cpp_api_ext_data_legacy_remove();
+    }
+
+    #! checks that all copies made were released
+    private checkBalanced(hash<auto> c, string label) {
+        assertEq(0, c.live, label + ": every copy made is released");
+        assertEq(c.made, c.released, label + ": every copy made is released once");
+    }
+
+    #! a copy() that raises an exception fails the creation of the child Program with it
+    copyFailsProgram() {
+        cpp_api_ext_data_legacy_set();
+        on_exit cpp_api_ext_data_legacy_remove();
+        cpp_api_ext_data_ex_set({"copy_fail_from": 0});
+        on_exit cpp_api_ext_data_ex_remove();
+
+        *Program child;
+        assertThrows("EXT-DATA-COPY-ERROR", sub () { child = new Program(PO_NEW_STYLE); });
+        assertNothing(child, "no Program is created");
+        # the data copied before the failure is released, and nothing was initialized
+        hash<auto> legacy = cpp_api_ext_data_legacy_counters();
+        assertEq(1, legacy.made, "the legacy data was copied before the failure");
+        assertEq(1, legacy.released_uninit, "the legacy copy is released without init()");
+        assertEq(0, legacy.inits, "no copy was initialized");
+        checkBalanced(legacy, "legacy");
+        hash<auto> ex = cpp_api_ext_data_ex_counters();
+        assertEq(1, ex.copy_calls);
+        assertEq(0, ex.made);
+        assertEq(0, ex.inits);
+        checkBalanced(ex, "ex");
+
+        # the parent still works
+        assertEq(3, call_function(int sub (int i) { return i + 1; }, 2));
+        assertTrue(cpp_api_ext_data_ex_remove(), "the failing data is still set in the parent");
+        # a child can be created once the failing data is removed
+        {
+            Program ok(PO_NEW_STYLE);
+            ok.parse("int sub f() { return 1; }", "ok");
+            assertEq(1, ok.callFunction("f"), "the child runs code");
+        }
+        legacy = cpp_api_ext_data_legacy_counters();
+        assertEq(2, legacy.made);
+        assertEq(1, legacy.inits);
+        checkBalanced(legacy, "legacy after a child was created");
+    }
+
+    #! a copy() that raises an exception fails ProgramControl::createEvalProgram() with it
+    copyFailsEvalProgram() {
+        cpp_api_ext_data_legacy_set();
+        on_exit cpp_api_ext_data_legacy_remove();
+        cpp_api_ext_data_ex_set({"copy_fail_from": 0});
+        on_exit cpp_api_ext_data_ex_remove();
+
+        ProgramControl pc = ProgramControl::getProgram();
+        *Program child;
+        assertThrows("EXT-DATA-COPY-ERROR", sub () { child = pc.createEvalProgram(PO_NEW_STYLE); });
+        assertNothing(child, "no Program is created");
+        hash<auto> legacy = cpp_api_ext_data_legacy_counters();
+        assertEq(1, legacy.made);
+        assertEq(0, legacy.inits);
+        checkBalanced(legacy, "legacy");
+        checkBalanced(cpp_api_ext_data_ex_counters(), "ex");
+
+        # the parent is not left locked: an evaluation Program can be created once the failing data is removed
+        assertTrue(cpp_api_ext_data_ex_remove());
+        {
+            Program ok = pc.createEvalProgram(PO_NEW_STYLE);
+            ok.parse("int sub f() { return 1; }", "ok");
+            assertEq(1, ok.callFunction("f"), "the evaluation Program runs code");
+        }
+        legacy = cpp_api_ext_data_legacy_counters();
+        assertEq(2, legacy.made);
+        checkBalanced(legacy, "legacy after an evaluation Program was created");
+    }
+
+    #! a copy() that returns a copy together with an exception: the copy is released
+    copyWithException() {
+        cpp_api_ext_data_ex_set({"copy_fail_from": 0, "copy_with_exception": True});
+        on_exit cpp_api_ext_data_ex_remove();
+        assertThrows("EXT-DATA-COPY-ERROR", sub () { Program child(PO_NEW_STYLE); });
+        hash<auto> ex = cpp_api_ext_data_ex_counters();
+        assertEq(1, ex.made, "the copy was made");
+        assertEq(1, ex.released_uninit, "the copy is released without init()");
+        assertEq(0, ex.inits);
+        checkBalanced(ex, "ex");
+    }
+
+    #! an init() that raises an exception fails the creation of the child, and all copies are released
+    initFails() {
+        cpp_api_ext_data_legacy_set();
+        on_exit cpp_api_ext_data_legacy_remove();
+        cpp_api_ext_data_ex_set({"init_fail": True});
+        on_exit cpp_api_ext_data_ex_remove();
+        assertThrows("EXT-DATA-INIT-ERROR", sub () { Program child(PO_NEW_STYLE); });
+        hash<auto> legacy = cpp_api_ext_data_legacy_counters();
+        hash<auto> ex = cpp_api_ext_data_ex_counters();
+        assertEq(1, legacy.inits, "the legacy copy was initialized first");
+        assertEq(1, ex.inits);
+        assertEq(1, ex.made);
+        checkBalanced(legacy, "legacy");
+        checkBalanced(ex, "ex");
+    }
+
+    #! a doDeref() that raises an exception: the deletion of the Program raises it, and other data is released
+    derefFails() {
+        cpp_api_ext_data_legacy_set();
+        on_exit cpp_api_ext_data_legacy_remove();
+        cpp_api_ext_data_ex_set({"deref_fail": True});
+        on_exit cpp_api_ext_data_ex_remove();
+
+        *Program child = new Program(PO_NEW_STYLE);
+        assertThrows("EXT-DATA-DEREF-ERROR", sub () { delete child; });
+        assertNothing(child);
+        checkBalanced(cpp_api_ext_data_legacy_counters(), "legacy");
+        checkBalanced(cpp_api_ext_data_ex_counters(), "ex");
+
+        # also at the end of the scope of the Program
+        assertThrows("EXT-DATA-DEREF-ERROR", sub () { Program child2(PO_NEW_STYLE); });
+        hash<auto> ex = cpp_api_ext_data_ex_counters();
+        assertEq(2, ex.made);
+        checkBalanced(ex, "ex after the end of the scope");
+        checkBalanced(cpp_api_ext_data_legacy_counters(), "legacy after the end of the scope");
+    }
+
+    #! data with the legacy callbacks only: nullptr is "not inherited", and C++ exceptions are converted
+    legacyCallbacks() {
+        # nullptr: the child does not inherit the data
+        cpp_api_ext_data_legacy_set({"copy_null": True});
+        {
+            Program child(PO_NEW_STYLE);
+        }
+        hash<auto> legacy = cpp_api_ext_data_legacy_counters();
+        assertEq(1, legacy.copy_calls);
+        assertEq(0, legacy.made);
+        assertEq(0, legacy.inits, "a child that does not inherit the data does not initialize it");
+        assertTrue(cpp_api_ext_data_legacy_remove());
+
+        # a C++ exception from copy() fails the creation; the data copied after it is not copied
+        cpp_api_ext_data_legacy_set({"copy_fail_from": 0});
+        cpp_api_ext_data_ex_set();
+        assertThrows("EXT-DATA-LEGACY-COPY-ERROR", sub () { Program child(PO_NEW_STYLE); });
+        assertEq(0, cpp_api_ext_data_ex_counters().copy_calls, "the copies stop at the failure");
+        checkBalanced(cpp_api_ext_data_legacy_counters(), "legacy copy");
+        assertTrue(cpp_api_ext_data_ex_remove());
+        assertTrue(cpp_api_ext_data_legacy_remove());
+
+        # a C++ exception from init() fails the creation, and the copy is released
+        cpp_api_ext_data_legacy_set({"init_fail": True});
+        assertThrows("EXT-DATA-LEGACY-INIT-ERROR", sub () { Program child(PO_NEW_STYLE); });
+        legacy = cpp_api_ext_data_legacy_counters();
+        assertEq(1, legacy.made);
+        checkBalanced(legacy, "legacy init");
+        assertTrue(cpp_api_ext_data_legacy_remove());
+
+        # a C++ exception from doDeref() is converted for the code that deletes the Program
+        cpp_api_ext_data_legacy_set({"deref_fail": True});
+        on_exit cpp_api_ext_data_legacy_remove();
+        *Program child = new Program(PO_NEW_STYLE);
+        assertThrows("EXT-DATA-LEGACY-DEREF-ERROR", sub () { delete child; });
+        checkBalanced(cpp_api_ext_data_legacy_counters(), "legacy release");
+    }
+
+    #! a child created with PO_NO_INHERIT_PROGRAM_DATA does not copy the data, so a failing copy() does not matter
+    noInherit() {
+        cpp_api_ext_data_legacy_set({"copy_fail_from": 0});
+        on_exit cpp_api_ext_data_legacy_remove();
+        cpp_api_ext_data_ex_set({"copy_fail_from": 0});
+        on_exit cpp_api_ext_data_ex_remove();
+        {
+            Program child(PO_NEW_STYLE | PO_NO_INHERIT_PROGRAM_DATA);
+            child.parse("int sub f() { return 2; }", "child");
+            assertEq(2, child.callFunction("f"), "the child runs code");
+        }
+        assertEq(0, cpp_api_ext_data_legacy_counters().copy_calls);
+        assertEq(0, cpp_api_ext_data_ex_counters().copy_calls);
+    }
+
+    #! children are created in several threads at once, and one copy fails
+    /** Only the child whose copy fails is not created; the copies of the others are made, and the data of the parent
+        can be removed afterwards (a failed copy does not leave the parent waiting for it)
+    */
+    concurrentFailure() {
+        cpp_api_ext_data_legacy_set();
+        on_exit cpp_api_ext_data_legacy_remove();
+        cpp_api_ext_data_ex_set({"copy_fail_from": 3, "copy_fail_once": True});
+        on_exit cpp_api_ext_data_ex_remove();
+        const int Threads = 8;
+        Counter done(Threads);
+        Counter failed();
+        for (int i = 0; i < Threads; ++i) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    Program child(PO_NEW_STYLE);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "EXT-DATA-COPY-ERROR") {
+                        failed.inc();
+                    } else {
+                        rethrow;
+                    }
+                }
+            }();
+        }
+        done.waitForZero();
+        assertEq(1, failed.getCount(), "one child is not created");
+        hash<auto> ex = cpp_api_ext_data_ex_counters();
+        assertEq(Threads, ex.copy_calls);
+        assertEq(Threads - 1, ex.made);
+        assertEq(Threads - 1, ex.inits);
+        checkBalanced(ex, "ex");
+        hash<auto> legacy = cpp_api_ext_data_legacy_counters();
+        assertEq(Threads, legacy.made);
+        assertEq(1, legacy.released_uninit, "the legacy copy of the failed child is released without init()");
+        checkBalanced(legacy, "legacy");
+        assertTrue(cpp_api_ext_data_ex_remove(), "the data is removed once the copies are made");
+        assertTrue(cpp_api_ext_data_legacy_remove(), "the data is removed once the copies are made");
+    }
+
+    #! the legacy copy() of AbstractQoreProgramExternalDataEx reports an exception and releases the copy
+    exLegacyEntryPoints() {
+        cpp_api_ext_data_ex_set();
+        assertTrue(cpp_api_ext_data_ex_legacy_copy(), "a copy is made");
+        checkBalanced(cpp_api_ext_data_ex_counters(), "ex");
+        assertTrue(cpp_api_ext_data_ex_remove());
+
+        cpp_api_ext_data_ex_set({"copy_fail_from": 0, "copy_with_exception": True});
+        on_exit cpp_api_ext_data_ex_remove();
+        # the exception is reported as unhandled on stderr, and no copy is returned
+        assertFalse(cpp_api_ext_data_ex_legacy_copy(), "no copy is returned with an exception");
+        hash<auto> ex = cpp_api_ext_data_ex_counters();
+        assertEq(1, ex.made);
+        checkBalanced(ex, "ex");
+    }
+}

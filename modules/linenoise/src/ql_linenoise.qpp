@@ -215,8 +215,15 @@ int rows() {
 
     @warning The callback must accept a string argument; otherwise a
              \c RUNTIME-OVERLOAD-ERROR exception is thrown when completion is requested.
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the callbacks
+    of the line editor, which is process-wide (see @ref linenoise_sandbox)
  */
 nothing set_callback(code callback) {
+    // the line editor and its callbacks are process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("set the completion callback of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     if (callbackNode) {
@@ -304,8 +311,15 @@ Linenoise::set_hints_callback();
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the callbacks
+    of the line editor, which is process-wide (see @ref linenoise_sandbox)
  */
 nothing set_hints_callback(*code callback) {
+    // the line editor and its callbacks are process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("set the hints callback of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     if (hintsCallbackNode) {
@@ -502,8 +516,15 @@ Linenoise::set_syntax_callback(sub (string input) {
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the callbacks
+    of the line editor, which is process-wide (see @ref linenoise_sandbox)
  */
 nothing set_syntax_callback(*code callback) {
+    // the line editor and its callbacks are process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("set the syntax callback of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     if (syntaxCallbackNode) {
@@ -582,8 +603,15 @@ Linenoise::bind_key("ctrl-x", hash<auto> sub (hash<auto> info) {
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the callbacks
+    of the line editor, which is process-wide (see @ref linenoise_sandbox)
  */
 nothing bind_key(string key_spec, code callback) {
+    // the line editor and its callbacks are process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("bind a key of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     int keyCode = parseKeySpec(key_spec->c_str(), xsink);
@@ -624,8 +652,15 @@ Linenoise::unbind_key("ctrl-x");
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the callbacks
+    of the line editor, which is process-wide (see @ref linenoise_sandbox)
  */
 nothing unbind_key(string key_spec) {
+    // the line editor and its callbacks are process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("unbind a key of the line editor", xsink)) {
+        return QoreValue();
+    }
     LinenoiseLockHelper al;
 
     int keyCode = parseKeySpec(key_spec->c_str(), xsink);
@@ -696,10 +731,17 @@ Linenoise::set_history_provider();
     @endcode
 
     @since linenoise 1.2.0
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the callbacks
+    of the line editor, which is process-wide (see @ref linenoise_sandbox)
  */
 nothing set_history_provider(*AbstractHistoryProvider[HistoryProviderPriv] provider) {
     // Check for error from private data extraction (e.g., object already deleted)
     if (*xsink) {
+        return QoreValue();
+    }
+    // the line editor and its history provider are process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("set the history provider of the line editor", xsink)) {
         return QoreValue();
     }
 

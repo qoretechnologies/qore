@@ -1,0 +1,12 @@
+%modern
+# Copyright 2026 Qore Technologies, s.r.o.
+%requires RangePalette
+module RangeBridge {
+    version = "1.0"; desc = "exports a field with an imported type";
+    author = "Qore"; license = "MIT";
+}
+public namespace RangeBridge {
+    public class Bridge {
+        public { RangePalette::Palette color(); }
+    }
+}

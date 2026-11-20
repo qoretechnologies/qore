@@ -88,7 +88,7 @@ public:
                pfd.fd = STDERR_FILENO;
                pfd.events = POLLOUT;
                pfd.revents = 0;
-               int pret = qore_cancellable_poll(&pfd, 1, -1, xsink, "stderr write");
+               int pret = qore_quiescent_cancellable_poll(&pfd, 1, -1, xsink, "stderr write");
                if (pret == QORE_POLL_CANCELLED) {
                   return;
                }

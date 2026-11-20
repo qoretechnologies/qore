@@ -1,0 +1,204 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  program-pending-objects.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+# the Program of the Qore subclass test allows reparsing
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires cppapiuser
+
+%exec-class ProgramPendingObjectsTest
+
+#! objects of the builtin classes of a Program that refuses runtime entry while code is parsed in it (qore#6752)
+/** A module command can create objects of builtin classes of the Program it runs in (their source Program) while
+    the Program has code pending (Program::parsePending() without Program::parseCommit()), or after
+    Program::parseRollback() without @ref PO_ALLOW_REPARSE, when the Program refuses runtime entry: module-python
+    raises an exception whose argument is an object of a Python class of the Program, and its \c import command adds
+    constants with such objects.  The \c "pending-error" and \c "pending-const" commands of the \c cppapiuser test
+    module do the same with a class whose destructor and method are C++ code (cpp_api_pending_probe_destroyed()).
+
+    Neither the lookup of a method of such an object (also of a pseudo-method such as \c className()) nor the C++
+    destructor of its class runs code of the Program, so neither needs runtime entry into it; a method of the class and
+    the destructor of a class with Qore code still do, and are refused.
+*/
+class ProgramPendingObjectsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("program-pending-objects", "1.0") {
+        addTestCase("exception argument", \exceptionArgumentTest());
+        addTestCase("exception argument after a rollback", \rollbackArgumentTest());
+        addTestCase("constants", \constantsTest());
+        addTestCase("committed control", \committedControlTest());
+        addTestCase("Qore subclass destructor", \qoreSubclassDestructorTest());
+        set_return_value(main());
+    }
+
+    #! returns a Program with code pending and the test module loaded
+    private Program getPendingProgram(int opts = PO_NEW_STYLE) {
+        Program p(opts);
+        p.parsePending("sub f() {}", "pending");
+        p.loadModule("cppapiuser");
+        return p;
+    }
+
+    exceptionArgumentTest() {
+        Program p = getPendingProgram();
+        checkPendingErrorArg(p, "pending");
+
+        # the Program can still be committed, and then runs the method
+        p.parseCommit();
+        int before = cpp_api_pending_probe_destroyed();
+        bool caught;
+        try {
+            p.issueModuleCmd("cppapiuser", "pending-error");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq(1, ex.arg.value());
+        }
+        assertTrue(caught);
+        assertEq(before + 1, cpp_api_pending_probe_destroyed());
+    }
+
+    #! a Program whose parse was rolled back without PO_ALLOW_REPARSE still refuses runtime entry (and module commands)
+    rollbackArgumentTest() {
+        Program p = getPendingProgram();
+        *object arg;
+        try {
+            p.issueModuleCmd("cppapiuser", "pending-error");
+        } catch (hash<ExceptionInfo> ex) {
+            arg = ex.arg;
+        }
+        p.parseRollback();
+        assertEq("PendingProbe", arg.className());
+        assertEq("object", arg.type());
+        assertThrows("METHOD-DOES-NOT-EXIST", sub () { arg.noSuchMethod(); });
+        assertThrows("PROGRAM-ERROR", "undergoing parsing", sub () { arg.value(); });
+        int before = cpp_api_pending_probe_destroyed();
+        *string err;
+        try {
+            remove arg;
+        } catch (hash<ExceptionInfo> ex) {
+            err = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertNothing(err);
+        assertEq(before + 1, cpp_api_pending_probe_destroyed());
+    }
+
+    #! checks the argument of the exception of the "pending-error" command in a Program that refuses runtime entry
+    private checkPendingErrorArg(Program p, string label) {
+        int before = cpp_api_pending_probe_destroyed();
+        *string escaped;
+        bool caught;
+        try {
+            try {
+                p.issueModuleCmd("cppapiuser", "pending-error");
+            } catch (hash<ExceptionInfo> ex) {
+                caught = True;
+                assertEq("CPPAPIUSER-PENDING-ERROR", ex.err, label);
+                # the pseudo-methods of the object, found after the lookup of the method in its class
+                assertEq("PendingProbe", ex.arg.className(), label);
+                assertEq("object", ex.arg.type(), label);
+                # the lookup of a method that the class does not have
+                assertThrows("METHOD-DOES-NOT-EXIST", sub () { ex.arg.noSuchMethod(); });
+                # a method of the class is code of the Program, which still refuses runtime entry
+                assertThrows("PROGRAM-ERROR", "undergoing parsing", sub () { ex.arg.value(); });
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the destruction of the argument with the caught exception after the catch block
+            escaped = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertTrue(caught, label);
+        assertNothing(escaped, label);
+        # the C++ destructor ran when the exception was deleted
+        assertEq(before + 1, cpp_api_pending_probe_destroyed(), label);
+    }
+
+    constantsTest() {
+        foreach string mode in ("keep", "rollback") {
+            int before = cpp_api_pending_probe_destroyed();
+            *string err;
+            try {
+                Program p = getPendingProgram();
+                p.issueModuleCmd("cppapiuser", "pending-const C1");
+                p.issueModuleCmd("cppapiuser", "pending-const C2");
+                if (mode == "rollback") {
+                    p.parseRollback();
+                }
+                # the deletion of the Program clears its constants while it refuses runtime entry
+                delete p;
+            } catch (hash<ExceptionInfo> ex) {
+                err = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            assertNothing(err, mode);
+            assertEq(before + 2, cpp_api_pending_probe_destroyed(), mode);
+        }
+    }
+
+    #! a committed Program: no runtime entry is refused (passes without the fix as well)
+    committedControlTest() {
+        int before = cpp_api_pending_probe_destroyed();
+        *string err;
+        try {
+            Program p = getPendingProgram();
+            p.issueModuleCmd("cppapiuser", "pending-const C1");
+            p.parseCommit();
+            delete p;
+        } catch (hash<ExceptionInfo> ex) {
+            err = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertNothing(err);
+        assertEq(before + 1, cpp_api_pending_probe_destroyed());
+    }
+
+    #! the destructor of a Qore subclass is Qore code of the Program: it is still refused, the C++ one still runs
+    qoreSubclassDestructorTest() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        p.loadModule("cppapiuser");
+        # the module command creates the builtin class in the Program, while the code is parsed
+        p.parse("%module-cmd(cppapiuser) pending-const C1\n"
+            "class Sub inherits CppApiPendingProbe::PendingProbe { destructor() { ++destroyed; } } "
+            "int destroyed = 0; object sub make() { return new Sub(); } int sub get_destroyed() { return destroyed; }",
+            "sub");
+        # initializes the global variable
+        p.run();
+        object o = p.callFunction("make");
+        assertEq("Sub", o.className());
+
+        p.parsePending("sub g() {}", "pending");
+        int before = cpp_api_pending_probe_destroyed();
+        *string err;
+        try {
+            delete o;
+        } catch (hash<ExceptionInfo> ex) {
+            err = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertRegex("^PROGRAM-ERROR: .*undergoing parsing", err);
+        # the C++ destructor of the builtin base class ran
+        assertEq(before + 1, cpp_api_pending_probe_destroyed());
+        p.parseCommit();
+        # the Qore destructor did not run
+        assertEq(0, p.callFunction("get_destroyed"));
+    }
+}

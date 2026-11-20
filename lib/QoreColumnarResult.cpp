@@ -13,6 +13,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
+#include "qore/intern/QoreBufferNodePrivate.h"
 #include "qore/intern/QoreColumnarResultPrivate.h"
 
 #include <algorithm>
@@ -550,6 +551,57 @@ static __attribute__((noinline, cold)) int columnar_check_script_int_value(QoreV
     }
 }
 
+//! Checks that a value for a dense integer column is in the range of int64, and raises an exception if not
+/** Called only for a value that may be out of the range (qore#6681): a float that is out of the range or NaN, a number
+    that is not zero and not a regular value below 2^63 in magnitude, and any other value that
+    QoreValue::getAsBigInt() converts to \c INT64_MAX or \c INT64_MIN (it saturates); a value whose integer part is
+    not in the range, or NaN, raises an exception instead of being stored as another value, and the limits themselves
+    are accepted
+
+    @param value the value; a float, number or string
+    @param type the type of \a value
+    @param name the column name
+    @param row the row index of \a value
+    @param xsink for the exception
+
+    @return 0 if the value is in the range, -1 if an exception was raised
+*/
+static __attribute__((noinline, cold)) int columnar_check_int_limit(QoreValue value, qore_type_t type,
+        const char* name, size_t row, ExceptionSink* xsink) {
+    bool out_of_range = false;
+    switch (type) {
+        case NT_FLOAT:
+            // called for a float only when it is out of the range or NaN
+            out_of_range = true;
+            break;
+        case NT_NUMBER: {
+            // the value truncated toward zero does not fit in int64 (also NaN and the infinities)
+            const QoreNumberNode* n = value.get<const QoreNumberNode>();
+            out_of_range = !mpfr_fits_intmax_p(qore_number_private::get(*n)->num, MPFR_RNDZ);
+            break;
+        }
+        case NT_STRING: {
+            QoreStringValueHelper str(value);
+            QoreAsciiCompatStringHelper::withText(**str, [&out_of_range] (const char* p, size_t len) -> bool {
+                errno = 0;
+                strtoll(p, nullptr, 10);
+                out_of_range = errno == ERANGE;
+                return true;
+            });
+            break;
+        }
+        default:
+            break;
+    }
+    if (out_of_range) {
+        xsink->raiseException("COLUMNAR-RESULT-ERROR", "integer column '%s' row " QLLD " has a value outside the "
+            "range of a 64-bit integer, which the column cannot hold: %s; the column must be described as a number or "
+            "decimal column", name, static_cast<int64>(row), value.getFullTypeName());
+        return -1;
+    }
+    return 0;
+}
+
 //! Returns the values of a column list in the storage of a column of the given shape
 /** @param source the column values
     @param shape the column shape
@@ -636,7 +688,63 @@ static QoreValue columnar_make_column_value(const QoreListNode* source, const Co
                         // an int outside of the inline range is held in a node of its own, which setEntry() copies
                         // and which is released here (qore#6146); released only when it is not inline, as a
                         // ValueHolder would cost an out-of-line discard() call for every converted value
-                        QoreValue int_value(value.getAsBigInt());
+                        // a value outside the range of int64, or NaN, is not stored as another value (qore#6681): a
+                        // string, a float and a number are converted here, with a range check that is part of the
+                        // conversion, which is cheaper than getAsBigInt() (it saturates, after a type dispatch); any
+                        // other value is converted by getAsBigInt(), and a saturated result (INT64_MAX or INT64_MIN)
+                        // is checked
+                        // an enum member is converted as its base value: getType() gives the base value's type,
+                        // which is read below from the value itself (the enum member's value is borrowed)
+                        if (value.isEnum()) {
+                            value = value.getEnumBaseValue();
+                        }
+                        int64 converted;
+                        if (type == NT_STRING) {
+                            if (value.isShortString()) {
+                                // at most 7 characters: always in the range of int64; converted as by getAsBigInt()
+                                char buf[8];
+                                value.getShortString(buf);
+                                converted = strtoll(buf, nullptr, 10);
+                            } else {
+                                // converted as by QoreStringNode::getAsBigIntImpl(), without the type dispatch and
+                                // the virtual call of getAsBigInt(); strtoll() saturates: the limits are checked
+                                converted = QoreAsciiCompatStringHelper::withText(*value.get<const QoreStringNode>(),
+                                        [] (const char* p, size_t) -> int64 {
+                                    return strtoll(p, nullptr, 10);
+                                });
+                                if (static_cast<uint64_t>(converted)
+                                        - static_cast<uint64_t>(std::numeric_limits<int64>::max()) <= 1
+                                        && columnar_check_int_limit(value, type, name, i.index(), xsink)) {
+                                    return QoreValue();
+                                }
+                            }
+                        } else if (type == NT_FLOAT) {
+                            double d = value.getDouble();
+                            // NaN fails both comparisons; 2^63 is exact in a double
+                            if (!(d >= -9223372036854775808.0 && d < 9223372036854775808.0)) {
+                                columnar_check_int_limit(value, type, name, i.index(), xsink);
+                                return QoreValue();
+                            }
+                            converted = static_cast<int64>(d);
+                        } else if (type == NT_NUMBER) {
+                            mpfr_srcptr num = qore_number_private::get(*value.get<const QoreNumberNode>())->num;
+                            // a regular value below 2^63 in magnitude (exponent <= 63) and zero fit; NaN, the
+                            // infinities and larger magnitudes (of which only -2^63 fits) are checked out of line
+                            if (!mpfr_zero_p(num) && !(mpfr_regular_p(num) && mpfr_get_exp(num) <= 63)
+                                    && columnar_check_int_limit(value, type, name, i.index(), xsink)) {
+                                return QoreValue();
+                            }
+                            converted = mpfr_get_sj(num, QORE_MPFR_RNDZ);
+                        } else {
+                            converted = value.getAsBigInt();
+                            // INT64_MAX and INT64_MIN (= INT64_MAX + 1) in one unsigned comparison
+                            if (static_cast<uint64_t>(converted)
+                                    - static_cast<uint64_t>(std::numeric_limits<int64>::max())
+                                    <= 1 && columnar_check_int_limit(value, type, name, i.index(), xsink)) {
+                                return QoreValue();
+                            }
+                        }
+                        QoreValue int_value(converted);
                         int rc = rv->setEntry(i.index(), int_value, xsink);
                         if (!int_value.isInt()) {
                             int_value.discard(xsink);
@@ -819,6 +927,28 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
             source->hasNullableElements(), selected, source->getDecimalPrecision(), source->getDecimalScale()),
             xsink);
+        if (source->getElementType() == QoreBufferElementType::Decimal128) {
+            // the elements are copied without a conversion to a number and back (qore#6220)
+            std::vector<size_t> indices;
+            indices.reserve(selected);
+            for (size_t i = 0; i < source->size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar buffer column")) {
+                    return QoreValue();
+                }
+                if (columnar_mask_at(mask, i, xsink)) {
+                    indices.push_back(i);
+                }
+                if (*xsink) {
+                    return QoreValue();
+                }
+            }
+            assert(indices.size() == selected);
+            if (qore_buffer_node_private::takeDecimalImpl(*rv, source, indices.data(), indices.size(),
+                    "filtering columnar buffer column", xsink)) {
+                return QoreValue();
+            }
+            return rv.release();
+        }
         size_t out = 0;
         for (size_t i = 0; i < source->size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar buffer column")) {
@@ -898,6 +1028,14 @@ static QoreValue columnar_take_value(QoreValue value, const std::vector<size_t>&
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
             source->hasNullableElements(), indices.size(), source->getDecimalPrecision(),
             source->getDecimalScale()), xsink);
+        if (source->getElementType() == QoreBufferElementType::Decimal128) {
+            // the elements are copied without a conversion to a number and back (qore#6220)
+            if (qore_buffer_node_private::takeDecimalImpl(*rv, source, indices.data(), indices.size(),
+                    "taking columnar buffer rows", xsink)) {
+                return QoreValue();
+            }
+            return rv.release();
+        }
         for (size_t i = 0; i < indices.size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "taking columnar buffer rows")) {
                 return QoreValue();

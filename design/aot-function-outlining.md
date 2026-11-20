@@ -129,7 +129,14 @@ This generalizes the existing Phase 1.5 init-expression outliner
    functions use closures (`map` with a closure, callbacks), and keeping
    them out of regions would leave those functions unpartitioned; the
    restriction that remains is the one on closure-use locals crossing the
-   boundary (decision 5).
+   boundary (decision 5).  A closure-use local that only a region
+   references belongs to the helper: the transform takes it out of the
+   coordinator's `all_body_locals` (undo restores them), so that the
+   coordinator does not push its closure variable at its entry, below
+   those of its own closure-use locals, where the helper's scope exit
+   popped the variable on the top of the stack, another local's, and a
+   closure created later in the helper that also captured that local
+   failed ("local variable ... is not instantiated"; qore#6654).
 5. **Region discovery: SESE interval sweep over the block layout.**
    First, a reversible *block-split pre-pass* breaks blocks at
    statement-end markers (`DiscardTemps`/`CheckException`/
@@ -333,6 +340,11 @@ This generalizes the existing Phase 1.5 init-expression outliner
   (`outline_held_return`) instead of releasing it, and the coordinator
   holds the call's result as the value of its own return until after
   its locals, as the function releases it (qore#5941, qore#6650).
+- The locals that a helper can write (`written_shared_locals`) are
+  assigned anything by the coordinator's call of it in the analysis of
+  the locals' assignment (`qore_ir_analyze_local_assignment()`): the
+  coordinator no longer takes a local of a type without NOTHING for
+  assigned after a helper that removes it (qore#6653).
 - Outlining disabled (`QORE_AOT_OUTLINE_FN=0`) must produce behavior
   byte-identical to the outlined build (test matrix requirement).
 

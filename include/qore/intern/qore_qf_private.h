@@ -37,6 +37,7 @@
 #include "qore/intern/QC_TermIOS.h"
 #endif
 
+#include "qore/intern/QoreMarkerBoundary.h"
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/AbstractPollState.h"
@@ -431,7 +432,7 @@ struct qore_qf_private {
         // qore_cancellable_poll(), which also waits on a named pipe with select(2) on Darwin, where poll(2) misses
         // the end of the pipe (see QorePollCompat.h)
         pollfd fds = {fd, static_cast<short>(read ? POLLIN : POLLOUT), 0};
-        int rc = qore_cancellable_poll(&fds, 1, timeout_ms, xsink, read ? "file read" : "file write");
+        int rc = qore_quiescent_cancellable_poll(&fds, 1, timeout_ms, xsink, read ? "file read" : "file write");
         if (rc == QORE_POLL_CANCELLED) {
             return -1;
         }
@@ -1076,8 +1077,9 @@ struct qore_qf_private {
     }
 
     //! reads until the given marker in the file's encoding is read at a character boundary; the lock must be held
-    /** In an encoding with characters of a minimum width of more than one byte (UTF-16, UTF-32), a marker is only
-        found at a character boundary
+    /** A marker is only found at a character boundary (see QoreMarkerBoundary): in an encoding with characters of a
+        minimum width of more than one byte (UTF-16, UTF-32), and in a variable-width encoding whose characters can
+        contain bytes that are other characters (Big5, Shift_JIS, GBK), as StreamReader::readLine() finds it
 
         @param marker the marker, in the encoding of the file
         @param str the string read
@@ -1091,13 +1093,12 @@ struct qore_qf_private {
     DLLLOCAL int readUntilMarker(const std::string& marker, QoreString& str, bool include_marker, const std::string& cr_marker,
             ExceptionSink* xsink) {
         assert(!marker.empty());
-        const size_t width = charset->getMinCharWidth();
         const bool tty = (bool)isatty(fd);
+        // the line starts at a character boundary
+        QoreMarkerBoundary boundary(charset, std::max(marker.size(), cr_marker.size()));
         // true if the string ends with the given marker at a character boundary
-        auto ends_with = [&str, width](const std::string& m) -> bool {
-            size_t sz = str.size();
-            return !m.empty() && sz >= m.size() && !((sz - m.size()) % width)
-                && !memcmp(str.c_str() + sz - m.size(), m.data(), m.size());
+        auto ends_with = [&str, &boundary](const std::string& m) -> bool {
+            return boundary.endsWith(str.c_str(), str.size(), m.data(), m.size());
         };
         int ch, rc = -1;
         int char_count = 0;
@@ -1109,6 +1110,7 @@ struct qore_qf_private {
                 }
             }
             str.concat(static_cast<char>(ch));
+            boundary.update(str.c_str(), str.size());
             rc = 0;
             if (ends_with(marker)) {
                 if (!include_marker) {

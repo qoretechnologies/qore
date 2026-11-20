@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -160,7 +160,10 @@ private:
     DLLLOCAL int64 readFromBuffer(void *ptr, int64 limit) {
         assert(outBufCount);
         int64 toCopy = QORE_MIN(static_cast<int64>(outBufCount), limit);
-        memcpy(ptr, outBuf + outBufOffset, toCopy);
+        // peek() reads into the output buffer itself, so the bytes are then already in place
+        if (ptr != outBuf + outBufOffset) {
+            memcpy(ptr, outBuf + outBufOffset, toCopy);
+        }
         // shift out buffer
         outBufCount -= toCopy;
         if (!outBufCount) {

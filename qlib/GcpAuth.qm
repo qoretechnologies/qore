@@ -181,6 +181,28 @@ class TokenCache {
     }
 }
 
+#! Returns the cache key of a token: a SHA-256 digest of every input that authorizes it
+/** The key of a token issued for a credential file covers the content of the file, which the caller reads before the
+    lookup, so that a token is returned only to a caller that can read the credential itself and a token is never
+    returned for a changed file; the key of a metadata-server token covers its endpoint (qore#6745).  Each part is
+    prefixed with its length, so no two lists of parts give the same input.
+*/
+string sub tokenCacheKey(list<string> parts) {
+    return SHA256(foldl $1 + $2, (map sprintf("%d:%s", $1.size(), $1), parts));
+}
+
+#! Checks that the caller may connect to a token endpoint before a cached token is served
+/** A token cached for such an endpoint is served only to a caller whose sandbox would let it fetch the token itself:
+    the check raises what a connection to the endpoint would raise for the caller (qore#6745).
+*/
+sub checkEndpointAccess(string endpoint) {
+    hash<auto> url = parse_url(endpoint);
+    if (!url.host.val()) {
+        throw "GCP-AUTH-ERROR", sprintf("token endpoint %y has no host", endpoint);
+    }
+    SandboxManager::checkNetworkConnect(url.host, url.port ?? (url.protocol == "https" ? 443 : 80));
+}
+
 #! Fetches a GCP access token from a service-account JSON key file
 /** Parses the SA JSON (extracts \c private_key, \c client_email,
     \c token_uri), builds a JWT (header \c {alg:RS256, typ:JWT, kid:...},
@@ -191,8 +213,10 @@ class TokenCache {
     \c https://oauth2.googleapis.com/token) using
     \c grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer.
 
-    Tokens are cached keyed by (sa_json_path, scopes-joined); a second call
-    with the same parameters returns the cached token unless it is within
+    Tokens are cached keyed by the content of the file and the scopes; the file
+    is read with the caller's policy before the cache is consulted, so a token is
+    returned only to a caller that can read the credential.  A second call with
+    the same parameters returns the cached token unless it is within
     @ref TokenSafetyWindowMs of expiry.
 
     @param sa_json_path filesystem path to the SA JSON key file
@@ -211,14 +235,21 @@ class TokenCache {
 public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
         list<string> scopes, *hash<auto> opts) {
     string scope_str = (foldl $1 + " " + $2, scopes) ?? "";
-    string key = sprintf("sa|%s|%s", sa_json_path, scope_str);
+    # the credential is read with the caller's policy before the cache is consulted (qore#6745)
+    string text = readCredentialText(sa_json_path);
+    string key = tokenCacheKey(("sa", text, scope_str));
+    hash<auto> sa = parseCredentialText(text);
     if (!opts.force_refresh) {
+        if (sa.token_uri.typeCode() == NT_STRING && sa.token_uri.val()) {
+            checkEndpointAccess(sa.token_uri);
+        } else {
+            checkEndpointAccess(TokenUrl);
+        }
         *string cached = TokenCache::getCached(key);
         if (cached) {
             return cached;
         }
     }
-    hash<auto> sa = readCredentialFile(sa_json_path);
     foreach string field in (("private_key", "client_email")) {
         if (sa{field}.typeCode() != NT_STRING || !sa{field}.val()) {
             throw "GCP-AUTH-ERROR", sprintf("service-account credentials require a nonempty %s", field);
@@ -298,7 +329,8 @@ public string sub getAccessTokenFromMetadataServer(list<string> scopes,
         *hash<auto> opts) {
     string scope_str = (foldl $1 + " " + $2, scopes) ?? "";
     string endpoint = opts.metadata_endpoint ?? MetadataEndpoint;
-    string key = sprintf("mds|%s|%s", endpoint, scope_str);
+    string key = tokenCacheKey(("mds", endpoint, scope_str));
+    checkEndpointAccess(endpoint);
     if (!opts.force_refresh) {
         *string cached = TokenCache::getCached(key);
         if (cached) {
@@ -425,7 +457,9 @@ public *string sub getQuotaProject(*string location, *string project) {
     \c cloud-platform), so no \c scope is sent in the request and the \a scopes
     used elsewhere in the ADC chain are not needed here.
 
-    Tokens are cached keyed by the file path; a second call returns the cached
+    Tokens are cached keyed by the content of the file, which is read with the
+    caller's policy before the cache is consulted, so a token is returned only
+    to a caller that can read the credential.  A second call returns the cached
     token unless it is within @ref TokenSafetyWindowMs of expiry.
 
     @param path filesystem path to the \c authorized_user JSON file
@@ -438,14 +472,21 @@ public *string sub getQuotaProject(*string location, *string project) {
         missing, or the token refresh failed
 */
 public string sub getAccessTokenFromAuthorizedUserFile(string path, *hash<auto> opts) {
-    string key = sprintf("au|%s", path);
+    # the credential is read with the caller's policy before the cache is consulted (qore#6745)
+    string text = readCredentialText(path);
+    string key = tokenCacheKey(("au", text));
+    hash<auto> cred = parseCredentialText(text);
     if (!opts.force_refresh) {
+        if (cred.token_uri.typeCode() == NT_STRING && cred.token_uri.val()) {
+            checkEndpointAccess(cred.token_uri);
+        } else {
+            checkEndpointAccess(TokenUrl);
+        }
         *string cached = TokenCache::getCached(key);
         if (cached) {
             return cached;
         }
     }
-    hash<auto> cred = readCredentialFile(path);
     foreach string field in (("client_id", "client_secret", "refresh_token")) {
         if (cred{field}.typeCode() != NT_STRING || !cred{field}.val()) {
             throw "GCP-AUTH-ERROR", sprintf("authorized_user credentials require a nonempty %s", field);
@@ -477,6 +518,11 @@ public string sub getAccessTokenFromAuthorizedUserFile(string path, *hash<auto> 
 
 #! Reads and parses a GCP credential JSON file, throwing a clear error on failure
 hash<auto> sub readCredentialFile(string location) {
+    return parseCredentialText(readCredentialText(location));
+}
+
+#! Reads a GCP credential location with the caller's policy, throwing a clear error on failure
+string sub readCredentialText(string location) {
     string text;
     try {
         # read the credential as a FileLocationHandler location: a bare path reads
@@ -486,6 +532,11 @@ hash<auto> sub readCredentialFile(string location) {
         rethrowCancellation(ex);
         throw "GCP-AUTH-ERROR", "cannot read the configured GCP credential location";
     }
+    return text;
+}
+
+#! Parses the text of a GCP credential, throwing a clear error on failure
+hash<auto> sub parseCredentialText(string text) {
     try {
         auto value = parse_json(text);
         if (value.typeCode() != NT_HASH) {

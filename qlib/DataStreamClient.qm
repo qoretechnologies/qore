@@ -149,6 +149,7 @@ client.setMaxMessageSize(8 * 1024 * 1024);  # 8 MB
     @section datastreamclientrelnotes Release Notes
 
     @subsection datastreamclient_v1_5_1 DataStreamClient v1.5.1
+    - a server-side error is described with its location only when the server gives one (issue #6780)
     - fixed requests with headers whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>:
       @ref DataStreamClient::DataStreamClient::sendRawStream() "sendRawStream()",
       @ref DataStreamClient::DataStreamClient::getRawStream() "getRawStream()", a request signed by
@@ -1191,7 +1192,10 @@ rest.setContentEncoding("gzip");
                 if (decode_errors && rv.body.arg.body) {
                     decodeError(rv.body.arg, \info);
                 }
-                throw rv.body.err, sprintf("server-side error: %s: %s", get_ex_pos(rv.body), rv.body.desc),
+                # the server gives the location of the exception only with debugging enabled (qore#6780)
+                throw rv.body.err, rv.body.file
+                    ? sprintf("server-side error: %s: %s", get_ex_pos(rv.body), rv.body.desc)
+                    : sprintf("server-side error: %s", rv.body.desc),
                     rv.body.arg;
             }
             throw "DATASTREAM-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %y",

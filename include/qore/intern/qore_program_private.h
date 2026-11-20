@@ -63,6 +63,9 @@ extern QoreHashNode* ENV;
 // Forward declaration to avoid circular includes
 class QoreSandboxManager;
 
+// Update the process-wide fast path for prelinked AOT calls when a Program gains or loses its debugger.
+DLLLOCAL void qore_aot_debug_program_change(bool attached);
+
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
@@ -85,6 +88,16 @@ class RSetHelper;
 // suspends the inlined calls of the IR interpreter whose callees belong to a Program that a debugger attaches to
 // (declared in QoreIR.h; issue #6473)
 DLLLOCAL void qore_ir_suspend_inline_states(const void* dpgm_addr);
+
+// the calls of the callbacks of AbstractQoreProgramExternalData: an AbstractQoreProgramExternalDataEx gets the sink,
+// and a C++ exception that a legacy callback lets escape is converted into it (issue #6786)
+//! returns the copy of the external data for a child Program; a copy made with an exception is released
+DLLLOCAL AbstractQoreProgramExternalData* qore_ext_data_copy(const AbstractQoreProgramExternalData* data,
+        QoreProgram* pgm, ExceptionSink* xsink);
+//! calls init() on a copy made by qore_ext_data_copy()
+DLLLOCAL void qore_ext_data_init(AbstractQoreProgramExternalData* data, ExceptionSink* xsink);
+//! releases external data
+DLLLOCAL void qore_ext_data_deref(AbstractQoreProgramExternalData* data, ExceptionSink* xsink);
 
 typedef vector_map_t<int, unsigned> ptid_map_t;
 //typedef std::map<int, unsigned> ptid_map_t;
@@ -832,6 +845,9 @@ public:
         * warnSink = nullptr,
         * pendingParseSink = nullptr;
     RootQoreNamespace* RootNS = nullptr;
+    //! the objects of the Program's own classes that its cleared constants held, deleted while only the thread that
+    //! deletes the Program can run code in it (see deleteOwnedConstantObjects(); #6791)
+    std::vector<QoreObject*> owned_constant_objects;
     QoreNamespace* QoreNS = nullptr;
 
     // when true, parse errors and warnings are also captured as structured diagnostics (machine-readable
@@ -2088,7 +2104,12 @@ protected:
         Qore code, which needs a Program that can be attached to.  setParent() runs from
         qore_program_private_base's constructor, where no member of the derived class exists yet.
     */
-    DLLLOCAL void copyExternalData();
+    /** @param xsink for the errors of the modules' callbacks; if nullptr, they are reported as unhandled exceptions
+
+        @return 0 for OK, -1 if a copy or an init() failed: then the copies made are released, the Program has none of
+        the parent's data, and its creator must delete it (issue #6786)
+    */
+    DLLLOCAL int copyExternalData(ExceptionSink* xsink);
 
     // for independent programs (not inherited from another QoreProgram object)
     DLLLOCAL void newProgram();
@@ -2394,9 +2415,16 @@ public:
     //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
 
     DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
-            QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr);
+            QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr,
+            ExceptionSink* xsink = nullptr);
 
     DLLLOCAL ~qore_program_private();
+
+    //! deletes a child Program whose creation failed, as its external data could not be copied (issue #6786)
+    /** The Program has none of the parent's data and has never been used: no object holds it and no code runs in it;
+        the exceptions of its deletion are added to \a xsink after the one of the failure
+    */
+    DLLLOCAL static void deleteFailedChild(QoreProgram* pgm, ExceptionSink* xsink);
 
     DLLLOCAL void registerProgram();
 
@@ -2679,6 +2707,26 @@ public:
 
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink);
 
+    //! Discards the parse state of a Program that is deleted: its pending code is rolled back (qore#6795)
+    /** A Program with code pending (Program::parsePending() without a commit or a rollback), or whose parse was rolled
+        back without PO_ALLOW_REPARSE, refuses every thread to enter it (parsing_in_progress, see incThreadCount()).
+        The code that runs when it is deleted (its exit hooks, the destructors of its saved objects and of the values
+        of its variables) enters it, so the parse is rolled back and the state cleared before that code runs.
+
+        Nothing is done if the Program is not in the parse state or if a thread holds its parse lock (a parse goes
+        on); with \a idle_only, also if a thread is counted in the Program: the rollback deletes code that such a
+        thread could still run, so it is made once the threads of the Program have ended
+    */
+    //! collects, with a reference, the objects of the Program's own classes that the values of its cleared constants
+    //! hold, if anything else holds them: they are deleted by deleteOwnedConstantObjects() (#6791)
+    DLLLOCAL void collectOwnedConstantObjects(const QoreListNode& l);
+
+    //! deletes the objects collected by collectOwnedConstantObjects(): their destructors must run while the Program
+    //! can run code, and only the thread that deletes it can (#6791)
+    DLLLOCAL void deleteOwnedConstantObjects(ExceptionSink* xsink);
+
+    DLLLOCAL void discardPendingParse(ExceptionSink* xsink, bool idle_only);
+
     // called when the program's ref count = 0 (but the dc count may not go to 0 yet)
     DLLLOCAL void clear(ExceptionSink* xsink);
 
@@ -2832,6 +2880,81 @@ public:
         return 0;
     }
     */
+
+    //! Returns true if code parsed in the Program refuses the given thread runtime entry; plock must be held
+    /** As ProgramThreadCountContextHelper::set() refuses it: the thread that holds the parse lock enters the Program
+        without its thread count and is not refused (see incThreadCount() for the others) (qore#6752)
+    */
+    DLLLOCAL bool parseRefusesEntryIntern(int tid) const {
+        return !parsingLocked(tid) && (refusesRuntimeEntry() || refusedByCommit(tid));
+    }
+
+    //! Returns true if code parsed in the Program refuses the given thread runtime entry (qore#6752)
+    DLLLOCAL bool parseRefusesEntry(int tid) const {
+        AutoLocker al(plock);
+        return parseRefusesEntryIntern(tid);
+    }
+
+    //! Enters the Program for native code that runs none of the Program's code, without its context if it refuses runtime entry to the thread because code is parsed in it (qore#6752)
+    /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).  The decision and the entry are
+        made under one lock, so a parse that starts meanwhile cannot refuse the entry.
+
+        @param tid the current thread's TID
+        @param with_context set to true if incThreadCount() would let the thread enter the Program, so that it can
+        switch to its context, false if it entered the Program without its context (see enterWithoutContext()); also
+        false for the thread that holds the parse lock while code is parsed, which incThreadCount() refuses as well
+        @param xsink for the exception if the Program has been deleted
+
+        @return 0 if the thread entered the Program, -1 if not (the Program's teardown has marked it)
+    */
+    DLLLOCAL int enterForNativeCode(int tid, bool& with_context, ExceptionSink* xsink) {
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid)) {
+            if (xsink) {
+                xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
+                    "therefore cannot be accessed at runtime");
+            }
+            return -1;
+        }
+        // the condition of incThreadCount()
+        with_context = !refusesRuntimeEntry() && !refusedByCommit(tid);
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
+        return 0;
+    }
+
+    //! Enters the Program without its context if code parsed in it refuses the thread runtime entry (qore#6752)
+    /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).
+
+        @param tid the current thread's TID
+
+        @return true if the thread entered the Program without its context; false if it did not enter it: the Program
+        does not refuse it runtime entry because of a parse (the entry that follows enters it), or its teardown has
+        marked it (the entry that follows raises the exception)
+    */
+    DLLLOCAL bool enterWithoutContextIfParseRefused(int tid) {
+        // a Program that no code is parsed or committed in, the usual case, is decided without the lock; a parse that
+        // another thread starts after this read can still refuse the normal entry that follows, as it could before
+        // (qore#6752 covers the objects created while the Program is parsed, not a parse that races with the entry)
+        if (!parsing_in_progress.load() && !commit_entry_restricted.load()) {
+            return false;
+        }
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid) || !parseRefusesEntryIntern(tid)) {
+            return false;
+        }
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
+        return true;
+    }
 
     //! Enters the Program without switching to it or running its code: its teardown waits until the thread leaves it
     /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).  Used where the Program's data
@@ -6919,6 +7042,9 @@ public:
         record();
         if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
             return;
+        if (!dpgm.load(std::memory_order_relaxed)) {
+            qore_aot_debug_program_change(true);
+        }
         dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
         // the IR interpreter no longer inlines the calls of this Program's methods (issue #6473)
         qore_ir_suspend_inline_states(&dpgm);
@@ -6955,7 +7081,9 @@ public:
         unrecord();
         if (!n_dpgm)
             return;
-        dpgm.store(nullptr, std::memory_order_release);
+        if (dpgm.exchange(nullptr, std::memory_order_release)) {
+            qore_aot_debug_program_change(false);
+        }
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {

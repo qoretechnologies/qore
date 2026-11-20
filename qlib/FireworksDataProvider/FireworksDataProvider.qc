@@ -34,10 +34,13 @@ public class FireworksDataProvider inherits FireworksDataProviderCommon {
         };
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
-        static Mutex child_lock();
+    }
 
+    private {
         const DefaultChildMap = {
             "chat-completion":
                 Class::forName("FireworksDataProvider::FireworksChatCompletionDataProvider"),
@@ -45,6 +48,10 @@ public class FireworksDataProvider inherits FireworksDataProviderCommon {
             "create-embeddings":
                 Class::forName("FireworksDataProvider::FireworksEmbeddingDataProvider"),
         };
+    }
+
+    private:internal {
+        static Mutex child_lock();
     }
 
     constructor(RestClientIo::RestClientIo rest) : FireworksDataProviderCommon(rest) {
@@ -61,8 +68,12 @@ public class FireworksDataProvider inherits FireworksDataProviderCommon {
     /** @param pathname unique child path
         @param cls provider class accepting a REST client
         @throw FIREWORKS-CHILD-ERROR the child name is already registered
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerChild(string pathname, Reflection::Class cls) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("register a child data provider");
         AutoLock al(child_lock);
         if (childMap{pathname} || inlist(pathname, getSchemaActionNames())) {
             throw "FIREWORKS-CHILD-ERROR", sprintf("child %y already registered", pathname);

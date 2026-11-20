@@ -1605,29 +1605,85 @@ int q_get_format_bounds(QoreFormatBounds& bounds, const QoreHashNode* h, Excepti
     return 0;
 }
 
-static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, ClassAccess access, const char* name, const qore_class_private* pcls, ExceptionSink* xsink) {
+//! returns the class context of the caller if it may access the private members of \a cls, otherwise nullptr
+/** As the lookups of method calls (see QoreClass::findStaticMethod()): a class context outside the class hierarchy of
+    \a cls has no more access than code without a class context (qore#6782)
+*/
+static const qore_class_private* runtime_call_ref_ctx(const qore_class_private* cls) {
+    const qore_class_private* class_ctx = runtime_get_class();
+    return class_ctx && cls->runtimeCheckPrivateClassAccess(class_ctx) ? class_ctx : nullptr;
+}
+
+//! returns true if the caller may access the private members of \a cls (see runtime_call_ref_ctx())
+static bool runtime_call_ref_ctx_may_access(const qore_class_private* cls) {
+    return runtime_call_ref_ctx(cls) != nullptr;
+}
+
+//! finds the method that a call reference by name gives the caller, as a method call of the name finds it
+/** The lookup has the caller's class context only if it may access the class; a caller without such a context gets
+    the public method of the name if the method found first is not public (qore#6704, qore#6782), and a caller with
+    such a context the method of the name that it can call, skipping a private method of a class that it may not
+    access, such as one of another parent class of the object (qore#6759)
+
+    @param callable set to true if the caller may call the method returned: a public method, or with the class context
+    kept, a method that it may call (qore_class_private::runtimeContextCanCallMethod(), the rule of the variant search
+    of a call); a call reference is not made to another method (qore#6782, qore#6759)
+
+    @param obj_cls the class of the object that the reference is bound to, if any: a normal method is looked up with
+    the caller's class context only if the context may also access this class, as a method call on the object does
+    (qore_class_private::getMethodForEval()), so a class-scoped name cannot reach a private method of a parent class
+    through an object of another branch of the hierarchy (qore#6806); a static method does not depend on the object
+
+    @return the method found, or nullptr if there is no method of the name
+*/
+static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* pcls, const char* name,
+        ClassAccess& access, bool& callable, const qore_class_private* obj_cls = nullptr) {
+    const qore_class_private* class_ctx = runtime_call_ref_ctx(pcls);
+    const qore_class_private* normal_ctx = class_ctx;
+    if (normal_ctx && obj_cls && obj_cls != pcls && !obj_cls->runtimeCheckPrivateClassAccess(normal_ctx)) {
+        normal_ctx = nullptr;
+    }
+    const QoreMethod* meth = pcls->runtimeFindCommittedMethodForEval(name, access, normal_ctx);
+    const qore_class_private* ctx = normal_ctx;
+    if (!meth) {
+        meth = pcls->runtimeFindCommittedStaticMethod(name, access, class_ctx);
+        ctx = class_ctx;
+    }
+    if (!meth) {
+        callable = false;
+        return nullptr;
+    }
+    if (access > Public) {
+        // the method that a call of the name makes from here, if the caller cannot call the method found first
+        meth = pcls->runtimeFindCallableCommittedMethod(name, meth, access, ctx);
+    }
+    // a method found with a class context does not have the access of the method of the class itself that the
+    // context may access (see qore_class_private::runtimeFindCommittedMethodForEval()), so the method is checked
+    callable = access == Public || (ctx && qore_class_private::runtimeContextCanCallMethod(*meth, ctx));
+    return meth;
+}
+
+static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, ClassAccess access, bool callable,
+        const char* name, const qore_class_private* pcls, ExceptionSink* xsink) {
+    // the constructor, destructor and copy method run only when an object is created, deleted or copied, also when
+    // a base class declares them (qore#6783)
+    if (qore_class_private::checkReferenceable(*meth, xsink)) {
+        return QoreValue();
+    }
     if (!meth->isStatic() && !self) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "non-static method \"%s\" is not accessible without an object "
             "context", name);
         return QoreValue();
     }
-    if (access > Public) {
-        // ensure the method can be accessed
-        if (self) {
-            const qore_class_private* selfcls = qore_class_private::get(*self->getClass());
-            if (selfcls != pcls) {
-                if (access > Private || !selfcls->runtimeCheckPrivateClassAccess(pcls)) {
-                    meth = nullptr;
-                }
-            }
-        } else {
-            meth = nullptr;
-        }
-        if (!meth) {
-            xsink->raiseException("CALL-REFERENCE-ERROR", "%s method \"%s\" is not accessible in this context",
-                privpub(access), name);
-            return QoreValue();
-        }
+    // the method was looked up with the caller's class context only if that context may access the class that was
+    // searched (see runtime_call_ref_find_method()): a method that is not public was found for a caller that may call
+    // it, as a method call finds it; without such a context, only a public method is returned (qore#6782); a method
+    // that the caller cannot call, such as a private method of another parent class of the object than those of its
+    // class context, is not returned either (qore#6759)
+    if (!callable) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "%s method \"%s\" is not accessible in this context",
+            privpub(access), name);
+        return QoreValue();
     }
     // see if non-static method is part of self's class hierarchy
     if (!meth->isStatic()) {
@@ -1636,6 +1692,13 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
             xsink->raiseException("CALL-REFERENCE-ERROR", "\"%s\" is not accessible from an object of " \
                 "class '%s' as the classes are not in the same hierarchy", name, self->getClassName());
             // no call reference with the error (issue #5866)
+            return QoreValue();
+        }
+        // a method of a privately inherited class (named with its class) is not accessible from outside the class
+        // hierarchy of the object, as a call of it is not (qore#6782)
+        if (priv && !runtime_call_ref_ctx_may_access(qore_class_private::get(*self->getClass()))) {
+            xsink->raiseException("CALL-REFERENCE-ERROR", "method \"%s\" of privately-inherited class '%s' is not "
+                "accessible in this context", name, meth->getClass()->getName());
             return QoreValue();
         }
     }
@@ -1660,31 +1723,28 @@ QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* iden
         return QoreValue();
     }
     bool scoped_ref = strstr(name->c_str(), "::");
-    const qore_class_private* class_ctx = runtime_get_class();
     if (scoped_ref) {
         NamedScope ns(name->c_str());
         const QoreClass* cls = qore_root_ns_private::get(*(getRootNS()))->runtimeFindScopedClassWithMethod(ns);
         if (cls) {
             const qore_class_private* pcls = qore_class_private::get(*cls);
             ClassAccess access;
-            const QoreMethod* meth = pcls->runtimeFindCommittedMethodForEval(ns.getIdentifier(), access, class_ctx);
-            if (!meth) {
-                meth = pcls->runtimeFindCommittedStaticMethod(ns.getIdentifier(), access, class_ctx);
-            }
+            bool callable;
+            // the object's class is checked as for a method call on the object (qore#6806)
+            const QoreMethod* meth = runtime_call_ref_find_method(pcls, ns.getIdentifier(), access, callable,
+                self ? qore_class_private::get(*self->getClass()) : nullptr);
             //printd(5, "get_call_reference_intern() '%s' -> cls: '%s' ctx: '%s' meth: %p\n", name->c_str(), cls->getName(), class_ctx ? class_ctx->name.c_str() : "n/a", meth);
             if (meth) {
-                return do_method_intern(self, meth, access, name->c_str(), pcls, xsink);
+                return do_method_intern(self, meth, access, callable, name->c_str(), pcls, xsink);
             }
         }
     } else if (self) {
         const qore_class_private* pcls = qore_class_private::get(*self->getClass());
         ClassAccess access;
-        const QoreMethod* meth = pcls->runtimeFindCommittedMethodForEval(name->c_str(), access, class_ctx);
-        if (!meth) {
-            meth = pcls->runtimeFindCommittedStaticMethod(name->c_str(), access, class_ctx);
-        }
+        bool callable;
+        const QoreMethod* meth = runtime_call_ref_find_method(pcls, name->c_str(), access, callable);
         if (meth) {
-            return do_method_intern(self, meth, access, name->c_str(), pcls, xsink);
+            return do_method_intern(self, meth, access, callable, name->c_str(), pcls, xsink);
         }
     }
 
@@ -4631,12 +4691,35 @@ qore_offset_t q_text_invalid_offset(const char* p, size_t len, const QoreEncodin
 
 void q_raise_invalid_read_text(ExceptionSink* xsink, const char* cls, const char* meth, const char* what,
         const QoreEncoding* enc, size_t offset, int64 line) {
-    QoreStringNode* desc = new QoreStringNodeMaker("%s::%s(): the %s is not valid %s: invalid byte sequence at byte "
-        "offset " QLLD, cls, meth, what, enc->getCode(), (int64)offset);
+    QoreStringNode* desc = new QoreStringNodeMaker("%s%s%s(): the %s is not valid %s: invalid byte sequence at byte "
+        "offset " QLLD, cls ? cls : "", cls ? "::" : "", meth, what, enc->getCode(), (int64)offset);
     if (line > 0) {
         desc->sprintf(" (line " QLLD ")", line);
     }
     xsink->raiseException("INVALID-ENCODING", desc);
+}
+
+qore_offset_t q_get_invalid_text_offset(const QoreEncoding* enc, const char* p, size_t len) {
+    // in an encoding without a byte order (the generic UTF-16, or a Unicode encoding created on the fly such as
+    // UTF-32), a byte order mark gives the byte order of the text, as when it is converted; the offset is in the text
+    const QoreEncoding* bo = q_get_bom_byte_order(enc, p, len);
+    if (bo) {
+        size_t bom = bo->getMinCharWidth();
+        qore_offset_t offset = q_text_invalid_offset(p + bom, len - bom, bo);
+        return offset < 0 ? -1 : offset + static_cast<qore_offset_t>(bom);
+    }
+    return q_text_invalid_offset(p, len, enc);
+}
+
+int q_check_text_encoding(const QoreEncoding* enc, const char* p, size_t len, const char* where, const char* what,
+        ExceptionSink* xsink) {
+    qore_offset_t offset = q_get_invalid_text_offset(enc, p, len);
+    if (offset < 0) {
+        return 0;
+    }
+    xsink->raiseException("INVALID-ENCODING", new QoreStringNodeMaker("%s: the %s is not valid %s: invalid byte "
+        "sequence at byte offset " QLLD, where, what, enc->getCode(), (int64)offset));
+    return -1;
 }
 
 const QoreEncoding* q_get_bom_byte_order(const QoreEncoding* enc, const char* p, size_t len) {
@@ -4663,14 +4746,13 @@ const QoreEncoding* q_get_bom_byte_order(const QoreEncoding* enc, const char* p,
     return bom_enc != enc ? bom_enc : nullptr;
 }
 
-int q_check_read_text(QoreString& str, qore_encoding_errors_t mode, const char* cls, const char* meth,
-        const char* what, ExceptionSink* xsink, int64 line, bool allow_cut_end) {
-    if (mode == qore_encoding_errors_t::KEEP || str.empty()) {
-        return 0;
+qore_offset_t q_string_invalid_offset(const QoreString& str, bool allow_cut_end) {
+    if (str.empty()) {
+        return -1;
     }
     const QoreEncoding* enc = str.getEncoding();
     if (!q_encoding_checks_text(enc)) {
-        return 0;
+        return -1;
     }
     size_t ascii = 0;
     if (enc->isAsciiCompat() && !qore_encoding_private::isStateful(enc)) {
@@ -4679,10 +4761,18 @@ int q_check_read_text(QoreString& str, qore_encoding_errors_t mode, const char* 
         const qore_string_private* p = qore_string_private::get(str);
         ascii = p->getAsciiPrefix(p->effective_buf(), str.size());
         if (ascii >= str.size()) {
-            return 0;
+            return -1;
         }
     }
-    qore_offset_t off = q_text_invalid_offset(str.c_str(), str.size(), enc, allow_cut_end, ascii);
+    return q_text_invalid_offset(str.c_str(), str.size(), enc, allow_cut_end, ascii);
+}
+
+int q_check_read_text(QoreString& str, qore_encoding_errors_t mode, const char* cls, const char* meth,
+        const char* what, ExceptionSink* xsink, int64 line, bool allow_cut_end) {
+    if (mode == qore_encoding_errors_t::KEEP) {
+        return 0;
+    }
+    qore_offset_t off = q_string_invalid_offset(str, allow_cut_end);
     if (off < 0) {
         return 0;
     }
@@ -4690,7 +4780,7 @@ int q_check_read_text(QoreString& str, qore_encoding_errors_t mode, const char* 
         str.setEncoding(QCS_ISO_8859_1);
         return 0;
     }
-    q_raise_invalid_read_text(xsink, cls, meth, what, enc, off, line);
+    q_raise_invalid_read_text(xsink, cls, meth, what, str.getEncoding(), off, line);
     return -1;
 }
 

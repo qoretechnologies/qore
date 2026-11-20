@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../EncodingCapability.qm
 
 %exec-class EncodingConversionLossTest
 
@@ -179,19 +180,17 @@ class EncodingConversionLossTest inherits QUnit::Test {
         }
     }
 
-    #! skips the test if the iconv library does not support the encoding
-    private checkAvailable(string enc) {
-        try {
-            # a conversion that the iconv library cannot make raises an exception
-            string probe = convert_encoding("x", enc);
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("%s is not available with the iconv library: %s", enc, ex.desc));
+    #! skips the test if the iconv library cannot encode the text in the encoding and decode it back
+    private checkAvailable(string enc, string text) {
+        *string reason = encoding_cannot_convert(enc, text);
+        if (reason) {
+            testSkip(reason);
         }
     }
 
     statefulBlocksTest(string enc) {
-        checkAvailable(enc);
         string text = StatefulText{enc};
+        checkAvailable(enc, text);
         binary src = binary(convert_encoding(text, enc));
         # every block size cuts characters and shift sequences at a different place
         foreach int block in ((1, 2, 3, 5, 7, 4093, 4096)) {
@@ -202,7 +201,7 @@ class EncodingConversionLossTest inherits QUnit::Test {
     }
 
     truncatedStatefulTest(string enc) {
-        checkAvailable(enc);
+        checkAvailable(enc, "日本");
         hash<auto> i = TruncatedText{enc};
         string s = binary_to_string(i.data, enc);
         # the bytes of the cut-off character are never decoded as other characters; the cut-off character is an
@@ -222,8 +221,9 @@ class EncodingConversionLossTest inherits QUnit::Test {
             binary out;
             *hash<ExceptionInfo> ex = inputStreamError(i.data, enc, "UTF-8", block, \out);
             if (ex) {
-                assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("block %d", block));
-                assertRegex(sprintf("byte offset %d ", i.offset), ex.desc, sprintf("block %d", block));
+                # input cut off at the end is not valid in the source encoding (qoretechnologies/qore#6730)
+                assertEq("INVALID-ENCODING", ex.err, sprintf("block %d", block));
+                assertRegex(sprintf("byte offset %d$", i.offset), ex.desc, sprintf("block %d", block));
                 # only the characters before it can have been read
                 assertEq(binary("日").substr(0, out.size()), out, sprintf("block %d", block));
             } else {
@@ -234,7 +234,7 @@ class EncodingConversionLossTest inherits QUnit::Test {
     }
 
     statefulLossTest() {
-        checkAvailable("ISO-2022-JP");
+        # ISO-2022-JP, which every platform has
         string text = "ab 日本";
         binary src = binary(convert_encoding(text, "ISO-2022-JP"));
         # "日" is the first character of the shifted run, which starts with "ESC $ B" after "ab "

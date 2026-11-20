@@ -448,8 +448,11 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
     #! Runs a script that requires Mid in a Program whose sandbox denies the given directory
     /** @param module_dirs the directories of the Program's own module path, searched in this order
         @param env_module_path the process-wide module path (QORE_MODULE_DIR)
+        @param native whether the sandbox allows uncontrolled APIs, without which the sandboxed code cannot load the
+        native code of a compiled module from outside the process-wide module path (issue #6776)
     */
-    private string runSandboxed(TmpDir tmp, string denied_dir, list<string> module_dirs, string env_module_path) {
+    private string runSandboxed(TmpDir tmp, string denied_dir, list<string> module_dirs, string env_module_path,
+            bool native = True) {
         string directives;
         foreach string dir in (module_dirs) {
             directives += sprintf("%%append-module-path \"%s\"\n", dir);
@@ -460,6 +463,7 @@ Program p(PO_NEW_STYLE);
 SandboxManager m();
 m.setFilesystemDefaultPolicy(True);
 m.addFilesystemDeniedPath(%y);
+m.setUncontrolledApiPolicy(%y);
 p.setSandboxManager(m);
 try {
     p.parse(%y, \"probe\");
@@ -467,7 +471,7 @@ try {
 } catch (hash<ExceptionInfo> ex) {
     printf(\"%%s: %%s\\n\", ex.err, ex.desc);
 }
-", realpath(denied_dir), directives + "%requires Mid\n"));
+", realpath(denied_dir), native, directives + "%requires Mid\n"));
         return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, env_module_path, qore_bin, script)));
     }
 
@@ -484,6 +488,12 @@ try {
         assertRegex("AOT module '.*/Mid\\.qmod' for feature 'Mid' is out of date: it was compiled against other "
             "files of module 'Zed' than '.*/shadow/Zed\\.qm'", out);
         # the module check did not read the file the sandbox denies
+        assertEq(old_atime, hstat(h.denied_qmod).atime, out);
+
+        # with the default policy for uncontrolled APIs, the sandboxed code cannot load the compiled module at all
+        out = runSandboxed(tmp, h.denied_dir, (h.denied_dir, h.shadow_dir, h.qmod_dir), tmp.path + "/none", False);
+        assertRegex("LOAD-MODULE-ERROR: cannot load binary module '.*/Mid\\.qmod': code that a sandbox governs or "
+            "whose functional domains are restricted can load native code only from the module path", out);
         assertEq(old_atime, hstat(h.denied_qmod).atime, out);
     }
 

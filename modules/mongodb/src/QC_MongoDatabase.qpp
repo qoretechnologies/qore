@@ -76,6 +76,7 @@ foreach string coll in (colls) {
     @endcode
 
     @throw MONGODB-DATABASE-ERROR failed to list collections
+    @throw INVALID-ENCODING a collection name from the server is not valid UTF-8; the names are tagged UTF-8
 */
 list<string> MongoDatabase::listCollectionNames() {
     return database->listCollectionNames(xsink);
@@ -89,21 +90,26 @@ list<string> MongoDatabase::listCollectionNames() {
     @code{.py}
 MongoCollection coll = db.getCollection("users");
     @endcode
+
+    @throw INVALID-ENCODING the name is not valid text in its encoding (it is converted to UTF-8 for the driver)
 */
 MongoCollection MongoDatabase::getCollection(string name) {
-    // the name is passed to the driver as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(name->c_str(), name->size(), "collection name", "collection names", "MONGODB-DATABASE-ERROR",
-            xsink)) {
+    // the driver takes UTF-8 text
+    TempEncodingHelper utf8_name;
+    if (mongo_utf8_arg(*name, utf8_name, "MongoDatabase::getCollection()", "collection name", xsink)) {
         return QoreValue();
     }
-    // MongoDB names are UTF-8
-    TempEncodingHelper utf8_name(name, QCS_UTF8, xsink);
-    if (*xsink) {
+    // the name is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(utf8_name->c_str(), utf8_name->size(), "collection name", "collection names",
+            "MONGODB-DATABASE-ERROR", xsink)) {
         return QoreValue();
     }
     mongoc_collection_t* coll = database->getCollection(utf8_name->c_str());
     if (!coll) {
-        xsink->raiseException("MONGODB-DATABASE-ERROR", "failed to get collection '%s'", name->c_str());
+        // the message is UTF-8, as the name given to the driver is
+        QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+        desc->sprintf("failed to get collection '%s'", utf8_name->c_str());
+        xsink->raiseException("MONGODB-DATABASE-ERROR", desc);
         return QoreValue();
     }
     return new QoreObject(QC_MONGOCOLLECTION, getProgram(),
@@ -120,16 +126,17 @@ MongoCollection coll = db.createCollection("newcollection");
     @endcode
 
     @throw MONGODB-DATABASE-ERROR failed to create collection
+    @throw INVALID-ENCODING the name is not valid text in its encoding (it is converted to UTF-8 for the driver)
 */
 MongoCollection MongoDatabase::createCollection(string name) {
-    // the name is passed to the driver as a C string, which would be cut at a NUL character
-    if (q_check_no_nul(name->c_str(), name->size(), "collection name", "collection names", "MONGODB-DATABASE-ERROR",
-            xsink)) {
+    // the driver takes UTF-8 text
+    TempEncodingHelper utf8_name;
+    if (mongo_utf8_arg(*name, utf8_name, "MongoDatabase::createCollection()", "collection name", xsink)) {
         return QoreValue();
     }
-    // MongoDB names are UTF-8
-    TempEncodingHelper utf8_name(name, QCS_UTF8, xsink);
-    if (*xsink) {
+    // the name is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(utf8_name->c_str(), utf8_name->size(), "collection name", "collection names",
+            "MONGODB-DATABASE-ERROR", xsink)) {
         return QoreValue();
     }
     mongoc_collection_t* coll = database->createCollection(utf8_name->c_str(), xsink);

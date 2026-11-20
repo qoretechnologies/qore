@@ -46,6 +46,8 @@ public:
     const QoreClass* oc;
     const QoreTypeInfo* object_type_info;
     std::string dynamic_class_name;
+    //! The constructor bound by name when its class or overloads are still pending AOT registration
+    std::string aot_constructor_signature;
     QoreProgram* aot_resolver_pgm = nullptr;
     QoreString desc;
 
@@ -73,7 +75,7 @@ public:
     DLLLOCAL ScopedObjectCallNode(const ScopedObjectCallNode& old, QoreListNode* n_args)
             : AbstractFunctionCallNode(old, n_args), name(old.name ? new NamedScope(*old.name) : nullptr),
             oc(old.oc), object_type_info(old.object_type_info), dynamic_class_name(old.dynamic_class_name),
-            aot_resolver_pgm(old.aot_resolver_pgm), desc(old.desc) {
+            aot_constructor_signature(old.aot_constructor_signature), aot_resolver_pgm(old.aot_resolver_pgm), desc(old.desc) {
     }
 
     DLLLOCAL virtual ~ScopedObjectCallNode() {

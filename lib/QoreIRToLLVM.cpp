@@ -478,6 +478,7 @@ static bool isFastMethodCallEligible(
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <limits>
+#include <string_view>
 #include <llvm/Support/raw_ostream.h>
 
 #include <cstdio>
@@ -485,8 +486,10 @@ static bool isFastMethodCallEligible(
 
 //! the name of the method of an object method reference passed to qore_rt_create_object_method_ref_aot(): a static
 //! method of the receiver's declared class, to which the reference is bound (qore#5990), is given with the class, as
-//! "\x01<class reference>\x01<method name>"; otherwise the name of qore_aot_object_method_ref_name(), which gives a
-//! normal method of a parent class resolved for the declared class with both classes (qore#6680)
+//! "\x01<class reference>\x01<method>", the method as qore_aot_encode_static_method_ref_target() gives it, with the
+//! class that declares it if that is not the declared class (qore#6679); otherwise the name of
+//! qore_aot_object_method_ref_name(), which gives a normal method of a parent class resolved for the declared class
+//! with both classes (qore#6680)
 static std::string qore_aot_native_object_method_ref_name(const ParseObjectMethodReferenceNode* omr) {
     const QoreClass* qc = omr->getStaticBoundClass();
     if (!qc) {
@@ -495,7 +498,7 @@ static std::string qore_aot_native_object_method_ref_name(const ParseObjectMetho
     std::string rv(1, '\x01');
     rv += qore_aot_encode_class_ref(qc);
     rv += '\x01';
-    rv += omr->getMethodName();
+    rv += qore_aot_encode_static_method_ref_target(omr->getParseMethod(), qc);
     return rv;
 }
 
@@ -10106,6 +10109,53 @@ llvm::Value* QoreIRToLLVM::getFastEntryReturnValue(llvm::Module& module, llvm::V
     }
 }
 
+// Enter through the ordinary call binder on this cold edge. The native entry can receive its caller's context,
+// so use the callee's canonical name and standard native symbol to identify its overload in the executing Program.
+bool QoreIRToLLVM::emitAOTDebugFastEntry(llvm::Module& module, llvm::Function& function, const BatchCalleeInfo& callee) {
+    unsigned count = callee.param_kinds.size();
+    llvm::Value* args = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    if (count) {
+        args = builder->CreateAlloca(i64_type, llvm::ConstantInt::get(i32_type, count));
+    }
+    std::string kinds;
+    kinds.reserve(count);
+    for (unsigned i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT debugger entry lowering")) {
+            return false;
+        }
+        auto kind = callee.param_kinds[i];
+        kinds.push_back(static_cast<char>(kind));
+        llvm::Value* raw = function.getArg(i);
+        if (kind == BatchCalleeParamKind::NativeBool) {
+            raw = builder->CreateZExt(raw, i64_type);
+        } else if (kind == BatchCalleeParamKind::NativeFloat) {
+            raw = builder->CreateBitCast(raw, i64_type);
+        }
+        builder->CreateStore(raw, builder->CreateGEP(i64_type, args, llvm::ConstantInt::get(i32_type, i)));
+    }
+    auto standard = module.getOrInsertFunction(callee.name,
+        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+    auto dispatch = module.getOrInsertFunction("qore_rt_debug_aot_fast_function",
+        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+    // Qualify a root function explicitly, so it cannot resolve to a builtin with the same name.
+    std::string identity = callee.call_ref_path;
+    if (identity.find("::") == std::string::npos) {
+        identity.insert(0, "::");
+    }
+    identity = qore_aot_encode_function_ref(std::move(identity),
+        callee.specialization_type_param_instantiation);
+    llvm::Value* boxed = builder->CreateCall(dispatch,
+        {qore_ir_create_global_string_ptr(builder, identity), standard.getCallee(), args,
+         qore_ir_create_global_string_ptr(builder, kinds), llvm::ConstantInt::get(i32_type, count), xsink_arg});
+    llvm::Value* rv = getFastEntryReturnValue(module, boxed);
+    if (rv != boxed) {
+        builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {boxed, xsink_arg});
+    }
+    builder->CreateRet(rv);
+    return true;
+}
+
 llvm::Constant* QoreIRToLLVM::getNothingReturnValue() const {
     if (fast_entry_return_kind == BatchCalleeReturnKind::NativeFloat) {
         return llvm::ConstantFP::get(double_type, 0.0);
@@ -14222,8 +14272,7 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
     nested_lowering.shared_obe_handler_fns = &getObeHandlerFns();
     if (aot_mode) {
         // the nested function shares the AOT context of the function being lowered: its slot tables
-        nested_lowering.setAOTMode(aot_slots);
-        nested_lowering.setAOTDirectClosureFastEntry(aot_direct_closure_fast_entry);
+        nested_lowering.setAOTMode(aot_slots, aot_direct_closure_fast_entry);
         // and its slot symbols, such as the dispatch functions of its closures (qore#6339)
         nested_lowering.aot_symbol_owner = getAOTSymbolOwner();
     }
@@ -15231,6 +15280,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     if (ret->has_value) {
                         returned.push_back(ret->value.id);
                     }
+                } else if (inst->opcode == QoreIROpcode::TakeHandedOverReturn && !inst->operands.empty()
+                        && inst->operands.front().isValid()) {
+                    // the value of a return whose cleanups run handlers out of line past the inline cap, which the
+                    // Return gives through the TakeHandedOverReturn after them: an exception in the cleanups
+                    // interrupts the return of that value, which is kept as the value of a Return is (#6762); a family
+                    // of its own, as the value taken can be another one
+                    returned.push_back(inst->operands.front().id);
                 } else if (aot_mode && inst->opcode == QoreIROpcode::CallAOTHelper && inst->result.isValid()
                         && static_cast<const QoreIRCallAOTHelperInstruction*>(inst.get())->function_body) {
                     // the result of an outlined helper's call on an exception is the value of an interrupted return
@@ -15586,15 +15642,51 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_set<const void*> native_unsafe_locals
         = qore_ir_get_native_unsafe_locals(func, initially_assigned_locals);
 
-    // In AOT mode, remove pre-instantiated body locals from the IR-only set.
-    // evalTiered pre-instantiates ALL body locals from all_body_locals on the
-    // runtime stack, so StoreLocal must sync via qore_rt_assign_local_aot (which
-    // adds a reference).  Without sync, the alloca holds the only reference while
-    // the cleanup alloca also tracks the source value for decref → double-free on
-    // function exit. Proven-assigned native scalar locals carry no references;
-    // exact string locals use the existing owned IR-local alloca cleanup. Both
-    // can safely remain alloca-only and skip runtime synchronization.
-    // Parameters and other non-body locals remain IR-only.
+    // A standard AOT frame can be inspected by a callback from another Program. An unshadowed root local's
+    // name is visible throughout the call, so the frame can report its declaration without a physical slot.
+    // For nested and shadowed variables the slot records scope exit and the order of name lookup.
+    size_t locals_examined = 0;
+    auto cancelled_local_scan = [&]() {
+        if (++locals_examined % 100 || !qore_check_cancel(nullptr, "AOT body-local storage analysis")) {
+            return false;
+        }
+        error = "cancelled during AOT body-local storage analysis";
+        return true;
+    };
+    const bool standard_aot_entry = aot_mode && fast_entry_name.empty();
+    if (standard_aot_entry) {
+        func.aot_private_body_locals.clear();
+        if (func.aot_private_root_scope && ir_only_locals_set) {
+            std::unordered_set<std::string_view> names{"self", "argv"};
+            std::unordered_set<std::string_view> shadowed;
+            for (const auto& param : func.param_local_vars) {
+                if (cancelled_local_scan()) {
+                    return false;
+                }
+                if (param.second) {
+                    names.emplace(param.second->getName());
+                }
+            }
+            for (const LocalVar* lv : func.all_body_locals) {
+                if (cancelled_local_scan()) {
+                    return false;
+                }
+                if (!names.emplace(lv->getName()).second) {
+                    shadowed.emplace(lv->getName());
+                }
+            }
+            for (const LocalVar* lv : func.aot_private_root_scope->lv) {
+                if (cancelled_local_scan()) {
+                    return false;
+                }
+                if (ir_only_locals_set->count(lv) && !lv->closureUse() && !lv->isTopLevel()
+                        && !shadowed.count(lv->getName())) {
+                    func.aot_private_body_locals.emplace(lv);
+                }
+            }
+        }
+    }
+    // Retain the existing switches for native scalars and strings.
     aot_adjusted_ir_only.clear();
     if (aot_mode && ir_only_locals_set && !func.all_body_locals.empty()) {
         aot_adjusted_ir_only = *ir_only_locals_set;
@@ -15603,18 +15695,25 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         static constinit QoreEnvFlag string_aot_body_locals_env("QORE_DISABLE_AOT_STRING_BODY_LOCALS");
         const bool string_aot_body_locals = !string_aot_body_locals_env.get();
         for (LocalVar* lv : func.all_body_locals) {
+            if (cancelled_local_scan()) {
+                return false;
+            }
             const void* key = reinterpret_cast<const void*>(lv);
             const QoreTypeInfo* ti = lv->getTypeInfo();
-            bool native_scalar = native_aot_body_locals
-                && !native_unsafe_locals.count(key)
-                && (QoreTypeInfo::isPlainType(ti, NT_INT)
-                    || QoreTypeInfo::isPlainType(ti, NT_FLOAT)
-                    || QoreTypeInfo::isPlainType(ti, NT_BOOLEAN));
-            bool owned_string = string_aot_body_locals
-                && !native_unsafe_locals.count(key)
-                && ti == stringTypeInfo;
-            if (!native_scalar && !owned_string) {
+            // Scalars and exact strings have switchable native representations. Other IR-owned locals
+            // use the boxed slot, including the read/write-through cache of a reference-slot local and
+            // the owning reference of an object local. Escaping lvalues were excluded by computeIROnlyLocals().
+            bool scalar = QoreTypeInfo::isPlainType(ti, NT_INT) || QoreTypeInfo::isPlainType(ti, NT_FLOAT)
+                || QoreTypeInfo::isPlainType(ti, NT_BOOLEAN);
+            bool private_body_local = standard_aot_entry ? func.aot_private_body_locals.count(key)
+                : func.aot_private_root_scope != nullptr;
+            if ((!scalar && ti != stringTypeInfo && !private_body_local)
+                    || (scalar && (!native_aot_body_locals || native_unsafe_locals.count(key)))
+                    || (ti == stringTypeInfo && (!string_aot_body_locals || native_unsafe_locals.count(key)))) {
                 aot_adjusted_ir_only.erase(key);
+                if (standard_aot_entry) {
+                    func.aot_private_body_locals.erase(key);
+                }
             }
         }
         ir_only_locals_set = aot_adjusted_ir_only.empty()
@@ -16072,6 +16171,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // check as AST user-code entry.  Some optimized call paths invoke LLVM
     // functions directly and bypass runtime helpers such as qore_rt_call_fast().
     llvm::BasicBlock* stack_overflow_bb = nullptr;
+    llvm::BasicBlock* debug_fast_entry_bb = nullptr;
+    auto* slots_type = llvm::ArrayType::get(ptr_type, 3);
+    llvm::AllocaInst* entry_slots = nullptr;
     if (!func.blocks.empty()) {
         llvm::BasicBlock* first_ir_bb = block_map[func.blocks.front().get()];
         llvm::BasicBlock* stack_check_bb = llvm::BasicBlock::Create(ctx,
@@ -16080,12 +16182,42 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 "stack_overflow", llvm_func, first_ir_bb);
 
         builder->SetInsertPoint(stack_check_bb);
-        auto check_fn = module.getOrInsertFunction("qore_rt_check_stack",
+        const BatchCalleeInfo* debug_callee = nullptr;
+        if (aot_mode && is_fast_entry && batch_callees && func.source_variant) {
+            auto it = batch_callees->find(func.source_variant);
+            if (it != batch_callees->end() && !it->second.call_ref_path.empty()
+                    && it->second.param_kinds.size() + 2 == llvm_func->arg_size()) {
+                debug_callee = &it->second;
+            }
+        }
+        llvm::Value* err;
+        if (debug_callee) {
+            // The stack check, the debugger decision, and the location slots all need this thread's data.
+            entry_slots = builder->CreateAlloca(slots_type, nullptr, "native_entry_slots");
+            auto enter = module.getOrInsertFunction("qore_rt_enter_aot_fast_function",
+                llvm::FunctionType::get(i32_type, {ptr_type, ptr_type}, false));
+            err = builder->CreateCall(enter, {xsink_arg, entry_slots});
+        } else {
+            auto check = module.getOrInsertFunction("qore_rt_check_stack",
                 llvm::FunctionType::get(i32_type, {ptr_type}, false));
-        llvm::Value* err = builder->CreateCall(check_fn, {xsink_arg});
-        llvm::Value* ok = builder->CreateICmpEQ(err,
-                llvm::ConstantInt::get(i32_type, 0));
-        builder->CreateCondBr(ok, first_ir_bb, stack_overflow_bb);
+            err = builder->CreateCall(check, {xsink_arg});
+        }
+        llvm::Value* ok = builder->CreateICmpEQ(err, llvm::ConstantInt::get(i32_type, 0));
+        if (debug_callee) {
+            llvm::BasicBlock* slow = llvm::BasicBlock::Create(ctx, "aot_entry_slow", llvm_func, first_ir_bb);
+            debug_fast_entry_bb = llvm::BasicBlock::Create(ctx, "aot_debug_entry", llvm_func, first_ir_bb);
+            builder->CreateCondBr(ok, first_ir_bb, slow, llvm::MDBuilder(ctx).createBranchWeights(1 << 20, 1));
+            builder->SetInsertPoint(slow);
+            builder->CreateCondBr(builder->CreateICmpSLT(err, llvm::ConstantInt::get(i32_type, 0)),
+                stack_overflow_bb, debug_fast_entry_bb);
+            builder->SetInsertPoint(debug_fast_entry_bb);
+            if (!emitAOTDebugFastEntry(module, *llvm_func, *debug_callee)) {
+                error = "operation cancelled during AOT debugger entry lowering";
+                return false;
+            }
+        } else {
+            builder->CreateCondBr(ok, first_ir_bb, stack_overflow_bb);
+        }
 
         builder->SetInsertPoint(stack_overflow_bb);
         builder->CreateRet(getNothingReturnValue());
@@ -16270,17 +16402,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // the thread's runtime location slots and its data for the frames of native calls, got with one call
     // (QoreNativeEntrySlots)
     {
-        llvm::Type* slots_type = llvm::ArrayType::get(ptr_type, 3);
-        llvm::AllocaInst* slots;
-        {
+        if (!entry_slots) {
             llvm::BasicBlock& entry = llvm_func->getEntryBlock();
             llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
-            slots = ab.CreateAlloca(slots_type, nullptr, "native_entry_slots");
+            entry_slots = ab.CreateAlloca(slots_type, nullptr, "native_entry_slots");
+            builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots",
+                llvm::FunctionType::get(void_type, {ptr_type}, false)), {entry_slots});
         }
-        builder->CreateCall(module.getOrInsertFunction("qore_rt_get_native_entry_slots",
-            llvm::FunctionType::get(void_type, {ptr_type}, false)), {slots});
         auto load_slot = [&](unsigned i, const char* name) -> llvm::Value* {
-            return builder->CreateLoad(ptr_type, builder->CreateConstInBoundsGEP2_32(slots_type, slots, 0, i), name);
+            return builder->CreateLoad(ptr_type, builder->CreateConstInBoundsGEP2_32(slots_type, entry_slots, 0, i), name);
         };
         native_call_thread_data = load_slot(0, "thread_data");
         loc_cache_ptr = load_slot(1, "loc_ptr");
@@ -18551,7 +18681,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
         std::vector<llvm::Instruction*> exit_terms;
         for (llvm::BasicBlock& bb : *llvm_func) {
-            if (&bb == stack_overflow_bb) {
+            if (&bb == stack_overflow_bb || &bb == debug_fast_entry_bb) {
                 continue;
             }
             llvm::Instruction* term = qoreGetTerminator(bb);
@@ -24359,9 +24489,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 qore_ir_create_global_string_ptr(builder,
                                     qc->getNamespacePath(),
                                     "static_call_ref_class_path");
+                            // the method with the class that declares it, so that the method that the compiler
+                            // resolved is the one called (qore#6679)
                             llvm::Value* method_name =
                                 qore_ir_create_global_string_ptr(builder,
-                                    method->getName(),
+                                    qore_aot_encode_static_method_ref_target(method, qc).c_str(),
                                     "static_call_ref_method_name");
                             auto cr_ft = llvm::FunctionType::get(i64_type,
                                     {ptr_type, ptr_type, ptr_type, ptr_type}, false);
@@ -34420,9 +34552,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             qore_ir_create_global_string_ptr(builder,
                                 qc->getNamespacePath(),
                                 "static_call_ref_class_path");
+                        // the method with the class that declares it, so that the method that the compiler
+                        // resolved is the one called (qore#6679)
                         llvm::Value* method_name =
                             qore_ir_create_global_string_ptr(builder,
-                                method->getName(),
+                                qore_aot_encode_static_method_ref_target(method, qc).c_str(),
                                 "static_call_ref_method_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, ptr_type, ptr_type}, false);
@@ -39784,8 +39918,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && local_key && !direct_self_mutation && path_inst->path.size() == 1
                     && path_inst->path[0].kind == LVPathStepKind::LocalVar
                     && current_ir_func->hasIRStorage(local_key)
-                    // an AOT body local is published to the runtime stack, where the runtime step finds it
-                    && !(aot_mode && aot_body_locals.count(local_key))
+                    && (!aot_mode || !aot_body_locals.count(local_key)
+                        || (current_ir_func->aot_private_root_scope && ir_only_body_locals.count(local_key)))
                     && !native_int_locals.count(local_key) && !native_float_locals.count(local_key)
                     && !native_bool_locals.count(local_key)) {
                 auto cache_it = local_allocas.find(local_key);

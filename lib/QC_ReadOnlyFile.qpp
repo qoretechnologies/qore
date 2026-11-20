@@ -853,10 +853,17 @@ while (exists (*string line = f.readLine(False))) {
     @note the line read is checked with the @ref encoding_errors "encoding_errors" option of the object (see
     ReadOnlyFile::setEncodingErrors())
 
+    @note the end of line marker ends a line only where it starts at a character boundary, as with
+    @ref Qore::StreamReader::readLine() "StreamReader::readLine()": in a double-byte encoding whose second bytes can
+    have the value of an ASCII character (\c Shift_JIS, \c Big5, \c GBK), a marker byte that is the second byte of
+    a character does not end the line, and in \c UTF-16 and \c UTF-32 a marker is found only at a whole character
+
     @see
     - @ref Qore::FileLineIterator
 
-    @since %Qore 3.0 the line read is checked with the @ref encoding_errors "encoding_errors" option
+    @since
+    - %Qore 3.0 the line read is checked with the @ref encoding_errors "encoding_errors" option
+    - %Qore 3.0 the end of line marker ends a line only at a character boundary
  */
 *string ReadOnlyFile::readLine(bool include_eol = True, *string eol) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::readLine", xsink))
