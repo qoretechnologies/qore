@@ -290,8 +290,14 @@ printf(\"trusted read: %s\\n\", trusted.callFunction(\"read\", data));
     aotPathTest() {
         *string qmod = aotIn(other_dir);
         if (qmod) {
-            # an AOT module was compiled without the loader's parse defines
-            checkGoverned(run("sandboxed", qmod, empty_dir), True, False);
+            # native code is trusted code: sandboxed code cannot load an AOT module from outside the module path, and
+            # without its source next to it, nothing is loaded (qore#6776)
+            string out = run("sandboxed", qmod, empty_dir);
+            assertEq(sprintf("loader load: LOAD-MODULE-ERROR: cannot load binary module '%s': code that a sandbox "
+                "governs or whose functional domains are restricted can load native code only from the module path "
+                "(see the trust model of native code in the sandboxing documentation)", qmod),
+                ModuleInitProvenanceTest::line("loader load:", out), out);
+            assertNothing(ModuleInitProvenanceTest::line("loader staticSandboxed:", out), out);
         }
     }
 

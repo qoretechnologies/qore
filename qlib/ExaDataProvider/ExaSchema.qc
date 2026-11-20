@@ -105,7 +105,9 @@ public class ExaSchema {
 
         #! The action set built from the schema and the manifest
         static *RestSchemaActions::RestSchemaActionSet action_set;
+    }
 
+    private:internal {
         #! Serializes construction of the schema and the action set
         static Mutex lck();
     }

@@ -51,9 +51,9 @@ this work; no change).
 | `PollPipeline::addCheckRegex()` | strings strictly; binary as before | done |
 | HTTP client response bodies (`qore_http_response_body_string()`, `qore_decode_http_response_body()`) | HTML and other text (or no Content-Type): ISO-8859-1; structured types: `INVALID-ENCODING` (HTTP/1.1 completes the request with the error, HTTP/2 completes the stream with it); chunks given to a receive callback are given as received | done for `HTTPClient` (`HttpBodyCharset.qtest`: HTTP/1.1, HTTP/2); the qlib client modules (HttpClientIo, RestClientIo, RestClient, FileLocationHandlerHttp) decode with the public `decode_http_body()`: #6604 |
 | Mime quoted-printable / base64 / encoded-word decoding, part bodies; MailMessage `force_encoding()` paths; POP3 data | the HTTP client rule (#6604); `sanitize_filename()` gives `"attachment"` (done) | #6604 |
-| JSON parser output (`modules/json`) | raise | #6604 |
+| JSON parser output (`modules/json`: `parse_json()` and its callers, `JsonSaxParser`, `parse_toon()`) | raise | done (#6604; `JsonInvalidEncoding.qtest`) |
 | File, `StreamReader` and line readers (CsvUtil, FixedLengthUtil, Ndjson, file data providers) | an `encoding_errors` option (raise, latin1, keep), default raise | #6604 |
-| MongoDB BSON strings; proto2 protobuf strings | raise | #6604 |
+| MongoDB BSON strings and keys, database and collection names; proto2 protobuf strings and map keys, `ProtobufSchema::fromJson()` JSON text | raise (keys converted to the default encoding; text given to libbson, libmongoc and libprotobuf converted to UTF-8) | done (#6604; `bson-array.cpp`, `protobuf/test/invalid-encoding.qtest`, `protobuf/test/default-encoding-keys.qtest`) |
 | YAML (libyaml), IMAP and SMTP replies (ISO-8859-1), Mime header text (`convert_encoding()`) | already valid | covered |
 | `ENV`, `ARGV` | trusted | unchanged |
 
@@ -76,5 +76,15 @@ and `YamlRpcHandler` method matching, `OpenApi3`/`Swagger` path templates, `McpS
 
 ## Other matchers
 
-- `modules/tokenizer` (`SplitPreTokenizer.cpp`) uses PCRE2 directly and takes a UTF-8 error as the end of the
-  matches: #6604.
+- `modules/tokenizer` (`SplitPreTokenizer.cpp`) uses PCRE2 directly and takes a match error as the end of the
+  matches.  Text enters the tokenizer through `qoreUtf8StdString()` (`modules/tokenizer/src/utils/qore_helpers.h`),
+  which raises `INVALID-ENCODING` for text that is not valid in its encoding and converts other encodings to UTF-8
+  (the text to encode, words, tokens, added tokens, the special tokens and chat template of `loadConfig()`, chat
+  messages), so valid input gives no UTF-8 error there; decoded text is UTF-8 with U+FFFD for each maximal invalid
+  subsequence, as Hugging Face tokenizers give (`modules/tokenizer/test/invalid-encoding.qtest`): done (#6604).
+  The model, normalizer, pre-tokenizer, post-processor and decoder configuration strings (vocabulary tokens, merges,
+  patterns, replacement strings, special tokens) are checked and converted to UTF-8 where the constructor reads them
+  (`configString()`, `configStringKey()`), and the token keys (`BPE`/`WordPiece` vocabulary keys, `TemplateProcessing`
+  special token keys), which are in the default encoding, are checked and converted from it (`configKey()`; #6727),
+  so a configuration parsed from JSON text in another encoding or built by hand, or keys in an ISO-8859-1 default
+  encoding, give the same tokenizer (`invalid-encoding.qtest`, `default-encoding-tokens.qtest`): done (#6604).

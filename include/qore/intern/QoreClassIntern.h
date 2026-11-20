@@ -5761,6 +5761,18 @@ public:
         return qc.priv->runtimeCheckPrivateClassAccess(oqc);
     }
 
+    //! Returns true if code running in a class context can call a variant of a method found by name at run time
+    /** As the variant search of a method call (CodeEvaluationHelper::findVariant()) allows it: a private variant
+        only with a class context that may access the private members of the method's class (not one only related to
+        the class of the object), a private:internal variant only from its own class (qore#6735)
+
+        @param m the method found
+        @param v a variant of the method (of the method's own class)
+        @param class_ctx the class context of the call, checked against the object's class; nullptr if none
+    */
+    DLLLOCAL static bool runtimeCheckMethodVariantAccess(const QoreMethod& m, const AbstractQoreFunctionVariant* v,
+            const qore_class_private* class_ctx);
+
     DLLLOCAL static qore_type_result_e parseCheckCompatibleClass(const QoreClass* qc, const QoreClass* oc) {
         if (!oc)
             return QTI_NOT_EQUAL;

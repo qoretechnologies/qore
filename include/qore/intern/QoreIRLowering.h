@@ -1083,6 +1083,14 @@ private:
         //! the list that the stages of a lazy pipeline gave a fold, which the fold iterates as its source (foldr $1,
         //! (select l, c)), released after the operator before the source (issue #6262)
         QoreIRValue intermediate;
+        //! the Phi of a fold's accumulator, which can hold a reference of its own to the fold's value when the Phi
+        //! after the loop cannot take it over (a conditional fold expression, a fused pipeline): released once the
+        //! fold's value has a reference of its own (see lowerWithSourceRelease(); issue #6442)
+        QoreIRValue accumulator;
+        //! the values that the accumulator's Phi gets on the loop's back edges (the value of the fold's expression),
+        //! which can keep a reference of their own when the Phi does not take them over (a ternary expression whose
+        //! temporaries are discarded, foldl ($1 ? $1 : $2), l), released with the accumulator (issue #6442)
+        std::vector<QoreIRValue> accumulator_values;
         //! A source read through a reference belongs to the statement.
         bool may_read_reference = false;
     };
@@ -1093,6 +1101,9 @@ private:
     //! returns true if the source of the functional operator being lowered is released after the operator (a
     //! temporary or a plain read of a local, see FunctionalSourceRelease)
     DLLLOCAL bool functionalSourceReleased() const;
+    //! records the Phi of the accumulator of the fold being lowered, which is released once the fold's value has a
+    //! reference of its own (see FunctionalSourceCapture::accumulator)
+    DLLLOCAL void recordFoldAccumulator(const QoreIRPhiInstruction* accumulator, QoreIRValue initial);
     //! Releases the value that a functional operator's expression gave once its result container holds it
     /** The container takes a reference of its own, as the AST interpreter's operator pushes the value, which the
         container then holds alone; see the definition.  Nothing is emitted for a value of a type that holds no object,
@@ -1168,6 +1179,11 @@ private:
         //! for an entry with try_end_depth: the exception target outside the try statement, which an exception raised
         //! once the statement has ended goes to (#6128; the hand-over of a return in it, #6074)
         QoreIRBasicBlock* try_outer_target = nullptr;
+        //! for an entry with try_end_depth: the handler of an exception raised when the try statement ends (qore#6658:
+        //! the exception stack of a walk from the body of a handler lowered inline does not hold it): the catch block
+        //! of the try statement for its try block, the handler outside the statement for its catch block (nullptr: the
+        //! exception leaves the frame)
+        QoreIRBasicBlock* try_end_target = nullptr;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         //! the exception target where the entry was pushed, outside the block: an exception that a destructor raises
         //! when a break, a continue or a return releases the locals of an Lvars or CatchVar entry goes there, to the

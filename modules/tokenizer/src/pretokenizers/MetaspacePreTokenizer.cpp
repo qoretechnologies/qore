@@ -34,7 +34,10 @@ MetaspacePreTokenizer::MetaspacePreTokenizer(const QoreHashNode* config, Excepti
     // Read "replacement" key
     QoreValue v = config->getKeyValue("replacement");
     if (!v.isNullOrNothing()) {
-        std::string str = safeGetStdString(v);
+        std::string str = configString(v, "configuration value 'replacement'", xsink);
+        if (*xsink) {
+            return;
+        }
         if (!str.empty()) {
             replacement = std::move(str);
         }
@@ -43,7 +46,10 @@ MetaspacePreTokenizer::MetaspacePreTokenizer(const QoreHashNode* config, Excepti
     // Read "str_rep" as alternative key name (some tokenizer.json files use this)
     v = config->getKeyValue("str_rep");
     if (!v.isNullOrNothing()) {
-        std::string str = safeGetStdString(v);
+        std::string str = configString(v, "configuration value 'str_rep'", xsink);
+        if (*xsink) {
+            return;
+        }
         if (!str.empty()) {
             replacement = std::move(str);
         }
@@ -52,7 +58,10 @@ MetaspacePreTokenizer::MetaspacePreTokenizer(const QoreHashNode* config, Excepti
     // Read "prepend_scheme" key
     v = config->getKeyValue("prepend_scheme");
     if (!v.isNullOrNothing()) {
-        std::string str = safeGetStdString(v);
+        std::string str = configString(v, "configuration value 'prepend_scheme'", xsink);
+        if (*xsink) {
+            return;
+        }
         if (!str.empty()) {
             prepend_scheme = parsePrependScheme(str);
         }

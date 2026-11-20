@@ -420,11 +420,20 @@ public namespace Hl7v2Util {
     public class Hl7v2SchemaRegistry {
         private {
             static hash<string, Hl7v2Schema> schema_cache = {};
+        }
+
+        private:internal {
             static Mutex schema_mutex();
         }
 
         #! Loads a schema from a Qore value file
         public static Hl7v2Schema loadFile(string path, bool reload = False) {
+            # the cache is process-wide: sandboxed code reads the file itself, with its own policy, and neither gets a
+            # schema that other code cached nor caches one for other code (qore#6747)
+            if (!DataProvider::mayRegisterShared()) {
+                return new Hl7v2Schema(cast<hash>(Util::parse_to_qore_value(
+                    FileLocationHandler::getTextFileFromLocation(path))));
+            }
             string key = normalize_dir(path);
             if (!reload) {
                 AutoLock al(schema_mutex);
@@ -455,6 +464,8 @@ public namespace Hl7v2Util {
 
         #! Registers a schema object in memory by version
         public static registerSchema(Hl7v2Schema schema) {
+            # a schema that sandboxed code registered would be used by other callers (qore#6747)
+            DataProvider::checkSharedRegistration("HL7 v2 schema registry", "schema", schema.version);
             AutoLock al(schema_mutex);
             schema_cache{"version:" + schema.version} = schema;
         }

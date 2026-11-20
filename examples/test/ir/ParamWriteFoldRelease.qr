@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# the script of ParamWriteFoldRelease.qtest: a parameter's write releases the value of a fold over a lazy pipeline,
+# of a fold whose expression is a conditional expression, and of the operators over such folds, as in the AST
+# interpreter (issue #6442)
+%modern
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+T sub mk(string n) { return new T(n); }
+auto sub ex() { throw "FOLD-ERR"; }
+
+our list<auto> g_l;
+
+# parameters that are written before the function continues
+sub wa(auto a, string tag) { a = NOTHING; printf("after write %s\n", tag); }
+sub wl(*list<auto> l, string tag) { l = (); printf("after write %s\n", tag); }
+
+sub folds(string p) {
+    # foldl over a lazy pipeline (map and select stages)
+    wa((foldl $1, (map $1, (mk(p + "fm1"), mk(p + "fm2")))), p + "fold-map");
+    wa((foldl $1, (select (mk(p + "fs1"), mk(p + "fs2")), True)), p + "fold-select");
+    wa((foldl $1, (select (map $1, (mk(p + "fsm1"), mk(p + "fsm2"))), True)), p + "fold-select-map");
+    wa((foldl $1, (map $1, (select (mk(p + "fms1"), mk(p + "fms2")), True))), p + "fold-map-select");
+    wa((foldl $1, (select (map $1, (select (mk(p + "fsms1"), mk(p + "fsms2")), True)), True)), p + "fold-sms");
+    # conditional fold expressions
+    wa((foldl ($1 ?? $2), (mk(p + "fnc1"), mk(p + "fnc2"))), p + "fold-nc");
+    wa((foldl ($1 ? $1 : $2), (mk(p + "fq1"), mk(p + "fq2"))), p + "fold-q");
+    wa((foldl ($1 ?* $2), (mk(p + "fvc1"), mk(p + "fvc2"))), p + "fold-vc");
+    wa((foldl $2, (mk(p + "f21"), mk(p + "f22"))), p + "fold-2");
+    wa((foldl ($1 ?? $2), (mk(p + "fone"),)), p + "fold-one");
+    wa((foldl ($1 ?? $2), ()), p + "fold-empty");
+    wa((foldl ($1 ?? $2), (map $1, (mk(p + "fncm1"), mk(p + "fncm2")))), p + "fold-nc-map");
+    wa((foldl ($1 ?? $2), (select (map $1, (mk(p + "fncs1"), mk(p + "fncs2"))), $1.n != "")), p + "fold-nc-sm");
+    # foldr over the same shapes
+    wa((foldr $1, (map $1, (mk(p + "rm1"), mk(p + "rm2")))), p + "foldr-map");
+    wa((foldr ($1 ?? $2), (mk(p + "rnc1"), mk(p + "rnc2"))), p + "foldr-nc");
+    wa((foldr ($1 ? $1 : $2), (mk(p + "rq1"), mk(p + "rq2"))), p + "foldr-q");
+    wa((foldr ($1 ?? $2), (select (mk(p + "rncs1"), mk(p + "rncs2")), True)), p + "foldr-nc-select");
+    # folds over iterators, nested folds and folds whose expression creates the objects
+    wa((foldl ($1 ?? $2), new ListIterator((mk(p + "fi1"), mk(p + "fi2")))), p + "fold-iter");
+    wa((foldl $1, (map $1, new ListIterator((mk(p + "fmi1"), mk(p + "fmi2"))))), p + "fold-map-iter");
+    wa((foldl ($1 ?? $2), (map (foldl $1, $1), ((mk(p + "fn1a"), mk(p + "fn1b")), (mk(p + "fn2a"),
+        mk(p + "fn2b"))))), p + "fold-nested");
+    wa((foldl mk($1.n + $2.n), (mk(p + "fo1"), mk(p + "fo2"))), p + "fold-obj");
+    wa((foldl ($1.n ? mk($1.n + "x") : $2), (mk(p + "fqn1"), mk(p + "fqn2"))), p + "fold-q-new");
+    g_l = (NOTHING, NOTHING);
+    wa((foldl ($1 ?? mk(p + "fgnew")), g_l), p + "fold-global");
+    # map and select over the value of a fold
+    wl((map $1, (foldl $1 + $2, ((mk(p + "mf1"),), (mk(p + "mf2"),)))), p + "map-fold");
+    wl((select (foldl $1 + $2, ((mk(p + "sf1"),), (mk(p + "sf2"),))), True), p + "select-fold");
+    wa((map $1, (select mk(p + "msel") ?? NOTHING, True)), p + "map-sel-single");
+    # a local source holds its objects
+    list<auto> l = (mk(p + "fl1"), mk(p + "fl2"));
+    wa((foldl ($1 ?? $2), l), p + "fold-local");
+    l = ();
+    printf("cleared %slocal\n", p);
+    # an exception raised in the fold's expression
+    try {
+        wa((foldl ($2.n == p + "fx3" ? ex() : ($1 ?? $2)), (mk(p + "fx1"), mk(p + "fx2"), mk(p + "fx3"))),
+            p + "fold-ex");
+    } catch (hash<ExceptionInfo> e) {
+        printf("caught %s %s\n", p, e.err);
+    }
+    try {
+        wa((foldl ($2.n == p + "fxm3" ? ex() : ($1 ?? $2)), (map $1, (mk(p + "fxm1"), mk(p + "fxm2"),
+            mk(p + "fxm3")))), p + "fold-ex-map");
+    } catch (hash<ExceptionInfo> e) {
+        printf("caught %s %s\n", p, e.err);
+    }
+}
+
+for (int round = 0; round < 3; ++round) {
+    printf("round %d\n", round);
+    folds("");
+    # from top-level code
+    wa((foldl ($1 ?? $2), (mk("top-fnc1"), mk("top-fnc2"))), "top-fold-nc");
+    wa((foldl $1, (select (mk("top-fs1"), mk("top-fs2")), True)), "top-fold-select");
+    printf("round end %d\n", round);
+}

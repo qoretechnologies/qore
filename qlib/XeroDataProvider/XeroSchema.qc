@@ -143,7 +143,9 @@ public class XeroSchema {
 
         #! The action set built from the projects schema and its manifest
         static *RestSchemaActionSet projects_set;
+    }
 
+    private:internal {
         #! Serializes construction of the schemas and the action sets
         static Mutex lck();
     }

@@ -43,6 +43,27 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         int size = 0;
     }
 
+    private:internal {
+        #! True if this is the process-wide cache of the DataProvider module, which sandboxed code cannot change
+        bool shared;
+    }
+
+    #! Creates the cache
+    /** @param shared @ref True for the process-wide cache of the module, which sandboxed code cannot change
+        (qore#6747)
+    */
+    constructor(*bool shared) {
+        self.shared = shared ?? False;
+    }
+
+    #! Refuses a change of the process-wide cache to sandboxed code (qore#6747)
+    private:internal checkChange(string path, *bool removal) {
+        if (shared) {
+            DataProviderSandboxState::checkSharedRegistration("data provider type cache", "data provider type", path,
+                removal);
+        }
+    }
+
     #! Register a new data provider type in the cache
     /** @param path a \c "/" separated path for the type; this is the lookup index
         @param type the new data provider type
@@ -56,6 +77,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         and therefore not suitable for indexing)
     */
     registerType(string path, AbstractDataProviderType type, bool locked = False, *bool set_rollback) {
+        checkChange(path);
         list<string> type_path = DataProvider::getPathList(\path);
 
         if ((*string p = type.getPath()).val()) {
@@ -106,6 +128,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         and therefore not suitable for indexing)
     */
     bool registerOrReplaceType(string path, AbstractDataProviderType type, *int id, *hash<auto> info) {
+        checkChange(path);
         list<string> type_path = DataProvider::getPathList(\path);
 
         if ((*string p = type.getPath()).val()) {
@@ -145,6 +168,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         @return the type removed or @ref NOTHING if no type was present or if the type or any of its parents is locked
     */
     *DataProviderTypeEntry removeTypeEntry(string path) {
+        checkChange(path, True);
         return removeTypeEntryIntern(path);
     }
 
@@ -158,6 +182,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         @since DataProvider 3.2.1
     */
     *DataProviderTypeEntry removeTypeEntryEx(string path) {
+        checkChange(path, True);
         return removeTypeEntryIntern(path, True);
     }
 
@@ -167,6 +192,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         @return the type removed or @ref NOTHING if the type was not present
     */
     *AbstractDataProviderType removeType(string path) {
+        checkChange(path, True);
         if (*DataProviderTypeEntry entry = removeTypeEntryIntern(path)) {
             return entry.getType();
         }
@@ -180,6 +206,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         @throw TYPE-LOCK-ERROR the given type cannot be removed, because it is locked
     */
     *AbstractDataProviderType removeTypeEx(string path) {
+        checkChange(path, True);
         if (*DataProviderTypeEntry entry = removeTypeEntryIntern(path, True)) {
             return entry.getType();
         }
@@ -326,6 +353,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
 
     #! Clears the type hierarchy of all non-locked types
     clear() {
+        checkChange("*", True);
         bool needs_lock = !rwlock.writeLockOwner();
         if (needs_lock) {
             rwlock.writeLock();

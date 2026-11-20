@@ -18,8 +18,11 @@ public namespace AzureDocumentIntelligenceDataProvider {
 */
 public class AzureDocumentIntelligenceSchema {
     private {
-        static Mutex lck();
         static list<RestSchemaActionSet> sets = ();
+    }
+
+    private:internal {
+        static Mutex lck();
     }
 
     #! Returns both complete action sets, constructing them once under the lock

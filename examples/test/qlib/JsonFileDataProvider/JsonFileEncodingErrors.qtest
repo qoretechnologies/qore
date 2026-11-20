@@ -62,8 +62,9 @@ public class JsonFileEncodingErrorsTest inherits QUnit::Test {
             assertEq(({"name": "René"},), readAll(new JsonFileReadDataProvider(input
                 + {"encoding_errors": "latin1"})), input.firstKey());
         }
-        list<hash<auto>> recs = readAll(new JsonFileReadDataProvider({"path": path, "encoding_errors": "keep"}));
-        assertEq(1, recs.size());
+        # the text kept without a check is not valid JSON text for the parser
+        assertThrows("INVALID-ENCODING", "^parse_json\\(\\): the JSON text is not valid UTF-8", \readAll(),
+            (new JsonFileReadDataProvider({"path": path, "encoding_errors": "keep"}),));
         assertThrows("OPTION-VALUE-ERROR", "encoding_errors", sub () {
             new JsonFileReadDataProvider({"path": path, "encoding_errors": "ignore"});
         });

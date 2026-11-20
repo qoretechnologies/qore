@@ -14407,7 +14407,71 @@ static bool finalizeAOTBatchBodyContracts(
     return true;
 }
 
+//! Returns true if the instruction is one that a body summary turns into an operation that can raise an exception
+/** These are the operations of the summaries that a call is replaced by (emitAOTImportedSummary()): divisions, the
+    projections of hash keys and list elements, the string operations of method calls, and the calls whose summaries a
+    summary composes, which run in the inline frame of the summarized call (qore#6673)
+*/
+static bool qore_ir_summary_may_raise(QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::DivInt:
+        case QoreIROpcode::DivAny:
+        case QoreIROpcode::DivFloat:
+        case QoreIROpcode::ModInt:
+        case QoreIROpcode::ModAny:
+        case QoreIROpcode::HashKeyAccessHash:
+        case QoreIROpcode::HashKeyAccessHashGuarded:
+        case QoreIROpcode::HashKeyAccessInt:
+        case QoreIROpcode::ListIndexDynamic:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallClosureDirect:
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Returns the statements of the operations of a function that a summary of it can raise an exception from
+/** @return 0 if there is none, 1 if they are all in one statement, whose location is returned in \a loc, or 2 if they
+    are in more than one statement, or -1 if cancelled
+*/
+static int qore_ir_get_raise_location(const QoreIRFunction& func, const QoreProgramLocation*& loc) {
+    loc = nullptr;
+    size_t check_count = 0;
+    for (QoreIRBasicBlock* block : qore_ir_code_blocks(func)) {
+        for (const auto& inst : block->instructions) {
+            if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "AOT function raise location")) {
+                return -1;
+            }
+            if (!inst || !qore_ir_summary_may_raise(inst->opcode)) {
+                continue;
+            }
+            // the runtime location of the instruction: of its statement, which an exception takes (qore#6646)
+            const QoreProgramLocation* iloc = inst->stmt_loc ? inst->stmt_loc : inst->loc;
+            if (!iloc || iloc->start_line <= 0) {
+                continue;
+            }
+            if (!loc) {
+                loc = iloc;
+            } else if (loc != iloc && (loc->start_line != iloc->start_line || loc->end_line != iloc->end_line
+                    || loc->getFileValue() != iloc->getFileValue())) {
+                return 2;
+            }
+        }
+    }
+    return loc ? 1 : 0;
+}
+
 const QoreProgramLocation* qore_ir_get_body_location(const QoreIRFunction& func) {
+    // the statement of the operations that can raise an exception, if they are all in one: an exception that the code
+    // run inline at this location raises is located at its statement (qore#6673)
+    const QoreProgramLocation* raise_loc;
+    if (qore_ir_get_raise_location(func, raise_loc) == 1) {
+        return raise_loc;
+    }
     const QoreProgramLocation* first = nullptr;
     size_t check_count = 0;
     // the code (QoreIRCodeBlocks): the return of the path of a debugger's request has the location of its step event
@@ -16129,6 +16193,31 @@ bool qore_ir_resolve_batch_function_summaries(
     if (!qore_aot_collect_float_expression_summaries(
             functions, batch_callees, check_count)) {
         return false;
+    }
+    // a summary runs in an inline frame at one location (qore_ir_get_body_location()), so a summary that can raise an
+    // exception is declined for a function whose operations that can raise are in more than one statement: the
+    // exception would be located at the wrong statement (qore#6673)
+    for (const auto& [variant, func] : functions) {
+        auto it = func ? batch_callees.find(variant) : batch_callees.end();
+        if (it == batch_callees.end()) {
+            continue;
+        }
+        const QoreProgramLocation* raise_loc;
+        int rc = qore_ir_get_raise_location(*func, raise_loc);
+        if (rc < 0) {
+            return false;
+        }
+        if (rc == 2) {
+            BatchCalleeInfo& info = it->second;
+            info.int_expression = AOTIntExpressionInfo();
+            info.float_expression = AOTFloatExpressionInfo();
+            info.string_op = AOTStringOpInfo();
+            info.string_expression = AOTStringExpressionInfo();
+            info.collection_op = AOTCollectionOpInfo();
+            info.composed_int = AOTComposedIntInfo();
+            info.context_int = AOTContextIntInfo();
+            info.global_int = AOTGlobalIntInfo();
+        }
     }
     return !collect_body_dependency_provenance
         || resolveAOTBatchBodyDependencyProvenance(functions,
@@ -36929,10 +37018,11 @@ class ExprTreeSerializer {
         if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_METH_REF));
             const QoreMethod* method = scr->getMethod();
-            // the class that the reference names (qore#6285)
+            // the class that the reference names (qore#6285), and the method with the class that declares it
+            // (qore#6679)
             const QoreClass* qc = scr->getScopeClass();
             writeStr(qore_aot_encode_class_ref(qc));
-            writeStr(method ? method->getName() : "");
+            writeStr(qore_aot_encode_static_method_ref_target(method, qc));
             writeU16(0);
             return true;
         }
@@ -38146,10 +38236,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
         id.kind = AOTExprKind::STATIC_METHOD_REF;
         const QoreMethod* method = scr->getMethod();
-        // the class that the reference names (qore#6285)
+        // the class that the reference names (qore#6285), and the method with the class that declares it
+        // (qore#6679)
         const QoreClass* qc = scr->getScopeClass();
         id.ref1 = qore_aot_encode_class_ref(qc);
-        id.ref2 = method ? method->getName() : "";
+        id.ref2 = qore_aot_encode_static_method_ref_target(method, qc);
         return id;
     }
     if (auto* dscr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {

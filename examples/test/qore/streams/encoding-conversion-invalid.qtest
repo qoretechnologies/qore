@@ -1,0 +1,606 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - iconv decoding of malformed UTF-8, UTF-16 and multi-byte input in stream conversions
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../EncodingCapability.qm
+
+%exec-class EncodingConversionInvalidTest
+
+#! An input stream that returns its data in blocks of a given size
+class BlockInputStream inherits InputStream {
+    private {
+        binary data;
+        int offset = 0;
+        int block;
+    }
+
+    constructor(binary data, int block) {
+        self.data = data;
+        self.block = block;
+    }
+
+    *binary read(int limit) {
+        int n = min(limit, block, data.size() - offset);
+        if (n <= 0) {
+            return NOTHING;
+        }
+        binary rv = data.substr(offset, n);
+        offset += n;
+        return rv;
+    }
+
+    int peek() {
+        return offset < data.size() ? data[offset] : -1;
+    }
+}
+
+#! The encoding conversion streams raise INVALID-ENCODING for input that is not valid in the source encoding
+/** qoretechnologies/qore#6730
+*/
+class EncodingConversionInvalidTest inherits QUnit::Test {
+    public {
+        #! malformed UTF-8 after "ab": each is not valid at byte offset 2
+        const MalformedUtf8 = {
+            "lead byte and ASCII": <6162c241>,
+            "lone continuation byte": <61628041>,
+            "overlong two-byte form": <6162c0af41>,
+            "overlong three-byte form": <6162e08080>,
+            "surrogate": <6162eda08041>,
+            "above U+10FFFF": <6162f490808041>,
+            "f5 lead byte": <6162f580808041>,
+            "ff byte": <6162ff41>,
+            "cut off at the end": <6162e282>,
+            "four-byte lead cut off at the end": <6162f09f98>,
+        };
+
+        #! target encodings of UTF-8 input
+        const Targets = ("UTF-8", "UTF-16LE", "UTF-16", "UCS-4", "UTF-32", "UTF-32LE", "ISO-8859-1", "Shift_JIS");
+
+        #! the block sizes of the input (or of the writes)
+        const Blocks = (1, 2, 3, 4096);
+
+        #! the byte offsets of invalid input in other encodings; "close": the input is cut off at the end, so that
+        #! an output stream finds it when it is closed
+        const OtherInvalid = (
+            # an unpaired low surrogate
+            {"enc": "UTF-16LE", "data": <410000dc4200>, "offset": 2},
+            # an unpaired high surrogate followed by a character
+            {"enc": "UTF-16LE", "data": <410000d84200>, "offset": 2},
+            # an unpaired high surrogate cut off at the end
+            {"enc": "UTF-16LE", "data": <410000d8>, "offset": 2, "close": True},
+            # half a code unit at the end
+            {"enc": "UTF-16LE", "data": <410042>, "offset": 2, "close": True},
+            {"enc": "UTF-16BE", "data": <0041dc000042>, "offset": 2},
+            # a value above U+10FFFF
+            {"enc": "UTF-32LE", "data": <4100000000001100>, "offset": 4},
+            {"enc": "UCS-4", "data": <0000004100110000>, "offset": 4},
+            # a Shift_JIS lead byte followed by a byte that is not a trail byte
+            {"enc": "Shift_JIS", "data": <41812042>, "offset": 1},
+            # a Shift_JIS lead byte cut off at the end
+            {"enc": "Shift_JIS", "data": <4181>, "offset": 1, "close": True},
+            # a byte above 0x7f in US-ASCII
+            {"enc": "US-ASCII", "data": <41804142>, "offset": 1},
+            # a byte above 0x7f in ISO-2022-JP (stateful)
+            {"enc": "ISO-2022-JP", "data": <41804142>, "offset": 1},
+            # ISO-2022-JP "ESC $ B" and the first byte of "日", cut off at the end (stateful): the offset is that of
+            # the shift sequence before it
+            {"enc": "ISO-2022-JP", "data": <411b244246>, "offset": 1, "close": True},
+        );
+    }
+
+    #! why the cases of the invalid Shift_JIS bytes 81 20 are skipped, or nothing
+    /** The conversions from Shift_JIS take the validity of the input from iconv; the iconv of some platforms (musl's)
+        decodes a lead byte followed by a byte that is not a trail byte without an error
+    */
+    static *string sjisIconvAccepts() {
+        return encoding_decodes_invalid("Shift_JIS", <41812042>);
+    }
+
+    constructor() : QUnit::Test("EncodingConversionInvalid", "1.0", \ARGV) {
+        addTestCase("malformed UTF-8 in an input stream", \malformedUtf8InputTest());
+        addTestCase("malformed UTF-8 in an output stream", \malformedUtf8OutputTest());
+        addTestCase("malformed UTF-8 after the first block", \largeInputTest());
+        addTestCase("the iconv of the platform refuses invalid Shift_JIS", \sjisIconvTest());
+        addTestCase("invalid input in other encodings", \otherInvalidTest());
+        addTestCase("a character the target cannot hold", \unrepresentableTest());
+        addTestCase("valid input converts", \validTest());
+        addTestCase("peek and close name their methods", \methodNameTest());
+        addTestCase("latin1 mode", \latin1Test());
+        addTestCase("latin1 mode with stateful encodings", \latin1StatefulTest());
+        addTestCase("latin1 mode with UTF-7", \latin1Utf7Test());
+        addTestCase("latin1 mode output stream", \latin1OutputTest());
+        addTestCase("keep mode", \keepTest());
+        addTestCase("encoding_errors values", \optionTest());
+        addTestCase("convert_encoding() to the same encoding", \convertSameEncodingTest());
+        addTestCase("convert_encoding() to the same encoding with UTF-7", \convertSameUtf7Test());
+        addTestCase("the first error in stateful input", \statefulOrderTest());
+        addTestCase("latin1 mode with many invalid bytes", \latin1ManyTest());
+        addTestCase("bytes not defined in the source encoding", \undefinedTest());
+        set_return_value(main());
+    }
+
+    #! converts data with an input stream read in blocks of the given size
+    static binary readAll(binary data, string from, string to, int block, *string encoding_errors,
+            int limit = 4096) {
+        EncodingConversionInputStream is(new BlockInputStream(data, block), from, to, encoding_errors);
+        binary rv = binary();
+        while (*binary b = is.read(limit)) {
+            rv += b;
+        }
+        return rv;
+    }
+
+    #! converts data with an output stream written in blocks of the given size
+    static binary writeAll(binary data, string from, string to, int block, *string encoding_errors) {
+        BinaryOutputStream bos();
+        EncodingConversionOutputStream os(bos, from, to, encoding_errors);
+        for (int i = 0; i < data.size(); i += block) {
+            os.write(data.substr(i, block));
+        }
+        os.close();
+        return bos.getData();
+    }
+
+    #! returns the exception raised by the code, or NOTHING
+    static *hash<ExceptionInfo> getError(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        return NOTHING;
+    }
+
+    #! checks that the code raises INVALID-ENCODING with the given message
+    checkInvalid(code c, string desc, string label) {
+        *hash<ExceptionInfo> ex = getError(c);
+        assertEq("INVALID-ENCODING", ex.err, label + ": err");
+        assertEq(desc, ex.desc, label + ": desc");
+    }
+
+    #! the message of the input stream for invalid input
+    static string inputDesc(string enc, int offset, string meth = "read") {
+        return sprintf("EncodingConversionInputStream::%s(): the input is not valid %s: invalid byte sequence at "
+            "byte offset %d", meth, enc, offset);
+    }
+
+    #! the message of the output stream for invalid input
+    static string outputDesc(string enc, int offset, string meth = "write") {
+        return sprintf("EncodingConversionOutputStream::%s(): the data written is not valid %s: invalid byte "
+            "sequence at byte offset %d", meth, enc, offset);
+    }
+
+    malformedUtf8InputTest() {
+        foreach hash<auto> i in (MalformedUtf8.pairIterator()) {
+            foreach string to in (Targets) {
+                foreach int block in (Blocks) {
+                    checkInvalid(sub () { readAll(i.value, "UTF-8", to, block); }, inputDesc("UTF-8", 2),
+                        sprintf("%s to %s in blocks of %d", i.key, to, block));
+                    # reads of one byte at a time
+                    checkInvalid(sub () { readAll(i.value, "UTF-8", to, block, NOTHING, 1); },
+                        inputDesc("UTF-8", 2), sprintf("%s to %s in blocks of %d, read by byte", i.key, to, block));
+                }
+            }
+        }
+    }
+
+    malformedUtf8OutputTest() {
+        foreach hash<auto> i in (MalformedUtf8.pairIterator()) {
+            # a character cut off at the end is found when the stream is closed
+            string meth = (i.key =~ /cut off/) ? "close" : "write";
+            foreach string to in (Targets) {
+                foreach int block in (Blocks) {
+                    checkInvalid(sub () { writeAll(i.value, "UTF-8", to, block); }, outputDesc("UTF-8", 2, meth),
+                        sprintf("%s to %s in writes of %d", i.key, to, block));
+                }
+            }
+        }
+    }
+
+    largeInputTest() {
+        # the invalid sequence is after the first internal block of 4096 bytes, after characters that are not ASCII
+        binary prefix = binary(strmul("é", 3000));
+        foreach binary bad in (<f4908080>, <c241>, <eda080>, <80>) {
+            binary data = prefix + bad + <41>;
+            foreach string to in ("UTF-8", "UCS-4", "UTF-16LE", "ISO-8859-1") {
+                foreach int block in (1, 1000, 4096, 10000) {
+                    string label = sprintf("%s to %s in blocks of %d", bad.toHex(), to, block);
+                    checkInvalid(sub () { readAll(data, "UTF-8", to, block); }, inputDesc("UTF-8", 6000), label);
+                    checkInvalid(sub () { writeAll(data, "UTF-8", to, block); }, outputDesc("UTF-8", 6000), label);
+                }
+            }
+        }
+        # cut off at the end of a large input
+        binary data = prefix + <e282>;
+        checkInvalid(sub () { readAll(data, "UTF-8", "UTF-8", 4096); }, inputDesc("UTF-8", 6000), "cut off");
+        checkInvalid(sub () { writeAll(data, "UTF-8", "UTF-8", 4096); }, outputDesc("UTF-8", 6000, "close"),
+            "cut off");
+    }
+
+    #! the cases of the invalid Shift_JIS bytes 81 20 need an iconv that refuses them
+    sjisIconvTest() {
+        *string reason = sjisIconvAccepts();
+        if (reason) {
+            testSkip(reason);
+        }
+        *hash<ExceptionInfo> ex = getError(sub () { convert_encoding(binary_to_string(<41812042>, "Shift_JIS"),
+            "UTF-8"); });
+        assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+    }
+
+    otherInvalidTest() {
+        bool sjis_accepted = exists sjisIconvAccepts();
+        foreach hash<auto> i in (OtherInvalid) {
+            # the iconv of the platform decodes these bytes (see sjisIconvTest())
+            if (sjis_accepted && i.enc == "Shift_JIS" && i.data == <41812042>) {
+                continue;
+            }
+            foreach string to in ("UTF-8", "UTF-16LE", "ISO-8859-1") {
+                if (to == i.enc) {
+                    continue;
+                }
+                foreach int block in (1, 4096) {
+                    string label = sprintf("%s %s to %s in blocks of %d", i.enc, i.data.toHex(), to, block);
+                    checkInvalid(sub () { readAll(i.data, i.enc, to, block); }, inputDesc(i.enc, i.offset), label);
+                    checkInvalid(sub () { writeAll(i.data, i.enc, to, block); },
+                        outputDesc(i.enc, i.offset, i.close ? "close" : "write"), label + ": output");
+                }
+            }
+        }
+        # a UTF-16 byte order mark is counted in the offset
+        checkInvalid(sub () { readAll(<fffe410000dc>, "UTF-16", "UTF-8", 4096); }, inputDesc("UTF-16LE", 4),
+            "UTF-16 with a byte order mark");
+    }
+
+    unrepresentableTest() {
+        # a valid character that the target encoding cannot hold raises ENCODING-CONVERSION-ERROR as before
+        binary data = binary("ab€c");
+        foreach int block in (1, 4096) {
+            *hash<ExceptionInfo> ex = getError(sub () { readAll(data, "UTF-8", "ISO-8859-1", block); });
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+            assertRegex("byte offset 2 ", ex.desc);
+            ex = getError(sub () { writeAll(data, "UTF-8", "ISO-8859-1", block); });
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+            assertRegex("byte offset 2 ", ex.desc);
+            # with latin1, as the character is valid
+            ex = getError(sub () { readAll(data, "UTF-8", "ISO-8859-1", block, ENCODING_ERRORS_LATIN1); });
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+            # a valid Unicode character that US-ASCII cannot hold
+            ex = getError(sub () { readAll(binary("aé"), "UTF-8", "US-ASCII", block); });
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+            assertRegex("byte offset 1 ", ex.desc);
+        }
+        # a character before an invalid sequence that the target cannot hold is reported first
+        *hash<ExceptionInfo> ex = getError(sub () { readAll(<61e282ac62ff>, "UTF-8", "ISO-8859-1", 4096); });
+        assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+        # an invalid sequence before a character that the target cannot hold is reported first
+        checkInvalid(sub () { readAll(<61ff62e282ac>, "UTF-8", "ISO-8859-1", 4096); }, inputDesc("UTF-8", 1),
+            "invalid before unrepresentable");
+    }
+
+    validTest() {
+        string text = "aé日本😀 " + strmul("Grüße 日本語 😀 ", 500);
+        foreach string to in ("UTF-8", "UTF-16LE", "UCS-4", "UTF-32", "UTF-16") {
+            binary expected = binary(convert_encoding(text, to));
+            foreach int block in (1, 3, 4096) {
+                assertEq(expected, readAll(binary(text), "UTF-8", to, block), sprintf("to %s in %d", to, block));
+                assertEq(expected, writeAll(binary(text), "UTF-8", to, block), sprintf("to %s in %d", to, block));
+            }
+            assertEq(text, binary_to_string(readAll(expected, to, "UTF-8", 7), "UTF-8"), "back from " + to);
+        }
+        # the largest code point
+        assertEq(<f48fbfbf>, readAll(<f48fbfbf>, "UTF-8", "UTF-8", 1));
+        assertEq(<0010ffff>, readAll(<f48fbfbf>, "UTF-8", "UCS-4", 1));
+        assertEq(<00000000>, readAll(<00>, "UTF-8", "UCS-4", 1));
+    }
+
+    methodNameTest() {
+        EncodingConversionInputStream is(new BlockInputStream(<ff>, 4096), "UTF-8", "UTF-16LE");
+        checkInvalid(sub () { is.peek(); }, inputDesc("UTF-8", 0, "peek"), "peek");
+        # a read after a peek names read()
+        is = new EncodingConversionInputStream(new BlockInputStream(<41ff>, 1), "UTF-8", "UTF-16LE");
+        assertEq(0x41, is.peek());
+        assertEq(<4100>, is.read(100));
+        checkInvalid(sub () { is.read(100); }, inputDesc("UTF-8", 1), "read after peek");
+    }
+
+    latin1Test() {
+        # each byte that does not start a valid character is the ISO-8859-1 character of that byte
+        list<hash<auto>> cases = (
+            {"data": <61e24162>, "text": "aâAb"},
+            {"data": <c3a9ffc3a9>, "text": "éÿé"},
+            {"data": <61f490808062>, "text": "a\u{f4}\u{90}\u{80}\u{80}b"},
+            {"data": <6162e282>, "text": "abâ\u{82}"},
+            {"data": <80>, "text": "\u{80}"},
+            {"data": <e697a5ffe69cac>, "text": "日ÿ本"},
+            {"data": <eda080>, "text": "í\u{a0}\u{80}"},
+            {"data": <c0af>, "text": "À¯"},
+        );
+        foreach hash<auto> c in (cases) {
+            foreach string to in ("UTF-8", "UTF-16LE", "UCS-4") {
+                binary expected = binary(convert_encoding(c.text, to));
+                foreach int block in (1, 2, 4096) {
+                    string label = sprintf("%s to %s in %d", c.data.toHex(), to, block);
+                    assertEq(expected, readAll(c.data, "UTF-8", to, block, ENCODING_ERRORS_LATIN1), label);
+                    assertEq(expected, readAll(c.data, "UTF-8", to, block, ENCODING_ERRORS_LATIN1, 1),
+                        label + " by byte");
+                }
+            }
+        }
+        # across the first internal block, mixed with valid text
+        string valid = strmul("é", 2047) + "a";
+        binary data = binary(valid) + <ff> + binary("日本") + <e2> + binary(valid) + <e282>;
+        string text = valid + "ÿ日本â" + valid + "â\u{82}";
+        foreach int block in (1, 100, 4096) {
+            assertEq(binary(text), readAll(data, "UTF-8", "UTF-8", block, ENCODING_ERRORS_LATIN1));
+            assertEq(binary(convert_encoding(text, "UTF-16LE")), readAll(data, "UTF-8", "UTF-16LE", block,
+                ENCODING_ERRORS_LATIN1));
+        }
+        # other source encodings
+        # in a Unicode encoding form, each byte of a code unit that does not start a valid character is an ISO-8859-1
+        # character, and the input after it is converted from the next code unit
+        list<hash<auto>> units = (
+            # an unpaired low surrogate: 00 DC gives U+0000 and U+00DC
+            {"enc": "UTF-16LE", "data": <410000dc4200>, "text": "A\u{0}\u{dc}B"},
+            # an unpaired high surrogate followed by a character
+            {"enc": "UTF-16LE", "data": <410000d84200>, "text": "A\u{0}\u{d8}B"},
+            {"enc": "UTF-16BE", "data": <0041dc000042>, "text": "A\u{dc}\u{0}B"},
+            # an unpaired high surrogate cut off at the end, and half a code unit at the end
+            {"enc": "UTF-16LE", "data": <410000d8>, "text": "A\u{0}\u{d8}"},
+            {"enc": "UTF-16LE", "data": <410042>, "text": "AB"},
+            # two invalid code units in a row
+            {"enc": "UTF-16LE", "data": <00dc00dc4100>, "text": "\u{0}\u{dc}\u{0}\u{dc}A"},
+            # a value above U+10FFFF
+            {"enc": "UTF-32LE", "data": <410000000000110042000000>, "text": "A\u{0}\u{0}\u{11}\u{0}B"},
+            {"enc": "UTF-32BE", "data": <000000410011000000000042>, "text": "A\u{0}\u{11}\u{0}\u{0}B"},
+            {"enc": "UCS-4", "data": <000000410011000000000042>, "text": "A\u{0}\u{11}\u{0}\u{0}B"},
+            # a surrogate code point in UTF-32
+            {"enc": "UTF-32LE", "data": <00dc000041000000>, "text": "\u{0}\u{dc}\u{0}\u{0}A"},
+            # three bytes of a UTF-32 code unit at the end
+            {"enc": "UTF-32LE", "data": <41000000420000>, "text": "AB\u{0}\u{0}"},
+        );
+        foreach hash<auto> c in (units) {
+            binary expected = binary(c.text);
+            # blocks of 1 and 3 bytes put the invalid code unit across read boundaries
+            foreach int block in (1, 3, 4096) {
+                string label = sprintf("%s %s in %d", c.enc, c.data.toHex(), block);
+                assertEq(expected, readAll(c.data, c.enc, "UTF-8", block, ENCODING_ERRORS_LATIN1), label);
+                assertEq(expected, readAll(c.data, c.enc, "UTF-8", block, ENCODING_ERRORS_LATIN1, 1),
+                    label + " by byte");
+                assertEq(expected, writeAll(c.data, c.enc, "UTF-8", block, ENCODING_ERRORS_LATIN1),
+                    label + " output");
+            }
+        }
+        # an invalid UTF-16 code unit after the first internal block, which ends in a code unit
+        binary prefix = binary(convert_encoding(strmul("é", 2049), "UTF-16LE"));
+        assertEq(binary(strmul("é", 2049) + "\u{0}\u{dc}A"), readAll(prefix + <00dc4100>, "UTF-16LE", "UTF-8",
+            4095, ENCODING_ERRORS_LATIN1));
+        # the iconv of the platform decodes these bytes (see sjisIconvTest())
+        if (!sjisIconvAccepts()) {
+            assertEq(binary("A\u{81} B"), readAll(<41812042>, "Shift_JIS", "UTF-8", 1, ENCODING_ERRORS_LATIN1));
+        }
+        assertEq(binary("A\u{80}AB"), readAll(<41804142>, "US-ASCII", "UTF-8", 1, ENCODING_ERRORS_LATIN1));
+        # a substituted character that the target encoding cannot hold
+        *hash<ExceptionInfo> ex = getError(sub () { readAll(<61ff>, "UTF-8", "US-ASCII", 1,
+            ENCODING_ERRORS_LATIN1); });
+        assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+        assertRegex("byte offset 1 ", ex.desc);
+        # the option of the stream
+        EncodingConversionInputStream is(new BlockInputStream(<61>, 1), "UTF-8", "UTF-16LE", ENCODING_ERRORS_LATIN1);
+        assertEq(ENCODING_ERRORS_LATIN1, is.getEncodingErrors());
+        is = new EncodingConversionInputStream(new BlockInputStream(<61>, 1), "UTF-8", "UTF-16LE");
+        assertEq(ENCODING_ERRORS_RAISE, is.getEncodingErrors());
+    }
+
+    latin1StatefulTest() {
+        # a stateful source encoding
+        assertEq(binary("A\u{80}AB"), readAll(<41804142>, "ISO-2022-JP", "UTF-8", 1, ENCODING_ERRORS_LATIN1));
+        assertEq(binary("A\u{80}AB"), readAll(<41804142>, "ISO-2022-JP", "UTF-8", 4096, ENCODING_ERRORS_LATIN1));
+    }
+
+    #! converts valid text to each of the encodings and the result to the same encoding, which gives it unchanged
+    sameEncodingValid(list<string> encs) {
+        foreach string text in ("", "abc", "aé日本😀", strmul("Grüße 日本語 ", 1000), strmul("a", 5000)) {
+            foreach string enc in (encs) {
+                string s;
+                try {
+                    s = convert_encoding(text, enc);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the encoding cannot hold the text
+                    assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+                    continue;
+                }
+                string r = convert_encoding(s, enc);
+                assertEq(binary(s), binary(r), enc);
+                assertEq(get_encoding(s), get_encoding(r), enc);
+            }
+        }
+    }
+
+    #! UTF-7, which the iconv of some platforms (musl's) does not have
+    convertSameUtf7Test() {
+        *string reason = encoding_cannot_convert("UTF-7", "aé日本😀");
+        if (reason) {
+            testSkip(reason);
+        }
+        sameEncodingValid(("UTF-7",));
+    }
+
+    #! a stateful target encoding, UTF-7, which the iconv of some platforms (musl's) does not have
+    latin1Utf7Test() {
+        *string reason = encoding_cannot_convert("UTF-7", "日ÿ本");
+        if (reason) {
+            testSkip(reason);
+        }
+        # the substituted characters are converted on their own
+        list<hash<auto>> cases = (
+            {"data": <61ff62>, "text": "aÿb"},
+            {"data": <e697a5ffe69cac>, "text": "日ÿ本"},
+            {"data": <e697a5ffffe69cacff>, "text": "日ÿÿ本ÿ"},
+            {"data": <ff>, "text": "ÿ"},
+        );
+        foreach hash<auto> c in (cases) {
+            foreach int block in (1, 4096) {
+                binary out = readAll(c.data, "UTF-8", "UTF-7", block, ENCODING_ERRORS_LATIN1);
+                assertEq(c.text, binary_to_string(readAll(out, "UTF-7", "UTF-8", 4096), "UTF-8"),
+                    sprintf("UTF-7 %s in %d", c.data.toHex(), block));
+                out = writeAll(c.data, "UTF-8", "UTF-7", block, ENCODING_ERRORS_LATIN1);
+                assertEq(c.text, binary_to_string(readAll(out, "UTF-7", "UTF-8", 4096), "UTF-8"),
+                    sprintf("UTF-7 output %s in %d", c.data.toHex(), block));
+            }
+        }
+        # 100 KB of ISO-8859-1 text read as UTF-8: each substituted character is converted on its own, so the text is
+        # compared
+        string text = strmul("Grüße aus Zürich, café crème, ÿ¿ ", 3500);
+        binary data = binary(convert_encoding(text, "ISO-8859-1"));
+        binary out = readAll(data, "UTF-8", "UTF-7", 4096, ENCODING_ERRORS_LATIN1);
+        assertEq(text, binary_to_string(readAll(out, "UTF-7", "UTF-8", 4096), "UTF-8"), "UTF-7");
+    }
+
+    latin1OutputTest() {
+        binary data = <61e24162> + binary(strmul("é", 3000)) + <ff> + <e282>;
+        string text = "aâAb" + strmul("é", 3000) + "ÿâ\u{82}";
+        foreach int block in (1, 3, 4096, 10000) {
+            assertEq(binary(text), writeAll(data, "UTF-8", "UTF-8", block, ENCODING_ERRORS_LATIN1));
+            assertEq(binary(convert_encoding(text, "UTF-16LE")), writeAll(data, "UTF-8", "UTF-16LE", block,
+                ENCODING_ERRORS_LATIN1));
+        }
+        BinaryOutputStream bos();
+        EncodingConversionOutputStream os(bos, "UTF-8", "UTF-16LE", ENCODING_ERRORS_LATIN1);
+        assertEq(ENCODING_ERRORS_LATIN1, os.getEncodingErrors());
+        os = new EncodingConversionOutputStream(bos, "UTF-8", "UTF-16LE");
+        assertEq(ENCODING_ERRORS_RAISE, os.getEncodingErrors());
+    }
+
+    keepTest() {
+        # the bytes are passed as they are when the encodings are the same
+        binary data = <fffe6162f4908080e2>;
+        foreach int block in (1, 4096) {
+            assertEq(data, readAll(data, "UTF-8", "UTF-8", block, ENCODING_ERRORS_KEEP));
+            assertEq(data, writeAll(data, "UTF-8", "UTF-8", block, ENCODING_ERRORS_KEEP));
+            assertEq(data, readAll(data, "UTF-16LE", "UTF-16LE", block, ENCODING_ERRORS_KEEP));
+        }
+        EncodingConversionInputStream is(new BlockInputStream(data, 1), "UTF-8", "UTF-8", ENCODING_ERRORS_KEEP);
+        assertEq(ENCODING_ERRORS_KEEP, is.getEncodingErrors());
+        # not allowed with different encodings
+        *hash<ExceptionInfo> ex = getError(sub () { readAll(data, "UTF-8", "ISO-8859-1", 1, ENCODING_ERRORS_KEEP); });
+        assertEq("ENCODING-ERRORS-ERROR", ex.err);
+        assertRegex("^EncodingConversionInputStream::constructor\\(\\): encoding_errors 'keep'", ex.desc);
+        ex = getError(sub () { writeAll(data, "UTF-8", "UTF-16LE", 1, ENCODING_ERRORS_KEEP); });
+        assertEq("ENCODING-ERRORS-ERROR", ex.err);
+        assertRegex("^EncodingConversionOutputStream::constructor\\(\\): encoding_errors 'keep'", ex.desc);
+    }
+
+    optionTest() {
+        *hash<ExceptionInfo> ex = getError(sub () { readAll(<61>, "UTF-8", "UTF-8", 1, "replace"); });
+        assertEq("ENCODING-ERRORS-ERROR", ex.err);
+        assertRegex("'replace'", ex.desc);
+        ex = getError(sub () { writeAll(<61>, "UTF-8", "UTF-8", 1, "RAISE"); });
+        assertEq("ENCODING-ERRORS-ERROR", ex.err);
+        # the option as a named argument
+        EncodingConversionInputStream is(new BlockInputStream(<61ff>, 1), "UTF-8", "UTF-8",
+            encoding_errors: "latin1");
+        assertEq("latin1", is.getEncodingErrors());
+        binary b = binary();
+        while (*binary r = is.read(10)) {
+            b += r;
+        }
+        assertEq(<61c3bf>, b);
+        # the default
+        assertEq(<61>, readAll(<61>, "UTF-8", "UTF-8", 1, ENCODING_ERRORS_RAISE));
+    }
+
+    statefulOrderTest() {
+        # ISO-2022-JP "ESC $ B 日" and then the invalid byte 0x80: ISO-8859-1 cannot hold "日", which is before the
+        # invalid byte, so its error is raised whatever the size of the reads and writes
+        list<binary> inputs = (<1b2442467c80>, <1b2442467c>, binary(strmul("a", 5000)) + <1b2442467c80>);
+        list<int> offsets = (0, 0, 5000);
+        *hash<ExceptionInfo> ex;
+        for (int i = 0; i < inputs.size(); ++i) {
+            foreach int block in (1, 2, 4096, 10000) {
+                foreach int limit in (1, 4096) {
+                    string label = sprintf("%s in %d, read %d", inputs[i].toHex().substr(0, 20), block, limit);
+                    ex = getError(sub () { readAll(inputs[i], "ISO-2022-JP", "ISO-8859-1", block,
+                        NOTHING, limit); });
+                    assertEq("ENCODING-CONVERSION-ERROR", ex.err, label);
+                    assertRegex(sprintf("byte offset %d ", offsets[i]), ex.desc, label);
+                }
+                ex = getError(sub () { writeAll(inputs[i], "ISO-2022-JP", "ISO-8859-1", block); });
+                assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("output in %d", block));
+                assertRegex(sprintf("byte offset %d ", offsets[i]), ex.desc, sprintf("output in %d", block));
+            }
+        }
+        # the invalid byte first: INVALID-ENCODING
+        foreach int block in (1, 4096) {
+            checkInvalid(sub () { readAll(<41801b2442467c>, "ISO-2022-JP", "ISO-8859-1", block); },
+                inputDesc("ISO-2022-JP", 1), sprintf("invalid first in %d", block));
+        }
+    }
+
+    latin1ManyTest() {
+        # 100 KB of ISO-8859-1 text read as UTF-8: every byte above 0x7f is substituted
+        string text = strmul("Grüße aus Zürich, café crème, ÿ¿ ", 3500);
+        binary data = binary(convert_encoding(text, "ISO-8859-1"));
+        assertGt(100000, data.size());
+        foreach string to in ("UTF-8", "UTF-16LE", "UTF-32", "ISO-8859-1") {
+            binary expected = binary(convert_encoding(text, to));
+            foreach int block in (1000, 4096, 65536) {
+                assertEq(expected, readAll(data, "UTF-8", to, block, ENCODING_ERRORS_LATIN1, 65536),
+                    sprintf("to %s in %d", to, block));
+            }
+            assertEq(expected, writeAll(data, "UTF-8", to, 10000, ENCODING_ERRORS_LATIN1), "output to " + to);
+        }
+        # all 128 bytes above 0x7f, each substituted
+        binary high = binary();
+        for (int i = 0x80; i < 0x100; ++i) {
+            high += chr(i, "ISO-8859-1").toBinary();
+        }
+        string high_text = binary_to_string(high, "ISO-8859-1");
+        assertEq(binary(convert_encoding(high_text, "UTF-8")), readAll(high, "UTF-8", "UTF-8", 7,
+            ENCODING_ERRORS_LATIN1));
+    }
+
+    undefinedTest() {
+        # a byte that has the form of a character but is not defined in the encoding is not invalid input
+        foreach *string ee in (NOTHING, ENCODING_ERRORS_LATIN1) {
+            *hash<ExceptionInfo> ex = getError(sub () { readAll(<418142>, "CP1252", "UTF-8", 1, ee); });
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err, ee ?? "raise");
+            assertRegex("byte offset 1 ", ex.desc, ee ?? "raise");
+        }
+    }
+
+    convertSameEncodingTest() {
+        # invalid text in its encoding
+        list<hash<auto>> cases = (
+            {"data": <6162f4908080>, "enc": "UTF-8", "offset": 2},
+            {"data": <6162c241>, "enc": "UTF-8", "offset": 2},
+            {"data": <6162eda080>, "enc": "UTF-8", "offset": 2},
+            {"data": <6162e282>, "enc": "UTF-8", "offset": 2},
+            {"data": binary(strmul("é", 3000)) + <ff>, "enc": "UTF-8", "offset": 6000},
+            {"data": binary(strmul("a", 3000)) + <80>, "enc": "UTF-8", "offset": 3000},
+            {"data": <410000dc>, "enc": "UTF-16LE", "offset": 2},
+            {"data": <410000d8>, "enc": "UTF-16LE", "offset": 2},
+            {"data": <41812042>, "enc": "Shift_JIS", "offset": 1},
+            {"data": <41804142>, "enc": "US-ASCII", "offset": 1},
+            {"data": <41804142>, "enc": "ISO-2022-JP", "offset": 1},
+        );
+        foreach hash<auto> c in (cases) {
+            string s = binary_to_string(c.data, c.enc);
+            *hash<ExceptionInfo> ex = getError(string sub () { return convert_encoding(s, c.enc); });
+            assertEq("INVALID-ENCODING", ex.err, c.enc + " " + c.data.toHex());
+            assertEq(sprintf("convert_encoding(): the string is not valid %s: invalid byte sequence at byte offset "
+                "%d", c.enc, c.offset), ex.desc, c.enc + " " + c.data.toHex());
+        }
+        # valid text is returned unchanged
+        sameEncodingValid(("UTF-8", "UTF-16LE", "UTF-16BE", "Shift_JIS", "ISO-2022-JP"));
+        # a single-byte encoding has no invalid bytes
+        string s = binary_to_string(<80ff41>, "ISO-8859-1");
+        assertEq(<80ff41>, binary(convert_encoding(s, "ISO-8859-1")));
+    }
+}

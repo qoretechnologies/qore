@@ -24,7 +24,10 @@ std::unique_ptr<AbstractPostProcessor> AbstractPostProcessor::fromConfig(
         return nullptr;
     }
 
-    std::string type = safeGetStringKey(config, "type");
+    std::string type = configStringKey(config, "type", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     if (type.empty()) {
         xsink->raiseException("TOKENIZER-POSTPROCESSOR-ERROR",
             "post_processor config missing 'type' field");

@@ -35,9 +35,13 @@
     location of each instruction, an expression's, before the image recorded the statements of the instructions
     (QORE_AOT_STATEMENT_LOCATIONS_VERSION).
 
+    The script calls the probes through call references, which are never replaced by a summary of the callee's body;
+    a third case calls them directly, so that a qcc executable replaces the calls that it can with the summaries of
+    their callees, and an exception that a summary raises must be located at the statement that raised it
+    (qore#6673).
+
     Not probed: the call stack location of the destructor of a function body's local at the end of the function
-    (qore#6672), and an exception raised by a callee that a qcc executable replaces with the callee's summary, which
-    the script avoids by calling the probes through call references (qore#6673).
+    (qore#6672).
 */
 class ExceptionLocationModesTest inherits QUnit::Test {
     public {
@@ -673,6 +677,8 @@ if (ARGV[0] == "debug") {
         }
         addTestCase("exceptions are located alike in every execution mode", \testLocations());
         addTestCase("exceptions are located alike in the IR of AOT images", \testAotIrLocations());
+        addTestCase("exceptions raised by summaries of directly called probes are located alike",
+            \testDirectCallLocations());
         set_return_value(main());
     }
 
@@ -723,6 +729,59 @@ if (ARGV[0] == "debug") {
             }
         }
         assertEq({}, wrong);
+    }
+
+    #! the probes called directly, so that a qcc executable can replace a call with the summary of the callee
+    testDirectCallLocations() {
+        TmpDir tmp("qore-exception-location-direct-");
+        string path = tmp.path + DirSep + "exception-location.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(getDirectCallScript());
+        f.close();
+
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        string expected = normalize(ExecModeHarness::run(sprintf("%s %s -b --enable-debug --exec-mode=ast %s", env,
+            qore_bin, path)), tmp.path);
+        hash<string, list<string>> wrong();
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "exception-location" + opt.lwr();
+            string out = backquote(sprintf("%s %s %s -o %s %s 2>&1", env, qcc_bin, opt, exe, path));
+            if (!is_file(exe)) {
+                wrong{"qcc " + opt} = ("compilation failed: " + out,);
+                continue;
+            }
+            list<string> diff = differences(expected, normalize(ExecModeHarness::run_any(sprintf("%s %s", env,
+                exe)), tmp.path));
+            if (diff) {
+                wrong{"qcc " + opt} = diff;
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    #! returns the script with a direct call of each probe in place of the loop over the call references
+    static string getDirectCallScript() {
+        const string LoopStart = "    foreach hash<auto> i in (probes.pairIterator()) {\n";
+        const string LoopEnd = "            show(i.key, ex);\n        }\n    }\n";
+        *int start = Script.find(LoopStart);
+        *int end = Script.find(LoopEnd, start);
+        if (start < 0 || end < 0) {
+            throw "TEST-ERROR", "the loop over the probes is not in the script";
+        }
+        string calls;
+        foreach string line in (Script.split("\n")) {
+            *list<*string> m = line =~ x/^    "([^"]+)": ([^,]+),$/;
+            if (!m) {
+                continue;
+            }
+            # a call reference (\\Class::method()) or a variable that holds one
+            string call = m[1] =~ /^\\/ ? regex_subst(m[1].substr(1), "\\(\\)$", "(j + 2)") : m[1] + "(j + 2)";
+            calls += sprintf("    try {\n        %s;\n        printf(\"%%s: no exception\\n\", %y);\n    } catch "
+                "(hash<ExceptionInfo> ex) {\n        show(%y, ex);\n    }\n", call, m[0], m[0]);
+        }
+        # the probes are defined before the loop, so their lines are those of the script
+        return Script.substr(0, start) + calls + Script.substr(end + LoopEnd.size());
     }
 
     testAotIrLocations() {

@@ -62,12 +62,6 @@ public class RestSchemaActionCodecs {
     }
 
     private {
-        #! The codec registry, keyed by codec name
-        static hash<string, hash<RestSchemaWireCodecInfo>> codecmap = DefaultCodecs;
-
-        #! Serializes access to @ref codecmap
-        static Mutex lck();
-
         #! The codecs provided by this module
         const DefaultCodecs = {
             Base64OrUrl: <RestSchemaWireCodecInfo>{
@@ -152,6 +146,14 @@ public class RestSchemaActionCodecs {
         };
     }
 
+    private:internal {
+        #! The codec registry, keyed by codec name
+        static hash<string, hash<RestSchemaWireCodecInfo>> codecmap = DefaultCodecs;
+
+        #! Serializes access to @ref codecmap
+        static Mutex lck();
+    }
+
     #! Registers a codec, replacing any codec already registered under the same name
     /** @param codec the codec to register
 
@@ -161,6 +163,9 @@ public class RestSchemaActionCodecs {
         if (!codec.name.val()) {
             throw "REST-SCHEMA-CODEC-ERROR", "cannot register a codec with an empty name";
         }
+        # every caller's REST field values pass through the codecs of the process-wide registry; modules register their
+        # codecs in their initialization, which no sandbox governs (qore#6747)
+        DataProvider::checkSharedRegistration("REST schema codec registry", "codec", codec.name);
         AutoLock al(lck);
         codecmap{codec.name} = codec;
     }
@@ -171,6 +176,8 @@ public class RestSchemaActionCodecs {
         @return the codec removed, if any
     */
     static *hash<RestSchemaWireCodecInfo> deregisterCodec(string name) {
+        # the registry is process-wide (qore#6747)
+        DataProvider::checkSharedRegistration("REST schema codec registry", "codec", name, True);
         AutoLock al(lck);
         return remove codecmap{name};
     }

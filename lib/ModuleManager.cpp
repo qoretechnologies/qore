@@ -4098,6 +4098,19 @@ std::string QoreModuleManager::findTrustedModule(const char* name) const {
     return std::string();
 }
 
+bool qore_caller_may_load_native_code() {
+    // trusted code decides what native code to load
+    if (!qore_caller_is_untrusted()) {
+        return true;
+    }
+    // code that is not trusted may if it may use uncontrolled APIs, which can bypass a sandbox as native code can:
+    // neither its own options nor any sandbox that governs it forbid them (QoreSandboxManager::setUncontrolledApiPolicy())
+    if (qore_caller_restricts_domain(QDOM_UNCONTROLLED_API)) {
+        return false;
+    }
+    return !qore_caller_is_sandboxed() || qore_thread_sandbox_allows_uncontrolled_apis(false);
+}
+
 int QoreModuleManager::checkShadowingLoad(ExceptionSink& xsink, const char* path, const char* feature,
         bool trusted, bool& tenant_chosen, QoreSandboxManager*& owner, qore_program_id_t& owner_pgm_id,
         qore_shadow_load_e kind) const {
@@ -6136,8 +6149,20 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen, owner, owner_pgm_id)) {
         return nullptr;
     }
-    // recorded on the module when it is registered
-    QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
+    // the reference to the sandbox that checkShadowingLoad() returns is handed over to the load frame below; it is
+    // released if the load is refused before
+    ReferenceHolder<QoreSandboxManager> owner_holder(owner, nullptr);
+    if (!trusted && !qore_caller_may_load_native_code()) {
+        // native code is trusted code: no sandbox governs it, so code that is not trusted cannot have the process map
+        // native code that it chose (qore#6776); a compiled module with its source next to it is loaded as a source
+        // module instead, by the caller's fallback to the source (see loadModuleIntern())
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "cannot load binary module '%s': "
+            "code that a sandbox governs or whose functional domains are restricted can load native code only from "
+            "the module path (see the trust model of native code in the sandboxing documentation)", path);
+        return nullptr;
+    }
+    // recorded on the module when it is registered; takes over the reference of owner
+    QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner_holder.release(), owner_pgm_id);
     // library code loaded by code that is not trusted does not resolve its dependencies through the module paths of
     // that code; checked before the barrier is set
     if (trusted && path_pgm && !qore_program_private::get(*path_pgm)->library_module && qore_caller_is_untrusted()) {

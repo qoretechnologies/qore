@@ -17,7 +17,8 @@ namespace QoreTokenizer {
 
 //! Byte fallback decoder: converts <0xHH> tokens back to bytes
 /** Accumulates consecutive tokens matching the <0xHH> pattern, parses
-    the hex values, and decodes the accumulated bytes as UTF-8.
+    the hex values, and decodes the accumulated bytes as UTF-8; as in Hugging Face
+    tokenizers, if they are not valid UTF-8, each byte token gives U+FFFD.
     Non-matching tokens pass through unchanged.
 */
 class ByteFallbackDecoder : public AbstractDecoder {
