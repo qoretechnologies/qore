@@ -209,6 +209,9 @@ Ran 4 test cases, 1 succeeded, 1 failed, 1 error, 1 skipped (2 assertions, 1 suc
 
 
     @section qunit_v0_5_2 Version 0.5.2
+    - added @ref QUnit::Test::assertContains() "Test::assertContains()" and
+      @ref QUnit::Test::assertNContains() "Test::assertNContains()": a list has (or has not) an element, a hash a
+      key, a string a substring (<a href="https://github.com/qoretechnologies/qore/issues/3374">issue 3374</a>)
     - a skip or an exception in @ref QUnit::Test::globalSetUp() "Test::globalSetUp()" stops the test cases: they are
       reported as skipped with its reason instead of running without what it prepares
       (<a href="https://github.com/qoretechnologies/qore/issues/6659">issue 6659</a>)
@@ -1925,6 +1928,93 @@ assertNRegex("regex string", string_function());
         } else {
             assertionOk(name);
         }
+    }
+
+    #! Tests that a list has an element, a hash has a key, or a string has a substring
+    /** @par Example:
+        @code{.py}
+assertContains("abc", ("x", "abc"));
+assertContains("key", {"key": 1});
+assertContains("ell", "hello");
+        @endcode
+
+        @param element the element that the container must have: compared with the elements of a list with a hard
+        comparison (types and values must be identical, as with assertEq()); a key of a hash; a substring of a
+        string
+        @param container the list, hash or string
+        @param name the name or description of the assertion
+
+        @throw TEST-EXCEPTION the container does not have the element, or it is not a list, a hash or a string, or
+        the element of a hash or a string is not a string
+
+        @since QUnit 0.5.2
+     */
+    public assertContains(auto element, auto container, *string name) {
+        TestCase tc = getTestCase("assertContains");
+        # increment assertion count
+        tc.incAssertions();
+        ++num_asserts;
+
+        if (!Test::contains(element, container)) {
+            throw "TEST-EXCEPTION", sprintf("%y does not contain %y", container, element),
+                ("name": name, "pos": NOTHING);
+        }
+        assertionOk(name);
+    }
+
+    #! Tests that a list does not have an element, a hash a key, or a string a substring
+    /** @par Example:
+        @code{.py}
+assertNContains("abc", ("x", "y"));
+        @endcode
+
+        @param element the element that the container must not have, as with assertContains()
+        @param container the list, hash or string
+        @param name the name or description of the assertion
+
+        @throw TEST-EXCEPTION the container has the element, or it is not a list, a hash or a string, or the element
+        of a hash or a string is not a string
+
+        @since QUnit 0.5.2
+     */
+    public assertNContains(auto element, auto container, *string name) {
+        TestCase tc = getTestCase("assertNContains");
+        # increment assertion count
+        tc.incAssertions();
+        ++num_asserts;
+
+        if (Test::contains(element, container)) {
+            throw "TEST-EXCEPTION", sprintf("%y contains %y", container, element), ("name": name, "pos": NOTHING);
+        }
+        assertionOk(name);
+    }
+
+    #! Returns True if the list has the element (a hard comparison), the hash the key or the string the substring
+    private static bool contains(auto element, auto container) {
+        switch (container.typeCode()) {
+            case NT_LIST: {
+                foreach auto v in (container) {
+                    if (v === element) {
+                        return True;
+                    }
+                }
+                return False;
+            }
+            case NT_HASH:
+                if (element.typeCode() != NT_STRING) {
+                    throw "TEST-EXCEPTION", sprintf("the key of a hash is a string, not %y", element),
+                        ("pos": NOTHING);
+                }
+                return container.hasKey(element);
+            case NT_STRING:
+                if (element.typeCode() != NT_STRING) {
+                    throw "TEST-EXCEPTION", sprintf("the substring of a string is a string, not %y", element),
+                        ("pos": NOTHING);
+                }
+                return container.find(element) != -1;
+        }
+        throw "TEST-EXCEPTION", sprintf("assertContains() and assertNContains() take a list, a hash or a string, not "
+            "%y", container), ("pos": NOTHING);
     }
 
     #! Tests for no value
