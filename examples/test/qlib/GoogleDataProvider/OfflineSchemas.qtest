@@ -10,13 +10,13 @@
 %requires GmailDataProvider
 %exec-class OfflineGoogleSchemasTest
 
-#! Exposes the runtime cache to verify it cannot bypass static schema qualification
+#! Seeds the runtime cache to verify it cannot bypass static schema qualification
+/** The cache is private to the base class (qore#6838); the document is published through its API, and the API name
+    is used by this test only
+*/
 class GoogleSchemaCacheProbe inherits GoogleDataProviderBase {
     static seedRuntimeCache() {
-        info_map{"runtime-test-api"} = GoogleDataProviderBase::getSchemaInfo("calendar");
-    }
-    static clearRuntimeCache() {
-        remove info_map{"runtime-test-api"};
+        registerSchemaInfo("runtime-test-api", GoogleDataProviderBase::getSchemaInfo("calendar"));
     }
 }
 
@@ -136,7 +136,6 @@ public class OfflineGoogleSchemasTest inherits QUnit::Test {
     unavailableTest() {
         assertFalse(DataProviderStaticMetadataHelper::get());
         GoogleSchemaCacheProbe::seedRuntimeCache();
-        on_exit GoogleSchemaCacheProbe::clearRuntimeCache();
         assertEq("v3", GoogleDataProviderBase::getSchemaInfo("runtime-test-api").version,
             "runtime discovery can reuse its cache");
         {
