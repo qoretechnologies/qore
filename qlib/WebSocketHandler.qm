@@ -140,6 +140,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
+      built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
+      option \c http_fields_at_top_level set to @ref False
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - a connection whose setup raises an exception after the connection was registered (for example when its
       @ref WebSocketHandler::WebSocketConnection "WebSocketConnection" raises one, or an HTTP/2 stream has no data
       queue) is deregistered, gets
@@ -3026,11 +3030,11 @@ handler.setCloseTimeout(2s);
                 is_http3 ? "9220" : "8441");
 
             # Negotiate extensions if supported
-            *hash<auto> ext_result = negotiateExtensions(hdr."sec-websocket-extensions");
+            *hash<auto> ext_result = negotiateExtensions(http_get_field(hdr, "sec-websocket-extensions"));
             # HTTP/2 and HTTP/3 header field names must be lowercase
             hash<auto> rhdr = {};
-            if (hdr."sec-websocket-key") {
-                rhdr."sec-websocket-accept" = ws_get_response_key(hdr."sec-websocket-key");
+            if (http_get_field(hdr, "sec-websocket-key")) {
+                rhdr."sec-websocket-accept" = ws_get_response_key(http_get_field(hdr, "sec-websocket-key"));
             }
             if (ext_result.response_header) {
                 rhdr."sec-websocket-extensions" = ext_result.response_header;
@@ -3066,7 +3070,7 @@ handler.setCloseTimeout(2s);
         }
 
         # HTTP/1.1 WebSocket upgrade requires Sec-WebSocket-Key
-        if (!hdr."sec-websocket-key") {
+        if (!http_get_field(hdr, "sec-websocket-key")) {
             return {
                 "code": 400,
                 "body": "cannot open WebSocket connection; no Sec-WebSocket-Key header found in request",
@@ -3076,11 +3080,11 @@ handler.setCloseTimeout(2s);
         hash<auto> rhdr = {
             "Upgrade": "websocket",
             "Connection": "Upgrade",
-            "Sec-WebSocket-Accept": ws_get_response_key(hdr."sec-websocket-key"),
+            "Sec-WebSocket-Accept": ws_get_response_key(http_get_field(hdr, "sec-websocket-key")),
         };
 
         # Negotiate extensions if supported
-        *hash<auto> ext_result = negotiateExtensions(hdr."sec-websocket-extensions");
+        *hash<auto> ext_result = negotiateExtensions(http_get_field(hdr, "sec-websocket-extensions"));
         if (ext_result.response_header) {
             rhdr."Sec-WebSocket-Extensions" = ext_result.response_header;
         }

@@ -135,7 +135,7 @@ module HttpServer {
 # the client has been sent the 202 response
 class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        string reply_to = hdr."reply-to";
+        string reply_to = http_get_field(hdr, "reply-to");
         string reply = sprintf("processed %d bytes", body.size());
         return <HttpResponseInfo>{
             "code": 202,
@@ -275,6 +275,12 @@ log("started listener on %s", lh.desc);
       after a persistent session ended) runs with the thread context of its own handler: it does not see the user
       thread context that another handler, also of another tenant, left on the thread, and that handler gets back its
       own (issue #6847)
+    - added the \c http_fields_at_top_level option
+      (@ref HttpServer::HttpServerOptionInfo::http_fields_at_top_level "HttpServerOptionInfo::http_fields_at_top_level";
+      default @ref True, deprecated), which gives the fields of a request only under the \c "headers" key of the
+      header hash given to the handlers when @ref False; the server reads the fields from there, and from the top
+      level of a header hash built by user code
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - the header hash given to the handlers gives the fields of the request under \c "headers" over HTTP/1.1, HTTP/2
       and HTTP/3; a field whose name is a key of the hash (ex: \c Path, \c Method, \c Body) is given only there and
       no longer replaces the key, and a request with such a field is answered
@@ -989,6 +995,25 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.6
     */
     bool quic_headers_only = True;
+
+    #! Gives the fields of a request at the top level of the header hash given to the handlers too (deprecated)
+    /** The header hash of a request gives its fields under its \c "headers" key; with this option @ref True "True"
+        (the default), they are also given at its top level, except a field whose name is a key of the hash (see
+        @ref HttpUtil::HttpReservedFieldNames "HttpReservedFieldNames").  With @ref False "False", the fields are
+        given only under \c "headers", over HTTP/1.1, HTTP/2 and HTTP/3; read them with
+        @ref HttpUtil::http_get_field() "http_get_field()" (see @ref httpserverutil_request_headers).
+
+        The option is set on the listening sockets of the server (see
+        @ref Qore::Socket::setHttpFieldsAtTopLevel() "Socket::setHttpFieldsAtTopLevel()"), whose accepted sockets
+        take it.
+
+        @deprecated the top-level copies of the fields are deprecated, and a later release gives the fields only
+        under \c "headers"; set this option to @ref False "False" to check that a server's handlers read them from
+        there
+
+        @since HttpServer 1.7
+    */
+    bool http_fields_at_top_level = True;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -1239,6 +1264,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! Default max-age for Alt-Svc header (seconds)
         int alt_svc_max_age = 3600;
+
+        #! True if the fields of a request are given at the top level of its header hash too (deprecated)
+        bool http_fields_at_top_level = True;
 
         #! Map of TCP listener ID -> auto-created QUIC listener ID
         /** Keys are string listener IDs (Qore auto-converts int keys to strings
@@ -1940,6 +1968,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         # the port for IPv4 on 0.0.0.0 and 127.0.0.1 itself), and the random-port
         # retry in addListenerIntern() picks a fresh port that actually works.
         udp_sock.bindINET(bind_addr, bind_port, False, family, SOCK_DGRAM);
+        # the HTTP/3 requests read from the listener give their fields as the server's option says (qore#6851)
+        udp_sock.setHttpFieldsAtTopLevel(http_fields_at_top_level);
 
         # Get the actual port that was bound
         hash<auto> sock_info = udp_sock.getSocketInfo(False);
@@ -3284,8 +3314,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     }
 
     static bool acceptsHtml(hash<auto> cx) {
-        if (!cx.hdr.accept.val() || cx.hdr.accept =~ /\btext\/html\b/i || cx.hdr.accept =~ /\b\*\/\*\b/
-            || cx.hdr.accept =~ /\btext\/\*\b/i) {
+        auto accept = http_get_field(cx.hdr, "accept");
+        if (!accept.val() || accept =~ /\btext\/html\b/i || accept =~ /\b\*\/\*\b/ || accept =~ /\btext\/\*\b/i) {
             return True;
         }
         return False;
@@ -3762,6 +3792,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         max_decoded_body_size = opts.max_decoded_body_size ?? 0;
         enable_h3 = opts.enable_h3 ?? True;
         alt_svc_max_age = opts.alt_svc_max_age ?? 3600;
+        http_fields_at_top_level = opts.http_fields_at_top_level ?? True;
         # Initialize async I/O
         AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
         # the global controller logs through the server's logger while the server runs
@@ -4111,6 +4142,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 c.done();
                 rethrow;
             }
+            # the requests read from the sockets accepted from the listener give their fields as the server's option
+            # says (qore#6851)
+            l.setHttpFieldsAtTopLevel(http_fields_at_top_level);
 
             # Register listener in maps BEFORE adding to async I/O controller
             # This prevents a race where an accept could arrive before registration is complete
@@ -4488,8 +4522,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         else
             str = "<no URL>";
 
-        if (hdr."content-type")
-            str += sprintf(", content-type=%y", hdr."content-type");
+        if (http_get_field(hdr, "content-type"))
+            str += sprintf(", content-type=%y", http_get_field(hdr, "content-type"));
         else
             str += ", <no content-type>";
 
@@ -4522,6 +4556,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             *HttpServer::AbstractHttpRequestHandler handler, int max_body, bool is_multiplexed, bool want_streaming,
             hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         *data body;
+        # the fields of the request that its body is read and decoded by (qore#6851)
+        auto content_type = http_get_field(hdr, "content-type");
+        auto content_encoding = http_get_field(hdr, "content-encoding");
+        auto req_content_length = http_get_field(hdr, "content-length");
         if (cx."header-info".body_streaming && !want_streaming) {
             # Handler doesn't support streaming — buffer body on handler thread
             # for backward compatibility (body was previously read by I/O thread)
@@ -4660,13 +4698,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # of silently dispatching the handler with an empty body —
                 # which would otherwise be auto-converted to 204 No Content
                 # and corrupt application semantics for echo/upload paths.
-                if (h2_complete && !body_data.size() && hdr."content-length"
-                        && int(hdr."content-length") > 0) {
+                if (h2_complete && !body_data.size() && req_content_length
+                        && int(req_content_length) > 0) {
                     string etxt = sprintf(
                         "HTTP/2 request body delivery race: Content-Length "
                         "%y advertised but no DATA chunks received before "
                         "END_STREAM (stream=%d)",
-                        hdr."content-length", sid);
+                        req_content_length, sid);
                     listener.logError("%s: from %s", etxt,
                         cx."peer-info".address_desc);
                     cx.close = True;
@@ -4700,9 +4738,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             if (body_data.size()) {
                 # a multipart container's octets are not text in the request charset: each part
                 # carries its own encoding, so the container is handed over as bytes
-                if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                        || hdr."content-type" =~ /^application\/connect\+/
-                        || hdr."content-type" =~ /^multipart\//i) {
+                if (content_encoding || content_type == MimeTypeOctetStream
+                        || content_type =~ /^application\/connect\+/
+                        || content_type =~ /^multipart\//i) {
                     body = body_data;
                 } else {
                     try {
@@ -4741,9 +4779,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             }
             # Body is always binary from the I/O layer — convert to string if text content type;
             # a multipart container stays binary, as its parts carry their own encodings
-            if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                    || hdr."content-type" =~ /^application\/connect\+/
-                    || hdr."content-type" =~ /^multipart\//i) {
+            if (content_encoding || content_type == MimeTypeOctetStream
+                    || content_type =~ /^application\/connect\+/
+                    || content_type =~ /^multipart\//i) {
                 body = cx."header-info".body;
             } else {
                 # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
@@ -4760,7 +4798,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     return NOTHING;
                 }
             }
-        } else if (exists hdr."content-length" && !is_multiplexed) {
+        } else if (exists req_content_length && !is_multiplexed) {
             # HTTP/1.x only: the request body is read from the raw socket here.
             #
             # HTTP/2 and HTTP/3 bodies never arrive as raw socket bytes; they are
@@ -4774,9 +4812,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # differently (a sign, hexadecimal, an exponent, a list) is refused, as is one that a general
             # conversion would make a length of 0 or less, for which the read below would wait for the connection
             # to close (RFC 9110 section 8.6)
-            *int content_length = http_parse_content_length(hdr."content-length");
+            *int content_length = http_parse_content_length(req_content_length);
             if (!exists content_length) {
-                string etxt = sprintf("invalid Content-Length %y", hdr."content-length");
+                string etxt = sprintf("invalid Content-Length %y", req_content_length);
                 listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                 cx.close = True;
                 sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
@@ -4799,8 +4837,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # nothing to read
                 # a multipart container stays binary here too, so that a direct read and a
                 # buffered one hand the handler the same bytes
-                } else if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                        || hdr."content-type" =~ /^multipart\//i) {
+                } else if (content_encoding || content_type == MimeTypeOctetStream
+                        || content_type =~ /^multipart\//i) {
                     body = s.recvBinary(content_length, HttpServer::ReadTimeout);
                 } else {
                     # text is decoded by the rules shared by all HTTP clients and servers, as it is when the
@@ -4904,7 +4942,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         # Protocol header parsers expose encoding names but discard their q-values. Select
         # once from the original header so HTTP/1, HTTP/2, and HTTP/3 all honor exclusions.
-        hash<string, float> preferences = getContentEncodingPreferences(hdr."accept-encoding");
+        hash<string, float> preferences = getContentEncodingPreferences(http_get_field(hdr, "accept-encoding"));
         cx."identity-acceptable" = (preferences.identity ?? 1.0) > 0.0;
         hash<string, bool> acceptable;
         foreach string encoding in (keys preferences) {
@@ -5018,8 +5056,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 }
             }
 
-            if (handler && hdr.expect) {
-                if (hdr.expect == "100-continue") {
+            if (handler && http_get_field(hdr, "expect")) {
+                if (http_get_field(hdr, "expect") == "100-continue") {
                     hash<HttpResponseInfo> resp = handler.handleExpectHeader(cx, hdr);
                     # 100-continue is an intermediate response that must be sent directly on the
                     # socket before the client sends the body.  Do NOT route through sendReply()
@@ -5043,7 +5081,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         return;
                     }
                 } else {
-                    string etxt = sprintf("unrecognized 'Expect' header: %y", hdr.expect);
+                    string etxt = sprintf("unrecognized 'Expect' header: %y", http_get_field(hdr, "expect"));
                     string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
                         cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
                     listener.logError("%s", str);
@@ -5155,10 +5193,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # decode body if applicable; a decoded body that is too large raises HTTP-BODY-TOO-LARGE,
                     # which is answered with 413, and text that is not valid in its encoding
                     # HTTP-BODY-ENCODING-ERROR, which is answered with 400
-                    if (body && hdr."content-encoding" && handler.decompress) {
+                    auto content_encoding = body && handler.decompress
+                        ? http_get_field(hdr, "content-encoding")
+                        : NOTHING;
+                    if (content_encoding) {
                         # the decompressed octets are text in the charset of the request, decoded as an
                         # uncompressed body is (qore#6618)
-                        body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
+                        body = AbstractHttpRequestHandler::decodeRequestBody(content_encoding, body, NOTHING,
                             handler.getMaxDecodedBodySize(listener.getHandlerView()));
                         if (handler.decompress_to_string) {
                             body = decodeRequestText(hdr, body);
@@ -5567,8 +5608,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 && refuseNonTunnelExtendedConnectResponse(cx, hdr, rv)) {
             string proto_label = (cx."header-info".http3 ?? False) ? "HTTP/3" : "HTTP/2";
             listener.logError("cid %d: %s extended CONNECT (protocol %y) answered by handler %y with a %d response "
-                "that does not establish a tunnel; refusing the request", cx.id, proto_label, hdr.":protocol",
-                cx.handler_name, rv."code");
+                "that does not establish a tunnel; refusing the request", cx.id, proto_label,
+                http_get_field(hdr, ":protocol"), cx.handler_name, rv."code");
             # the refusal replaces the handler's response and is sent as an error response below, which also works
             # with the asynchronous I/O controller (HTTP/2 multiplexing, HTTP/3)
             rv."code" = 501;
@@ -7134,7 +7175,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         if (log_recv_body) {
-            if (body && (hdr."content-type" == MimeTypeOctetStream || hdr."content-encoding")) {
+            if (body && (http_get_field(hdr, "content-type") == MimeTypeOctetStream
+                    || http_get_field(hdr, "content-encoding"))) {
                 log("cid %d: RECV BODY: <%s>", cx.id, body.toHex());
             } else {
                 log("cid %d: RECV BODY: %s", cx.id, getMaskedBodyLogString(body));
@@ -7966,6 +8008,27 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
     }
 
+    #! Sets the \c Content-Type of the request that handlers are given, and keeps the one received
+    /** The \c Content-Type received is kept in \c _qore_orig_content_type; the field is set to the content type
+        without its charset parameter, as reported for every HTTP version (qore#6318); it is not set when nothing but a
+        charset parameter is given.  The field is set under \c "headers", and at the top level only if the fields are
+        given there (qore#6851)
+    */
+    private static setupRequestContentType(reference<hash<auto>> hdr, *hash<auto> header_info) {
+        auto ct = http_get_field(hdr, "content-type");
+        if (ct) {
+            hdr."_qore_orig_content_type" = ct;
+        }
+        if (header_info."body-content-type".val()) {
+            # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
+            auto v = HttpListener::obsText(header_info."body-content-type");
+            if (v.typeCode() == NT_LIST) {
+                v = v[0];
+            }
+            http_set_field(\hdr, "content-type", v);
+        }
+    }
+
     #! Returns a masked copy of the request path without changing handler-visible path semantics
     private string maskRequestPath(string raw_path) {
         # Mask sensitive query values before URL decoding so an encoded '&' in
@@ -8061,24 +8124,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # Set authorization if present
-        if (hdr.authorization) {
-            cx.auth = hdr.authorization;
+        if (auto auth = http_get_field(hdr, "authorization")) {
+            cx.auth = auth;
         }
 
         # Save original content-type and process content-type header
-        if (hdr."content-type") {
-            hdr."_qore_orig_content_type" = hdr."content-type";
-        }
-        # the content type without its charset parameter, as reported for every HTTP version (qore#6318); it is not set
-        # when nothing but a charset parameter is given
-        if (header_info."body-content-type".val()) {
-            hdr."content-type" = header_info."body-content-type";
-            # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
-            hdr."content-type" = HttpListener::obsText(hdr."content-type");
-            if (hdr."content-type".typeCode() == NT_LIST) {
-                hdr."content-type" = hdr."content-type"[0];
-            }
-        }
+        setupRequestContentType(\hdr, header_info);
 
         # Copy headers to the context
         cx.hdr = hdr;
@@ -8094,8 +8145,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         if (request_helper.log_info) {
             string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
             string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
-                cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
-            if (hdr."transfer-encoding" == "chunked") {
+                cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, http_get_field(hdr, "user-agent"));
+            if (http_get_field(hdr, "transfer-encoding") == "chunked") {
                 lstr += " body: chunked";
             }
             if (hdr."_qore_orig_content_type") {
@@ -8997,20 +9048,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 if (req_hdr.path =~ /^\//) {
                     splice req_hdr.path, 0, 1;
                 }
-                if (req_hdr.authorization) {
-                    cx.auth = req_hdr.authorization;
+                if (auto auth = http_get_field(req_hdr, "authorization")) {
+                    cx.auth = auth;
                 }
-                if (req_hdr."content-type") {
-                    req_hdr."_qore_orig_content_type" = req_hdr."content-type";
-                }
-                if (conn_info.header_info."body-content-type".val()) {
-                    req_hdr."content-type" = conn_info.header_info."body-content-type";
-                    # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
-                    req_hdr."content-type" = HttpListener::obsText(req_hdr."content-type");
-                    if (req_hdr."content-type".typeCode() == NT_LIST) {
-                        req_hdr."content-type" = req_hdr."content-type"[0];
-                    }
-                }
+                setupRequestContentType(\req_hdr, conn_info.header_info);
                 cx.hdr = req_hdr;
                 cx.char_encoding = s.getEncoding();
                 cx."response-encoding" = conn_info.header_info."accept-charset";
@@ -9022,7 +9063,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         ? req_hdr.http_version : "HTTP/" + req_hdr.http_version;
                     string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
                         cx."peer-info".address_desc, req_hdr.method, cx.masked_path,
-                        http_ver, req_hdr."user-agent");
+                        http_ver, http_get_field(req_hdr, "user-agent"));
                     if (req_hdr."_qore_orig_content_type") {
                         lstr += sprintf(" Content-Type: %y", req_hdr."_qore_orig_content_type");
                     }
@@ -9228,20 +9269,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (req_hdr.path =~ /^\//) {
                 splice req_hdr.path, 0, 1;
             }
-            if (req_hdr.authorization) {
-                cx.auth = req_hdr.authorization;
+            if (auto auth = http_get_field(req_hdr, "authorization")) {
+                cx.auth = auth;
             }
-            if (req_hdr."content-type") {
-                req_hdr."_qore_orig_content_type" = req_hdr."content-type";
-            }
-            if (conn_info.header_info."body-content-type".val()) {
-                req_hdr."content-type" = conn_info.header_info."body-content-type";
-                # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
-                req_hdr."content-type" = HttpListener::obsText(req_hdr."content-type");
-                if (req_hdr."content-type".typeCode() == NT_LIST) {
-                    req_hdr."content-type" = req_hdr."content-type"[0];
-                }
-            }
+            setupRequestContentType(\req_hdr, conn_info.header_info);
             cx.hdr = req_hdr;
             cx.char_encoding = s.getEncoding();
             cx."response-encoding" = conn_info.header_info."accept-charset";
@@ -9253,7 +9284,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     ? req_hdr.http_version : "HTTP/" + req_hdr.http_version;
                 string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y",
                     cx.id, cx."peer-info".address_desc, req_hdr.method,
-                    cx.masked_path, http_ver, req_hdr."user-agent");
+                    cx.masked_path, http_ver, http_get_field(req_hdr, "user-agent"));
                 if (req_hdr."_qore_orig_content_type") {
                     lstr += sprintf(" Content-Type: %y",
                         req_hdr."_qore_orig_content_type");
@@ -9505,15 +9536,17 @@ class HandlerInfo {
             return 0;
         }
 
-        if (hdr{special_header_list}) {
-            return 2;
+        foreach string name in (special_header_list) {
+            if (exists http_get_field(hdr, name)) {
+                return 2;
+            }
         }
 
         if (score || !content_type_map) {
             return 0;
         }
 
-        return content_type_map.(hdr."content-type") ? 1 : 0;
+        return content_type_map.(http_get_field(hdr, "content-type")) ? 1 : 0;
     }
 
     stop() {
@@ -9872,7 +9905,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
             return NOTHING;
         }
         # Reject requests with a body — the inline path does not read the body
-        if (info.hdr."content-length" || info.hdr."transfer-encoding") {
+        if (http_get_field(info.hdr, "content-length") || http_get_field(info.hdr, "transfer-encoding")) {
             return NOTHING;
         }
         # the inline path gives the request head to the handler as it is: a head that is not valid text takes the full
