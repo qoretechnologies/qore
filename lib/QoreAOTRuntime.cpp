@@ -7390,7 +7390,7 @@ struct QoreAOTStmtLocReadTable {
 };
 
 //! Reads the runtime location of an IR instruction written by qore_aot_write_stmt_loc() (see QoreAOTStmtLocTag)
-/** @param inst the instruction, whose own location (QoreIRInstruction::loc) is taken for a new entry with the same
+/** @param inst_loc the instruction's own location (null for a local unwind location), taken for a new entry with the same
     lines and file, so that no location is made for it
     @param inst_file the file of the instruction's own location as read from the string pool of the image, which
     gives a string once: a new entry in the same file has the same pointer, and takes the file of the instruction's
@@ -7398,8 +7398,8 @@ struct QoreAOTStmtLocReadTable {
     @return false if the location is malformed, with \a error set
 */
 static bool qore_aot_read_stmt_loc(const QoreAOTBinaryReader& reader, const uint8_t*& ptr, QoreProgram* pgm,
-        QoreIRFunction* owner_func, QoreAOTStmtLocReadTable& table, QoreIRInstruction& inst, const char* inst_file,
-        std::string& error) {
+        QoreIRFunction* owner_func, QoreAOTStmtLocReadTable& table, const QoreProgramLocation* inst_loc,
+        const char* inst_file, std::string& error) {
     uint8_t tag = QoreAOTBinaryReader::readU8(ptr);
     switch (static_cast<QoreAOTStmtLocTag>(tag)) {
         case QoreAOTStmtLocTag::None:
@@ -7431,15 +7431,15 @@ static bool qore_aot_read_stmt_loc(const QoreAOTBinaryReader& reader, const uint
                 return false;
             }
             const QoreProgramLocation* loc = nullptr;
-            const bool inst_file_same = inst.loc && file == inst_file;
+            const bool inst_file_same = inst_loc && file == inst_file;
             // deserializeIRFunction() reads every instruction for the function that owns its locations
             assert(owner_func);
-            if (inst_file_same && inst.loc->start_line == start_line && inst.loc->end_line == end_line) {
-                loc = inst.loc;
+            if (inst_file_same && inst_loc->start_line == start_line && inst_loc->end_line == end_line) {
+                loc = inst_loc;
             } else {
                 // the file is interned in the Program, as the instruction's own (see deserializeIRInstruction())
                 const char* interned_file = inst_file_same
-                    ? inst.loc->getFile()
+                    ? inst_loc->getFile()
                     : (file && pgm)
                         ? qore_program_private::get(*pgm)->addRuntimeString(file)
                         : (file ? file : "");
@@ -7455,7 +7455,6 @@ static bool qore_aot_read_stmt_loc(const QoreAOTBinaryReader& reader, const uint
             error = "malformed IR: invalid runtime location tag " + std::to_string(tag);
             return false;
     }
-    inst.stmt_loc = table.prev;
     return true;
 }
 
@@ -7631,8 +7630,11 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     }
     // the runtime location (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646); an earlier image has none, and the
     // function takes the instructions' own (qore_ir_set_deserialized_statement_locations())
-    if (stmt_locs && !qore_aot_read_stmt_loc(reader, ptr, pgm, owner_func, *stmt_locs, *inst, loc_file, error)) {
-        return nullptr;
+    if (stmt_locs) {
+        if (!qore_aot_read_stmt_loc(reader, ptr, pgm, owner_func, *stmt_locs, inst->loc, loc_file, error)) {
+            return nullptr;
+        }
+        inst->stmt_loc = stmt_locs->prev;
     }
     // the temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742); an earlier image has none (see
     // QoreIRFunction::temp_scope_ids_unknown)
@@ -8593,6 +8595,34 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             && !qore_aot_read_ir_catch_tables(ptr, end, *func, error)) {
         error = "malformed IR function '" + func->name + "': " + error;
         return nullptr;
+    }
+
+    if (reader.getHeader().version >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
+        if (!need(2, "local unwind location count")) {
+            return nullptr;
+        }
+        uint16_t count = QoreAOTBinaryReader::readU16(ptr);
+        if (count > slot_to_local.size()) {
+            error = "malformed IR: local unwind location count exceeds the local slot table";
+            return nullptr;
+        }
+        uint32_t previous = 0;
+        for (unsigned i = 0; i < count; ++i) {
+            if (checkCancel() || !need(5, "local unwind slot and location tag")) {
+                return nullptr;
+            }
+            uint32_t slot = QoreAOTBinaryReader::readU32(ptr);
+            auto lv = slot_to_local.find(slot);
+            if (slot > func->max_local_slot_id || lv == slot_to_local.end() || (i && slot <= previous)) {
+                error = "malformed IR: unknown or unordered local unwind slot " + std::to_string(slot);
+                return nullptr;
+            }
+            if (!qore_aot_read_stmt_loc(reader, ptr, pgm, func.get(), stmt_locs, nullptr, nullptr, error)) {
+                return nullptr;
+            }
+            func->local_unwind_locations.emplace(lv->second, stmt_locs.prev);
+            previous = slot;
+        }
     }
 
     // a read past the end of the IR gave 0: the function is not used (qore#6265)

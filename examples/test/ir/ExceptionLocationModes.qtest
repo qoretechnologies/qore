@@ -40,8 +40,8 @@
     their callees, and an exception that a summary raises must be located at the statement that raised it
     (qore#6673).
 
-    Not probed: the call stack location of the destructor of a function body's local at the end of the function
-    (qore#6672).
+    The body-local cleanup probes also check the destructor's call stack on return, fallthrough, and exception
+    unwinding (qore#6672).
 */
 class ExceptionLocationModesTest inherits QUnit::Test {
     public {
@@ -459,7 +459,7 @@ hash<string, code> probes = {
     "destructor then division": \MoreProbes::pDtorThenDiv(),
     "closure then division": \LastProbes::pClosureThenDiv(),
 };
-
+checkBodyExit();
 for (int j = 0; j < 3; ++j) {
     foreach hash<auto> i in (probes.pairIterator()) {
         try {
@@ -490,6 +490,76 @@ class LastProbes {
             return b;
         };
         return c(x) + x / (x - x);
+    }
+}
+class BodyExit {
+    static fallthrough() {
+        D d();
+    }
+}
+int sub bodyExit(bool fail) {
+    D d();
+    if (fail) {
+        throw "BODY", "exception from function";
+    }
+    return 1;
+}
+sub checkBodyExit() {
+    for (int j = 0; j < 3; ++j) {
+        foreach bool fail in (False, True) {
+            try {
+                int result =
+                    bodyExit(fail)
+                    + 1;
+            } catch (hash<ExceptionInfo> ex) {
+                if (fail) {
+                    show("function exception", ex);
+                    ex = ex.next;
+                }
+                show(fail ? "local during unwind" : "local on return", ex);
+            }
+        }
+        code done = \BodyExit::fallthrough();
+        try {
+            done(
+            );
+        } catch (hash<ExceptionInfo> ex) {
+            show("local on fallthrough", ex);
+        }
+        try {
+            int result =
+                throwAfterHandler();
+        } catch (hash<ExceptionInfo> ex) {
+            show("handler unwind", ex.next);
+        }
+        checkNestedBodyExit();
+    }
+}
+int sub throwAfterHandler() {
+    D d();
+    on_exit { printf("handler before local\n"); }
+    throw "EXIT", "function always throws";
+}
+sub innerOnly(bool fail) {
+    if (fail) { D inner(); throw "BODY", "inner only"; }
+}
+sub mixedLocals(bool fail) {
+    D outer();
+    if (fail) { D inner(); throw "BODY", "inner and outer"; }
+}
+sub checkNestedBodyExit() {
+    try {
+        innerOnly(
+            True);
+    } catch (hash<ExceptionInfo> ex) {
+        show("inner only", ex.next);
+    }
+    try {
+        mixedLocals(
+            True);
+    } catch (hash<ExceptionInfo> ex) {
+        show("mixed inner", ex.next);
+        show("mixed outer", ex.next.next);
     }
 }
 ';
@@ -613,6 +683,7 @@ sub run() {
             }
         }
     }
+    runBodyClosure();
     bg_closure(2);
 }
 
@@ -630,14 +701,31 @@ if (ARGV[0] == "debug") {
 } else {
     run();
 }
+class ClosureLocal {
+    destructor() {
+        throw "LOCAL", "closure local";
+    }
+}
+sub runBodyClosure() {
+    code finish = sub () { ClosureLocal local(); };
+    try {
+        finish(
+        );
+    } catch (hash<ExceptionInfo> ex) {
+        show("closure local", ex);
+    }
+}
+
 ';
 
         #! results that the AST interpreter must give for AotIrScript
         const AotIrPinned = (
-            "if condition: DIVISION-BY-ZERO 30-33 <- Probes::pIfCond:111-111 <- run:133-133",
-            "nested handler: DIVISION-BY-ZERO 43-46 <- Probes::pNestedHandler:111-111 <- run:133-133",
-            "closure: DIVISION-BY-ZERO 60-63 <- <anonymous closure>:111-111 <- run:133-133",
-            "nested handler in a closure: DIVISION-BY-ZERO 72-75 <- <anonymous closure>:111-111 <- run:133-133",
+            "if condition: DIVISION-BY-ZERO 30-33 <- Probes::pIfCond:111-111 <- run:134-134",
+            "nested handler: DIVISION-BY-ZERO 43-46 <- Probes::pNestedHandler:111-111 <- run:134-134",
+            "closure: DIVISION-BY-ZERO 60-63 <- <anonymous closure>:111-111 <- run:134-134",
+            "nested handler in a closure: DIVISION-BY-ZERO 72-75 <- <anonymous closure>:111-111 <- run:134-134",
+            "closure local: LOCAL 138-138 <- ClosureLocal::destructor:144-145 <- <anonymous closure>:144-145 "
+                "<- runBodyClosure:118-118 <- run:134-134",
             "unhandled QORE System exception thrown in TID 2 in <background operator>() "
                 "(aot-ir-location.qr:88-89 (Qore new-thread code))",
         );
@@ -658,6 +746,20 @@ if (ARGV[0] == "debug") {
                 "MoreProbes::pHandlersWhile:417-417",
             "closure then division: DIVISION-BY-ZERO exception-location.qr:443-443 <- "
                 "LastProbes::pClosureThenDiv:417-417",
+            "local on return: DTOR exception-location.qr:4-4 <- D::destructor:462-464 "
+                "<- bodyExit:463-463 <- checkBodyExit:413-413",
+            "local during unwind: DTOR exception-location.qr:4-4 <- D::destructor:462-464 "
+                "<- bodyExit:463-463 <- checkBodyExit:413-413",
+            "local on fallthrough: DTOR exception-location.qr:4-4 <- D::destructor:475-476 "
+                "<- BodyExit::fallthrough:475-476 <- checkBodyExit:413-413",
+            "handler unwind: DTOR exception-location.qr:4-4 <- D::destructor:481-482 "
+                "<- throwAfterHandler:482-482 <- checkBodyExit:413-413",
+            "inner only: DTOR exception-location.qr:4-4 <- D::destructor:495-495 "
+                "<- innerOnly:503-504 <- checkNestedBodyExit:486-486 <- checkBodyExit:413-413",
+            "mixed inner: DTOR exception-location.qr:4-4 <- D::destructor:499-499 "
+                "<- mixedLocals:509-510 <- checkNestedBodyExit:486-486 <- checkBodyExit:413-413",
+            "mixed outer: DTOR exception-location.qr:4-4 <- D::destructor:509-510 "
+                "<- mixedLocals:509-510 <- checkNestedBodyExit:486-486 <- checkBodyExit:413-413",
         );
     }
 
@@ -679,6 +781,8 @@ if (ARGV[0] == "debug") {
         addTestCase("exceptions are located alike in the IR of AOT images", \testAotIrLocations());
         addTestCase("exceptions raised by summaries of directly called probes are located alike",
             \testDirectCallLocations());
+        addTestCase("body-local cleanup after an exception leaves an outlined helper", \testOutlinedBodyCleanup());
+        addTestCase("body-local cleanup in a stripped closure without debug events", \testStrippedClosureCleanup());
         set_return_value(main());
     }
 
@@ -729,6 +833,102 @@ if (ARGV[0] == "debug") {
             }
         }
         assertEq({}, wrong);
+    }
+
+    testStrippedClosureCleanup() {
+        string path = get_script_dir() + "/ExceptionLocationModes/closure-locals.q";
+        TmpDir tmp("qore-closure-cleanup-");
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        string expected = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, path));
+        assertRegex("^BODY [0-9]+-[0-9]+\nINNER [0-9]+-[0-9]+\nOUTER [0-9]+-[0-9]+\n"
+            "BODY [0-9]+-[0-9]+\nOUTER [0-9]+-[0-9]+", expected, "AST destroyed the shadowed locals in order");
+        hash<string, auto> wrong;
+        foreach string mode in ("ir", "jit", "tiered") {
+            string output = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, path));
+            if (output != expected) {
+                wrong{mode} = differences(expected, output);
+            }
+        }
+        foreach string opt in ("-O0", "-O3") {
+            foreach string source in ("--strip-source", "--include-source") {
+                string exe = tmp.path + DirSep + "closure" + opt + source;
+                # Exercise both forms of the native exception epilogue. The table releases contiguous groups
+                # in reverse order and must switch from the inner statement to the caller for the root local.
+                bool cleanup_table = source == "--include-source";
+                string compiler_env = cleanup_table ? "QORE_JIT_CLEANUP_PHI_BUDGET=1 QORE_IR_OPT_STATS=1" : "";
+                string compile = backquote(sprintf("%s %s %s %s %s -o %s %s 2>&1", env, compiler_env, qcc_bin, opt,
+                    source, exe, path));
+                assertTrue(is_file(exe), opt + " " + source + " compile " + compile);
+                if (cleanup_table) {
+                    assertRegex("IR-OPT-LLVM: array-exit-cleanup", compile, opt + " emitted table cleanup");
+                }
+                foreach string settings in ("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1",
+                        "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1") {
+                    string output = ExecModeHarness::run_any(sprintf("%s %s %s -b", env, settings, exe));
+                    if (output != expected) {
+                        wrong{opt + " " + source + " " + settings} = differences(expected, output);
+                    }
+                }
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    testOutlinedBodyCleanup() {
+        TmpDir tmp("qore-body-cleanup-outline-");
+        string path = tmp.path + DirSep + "cleanup.q";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write('%modern
+class D { destructor() { throw "OUTER", "root local"; } }
+class Inner { destructor() { throw "INNER", "helper local"; } }
+int sub visit(int site, int fail) {
+    if (site == fail) { throw "SITE", "helper"; }
+    return 1;
+}
+int sub body(int fail) {
+    D d();
+    int count = 0;
+');
+        # Each throwing site owns an inner local. Its destructor runs at the enclosing if, then the root
+        # local runs at the multiline call in callBody().
+        # The first region clears the shared root local on an early return, before the coordinator receives it.
+        f.write("    if (fail == 0) {\n        ++count;\n        return count;\n    } else { count += visit(0, fail); }\n");
+        for (int i = 1; i < 24; ++i) {
+            f.write(sprintf("    if (fail == %d) {\n        Inner inner();\n        count += visit(%d, fail);\n"
+                "    } else { count += visit(%d, fail); }\n", i, i, i));
+        }
+        f.write('    return count;
+}
+sub callBody(int fail) {
+    int result =
+        body(fail)
+        + 1;
+}
+for (int fail = -1; fail < 24; ++fail) {
+    try { callBody(fail); } catch (hash<ExceptionInfo> ex) {
+        while (True) {
+            printf("%s:%d-%d ", ex.err, ex.callstack[0].line, ex.callstack[0].endline);
+            if (!ex.next) { break; }
+            ex = ex.next;
+        }
+        printf("\n");
+    }
+}
+');
+        f.close();
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        string expected = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, path));
+        assertRegex("SITE:[0-9]+-[0-9]+ INNER:[0-9]+-[0-9]+ OUTER:[0-9]+-[0-9]+", expected,
+            "AST ran both destructors");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "body" + opt;
+            string compile = backquote(sprintf("%s QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=20 "
+                "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 QORE_AOT_OUTLINE_FN_TARGET_INSTS=20 %s %s -o %s %s 2>&1",
+                env, qcc_bin, opt, exe, path));
+            assertRegex("AOT-OUTLINE-FN: 'body' outlined [1-9]", compile, opt + " extracted a helper");
+            assertEq(expected, ExecModeHarness::run_any(sprintf("%s %s -b", env, exe)), opt);
+        }
     }
 
     #! the probes called directly, so that a qcc executable can replace a call with the summary of the callee

@@ -23,19 +23,30 @@ using Payload = std::function<void(QoreAOTBinaryWriter&)>;
 static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         const std::vector<uint32_t>& operands, const Payload& payload, const char* expected,
         bool tag_only = false, bool wide = false, uint16_t version = QORE_AOT_BINARY_VERSION,
-        uint32_t result_id = 3, uint64_t features = 0, const Payload* stmt_loc = nullptr) {
+        uint32_t result_id = 3, uint64_t features = 0, const Payload* stmt_loc = nullptr,
+        const Payload* unwind = nullptr) {
     QoreAOTBinaryWriter writer;
     writer.feature_flags = features | (wide ? QORE_AOT_FEAT_WIDE_IR_OPERANDS : 0);
     uint32_t section = writer.beginSection(QoreAOTSectionType::TOPLEVEL);
     writer.writeStringRef("instruction-validation");
     writer.writeU32(32); // maximum value ID
-    writer.writeU32(0); // local slots
+    writer.writeU32(unwind ? 2 : 0); // maximum local slot ID
     writer.writeU32(0); // guards
     writer.writeStringRef(""); // return type
     writer.writeU32(0); // parent slots
     writer.writeU16(1); // blocks
-    writer.writeU16(0); // local variables
+    writer.writeU16(unwind ? 2 : 0); // local variables
     writer.writeU16(0); // body locals
+    if (unwind) {
+        // Sparse slots distinguish an unknown in-range ID from one beyond the frame.
+        for (uint32_t slot : {0u, 2u}) {
+            writer.writeStringRef(slot ? "inner" : "outer");
+            writer.writeStringRef("auto");
+            writer.writeU32(slot);
+            writer.writeU8(static_cast<uint8_t>(AOTIRLocalBinding::NONE));
+            writer.writeU32(UINT32_MAX);
+        }
+    }
     if (version >= QORE_AOT_HANDLER_OWN_LOCALS_VERSION) {
         writer.writeU32(0); // handler-own slots
     }
@@ -130,6 +141,13 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         writer.writeU32(0); // catch-exit depths (qore#6733)
         writer.writeU32(0); // catch-cleanup results
     }
+    if (version >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
+        if (unwind) {
+            (*unwind)(writer);
+        } else {
+            writer.writeU16(0);
+        }
+    }
     writer.endSection(section);
     QoreAOTBinaryHeader header{};
     header.magic = QORE_AOT_BINARY_MAGIC;
@@ -175,6 +193,15 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         }, nullptr, error);
     bool ok = expected ? !ir && error.find(expected) != std::string::npos
         : ir && error.empty() && ptr == end;
+    if (ok && unwind && !expected) {
+        // The nested local must reuse the precise location written for the instruction before the catch tables.
+        const auto* loc = ir->blocks.front()->instructions.front()->stmt_loc;
+        ok = loc && ir->local_unwind_locations.size() == 2 && ir->local_var_slots.size() == 2;
+        for (const auto& [local, slot] : ir->local_var_slots) {
+            auto site = ir->local_unwind_locations.find(local);
+            ok = ok && site != ir->local_unwind_locations.end() && site->second == (slot ? loc : nullptr);
+        }
+    }
     // A mismatched group must fail before its payload reader is called, even with no payload bytes.
     if (tag_only && expression_reads) {
         ok = false;
@@ -401,6 +428,67 @@ int main() {
         w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
         w.writeU32(0);
     }, "runtime location 0 is beyond the 0 location(s) of the function");
+    if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
+        const Payload nothing = [](QoreAOTBinaryWriter& w) {
+            w.writeU8(static_cast<uint8_t>(QoreIRConstant::Kind::Nothing));
+        };
+        auto mapping = [&](const char* label, const Payload& wire, const char* error) {
+            const Payload instruction_location = new_entry(3);
+            ok = check(pgm, label, O::ConstNothing, static_cast<uint8_t>(G::Const), {}, nothing, error,
+                false, false, QORE_AOT_BINARY_VERSION, 3, 0, &instruction_location, &wire) && ok;
+            ++count;
+        };
+        auto slots = [](std::initializer_list<uint32_t> ids) -> Payload {
+            return [ids = std::vector<uint32_t>(ids)](QoreAOTBinaryWriter& w) {
+                w.writeU16(static_cast<uint16_t>(ids.size()));
+                for (uint32_t slot : ids) {
+                    w.writeU32(slot);
+                    w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+                }
+            };
+        };
+        mapping("caller and nested unwind locations", [](QoreAOTBinaryWriter& w) {
+            w.writeU16(2);
+            w.writeU32(0);
+            w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+            w.writeU32(2);
+            w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
+            w.writeU32(0);
+        }, nullptr);
+        mapping("too many unwind slots", slots({0, 1, 2}), "local unwind location count exceeds");
+        mapping("unknown unwind slot", slots({1}), "unknown or unordered local unwind slot");
+        mapping("out-of-range unwind slot", slots({3}), "unknown or unordered local unwind slot");
+        mapping("duplicate unwind slot", slots({0, 0}), "unknown or unordered local unwind slot");
+        mapping("unordered unwind slots", slots({2, 0}), "unknown or unordered local unwind slot");
+        mapping("truncated unwind section", [](QoreAOTBinaryWriter& w) { w.writeU16(1); },
+            "truncated IR function");
+        // The instruction created location entry zero. A short index must fail even if the bounds-checked
+        // read returns zero and that index would otherwise resolve.
+        mapping("truncated unwind location index", [](QoreAOTBinaryWriter& w) {
+            w.writeU16(1);
+            w.writeU32(0);
+            w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
+            w.writeU16(0);
+        }, "truncated IR function");
+        mapping("invalid unwind location tag", [](QoreAOTBinaryWriter& w) {
+            w.writeU16(1);
+            w.writeU32(0);
+            w.writeU8(255);
+        }, "invalid runtime location tag");
+        mapping("unknown unwind location index", [](QoreAOTBinaryWriter& w) {
+            w.writeU16(1);
+            w.writeU32(0);
+            w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
+            w.writeU32(1);
+        }, "runtime location 1 is beyond");
+    }
+    constexpr unsigned expected_count =
+        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 168 : 158;
+    if (count != expected_count) {
+        fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,
+            static_cast<unsigned>(QORE_AOT_BINARY_VERSION));
+        ok = false;
+    }
     qore_destroy_program(pgm);
     qore_cleanup();
     if (ok) {
