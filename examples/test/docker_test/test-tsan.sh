@@ -59,7 +59,9 @@ TSAN_FLAGS="-fsanitize=thread"
 
 # the tests that compile a C++ fixture (a host executable, a module or a program that loads libqore) against the
 # libqore of the build, with its sanitizer flags (qore#6587: the thread stack tests, qore#6682: the others); the tests
-# of qore/threads and qore/debug are added below, as are the race tests of other directories (qore#6792)
+# of qore/threads and qore/debug are added below, as are the race tests of other directories (qore#6792) and the fork
+# tests (qore#6817: their child processes run with the locks that the fork handlers release; fork-before-init runs
+# qore-fork-before-init-test, a host executable of the build)
 FIXTURE_TESTS="
 examples/test/qore/threads/frame-check-stack.qtest
 examples/test/qore/threads/parse-stack-boundary.qtest
@@ -74,8 +76,15 @@ examples/test/ir/AOTStaticModuleMetadata.qtest
 examples/test/ir/LocalVarLValueLookup.qtest
 examples/test/ir/OptionalMapTypeFolding.qtest
 examples/test/ir/RecursiveClosureLocals.qtest
+examples/test/qore/classes/Datasource/fork.qtest
+examples/test/qore/classes/Program/parse-options-fork.qtest
 examples/test/qore/classes/Socket/ssl-config-init.qtest
+examples/test/qore/functions/fork_environment_lock_order.qtest
 examples/test/qore/misc/dgc-removed-object-set-race.qtest
+examples/test/qore/misc/fork-before-init/fork-before-init.qtest
+examples/test/qore/misc/fork-delete-program-in-method.qtest
+examples/test/qore/misc/fork-leaf-locks.qtest
+examples/test/qore/misc/fork-thread-wait-lock.qtest
 examples/test/qore/misc/libqore-dlopen/libqore-dlopen.qtest
 examples/test/qore/misc/module-loader/aot-binary-symbol-resolution.qtest
 examples/test/qore/parser/modern-option-consistency/modern-option-consistency.qtest
@@ -113,11 +122,14 @@ cmake -S "${QORE_SRC_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=debug -DQORE_QCC
     -DCMAKE_C_FLAGS="${TSAN_FLAGS}" -DCMAKE_CXX_FLAGS="${TSAN_FLAGS}" \
     -DCMAKE_EXE_LINKER_FLAGS="${TSAN_FLAGS}" -DCMAKE_SHARED_LINKER_FLAGS="${TSAN_FLAGS}" \
     -DCMAKE_MODULE_LINKER_FLAGS="${TSAN_FLAGS}"
-# qcc and qore-aot-reseal: the tests that compile a program use the qcc next to qore (an installed one crashes with a
-# TSan libqore) and modern-option-consistency the qore-aot-reseal next to it; the
-# binary modules that the tests load (json, reflection and yaml for QUnit and the test modules; logger_bin, i18n and
-# linenoise for the debugger and sandbox tests of qore/debug and qore/threads)
-${NO_ASLR} cmake --build "${BUILD_DIR}" -j${MAKE_JOBS} --target qore qcc qore-aot-reseal json reflection yaml logger_bin i18n linenoise
+# qcc, qore-aot-reseal and qore-fork-before-init-test: the tests that compile a program use the qcc next to qore (an
+# installed one crashes with a TSan libqore), modern-option-consistency the qore-aot-reseal next to it and
+# fork-before-init the qore-fork-before-init-test next to it (it skips without it); the binary modules that the tests
+# load (json, reflection and yaml for QUnit and the test modules; logger_bin, i18n and linenoise for the debugger and
+# sandbox tests of qore/debug and qore/threads; dbitest, the mock DBI driver of Datasource/fork, which run_tests.sh
+# finds in the build's modules/ directory)
+${NO_ASLR} cmake --build "${BUILD_DIR}" -j${MAKE_JOBS} --target qore qcc qore-aot-reseal qore-fork-before-init-test \
+    json reflection yaml logger_bin i18n linenoise dbitest
 BUILD_END=$(date +%s)
 echo "=== TSan build end: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ($((BUILD_END - BUILD_START)) s) ==="
 
