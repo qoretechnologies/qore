@@ -5,7 +5,6 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
-%no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit

@@ -36,7 +36,6 @@
 # Test servers use IPv4 unless a case explicitly selects another family. Keep endpoints on IPv4 loopback because an
 # unrelated IPv6-only listener can independently own the same ephemeral port number.
 
-#! a logger appender that reports the ends of the connections of an HTTP server
 class AltHandler inherits AbstractHttpRequestHandler {
     hash handleRequest(hash cx, hash hdr, *data body) {
         return makeResponse(201, "a1, " + hdr.method + ", " + hdr.path + ", " + cx.raw_path);
@@ -3705,7 +3704,6 @@ public class HttpServerTest inherits QUnit::Test {
         assertEq(0, done.getCount(), "all concurrent requests should complete");
         assertTrue(all_success, "all requests should succeed after listener add/remove cycles");
     }
-
 
     /** Test that server handles bad SSL handshakes without blocking I/O thread.
         Simulates clients that connect and close immediately during SSL handshake,
