@@ -806,6 +806,14 @@ public:
         qore_type_retirement_scan() (see qore_type_retire_epoch; issue #6419)
     */
     std::atomic<uint64_t> type_epoch{0};
+    //! the number of frames that hold a type read through a derived type across the code that they run (issue #6419)
+    /** A generic call with type arguments inferred or substituted at run time, for example; while it is not 0, the
+        waits of the thread are not quiescent (QoreTypeQuiescentWaitHelper)
+    */
+    unsigned type_unsafe_frames = 0;
+    //! the number of builtin waits that the thread has entered (QoreTypeQuiescentWaitHelper), for the debug hook
+    //! dbg_type_wait_entered(); guarded by qore_type_wait_entry_lock, counted in debug builds only
+    int64 type_wait_entries = 0;
 
     // issue #3024: program context for calls prior to a call
     QoreProgram* call_program_context = nullptr;
@@ -1093,7 +1101,7 @@ public:
             tlv_clearing(false) {
         if (p) {
             // the thread runs the Program's code from its start
-            type_epoch.store(qore_type_retire_epoch.load(std::memory_order_seq_cst), std::memory_order_seq_cst);
+            qore_publish_type_epoch(type_epoch);
         }
 #ifdef QORE_MANAGE_STACK
         if (n_flags & QTF_NO_STACK_GUARD) {
@@ -1708,14 +1716,195 @@ static QoreThreadLocalStorage<ThreadData> thread_data;
 */
 static inline void set_thread_current_pgm(ThreadData* td, QoreProgram* pgm) {
     if (!td->current_pgm != !pgm) {
-        td->type_epoch.exchange(pgm ? qore_type_retire_epoch.load(std::memory_order_seq_cst) : 0,
-            std::memory_order_seq_cst);
+        if (pgm) {
+            qore_publish_type_epoch(td->type_epoch);
+        } else {
+            td->type_epoch.store(0, std::memory_order_seq_cst);
+        }
     }
     td->current_pgm = pgm;
 }
 
+//! Frees the retired declarations that are pending after the thread left Qore code (issue #6419)
+/** Called where the thread's outermost exit from Qore code is complete, with no lock of the Program held
+*/
+static inline void qore_type_retirement_exit_scan(ThreadData* td) {
+    if (!td->current_pgm && qore_type_retirement_pending.load(std::memory_order_relaxed)) {
+        qore_type_retirement_free();
+    }
+}
+
+QoreTypeEpochEntryHelper::QoreTypeEpochEntryHelper() {
+    ThreadData* td = thread_data.get();
+    if (td && !td->type_epoch.load(std::memory_order_relaxed)) {
+        qore_publish_type_epoch(td->type_epoch);
+        slot = &td->type_epoch;
+    }
+}
+
+QoreTypeEpochEntryHelper::~QoreTypeEpochEntryHelper() {
+    if (slot) {
+        slot->store(0, std::memory_order_seq_cst);
+    }
+}
+
+#ifdef DEBUG
+bool qore_thread_has_no_type_epoch() {
+    ThreadData* td = thread_data.get();
+    return td && !td->type_epoch.load(std::memory_order_relaxed);
+}
+
+//! signals the entries of threads into the builtin waits (see dbg_type_wait_entered())
+static std::mutex qore_type_wait_entry_lock;
+static std::condition_variable qore_type_wait_entry_cond;
+
+//! returns the waits that a thread entered, or -1 if there is no such thread; qore_type_wait_entry_lock is held
+static int64 qore_type_dbg_wait_entries_locked(int tid) {
+    int64 rv = -1;
+    thread_list.anyThreadData([tid, &rv](ThreadData* td) -> bool {
+        if (td->tid == tid) {
+            rv = td->type_wait_entries;
+            return true;
+        }
+        return false;
+    });
+    return rv;
+}
+
+bool qore_type_dbg_wait_entered(int tid, int64 count, int64 timeout_ms) {
+    std::unique_lock<std::mutex> lock(qore_type_wait_entry_lock);
+    return qore_type_wait_entry_cond.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+        [&]() { return qore_type_dbg_wait_entries_locked(tid) >= count; });
+}
+
+int64 qore_type_dbg_wait_entries(int tid) {
+    std::lock_guard<std::mutex> lock(qore_type_wait_entry_lock);
+    return qore_type_dbg_wait_entries_locked(tid);
+}
+#endif
+
+QoreTypeQuiescentWaitHelper::QoreTypeQuiescentWaitHelper() {
+    ThreadData* td = thread_data.get();
+    // a thread outside Qore code is quiescent already; one in a frame that holds a type read through a derived type
+    // is not quiescent while it waits
+    if (td && !td->type_unsafe_frames && td->type_epoch.load(std::memory_order_relaxed)) {
+        // every type the thread read before the wait is read before this store
+        td->type_epoch.store(0, std::memory_order_seq_cst);
+        slot = &td->type_epoch;
+    }
+#ifdef DEBUG
+    // counted once the thread is quiescent, so that a test that waits for the entry finds it so
+    if (td) {
+        std::lock_guard<std::mutex> lock(qore_type_wait_entry_lock);
+        ++td->type_wait_entries;
+        qore_type_wait_entry_cond.notify_all();
+    }
+#endif
+}
+
+QoreTypeQuiescentWaitHelper::~QoreTypeQuiescentWaitHelper() {
+    if (slot) {
+        qore_publish_type_epoch(*slot);
+        if (qore_type_retirement_pending.load(std::memory_order_relaxed)) {
+            qore_type_retirement_free();
+        }
+    }
+}
+
+QoreTypeUnsafeFrameHelper::QoreTypeUnsafeFrameHelper() : td(thread_data.get()) {
+    if (td) {
+        ++static_cast<ThreadData*>(td)->type_unsafe_frames;
+    }
+}
+
+QoreTypeUnsafeFrameHelper::~QoreTypeUnsafeFrameHelper() {
+    if (td) {
+        assert(static_cast<ThreadData*>(td)->type_unsafe_frames);
+        --static_cast<ThreadData*>(td)->type_unsafe_frames;
+    }
+}
+
+void qore_type_unsafe_frame_add(int delta) {
+    ThreadData* td = thread_data.get();
+    if (td) {
+        assert(delta > 0 || td->type_unsafe_frames);
+        td->type_unsafe_frames += delta;
+    }
+}
+
+unsigned qore_type_unsafe_frames() {
+    ThreadData* td = thread_data.get();
+    return td ? td->type_unsafe_frames : 0;
+}
+
+namespace {
+//! The armed holds of QoreTypeEpochHold: id -> epoch; never destroyed (holds are released at static destruction)
+struct QoreTypeEpochHoldRegistry {
+    std::mutex m;
+    std::map<uint64_t, uint64_t> holds;
+    uint64_t next_id = 0;
+};
+
+QoreTypeEpochHoldRegistry& type_epoch_hold_registry() {
+    static QoreTypeEpochHoldRegistry* r = new QoreTypeEpochHoldRegistry;
+    return *r;
+}
+}
+
+void QoreTypeEpochHold::arm() {
+    release();
+    ThreadData* td = thread_data.get();
+    uint64_t e = td ? td->type_epoch.load(std::memory_order_seq_cst) : 0;
+    QoreTypeEpochHoldRegistry& r = type_epoch_hold_registry();
+    if (!e) {
+        // the work was read outside Qore code: published as a thread entering it would publish (see
+        // qore_publish_type_epoch())
+        e = qore_type_retire_epoch.load(std::memory_order_seq_cst);
+        {
+            std::lock_guard<std::mutex> lock(r.m);
+            id = ++r.next_id;
+            r.holds[id] = e;
+        }
+        uint64_t e2 = qore_type_retire_epoch.load(std::memory_order_seq_cst);
+        if (e2 != e) {
+            std::lock_guard<std::mutex> lock(r.m);
+            r.holds[id] = e2;
+        }
+        return;
+    }
+    std::lock_guard<std::mutex> lock(r.m);
+    id = ++r.next_id;
+    r.holds[id] = e;
+}
+
+void QoreTypeEpochHold::release() {
+    if (!id) {
+        return;
+    }
+    QoreTypeEpochHoldRegistry& r = type_epoch_hold_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.holds.erase(id);
+    id = 0;
+}
+
+uint64_t qore_type_epoch_hold_min() {
+    QoreTypeEpochHoldRegistry& r = type_epoch_hold_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    uint64_t rv = 0;
+    for (auto& i : r.holds) {
+        if (!rv || i.second < rv) {
+            rv = i.second;
+        }
+    }
+    return rv;
+}
+
 uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads) {
-    uint64_t min_epoch = 0;
+    // the holds of work handed to threads without an epoch count as threads (see QoreTypeEpochHold)
+    uint64_t min_epoch = qore_type_epoch_hold_min();
+    if (threads && below && min_epoch && min_epoch < below) {
+        threads->push_back(QoreTypeRetirementThread{-1, min_epoch});
+    }
     thread_list.anyThreadData([&](ThreadData* td) -> bool {
         uint64_t e = td->type_epoch.load(std::memory_order_seq_cst);
         if (e) {
@@ -2397,6 +2586,11 @@ public:
         if (receiver_set) {
             old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
         }
+        // the thread runs with types that the starting thread read through derived types (issue #6419)
+        unsafe = inst_set || QoreParameterizedClassTypeInfo::isUnsafeReceiver(receiver_type_info);
+        if (unsafe) {
+            qore_type_unsafe_frame_add(1);
+        }
     }
 
     DLLLOCAL ~BGTypeParamInstantiationHelper() {
@@ -2406,6 +2600,9 @@ public:
         if (receiver_set) {
             runtime_set_receiver_type_info(old_receiver_type_info);
         }
+        if (unsafe) {
+            qore_type_unsafe_frame_add(-1);
+        }
     }
 
 private:
@@ -2413,6 +2610,7 @@ private:
     const QoreTypeInfo* old_receiver_type_info = nullptr;
     bool inst_set;
     bool receiver_set;
+    bool unsafe;
 };
 
 class BGThreadParams {
@@ -2454,6 +2652,9 @@ public:
     QoreTypeParamInstantiation type_param_inst;
     //! the receiver type of the code that starts the thread, which binds the type parameters of its class (qore#5732)
     const QoreTypeInfo* receiver_type_info = nullptr;
+    //! the declarations that the type arguments and the receiver type name, kept while the thread lives: the starting
+    //! thread read them through derived types, and the new thread publishes a later epoch (issue #6419)
+    std::vector<std::unique_ptr<QoreExternalTypeDeclRefs>> type_decl_refs;
     bool registered = false,
         started = false;
 
@@ -2574,8 +2775,14 @@ public:
         const QoreTypeParamInstantiation* inst = runtime_get_type_param_instantiation();
         if (inst && !inst->empty()) {
             type_param_inst = *inst;
+            for (const QoreTypeInfo* ti : type_param_inst.type_args) {
+                type_decl_refs.emplace_back(new QoreExternalTypeDeclRefs(ti));
+            }
         }
         receiver_type_info = runtime_get_receiver_type_info();
+        if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(receiver_type_info)) {
+            type_decl_refs.emplace_back(new QoreExternalTypeDeclRefs(receiver_type_info));
+        }
     }
 
     //! records the identity of the new thread and of the starting thread
@@ -4541,6 +4748,7 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
     set_thread_current_pgm(td, old_pgm);
     td->popProgramContextData();
     sync_runtime_config_program(td);
+    qore_type_retirement_exit_scan(td);
 }
 
 CalleeContextHelper::CalleeContextHelper(void* thread_data_ptr, const qore_class_private* cls)
@@ -5341,6 +5549,8 @@ void ProgramThreadCountContextHelper::restoreContext() {
     sync_runtime_config_program(td);
 
     releaseThreadCount(td, pgm);
+    // the thread left Qore code: retired declarations that only it held back can be freed (issue #6419)
+    qore_type_retirement_exit_scan(td);
 }
 
 void ProgramThreadCountContextHelper::releaseThreadCount(ThreadData* td, QoreProgram* pgm) {
@@ -11859,6 +12069,8 @@ int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const char* operat
     if (usecs <= 0) {
         return 0;
     }
+    // a quiescent wait: no type read through a derived type is held across it (issue #6419)
+    QoreTypeQuiescentWaitHelper qwh;
     // no cancellation can be delivered while it is deferred
     if (qore_is_cancel_deferred()) {
         return qore_usleep(usecs);

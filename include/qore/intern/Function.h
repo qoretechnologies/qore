@@ -1182,7 +1182,8 @@ protected:
     bool restore_stack = false;
     bool restore_runtime_ctx = false;
     bool restore_receiver_type_info = false;
-    bool restore_type_param_instantiation = false;
+    //! the generic state of the frame (GF_*), which only generic calls set: the destructor tests it once
+    uint8_t generic_frame = 0;
     bool restore_rtflags = false;
     //! true while the variant's evaluation has borrowed module_po_override; see borrowPoOverride()
     bool po_override_borrowed = false;
@@ -1271,6 +1272,23 @@ protected:
         without an explicit receiver keep their code
     */
     DLLLOCAL QORE_INTERN_NOINLINE void substituteCallerReceiverTypeParams(const QoreFunction* func);
+
+    //! the frame restores the caller's type parameter instantiation
+    static constexpr uint8_t GF_RESTORE_TYPE_PARAM_INSTANTIATION = 1;
+    //! the call runs generic code with a parameterized receiver whose type arguments name user declarations, or with
+    //! such inferred type arguments: it holds types read through derived types (the type arguments, the substituted
+    //! types), so the waits of the thread are not quiescent while it runs (issue #6419; see QoreTypeUnsafeFrameHelper)
+    static constexpr uint8_t GF_TYPE_UNSAFE = 2;
+
+    //! Marks the frame as holding types read through derived types (GF_TYPE_UNSAFE), once; out of line, as only
+    //! generic calls get there
+    DLLLOCAL __attribute__((noinline, cold)) void markTypeUnsafe();
+
+    //! Sets the receiver of a call with an object and no receiver type: the type that the object was instantiated
+    //! with (a parameterized class type, which marks the frame if its type arguments name user declarations), or the
+    //! type of its class, as qore_get_object_receiver_type_info(), which the compiler inlined here; the test of the
+    //! receiver is in the branch of the instantiated type only (issue #6419)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void setObjectReceiverTypeInfo(const QoreObject* self);
 
     //! the call entry; LexicalInvocation: a legacy AST call with a non-default semantic policy; NAMED: a named call
     //! whose variant is resolved at run time by parameter name (arg_names is set)

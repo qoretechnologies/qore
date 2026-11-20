@@ -851,13 +851,13 @@ list<Type> args = new Type("Queue<int>").getTypeArguments();
     @since %Qore 3.0
 */
 *list<Type> Type::getTypeArguments() [flags=CONSTANT] {
-    const type_vec_t* type_args = qore_type_get_type_arguments(t->typeInfo);
-    if (!type_args) {
+    type_vec_t type_args;
+    if (!qore_type_get_type_arguments(t->typeInfo, type_args)) {
         return QoreValue();
     }
     ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_TYPE->getTypeInfo()), xsink);
     // preserve the source program to keep it alive while the Type object exists (issue #4816)
-    for (const QoreTypeInfo* ti : *type_args) {
+    for (const QoreTypeInfo* ti : type_args) {
         rv->push(get_type_object(ti, t->source_pgm), xsink);
     }
     return rv.release();
@@ -945,13 +945,13 @@ bool Type::isTypedCode() [flags=CONSTANT] {
     @since %Qore 3.0
 */
 *list<Type> Type::getCodeParamTypes() [flags=CONSTANT] {
-    const type_vec_t* params = qore_type_get_code_param_types(t->typeInfo);
-    if (!params) {
+    type_vec_t params;
+    if (!qore_type_get_code_param_types(t->typeInfo, params)) {
         return QoreValue();
     }
     ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_TYPE->getTypeInfo()), xsink);
     // preserve the source program to keep it alive while the Type object exists (issue #4816)
-    for (const QoreTypeInfo* ti : *params) {
+    for (const QoreTypeInfo* ti : params) {
         rv->push(get_type_object(ti, t->source_pgm), xsink);
     }
     return rv.release();

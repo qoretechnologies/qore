@@ -33,6 +33,8 @@
 
 #define _QORE_QOREHASHITERATOR_H
 
+#include "qore/intern/QoreTypeDeclPin.h"
+
 extern QoreClass* QC_HASHITERATOR;
 extern QoreClass* QC_HASHKEYITERATOR;
 extern QoreClass* QC_HASHPAIRITERATOR;
@@ -65,6 +67,8 @@ protected:
     mutable QoreHashNode* pairHash;
 
     const QoreTypeInfo* value_type;
+    //! keeps the declarations that the value type names, which it read through a derived type (issue #6419)
+    QoreTypeDeclPin value_type_pin{value_type};
 
     // What nativeGetValue() yields; set by the QPP ctors for Key/Pair variants.
     HashView view = VIEW_VALUE;

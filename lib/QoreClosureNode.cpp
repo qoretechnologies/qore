@@ -91,6 +91,10 @@ void QoreClosureBase::captureObjectReceiver(const QoreObject* obj) {
 }
 
 void QoreClosureTypeContextHelper::set() {
+    type_unsafe_frame = !ctx->inst.empty() || QoreParameterizedClassTypeInfo::isUnsafeReceiver(ctx->receiver_type_info);
+    if (type_unsafe_frame) {
+        qore_type_unsafe_frame_add(1);
+    }
     if (!ctx->inst.empty()) {
         old_inst = runtime_set_type_param_instantiation(&ctx->inst);
     } else {
@@ -106,6 +110,9 @@ void QoreClosureTypeContextHelper::set() {
 void QoreClosureTypeContextHelper::restore() {
     runtime_set_type_param_instantiation(old_inst);
     runtime_set_receiver_type_info(old_receiver_type_info);
+    if (type_unsafe_frame) {
+        qore_type_unsafe_frame_add(-1);
+    }
 }
 
 const QoreTypeInfo* QoreClosureBase::getCallTypeInfo() const {

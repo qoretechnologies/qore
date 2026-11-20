@@ -2509,7 +2509,7 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
         }
     }
     LValueHelper helper(xsink);
-    if (var->getLValue(helper, false, true)) {
+    if (var->getLValueInline(helper, false, true)) {
         return;
     }
     // refSelf before assign — assign takes ownership of the reference
@@ -13376,17 +13376,26 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     struct ReceiverTypeInfoGuard {
         const QoreTypeInfo* old = nullptr;
         bool restore = false;
+        bool unsafe = false;
 
         ReceiverTypeInfoGuard(const QoreTypeInfo* ti) {
             if (ti) {
                 old = runtime_set_receiver_type_info(ti);
                 restore = true;
+                // a parameterized receiver: the frame holds types read through it (issue #6419)
+                if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(ti)) {
+                    unsafe = true;
+                    qore_type_unsafe_frame_add(1);
+                }
             }
         }
 
         ~ReceiverTypeInfoGuard() {
             if (restore) {
                 runtime_set_receiver_type_info(old);
+                if (unsafe) {
+                    qore_type_unsafe_frame_add(-1);
+                }
             }
         }
     } receiver_guard(receiver_type_info);
@@ -19695,12 +19704,15 @@ struct AOTDirectCallTypeParams {
             }
             old = runtime_set_type_param_instantiation(inst);
             restore = true;
+            // generic code: the frame holds types read through derived types (issue #6419)
+            qore_type_unsafe_frame_add(1);
         }
     }
 
     ~AOTDirectCallTypeParams() {
         if (restore) {
             runtime_set_type_param_instantiation(old);
+            qore_type_unsafe_frame_add(-1);
         }
     }
 };

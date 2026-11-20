@@ -137,6 +137,8 @@ nothing Counter::waitForZero() {
    }
    // a single wait without a timeout: a cancellation request or program interrupt wakes it at once (see
    // QoreCondition::waitWithInterrupt())
+   // a quiescent wait: no type read through a derived type is held across it (issue #6419)
+   QoreTypeQuiescentWaitHelper qwh;
    c->waitForZero(xsink, 0);
    return QoreValue();
 }
@@ -163,7 +165,12 @@ int Counter::waitForZero(timeout timeout_ms) [flags=NAMED_ARGS] {
    }
    // a single wait for the timeout (none if it is not positive): a cancellation request or program interrupt
    // wakes it at once (see QoreCondition::waitWithInterrupt())
-   int rc = c->waitForZero(xsink, timeout_ms > 0 ? static_cast<int>(QORE_MIN(timeout_ms, (int64)INT_MAX)) : 0);
+   int rc;
+   {
+      // a quiescent wait: no type read through a derived type is held across it (issue #6419)
+      QoreTypeQuiescentWaitHelper qwh;
+      rc = c->waitForZero(xsink, timeout_ms > 0 ? static_cast<int>(QORE_MIN(timeout_ms, (int64)INT_MAX)) : 0);
+   }
    if (*xsink) {
       return -1;
    }

@@ -42,6 +42,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <cstdint>
+
+#include "qore/intern/QoreTypeOwner.h"
 #include <thread>
 #include <queue>
 #include <condition_variable>
@@ -1325,6 +1327,9 @@ private:
         bool has_callees = false;                           //!< true if callees should be compiled
         //! the Programs whose code the work lowers, each one once; set when the work is accepted
         std::vector<const QoreProgram*> pgms;
+        //! holds back the free of the declarations that the IR of a specialization names, which the enqueuing thread
+        //! read, while the work is queued or compiled: the compile thread has no epoch of its own (issue #6419)
+        QoreTypeEpochHold type_epoch_hold;
     };
 
     // Background compilation thread management

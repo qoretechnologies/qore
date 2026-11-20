@@ -1869,6 +1869,7 @@ set(LIBQORE_CPP_SRC
     lib/ReferenceArgumentHelper.cpp
     lib/ReferenceHelper.cpp
     lib/QoreTypeInfo.cpp
+    lib/QoreTypeTombstone.cpp
     lib/QoreTypeSpecMatchRegistry.cpp
     lib/QoreIRExprRegistry.cpp
     lib/JITRuntime.cpp
@@ -2232,6 +2233,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTypeInfo.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreTypeTombstone.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTypeSpecMatchRegistry.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreDeleteOperatorNode.cpp\"
