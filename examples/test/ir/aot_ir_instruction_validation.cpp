@@ -75,6 +75,11 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         if (version >= QORE_AOT_STATEMENT_LOCATIONS_VERSION) {
             writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
         }
+        // no temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742)
+        if (version >= QORE_AOT_TEMP_SCOPES_VERSION) {
+            writer.writeU8(0);
+            writer.writeU8(0);
+        }
     };
     writer.writeU16(static_cast<uint16_t>(tag_only ? 1 : defined.size() + 2)); // instructions
     for (uint32_t id : defined) {
@@ -111,6 +116,11 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             } else {
                 writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
             }
+        }
+        // no temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742)
+        if (version >= QORE_AOT_TEMP_SCOPES_VERSION) {
+            writer.writeU8(0);
+            writer.writeU8(0);
         }
         writeSimple(O::ReturnNothing, G::Return, 0, [&]() {
             writer.writeU8(0); // no value

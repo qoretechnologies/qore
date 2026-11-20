@@ -764,6 +764,13 @@ static_assert(QORE_AOT_INHERITED_OBJECT_METHOD_REF_VERSION == QORE_AOT_BATCH_AL_
 constexpr uint16_t QORE_AOT_INLINE_CONSTRUCTOR_BINDING_VERSION = 49;
 static_assert(QORE_AOT_INLINE_CONSTRUCTOR_BINDING_VERSION == QORE_AOT_BATCH_AM_VERSION,
     "the format changes of batch AM share one format version (v49)");
+//! The format version from which the IR of an image carries the temp scopes of its instructions (qore#6742)
+/** QoreIRInstruction::temp_scope_id and QoreIRInstruction::unwind_inner_temp_scope_id are written after the runtime
+    location of each instruction, so that the IR interpreter drains the temp scopes of IR read from an image on the
+    paths of exceptions as it does those of IR that it lowered, and the verification of the IR follows them.  Part of
+    the format bump of batch AN: inactive until QORE_AOT_BINARY_VERSION reaches it.
+*/
+constexpr uint16_t QORE_AOT_TEMP_SCOPES_VERSION = 50;
 constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AM_VERSION;
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
@@ -2197,6 +2204,34 @@ static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int line) {
     negative lines in stack traces) as soon as a location is built from it.  Only the 0xffff sentinel is read back
     as -1, and only for the signed call sites.
 */
+//! Writes an unsigned 32-bit value in 7-bit groups, least significant first (a small value takes one byte)
+static inline void qore_aot_write_varu32(QoreAOTBinaryWriter& writer, uint32_t v) {
+    while (v >= 0x80) {
+        writer.writeU8(static_cast<uint8_t>(v | 0x80));
+        v >>= 7;
+    }
+    writer.writeU8(static_cast<uint8_t>(v));
+}
+
+//! Reads a value written by qore_aot_write_varu32(); returns false if it is truncated or too long
+static inline bool qore_aot_read_varu32(const uint8_t*& ptr, const uint8_t* end, uint32_t& v) {
+    v = 0;
+    for (unsigned shift = 0; shift < 35; shift += 7) {
+        if (ptr >= end) {
+            return false;
+        }
+        uint8_t b = *ptr++;
+        if (shift == 28 && (b & 0xf0)) {
+            return false;
+        }
+        v |= static_cast<uint32_t>(b & 0x7f) << shift;
+        if (!(b & 0x80)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
         bool signed_legacy = true) {
     if (reader.getHeader().version >= 11) {

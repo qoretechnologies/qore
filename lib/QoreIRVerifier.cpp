@@ -503,6 +503,11 @@ struct QoreIRVerifyState {
     //! whether the entries of each stack are known: not on a path from an exception edge until it meets a path of
     //! the normal control flow (see QoreIRVerifyOwnership::verify())
     bool known[QORE_IR_VERIFY_NUM_STACKS] = {true, true, true, true, true, true};
+    //! true on the path of an exception (QoreIRVerifyOwnership::verifyExceptionPaths()): the end of a temp scope
+    //! closes the temp scopes opened after it as well, as the IR interpreter's DiscardTemps does: the branch to the
+    //! handler leaves the mark of the first temp scope that the exception left, which the end of the enclosing
+    //! statement removes (see design/ir-exception-branch-temp-scope.md, qore#6742)
+    bool temps_relaxed = false;
 
     //! closes the catch blocks begun in the scopes that an exception left, with \a scopes scopes left open (the
     //! interpreter's LandingPad and ScopeExit, qore_ir_close_catch_scopes())
@@ -635,6 +640,9 @@ private:
             bool& changed);
     //! follows the paths of the exceptions with the stacks that each raise point has (qore#6658)
     bool verifyExceptionPaths(const std::vector<QoreIRVerifyState>& in);
+    //! drains the temp scopes of the state of an exception edge as the IR interpreter does before it branches to the
+    //! handler (qore_ir_exception_branch_temp_scope(), qore#6742)
+    bool exceptionTemps(QoreIRVerifyState& es, const QoreIRInstruction& inst, uint32_t b, size_t pos);
 };
 
 void QoreIRVerifyOwnership::buildNodes() {
@@ -843,6 +851,17 @@ bool QoreIRVerifyOwnership::applyStack(QoreIRVerifyState& s, const QoreIRInstruc
     std::vector<uint32_t>& st = s.stacks[e.stack];
     if (e.push) {
         st.push_back(e.id);
+        return true;
+    }
+    if (e.stack == QORE_IR_VERIFY_TEMPS && s.temps_relaxed) {
+        auto i = std::find(st.rbegin(), st.rend(), e.id);
+        if (i == st.rend()) {
+            error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " closes a temp scope that is not open on "
+                "the path of an exception to it" + where(b, pos);
+            return false;
+        }
+        size_t idx = st.size() - (i - st.rbegin()) - 1;
+        st.resize(e.keep ? idx + 1 : idx);
         return true;
     }
     // an implicit element is a value of the thread that a push saves and a pop restores: a pop restores the value from
@@ -1142,6 +1161,48 @@ bool QoreIRVerifyOwnership::verify() {
     its handler, which IR read from a module does not give.  Each block is walked once for each set of stacks that
     reaches it, which are few in lowered code (one per nesting of the raise points that share a handler).
 */
+bool QoreIRVerifyOwnership::exceptionTemps(QoreIRVerifyState& es, const QoreIRInstruction& inst, uint32_t b,
+        size_t pos) {
+    std::vector<uint32_t>& temps = es.stacks[QORE_IR_VERIFY_TEMPS];
+    // the temp scope that the exception drains to: that of the raising instruction, or, if the temp scope of its
+    // handler is outside it, the first one opened after the handler's, as the IR interpreter computes it
+    // (qore_ir_exception_branch_temp_scope()); the end of a temp scope that raises has closed its own already
+    bool scope_closed = inst.opcode == QoreIROpcode::DiscardTemps || inst.opcode == QoreIROpcode::DiscardTempsKeep;
+    uint32_t scope_id = scope_closed ? 0 : inst.temp_scope_id;
+    uint32_t drain_to = scope_id;
+    QoreIRBasicBlock* target = qore_ir_verify_exception_target(inst);
+    if (target && (scope_id || scope_closed)) {
+        uint32_t handler_scope_id = target->getHandlerTempScopeId();
+        if (handler_scope_id && handler_scope_id != scope_id) {
+            size_t i = temps.size();
+            if (!scope_closed) {
+                while (i > 0 && temps[i - 1] != scope_id) {
+                    --i;
+                }
+            }
+            for (; i > 1; --i) {
+                if (temps[i - 2] == handler_scope_id) {
+                    drain_to = temps[i - 1];
+                    break;
+                }
+            }
+        }
+    }
+    if (!drain_to) {
+        return true;
+    }
+    // the temporaries after the mark of that scope are released, and its mark is kept (see temps_relaxed); for a
+    // scope that is not open the branch releases nothing, as the interpreter's (the scope of the element of an
+    // iterator that raises before the element's scope is opened): the end of the enclosing statement releases them
+    auto i = std::find(temps.rbegin(), temps.rend(), drain_to);
+    if (i != temps.rend()) {
+        temps.resize(temps.size() - (i - temps.rbegin()));
+    }
+    (void)b;
+    (void)pos;
+    return true;
+}
+
 bool QoreIRVerifyOwnership::verifyExceptionPaths(const std::vector<QoreIRVerifyState>& in) {
     const QoreIRFunction& func = g.func;
     struct Item {
@@ -1177,9 +1238,14 @@ bool QoreIRVerifyOwnership::verifyExceptionPaths(const std::vector<QoreIRVerifyS
         if (!apply(es, inst, b, pos, EdgeException)) {
             return false;
         }
-        es.stacks[QORE_IR_VERIFY_TEMPS].clear();
-        es.known[QORE_IR_VERIFY_TEMPS] = false;
-        return true;
+        es.temps_relaxed = true;
+        if (func.temp_scope_ids_unknown || !es.known[QORE_IR_VERIFY_TEMPS]) {
+            // IR read from an image that does not carry the temp scopes of its instructions
+            es.stacks[QORE_IR_VERIFY_TEMPS].clear();
+            es.known[QORE_IR_VERIFY_TEMPS] = false;
+            return true;
+        }
+        return exceptionTemps(es, inst, b, pos);
     };
     auto prefix = [&](uint32_t from_block, uint32_t from_pos) {
         error = "on the path of the exception of block " + std::to_string(from_block) + ", instruction "
@@ -1268,10 +1334,15 @@ bool QoreIRVerifyOwnership::verifyExceptionPaths(const std::vector<QoreIRVerifyS
             // the path meets the normal control flow: its stacks must be those of the block
             const QoreIRVerifyState& ns = in[g.block_entry[b]];
             for (unsigned i = 0; i < QORE_IR_VERIFY_NUM_STACKS; ++i) {
-                if (i == QORE_IR_VERIFY_TEMPS || !s.known[i] || !ns.known[i]) {
+                if (!s.known[i] || !ns.known[i]) {
                     continue;
                 }
-                if (s.stacks[i] != ns.stacks[i]) {
+                // the temp scopes may be followed by marks that the exceptions left, which the end of the enclosing
+                // statement removes (see temps_relaxed)
+                if (i == QORE_IR_VERIFY_TEMPS
+                        ? (s.stacks[i].size() < ns.stacks[i].size()
+                            || !std::equal(ns.stacks[i].begin(), ns.stacks[i].end(), s.stacks[i].begin()))
+                        : s.stacks[i] != ns.stacks[i]) {
                     error = "malformed IR: the " + std::string(qore_ir_verify_stack_names[i]) + " open differ from "
                         "those of the normal paths into block " + std::to_string(b);
                     prefix(item.from_block, item.from_pos);

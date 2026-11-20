@@ -7596,6 +7596,17 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     if (stmt_locs && !qore_aot_read_stmt_loc(reader, ptr, pgm, owner_func, *stmt_locs, *inst, loc_file, error)) {
         return nullptr;
     }
+    // the temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742); an earlier image has none (see
+    // QoreIRFunction::temp_scope_ids_unknown)
+    if (reader.getHeader().version >= QORE_AOT_TEMP_SCOPES_VERSION) {
+        if (!qore_aot_read_varu32(ptr, end, inst->temp_scope_id)
+                || !qore_aot_read_varu32(ptr, end, inst->unwind_inner_temp_scope_id)) {
+            error = "truncated or invalid temp scope of an IR instruction";
+            return nullptr;
+        }
+    } else if (owner_func) {
+        owner_func->temp_scope_ids_unknown = true;
+    }
 
     return inst;
 }
