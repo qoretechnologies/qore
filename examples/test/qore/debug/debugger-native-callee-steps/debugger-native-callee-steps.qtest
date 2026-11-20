@@ -8,6 +8,7 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
 %requires QUnit
 %requires ../../../TestInterpreter.qm
 %requires ../../../ExecModeHarness.qm
