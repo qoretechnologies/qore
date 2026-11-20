@@ -8,7 +8,8 @@
 # takes it from the value): a parse result type that does not allow the value raises RUNTIME-TYPE-ERROR, and one whose
 # first member converts it gives another value; each case is called with values of every type that the declared types
 # allow and prints the list (an object as its class name); the output of every execution mode must be that of the AST
-# interpreter
+# interpreter; with the parse define OnlyAddSub only the cases of + and - are defined and run, with OnlyMulDiv only
+# those of * and /, so that each AOT compile of a part compiles half of the cases
 
 %modern
 # some combinations are invalid operations, which the parser warns about
@@ -27,6 +28,7 @@ sub show(string label, code<auto()> c) {
     }
 }
 
+%ifndef OnlyMulDiv
 auto sub c1(int x, int y) {
     return (x + y,);
 }
@@ -1563,6 +1565,8 @@ auto sub c511(C x, binary y) {
 auto sub c512(C x, C y) {
     return (x - y,);
 }
+%endif
+%ifndef OnlyAddSub
 auto sub c513(int x, int y) {
     return (x * y,);
 }
@@ -3099,6 +3103,7 @@ auto sub c1023(C x, binary y) {
 auto sub c1024(C x, C y) {
     return (x / y,);
 }
+%endif
 
 # a value in the label, an object as its class name
 string sub vs(auto v) {
@@ -3138,6 +3143,7 @@ sub main() {
     list<auto> v14 = (<01>,);
     # values of C
     list<auto> v15 = (new C(),);
+%ifndef OnlyMulDiv
     foreach auto a in (v0) {
         foreach auto b in (v0) {
             show(sprintf("int + int (%s, %s)", vs(a), vs(b)), auto sub () { return c1(a, b); });
@@ -5720,6 +5726,8 @@ sub main() {
             show(sprintf("C - C (%s, %s)", vs(a), vs(b)), auto sub () { return c512(a, b); });
         }
     }
+%endif
+%ifndef OnlyAddSub
     foreach auto a in (v0) {
         foreach auto b in (v0) {
             show(sprintf("int * int (%s, %s)", vs(a), vs(b)), auto sub () { return c513(a, b); });
@@ -8302,6 +8310,7 @@ sub main() {
             show(sprintf("C / C (%s, %s)", vs(a), vs(b)), auto sub () { return c1024(a, b); });
         }
     }
+%endif
 }
 
 main();

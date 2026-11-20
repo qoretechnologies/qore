@@ -15,7 +15,7 @@
 
 %exec-class ArithParseResultTypesPart1
 
-#! runs part 1 of 5 of the cases of ArithParseResultTypesBase: the matrix cases in the IR and JIT modes
+#! runs part 1 of 7 of the cases of ArithParseResultTypesBase: the matrix cases in the IR and JIT modes
 class ArithParseResultTypesPart1 inherits ArithParseResultTypesBase {
     constructor() : ArithParseResultTypesBase("ArithParseResultTypesPart1", 1) {
     }
