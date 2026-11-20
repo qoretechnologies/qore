@@ -164,6 +164,22 @@ sibling artifact).
   parameter then holds the only reference, a write releases it, and the entry releases it when it returns, also when
   it raises an exception; the caller's landing pad finds the slots empty and releases only the slots that it did not
   hand over, which a call that gives a slot to a borrowed parameter releases when the call returns, as before.
+- An argument that a call hands over to a parameter whose prologue takes no reference (a parameter that the body
+  does not use, which has no local, or that it borrows) is released by the call when the copy returns:
+  `materializeOwnedFastEntries()` adds the release after each call of the copy, as the call of the fast entry releases
+  its argument; the mask that it records on the copy (`QORE_OWNED_FAST_ENTRY_ARGS_ATTR`) has only the arguments whose
+  references the copy owns.
+- The prologue takes its references before the entry's stack check: the paths that leave the entry before its body
+  runs, the stack overflow and the debugger entry, release them (`emitFastEntryPrologueRelease()`), so that the copy
+  releases the caller's references there and the fast entry its own (which a stack overflow in a fast entry leaked
+  before).  The thunk that checks the stack for a large frame (`QoreIRFrameCheck`) releases the arguments of the
+  copy's mask when it does not call the copy's code.  The debugger entry calls the function's standard entry, whose
+  parameters take references of their own: under a debugger, a temporary handed over is released when the call
+  returns.
+- `QORE_DUMP_LLVM_IR` prints the module before the copies are made (their declarations); `QORE_DUMP_IR_BEFORE_OPT`
+  prints them.
+- The copies are made in `lib/QoreIRToLLVMOwnedEntries.cpp`, compiled outside the single compilation unit with hidden
+  visibility, so that the LLVM templates that `llvm::CloneFunction()` instantiates are not exported from libqore.
 - Nothing is handed over before the checks of the fast path pass (the callee's context, the checks of arguments for
   NOTHING and of date kinds); a call whose checks fail is made by the consume path, which binds the parameters from
   the runtime stack and can raise an exception while it binds them, before anything is taken over.
@@ -171,7 +187,8 @@ sibling artifact).
   before.  The JIT does not use the copies: its fast entries can be defined in an earlier batch module, which a copy
   cannot be made from.
 
-A static method has a fast entry only in a final class or if it is a final method (since 6a26053517, the methods of
+A static method has a fast entry only in a final class or if it is a final method, and none in qcc -O0 code that
+keeps its calls for the debugger (`aotPreserveDebugCalls()`) (since 6a26053517, the methods of
 a class that is not final have no fast entry unless context independent), so the calls of the static methods of other
 classes are made by the consume path, as before.
 

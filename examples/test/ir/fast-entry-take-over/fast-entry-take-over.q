@@ -24,6 +24,52 @@ int sub w2b(list<auto> a, list<auto> b) { b = (); log("w2b written b"); return a
 list<auto> sub keep(list<auto> l) { list<auto> r = l; l = (); log("keep written"); return r; }
 # recursion
 int sub rec(list<auto> l, int d) { if (d) { rec((0, new T("rec" + d)), d - 1); } l = (); log("rec written " + d); return d; }
+# a parameter that the body does not use, beside one that it writes
+int sub u(list<auto> a, list<auto> b) { a = (); log("u written"); return 0; }
+# an `any` parameter that the body does not use (its argument's complex type is stripped), beside one that it writes
+int sub an(any a, list<auto> b) { b = (); log("an written"); return 0; }
+# a parameter that escapes into a global, beside one that is written
+our list<auto> kept_global;
+int sub esc(list<auto> a, list<auto> b) { a = (); kept_global = b; log("esc written"); return 0; }
+# an optional parameter written with NOTHING
+int sub on(*list<auto> a) { a = NOTHING; log("on written"); return 0; }
+# a hash parameter and a list parameter, both written
+int sub ha(hash<auto> h, list<auto> b) { b = (); h = {}; log("ha written"); return 0; }
+# a parameter written by a closure
+int sub cl(list<auto> a) { code c = sub () { a = (); }; c(); log("cl written"); return 0; }
+# two parameters written
+int sub dbl(list<auto> a, list<auto> b) { a = (); b = (); log("dbl written"); return 0; }
+
+# the calls of the functions above, in a try block and outside
+sub unused_params() {
+    try {
+        u((0, new T("u.a")), (0, new T("u.b")));
+        log("after u");
+        an((0, new T("an.a")), (0, new T("an.b")));
+        log("after an");
+        an({"a": new T("an.h")}, (0, new T("an.b2")));
+        log("after an hash");
+        esc((0, new T("esc.a")), (0, new T("esc.b")));
+        log("after esc");
+        remove kept_global;
+        log("removed esc");
+        on((0, new T("on")));
+        log("after on");
+        ha({"a": new T("ha.h")}, (0, new T("ha.b")));
+        log("after ha");
+        cl((0, new T("cl")));
+        log("after cl");
+        dbl((0, new T("dbl.a")), (0, new T("dbl.b")));
+        log("after dbl");
+    } catch (hash<ExceptionInfo> ex) {
+        log("catch " + ex.err);
+    }
+    u((0, new T("ou.a")), (0, new T("ou.b")));
+    log("after ou");
+    an((0, new T("oan.a")), (0, new T("oan.b")));
+    log("after oan");
+}
+
 # a typed list parameter
 int sub wl(list<T> l) { l = (); log("wl written"); return 0; }
 # a parameter with a type that a run-time check binds
@@ -151,6 +197,8 @@ sub outside_try() {
 
 in_try();
 log("in try done");
+unused_params();
+log("unused params done");
 outside_try();
 log("outside try done");
 try {

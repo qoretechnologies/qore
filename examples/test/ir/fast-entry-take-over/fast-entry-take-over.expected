@@ -59,6 +59,46 @@ after loop 1
 kept 2
 dtor kept
 in try done
+dtor u.a
+u written
+dtor u.b
+after u
+dtor an.b
+an written
+dtor an.a
+after an
+dtor an.b2
+an written
+dtor an.h
+after an hash
+dtor esc.a
+esc written
+after esc
+dtor esc.b
+removed esc
+dtor on
+on written
+after on
+dtor ha.b
+dtor ha.h
+ha written
+after ha
+dtor cl
+cl written
+after cl
+dtor dbl.a
+dtor dbl.b
+dbl written
+after dbl
+dtor ou.a
+u written
+dtor ou.b
+after ou
+dtor oan.b
+an written
+dtor oan.a
+after oan
+unused params done
 dtor ow
 w written
 after ow

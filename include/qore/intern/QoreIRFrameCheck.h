@@ -56,6 +56,10 @@ class Module;
     of every function of the module.  Every other function's frame is checked against the threshold in the same way: a
     frame above it with a stack check fails the code generation.
 */
+//! The function attribute of a fast entry that takes its arguments over: a mask with a '1' for each argument whose
+//! reference it owns, which the thunk releases when the stack has no room for the entry's frame (issue #6105)
+#define QORE_OWNED_FAST_ENTRY_ARGS_ATTR "qore-owned-args"
+
 class QoreIRFrameCheck {
 public:
     //! the suffix of the name of the code of a function whose frame is checked by a thunk

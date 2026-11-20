@@ -24,7 +24,11 @@
     program (fast-entry-take-over.q) logs the destructions of temporaries given to such callees: a write, a write
     followed by an exception, an exception before the write, two parameters with one temporary or two, a value kept
     by the callee, recursion, a binding that raises an exception, the static methods of a final class (which have fast
-    entries) and of another class, a method and a loop.  Every mode
+    entries) and of another class, a method and a loop, and parameters that the callee does not use, borrows, strips
+    (`any`) or writes through a closure beside parameters that it writes.  Recursions that end with a stack overflow in
+    the entry (fast-entry-take-over-overflow.q) or in the thunk that checks the stack for its large frame
+    (fast-entry-take-over-frame.q) raise the exception as in the AST interpreter (valgrind checks that they release
+    the references that they were given).  Every mode
     and the qcc executables at -O0 and -O3 must print the AST interpreter's output, and the qcc code must call the
     entry that takes the arguments over.
 */
@@ -44,6 +48,9 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
         addTestCase("qcc code calls the entry that takes the arguments over", \testOwnedEntry());
+        addTestCase("a stack overflow in an entry that takes its arguments over", \testStackOverflow());
+        addTestCase("the stack check of the large frame of an entry that takes its arguments over",
+            \testFrameCheck());
         set_return_value(main());
     }
 
@@ -76,20 +83,68 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         }
     }
 
+    #! compiles @p prog with qcc at @p opt into @p exe; a program that qcc cannot compile fails the test
+    private compile(string qcc_bin, string opt, string exe, string prog) {
+        int rc;
+        string out = backquote(sprintf("%s %s -O%s -o %s %s 2>&1", env, qcc_bin, opt, exe, prog), \rc);
+        assertEq(0, rc, sprintf("qcc -O%s %s: %s", opt, basename(prog), out));
+        assertTrue(is_file(exe), sprintf("qcc -O%s %s made no executable: %s", opt, basename(prog), out));
+    }
+
     testCompiled() {
         string qcc_bin = qcc();
         TmpDir tmp("qore-fast-entry-take-over-");
         foreach string opt in (("0", "3")) {
             string exe = sprintf("%s/fast-entry-take-over-O%s", tmp.path, opt);
-            int rc;
-            string out = backquote(sprintf("%s %s -O%s -o %s %s 2>&1", env, qcc_bin, opt, exe, src), \rc);
-            if (rc || !is_file(exe)) {
-                testSkip("qcc cannot compile the program: " + out);
-            }
+            compile(qcc_bin, opt, exe, src);
             # -b must be the first argument of a compiled program
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b", env, exe));
             assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
             assertEq(expected(), r.stdout, "-O" + opt);
+        }
+    }
+
+    #! a stack overflow in the entry of a recursion that gives it temporaries is raised as in the AST interpreter
+    /** the entry releases the references that it was given (the memory checks are those of valgrind: a destructor
+        that runs at the end of the stack cannot run its code, so the program does not count the objects)
+    */
+    testStackOverflow() {
+        string prog = dir + "/fast-entry-take-over-overflow.q";
+        string expected_out = "r: STACK-LIMIT-EXCEEDED\nr: done\nra: STACK-LIMIT-EXCEEDED\nra: done\n";
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=ast %s", qore_bin, prog));
+        assertEq(0, r.rc, sprintf("ast: exit status (output: %y)", r.out));
+        assertEq(expected_out, r.stdout, "ast");
+        string qcc_bin = qcc();
+        TmpDir tmp("qore-fast-entry-take-over-overflow-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/overflow-O%s", tmp.path, opt);
+            compile(qcc_bin, opt, exe, prog);
+            r = ExecModeHarness::run_command(sprintf("%s %s -b", env, exe));
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(expected_out, r.stdout, "-O" + opt);
+        }
+    }
+
+    #! a recursion that ends when the stack has no room for the frame of an entry that takes its arguments over
+    /** the thunk that checks the stack for the large frame of the entry (QoreIRFrameCheck) releases the reference
+        that the call handed over to it; the memory checks are those of valgrind
+    */
+    testFrameCheck() {
+        string prog = dir + "/fast-entry-take-over-frame.q";
+        string expected_out = "STACK-LIMIT-EXCEEDED\ndone made\n";
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=ast %s", qore_bin, prog));
+        assertEq(0, r.rc, sprintf("ast: exit status (output: %y)", r.out));
+        assertEq(expected_out, r.stdout, "ast");
+        string qcc_bin = qcc();
+        TmpDir tmp("qore-fast-entry-take-over-frame-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/frame-O%s", tmp.path, opt);
+            compile(qcc_bin, opt, exe, prog);
+            r = ExecModeHarness::run_command(sprintf("%s %s -b", env, exe));
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(expected_out, r.stdout, "-O" + opt);
         }
     }
 
@@ -99,11 +154,10 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         string exe = tmp.path + "/fast-entry-take-over";
         string ir_path = tmp.path + "/ir.ll";
         int rc;
-        string out = backquote(sprintf("%s QORE_DUMP_IR_BEFORE_OPT=1 %s -O0 -o %s %s 2>%s", env, qcc_bin, exe, src,
+        string out = backquote(sprintf("%s QORE_DUMP_IR_BEFORE_OPT=1 %s -O3 -o %s %s 2>%s", env, qcc_bin, exe, src,
             ir_path), \rc);
-        if (rc || !is_file(exe)) {
-            testSkip("qcc cannot compile the program: " + out);
-        }
+        assertEq(0, rc, "qcc -O3: " + out);
+        assertTrue(is_file(exe), "qcc -O3 made no executable: " + out);
         string ir = ReadOnlyFile::readTextFile(ir_path);
         # the entries of w() and F::s() that take their single argument over are defined and called
         list<string> defined = (ir =~ x/^define [^@]*@"?([^"(]*\.own\.1)"?\(/gm) ?? ();

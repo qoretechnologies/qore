@@ -1021,7 +1021,8 @@ static uint8_t qore_ir_date_kind_guard_flags(const QoreTypeInfo* param_ti) {
 //! (\a call_gives_args, QoreIRToLLVM::callGivesArgs()), which a parameter of the callee takes over
 //! (QoreIRFunction::param_take_over); the fast entry takes a reference of its own to each argument, so the call is made
 //! by the consume path, whose binding from the runtime stack takes the argument over (see design/param-take-over.md)
-static bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const AbstractQoreFunctionVariant* variant) {
+// documented in QoreIRToLLVM.h
+bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const AbstractQoreFunctionVariant* variant) {
     if (!call_gives_args) {
         return false;
     }
@@ -3729,6 +3730,7 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                     alloca_builder.CreateStore(native_val, alloca);
                     // Native int: incref'd value cleaned up via preinstantiated_entry_loads
                     preinstantiated_entry_loads.push_back(arg_val);
+                    fast_entry_converted_arg_refs.push_back(arg_val);
                 } else if (is_native_float) {
                     auto to_float = module.getOrInsertFunction("qore_rt_to_float",
                             llvm::FunctionType::get(double_type, {i64_type}, false));
@@ -3736,11 +3738,13 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                     alloca_builder.CreateStore(native_val, alloca);
                     // Native float: incref'd value cleaned up via preinstantiated_entry_loads
                     preinstantiated_entry_loads.push_back(arg_val);
+                    fast_entry_converted_arg_refs.push_back(arg_val);
                 } else if (is_native_bool) {
                     llvm::Value* native_val = alloca_builder.CreateICmpEQ(arg_val,
                         llvm::ConstantInt::get(i64_type, VAL_TRUE));
                     alloca_builder.CreateStore(native_val, alloca);
                     preinstantiated_entry_loads.push_back(arg_val);
+                    fast_entry_converted_arg_refs.push_back(arg_val);
                 } else {
                     if (strip_any) {
                         auto strip_fn = module.getOrInsertFunction("qore_rt_strip_any_param",
@@ -9382,94 +9386,6 @@ bool QoreIRToLLVM::callGivesArgs(const QoreIRInstruction* inst) const {
     return false;
 }
 
-//! Returns true if the fast entry of \a info takes a reference of its own to its argument \a i when it is entered
-/** The rule of the prologue of a fast entry (QoreIRToLLVM::preCreateLocalAllocas(), the reference marked with
-    QORE_FAST_ENTRY_ARG_REF_MD): a boxed parameter that is not borrowed (BatchCalleeInfo::param_noescape, the borrowed
-    parameters of the AOT fast entries in QoreAOT.cpp), or that is borrowed but strips the complex type of its
-    argument; a parameter of a native ABI kind takes no reference.  materializeOwnedFastEntries() checks that the copy
-    of the entry has the reference of each argument that a call hands over to it (issue #6105)
-*/
-static bool qore_aot_fast_entry_param_takes_ref(const BatchCalleeInfo& info, const UserSignature* sig, unsigned i) {
-    if (i >= info.num_params || (i < info.param_kinds.size() && info.param_kinds[i] != BatchCalleeParamKind::Boxed)) {
-        return false;
-    }
-    if (i < info.param_noescape.size() && info.param_noescape[i]) {
-        return sig && i < sig->numParams() && q_type_strips_complex_type(sig->lv[i]->getTypeInfoForLValue());
-    }
-    return true;
-}
-
-// documented in QoreIRToLLVM.h
-bool QoreIRToLLVM::callCanTakeOverToFastEntry(const QoreIRInstruction* inst, int arg_start,
-        const AbstractQoreFunctionVariant* variant, const BatchCalleeInfo& info) const {
-    static constinit QoreEnvFlag disable_env("QORE_DISABLE_AOT_OWNED_FAST_ENTRY");
-    if (!aot_mode || info.cross_module || info.preloaded_fast_entry || !info.approach_b_eligible
-            || arg_start < 0 || disable_env.get()
-            || !qore_ir_fast_entry_refuses_given_args(true, variant)) {
-        return false;
-    }
-    const UserVariantBase* uvb = variant->getUserVariantBase();
-    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
-    bool takes_over = false;
-    // the test of buildArgCleanupArray() for an argument whose cleanup slot is given to the callee
-    for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
-        uint32_t value_id = inst->operands[i].id;
-        auto uses_it = operand_remaining_uses.find(value_id);
-        if (invoke_alloca_map.count(value_id)
-                && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)
-                && !(value_id < reused_call_args.size() && reused_call_args[value_id])) {
-            if (qore_aot_fast_entry_param_takes_ref(info, sig, static_cast<unsigned>(i - arg_start))) {
-                takes_over = true;
-            }
-            continue;
-        }
-        // the slot of a read through a reference is given only if it holds the value, which is known at run time
-        if (givenReferenceReadSlot(inst, value_id)) {
-            return false;
-        }
-    }
-    return takes_over;
-}
-
-// documented in QoreIRToLLVM.h
-QoreIRToLLVM::FastEntryTakeOver QoreIRToLLVM::fastEntryTakeOverSlots(const AbstractQoreFunctionVariant* variant,
-        const BatchCalleeInfo& info, const std::vector<llvm::Value*>& given_slots) const {
-    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
-    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
-    FastEntryTakeOver rv;
-    rv.slots.assign(info.num_params, nullptr);
-    for (size_t i = 0; i < given_slots.size(); ++i) {
-        if (!given_slots[i]) {
-            continue;
-        }
-        if (i < info.num_params && qore_aot_fast_entry_param_takes_ref(info, sig, static_cast<unsigned>(i))) {
-            rv.slots[i] = given_slots[i];
-        } else {
-            rv.releases_given = true;
-        }
-    }
-    return rv;
-}
-
-// documented in QoreIRToLLVM.h
-llvm::Function* QoreIRToLLVM::ownedFastEntry(llvm::Function* fast_fn,
-        const std::vector<llvm::Value*>& take_over_slots, llvm::Module& module) const {
-    std::string name = fast_fn->getName().str() + QORE_OWNED_FAST_ENTRY_INFIX;
-    name.reserve(name.size() + take_over_slots.size());
-    for (llvm::Value* slot : take_over_slots) {
-        name += slot ? '1' : '0';
-    }
-    if (llvm::Function* fn = module.getFunction(name)) {
-        assert(fn->getFunctionType() == fast_fn->getFunctionType());
-        return fn;
-    }
-    // a declaration until materializeOwnedFastEntries() defines it as a copy of the fast entry
-    llvm::Function* fn = llvm::Function::Create(fast_fn->getFunctionType(), llvm::Function::ExternalLinkage, name,
-        module);
-    fn->setCallingConv(fast_fn->getCallingConv());
-    return fn;
-}
-
 //! Returns true if the call \a inst calls a variant known when it is compiled, none of whose parameters takes its
 //! argument over: a function or a static method whose IR is known, or a builtin variant
 /** A read through a reference that such a call takes as an argument is released when it returns, as the AST
@@ -10346,7 +10262,7 @@ bool QoreIRToLLVM::emitAOTDebugFastEntry(llvm::Module& module, llvm::Function& f
         builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {boxed, xsink_arg});
     }
-    builder->CreateRet(rv);
+    debug_fast_entry_ret = builder->CreateRet(rv);
     return true;
 }
 
@@ -16239,6 +16155,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     taken_param_cleanups.clear();
     fast_entry_param_allocas.clear();
     fast_entry_param_allocas_by_local.clear();
+    fast_entry_converted_arg_refs.clear();
+    debug_fast_entry_ret = nullptr;
     owned_ir_local_allocas.clear();
     owned_ir_local_alloca_keys.clear();
     invoke_result_allocas.clear();
@@ -16497,6 +16415,20 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         builder->SetInsertPoint(block_map[func.blocks.front().get()]);
         emitLocalInstantiation(module);
         preCreateLocalAllocas(module, llvm_func);
+
+        // the paths that leave a fast entry after its prologue took references to the arguments and before its body
+        // runs release them: the entry that takes its arguments over holds the caller's references (issue #6105)
+        if (fast_entry_args && (!fast_entry_param_allocas.empty() || !fast_entry_converted_arg_refs.empty())) {
+            llvm::IRBuilderBase::InsertPoint saved_ip = builder->saveIP();
+            for (llvm::Instruction* exit : {stack_overflow_bb ? stack_overflow_bb->getTerminator() : nullptr,
+                    static_cast<llvm::Instruction*>(debug_fast_entry_ret)}) {
+                if (exit) {
+                    builder->SetInsertPoint(exit);
+                    emitFastEntryPrologueRelease(module);
+                }
+            }
+            builder->restoreIP(saved_ip);
+        }
 
         // Save on_block_exit handler count at function entry so we can
         // execute handlers registered during this function at exit.

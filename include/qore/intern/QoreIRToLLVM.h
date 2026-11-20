@@ -86,6 +86,10 @@ DLLLOCAL void qore_dbg_force_finalize_cancel(int loop, int64_t index);
 //! a '1' for each parameter whose argument it takes over and a '0' for the others
 #define QORE_OWNED_FAST_ENTRY_INFIX ".own."
 
+//! Returns true if the fast entry of \a variant cannot be called by a call that gives the callee a temporary argument
+//! (\a call_gives_args), which a parameter of the callee takes over (see QoreIRToLLVM.cpp)
+DLLLOCAL bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const AbstractQoreFunctionVariant* variant);
+
 class QoreIRToLLVM {
 public:
     explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
@@ -661,6 +665,15 @@ private:
     // cleanup can run without dangling cached locals.
     std::vector<llvm::AllocaInst*> fast_entry_param_allocas;
     std::unordered_map<const void*, llvm::AllocaInst*> fast_entry_param_allocas_by_local;
+    //! the arguments of native locals that the prologue of a fast entry took a reference to, released at exit with
+    //! preinstantiated_entry_loads
+    std::vector<llvm::Value*> fast_entry_converted_arg_refs;
+    //! the return of the debugger entry of an AOT fast entry (emitAOTDebugFastEntry())
+    llvm::ReturnInst* debug_fast_entry_ret = nullptr;
+    //! Emits the release of the references that the prologue of a fast entry took to its arguments at the insert
+    //! point, for a path that leaves the entry before its body runs (a stack overflow, the debugger entry; issue
+    //! #6105)
+    DLLLOCAL void emitFastEntryPrologueRelease(llvm::Module& module);
 
     // Boxed IR-only locals that are neither fast-entry params nor backed by a
     // pre-instantiated cleanup slot. Their alloca owns the current value and
