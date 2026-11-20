@@ -232,6 +232,8 @@ int main() {
         false, false, QORE_AOT_BATCH_AK_VERSION);
     run("AL v48 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 48 ",
         false, false, QORE_AOT_BATCH_AL_VERSION);
+    run("AM v49 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 49 ",
+        false, false, QORE_AOT_BATCH_AM_VERSION);
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);

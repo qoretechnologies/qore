@@ -623,10 +623,26 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        exception targets of the handlers that a ScopeExit runs after it has closed its scope and of the end of a try
 //!        statement (qore#6658); the location of an exception raised by a summary that replaces a call in native code
 //!        (qore#6673)
+//! v50 (batch AN; the reader refuses v49 and older images, also those that a qcc executable embeds):
+//!      - each serialized IR instruction ends, after its runtime location, with its temp scope id and the id of the
+//!        innermost temp scope that an exception at it unwinds (two varu32: QoreIRInstruction::temp_scope_id and
+//!        unwind_inner_temp_scope_id), so that the IR rebuilt from an image (debug IR, closure bodies without native
+//!        code, handler and background helper IR) drains the temp scopes on the paths of exceptions as the IR that the
+//!        compiler lowered, and the IR verification follows them; a v49 image has none, and its temp scope ids are all
+//!        0 (qore#6742)
+//!      - no format change, but the code and the IR that a v49 compiler wrote differ (an image must be rebuilt): an
+//!        indexed map no longer releases an element after its read becomes borrowed (qore#5959); the cleanups of a
+//!        return past the handler cap keep the return's value when one of them raises (qore#6762, qore#6763); a closure
+//!        that an outlined helper creates finds the coordinator's locals that it captures, and an outlined helper's
+//!        calls of a bound private:internal method and the locals that it can write (qore#6653, qore#6654); native
+//!        code calls the debugger-aware binder for the direct calls and typed native entries of a frame that a
+//!        debugger attached to mid-frame (qore#6601)
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
 constexpr uint16_t QORE_AOT_BATCH_AM_VERSION = 49;
+//! The shared format version for the changes in batch AN (see v50 above).
+constexpr uint16_t QORE_AOT_BATCH_AN_VERSION = 50;
 //! First format version whose static method call references record the class that declares their method (see v49
 //! above, qore#6679): the method name of a STATIC_METHOD_REF or EN_STATIC_METH_REF expression, and the name that
 //! native code passes to qore_rt_create_static_method_call_ref_aot(), is followed by a newline and the class
@@ -635,9 +651,10 @@ constexpr uint16_t QORE_AOT_BATCH_AM_VERSION = 49;
 constexpr uint16_t QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION = 49;
 static_assert(QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION == QORE_AOT_BATCH_AM_VERSION,
     "the format changes of batch AM share one format version (v49)");
-//! Old compiled artifacts must be rebuilt (see v49 above): the reader refuses older images, the program image of a qcc
-//! executable included (qore_aot_run_v3() reads it before anything else)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AM_VERSION;
+//! Old compiled artifacts must be rebuilt (see v50 above): the reader refuses older images, the program image of a qcc
+//! executable included (qore_aot_run_v3() reads it before anything else); the reader of a v50 image always has the temp
+//! scopes of its IR (qore#6742)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AN_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -768,10 +785,12 @@ static_assert(QORE_AOT_INLINE_CONSTRUCTOR_BINDING_VERSION == QORE_AOT_BATCH_AM_V
 /** QoreIRInstruction::temp_scope_id and QoreIRInstruction::unwind_inner_temp_scope_id are written after the runtime
     location of each instruction, so that the IR interpreter drains the temp scopes of IR read from an image on the
     paths of exceptions as it does those of IR that it lowered, and the verification of the IR follows them.  Part of
-    the format bump of batch AN: inactive until QORE_AOT_BINARY_VERSION reaches it.
+    the format bump of batch AN (see v50 above).
 */
 constexpr uint16_t QORE_AOT_TEMP_SCOPES_VERSION = 50;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AM_VERSION;
+static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
+    "the format changes of batch AN share one format version (v50)");
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AN_VERSION;
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
