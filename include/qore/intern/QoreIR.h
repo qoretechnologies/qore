@@ -64,6 +64,7 @@ class StatementBlock;
 class AbstractStatement;
 class CaseNodeRegex;
 class QoreIRFunction;
+class LVList;
 class QoreIRInstruction;
 class FunctionalOperator;
 class ContextStatement;
@@ -5108,6 +5109,12 @@ public:
         (issue #5890); empty otherwise.
     */
     mutable std::unordered_map<const void*, uint8_t> aot_native_local_flags;
+    //! Locals whose value the standard AOT entry owns. The availability flags above also describe optimized-away
+    //! writes and locals that the code caches while continuing to assign their runtime variable.
+    mutable std::unordered_set<const void*> aot_private_body_locals;
+    //! The root declarations of a body compiled with private AOT storage. A null list keeps the original
+    //! runtime storage for code with access to debugger functions and for entries without scope information.
+    const LVList* aot_private_root_scope = nullptr;
 
     // Return type info for the function (populated in attemptIRLowering()).
     // Used by Return opcode lowering in QoreIRToLLVM to apply type coercion.

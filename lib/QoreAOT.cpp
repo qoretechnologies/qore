@@ -2951,6 +2951,9 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // overloads share the same QoreFunction family.
     ir_func->source_qf = source_qf;
     ir_func->source_variant = uvb->getAbstractFunctionVariant();
+    if (!(uvb->getParseOptions(pgm->getParseOptions()) & PO_ALLOW_DEBUGGER)) {
+        ir_func->aot_private_root_scope = statements->getLVList();
+    }
     // the parse-time type checks of the lowering are made in the class context of the code, as in
     // UserVariantBase::lowerIRFunction() (qore#5750)
     QoreIRClassContextHelper class_ctx(*ir_func);
@@ -5860,13 +5863,30 @@ private:
 /** The coordinator's own locals that only a helper uses are kept by the helper (see
     QoreIRFunction::aot_native_local_flags)
 */
-static void aotMergeOutlinedNativeLocalFlags(const QoreIRFunction& coordinator,
-        const std::vector<AOTOutlinedHelper>& helpers) {
+static bool aotMergeOutlinedNativeLocalFlags(const QoreIRFunction& coordinator,
+        const std::vector<AOTOutlinedHelper>& helpers, std::string& error) {
+    size_t examined = 0;
     for (const auto& h : helpers) {
+        // A contained local can still be listed in the coordinator after all its accesses moved to
+        // the helper. Only the entry that executes the stores can prove that it needs no stack slot.
+        for (LocalVar* lv : h.ir_func->all_body_locals) {
+            if (!(++examined % 100) && qore_check_cancel(nullptr, "AOT outlined local metadata")) {
+                error = "cancelled during AOT outlined local metadata";
+                return false;
+            }
+            if (!h.ir_func->aot_private_body_locals.count(lv)) {
+                coordinator.aot_private_body_locals.erase(lv);
+            }
+        }
         for (const auto& [key, flags] : h.ir_func->aot_native_local_flags) {
+            if (!(++examined % 100) && qore_check_cancel(nullptr, "AOT outlined local metadata")) {
+                error = "cancelled during AOT outlined local metadata";
+                return false;
+            }
             coordinator.aot_native_local_flags[key] |= flags;
         }
     }
+    return true;
 }
 
 //! Erases the unused declarations of the closure dispatch functions of the AOT body \a owner
@@ -6210,7 +6230,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     // assuming evalTiered set them up). Init functions are called directly
     // from the init-exec loop with no evalTiered wrapper — we handle the
     // instantiation ourselves in executeInitFunctions for MODULE_INIT entries
-    // by iterating ctx->all_body_locals and calling instantiate/uninstantiate
+    // by iterating ctx->runtime_body_locals and calling instantiate/uninstantiate
     // around the call.
 
     AOTSlotMap slots;
@@ -22186,7 +22206,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             llvm_error);
                     }
                     if (std_entry_ok && fn_outliner.active()) {
-                        aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers);
+                        std_entry_ok = aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers, llvm_error);
                     }
 
                     // Compile fast entry for AOT Approach B.
@@ -22656,7 +22676,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 llvm_error);
                         }
                         if (method_ok && fn_outliner.active()) {
-                            aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers);
+                            method_ok = aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers, llvm_error);
                         }
 
                         if (method_ok && fast_entry_eligible) {
@@ -35337,7 +35357,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     ctx->allocate();
 
     // Copy all_body_locals from the fresh IR
-    ctx->all_body_locals = func.all_body_locals;
+    ctx->runtime_body_locals = func.all_body_locals;
 
     // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
     ctx->all_body_locals_ir_only = func.areAllBodyLocalsIROnly();
@@ -38725,7 +38745,6 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         gid.global_var = var;
     }
 
-    // Extract body local identities
     for (LocalVar* lv : func.all_body_locals) {
         AOTBodyLocalId blid;
         blid.local_var_ptr = static_cast<const void*>(lv);
@@ -38740,6 +38759,8 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         // Use that complete table so same-named locals in the body and a handler retain distinct identities.
         auto slot_it = slots.local_slots.find(static_cast<const void*>(lv));
         blid.slot_id = slot_it != slots.local_slots.end() ? slot_it->second : UINT32_MAX;
+        blid.native_only = func.aot_private_body_locals.count(lv) && blid.slot_id < out.locals.size()
+            && (out.locals[blid.slot_id].flags & QORE_AOT_LOCAL_SLOT_NATIVE_WRITES);
         out.body_locals.push_back(std::move(blid));
     }
 

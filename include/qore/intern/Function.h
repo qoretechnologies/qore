@@ -56,6 +56,11 @@ struct QoreAOTLazyClosureIR;
 struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
+//! Enter a standard native body with its private root declarations visible to frame inspection.
+DLLLOCAL uint64_t qore_aot_call_body(AotFunctionPtr fn, QoreAOTContext* ctx, ExceptionSink* xsink);
+
+//! Bind the native entry once when the variant's context is published.
+DLLLOCAL AotFunctionPtr qore_aot_bind_body(AotFunctionPtr fn, QoreAOTContext* ctx);
 
 // these data structures are all private to the library
 
@@ -1805,6 +1810,8 @@ protected:
     mutable std::mutex aot_lazy_function_ir_mutex;
     //! Lock-free call guard; publishes aot_lazy_function_ir before first invocation.
     mutable std::atomic<bool> has_aot_lazy_function_ir{false};
+    //! Initialized before cached_aot_ctx is published. cached_aot_fn remains the native symbol for lookup.
+    mutable AotFunctionPtr aot_body_entry = nullptr;
 
     template <typename Completion = QoreCallCompletion>
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
@@ -2126,7 +2133,7 @@ public:
             // just sees 0 (NOTHING bits) + xsink set, matching the behavior
             // of the check-based path.
             try {
-                return cached_aot_fn(ctx, xsink);
+                return aot_body_entry(ctx, xsink);
             } catch (const QoreJITException&) {
                 return 0;
             }

@@ -32,6 +32,7 @@
 #ifndef _QORE_INTERN_THREADLOCALVARIABLEDATA_H
 #define _QORE_INTERN_THREADLOCALVARIABLEDATA_H
 
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -46,6 +47,27 @@ private:
     };
     std::vector<FrameMarkerRecord> frame_marker_stack;
 public:
+    //! A stable location on this thread's local stack, sampled after the caller instantiated its body locals.
+    struct Position {
+        const Block* block;
+        int pos;
+
+        const LocalVarValue* peek() {
+            while (!pos && block->prev) {
+                block = block->prev;
+                pos = block->pos;
+            }
+            return pos ? &block->var[pos - 1] : nullptr;
+        }
+    };
+
+    DLLLOCAL Position position() const {
+        return {curr, curr->pos};
+    }
+
+    //! Declarations in reverse stack order immediately before each physical slot during frame inspection.
+    using UnavailableLocals = std::unordered_map<const LocalVarValue*, std::vector<const LocalVar*>>;
+
     // clears and marks all variables as finalized on the stack
     DLLLOCAL void finalize(SafeDerefHelper& sdh) {
         ThreadLocalVariableData::iterator i(curr);
@@ -231,7 +253,8 @@ public:
         ProgramThreadCountContextHelper::getContextFrame()): a variable that the code assigns in native storage only
         (LocalVar::AOT_NATIVE_WRITES) is then given without a value and with \c "unavailable" set (issue #5890)
     */
-    DLLLOCAL void getLocalVars(QoreHashNode& h, int frame, ExceptionSink* xsink, bool aot_code = false);
+    DLLLOCAL void getLocalVars(QoreHashNode& h, int frame, ExceptionSink* xsink, bool aot_code,
+        const UnavailableLocals& omitted);
 
     //! Sets the value of a local variable of the frame
     /** @param aot_code true if the frame runs AOT-compiled native code: a variable that the code keeps in native

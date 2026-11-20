@@ -478,6 +478,7 @@ static bool isFastMethodCallEligible(
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <limits>
+#include <string_view>
 #include <llvm/Support/raw_ostream.h>
 
 #include <cstdio>
@@ -15586,15 +15587,51 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_set<const void*> native_unsafe_locals
         = qore_ir_get_native_unsafe_locals(func, initially_assigned_locals);
 
-    // In AOT mode, remove pre-instantiated body locals from the IR-only set.
-    // evalTiered pre-instantiates ALL body locals from all_body_locals on the
-    // runtime stack, so StoreLocal must sync via qore_rt_assign_local_aot (which
-    // adds a reference).  Without sync, the alloca holds the only reference while
-    // the cleanup alloca also tracks the source value for decref → double-free on
-    // function exit. Proven-assigned native scalar locals carry no references;
-    // exact string locals use the existing owned IR-local alloca cleanup. Both
-    // can safely remain alloca-only and skip runtime synchronization.
-    // Parameters and other non-body locals remain IR-only.
+    // A standard AOT frame can be inspected by a callback from another Program. An unshadowed root local's
+    // name is visible throughout the call, so the frame can report its declaration without a physical slot.
+    // For nested and shadowed variables the slot records scope exit and the order of name lookup.
+    size_t locals_examined = 0;
+    auto cancelled_local_scan = [&]() {
+        if (++locals_examined % 100 || !qore_check_cancel(nullptr, "AOT body-local storage analysis")) {
+            return false;
+        }
+        error = "cancelled during AOT body-local storage analysis";
+        return true;
+    };
+    const bool standard_aot_entry = aot_mode && fast_entry_name.empty();
+    if (standard_aot_entry) {
+        func.aot_private_body_locals.clear();
+        if (func.aot_private_root_scope && ir_only_locals_set) {
+            std::unordered_set<std::string_view> names{"self", "argv"};
+            std::unordered_set<std::string_view> shadowed;
+            for (const auto& param : func.param_local_vars) {
+                if (cancelled_local_scan()) {
+                    return false;
+                }
+                if (param.second) {
+                    names.emplace(param.second->getName());
+                }
+            }
+            for (const LocalVar* lv : func.all_body_locals) {
+                if (cancelled_local_scan()) {
+                    return false;
+                }
+                if (!names.emplace(lv->getName()).second) {
+                    shadowed.emplace(lv->getName());
+                }
+            }
+            for (const LocalVar* lv : func.aot_private_root_scope->lv) {
+                if (cancelled_local_scan()) {
+                    return false;
+                }
+                if (ir_only_locals_set->count(lv) && !lv->closureUse() && !lv->isTopLevel()
+                        && !shadowed.count(lv->getName())) {
+                    func.aot_private_body_locals.emplace(lv);
+                }
+            }
+        }
+    }
+    // Retain the existing switches for native scalars and strings.
     aot_adjusted_ir_only.clear();
     if (aot_mode && ir_only_locals_set && !func.all_body_locals.empty()) {
         aot_adjusted_ir_only = *ir_only_locals_set;
@@ -15603,18 +15640,25 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         static constinit QoreEnvFlag string_aot_body_locals_env("QORE_DISABLE_AOT_STRING_BODY_LOCALS");
         const bool string_aot_body_locals = !string_aot_body_locals_env.get();
         for (LocalVar* lv : func.all_body_locals) {
+            if (cancelled_local_scan()) {
+                return false;
+            }
             const void* key = reinterpret_cast<const void*>(lv);
             const QoreTypeInfo* ti = lv->getTypeInfo();
-            bool native_scalar = native_aot_body_locals
-                && !native_unsafe_locals.count(key)
-                && (QoreTypeInfo::isPlainType(ti, NT_INT)
-                    || QoreTypeInfo::isPlainType(ti, NT_FLOAT)
-                    || QoreTypeInfo::isPlainType(ti, NT_BOOLEAN));
-            bool owned_string = string_aot_body_locals
-                && !native_unsafe_locals.count(key)
-                && ti == stringTypeInfo;
-            if (!native_scalar && !owned_string) {
+            // Scalars and exact strings have switchable native representations. Other IR-owned locals
+            // use the boxed slot, including the read/write-through cache of a reference-slot local and
+            // the owning reference of an object local. Escaping lvalues were excluded by computeIROnlyLocals().
+            bool scalar = QoreTypeInfo::isPlainType(ti, NT_INT) || QoreTypeInfo::isPlainType(ti, NT_FLOAT)
+                || QoreTypeInfo::isPlainType(ti, NT_BOOLEAN);
+            bool private_body_local = standard_aot_entry ? func.aot_private_body_locals.count(key)
+                : func.aot_private_root_scope != nullptr;
+            if ((!scalar && ti != stringTypeInfo && !private_body_local)
+                    || (scalar && (!native_aot_body_locals || native_unsafe_locals.count(key)))
+                    || (ti == stringTypeInfo && (!string_aot_body_locals || native_unsafe_locals.count(key)))) {
                 aot_adjusted_ir_only.erase(key);
+                if (standard_aot_entry) {
+                    func.aot_private_body_locals.erase(key);
+                }
             }
         }
         ir_only_locals_set = aot_adjusted_ir_only.empty()
@@ -39784,8 +39828,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && local_key && !direct_self_mutation && path_inst->path.size() == 1
                     && path_inst->path[0].kind == LVPathStepKind::LocalVar
                     && current_ir_func->hasIRStorage(local_key)
-                    // an AOT body local is published to the runtime stack, where the runtime step finds it
-                    && !(aot_mode && aot_body_locals.count(local_key))
+                    && (!aot_mode || !aot_body_locals.count(local_key)
+                        || (current_ir_func->aot_private_root_scope && ir_only_body_locals.count(local_key)))
                     && !native_int_locals.count(local_key) && !native_float_locals.count(local_key)
                     && !native_bool_locals.count(local_key)) {
                 auto cache_it = local_allocas.find(local_key);

@@ -3148,12 +3148,16 @@ struct AOTExprSlotId {
     const name_vec_t* arg_names = nullptr; //!< For CALLREF_CALL_NAMED: the names of the arguments (interned)
 };
 
+//! In the body-local record's flags byte: the runtime wrapper may omit the value slot.
+constexpr uint8_t QORE_AOT_BODY_LOCAL_NATIVE_ONLY = 0x04;
+
 //! Identity for a body local variable (needed for instantiation management)
 struct AOTBodyLocalId {
     std::string name;        //!< variable name
     std::string type_path;   //!< type path
     bool is_closure = false; //!< true if closure variable
     bool read_only = false;  //!< true if read-only binding
+    bool native_only = false; //!< the standard native entry owns the value
     uint32_t slot_id = UINT32_MAX; //!< local slot id when available
     const void* local_var_ptr = nullptr; //!< compile-time only: pointer to LocalVar for identity matching
 };

@@ -7732,6 +7732,7 @@ QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) co
 
 void UserVariantBase::registerPrecompiledAOTFunction(
         AotFunctionPtr fn, QoreAOTContext* ctx, const QoreProgramLocation* body_loc) {
+    aot_body_entry = qore_aot_bind_body(fn, ctx);
     QoreAOTContext* old_ctx = cached_aot_ctx.exchange(ctx, std::memory_order_acq_rel);
     if (old_ctx != ctx) {
         delete old_ctx;
@@ -7816,6 +7817,7 @@ bool UserVariantBase::ensureAOTContext(const char* name, ExceptionSink* xsink) c
         return false;
     }
 
+    aot_body_entry = qore_aot_bind_body(cached_aot_fn, ctx);
     cached_aot_ctx.store(ctx, std::memory_order_release);
     aot_lazy_function_ir.reset();
     aot_lazy_function_ir_index = 0;
@@ -7825,7 +7827,7 @@ bool UserVariantBase::ensureAOTContext(const char* name, ExceptionSink* xsink) c
 
 const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
     if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
-        return ctx->all_body_locals;
+        return ctx->runtime_body_locals;
     }
     const QoreIRFunction* ir = getCachedIR();
     assert(ir);
@@ -7864,7 +7866,7 @@ void UserVariantBase::publishIRContextFlags(const IRContextFlags& flags) const {
 
 const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
     if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
-        return ctx->all_body_locals;
+        return ctx->runtime_body_locals;
     }
     const QoreIRFunction* ir = getCachedIR();
     assert(ir);
@@ -9851,11 +9853,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             }
 
             if (!gate || (gate->enter(xsink) >= 0)) {
-                // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
-                // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
-                // are never accessed by AST callbacks).
+                // Instantiate the locals that the compiled body accesses through the runtime stack.
                 const std::vector<LocalVar*>& body_locals = aot_ctx
-                    ? aot_ctx->all_body_locals
+                    ? aot_ctx->runtime_body_locals
                     : ir->ast_visible_body_locals;
 
                 // Instantiate AST-visible body locals so that AST Invoke callbacks
@@ -9897,7 +9897,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // through to the normal xsink-set path below.
                 try {
                     if (aot_ctx && cached_aot_fn) {
-                        result_bits = cached_aot_fn(aot_ctx, xsink);
+                        result_bits = aot_body_entry(aot_ctx, xsink);
                     } else {
                         assert(jit_fn);
                         result_bits = jit_fn(xsink);

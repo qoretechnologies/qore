@@ -54,6 +54,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
@@ -3388,14 +3389,93 @@ void qore_set_local_var_debug_type(QoreHashNode& v, const QoreTypeInfo* typeInfo
     }
 }
 
+// Native code owns these locals for the duration of its call. Keep only a description of them beside the
+// actual frame: an inspection may come from a nested call, including one running in another Program.
+namespace {
+struct AOTLocalFrame;
+constinit thread_local AOTLocalFrame* aot_local_frame = nullptr;
+struct AOTLocalFrame {
+    const ThreadLocalProgramData* data;
+    int depth;
+    const QoreAOTContext::NativeBodyLocals& native;
+    ThreadLocalVariableData::Position top;
+    AOTLocalFrame* outer;
+
+    AOTLocalFrame(const ThreadLocalProgramData* data, const QoreAOTContext::NativeBodyLocals& native)
+            : data(data), depth(data->lvstack.getFrameCount()), native(native), top(data->lvstack.position()),
+              outer(aot_local_frame) {
+        aot_local_frame = this;
+    }
+
+    ~AOTLocalFrame() {
+        assert(aot_local_frame == this);
+        aot_local_frame = outer;
+    }
+
+    bool matches(const ThreadLocalProgramData* target, int frame) const {
+        return target == data && depth == target->lvstack.getFrameCount() - frame;
+    }
+};
+}
+
+static uint64_t qore_aot_call_private_body(QoreAOTContext* ctx, ExceptionSink* xsink) {
+    const auto& native = *ctx->native_body_locals;
+    AOTLocalFrame frame(get_thread_local_program_data(), native);
+    return native.entry(ctx, xsink);
+}
+
+AotFunctionPtr qore_aot_bind_body(AotFunctionPtr fn, QoreAOTContext* ctx) {
+    if (ctx && ctx->native_body_locals) {
+        ctx->native_body_locals->entry = fn;
+        return qore_aot_call_private_body;
+    }
+    return fn;
+}
+
+uint64_t qore_aot_call_body(AotFunctionPtr fn, QoreAOTContext* ctx, ExceptionSink* xsink) {
+    if (ctx && ctx->native_body_locals) {
+        AOTLocalFrame frame(get_thread_local_program_data(), *ctx->native_body_locals);
+        return fn(ctx, xsink);
+    }
+    return fn(ctx, xsink);
+}
+
 QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     bool aot_code;
     ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink, &aot_code);
     if (tlpd) {
-        tlpd->lvstack.getLocalVars(**rv, frame, xsink, aot_code);
-        if (*xsink)
+        ThreadLocalVariableData::UnavailableLocals omitted;
+        size_t examined = 0;
+        for (AOTLocalFrame* f = aot_local_frame; f; f = f->outer) {
+            if (!(++examined % 100) && qore_check_cancel(xsink, "AOT frame inspection")) {
+                return nullptr;
+            }
+            if (!f->matches(tlpd, frame)) {
+                continue;
+            }
+            // Merge declarations at their original positions. Body locals are pushed in declaration
+            // order, whereas get_local_vars() visits the stack from the most recent slot down.
+            auto pos = f->top;
+            auto next = f->native.omitted.rbegin();
+            for (auto it = f->native.declarations.rbegin(); it != f->native.declarations.rend()
+                    && next != f->native.omitted.rend(); ++it) {
+                if (!(++examined % 100) && qore_check_cancel(xsink, "AOT frame inspection")) {
+                    return nullptr;
+                }
+                const LocalVarValue* slot = pos.peek();
+                if (*it == *next) {
+                    omitted[slot].push_back(*next);
+                    ++next;
+                } else if (slot && slot->local_var == *it) {
+                    --pos.pos;
+                }
+            }
+        }
+        tlpd->lvstack.getLocalVars(**rv, frame, xsink, aot_code, omitted);
+        if (*xsink) {
             return nullptr;
+        }
         tlpd->cvstack.getLocalVars(**rv, frame, xsink);
         if (*xsink)
             return nullptr;
@@ -3416,7 +3496,30 @@ int thread_set_local_var_value(int frame, const char* name, const QoreValue& val
     bool aot_code;
     ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink, &aot_code);
     // a frame that cannot be accessed because of an exception is not looked up again for a closure-bound variable
-    return tlpd ? tlpd->lvstack.setVarValue(frame, name, val, xsink, aot_code) : (*xsink ? -1 : 1);
+    if (!tlpd) {
+        return *xsink ? -1 : 1;
+    }
+    int rc = tlpd->lvstack.setVarValue(frame, name, val, xsink, aot_code);
+    if (rc == 1) {
+        size_t examined = 0;
+        for (AOTLocalFrame* f = aot_local_frame; f; f = f->outer) {
+            if (!(++examined % 100) && qore_check_cancel(xsink, "AOT frame inspection")) {
+                return -1;
+            }
+            if (f->matches(tlpd, frame)) {
+                for (LocalVar* lv : f->native.omitted) {
+                    if (!(++examined % 100) && qore_check_cancel(xsink, "AOT frame inspection")) {
+                        return -1;
+                    }
+                    if (!strcmp(name, lv->getName())) {
+                        qore_raise_native_local_set_error(name, xsink);
+                        return -1;
+                    }
+                }
+            }
+        }
+    }
+    return rc;
 }
 
 // returns 0 = OK, 1 = no such variable or inaccessible frame, -1 exception setting variable

@@ -2380,6 +2380,10 @@ DLLLOCAL cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist);
 DLLLOCAL void thread_push_frame_boundary();
 DLLLOCAL void thread_pop_frame_boundary();
 
+//! Add a declaration whose value lives in a native frame to the result of get_local_vars().
+DLLLOCAL void qore_add_unavailable_local(QoreHashNode& h, const LocalVar& lv, ExceptionSink* xsink);
+//! Report a write that native code could not see from the runtime stack.
+DLLLOCAL void qore_raise_native_local_set_error(const char* name, ExceptionSink* xsink);
 DLLLOCAL QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink);
 //! Returns the number of local variables on the current thread's runtime stack of the current Program, for tests
 DLLLOCAL int64 thread_get_local_var_count(ExceptionSink* xsink);
