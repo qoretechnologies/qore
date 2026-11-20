@@ -222,6 +222,7 @@ Ran 4 test cases, 1 succeeded, 1 failed, 1 error, 1 skipped (2 assertions, 1 suc
       those of a thread started by the global setup raised \c TEST-ERROR (or were counted for the enclosing test case
       of a nested test), and those of a thread started by the global teardown were counted for the last test case
       that ran, or, when no test case ran, raised \c TEST-ERROR (or were counted for the enclosing test case)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6937">issue 6937</a>)
     - a @ref Qore::Program "Program" restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" can
       load the module (it declares the \c PROCESS domain); a test created there raises \c TEST-OPTION-ERROR
       instead of exiting the process for a usage error, and does not install the \c SIGUSR1 handler
@@ -2875,7 +2876,7 @@ fail("Unexpected code executed");
         TestCase gtc("globalSetUp", sub () {});
         gtc.setupThread();
         on_exit gtc.restoreThread();
-        # a thread started by the global setup makes its assertions for it
+        # a thread started by the global setup makes its assertions for it (qore#6937)
         set_thread_init(gtc.getNewThreadInit());
 
         # a skip or an exception in the global setup leaves the test cases without what it prepares: they are reported
@@ -2957,6 +2958,7 @@ fail("Unexpected code executed");
             gttc.setupThread();
             on_exit gttc.restoreThread();
             # a thread started by the global teardown makes its assertions for it, not for the last test case run
+            # (qore#6937)
             set_thread_init(gttc.getNewThreadInit());
             try {
                 globalTearDown();

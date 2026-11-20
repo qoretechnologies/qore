@@ -17,7 +17,7 @@
 %exec-class GlobalErrorLabelTest
 
 #! An error in Test::globalSetUp() or Test::globalTearDown() is reported with the name of its phase (issue #6925), and
-#! the assertions of a thread that one of them starts are counted for it
+#! the assertions of a thread that one of them starts are counted for it (issue #6937)
 /** The child test has one test case; its global setup makes 1 assertion and its global teardown 2, and each raises an
     exception when the \c ERROR_MODE environment variable names it.  The report of each error, the list of failed test
     cases after the run and the junit report name the phase that raised the exception, with its own assertions.  With
@@ -160,7 +160,7 @@ class ReportedTest inherits QUnit::Test {
 
     threadBothErrors() {
         # the assertions of the threads are counted for the phase that started them; before, the global setup fails
-        # and no test case runs, so neither thread could make an assertion (TEST-ERROR)
+        # and no test case runs, so neither thread could make an assertion (TEST-ERROR) (issue #6937)
         hash<auto> res = runTest("both", "-v", True);
         assertEq(2, res.rc, res.out);
         assertEq(1, countMatches("^ERROR: globalSetUp: 3 assertions$", res.out), res.out);
@@ -172,6 +172,7 @@ class ReportedTest inherits QUnit::Test {
 
     threadTeardownError() {
         # before, the thread started by the global teardown made its assertions for the test case that ran last
+        # (issue #6937)
         hash<auto> res = runTest("teardown", "-v", True);
         assertEq(1, res.rc, res.out);
         assertEq(1, countMatches("^Success: case: 1 assertion$", res.out), res.out);
