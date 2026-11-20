@@ -2352,15 +2352,23 @@ const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
 
     AOTClassRef ref = decodeAOTClassRef(class_ref);
     const QoreClass* qc = resolveAOTClassRefInProgram(pgm, ref.path, pseudo);
-    if (qc || !ref.module || !*ref.module) {
-        if (qc && cache && cache->pgm == pgm) {
-            cache->classes.emplace(std::move(cache_key), qc);
+    if (ref.module && *ref.module) {
+        const char* owner = qc ? qc->getModuleName() : nullptr;
+        if (!owner || ref.module_storage != owner) {
+            // A transitive dependency need not re-export the class. The consumer
+            // can even declare a different class with the same namespace path.
+            if (QoreAbstractModule* module = QMM.findModule(ref.module)) {
+                qc = resolveAOTClassRefInProgram(module->getModuleProgram(), ref.path, pseudo);
+                if (qc && (!qc->getModuleName() || ref.module_storage != qc->getModuleName())) {
+                    qc = nullptr;
+                }
+            } else if (owner) {
+                qc = nullptr;
+            }
+            // An embedded source module has no separately loaded module or owner tag.
+            // Its class was deserialized directly into the executable's Program.
         }
-        return qc;
     }
-
-    QoreProgram* module_pgm = MM.findUserModuleProgram(ref.module);
-    qc = resolveAOTClassRefInProgram(module_pgm, ref.path, pseudo);
     if (qc && cache && cache->pgm == pgm) {
         cache->classes.emplace(std::move(cache_key), qc);
     }
@@ -4710,7 +4718,6 @@ static QoreAOTContext* buildContextFromSlotMap(
                     uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
                     ReferenceHolder<QoreListNode> self_args(
                         num_args ? qore_list_private::newList(true) : nullptr, nullptr);
-                    bool self_args_ok = true;
                     for (uint8_t j = 0; j < num_args; ++j) {
                         std::string arg_err;
                         QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
@@ -4718,11 +4725,13 @@ static QoreAOTContext* buildContextFromSlotMap(
                             local_owner_pgm);
                         if (!arg_err.empty()) {
                             arg.discard(nullptr);
-                            qore_list_private::pushCanonical(**self_args, QoreValue(), nullptr);
-                            self_args_ok = false;
-                        } else {
-                            qore_list_private::pushCanonical(**self_args, arg, nullptr);
+                            // A failed inline expression can leave ptr inside its payload.
+                            setBuildError("cannot read argument " + std::to_string(j)
+                                + " of self method call '" + (ref2 ? ref2 : "") + "': " + arg_err);
+                            delete ctx;
+                            return nullptr;
                         }
+                        qore_list_private::pushCanonical(**self_args, arg, nullptr);
                     }
                     // Build the base (method/class/variant-resolved) self-call node, then wrap it
                     // with the args via the copy constructor (mirrors read_node_EN_SELF_CALL).
@@ -4732,13 +4741,13 @@ static QoreAOTContext* buildContextFromSlotMap(
                         QoreValue base_val = fromBits(base_bits);
                         const SelfFunctionCallNode* base_sfcn = qore_get_self_function_call_node(
                             base_val.getInternalNode());
-                        if (base_sfcn && num_args && self_args_ok) {
+                        if (base_sfcn && num_args) {
                             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(*base_sfcn,
                                 self_args.release());
                             base_val.discard(nullptr);
                             ctx->exprs[i] = toBitsNB(QoreValue(sfcn));
                         } else {
-                            // no args (or a static-method self call, or arg error): keep base node
+                            // no args (or a static-method self call): keep base node
                             ctx->exprs[i] = base_bits;
                         }
                     }
