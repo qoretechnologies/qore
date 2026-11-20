@@ -441,7 +441,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest",
                                  "modules/dataframe/test/dataframe-plugin-exception-handler.qtest",
                                  "modules/dataframe/test/dataframe-inline-mask-subscript.qtest",
-                                 "modules/dataframe/test/parquet-memory-pool.qtest"]),
+                                 "modules/dataframe/test/parquet-memory-pool.qtest",
+                                 "examples/test/qore/functions/value-string-target-encoding/value-string-target-encoding.qtest"]),
                          sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):
