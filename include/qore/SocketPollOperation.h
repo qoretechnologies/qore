@@ -125,8 +125,11 @@ public:
     */
     DLLLOCAL bool scanPollMembers(class RObject& obj, class RSetHelper& rsh);
 
-    //! true if the object of the operation is registered for the scan of its private data (a strong socket reference)
-    bool poll_scan_registered = false;
+    //! the object of the operation, if it is registered for the scan of its private data (a strong socket reference)
+    /** a value that is given up is marked on it (RObject::edgesRemoved()), as for the other containers of
+        design/dgc.md
+    */
+    class RObject* poll_scan_holder = nullptr;
 
 private:
     //! the lock of the values: the async I/O controller reads the socket while the object can be deleted

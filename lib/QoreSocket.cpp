@@ -15790,6 +15790,10 @@ void SocketPollOperationMembers::setPollMember(const char* key, QoreValue val, E
         AutoLocker al(poll_member_lock);
         QoreValue& v = key[0] == 's' ? poll_sock : poll_goal;
         old = v;
+        // a value that a scan can have read is given up: marked under the lock (design/dgc.md)
+        if (poll_scan_holder && old.getType() == NT_OBJECT) {
+            poll_scan_holder->edgesRemoved();
+        }
         v = val;
     }
     // released outside the lock: the release can run a destructor
@@ -15808,6 +15812,10 @@ void SocketPollOperationMembers::releasePollMembers(ExceptionSink* xsink) {
         AutoLocker al(poll_member_lock);
         s = poll_sock;
         g = poll_goal;
+        // a value that a scan can have read is given up: marked under the lock (design/dgc.md)
+        if (poll_scan_holder && s.getType() == NT_OBJECT) {
+            poll_scan_holder->edgesRemoved();
+        }
         poll_sock = QoreValue();
         poll_goal = QoreValue();
     }
@@ -15878,11 +15886,12 @@ int qore_poll_op_set_member(QoreObject* op_obj, const char* key, QoreValue val, 
     if (m) {
         // a strong reference to the socket is reported to the scan for recursive references of the object, as a
         // member is (design/dgc.md Pattern B; the registration is released in SocketPollOperation::destructor())
-        bool scan = key[0] == 's' && val.getType() == NT_OBJECT && !m->poll_scan_registered;
+        bool scan = key[0] == 's' && val.getType() == NT_OBJECT && !m->poll_scan_holder;
         m->setPollMember(key, val, xsink);
         if (scan) {
-            m->poll_scan_registered = true;
-            qore_object_private::get(*op_obj)->incScanPrivateData();
+            qore_object_private* obj = qore_object_private::get(*op_obj);
+            obj->incScanPrivateData();
+            m->poll_scan_holder = obj;
         }
         return *xsink ? -1 : 0;
     }
@@ -15903,11 +15912,12 @@ QoreValue qore_poll_op_get_referenced_member(const QoreObject* op_obj, const cha
 
 int qore_poll_op_release_members(QoreObject* self, SocketPollOperationBase* op, ExceptionSink* xsink) {
     if (SocketPollOperationMembers* m = dynamic_cast<SocketPollOperationMembers*>(op)) {
-        if (m->poll_scan_registered) {
-            m->poll_scan_registered = false;
+        // the values are released while the registration is held, so that a value given up is marked on the object
+        m->releasePollMembers(xsink);
+        if (m->poll_scan_holder) {
+            m->poll_scan_holder = nullptr;
             qore_object_private::get(*self)->decScanPrivateData();
         }
-        m->releasePollMembers(xsink);
     }
     return *xsink ? -1 : 0;
 }
