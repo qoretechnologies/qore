@@ -107,9 +107,9 @@ public class WebSocketUtilTest inherits QUnit::Test {
         assertEq(WSCC_NormalClosure, h.close);
         assertNothing(h.msg);
 
-        # ws_read_message()
+        # ws_read_message(); the server listens on the host that doSend() connects to
         Socket s();
-        s.bind(0);
+        s.bind("localhost:0");
         int port = s.getSocketInfo().port;
         s.listen();
         background doSend(ws_encode_message(<03>, WSOP_Close) + ws_encode_message(WSCC_NoStatusRcvd.encodeMsb(2),
