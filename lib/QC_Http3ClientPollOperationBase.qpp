@@ -463,6 +463,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         // Detect connection close.  inner_op transitions to "closed" via
         // QuicSession::isClosed() which has THREE distinct triggers:
         //   - local idle timer expired (NGTCP2_ERR_IDLE_CLOSE)
+        //   - no packet from the peer within the peer response timeout of a request (qore#6930)
         //   - we sent CONNECTION_CLOSE
         //   - peer sent CONNECTION_CLOSE
         // Surface each as a different error code so callers (retry policy,
@@ -480,6 +481,14 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                         err_desc = "QUIC connection closed: local idle timer "
                                    "expired before any response data arrived "
                                    "(NGTCP2_ERR_IDLE_CLOSE)";
+                        break;
+                    case QuicSession::CloseReason::Unresponsive:
+                        // nothing came back, not even an acknowledgement: the request was not received
+                        err_code = "HTTP3-PEER-UNRESPONSIVE";
+                        err_desc = "QUIC connection closed: the server sent nothing, not even an "
+                                   "acknowledgement, within the connect timeout of the request; its "
+                                   "connection state is gone (ex: it restarted), and the request was not "
+                                   "received";
                         break;
                     case QuicSession::CloseReason::LocalClose:
                         err_code = "HTTP3-LOCAL-CLOSE";

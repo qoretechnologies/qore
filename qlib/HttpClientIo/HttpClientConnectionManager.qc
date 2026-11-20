@@ -4627,6 +4627,7 @@ printf("%d connection(s) migrated\n", migrated);
     private bool isHttp3ConnectionCloseError(string err) {
         return err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella, still emitted from some sites
             || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
+            || err == "HTTP3-PEER-UNRESPONSIVE"   # no packet from the peer after a request (qore#6930)
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR";
@@ -4658,6 +4659,7 @@ printf("%d connection(s) migrated\n", migrated);
             || err == "HTTP3-CONNECT-ERROR"
             || err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella; still emitted from some sites
             || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
+            || err == "HTTP3-PEER-UNRESPONSIVE"   # no packet from the peer after a request (qore#6930)
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR"

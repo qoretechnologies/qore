@@ -1304,6 +1304,10 @@ const char* QuicSession::raiseSettingsWaitCloseError(ExceptionSink* xsink) const
             xsink->raiseException("HTTP3-IDLE-CLOSE", "QUIC connection closed by its idle timer before the "
                 "server's HTTP/3 SETTINGS were received; the request was not sent");
             return "HTTP3-IDLE-CLOSE";
+        case CloseReason::Unresponsive:
+            xsink->raiseException("HTTP3-PEER-UNRESPONSIVE", "QUIC connection closed: the server sent nothing "
+                "after a request before its HTTP/3 SETTINGS were received; the request was not sent");
+            return "HTTP3-PEER-UNRESPONSIVE";
         case CloseReason::PeerClose:
             xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the server before its HTTP/3 "
                 "SETTINGS were received; the request was not sent");
@@ -2268,6 +2272,10 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     // connections too)
     ERR_clear_error();
     int rv = ngtcp2_conn_read_pkt(conn_, &path, &pi, data, len, last_rx_ts_);
+    if (!rv) {
+        // the peer answered: its connection state is alive (see setPeerResponseTimeout())
+        peer_response_deadline_ = 0;
+    }
     if (rv != 0) {
         // Handle specific error codes
         if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
@@ -2399,6 +2407,10 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
         last_rx_ts_ = nowLocked();
         int rv = ngtcp2_conn_read_pkt(conn_, &packets[i].path, &pi,
                                        packets[i].data, packets[i].len, last_rx_ts_);
+        if (!rv) {
+            // the peer answered: its connection state is alive (see setPeerResponseTimeout())
+            peer_response_deadline_ = 0;
+        }
         if (rv != 0) {
             if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
                 // see readPacketLocked()
@@ -2722,7 +2734,23 @@ ngtcp2_tstamp QuicSession::getExpiryLocked() const {
     if (!conn_) {
         return UINT64_MAX;
     }
-    return ngtcp2_conn_get_expiry2(conn_);
+    ngtcp2_tstamp expiry = ngtcp2_conn_get_expiry2(conn_);
+    // the deadline for a packet from the peer after a request (see setPeerResponseTimeout())
+    if (peer_response_deadline_ && peer_response_deadline_ < expiry) {
+        expiry = peer_response_deadline_;
+    }
+    return expiry;
+}
+
+void QuicSession::setPeerResponseTimeout(uint64_t timeout_ns) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    peer_response_timeout_ns_ = std::min<uint64_t>(timeout_ns, local_idle_timeout_ns_);
+}
+
+void QuicSession::armPeerResponseDeadlineLocked() {
+    if (!is_server_ && peer_response_timeout_ns_ && !peer_response_deadline_) {
+        peer_response_deadline_ = nowLocked() + peer_response_timeout_ns_;
+    }
 }
 
 ngtcp2_tstamp QuicSession::getExpiry() const {
@@ -2734,6 +2762,18 @@ int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
     if (!conn_) {
         xsink->raiseException("QUIC-ERROR", "QUIC connection not initialized");
         return -1;
+    }
+
+    // a request was sent, and the peer has sent nothing since for the peer response timeout: it did not receive the
+    // request, and its connection state is gone (see setPeerResponseTimeout()); the connection is closed as by its
+    // idle timer, which it would otherwise wait for, with the cause recorded
+    if (peer_response_deadline_ && nowLocked() >= peer_response_deadline_) {
+        printd(5, "QuicSession::handleExpiryLocked(): no packet from the peer within %lld ms of a request (session "
+            "%lld)\n", (long long)(peer_response_timeout_ns_ / 1000000), (long long)session_id_);
+        peer_response_deadline_ = 0;
+        peer_unresponsive_.store(true, std::memory_order_release);
+        closeIdleLocked();
+        return 0;
     }
 
     int rv = ngtcp2_conn_handle_expiry(conn_, nowLocked());
@@ -2853,6 +2893,11 @@ bool QuicSession::refuseRequestOnClosedLocked(ExceptionSink* xsink) {
         case CloseReason::Idle:
             xsink->raiseException("HTTP3-IDLE-CLOSE", "QUIC connection closed by its idle timer before the "
                 "request was sent; the request was not sent");
+            break;
+        case CloseReason::Unresponsive:
+            xsink->raiseException("HTTP3-PEER-UNRESPONSIVE", "QUIC connection closed: the server did not "
+                "acknowledge an earlier request (its connection state is gone, ex: it restarted); the request was "
+                "not sent");
             break;
         case CloseReason::LocalClose:
             xsink->raiseException("HTTP3-LOCAL-CLOSE", "QUIC connection closed locally before the request was "
@@ -3095,6 +3140,7 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
     stream->method = method;
     stream->path = path;
     stream->state = QuicStreamState::Open;
+    armPeerResponseDeadlineLocked();
 
     // Signal that there's data to write
     pending_write_.store(true, std::memory_order_release);
@@ -3236,6 +3282,7 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
         stream->connect_protocol = *proto_val;
         stream->connect_tunnel_active = true;
     }
+    armPeerResponseDeadlineLocked();
 
     // Signal that there's data to write (headers)
     pending_write_.store(true, std::memory_order_release);
@@ -4704,7 +4751,7 @@ QuicSession::CloseReason QuicSession::getCloseReason() const {
     // Without this check, idle H3 client connections would leak their UDP socket
     // forever because the controller's isClosed()-driven close path never fires.
     if (idle_closed_.load(std::memory_order_acquire)) {
-        return CloseReason::Idle;
+        return peer_unresponsive_.load(std::memory_order_acquire) ? CloseReason::Unresponsive : CloseReason::Idle;
     }
     // a server connection dropped without CONNECTION_CLOSE (see dropped_) is a local teardown
     if (dropped_.load(std::memory_order_acquire)) {
@@ -4752,11 +4799,26 @@ void QuicSession::markClosed() {
     notifyDatagramData();
 }
 
+#ifdef DEBUG
+// see qore_quic_test_silent_server_close()
+static std::atomic<bool> quic_test_silent_server_close_flag{false};
+
+void qore_quic_test_silent_server_close(bool silent) {
+    quic_test_silent_server_close_flag.store(silent, std::memory_order_release);
+}
+#endif
+
 ssize_t QuicSession::writeConnectionClose(uint8_t* buf, size_t buflen) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (!conn_ || ngtcp2_conn_in_draining_period(conn_)) {
         return 0;
     }
+#ifdef DEBUG
+    // a test closes the server as a killed server process is: its client is not told
+    if (is_server_ && quic_test_silent_server_close_flag.load(std::memory_order_acquire)) {
+        return 0;
+    }
+#endif
 
     ngtcp2_path_storage ps;
     ngtcp2_path_storage_zero(&ps);
@@ -4930,6 +4992,12 @@ int QuicSession::submitShutdownNotice(ExceptionSink* xsink) {
     if (goaway_sent_.load(std::memory_order_acquire)) {
         return 0;
     }
+#ifdef DEBUG
+    // see writeConnectionClose()
+    if (is_server_ && quic_test_silent_server_close_flag.load(std::memory_order_acquire)) {
+        return 0;
+    }
+#endif
     int rv = nghttp3_conn_submit_shutdown_notice(h3_conn_);
     if (rv != 0) {
         xsink->raiseException("QUIC-HTTP3-ERROR", "failed to submit shutdown notice: %s",
