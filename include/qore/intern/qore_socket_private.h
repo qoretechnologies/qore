@@ -1956,6 +1956,8 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     // issue #3633: HTTP encoding to assume
     std::string assume_http_encoding = "ISO-8859-1";
+    //! the name of the encoding that assume_http_encoding resolved to for the code that set it (qore#6826)
+    std::string assume_http_encoding_resolved = "ISO-8859-1";
 
     // socket buffer for buffered reads
     char rbuf[DEFAULT_SOCKET_BUFSIZE];
@@ -2905,16 +2907,23 @@ public:
 
     DLLLOCAL void setAssumedEncoding(const char* str) {
         if (!str || !*str) {
-            assume_http_encoding.clear();
+            assume_http_encoding = assume_http_encoding_resolved = "ISO-8859-1";
             return;
         }
-        // the name is resolved by the code that sets it, which can be code that is not trusted, not by the code that
-        // uses it later (qore#6826)
-        assume_http_encoding = QEM.findCreate(str)->getCode();
+        // the name is kept as given; the encoding is resolved by the code that sets it, which can be code that is not
+        // trusted, not by the code that uses it later (qore#6826)
+        assume_http_encoding = str;
+        assume_http_encoding_resolved = QEM.findCreate(str)->getCode();
     }
 
+    //! returns the assumed encoding as it was set
     DLLLOCAL const char* getAssumedEncoding() const {
         return assume_http_encoding.c_str();
+    }
+
+    //! returns the name of the encoding that the assumed encoding resolved to when it was set
+    DLLLOCAL const char* getAssumedEncodingResolved() const {
+        return assume_http_encoding_resolved.c_str();
     }
 
     DLLLOCAL int getSendTimeout() const {
@@ -4506,7 +4515,7 @@ public:
                     // the character set and the media type, which the HTTP/2 and HTTP/3 servers report in the same
                     // way (qore_get_http_content_type_info(), qore#6318)
                     QoreHttpContentTypeInfo cti = qore_get_http_content_type_info(t,
-                        QEM.findCreate(assume_http_encoding.c_str()));
+                        QEM.findCreate(assume_http_encoding_resolved.c_str()));
                     enc = cti.enc;
                     senc = enc.load()->getCode();
                     if (info) {
@@ -4571,7 +4580,7 @@ public:
 
         if ((flags & CHF_PROCESS)) {
             if (!senc) {
-                enc = QEM.findCreate(assume_http_encoding.c_str());
+                enc = QEM.findCreate(assume_http_encoding_resolved.c_str());
             }
             if (info && have_accept_charset) {
                 acceptcharset = do_accept_charset(accept_charset_list.c_str(), *info);
