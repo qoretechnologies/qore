@@ -16,10 +16,13 @@
 
 %exec-class GlobalErrorLabelTest
 
-#! An error in Test::globalSetUp() or Test::globalTearDown() is reported with the name of its phase (issue #6925)
+#! An error in Test::globalSetUp() or Test::globalTearDown() is reported with the name of its phase (issue #6925), and
+#! the assertions of a thread that one of them starts are counted for it
 /** The child test has one test case; its global setup makes 1 assertion and its global teardown 2, and each raises an
     exception when the \c ERROR_MODE environment variable names it.  The report of each error, the list of failed test
-    cases after the run and the junit report name the phase that raised the exception, with its own assertions.
+    cases after the run and the junit report name the phase that raised the exception, with its own assertions.  With
+    the \c THREADS environment variable set, the global setup also starts a thread that makes 2 assertions and the
+    global teardown one that makes 3, and each waits for its thread and raises the exception that its thread got.
 */
 class GlobalErrorLabelTest inherits QUnit::Test {
     private {
@@ -33,6 +36,7 @@ class ReportedTest inherits QUnit::Test {
     }
     globalSetUp() {
         assertTrue(True, \"setup\");
+        runThread(2);
         if (ENV.ERROR_MODE == \"setup\" || ENV.ERROR_MODE == \"both\") {
             throw \"SETUP-ERROR\", \"the setup failed\";
         }
@@ -40,12 +44,35 @@ class ReportedTest inherits QUnit::Test {
     globalTearDown() {
         assertTrue(True, \"teardown 1\");
         assertTrue(True, \"teardown 2\");
+        runThread(3);
         if (ENV.ERROR_MODE == \"teardown\" || ENV.ERROR_MODE == \"both\") {
             throw \"TEARDOWN-ERROR\", \"the teardown failed\";
         }
     }
     testCase() {
         assertTrue(True, \"case\");
+    }
+    # with THREADS set, starts a thread that makes the assertions and waits for it; raises the exception it got
+    runThread(int n) {
+        if (!ENV.THREADS) {
+            return;
+        }
+        Counter done(1);
+        *hash<ExceptionInfo> thread_ex;
+        background sub () {
+            on_exit done.dec();
+            try {
+                for (int i = 0; i < n; ++i) {
+                    assertTrue(True, \"thread \" + i);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                thread_ex = ex;
+            }
+        }();
+        done.waitForZero();
+        if (thread_ex) {
+            throw thread_ex.err, thread_ex.desc;
+        }
     }
 }
 ";
@@ -69,6 +96,9 @@ class ReportedTest inherits QUnit::Test {
         addTestCase("a setup and a teardown error", \bothErrors());
         addTestCase("no error", \noError());
         addTestCase("junit report", \junitReport());
+        addTestCase("thread assertions in a setup and a teardown error", \threadBothErrors());
+        addTestCase("thread assertions in a teardown error", \threadTeardownError());
+        addTestCase("thread assertions without an error", \threadNoError());
         set_return_value(main());
     }
 
@@ -128,6 +158,36 @@ class ReportedTest inherits QUnit::Test {
 %endif
     }
 
+    threadBothErrors() {
+        # the assertions of the threads are counted for the phase that started them; before, a thread started by the
+        # global setup could make no assertion (TEST-ERROR), and one started by the global teardown made them for the
+        # last test case that ran
+        hash<auto> res = runTest("both", "-v", True);
+        assertEq(2, res.rc, res.out);
+        assertEq(1, countMatches("^ERROR: globalSetUp: 3 assertions$", res.out), res.out);
+        assertEq(1, countMatches("^ERROR: globalTearDown: 5 assertions$", res.out), res.out);
+        assertEq(0, countMatches("TEST-ERROR", res.out), res.out);
+        assertEq((SetupListed, TeardownListed), getFailedList(res.out), res.out);
+        assertEq(1, countMatches("^Ran 3 test cases, 2 errors, 1 skipped \\(8 assertions\\)$", res.out), res.out);
+    }
+
+    threadTeardownError() {
+        hash<auto> res = runTest("teardown", "-v", True);
+        assertEq(1, res.rc, res.out);
+        assertEq(1, countMatches("^Success: case: 1 assertion$", res.out), res.out);
+        assertEq(1, countMatches("^ERROR: globalTearDown: 5 assertions$", res.out), res.out);
+        assertEq((TeardownListed,), getFailedList(res.out), res.out);
+        assertEq(1, countMatches("^Ran 2 test cases, 1 succeeded, 1 error \\(9 assertions\\)$", res.out),
+            res.out);
+    }
+
+    threadNoError() {
+        hash<auto> res = runTest("none", "-v", True);
+        assertEq(0, res.rc, res.out);
+        assertEq(0, countMatches("global(SetUp|TearDown)|TEST-ERROR", res.out), res.out);
+        assertEq(1, countMatches("^Ran 1 test case, 1 succeeded \\(9 assertions\\)$", res.out), res.out);
+    }
+
     #! returns the lines of the list of failed test cases that the summary gives after the reports of the test cases
     private list<string> getFailedList(string out) {
         list<string> lines = out.split("\n");
@@ -163,8 +223,9 @@ class ReportedTest inherits QUnit::Test {
         return (select out.split("\n"), $1.regex(pattern)).size();
     }
 
-    #! runs the child test with the error mode and the arguments; returns its exit status and its output
-    private hash<auto> runTest(string mode, string args) {
+    #! runs the child test with the error mode and the arguments, with threads in its global setup and teardown if
+    #! requested; returns its exit status and its output
+    private hash<auto> runTest(string mode, string args, bool threads = False) {
         string cmd;
         # the library path is set again because a shell can remove it from its environment (macOS)
         foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
@@ -174,6 +235,9 @@ class ReportedTest inherits QUnit::Test {
         }
         # with --format=junit only the standard output is read, as it is the report; otherwise the standard error,
         # where the test cases are announced with -v, is read with it
+        if (threads) {
+            cmd += "THREADS=1 ";
+        }
         cmd += sprintf("ERROR_MODE=%s '%s' '%s' %s%s", mode, TestInterpreter::qore_interpreter(), path, args,
             args == "--format=junit" ? "" : " 2>&1");
         int rc;
