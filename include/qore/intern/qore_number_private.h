@@ -45,6 +45,8 @@
 #define QORE_NUM_ALL_DIGITS -999999
 
 #define QORE_DEFAULT_PREC 128
+// the number of decimal digits of precision beyond the significant digits of a number parsed from a decimal string
+#define QORE_NUM_STRING_GUARD_DIGITS 20
 #define QORE_MAX_PREC 8192
 #ifndef HAVE_MPFR_RNDN
 #define MPFR_RNDN GMP_RNDN
@@ -186,7 +188,41 @@ struct qore_number_private : public qore_number_private_intern {
         mpfr_set_sj(num, i, QORE_MPFR_RND);
     }
 
-    DLLLOCAL qore_number_private(const char* str) : qore_number_private_intern(QORE_MAX(QORE_DEFAULT_PREC, strlen(str)*5)) {
+    //! returns the precision of a number parsed from a decimal string
+    /** The precision is at least QORE_DEFAULT_PREC and 5 bits per character of the string, and at least the bits of
+        the significant digits of the significand plus QORE_NUM_STRING_GUARD_DIGITS digits.  The guard digits make
+        the binary conversion error of a decimal value show as a run of more than QORE_MPFR_ROUND_THRESHOLD_2 0 or 9
+        digits after the digits of the value in the string form of the number, which the display rounding removes, so
+        that the number prints as the decimal value it was parsed from; at 5 bits per character alone, a value of 22
+        to 31 digits, such as "-567890123456789.0123456789" (a decimal128 value read as a number), could print with
+        the noise digits (issue #6824).
+    */
+    DLLLOCAL static mpfr_prec_t getDecimalStringPrec(const char* str) {
+        size_t len = 0;
+        size_t digits = 0;
+        bool significant = false;
+        bool in_exponent = false;
+        for (const char* p = str; *p; ++p, ++len) {
+            if (in_exponent) {
+                continue;
+            }
+            if (*p == 'e' || *p == 'E') {
+                in_exponent = true;
+            } else if (*p >= '0' && *p <= '9' && (significant || *p != '0')) {
+                significant = true;
+                ++digits;
+            }
+        }
+        // log2(10) < 3.322 bits per decimal digit
+        size_t digit_prec = ((digits + QORE_NUM_STRING_GUARD_DIGITS) * 3322 + 999) / 1000;
+        size_t prec = QORE_MAX(len * 5, digit_prec);
+        if (prec > QORE_MAX_PREC) {
+            prec = QORE_MAX_PREC;
+        }
+        return QORE_MAX(QORE_DEFAULT_PREC, static_cast<mpfr_prec_t>(prec));
+    }
+
+    DLLLOCAL qore_number_private(const char* str) : qore_number_private_intern(getDecimalStringPrec(str)) {
         // see if number has an exponent and increase the number's precision if necessary
         const char* p = strchrs(str, "eE");
         if (p) {

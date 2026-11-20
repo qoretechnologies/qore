@@ -356,6 +356,15 @@ bool same = c'a' == "a";        # True
     - \c -500.494n
     - \c 2.35e10n
 
+    @par Precision of a Number from a Decimal String:
+    @anchor number_string_precision A number parsed from a decimal string (an immediate value, a string converted to
+    a number, or a value read from a \c buffer<decimal128>, as from a decimal column of a
+    @ref Qore::SQL::ColumnarResult "ColumnarResult") has at least 128 bits of precision, 5 bits for each character
+    of the string, and the bits of its significant digits plus 20 guard digits, so that it prints as the decimal
+    value it was parsed from (ex: \c -567890123456789.0123456789n).  The display rounding of number strings removes a run of more than 16 \c 0 or
+    \c 9 digits in the fraction, so a value with such a run prints rounded (ex: \c 1.00000000000000000001n prints as
+    \c 1); @ref <number>::toStringRoundTrip() "<number>::toStringRoundTrip()" returns the exact value.
+
     @par Exact Integer Text:
     For integral number values, \c value.toString(NF_Raw) includes every stored integer digit,
     even when the exponent exceeds the value's binary precision. This is useful when exporting
