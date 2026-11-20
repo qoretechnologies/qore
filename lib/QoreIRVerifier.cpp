@@ -2731,6 +2731,11 @@ static void collectLocalsFromFindInstruction(const QoreIRFindInstruction* find_i
     operator branches below; in a debug build an operator that matches none fails an assertion, and
     examples/test/ir/IRSlotWalkOperatorCoverage.qtest checks that every operator class in include/qore/intern
     derives from one of the classes the walk handles.
+
+    \a seen holds the locals and the expressions found so far: an expression found again, such as the argument of
+    a call that is the expression of an instruction of its own and part of the expression of the instruction of the
+    call that takes it, is not walked again, so that the walks of the instructions of nested calls take time in the
+    number of their expressions and not in its square (issue #6872)
 */
 static void collectLocalSlotsFromExpr(const QoreValue& expr,
         std::vector<const LocalVar*>& locals, std::unordered_set<const void*>& seen) {
@@ -2738,7 +2743,7 @@ static void collectLocalSlotsFromExpr(const QoreValue& expr,
         return;
     }
     const AbstractQoreNode* node = expr.getInternalNode();
-    if (!node) {
+    if (!node || !seen.insert(node).second) {
         return;
     }
 
@@ -4561,6 +4566,8 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     // first appears, but a later run of this pass keeps the slots of an earlier one (next_local_slot then starts
     // after all of them)
     uint32_t seen_slots = 0;
+    // the locals and the expressions found by the walks of the instructions' expressions (assign_expr_slots)
+    std::unordered_set<const void*> expr_slots_seen;
     has_generic_add_assign = false;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
@@ -4596,8 +4603,8 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             };
             auto assign_expr_slots = [&](const QoreValue& expr) {
                 std::vector<const LocalVar*> expr_locals;
-                std::unordered_set<const void*> seen;
-                collectLocalSlotsFromExpr(expr, expr_locals, seen);
+                // the locals found by an earlier walk have their slots already
+                collectLocalSlotsFromExpr(expr, expr_locals, expr_slots_seen);
                 // Embedded closures contribute a pointer-ordered capture set. Slot allocation
                 // must use lexical names rather than allocator-dependent collection order.
                 std::stable_sort(expr_locals.begin(), expr_locals.end(),
