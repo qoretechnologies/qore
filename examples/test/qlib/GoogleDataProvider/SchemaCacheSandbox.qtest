@@ -34,6 +34,7 @@ class SchemaCacheSandboxTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("SchemaCacheSandbox", "1.0", \ARGV) {
         addTestCase("a subclass cannot reach the caches", \storageTest());
+        addTestCase("the schema maps are rebuilt only by the base class", \rebuildTest());
         addTestCase("sandboxed code cannot publish a document", \sandboxedTest());
         addTestCase("a trusted subclass publishes a synthetic API, and the first document is kept", \trustedTest());
         set_return_value(main());
@@ -49,6 +50,27 @@ class SchemaCacheSandboxTest inherits QUnit::Test {
                 assertTrue(False, member + ": a subclass reached the cache");
             } catch (hash<ExceptionInfo> ex) {
                 assertEq("PARSE-EXCEPTION", ex.err, sprintf("%s: %s", member, ex.desc));
+            }
+        }
+    }
+
+    rebuildTest() {
+        # the rebuilders write the process-wide schema map of an API from the document that the caller gives them: a
+        # subclass and other code cannot call them
+        foreach string method in (("getInputSchemaMap", "getOutputSchemaMap")) {
+            foreach string src in (
+                    "class T inherits GoogleDataProvider::GoogleDataProviderBase { "
+                    "static set() { " + method + "(\"t6838-rebuild\", {}); } }",
+                    "sub set() { GoogleDataProvider::GoogleDataProviderBase::" + method + "(\"t6838-rebuild\", {}); }") {
+                Program p(PO_NEW_STYLE);
+                try {
+                    p.parse("%modern\n%requires GoogleDataProvider\n" + src, "rebuild");
+                    assertTrue(False, method + ": the rebuilder was reachable: " + src);
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("PARSE-EXCEPTION", ex.err, sprintf("%s: %s", method, ex.desc));
+                    # refused because the method cannot be reached (private:internal), not for another reason
+                    assertRegex(method, ex.desc, ex.desc);
+                }
             }
         }
     }
