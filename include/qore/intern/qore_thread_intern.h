@@ -369,6 +369,9 @@ DLLLOCAL const QoreProgram* runtime_get_module_call_program();
 */
 DLLLOCAL unsigned qore_get_cancel_raise_count();
 
+//! Checks for an explicit thread cancellation during parsing, respecting scope and cancellation deferral.
+DLLLOCAL bool qore_check_thread_cancel(ExceptionSink& xsink, const char* operation);
+
 //! Requests the cancellation of the current thread, scoped to a Program, as a cancellation of another thread
 /** Program::cancelThread() refuses the current thread; a debugger callback that ends the thread while it raises
     another exception (the one that the callback was made for) makes the end of the thread stick with it: the next
