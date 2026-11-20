@@ -471,14 +471,16 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         # the stream that is not read is full, and the client holds the data that its stream window admitted
         fillStream(proto, idle.writer);
         # the other streams of the connection complete
+        int peer_bytes = min(2 * getStreamWindow(proto), 2 * H2Window);
         foreach int i in (xrange(3)) {
             hash<auto> s = openStream(mgr);
+            assertTrue(s.stream.getConnection() === idle.stream.getConnection(), "the reader shares the idle connection");
             BodyReader r(s.stream);
-            s.writer.writeAll(binary(strmul("z", 2 * 1024 * 1024)));
+            s.writer.writeAll(binary(strmul("z", peer_bytes)));
             s.writer.end();
             assertEq(0, r.wait(), sprintf("stream %d ended", i));
             assertNothing(r.err);
-            assertEq(2 * 1024 * 1024, r.bytes, sprintf("stream %d gets every byte", i));
+            assertEq(peer_bytes, r.bytes, sprintf("stream %d gets every byte", i));
         }
     }
 
