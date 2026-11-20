@@ -5499,6 +5499,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     ReferenceHolder<QoreHashNode> ans(xsink);
     // the headers of the last response with lower-case names, as received
     ReferenceHolder<QoreHashNode> resp_headers(xsink);
+    ValueHolder response_protocol(xsink);
+    auto set_response = [&](QoreHashNode* raw) {
+        // Only the manager's response metadata identifies the transport. Keep it across the
+        // redirect loop independently of the response hash exposed to the caller.
+        response_protocol = raw->getKeyValue("protocol").refSelf();
+        resp_headers = get_response_headers_ref(raw);
+        ans = transformConnMgrResponse(raw, xsink);
+    };
     int code = 0;
 
     while (true) {
@@ -5887,8 +5895,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     QoreValue sc_val = h->getKeyValue("status_code");
                     if (!sc_val.isNullOrNothing() && !got_headers) {
                         got_headers = true;
-                        ans = transformConnMgrResponse(h, xsink);
-                        resp_headers = get_response_headers_ref(h);
+                        set_response(h);
                         if (*xsink) {
                             channel->close();
                             return nullptr;
@@ -6134,8 +6141,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // Transform to legacy flat format
                 ReferenceHolder<QoreHashNode> raw_resp(
                     result.get<QoreHashNode>(), xsink);
-                ans = transformConnMgrResponse(*raw_resp, xsink);
-                resp_headers = get_response_headers_ref(*raw_resp);
+                set_response(*raw_resp);
                 if (*xsink) {
                     return nullptr;
                 }
@@ -6313,8 +6319,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 if (!sc_val.isNullOrNothing() && !got_headers) {
                     got_headers = true;
                     // Transform to flat format for redirect/error processing
-                    ans = transformConnMgrResponse(h, xsink);
-                    resp_headers = get_response_headers_ref(h);
+                    set_response(h);
                     if (*xsink) {
                         channel->close();
                         return nullptr;
@@ -6710,8 +6715,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // Check for response headers
                 QoreValue sc_val = h->getKeyValue("status_code");
                 if (!sc_val.isNullOrNothing()) {
-                    ans = transformConnMgrResponse(h, xsink);
-                    resp_headers = get_response_headers_ref(h);
+                    set_response(h);
                     if (*xsink) {
                         channel->close();
                         return nullptr;
@@ -6860,8 +6864,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             }
 
             // Transform to legacy flat format
-            ans = transformConnMgrResponse(*raw_resp, xsink);
-            resp_headers = get_response_headers_ref(*raw_resp);
+            set_response(*raw_resp);
             if (*xsink) {
                 return nullptr;
             }
@@ -7008,20 +7011,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         return nullptr;
     }
 
-    // Refresh http2_active for NEGOTIATE clients: the first successful
-    // response reveals the actual protocol the conn_mgr selected.  Phase 6
-    // of design/conn-mgr-alpn-negotiation.md (Option β).
-    {
-        QoreValue proto = ans->getKeyValue("protocol");
-        if (proto.getType() == NT_STRING) {
-            QoreStringValueHelper proto_str(proto);
-            const char* p = proto_str->c_str();
-            if (!strcmp(p, "h2")) {
-                http2_active = true;
-            } else if (!strcmp(p, "h3")) {
-                http3_active = true;
-            }
-        }
+    if (response_protocol->getType() == NT_STRING) {
+        const char* protocol = response_protocol->get<const QoreStringNode>()->c_str();
+        http2_active = !strcmp(protocol, "h2");
+        http3_active = !strcmp(protocol, "h3");
     }
 
     // Parse Alt-Svc for future HTTP/3 upgrades.  Without this, the conn_mgr
