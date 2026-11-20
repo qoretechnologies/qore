@@ -3339,7 +3339,7 @@ static std::unique_ptr<QoreIRFunction> deserializeDebugIRForContext(
         const uint8_t* debug_ir_end, QoreAOTContext* ctx, const char* name,
         std::string& error) {
     std::unordered_map<std::string, LocalVar*> debug_local_map;
-    for (auto* lv : ctx->all_body_locals) {
+    for (auto* lv : ctx->getDeclaredBodyLocals()) {
         if (lv && lv->getName() && *lv->getName()) {
             debug_local_map[lv->getName()] = lv;
             std::string tpath = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
@@ -3399,7 +3399,7 @@ static std::unique_ptr<QoreIRFunction> deserializeDebugIRForContext(
     const uint8_t* ptr = debug_ir_start;
     std::unique_ptr<QoreIRFunction> debug_ir = deserializeIRFunction(reader, ptr, debug_ir_end,
         ctx->pgm, readExprCb, &debug_local_map, error, ctx->locals, ctx->num_locals,
-        nullptr, true, &ctx->all_body_locals, ctx->local_owner_pgm);
+        nullptr, true, &ctx->getDeclaredBodyLocals(), ctx->local_owner_pgm);
     if (!debug_ir) {
         if (error.empty()) {
             error = "debug IR deserialization failed";
@@ -6830,7 +6830,19 @@ static QoreAOTContext* buildContextFromSlotMap(
         if ((bl_flags & 0x02) && !lv->isReadOnly()) {
             lv->setReadOnly();
         }
-        ctx->all_body_locals.push_back(lv);
+        if ((bl_flags & QORE_AOT_BODY_LOCAL_NATIVE_ONLY) && !lv->closureUse()
+                && bl_slot_id < num_locals && ctx->locals[bl_slot_id] == lv && (lv->getAOTNativeStorage() & LocalVar::AOT_NATIVE_WRITES)) {
+            if (!ctx->native_body_locals) {
+                ctx->native_body_locals = std::make_unique<QoreAOTContext::NativeBodyLocals>();
+                ctx->native_body_locals->declarations = ctx->runtime_body_locals;
+            }
+            ctx->native_body_locals->omitted.push_back(lv);
+        } else {
+            ctx->runtime_body_locals.push_back(lv);
+        }
+        if (ctx->native_body_locals) {
+            ctx->native_body_locals->declarations.push_back(lv);
+        }
     }
 
     // Deserialize regex cases
@@ -13386,20 +13398,21 @@ static void runAOTModuleDelClosure(const std::string& mod_name, const std::strin
             }
             // the compiled body expects its body locals to be instantiated, as a function called by evalTiered
             // expects them; instantiate them around the call as for the init closure
+            const auto& body_locals = ctx->runtime_body_locals;
             int instantiated = 0;
-            for (LocalVar* lv : ctx->all_body_locals) {
+            for (LocalVar* lv : body_locals) {
                 if (lv) {
                     lv->instantiate(QoreParseOptions());
                     ++instantiated;
                 }
             }
             try {
-                fn_ptr(ctx, &xsink);
+                qore_aot_call_body(fn_ptr, ctx, &xsink);
             } catch (const QoreJITException&) {
                 // xsink is already populated at the raise site
             }
             for (int k = instantiated - 1; k >= 0; --k) {
-                LocalVar* lv = ctx->all_body_locals[k];
+                LocalVar* lv = body_locals[k];
                 if (lv) {
                     lv->uninstantiate(&xsink);
                 }
@@ -15017,8 +15030,9 @@ static int executeInitFunctions(
                 // pre-instantiated on the thread's lvstack (mimicking evalTiered's
                 // contract with regular functions). Manually instantiate each
                 // body local before the call and uninstantiate after.
+                const auto& body_locals = info->ctx->runtime_body_locals;
                 int instantiated = 0;
-                for (LocalVar* lv : info->ctx->all_body_locals) {
+                for (LocalVar* lv : body_locals) {
                     if (lv) {
                         lv->instantiate(QoreParseOptions());
                         ++instantiated;
@@ -15038,20 +15052,20 @@ static int executeInitFunctions(
                     LoadTimeParseOptionsHelper lifecycle_po(init_pgm ? init_pgm->getParseOptions()
                         : runtime_get_parse_options());
                     try {
-                        raw_result = info->fn_ptr(info->ctx, &xsink);
+                        raw_result = qore_aot_call_body(info->fn_ptr, info->ctx, &xsink);
                     } catch (const QoreJITException&) {
                         raw_result = 0;
                     }
                 }
                 for (int k = instantiated - 1; k >= 0; --k) {
-                    LocalVar* lv = info->ctx->all_body_locals[k];
+                    LocalVar* lv = body_locals[k];
                     if (lv) {
                         lv->uninstantiate(&xsink);
                     }
                 }
             } else {
                 try {
-                    raw_result = info->fn_ptr(info->ctx, &xsink);
+                    raw_result = qore_aot_call_body(info->fn_ptr, info->ctx, &xsink);
                 } catch (const QoreJITException&) {
                     raw_result = 0;
                 }

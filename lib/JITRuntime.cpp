@@ -13305,17 +13305,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         }
         return;
     }
-    // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
-    // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
-    // are never accessed by AST callbacks).
     bool has_aot = uvb->hasCachedAOT();
     bool has_ir = uvb->getCachedIR() != nullptr;
-    // AOT lowering syncs body locals that need ownership through the runtime
-    // local stack; proven native scalars can remain alloca-only, but AOT frame
-    // metadata does not encode a per-local instantiation subset. The stack slots
-    // therefore still exist for every non-closure body local. The skip
-    // optimization only applies to in-process JIT/IR functions.
-    //
     // AST-only variants (no AOT and no IR cache) own their own LocalVarList via
     // the StatementBlock and instantiate it themselves on entry — pre-instantiating
     // here both has nothing to read from (getASTVisibleBodyLocals() requires
@@ -13325,9 +13316,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         || (!has_aot && uvb->areAllBodyLocalsIROnly());
     static const std::vector<LocalVar*> empty_body_locals;
     const std::vector<LocalVar*>& body_locals = has_aot
-        ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
-        : (has_ir ? uvb->getASTVisibleBodyLocals()  // IR: use filtered list
-                  : empty_body_locals);            // AST-only: nothing to pre-inst here
+        ? uvb->getBodyLocals() : (has_ir ? uvb->getASTVisibleBodyLocals() : empty_body_locals);
     // the Program's own options: a call takes them at run time, not the scoped options of a parse (#6207)
     QoreParseOptions po = uvb->getParseOptions(qore_program_private::getParseOptions(*runtime_pgm));
     if (!skip_body_locals) {
@@ -20420,12 +20409,8 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
         return toBits(QoreValue());
     }
 
-    // Body locals — use getBodyLocals() for AOT (same as execJITWithDeopt).
-    // AOT StoreLocal syncs non-closure body locals through the runtime stack
-    // for ownership, so the stack slots must exist even when the IR classifier
-    // marks every body local IR-only.
     bool skip_body_locals = false;
-    const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+    const std::vector<LocalVar*>& body_locals = ctx->runtime_body_locals;
     // the Program's own options: a call takes them at run time, not the scoped options of a parse (#6207)
     QoreParseOptions po = uvb->getParseOptions(qore_program_private::getParseOptions(*uvb->pgm));
     if (!skip_body_locals) {
@@ -20444,7 +20429,7 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
         QoreNativeCallStackLocation frame(get_thread_data_for_native_calls(), uvb->getCallName(),
             uvb->getStatementBlock());
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        result_bits = self_fn(ctx, xsink);
+        result_bits = qore_aot_call_body(self_fn, ctx, xsink);
     }
 
     // Uninstantiate body locals

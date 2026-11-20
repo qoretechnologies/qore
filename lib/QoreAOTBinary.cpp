@@ -12698,6 +12698,10 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, 
     builder.setBlock(entry);
 
     QoreProgram* pgm = const_cast<UserClosureVariant*>(variant)->pgm;
+    if (pgm && !(static_cast<const UserVariantBase*>(variant)->getParseOptions(pgm->getParseOptions())
+            & PO_ALLOW_DEBUGGER)) {
+        ir->aot_private_root_scope = sb->getLVList();
+    }
     // the IR of a closure runs in the IR interpreter once a debugger is attached, so in a Program that can be debugged
     // it has the debugger's events of its statements, as the debug IR of a function (#5816); without a debugger, the
     // closure runs its native code
@@ -15134,7 +15138,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         for (auto& bl : func.slot_ids.body_locals) {
             writer.writeStringRef(bl.name.c_str());
             writer.writeStringRef(bl.type_path.c_str());
-            writer.writeU8((bl.is_closure ? 0x01 : 0) | (bl.read_only ? 0x02 : 0));
+            writer.writeU8((bl.is_closure ? 0x01 : 0) | (bl.read_only ? 0x02 : 0)
+                | (bl.native_only ? QORE_AOT_BODY_LOCAL_NATIVE_ONLY : 0));
             writer.writeU32(bl.slot_id);
         }
         traceEntryOffset("after body-locals");
