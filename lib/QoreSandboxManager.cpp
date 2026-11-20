@@ -2125,7 +2125,7 @@ int qore_check_process_wide_registration(const char* what, ExceptionSink* xsink)
         return 0;
     }
     xsink->raiseException("SANDBOX-REGISTRATION-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
-        "%s: a process-wide registry is shared by the code of every Program in the process", what);
+        "%s: a process-wide registry or setting is shared by the code of every Program in the process", what);
     return -1;
 }
 

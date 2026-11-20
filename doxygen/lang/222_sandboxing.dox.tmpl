@@ -467,6 +467,10 @@ authenticate();
     - the async I/O loggers and callbacks: @ref Qore::set_async_io_logger() "set_async_io_logger()",
       @ref Qore::AsyncIoController::setLogger() "AsyncIoController::setLogger()" and
       @ref Qore::AsyncIoController::setTimerCallback() "AsyncIoController::setTimerCallback()"
+    - the settings of the process-wide async I/O controller, which apply to the operations of every caller:
+      @ref Qore::AsyncIoController::setAutostop() "AsyncIoController::setAutostop()",
+      @ref Qore::AsyncIoController::setMaxCallbackWorkers() "AsyncIoController::setMaxCallbackWorkers()" and
+      @ref Qore::AsyncIoController::setMaxIoThreads() "AsyncIoController::setMaxIoThreads()"
     - the callbacks of the line editor of the \c linenoise module
     - the module blacklist: @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" and
       @ref Qore::qore_add_module_to_blacklist_ex() "qore_add_module_to_blacklist_ex()"
@@ -475,8 +479,9 @@ authenticate();
     The registries, lookups, resolvers, serializers, codecs, schemas and type caches of the standard modules apply
     the same rule with exceptions of their own, which each API documents (see @ref sandbox_module_state); the other
     callback registries of the standard modules raise \c SANDBOX-REGISTRATION-ERROR, for example the child provider
-    generators that some data provider modules keep, the logger of the process-wide \c AsyncSocketIo controller and
-    the catalog change listeners of \c DataProvider (\c DATA-PROVIDER-LISTENER-ERROR).  The factory registries
+    generators that some data provider modules keep, the logger and the settings of the process-wide
+    \c AsyncSocketIo controller and the catalog change listeners of \c DataProvider (\c DATA-PROVIDER-LISTENER-ERROR).
+    The factory registries
     apply the rule as well: the LLM, RAG, media and speech provider factories (\c QoreLlmTypes, \c QoreRagTypes,
     \c QoreMediaUtils and \c QoreSpeechUtils), the child data providers that data provider modules register, and
     the client identity providers, server host key providers and host key stores of the \c sshutil module's
@@ -488,10 +493,11 @@ authenticate();
     @ref Qore::SandboxManager::checkProcessWideRegistration() "SandboxManager::checkProcessWideRegistration()" before
     it changes it (\c qore_check_process_wide_registration() in the C++ API,
     \c QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION); where the registration is only a side effect of an operation that
-    the caller may perform, such as an \c HttpServer setting its logger on the process-wide async I/O controller, it
-    leaves the registration out when
+    the caller may perform, such as an \c HttpServer setting its logger on the process-wide async I/O controller or
+    an \c AsyncSocketIoController created with an autostop flag setting it on that controller, it leaves the
+    registration out when
     @ref Qore::SandboxManager::isProcessWideRegistrationAllowed() "SandboxManager::isProcessWideRegistrationAllowed()"
-    returns @ref False.
+    returns @ref False, and the object then uses the process's setting.
 
     @since %Qore 3.0
 
@@ -1619,7 +1625,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
     |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
-    |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry"
+    |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality
 

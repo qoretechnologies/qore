@@ -90,6 +90,10 @@ module AsyncSocketIo {
     - \c AsyncSocketIoController::setLogger() sets the logger of the process-wide controller, so sandboxed code
       cannot call it (\c SANDBOX-REGISTRATION-ERROR; see @ref sandbox_process_wide_registries)
       (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>)
+    - \c AsyncSocketIoController::setAutostop() and \c setMaxCallbackWorkers() change settings of the process-wide
+      controller, so sandboxed code cannot call them (\c SANDBOX-REGISTRATION-ERROR), and a controller that sandboxed
+      code creates with an autostop flag uses the process's setting (see @ref sandbox_process_wide_registries)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6836">issue 6836</a>)
     - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" runs its operations in the native
       @ref Qore::AsyncIoController "AsyncIoController" with the operating system's event loop (epoll on Linux, kqueue
       on macOS and BSD), with I/O threads, callback worker threads and timers
