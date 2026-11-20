@@ -2413,6 +2413,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::Serializable::deserialize() "Serializable::deserialize()" reads serialized data in a process whose
+      @ref default_encoding "default character encoding" is not \c UTF-8, where it raised
+      \c DESERIALIZATION-ERROR for the header (<tt>expecting 'QS', got 'QS'</tt>; issue #6722)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)
