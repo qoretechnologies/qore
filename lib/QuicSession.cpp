@@ -3555,7 +3555,15 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
             sbd.data.size(), sbd.sent_bufs.size());
         printd(5, "QuicSession::sendStreamData() stream_id=" QLLD " BACKPRESSURE pending=%d\n",
             (int64)stream_id, (int)sbd.data.size());
+        if (sbd.send_limit) {
+            sbd.refused_len = len;
+        }
         return 1;
+    }
+    // data taken within the limit ends the wait for room for the refused data; a control frame staged past the limit
+    // does not
+    if (data && len > 0 && !ignore_limit) {
+        sbd.refused_len = 0;
     }
 
     // Append new data to staging buffer.
@@ -3689,8 +3697,13 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
         if (it == streaming_body_data_.end()) {
             return -1;  // stream not found
         }
-        if (it->second.data.size() <= QUIC_MAX_STREAM_BODY) {
-            return 0;  // buffer already below threshold
+        const QuicStreamingBodyData& sbd = it->second;
+        // a stream with its own limit is drained when the data it refused last fits, as sendStreamData() then takes
+        // it (issue #6907); otherwise when the staged data is under the backpressure threshold
+        if (sbd.send_limit
+            ? (sbd.data.empty() || sbd.data.size() + sbd.refused_len <= sbd.send_limit)
+            : sbd.data.size() <= QUIC_MAX_STREAM_BODY) {
+            return 0;
         }
     }
 

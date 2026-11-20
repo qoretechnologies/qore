@@ -221,6 +221,9 @@ struct QuicStreamingBodyData {
     bool no_end_stream = false;      //!< Keep stream open after data exhausted (CONNECT tunnels)
     //! the limit of the staged data set with QuicSession::setStreamSendLimit(), 0 for the default
     size_t send_limit = 0;
+    //! the length of the data that the stream's own limit refused last, 0 once data was taken again: the stream is
+    //! drained when that data fits (waitForStreamDrain(); issue #6907)
+    size_t refused_len = 0;
     //! the latest WebSocket pong kept while the staged data was over its limit (issue #5900)
     std::vector<uint8_t> pending_pong;
     //! true once a WebSocket close frame was staged past the limit (once per stream; issue #5900)

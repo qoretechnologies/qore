@@ -1247,6 +1247,9 @@ private:
 
     //! Per-stream limits of the data buffered for sending, set with setStreamSendLimit(); erased with the stream
     std::unordered_map<int32_t, size_t> stream_send_limits;
+    //! the length of the data that a stream's own limit refused last (none once data was taken again): the stream is
+    //! drained when that data fits (waitForStreamDrain(); issue #6907)
+    std::unordered_map<int32_t, size_t> stream_refused_len;
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int32_t, size_t> deferred_stream_credit;
 
