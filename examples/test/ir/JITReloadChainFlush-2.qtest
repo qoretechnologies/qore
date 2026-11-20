@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes, and in qcc executables
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
 # test-platform: macos - the JIT and AOT code generation of the flush of the reload chains of a large function
 # Copyright 2026 Qore Technologies, s.r.o.
 
@@ -17,8 +17,7 @@
 
 %exec-class JITReloadChainFlushPart2
 
-#! runs part 2 of 3 of the cases of JITReloadChainFlushBase: the results in every mode, with the inline flush and in
-#! executables made by qcc
+#! runs part 2 of 5 of the cases of JITReloadChainFlushBase: the results in every mode
 class JITReloadChainFlushPart2 inherits JITReloadChainFlushBase {
     constructor() : JITReloadChainFlushBase("JITReloadChainFlushPart2", 2) {
     }
