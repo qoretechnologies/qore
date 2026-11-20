@@ -159,9 +159,8 @@ class ReportedTest inherits QUnit::Test {
     }
 
     threadBothErrors() {
-        # the assertions of the threads are counted for the phase that started them; before, a thread started by the
-        # global setup could make no assertion (TEST-ERROR), and one started by the global teardown made them for the
-        # last test case that ran
+        # the assertions of the threads are counted for the phase that started them; before, the global setup fails
+        # and no test case runs, so neither thread could make an assertion (TEST-ERROR)
         hash<auto> res = runTest("both", "-v", True);
         assertEq(2, res.rc, res.out);
         assertEq(1, countMatches("^ERROR: globalSetUp: 3 assertions$", res.out), res.out);
@@ -172,6 +171,7 @@ class ReportedTest inherits QUnit::Test {
     }
 
     threadTeardownError() {
+        # before, the thread started by the global teardown made its assertions for the test case that ran last
         hash<auto> res = runTest("teardown", "-v", True);
         assertEq(1, res.rc, res.out);
         assertEq(1, countMatches("^Success: case: 1 assertion$", res.out), res.out);
