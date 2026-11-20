@@ -325,6 +325,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   in child processes that set their own execution modes and in a qcc executable, as a module is loaded once
         #   in a process
         # - globalsetup-stop (#6659): the tests whose global setup stops run in child processes of its own binary
+        # - global-error-label (#6925): the test whose global setup or teardown raises an exception runs in child
+        #   processes of its own binary started without an execution mode
         # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
         # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
@@ -432,6 +434,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
                                  "examples/test/qlib/TerminalIoRestrictedLoad/TerminalIoRestrictedLoad.qtest",
                                  "examples/test/qore/classes/Program/entry-cpp-exception/entry-cpp-exception.qtest",
+                                 "examples/test/qlib/QUnit/global-error-label.qtest",
                                  "examples/test/qlib/QUnit/globalsetup-stop.qtest",
                                  "examples/test/qlib/QUnit/result-counts.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding.qtest",
