@@ -125,6 +125,7 @@ class SignalTest inherits QUnit::Test {
     constructor() : QUnit::Test("Signal test", "1.0") {
         addTestCase("signal neg test", \signalNegTest());
         addTestCase("a signal without a handler, also after its handler is removed", \signalDispositionTest());
+        addTestCase("the runner records the sender of a terminating signal", \signalSenderTest());
         addTestCase("reserved signals have no handlers", \signalReservedTest());
         addTestCase("signal test", \signalTest());
         addTestCase("signal handler re-register", \signalReregisterTest());
@@ -308,6 +309,47 @@ class SignalTest inherits QUnit::Test {
         string out = backquote(cmd);
         *list<string> m = (out =~ x/rc=([0-9]+)/);
         return {"out": out, "rc": int(m[0])};
+    }
+
+    signalSenderTest() {
+        if (PlatformOS != "Linux" || !HAVE_SIGNAL_HANDLING || startedWithSignalIgnored(SIGTERM)) {
+            testSkip("requires the default Linux SIGTERM disposition");
+        }
+        TmpDir dir("qore-signal-sender-");
+        string ready = dir.path + "/ready";
+        assertEq(0, mkfifo(ready));
+        TmpFile script("qore-signal-sender-", ".q");
+        script.file.write("%modern\n"
+            "stdout.write(sprintf(\"%d\\n\", getpid()));\n"
+            "Counter guard(1); guard.waitForZero(30s);\n");
+        script.file.close();
+
+        # Opening stdout before exec also gives read EOF if the interpreter fails to start.
+        # Signal only the child this shell launched, once its Qore code has reported ready.
+        string qore = TestInterpreter::qore_interpreter();
+        string launch = sprintf("'%s' '%s' > '%s' & child=$!; "
+            "if read -r ready < '%s' && [ \"$ready\" = \"$child\" ]; then kill -TERM \"$child\"; fi; "
+            "wait \"$child\"; echo status=$? target=$child sender=$$", qore, script.path, ready, ready);
+        string out = backquote("{ QORE_TEST_SIGNAL_PARENT=$$ " + launch + "; } 2>&1");
+        list<string> ids = out =~ x/status=143 target=(\d+) sender=(\d+)/;
+        assertTrue(boolean(ids), out);
+        assertTrue(out.contains(sprintf("TEST SIGNAL: terminated by signal (external): pid %s received SIGTERM "
+            "from pid %s uid %d; exiting 143", ids[0], ids[1], getuid())), out);
+
+        # Helpers that inherit the runner's environment have a different parent.
+        out = backquote("{ QORE_TEST_SIGNAL_PARENT=0 " + launch + "; } 2>&1");
+        assertFalse(out =~ /TEST SIGNAL/, out);
+        assertRegex("status=143", out);
+
+        out = backquote(sprintf("QORE_TEST_SIGNAL_PARENT=$$ '%s' -e "
+            "'kill(getpid(), SIGTERM); Counter guard(1); guard.waitForZero(30s);' 2>&1; echo status=$?", qore));
+        assertRegex("terminated by signal \\(self\\)", out);
+        assertFalse(out.contains("terminated by signal (external)"), out);
+        assertRegex("status=143", out);
+
+        # A child that exits with the same number received no signal.
+        out = backquote(sprintf("QORE_TEST_SIGNAL_PARENT=$$ '%s' -e 'exit(143);' 2>&1; echo status=$?", qore));
+        assertEq("status=143\n", out);
     }
 
     # removing a handler returns the signal to the state that it had before the handler was set

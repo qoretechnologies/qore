@@ -1536,16 +1536,19 @@ run_with_watchdog() {
     # a parallel run writes the output of the test to its log (TEST_LOG).  The test runs in a process group of its
     # own (see exec_in_test_group()); the mark is in its environment from the start, so that the process has it also
     # before the command that makes the group has replaced itself with the test
+    # Linux libqore records the kernel's sender PID when the test's default signal handler exits with
+    # 128 + signal. The parent PID makes the diagnostic specific to the test itself.
+    QORE_TEST_SIGNAL_PARENT="$RUNNER_SHELL_PID"
     if [ -n "$TEST_LOG" ]; then
         (
             QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" QORE_TEST_PROCESS_MARK="$TEST_PROCESS_MARK"
-            export QORE_TEST_EVENT_FIFO QORE_TEST_PROCESS_MARK
+            export QORE_TEST_EVENT_FIFO QORE_TEST_PROCESS_MARK QORE_TEST_SIGNAL_PARENT
             exec_in_test_group "$@"
         ) 4>&- >> "$TEST_LOG" 2>&1 &
     else
         (
             QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" QORE_TEST_PROCESS_MARK="$TEST_PROCESS_MARK"
-            export QORE_TEST_EVENT_FIFO QORE_TEST_PROCESS_MARK
+            export QORE_TEST_EVENT_FIFO QORE_TEST_PROCESS_MARK QORE_TEST_SIGNAL_PARENT
             exec_in_test_group "$@"
         ) 4>&- &
     fi
