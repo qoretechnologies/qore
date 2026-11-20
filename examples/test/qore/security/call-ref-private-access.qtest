@@ -43,6 +43,39 @@ class O {
     code ownRef(string name) { return self.getCallReference(name); }
 }
 
+#! a parent class with a private method and a private static method, and two subclasses of it (qore#6806)
+class A6 {
+    private string m() { return "A6::m"; }
+    private static string ps() { return "A6::ps"; }
+}
+
+class D6 inherits A6 {
+}
+
+#! a sibling of D6: its code may access A6, but not D6
+class E6 inherits A6 {
+    static string direct(D6 d) {
+        try {
+            return d.m();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    static code refOf(object o, string name) {
+        return o.getCallReference(name);
+    }
+
+    static code closureRefOf(object o, string name) {
+        code c = code sub () { return o.getCallReference(name); };
+        return c();
+    }
+
+    code ownRef(string name) {
+        return self.getCallReference(name);
+    }
+}
+
 #! a class outside the hierarchy
 class X {
     static code refOf(object o, string name) { return o.getCallReference(name); }
@@ -68,6 +101,7 @@ class CallRefPrivateAccessTest inherits QUnit::Test {
         addTestCase("the code of the hierarchy", \hierarchyTest());
         addTestCase("sandboxed code", \sandboxTest());
         addTestCase("the object's own private method", \ownPrivateTest());
+        addTestCase("a class-scoped name through an object of another subclass", \siblingScopedTest());
         set_return_value(main());
     }
 
@@ -113,6 +147,22 @@ class CallRefPrivateAccessTest inherits QUnit::Test {
         C c();
         assertEq("P::priv", c.hierRef("priv")());
         assertEq("P::priv", c.ownRef("priv")());
+    }
+
+    siblingScopedTest() {
+        D6 d();
+        # a method call from E6's code on a D6 object cannot call A6's private method
+        assertEq("METHOD-IS-PRIVATE", E6::direct(d));
+        # nor can a call reference by name, scoped or not, directly or through a closure
+        assertThrows("CALL-REFERENCE-ERROR", \E6::refOf(), (d, "A6::m"));
+        assertThrows("CALL-REFERENCE-ERROR", \E6::refOf(), (d, "m"));
+        assertThrows("CALL-REFERENCE-ERROR", \E6::closureRefOf(), (d, "A6::m"));
+        # a static method does not depend on the object: E6's code may call A6's private static method
+        assertEq("A6::ps", E6::refOf(d, "A6::ps")());
+        # E6's code may take the reference through an object of its own class
+        E6 e();
+        assertEq("A6::m", e.ownRef("A6::m")());
+        assertEq("A6::m", E6::refOf(e, "A6::m")());
     }
 
     ownPrivateTest() {

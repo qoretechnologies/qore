@@ -1629,14 +1629,25 @@ static bool runtime_call_ref_ctx_may_access(const qore_class_private* cls) {
     kept, a method that it may call (qore_class_private::runtimeContextCanCallMethod(), the rule of the variant search
     of a call); a call reference is not made to another method (qore#6782, qore#6759)
 
+    @param obj_cls the class of the object that the reference is bound to, if any: a normal method is looked up with
+    the caller's class context only if the context may also access this class, as a method call on the object does
+    (qore_class_private::getMethodForEval()), so a class-scoped name cannot reach a private method of a parent class
+    through an object of another branch of the hierarchy (qore#6806); a static method does not depend on the object
+
     @return the method found, or nullptr if there is no method of the name
 */
 static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* pcls, const char* name,
-        ClassAccess& access, bool& callable) {
+        ClassAccess& access, bool& callable, const qore_class_private* obj_cls = nullptr) {
     const qore_class_private* class_ctx = runtime_call_ref_ctx(pcls);
-    const QoreMethod* meth = pcls->runtimeFindCommittedMethodForEval(name, access, class_ctx);
+    const qore_class_private* normal_ctx = class_ctx;
+    if (normal_ctx && obj_cls && obj_cls != pcls && !obj_cls->runtimeCheckPrivateClassAccess(normal_ctx)) {
+        normal_ctx = nullptr;
+    }
+    const QoreMethod* meth = pcls->runtimeFindCommittedMethodForEval(name, access, normal_ctx);
+    const qore_class_private* ctx = normal_ctx;
     if (!meth) {
         meth = pcls->runtimeFindCommittedStaticMethod(name, access, class_ctx);
+        ctx = class_ctx;
     }
     if (!meth) {
         callable = false;
@@ -1644,11 +1655,11 @@ static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* 
     }
     if (access > Public) {
         // the method that a call of the name makes from here, if the caller cannot call the method found first
-        meth = pcls->runtimeFindCallableCommittedMethod(name, meth, access, class_ctx);
+        meth = pcls->runtimeFindCallableCommittedMethod(name, meth, access, ctx);
     }
     // a method found with a class context does not have the access of the method of the class itself that the
     // context may access (see qore_class_private::runtimeFindCommittedMethodForEval()), so the method is checked
-    callable = access == Public || (class_ctx && qore_class_private::runtimeContextCanCallMethod(*meth, class_ctx));
+    callable = access == Public || (ctx && qore_class_private::runtimeContextCanCallMethod(*meth, ctx));
     return meth;
 }
 
@@ -1719,7 +1730,9 @@ QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* iden
             const qore_class_private* pcls = qore_class_private::get(*cls);
             ClassAccess access;
             bool callable;
-            const QoreMethod* meth = runtime_call_ref_find_method(pcls, ns.getIdentifier(), access, callable);
+            // the object's class is checked as for a method call on the object (qore#6806)
+            const QoreMethod* meth = runtime_call_ref_find_method(pcls, ns.getIdentifier(), access, callable,
+                self ? qore_class_private::get(*self->getClass()) : nullptr);
             //printd(5, "get_call_reference_intern() '%s' -> cls: '%s' ctx: '%s' meth: %p\n", name->c_str(), cls->getName(), class_ctx ? class_ctx->name.c_str() : "n/a", meth);
             if (meth) {
                 return do_method_intern(self, meth, access, callable, name->c_str(), pcls, xsink);

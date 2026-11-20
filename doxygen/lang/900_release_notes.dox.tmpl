@@ -2459,6 +2459,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a call reference obtained by a class-scoped method name for an object applies the access rule of a method call
+      on the object, where code of a subclass could get a reference to a parent class's private method through an
+      object of another subclass (<a href="https://github.com/qoretechnologies/qore/issues/6806">issue 6806</a>)
     - a call reference obtained by name for a method (\c getCallReference(), @ref Qore::get_call_reference()
       "get_call_reference()") applies the access rules of a method call from the same context, where it could give
       a parent class's private method to code outside the class hierarchy
