@@ -571,7 +571,10 @@ int Http2Session::sendConnectionPrefaceNonBlocking(ExceptionSink* xsink) {
         iv.push_back({NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, local_settings.max_concurrent_streams});
         iv.push_back({NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, local_settings.initial_window_size});
         iv.push_back({NGHTTP2_SETTINGS_MAX_FRAME_SIZE, local_settings.max_frame_size});
-        iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, local_settings.max_header_list_size});
+        // the limit that this side enforces on the header list that it receives (qore#6867)
+        iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE,
+            local_settings.max_header_list_size == UINT32_MAX ? getMaxHeaderListSize()
+                : local_settings.max_header_list_size});
         // RFC 8441: Enable extended CONNECT protocol for WebSocket over HTTP/2
         if (local_settings.enable_connect_protocol) {
             iv.push_back({NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, local_settings.enable_connect_protocol});
@@ -626,7 +629,8 @@ int Http2Session::submitSettings(const Http2Settings& settings, ExceptionSink* x
     iv.push_back({NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, settings.max_concurrent_streams});
     iv.push_back({NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, settings.initial_window_size});
     iv.push_back({NGHTTP2_SETTINGS_MAX_FRAME_SIZE, settings.max_frame_size});
-    iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, settings.max_header_list_size});
+    iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE,
+        settings.max_header_list_size == UINT32_MAX ? getMaxHeaderListSize() : settings.max_header_list_size});
     // RFC 8441: Enable extended CONNECT protocol for WebSocket over HTTP/2
     if (settings.enable_connect_protocol) {
         iv.push_back({NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, settings.enable_connect_protocol});
@@ -2997,6 +3001,11 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     return static_cast<ssize_t>(to_copy);
 }
 
+uint32_t Http2Session::getMaxHeaderListSize() const {
+    size_t max_size = sock ? sock->getMaxHeaderSize() : QORE_MAX_HEADER_SIZE;
+    return max_size > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(max_size);
+}
+
 int Http2Session::onHeaderCallback(nghttp2_session* session, const nghttp2_frame* frame,
         const uint8_t* name, size_t namelen, const uint8_t* value, size_t valuelen,
         uint8_t flags, void* user_data) {
@@ -3004,6 +3013,19 @@ int Http2Session::onHeaderCallback(nghttp2_session* session, const nghttp2_frame
     Http2StreamInfo* stream = h2->getOrCreateStream(frame->hd.stream_id);
     if (!stream) {
         return 0;
+    }
+
+    // a header list larger than the limit of the socket is not kept: nghttp2 rejects the stream with RST_STREAM,
+    // and goes on decoding the header block, as the connection's header compression state needs it (qore#6867)
+    stream->header_list_size += namelen + valuelen + 32;
+    if (stream->header_list_size > h2->getMaxHeaderListSize()) {
+        if (!stream->header_list_too_large) {
+            stream->header_list_too_large = true;
+            // free what was kept of the header list
+            stream->headers.clear();
+            stream->trailers.clear();
+        }
+        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
 
     std::string header_name(reinterpret_cast<const char*>(name), namelen);
@@ -3083,6 +3105,10 @@ int Http2Session::onBeginHeadersCallback(nghttp2_session* session,
             // For server: Create stream for incoming request
             // For client: Stream already exists for our request
             h2->getOrCreateStream(frame->hd.stream_id);
+        }
+        // the header list of each header block counts from zero (qore#6867)
+        if (Http2StreamInfo* stream = h2->getStream(frame->hd.stream_id)) {
+            stream->header_list_size = 0;
         }
     }
 

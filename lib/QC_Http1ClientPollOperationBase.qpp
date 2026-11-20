@@ -35,6 +35,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/SocketRecvHttpLinePollOperation.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -2073,7 +2074,8 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             releaseCurrentOp(xsink);
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-            setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
+            setCurrentOp(new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+                "chunk size line"));
             if (*xsink) {
                 releaseCurrentOp(xsink);
                 return nullptr;
@@ -2320,9 +2322,11 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkSize(ExceptionSink* x
         if (chunk_size == 0) {
             // Last chunk - read trailing CRLF (or trailers followed by CRLF)
             releaseCurrentOp(xsink);
+            trailer_bytes = 0;
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-            setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
+            setCurrentOp(new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+                "chunked body trailer"));
             if (*xsink) {
                 releaseCurrentOp(xsink);
                 return nullptr;
@@ -2516,7 +2520,8 @@ QoreHashNode* Http1ClientPollOperationPriv::readNextChunkSize(ExceptionSink* xsi
     releaseCurrentOp(xsink);
     sock_obj->ref();
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-    setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
+    setCurrentOp(new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+        "chunk size line"));
     if (*xsink) {
         releaseCurrentOp(xsink);
         return nullptr;
@@ -2596,22 +2601,16 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkCrlf(ExceptionSink* x
                 }
                 return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
             }
-            // Trailer line - kept, then the next line is read
+            // Trailer line - kept, then the next line is read; the lines of the section count together against the
+            // maximum header size of the socket (issue #6867)
             printd(5, "Http1ClientPollOperationPriv::handleRecvChunkCrlf() trailer line\n");
             response_trailer_text.append(line->c_str(), line->size());
-            // the trailer section is kept in memory until it ends, so its size is limited as a header's is meant to
-            // be; the size of a single line is not limited yet (issue #6867)
-            if (response_trailer_text.size() > QORE_MAX_HEADER_SIZE) {
-                QoreString desc;
-                desc.sprintf("the trailer section of the chunked response body exceeds the maximum size of %d bytes",
-                    QORE_MAX_HEADER_SIZE);
-                setError("HTTP1-RECV-ERROR", desc.c_str(), xsink);
-                return nullptr;
-            }
+            trailer_bytes += line->size();
             releaseCurrentOp(xsink);
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-            setCurrentOp(new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true));
+            setCurrentOp(new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+                "chunked body trailer", trailer_bytes));
             if (*xsink) {
                 releaseCurrentOp(xsink);
                 return nullptr;

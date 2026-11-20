@@ -752,6 +752,8 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
         if (cached_stream->request_rejected) {
             // the peer did not process the request; it can be sent again on another connection
             err_code = "HTTP3-REQUEST-REJECTED";
+        } else if (cached_stream->header_too_large) {
+            err_code = "HTTP-HEADER-TOO-LARGE";
         } else if (cached_stream->body_too_large) {
             err_code = "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE";
         } else if (cached_stream->error_message.find("exceeded maximum size")
@@ -1103,6 +1105,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
     // does not keep the socket
     quic_session->setMaxResponseBodySize(
         sock->priv->socket->priv->max_response_body_size.load(std::memory_order_relaxed));
+    quic_session->setMaxHeaderListSize(sock->priv->socket->priv->getMaxHeaderSize());
 
     // Enforce the handshake deadline if one was configured. QUIC runs over UDP,
     // so a stalled handshake gets no OS-level feedback (unlike TCP connect which
@@ -1766,7 +1769,8 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
     h->setKeyValue("stream_id", cached_stream_->stream->stream_id, nullptr);
 
     if (!cached_stream_->stream->error_message.empty()) {
-        h->setKeyValue("err", new QoreStringNode("QUIC-BODY-TOO-LARGE"), nullptr);
+        h->setKeyValue("err", new QoreStringNode(cached_stream_->stream->header_too_large ? "HTTP-HEADER-TOO-LARGE"
+            : "QUIC-BODY-TOO-LARGE"), nullptr);
         h->setKeyValue("desc", new QoreStringNode(cached_stream_->stream->error_message), nullptr);
     }
 

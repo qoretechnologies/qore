@@ -56,6 +56,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/SocketRecvHttpLinePollOperation.h"
 #include "qore/intern/HttpFastRoutes.h"
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRequest.h"
@@ -2034,10 +2035,13 @@ public:
                 active_state, done_state), action(action), size(size) {
     }
 
+    //! @param limit_what if set, the data read is an HTTP section whose size is limited with the maximum header size
+    //! of the socket, and this is what it is, for the exception: "header" (qore#6867)
     DLLLOCAL QoreSocketControllerRecvPollOperation(QoreSocket* sock, const char* pattern, size_t pattern_size,
-            bool to_string, const char* active_state, const char* done_state)
+            bool to_string, const char* active_state, const char* done_state, const char* limit_what = nullptr)
             : QoreSocketControllerDeferredPollOperation(sock, sock->getEncoding(), to_string, true,
-                active_state, done_state), action(Action::RecvUntilBytes), pattern(pattern, pattern_size) {
+                active_state, done_state), action(Action::RecvUntilBytes), pattern(pattern, pattern_size),
+                limit_what(limit_what) {
     }
 
 protected:
@@ -2049,8 +2053,16 @@ protected:
                 return sock->startRecvPacket(xsink);
             case Action::RecvSome:
                 return sock->startRecvSome(xsink, size);
-            case Action::RecvUntilBytes:
-                return sock->startRecvUntilBytes(xsink, pattern.c_str(), pattern.size());
+            case Action::RecvUntilBytes: {
+                std::unique_ptr<AbstractPollState> state(sock->startRecvUntilBytes(xsink, pattern.c_str(),
+                    pattern.size()));
+                if (state && limit_what
+                    && qore_socket_private::limitHttpRead(xsink, state.get(), sock->getMaxHeaderSize(), 0,
+                        limit_what)) {
+                    return nullptr;
+                }
+                return state.release();
+            }
             default:
                 assert(false);
         }
@@ -2077,6 +2089,8 @@ private:
     Action action;
     size_t size = 0;
     std::string pattern;
+    //! if set, what is read is an HTTP section with the size limit of the socket (see the constructor)
+    const char* limit_what = nullptr;
 };
 
 class QoreSocketControllerReadServerSentEventPollOperation : public SocketPollOperationBase {
@@ -4303,7 +4317,7 @@ static QoreStringNode* qore_socket_exec_recv_string(QoreSocket* s, qore_offset_t
 }
 
 static QoreStringNode* qore_socket_exec_recv_until_string(QoreSocket* s, const char* pattern, size_t pattern_size,
-        int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
+        int timeout_ms, const char* owner_name, ExceptionSink* xsink, const char* limit_what = nullptr) {
     qore_socket_private* priv = qore_socket_private::get(*s);
     QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
     if (!io_guard) {
@@ -4311,8 +4325,8 @@ static QoreStringNode* qore_socket_exec_recv_until_string(QoreSocket* s, const c
     }
 
     ValueHolder result(qore_socket_exec_poll(s,
-        new QoreSocketControllerRecvPollOperation(s, pattern, pattern_size, true, "receiving", "received"),
-        timeout_ms, owner_name, "received", xsink), xsink);
+        new QoreSocketControllerRecvPollOperation(s, pattern, pattern_size, true, "receiving", "received",
+            limit_what), timeout_ms, owner_name, "received", xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -4931,7 +4945,11 @@ public:
 
         if (!poll_state) {
             poll_state.reset(sock->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+            if (!*xsink && poll_state) {
+                qore_socket_private::limitHttpRead(xsink, poll_state.get(), sock->getMaxHeaderSize(), 0, "header");
+            }
             if (*xsink || !poll_state) {
+                poll_state.reset();
                 done = true;
                 return nullptr;
             }
@@ -5080,7 +5098,7 @@ static QoreHashNode* qore_socket_exec_read_http_header(QoreSocket* s, QoreHashNo
 static QoreStringNode* qore_socket_exec_read_http_header_string(QoreSocket* s, int timeout_ms, int source,
         ExceptionSink* xsink) {
     SimpleRefHolder<QoreStringNode> raw(qore_socket_exec_recv_until_string(s, "\r\n\r\n", 4, timeout_ms,
-        "readHTTPHeaderString", xsink));
+        "readHTTPHeaderString", xsink, "header"));
     if (*xsink) {
         return nullptr;
     }
@@ -5267,6 +5285,14 @@ private:
             case State::RecvTrailer:
                 current_read_to_string = true;
                 poll_state.reset(sock->startRecvUntilBytes(xsink, "\r\n", 2));
+                if (!*xsink && poll_state) {
+                    // the lines of the trailer section count together against the limit (qore#6867)
+                    if (qore_socket_private::limitHttpRead(xsink, poll_state.get(), sock->getMaxHeaderSize(),
+                            state == State::RecvTrailer ? trailers.size() : 0,
+                            state == State::RecvTrailer ? "chunked body trailer" : "chunk size line")) {
+                        poll_state.reset();
+                    }
+                }
                 break;
             case State::RecvChunkData:
                 current_read_to_string = false;
@@ -10666,6 +10692,14 @@ int SocketRecvUntilBytesPollState::continuePollIntern(ExceptionSink* xsink) {
         }
 
         bin->concat(c);
+        if (max_size && bin->size() > max_size) {
+            // fail closed: the data received is not kept, and no more is read (qore#6867)
+            xsink->raiseException("HTTP-HEADER-TOO-LARGE", "the HTTP %s received exceeds the maximum size of %zu "
+                "bytes; the limit can be changed with Socket::setMaxHeaderSize()",
+                limit_what ? limit_what : "header", limit_total);
+            bin = new QoreStringNode;
+            return -1;
+        }
         if (c == bytes[matched]) {
             ++matched;
             if (matched == size) {
@@ -15780,6 +15814,15 @@ int64 QoreSocket::getMaxChunkedBodySize() const {
     return priv->max_chunked_body_size.load(std::memory_order_relaxed);
 }
 
+void QoreSocket::setMaxHeaderSize(size_t size) {
+    // the limit is only read when a section is read, so it needs no round trip to the socket's I/O thread
+    priv->max_header_size.store(size, std::memory_order_relaxed);
+}
+
+size_t QoreSocket::getMaxHeaderSize() const {
+    return priv->getMaxHeaderSize();
+}
+
 void QoreSocket::setHttp2MaxRequestBodySize(int64 size) {
     // the limit of the socket's HTTP/2 session, if any, always has the effect of the socket's limit (see
     // qore_socket_private::max_http2_body_size), so setting the value the socket has changes nothing and needs no
@@ -19166,6 +19209,50 @@ int SocketRecvUntilBytesPollOperation::initPollState(ExceptionSink* xsink) {
     return poll_state ? 0 : -1;
 }
 
+SocketRecvHttpLinePollOperation::SocketRecvHttpLinePollOperation(ExceptionSink* xsink, const QoreStringNode* pattern,
+        QoreSocketObject* sock, bool to_string, bool defer_init, const char* what, size_t used)
+        : SocketRecvUntilBytesPollOperation(xsink, pattern, sock, to_string, defer_init),
+        http_pattern(pattern->stringRefSelf()), what(what), used(used) {
+    if (*xsink || defer_init) {
+        // a deferred operation creates its poll state, with the limit, when the controller runs it
+        return;
+    }
+    // the base class created the poll state, without the limit
+    AutoLocker al(this->sock->priv->m);
+    if (poll_state && applyLimit(xsink)) {
+        poll_state.reset();
+        this->sock->priv->clearNonBlock(NB_RECV);
+        set_non_block = false;
+    }
+}
+
+int SocketRecvHttpLinePollOperation::applyLimit(ExceptionSink* xsink) {
+    return qore_socket_private::limitHttpRead(xsink, poll_state.get(), sock->priv->socket->getMaxHeaderSize(), used,
+        what);
+}
+
+int SocketRecvHttpLinePollOperation::initPollState(ExceptionSink* xsink) {
+    assert(sock->priv->m.trylock());
+    if (initialized) {
+        return 0;
+    }
+    if (initIntern(xsink)) {
+        return -1;
+    }
+
+    poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, http_pattern->c_str(), http_pattern->size()));
+    if (!*xsink && poll_state && applyLimit(xsink)) {
+        poll_state.reset();
+    }
+    if (*xsink) {
+        sock->priv->clearNonBlock(NB_RECV);
+        set_non_block = false;
+        return -1;
+    }
+    initialized = true;
+    return poll_state ? 0 : -1;
+}
+
 bool SocketRecvUntilBytesPollOperation::abortNeedsClose() const {
     if (poll_state) {
         assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
@@ -19205,6 +19292,11 @@ int SocketReadHttpHeaderPollOperation::initPollState(ExceptionSink* xsink) {
     }
 
     poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+    if (!*xsink && poll_state
+        && qore_socket_private::limitHttpRead(xsink, poll_state.get(), sock->priv->socket->getMaxHeaderSize(), 0,
+            "header")) {
+        poll_state.reset();
+    }
     if (*xsink) {
         sock->priv->clearNonBlock(NB_RECV);
         set_non_block = false;
@@ -19534,6 +19626,14 @@ void SocketReadHttpChunkedBodyPollOperation::startCurrentOp(ExceptionSink* xsink
         case ChunkedBodyState::RECV_TRAILER: {
             current_read_to_string = true;
             poll_state.reset(priv->socket->startRecvUntilBytes(xsink, "\r\n", 2));
+            if (!*xsink && poll_state) {
+                // the lines of the trailer section count together against the limit (qore#6867)
+                bool trailer = chunked_body_state == ChunkedBodyState::RECV_TRAILER;
+                if (qore_socket_private::limitHttpRead(xsink, poll_state.get(), priv->socket->getMaxHeaderSize(),
+                        trailer ? trailers.size() : 0, trailer ? "chunked body trailer" : "chunk size line")) {
+                    poll_state.reset();
+                }
+            }
             break;
         }
         case ChunkedBodyState::RECV_CHUNK_DATA:
@@ -19929,7 +20029,8 @@ void SocketReadHttpBodyPollOperation::startBodyRead(ExceptionSink* xsink) {
             break;
         case BodyState::RECV_CHUNK_SIZE: {
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-            current_op = new SocketRecvUntilBytesPollOperation(xsink, pattern.release(), sock_obj, true);
+            current_op = new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+                "chunk size line");
             break;
         }
         case BodyState::RECV_CLOSE:
@@ -20061,9 +20162,13 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkSize(ExceptionSink
     if (chunk_size == 0) {
         // Last chunk — read trailing CRLF (or trailers followed by CRLF)
         body_state = BodyState::RECV_CHUNK_CRLF;
+        // in a chunked body, which does not use the Content-Length counter, this counts the bytes of the trailer
+        // section read, for the size limit (qore#6867)
+        remaining = 0;
         sock_obj->ref();
         SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-        current_op = new SocketRecvUntilBytesPollOperation(xsink, pattern.release(), sock_obj, true);
+        current_op = new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+            "chunked body trailer");
         if (*xsink) {
             releaseCurrentOp(xsink);
             body_state = BodyState::DONE;
@@ -20100,7 +20205,8 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkData(ExceptionSink
     body_state = BodyState::RECV_CHUNK_SIZE;
     sock_obj->ref();
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-    current_op = new SocketRecvUntilBytesPollOperation(xsink, pattern.release(), sock_obj, true);
+    current_op = new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+        "chunk size line");
     if (*xsink) {
         releaseCurrentOp(xsink);
         body_state = BodyState::DONE;
@@ -20120,11 +20226,13 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkCrlf(ExceptionSink
             body_state = BodyState::DONE;
             return nullptr;
         }
-        // Trailer line — read next line
+        // Trailer line — read next line; the lines of the section count together against the limit
         printd(5, "SocketReadHttpBodyPollOperation::handleRecvChunkCrlf() trailer line\n");
+        remaining += static_cast<int64_t>(line->size());
         sock_obj->ref();
         SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
-        current_op = new SocketRecvUntilBytesPollOperation(xsink, pattern.release(), sock_obj, true);
+        current_op = new SocketRecvHttpLinePollOperation(xsink, *pattern, sock_obj, true, false,
+            "chunked body trailer", static_cast<size_t>(remaining));
         if (*xsink) {
             releaseCurrentOp(xsink);
             body_state = BodyState::DONE;
@@ -20330,6 +20438,11 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             }
             // Data is available — transition to header reading
             poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+            if (!*xsink && poll_state
+                && qore_socket_private::limitHttpRead(xsink, poll_state.get(),
+                    sock->priv->socket->getMaxHeaderSize(), 0, "header")) {
+                poll_state.reset();
+            }
             if (*xsink || !poll_state) {
                 phase = Phase::Error;
                 sock->priv->clearNonBlock();
@@ -20972,6 +21085,11 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                 }
                 // Data is available — transition to header reading
                 poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+                if (!*xsink && poll_state
+                    && qore_socket_private::limitHttpRead(xsink, poll_state.get(),
+                        sock->priv->socket->getMaxHeaderSize(), 0, "header")) {
+                    poll_state.reset();
+                }
                 if (*xsink || !poll_state) {
                     phase = Phase::Error;
                     sock->priv->clearNonBlock();

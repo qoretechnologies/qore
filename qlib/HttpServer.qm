@@ -279,6 +279,10 @@ log("started listener on %s", lh.desc);
       and HTTP/3; a field whose name is a key of the hash (ex: \c Path, \c Method, \c Body) is given only there and
       no longer replaces the key, and a request with such a field is answered
       (<a href="https://github.com/qoretechnologies/qore/issues/6761">issue 6761</a>)
+    - a request whose HTTP/1.x header, or whose chunked body's trailer section, is larger than the limit of the
+      connection (the new \c max_header_size option, 65536 bytes by default) is answered with @c 431 (Request Header
+      Fields Too Large) and the connection is closed; before, the server kept the header or trailer in memory without
+      a limit (issue #6867)
     - the error response for an exception of a request handler (400, 413 or 500) gives the error and its description
       only, without the location of the exception in the server's code, unless debugging is enabled
       (@ref HttpServer::HttpServer::setDebug() "HttpServer::setDebug()"; issue #6780)
@@ -813,6 +817,18 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.6
     */
     int max_request_body_size = 0;
+
+    #! Maximum size in bytes of the header of an HTTP/1.x request and of the trailer section of a chunked request body
+    /** The server answers a request whose header is larger than this limit with HTTP 431 (Request Header Fields Too
+        Large) and closes the connection, without keeping more of the header in memory, and a request whose chunked
+        body has a larger trailer section the same way.  The size is that of the text received, with the line ends.
+
+        - a positive value is the limit
+        - \c 0 (the default) uses the default of 65536 bytes
+
+        @since HttpServer 1.7
+    */
+    int max_header_size = 0;
 
     #! Maximum size in bytes of a decompressed request body
     /** A request body with a \c Content-Encoding is decompressed before it is passed to the handler; a body whose
@@ -3703,6 +3719,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             setTtl(effective_ttl);
         }
         max_request_body_size = opts.max_request_body_size ?? 0;
+        if ((opts.max_header_size ?? 0) < 0) {
+            throw "HTTP-SERVER-INIT-ERROR", sprintf("max_header_size (%d) must not be negative", opts.max_header_size);
+        }
         max_decoded_body_size = opts.max_decoded_body_size ?? 0;
         enable_h3 = opts.enable_h3 ?? True;
         alt_svc_max_age = opts.alt_svc_max_age ?? 3600;
@@ -3721,6 +3740,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             "lingering_close_timeout": opts.lingering_close_timeout,
             "peer_hostname_lookup": opts.peer_hostname_lookup,
             "io_operation_timeout": opts.io_operation_timeout,
+            "max_header_size": opts.max_header_size,
         });
         asyncIo.start();
     }
@@ -5236,6 +5256,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             int err_code;
             switch (ex.err) {
                 case "HTTP-BODY-TOO-LARGE": err_code = 413; break;
+                # the trailer section of a chunked request body is larger than the limit of the socket (qore#6867)
+                case "HTTP-HEADER-TOO-LARGE": err_code = 431; break;
                 case "HTTP-BODY-ENCODING-ERROR": err_code = 400; break;
                 default: err_code = 500; break;
             }

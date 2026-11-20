@@ -106,8 +106,13 @@ typedef struct ares_channeldata ares_channel_t;
 #define DEFAULT_SOCKET_BUFSIZE (64 * 1024)
 #endif
 
+//! The default maximum size in bytes of an HTTP/1.x header section, of a chunked body trailer section and of a chunk
+//! size line (qore#6867)
+/** The limit is the size of the text as received, with the line ends.  It can be changed per socket with
+    Socket::setMaxHeaderSize().
+*/
 #ifndef QORE_MAX_HEADER_SIZE
-#define QORE_MAX_HEADER_SIZE 16384
+#define QORE_MAX_HEADER_SIZE 65536
 #endif
 
 #define CHF_HTTP11  (1 << 0)
@@ -1458,9 +1463,30 @@ public:
 
     DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retry_tls_read; }
 
+    //! Limits the size of the data received, including the pattern, for the reader of an HTTP header or trailer
+    //! section or of a line of a chunked body (qore#6867)
+    /** An HTTP-HEADER-TOO-LARGE exception is raised, and no more data is read or kept, when the data received is
+        larger than the limit.
+
+        @param max_size the maximum size in bytes; 0 = no limit
+        @param what what is read, for the exception: \c "header", \c "chunked body trailer" or \c "chunk size line"
+    */
+    DLLLOCAL void setLimit(size_t max_size, const char* what, size_t total_max = 0) {
+        this->max_size = max_size;
+        limit_what = what;
+        limit_total = total_max ? total_max : max_size;
+    }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
+
+    //! the limit of the size of the data received (0 = none)
+    size_t max_size = 0;
+    //! what is read, for the exception raised when the limit is exceeded
+    const char* limit_what = nullptr;
+    //! the limit of the whole section, for the exception, when the data is a part of a section
+    size_t limit_total = 0;
 
     qore_socket_private* sock;
     // we are using QoreStringNode as it has a much better append / concat implementation than BinaryNode
@@ -2230,6 +2256,19 @@ public:
         instead of being accumulated.
     */
     std::atomic<int64> max_chunked_body_size{0};
+
+    //! Maximum size in bytes of an HTTP/1.x header section, of a chunked body trailer section and of a chunk size line
+    //! (0 = QORE_MAX_HEADER_SIZE)
+    /** The readers of these sections raise an HTTP-HEADER-TOO-LARGE exception when a peer sends more, instead of
+        keeping the data in memory.  The value is read when the section is read, so that it can change at any time.
+    */
+    std::atomic<size_t> max_header_size{0};
+
+    //! Returns the maximum size in bytes of an HTTP/1.x header or trailer section
+    DLLLOCAL size_t getMaxHeaderSize() const {
+        size_t rv = max_header_size.load(std::memory_order_relaxed);
+        return rv ? rv : QORE_MAX_HEADER_SIZE;
+    }
 
     //! Maximum request body size for HTTP/2 streams (0 = unlimited)
     /** Propagated to Http2Session when created; DATA frame accumulation exceeding
@@ -4096,6 +4135,41 @@ public:
             --buflen;
             ++bufoffset;
         }
+        return 0;
+    }
+
+    //! raises the exception for HTTP data over the limit (qore#6867)
+    /** @param xsink for the exception
+        @param max_size the limit in bytes
+        @param what what is read: \c "header", \c "chunked body trailer" or \c "chunk size line"
+    */
+    DLLLOCAL static void raiseHttpHeaderTooLarge(ExceptionSink* xsink, size_t max_size, const char* what) {
+        xsink->raiseException("HTTP-HEADER-TOO-LARGE", "the HTTP %s received exceeds the maximum size of %zu bytes; "
+            "the limit can be changed with Socket::setMaxHeaderSize()", what, max_size);
+    }
+
+    //! limits the size of what a receive until a pattern state reads, for the reader of an HTTP header or trailer
+    //! section or of a chunk size line (qore#6867)
+    /** @param xsink for the exception
+        @param state the state, which must be a SocketRecvUntilBytesPollState
+        @param max_size the limit of the whole section in bytes
+        @param used the size of the part of the section that was read before this state, which is counted in the
+            limit
+        @param what what is read: \c "header", \c "chunked body trailer" or \c "chunk size line"
+
+        @return 0 if the state was limited, -1 if the part of the section read already leaves no room for the data of
+        the state, and an exception was raised
+    */
+    DLLLOCAL static int limitHttpRead(ExceptionSink* xsink, AbstractPollState* state, size_t max_size, size_t used,
+            const char* what) {
+        assert(state);
+        assert(dynamic_cast<SocketRecvUntilBytesPollState*>(state));
+        // a state limit of 0 means no limit: nothing is left, and the data to come cannot be empty
+        if (used >= max_size) {
+            raiseHttpHeaderTooLarge(xsink, max_size, what);
+            return -1;
+        }
+        static_cast<SocketRecvUntilBytesPollState*>(state)->setLimit(max_size - used, what, max_size);
         return 0;
     }
 

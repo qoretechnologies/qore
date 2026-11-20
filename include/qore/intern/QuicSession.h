@@ -126,6 +126,14 @@ struct QuicStreamInfo {
           is discarded and the rest of the stream is not read.
     */
     bool body_too_large = false;
+
+    //! The size of the header list received so far in the current header block (RFC 9114 section 4.2.2: the length of
+    //! each name and value plus 32 bytes) (qore#6867)
+    size_t header_list_size = 0;
+
+    //! The header list exceeded the maximum header size of the socket; the stream was rejected and error_message says
+    //! so (qore#6867)
+    bool header_too_large = false;
     //! true if stream received data in 0-RTT (for server-side logging/auditing)
     bool received_0rtt_data = false;
 
@@ -674,6 +682,12 @@ public:
     */
     DLLLOCAL void setMaxResponseBodySize(int64_t size) {
         max_response_body_size_.store(size, std::memory_order_relaxed);
+    }
+
+    //! Sets the maximum size in bytes of the header list of a received header block (the maximum header size of the
+    //! socket; qore#6867)
+    DLLLOCAL void setMaxHeaderListSize(size_t size) {
+        max_header_list_size_.store(size, std::memory_order_relaxed);
     }
 
     //! Atomically find first headers-ready stream, copy it, and mark as dispatched
@@ -1797,6 +1811,8 @@ private:
                                     void* conn_user_data, void* stream_user_data);
 
     //! HTTP/3 receive header
+    DLLLOCAL static bool h3CheckHeaderListSize(QuicSession* session, QuicStreamInfo& stream, int64_t stream_id,
+            size_t name_len, size_t value_len);
     DLLLOCAL static int h3RecvHeaderCallback(nghttp3_conn* conn, int64_t stream_id,
                                     int32_t token, nghttp3_rcbuf* name,
                                     nghttp3_rcbuf* value, uint8_t flags,
@@ -1918,6 +1934,9 @@ private:
     //! Maximum size of a client response body received into memory; <= 0 = no limit
     // atomic: set from the thread that polls the session while it can be read by callbacks
     std::atomic<int64_t> max_response_body_size_{0};
+    //! Maximum size of the header list of a received header block (qore#6867)
+    // the default is that of QORE_MAX_HEADER_SIZE; the session is given the limit of its socket when it is created
+    std::atomic<size_t> max_header_list_size_{65536};
 
     //! Server CID for this session (used for CID-based routing)
     ngtcp2_cid scid_{};
