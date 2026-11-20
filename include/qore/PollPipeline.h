@@ -212,6 +212,14 @@ public:
     //! Adds a recv-until-pattern step
     DLLEXPORT int addRecvUntil(const char* pattern, bool as_string = true);
 
+    //! Adds a receive-until-pattern step that accepts at most \a max_size bytes (qore#6914)
+    /** @param pattern the byte pattern to match
+        @param as_string if true, return the data as a string
+        @param max_size the maximum size in bytes of the data received; a SOCKET-RESPONSE-TOO-LARGE exception is
+            raised for more; 0 means no limit besides that of a line
+    */
+    DLLEXPORT int addRecvUntil(const char* pattern, bool as_string, size_t max_size);
+
     //! Adds a recv-available-data step
     DLLEXPORT int addRecvData(bool as_string = false);
 

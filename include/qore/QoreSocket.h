@@ -2428,6 +2428,24 @@ int MyPollable::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) cons
     */
     DLLEXPORT size_t getMaxHeaderSize() const;
 
+    //! Sets the maximum size of a line that is read until a line terminator (<tt>&quot;\\n&quot;</tt> or <tt>&quot;\\r\\n&quot;</tt>)
+    /** The readers of a line (the receive until a terminator operations, and the clients of the line-based protocols
+        IMAP, POP3, SMTP and FTP) raise a \c SOCKET-LINE-TOO-LARGE exception if a peer sends more.  The size is that
+        of the line as received, with the line end.
+
+        @param size the maximum size in bytes; 0 restores the default of 1048576 bytes
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void setMaxLineSize(size_t size);
+
+    //! Returns the maximum size of a line that is read until a line terminator
+    /** @return the maximum size in bytes; the default of 1048576 bytes if no other was set
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT size_t getMaxLineSize() const;
+
     //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
     /** When set, HTTP/2 DATA frame accumulation exceeding this limit will cause
         the stream to be reset with REFUSED_STREAM.

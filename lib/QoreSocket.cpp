@@ -10645,6 +10645,13 @@ SocketRecvUntilBytesPollState::SocketRecvUntilBytesPollState(ExceptionSink* xsin
             fail[i] = k;
         }
     }
+    // a read until a line terminator is limited to the maximum line size of the socket, unless a reader that knows
+    // better sets another limit (qore#6914)
+    if ((size == 1 && bytes[0] == '\n') || (size == 2 && bytes[0] == '\r' && bytes[1] == '\n')) {
+        max_size = sock->getMaxLineSize();
+        limit_total = max_size;
+        line_limit = true;
+    }
 }
 
 /** returns:
@@ -10694,9 +10701,17 @@ int SocketRecvUntilBytesPollState::continuePollIntern(ExceptionSink* xsink) {
         bin->concat(c);
         if (max_size && bin->size() > max_size) {
             // fail closed: the data received is not kept, and no more is read (qore#6867)
-            xsink->raiseException("HTTP-HEADER-TOO-LARGE", "the HTTP %s received exceeds the maximum size of %zu "
-                "bytes; the limit can be changed with Socket::setMaxHeaderSize()",
-                limit_what ? limit_what : "header", limit_total);
+            if (message_limit) {
+                xsink->raiseException("SOCKET-RESPONSE-TOO-LARGE", "the response received exceeds the maximum size "
+                    "of %zu bytes", limit_total);
+            } else if (line_limit) {
+                xsink->raiseException("SOCKET-LINE-TOO-LARGE", "the line received exceeds the maximum size of %zu "
+                    "bytes; the limit can be changed with Socket::setMaxLineSize()", limit_total);
+            } else {
+                xsink->raiseException("HTTP-HEADER-TOO-LARGE", "the HTTP %s received exceeds the maximum size of %zu "
+                    "bytes; the limit can be changed with Socket::setMaxHeaderSize()",
+                    limit_what ? limit_what : "header", limit_total);
+            }
             bin = new QoreStringNode;
             return -1;
         }
@@ -15823,6 +15838,15 @@ size_t QoreSocket::getMaxHeaderSize() const {
     return priv->getMaxHeaderSize();
 }
 
+void QoreSocket::setMaxLineSize(size_t size) {
+    // the limit is only read when a line is read, so it needs no round trip to the socket's I/O thread
+    priv->max_line_size.store(size, std::memory_order_relaxed);
+}
+
+size_t QoreSocket::getMaxLineSize() const {
+    return priv->getMaxLineSize();
+}
+
 void QoreSocket::setHttp2MaxRequestBodySize(int64 size) {
     // the limit of the socket's HTTP/2 session, if any, always has the effect of the socket's limit (see
     // qore_socket_private::max_http2_body_size), so setting the value the socket has changes nothing and needs no
@@ -19210,9 +19234,9 @@ int SocketRecvUntilBytesPollOperation::initPollState(ExceptionSink* xsink) {
 }
 
 SocketRecvHttpLinePollOperation::SocketRecvHttpLinePollOperation(ExceptionSink* xsink, const QoreStringNode* pattern,
-        QoreSocketObject* sock, bool to_string, bool defer_init, const char* what, size_t used)
+        QoreSocketObject* sock, bool to_string, bool defer_init, const char* what, size_t used, size_t message_max)
         : SocketRecvUntilBytesPollOperation(xsink, pattern, sock, to_string, defer_init),
-        http_pattern(pattern->stringRefSelf()), what(what), used(used) {
+        http_pattern(pattern->stringRefSelf()), what(what), used(used), message_max(message_max) {
     if (*xsink || defer_init) {
         // a deferred operation creates its poll state, with the limit, when the controller runs it
         return;
@@ -19227,6 +19251,11 @@ SocketRecvHttpLinePollOperation::SocketRecvHttpLinePollOperation(ExceptionSink* 
 }
 
 int SocketRecvHttpLinePollOperation::applyLimit(ExceptionSink* xsink) {
+    if (message_max) {
+        assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
+        static_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->setMessageLimit(message_max);
+        return 0;
+    }
     return qore_socket_private::limitHttpRead(xsink, poll_state.get(), sock->priv->socket->getMaxHeaderSize(), used,
         what);
 }

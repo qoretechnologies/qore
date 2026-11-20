@@ -35,6 +35,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_PollPipeline.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/SocketRecvHttpLinePollOperation.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
@@ -460,6 +461,10 @@ int PollPipelinePriv::addRecvExact(size_t size, bool as_string) {
 }
 
 int PollPipelinePriv::addRecvUntil(const char* pattern, bool as_string) {
+    return addRecvUntil(pattern, as_string, 0);
+}
+
+int PollPipelinePriv::addRecvUntil(const char* pattern, bool as_string, size_t max_size) {
     QoreStringNode* pat = new QoreStringNode(pattern);
     int idx = (int)string_data.size();
     string_data.push_back(pat);
@@ -468,6 +473,7 @@ int PollPipelinePriv::addRecvUntil(const char* pattern, bool as_string) {
     s.type = StepType::RECV_UNTIL;
     s.pattern_idx = idx;
     s.recv_as_string = as_string;
+    s.recv_size = max_size;  // the maximum size of the data received (0 = no limit besides that of a line; qore#6914)
     steps.push_back(std::move(s));
     return (int)steps.size() - 1;
 }
@@ -1402,6 +1408,17 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                                 ctx.line_accum->concat('\n');
                             }
                             ctx.line_accum->concat(str, len);
+                            // the lines of a reply count together against the maximum line size of the socket
+                            // (qore#6914)
+                            size_t max_line = sock_obj->getMaxLineSize();
+                            if (ctx.line_accum->size() > max_line) {
+                                QoreString msg;
+                                msg.sprintf("the reply received exceeds the maximum size of %zu bytes; the limit can "
+                                    "be changed with Socket::setMaxLineSize()", max_line);
+                                setError("SOCKET-LINE-TOO-LARGE", msg.c_str(), xsink);
+                                xsink->raiseException("SOCKET-LINE-TOO-LARGE", msg.c_str());
+                                return nullptr;
+                            }
                         }
 
                         // Check continuation: line[3] == '-' means more lines follow
@@ -1903,9 +1920,11 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
             sock_obj->ref();
             // SocketRecvUntilBytesPollOperation takes const QoreStringNode*
             // and calls stringRefSelf() internally
-            ReferenceHolder<SocketRecvUntilBytesPollOperation> op(
-                new SocketRecvUntilBytesPollOperation(xsink, pattern,
-                    sock_obj, step.recv_as_string),
+            // a step with a maximum size limits the data received (qore#6914)
+            ReferenceHolder<SocketRecvUntilBytesPollOperation> op(step.recv_size
+                ? new SocketRecvHttpLinePollOperation(xsink, pattern, sock_obj, step.recv_as_string, false, nullptr,
+                    0, step.recv_size)
+                : new SocketRecvUntilBytesPollOperation(xsink, pattern, sock_obj, step.recv_as_string),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -2477,14 +2496,27 @@ int PollPipeline::addRecvExact(int byte_count, bool as_string = False) [dom=NETW
 }
 
 //! Adds a receive-until-pattern step
-/** @param pattern the byte pattern to match
+/** A read until a line terminator (<tt>&quot;\\n&quot;</tt> or <tt>&quot;\\r\\n&quot;</tt>) is limited to the maximum line size of the socket (see
+    @ref Qore::Socket::setMaxLineSize() "Socket::setMaxLineSize()").
+
+    @param pattern the byte pattern to match
     @param as_string if True, return the data as a string (default True)
+    @param max_size the maximum size in bytes of the data received, a \c SOCKET-RESPONSE-TOO-LARGE exception is raised
+        for more; 0 (the default) means no limit besides that of a line; the data is kept in memory until the pattern
+        is matched, so a read of a message of a peer that is not trusted needs a limit
+
     @return the step index
+
+    @throw PIPELINE-ADD-ERROR \a max_size is negative
 
     @since %Qore 3.0
 */
-int PollPipeline::addRecvUntilBytes(string pattern, bool as_string = True) [dom=NETWORK; flags=NAMED_ARGS] {
-    return priv->addRecvUntil(pattern->c_str(), as_string);
+int PollPipeline::addRecvUntilBytes(string pattern, bool as_string = True, int max_size = 0)
+        [dom=NETWORK; flags=NAMED_ARGS] {
+    if (max_size < 0) {
+        return xsink->raiseException("PIPELINE-ADD-ERROR", "the maximum size cannot be negative (%d)", max_size);
+    }
+    return priv->addRecvUntil(pattern->c_str(), as_string, static_cast<size_t>(max_size));
 }
 
 //! Adds a receive-available-data step
