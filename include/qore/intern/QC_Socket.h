@@ -570,13 +570,27 @@ public:
     DLLLOCAL void doReadHttpHeaderEvent(int event, const QoreHashNode& hdr, int source) const;
 
     //! Parses HTTP chunked body trailer lines into a hash using the underlying socket private implementation
-    /** @return 0 for OK, -1 if an exception was raised: the trailer text contains a NUL character
+    /** @param h the hash that the trailer fields are given in
+        @param hdr the trailer text
+        @param xsink for exceptions
+        @param info the info hash, if any
+        @param in_trailers true if \a h is the hash of a message with a body: the fields are then given under its
+        \c "trailers" key, and at its top level only as the socket's field placement allows and never with a name
+        that is a key of the message (qore#6761); false if \a h is a hash of trailer fields only
+
+        @return 0 for OK, -1 if an exception was raised: the trailer text contains a NUL character
     */
     DLLLOCAL int convertHeaderToHash(QoreHashNode& h, QoreString& hdr, ExceptionSink* xsink,
-            QoreHashNode* info = nullptr) const;
+            QoreHashNode* info = nullptr, bool in_trailers = false) const;
 
     //! Clears the pending chunked body expectation flag on the underlying socket private implementation
     DLLLOCAL void clearHttpExpectChunkedBody() const;
+
+    //! Sets whether the fields of the HTTP messages read are also given at the top level of their hashes
+    DLLLOCAL void setHttpFieldsAtTopLevel(bool top_level) const;
+
+    //! Returns true if the fields of the HTTP messages read are also given at the top level of their hashes
+    DLLLOCAL bool getHttpFieldsAtTopLevel() const;
 
     //! Returns the configured maximum chunked body size, or 0 if unlimited
     DLLLOCAL int64 getMaxChunkedBodySize() const;

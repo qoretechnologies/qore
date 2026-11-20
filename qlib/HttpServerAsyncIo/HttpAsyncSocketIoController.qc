@@ -2372,12 +2372,18 @@ public class HttpAsyncSocketIoController {
         }
 
         # Build header hash (same format as HTTP/2)
-        hash<auto> hdr = request.headers ?? {};
+        # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted
+        # socket has the listener's setting), never with the name of a key of the header (qore#6761)
+        hash<auto> hdr = http_get_request_header_hash(request.headers, listener.getHttpFieldsAtTopLevel());
         hdr.method = request.method;
         hdr.path = request.path;
         hdr.":authority" = request.authority;
         hdr.":scheme" = request.scheme ?? "https";
         hdr.host = request.authority;
+        # the authority of the request is its Host field, as it is in an HTTP/1.1 request (qore#6761)
+        if (!exists hdr.headers.host && exists request.authority) {
+            hdr.headers.host = request.authority;
+        }
         hdr.http_version = "HTTP/3";
 
         # Parse accept-encoding header
@@ -5199,12 +5205,18 @@ public class HttpAsyncSocketIoController {
             uh, stream_id, request.method, getLogRequestPath(request.path));
 
         # Build header hash
-        hash<auto> hdr = request.headers;
+        # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted
+        # socket has the listener's setting), never with the name of a key of the header (qore#6761)
+        hash<auto> hdr = http_get_request_header_hash(request.headers, cinfo.sock.getHttpFieldsAtTopLevel());
         hdr.method = request.method;
         hdr.path = request.path;
         hdr.":authority" = request.authority;
         hdr.":scheme" = request.scheme;
         hdr.host = request.authority;
+        # the authority of the request is its Host field, as it is in an HTTP/1.1 request (qore#6761)
+        if (!exists hdr.headers.host && exists request.authority) {
+            hdr.headers.host = request.authority;
+        }
         hdr.http_version = "HTTP/2";
 
         # Parse accept-encoding header for compression support
@@ -5599,12 +5611,18 @@ public class HttpAsyncSocketIoController {
         submitConnectionOp(dispatch_uh, new_cinfo);
 
         # Build header hash
-        hash<auto> hdr = request.headers;
+        # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted
+        # socket has the listener's setting), never with the name of a key of the header (qore#6761)
+        hash<auto> hdr = http_get_request_header_hash(request.headers, cinfo.sock.getHttpFieldsAtTopLevel());
         hdr.method = request.method;
         hdr.path = request.path;
         hdr.":authority" = request.authority;
         hdr.":scheme" = request.scheme;
         hdr.host = request.authority;
+        # the authority of the request is its Host field, as it is in an HTTP/1.1 request (qore#6761)
+        if (!exists hdr.headers.host && exists request.authority) {
+            hdr.headers.host = request.authority;
+        }
         hdr.http_version = "HTTP/2";
 
         # Parse accept-encoding header for compression support

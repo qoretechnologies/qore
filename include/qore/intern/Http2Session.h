@@ -1496,6 +1496,30 @@ using Http2SessionPtr = std::shared_ptr<Http2Session>;
 //! Convert HTTP/2 or HTTP/3 multi-value headers map to a QoreHashNode
 // see qore_string_private.h
 DLLLOCAL QoreStringNode* qore_http_field_value_string(const char* p, size_t len);
+
+//! Returns true if a lower-case HTTP field name is a key that the readers set in the hash of a message themselves
+/** Such a field is given only under the \c "headers" or \c "trailers" key of the message, never at its top level,
+    so that a field cannot replace a key of the message (qore#6761, qore#6811): \c body, \c headers, \c trailers,
+    \c status_code, \c status_message, \c http_version, \c method and \c path
+*/
+DLLLOCAL inline bool qore_http_is_reserved_field_name(const char* name) {
+    switch (name[0]) {
+        case 'b':
+            return !strcmp(name, "body");
+        case 'h':
+            return !strcmp(name, "headers") || !strcmp(name, "http_version");
+        case 'm':
+            return !strcmp(name, "method");
+        case 'p':
+            return !strcmp(name, "path");
+        case 's':
+            return !strcmp(name, "status_code") || !strcmp(name, "status_message");
+        case 't':
+            return !strcmp(name, "trailers");
+        default:
+            return false;
+    }
+}
 DLLLOCAL void qore_http_field_value_check(QoreStringNode* str);
 
 /** Template to accept maps with any comparator (e.g. std::less or ltstrcase).
