@@ -11,6 +11,7 @@
 
 # a run on PostgreSQL has its own schema
 %requires ../SqlUtil/PgsqlTestIsolation.qm
+%requires ../SqlUtil/TestRunIsolation.qm
 
 %exec-class SchemaReverseNullDefaultTest
 
@@ -99,7 +100,7 @@ class SchemaReverseNullDefaultTest inherits QUnit::Test {
         if (*Datasource ds = dsh{label}) {
             return ds;
         }
-        testSkip(skip_reasons{label} ?? sprintf("no %s connection", label));
+        TestRun::skipOrFail(skip_reasons{label} ?? sprintf("no %s connection", label));
     }
 
     private AbstractTable getTable(string label) {

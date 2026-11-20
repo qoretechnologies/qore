@@ -9,6 +9,7 @@
 %requires QUnit
 %requires SqlUtil
 %requires ./MssqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module freetds
 %define NoFreetds
@@ -58,7 +59,7 @@ class MssqlYearOperatorsTest inherits QUnit::Test {
 
     yearTest() {
         if (!ds) {
-            testSkip(skip);
+            TestRun::skipOrFail(skip);
         }
         on_exit ds.rollback();
         AbstractTable t = new Table(ds, "year_ops_6582").getTable();

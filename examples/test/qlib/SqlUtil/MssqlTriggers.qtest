@@ -281,7 +281,7 @@ class MssqlTriggersTest inherits QUnit::Test {
             if (ex.err == "TEST-SKIPPED-EXCEPTION") {
                 rethrow;
             }
-            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+            TestRun::failOrSkipConnect("no DB connection", ex);
         }
         Datasource ds(MssqlRunDatabase::getConnectionString(ENV{var}, "MssqlTriggers"));
         ds.open();
