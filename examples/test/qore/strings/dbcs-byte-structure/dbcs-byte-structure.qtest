@@ -6,9 +6,10 @@
 
 # The character functions of the multi-byte encodings (EUC, Shift_JIS, GBK, Big5, UHC, Johab) count the bytes that
 # are characters of the encoding by its definition: a byte or byte sequence that is never a character of the encoding
-# is invalid, as for isEncodingValid() and the conversions (issue #6665).  A well-formed double-byte sequence that is
-# not assigned to a character is not checked by the character functions; isEncodingValid() and the conversions
-# refuse it.
+# is invalid on every platform (issue #6665).  isEncodingValid() and the conversions take validity from the
+# platform's iconv, which can accept such bytes as vendor or user-defined characters or decode an incomplete sequence,
+# so the test checks them against a conversion of the same bytes.  A well-formed double-byte sequence that is not
+# assigned to a character is not checked by the character functions; the conversions refuse it.
 
 %modern
 
@@ -35,26 +36,24 @@ class DbcsByteStructureTest inherits QUnit::Test {
             "JOHAB": "한국어",
         };
 
-        #! the cases of each encoding: the bytes between "A" and "B", and the number of characters that they are, or a
-        #! negative number if they are not characters of the encoding by its definition, which the character
-        #! functions refuse on every platform:
-        #! - -1: a malformed sequence (a first byte followed by a byte that is never a second byte of the encoding or
-        #!   of any vendor form of it, or an incomplete SS2 or SS3 sequence), which isEncodingValid() and the
-        #!   conversions refuse with every iconv implementation
-        #! - -2: a single byte or a first byte outside the definition of the encoding, which isEncodingValid() and the
-        #!   conversions take from the iconv implementation (see the character encoding page): one can map it as a
-        #!   vendor or user-defined character (ex: macOS decodes the Shift_JIS user-defined area 0xF040, glibc decodes
-        #!   0x80 in Big5 as U+0080), so its isEncodingValid() is checked against a conversion of the same bytes with
-        #!   the platform's iconv, not against a fixed result
+        #! the cases of each encoding: the bytes between "A" and "B", and the number of characters that they are, or -1
+        #! if they are not characters of the encoding by its definition (a byte or a first byte outside it, a first
+        #! byte followed by a byte that is not one of its second bytes, or an incomplete SS2 or SS3 sequence), which
+        #! the character functions refuse on every platform.  isEncodingValid() and the conversions take the validity
+        #! of such bytes from the platform's iconv (see the character encoding page), which can map them as vendor or
+        #! user-defined characters or decode a sequence that is not complete (ex: macOS decodes the Shift_JIS
+        #! user-defined area 0xF040 and a lone EUC-JP SS2 byte 0x8E, which glibc refuses; glibc decodes 0x80 in Big5
+        #! as U+0080), so their isEncodingValid() is checked against a conversion of the same bytes with the
+        #! platform's iconv, not against a fixed result
         const Cases = {
             "Shift_JIS": {
-                "80": -2, "a0": -2, "fd": -2, "f040": -2, "82a0": 1, "a1": 1, "8140": 1,
+                "80": -1, "a0": -1, "fd": -1, "f040": -1, "82a0": 1, "a1": 1, "8140": 1,
             },
             "CP932": {
-                "80": -2, "a0": -2, "fd": -2, "fe": -2, "ff": -2, "fa40": 1, "a1": 1, "8140": 1,
+                "80": -1, "a0": -1, "fd": -1, "fe": -1, "ff": -1, "fa40": 1, "a1": 1, "8140": 1,
             },
             "Windows-31J": {
-                "80": -2, "a0": -2, "fd": -2, "ff": -2, "fa40": 1,
+                "80": -1, "a0": -1, "fd": -1, "ff": -1, "fa40": 1,
             },
             "EUC-JP": {
                 # C1 control characters (JIS X 0208 Annex 1)
@@ -63,37 +62,35 @@ class DbcsByteStructureTest inherits QUnit::Test {
                 "8ea1": 1, "8edf": 1, "8ee0": -1, "8e": -1,
                 # SS3 and JIS X 0212
                 "8fa1a1": 1, "8fa1": -1,
-                "a1a1": 1, "a0": -2, "ff": -2, "a1a0": -1,
+                "a1a1": 1, "a0": -1, "ff": -1, "a1a0": -1,
             },
             "EUC-KR": {
                 # C1 control characters (KS X 2901); SS2 and SS3 are not used
                 "80": 1, "8e": 1, "8f": 1, "8ea1a1": 2,
-                "b0a1": 1, "a0": -2, "ff": -2, "b0a0": -1,
+                "b0a1": 1, "a0": -1, "ff": -1, "b0a0": -1,
             },
             "GB2312": {
-                # 0x8E and 0x8F are first bytes of GBK, which an implementation can take GB2312 for
-                "80": -2, "8ea1": -2, "8fa1a1": -2, "b0a1": 1, "a0": -2,
+                "80": -1, "8ea1": -1, "8fa1a1": -1, "b0a1": 1, "a0": -1,
             },
             "GBK": {
                 # the euro sign in its code page
-                "80": 1, "ff": -2, "8140": 1, "817f": -1, "81ff": -1, "8180": 1,
+                "80": 1, "ff": -1, "8140": 1, "817f": -1, "81ff": -1, "8180": 1,
             },
             "WINDOWS-936": {
-                "80": 1, "ff": -2, "8140": 1, "817f": -1,
+                "80": 1, "ff": -1, "8140": 1, "817f": -1,
             },
             "Big5": {
-                # 0x81 and 0xFA are first bytes of CP950 and Big5-HKSCS
-                "80": -2, "a140": 1, "a1a1": 1, "a180": -1, "a1a0": -1, "8140": -2, "fa40": -2, "ff": -2,
+                "80": -1, "a140": 1, "a1a1": 1, "a180": -1, "a1a0": -1, "8140": -1, "fa40": -1, "ff": -1,
             },
             "CP950": {
-                "80": -2, "8140": 1, "a180": -1, "f9fe": 1, "ff": -2,
+                "80": -1, "8140": 1, "a180": -1, "f9fe": 1, "ff": -1,
             },
             "CP949": {
-                "80": -2, "8141": 1, "815b": -1, "817b": -1, "8181": 1, "b0a1": 1, "ff": -2,
+                "80": -1, "8141": 1, "815b": -1, "817b": -1, "8181": 1, "b0a1": 1, "ff": -1,
             },
             "JOHAB": {
-                "80": -2, "8441": 1, "8431": -1, "d931": 1, "d991": 1, "d941": 1, "d441": -2, "d971": 1,
-                "d980": -1, "fa41": -2,
+                "80": -1, "8441": 1, "8431": -1, "d931": 1, "d991": 1, "d941": 1, "d441": -1, "d971": 1,
+                "d980": -1, "fa41": -1,
             },
         };
     }
@@ -135,13 +132,8 @@ class DbcsByteStructureTest inherits QUnit::Test {
                 if (c.value < 0) {
                     assertThrows("INVALID-ENCODING", \str.length(), NOTHING, label + ": length()");
                     assertThrows("INVALID-ENCODING", \str.substr(), 2, label + ": substr()");
-                    if (c.value == -1) {
-                        # a malformed sequence: the conversions refuse it too, with every iconv implementation
-                        assertFalse(str.isEncodingValid(), label + ": isEncodingValid()");
-                    } else {
-                        # outside the definition: valid as the platform's iconv converts it
-                        assertEq(converts(str), str.isEncodingValid(), label + ": isEncodingValid() as iconv");
-                    }
+                    # valid as the platform's iconv converts it
+                    assertEq(converts(str), str.isEncodingValid(), label + ": isEncodingValid() as iconv");
                 } else {
                     assertEq(c.value + 2, str.length(), label + ": length()");
                     assertEq("B", convert_encoding(str.substr(-1), "UTF-8"), label + ": the last character");
