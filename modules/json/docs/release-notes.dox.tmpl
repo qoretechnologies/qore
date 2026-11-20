@@ -6,6 +6,11 @@
 
     @section json_v3_0_0 json Module Version 3.0.0
 
+    - NUL characters no longer cut JWT and JWS keys, signing inputs, tokens, algorithm names, JSON schema texts,
+      validated strings or @ref Qore::Json::json_pointer_escape() "json_pointer_escape()" tokens short: a key or
+      signing input with one was used up to it, so that its prefix verified, and a token or algorithm name with one
+      raises \c JWT-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6841">issue 6841</a>)
     - @ref Qore::Json::parse_json() "parse_json()" (and so @ref Qore::Json::jwt_decode() "jwt_decode()"),
       @ref Qore::Json::parse_toon() "parse_toon()" and @ref Qore::Json::JsonSaxParser "JsonSaxParser" raise
       \c INVALID-ENCODING for text that is not valid in its encoding, which was returned in strings
