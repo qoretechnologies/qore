@@ -99,6 +99,9 @@ public class QoreReplTest inherits QUnit::Test {
         addTestCase("State persistence across evals", \testStatePersistence());
 
         # /load command tests
+        addTestCase("/load validates UTF-8", \testLoadUtf8());
+        addTestCase("history across process charsets", \testHistoryCharsets());
+        addTestCase("redirected interactive UTF-8", \testInteractiveUtf8());
         addTestCase("/load with active threads", \testLoadWithActiveThreads());
 
         # WebSocket handler tests
@@ -1205,6 +1208,98 @@ public class QoreReplTest inherits QUnit::Test {
         assertEq("Y", result.error.err);
         result = repl.eval("n");
         assertEq(2, result.value, "the statement of the file after the exception was skipped");
+    }
+
+    testLoadUtf8() {
+        TmpDir tmp("qore-repl-utf8-");
+        string path = tmp.path + "/loaded.q";
+        FileOutputStream file(path);
+        file.write(binary("# valid line\n# "));
+        file.write(<ff>);
+        file.close();
+        QoreRepl repl();
+        auto result = repl.eval("/load " + path);
+        assertEq("PARSE-EXCEPTION", result.error.err);
+        assertEq(path, result.error.file);
+        assertEq(2, result.error.line);
+    }
+
+    private string historySession(string home, string charset, string commands) {
+        string input = home + "/commands";
+        FileOutputStream f(input);
+        f.write(binary(commands));
+        f.close();
+        string exe = TestInterpreter::qore_interpreter();
+        int rc;
+        string out = backquote("HOME='" + replace(home, "'", "'\"'\"'") + "' QORE_CHARSET=" + charset
+            + " '" + replace(exe, "'", "'\"'\"'") + "' -b --interactive <'"
+            + replace(input, "'", "'\"'\"'") + "' 2>&1", \rc);
+        assertEq(0, rc, out);
+        return out;
+    }
+
+    testHistoryCharsets() {
+        TmpDir tmp("qore-repl-history-");
+        string path = tmp.path + "/.qore-repl-history";
+        binary legacy = <2320636166e90a>;
+        FileOutputStream f(path);
+        f.write(legacy);
+        f.close();
+        # Raw Latin-1 is invalid in a UTF-8 process. Keep the file so it can be opened in its original charset.
+        chmod(path, 0);
+        if (!is_readable(path)) {
+            string warning = historySession(tmp.path, "ISO-8859-1", "/quit\n");
+            assertTrue(warning.find("Could not load history file") >= 0, warning);
+        }
+        chmod(path, 0600);
+        assertEq(legacy, File::readBinaryFile(path));
+        string out = historySession(tmp.path, "UTF-8", "/quit\n");
+        assertTrue(out.find("Could not load history file") >= 0, out);
+        assertEq(legacy, File::readBinaryFile(path));
+        out = historySession(tmp.path, "ISO-8859-1", "# 😀\n/quit\n");
+        assertFalse(out.find("Warning:") >= 0, out);
+        binary saved = File::readBinaryFile(path);
+        assertEq(<efbbbf>, saved.substr(0, 3));
+        # The shared loader must remove the BOM before parsing the first timestamp.
+        QoreHistory::History history();
+        history.load(path);
+        list<string> expected = ("# café", "# 😀");
+        assertEq(expected, select (map $1.text, history.getItems()), $1 != "/quit");
+        out = historySession(tmp.path, "UTF-8", "# 🚀\n/quit\n");
+        assertFalse(out.find("Warning:") >= 0, out);
+        expected += "# 🚀";
+        history.load(path);
+        assertEq(expected, select (map $1.text, history.getItems()), $1 != "/quit");
+        # Reopen the UTF-8 writer's new command in Latin-1 and verify that this session saved its own entry too.
+        out = historySession(tmp.path, "ISO-8859-1", "# reopened\n/quit\n");
+        assertFalse(out.find("Warning:") >= 0, out);
+        expected += "# reopened";
+        history.load(path);
+        assertEq(expected, select (map $1.text, history.getItems()), $1 != "/quit");
+    }
+
+    testInteractiveUtf8() {
+        TmpDir tmp("qore-repl-stdin-");
+        string path = tmp.path + "/commands";
+        FileOutputStream file(path);
+        file.write(binary("#" + strmul(" ", 16382)));
+        file.write(<f09f9880>);
+        file.write(binary("\n# malformed "));
+        file.write(<00ff>);
+        file.write(binary("\n/quit\n"));
+        file.close();
+        # Load an existing history in the process charset before adding the first UTF-8 line.
+        FileOutputStream history(tmp.path + "/.qore-repl-history");
+        history.write(binary("#1770000000000000\nprevious ASCII command\n"));
+        history.close();
+        string exe = TestInterpreter::qore_interpreter();
+        int status;
+        string output = backquote("HOME='" + replace(tmp.path, "'", "'\"'\"'") + "' QORE_CHARSET=ISO-8859-1 '"
+            + replace(exe, "'", "'\"'\"'") + "' -b --interactive <'"
+            + replace(path, "'", "'\"'\"'") + "' 2>&1", \status);
+        assertEq(0, status, output);
+        assertTrue(output.find("<stdin>:2: invalid UTF-8 in source") >= 0, output);
+        assertFalse(output.find("<stdin>:1: invalid UTF-8 in source") >= 0, output);
     }
 
     #! Test /load command with active threads

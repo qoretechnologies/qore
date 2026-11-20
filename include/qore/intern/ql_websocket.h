@@ -70,4 +70,16 @@ DLLLOCAL bool q_ws_close_code_valid(uint16_t code);
 DLLLOCAL uint16_t q_ws_parse_close_payload(const void* p, size_t len, uint16_t& code, std::string& reason,
         const char*& error);
 
+//! Returns the description of an RSV bit that a frame may not have whatever extensions are negotiated, or nullptr
+/** An RSV bit must be 0 unless a negotiated extension defines its meaning (RFC 6455 section 5.2); the extensions
+    are given the RSV bits of the first frame of a data message only, so none defines an RSV bit of a control frame,
+    and RSV1, the "Per-Message Compressed" bit of permessage-deflate, is not set on a control frame or a continuation
+    frame (RFC 7692 section 6.1): such a frame fails the connection with status code 1002 (protocol error;
+    qore#6781).  The RSV bits of a data frame that no negotiated extension defines are checked by the caller.
+
+    @param opcode the opcode of the frame
+    @param rsv the RSV bits of the frame: RSV1 is 4, RSV2 is 2, RSV3 is 1
+*/
+DLLLOCAL const char* q_ws_rsv_position_error(unsigned opcode, uint8_t rsv);
+
 #endif // QORE_QL_WEBSOCKET_H

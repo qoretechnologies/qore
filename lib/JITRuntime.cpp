@@ -1681,14 +1681,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_string(const char* str) {
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_string_len(const char* str, uint64_t len) {
-    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
+    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len), QCS_UTF8);
     QoreValue v(s);
     return toBits(v);
 }
 
 //! As qore_rt_make_string_len() for a literal that is ASCII text: the string has its ASCII prefix known (qore#6625)
 extern "C" DLLEXPORT uint64_t qore_rt_make_ascii_string_len(const char* str, uint64_t len) {
-    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
+    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len), QCS_UTF8);
     qore_string_private::get(*s)->setOwnedAsciiText();
     return toBits(QoreValue(s));
 }
@@ -2509,7 +2509,7 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
         }
     }
     LValueHelper helper(xsink);
-    if (var->getLValue(helper, false, true)) {
+    if (var->getLValueInline(helper, false, true)) {
         return;
     }
     // refSelf before assign — assign takes ownership of the reference
@@ -8632,7 +8632,8 @@ static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key
         ExceptionSink* xsink) {
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj->getClass(), class_ctx)) {
-        class_ctx = nullptr;
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*obj->getClass(), key, class_ctx);
     }
 
     LValueHelper helper(xsink, true);
@@ -13335,17 +13336,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         }
         return;
     }
-    // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
-    // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
-    // are never accessed by AST callbacks).
     bool has_aot = uvb->hasCachedAOT();
     bool has_ir = uvb->getCachedIR() != nullptr;
-    // AOT lowering syncs body locals that need ownership through the runtime
-    // local stack; proven native scalars can remain alloca-only, but AOT frame
-    // metadata does not encode a per-local instantiation subset. The stack slots
-    // therefore still exist for every non-closure body local. The skip
-    // optimization only applies to in-process JIT/IR functions.
-    //
     // AST-only variants (no AOT and no IR cache) own their own LocalVarList via
     // the StatementBlock and instantiate it themselves on entry — pre-instantiating
     // here both has nothing to read from (getASTVisibleBodyLocals() requires
@@ -13355,9 +13347,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         || (!has_aot && uvb->areAllBodyLocalsIROnly());
     static const std::vector<LocalVar*> empty_body_locals;
     const std::vector<LocalVar*>& body_locals = has_aot
-        ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
-        : (has_ir ? uvb->getASTVisibleBodyLocals()  // IR: use filtered list
-                  : empty_body_locals);            // AST-only: nothing to pre-inst here
+        ? uvb->getBodyLocals() : (has_ir ? uvb->getASTVisibleBodyLocals() : empty_body_locals);
     // the Program's own options: a call takes them at run time, not the scoped options of a parse (#6207)
     QoreParseOptions po = uvb->getParseOptions(qore_program_private::getParseOptions(*runtime_pgm));
     if (!skip_body_locals) {
@@ -13386,23 +13376,31 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     struct ReceiverTypeInfoGuard {
         const QoreTypeInfo* old = nullptr;
         bool restore = false;
+        bool unsafe = false;
 
         ReceiverTypeInfoGuard(const QoreTypeInfo* ti) {
             if (ti) {
                 old = runtime_set_receiver_type_info(ti);
                 restore = true;
+                // a parameterized receiver: the frame holds types read through it (issue #6419)
+                if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(ti)) {
+                    unsafe = true;
+                    qore_type_unsafe_frame_add(1);
+                }
             }
         }
 
         ~ReceiverTypeInfoGuard() {
             if (restore) {
                 runtime_set_receiver_type_info(old);
+                if (unsafe) {
+                    qore_type_unsafe_frame_add(-1);
+                }
             }
         }
     } receiver_guard(receiver_type_info);
 
-    // Swap in the callee variant's parse options and set runtime_loc to the
-    // function's parse location.  This is critical for correctness: when the
+    // Swap in the callee variant's parse options, keeping the caller's statement for body cleanup. When the
     // caller's program has different parse options than the callee's (e.g. the
     // caller is a restricted sandbox but the callee is a module method), the
     // callee must run with its OWN parse options so that runtime domain checks
@@ -13415,7 +13413,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     QoreParseOptions old_po;
     bool swapped_runtime_ctx = false;
     if (parse_loc) {
-        swap_runtime_statement_location(xsink, nullptr, parse_loc, po, old_stmt, old_loc, old_po);
+        enter_compiled_body_options(xsink, po, old_stmt, old_loc, old_po);
         swapped_runtime_ctx = true;
     }
 
@@ -13582,8 +13580,8 @@ struct QoreRtCrossModuleCallState {
     */
     class RuntimeContextSwap {
     public:
-        RuntimeContextSwap(const QoreProgramLocation* loc, const QoreParseOptions& po) {
-            swap_runtime_statement_location(nullptr, nullptr, loc, po, old_stmt, old_loc, old_po);
+        explicit RuntimeContextSwap(const QoreParseOptions& po) {
+            swap_runtime_parse_options(po, old_stmt, old_loc, old_po);
         }
 
         ~RuntimeContextSwap() {
@@ -13688,11 +13686,10 @@ extern "C" DLLEXPORT int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, in
     // a normal function call: a calling closure's captured locals do not shadow the callee's
     state->closure_env_clear.emplace(nullptr);
     state->po_override.emplace(exec_pgm, uvb, caller_pgm);
-    // the function's parse options, after the override, as execJITWithDeopt() sets them (with the location only)
+    // A native fast entry inherits the caller's statement and uses the callee's parse options.
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     if (parse_loc) {
-        state->runtime_context.emplace(parse_loc,
-            uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm)));
+        state->runtime_context.emplace(uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm)));
     }
     return 0;
 }
@@ -19705,12 +19702,15 @@ struct AOTDirectCallTypeParams {
             }
             old = runtime_set_type_param_instantiation(inst);
             restore = true;
+            // generic code: the frame holds types read through derived types (issue #6419)
+            qore_type_unsafe_frame_add(1);
         }
     }
 
     ~AOTDirectCallTypeParams() {
         if (restore) {
             runtime_set_type_param_instantiation(old);
+            qore_type_unsafe_frame_add(-1);
         }
     }
 };
@@ -20585,12 +20585,8 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
         return toBits(QoreValue());
     }
 
-    // Body locals — use getBodyLocals() for AOT (same as execJITWithDeopt).
-    // AOT StoreLocal syncs non-closure body locals through the runtime stack
-    // for ownership, so the stack slots must exist even when the IR classifier
-    // marks every body local IR-only.
     bool skip_body_locals = false;
-    const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+    const std::vector<LocalVar*>& body_locals = ctx->runtime_body_locals;
     // the Program's own options: a call takes them at run time, not the scoped options of a parse (#6207)
     QoreParseOptions po = uvb->getParseOptions(qore_program_private::getParseOptions(*uvb->pgm));
     if (!skip_body_locals) {
@@ -20609,7 +20605,7 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
         QoreNativeCallStackLocation frame(get_thread_data_for_native_calls(), uvb->getCallName(),
             uvb->getStatementBlock());
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        result_bits = self_fn(ctx, xsink);
+        result_bits = qore_aot_call_body(self_fn, ctx, xsink);
     }
 
     // Uninstantiate body locals

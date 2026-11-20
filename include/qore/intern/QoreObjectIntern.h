@@ -414,7 +414,9 @@ public:
             return nullptr;
         }
 
-        if (class_ctx) {
+        // all the members only in the object's class: another class context sees the members that it can use (issue
+        // #6760)
+        if (class_ctx == qore_class_private::get(*theclass)) {
             const char* str = data->getFirstKey();
             //printd(5, "qore_object_private::firstKey() got %p (%s)\n", str, str ? str : "<null>");
             return !str ? nullptr : new QoreStringNode(str);
@@ -446,7 +448,8 @@ public:
             return nullptr;
         }
 
-        if (class_ctx) {
+        // all the members only in the object's class (issue #6760)
+        if (class_ctx == qore_class_private::get(*theclass)) {
             const char* str = data->getLastKey();
             return !str ? nullptr : new QoreStringNode(str);
         }

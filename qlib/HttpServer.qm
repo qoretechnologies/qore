@@ -278,6 +278,8 @@ log("started listener on %s", lh.desc);
       logged, of a queued persistent handler and of a request processed after its persistent session ended did the
       opposite, an error clearing the context data of a request lost the text of its message, and an error
       preprocessing or authenticating a request lost the description of the exception (issues #6793 and #6809)
+    - a server that sandboxed code creates does not set its logger on the process-wide async I/O controller (see
+      @ref sandbox_process_wide_registries) (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>)
     - a request whose target (the path or the query, which must be and decode to valid UTF-8 text) or whose method or
       HTTP version is not valid text, whose HTTP/1.x header names have a byte above 0x7f, or whose body (with a
       \c Content-Length, buffered over HTTP/2 or HTTP/3, chunked, or compressed) is not valid text in its encoding, is
@@ -3719,8 +3721,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         it last is used; restoreControllerLogger() gives the controller back the logger this server replaced when the
         server stops, so a stopped server's logger is not kept by the controller and the controller's logger is that
         of a server still running, or the one it had before the servers set theirs.
+
+        A server that code that is sandboxed or acts for sandboxed code creates does not set its logger there: the
+        controller's logger is process-wide (see @ref sandbox_process_wide_registries), and the server logs its own
+        messages through its own logger anyway.
     */
     private:internal setControllerLogger() {
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            return;
+        }
         AutoLock al(controller_logger_lck);
         controller_loggers += <Priv::ControllerLoggerInfo>{
             "owner": self.uniqueHash(),
@@ -3757,8 +3766,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 if (controller_loggers[i + 1].prev == info.logger) {
                     controller_loggers[i + 1].prev = info.prev;
                 }
-            } else if (Qore::AsyncIoController::getLogger() == info.logger) {
-                # this server's logger is replaced only if nothing else has replaced it on the controller since
+            } else if (Qore::AsyncIoController::getLogger() == info.logger
+                && SandboxManager::isProcessWideRegistrationAllowed()) {
+                # this server's logger is replaced only if nothing else has replaced it on the controller since; a
+                # stop by code that is sandboxed or acts for sandboxed code cannot change the process-wide logger, so
+                # the controller keeps it until another server sets or restores its own
                 Qore::AsyncIoController::setLogger(info.prev);
             }
             splice controller_loggers, i, 1;
@@ -6273,8 +6285,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 }
                 done.dec();
             });
-        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-        ctrl.submit(<SocketPollOperationInfo>{
+        # the static API: no controller wrapper per request (issue #6836); sock, spop and owner are always set, as
+        # AsyncSocketIoController::submit() requires
+        Qore::AsyncIoController::submit(operation_info: <SocketPollOperationInfo>{
             "sock": s,
             "spop": wrapped_op,
             "to": 30s,
@@ -7255,8 +7268,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     /** @param hook the hook, called with the listener in the thread of the stop, or @ref nothing to remove it
 
         @throw HTTPLISTENER-DEBUG-ERROR the library is not a debug build
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it: the hook is process-wide
     */
     static dbgSetStoppingHook(*code<nothing(HttpListener)> hook) {
+        SandboxManager::checkProcessWideRegistration("set the stopping hook of HTTP listeners");
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             throw "HTTPLISTENER-DEBUG-ERROR", "the test hooks of HttpListener need a debug build of the library";
         }

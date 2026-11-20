@@ -218,11 +218,6 @@ public class KlaviyoCodecs {
         };
     }
 
-    private {
-        #! Set once the codecs have been registered
-        static bool registered = False;
-    }
-
     private:internal {
         #! Serializes registration
         static Mutex lck();
@@ -233,13 +228,15 @@ public class KlaviyoCodecs {
     */
     static register() {
         AutoLock al(lck);
-        if (registered) {
-            return;
+        # registered in the module's initialization; a later call registers only a codec that trusted code removed
+        # since, as the registry is process-wide and refuses sandboxed callers
+        list<hash<RestSchemaWireCodecInfo>> codecs = (KlaviyoCodecs::getSortCodec(),);
+        codecs += map KlaviyoCodecs::getFilterCodec($1.key, $1.value), FilterSpecs.pairIterator();
+        foreach hash<RestSchemaWireCodecInfo> codec in (codecs) {
+            if (!RestSchemaActionCodecs::getCodec(codec.name)) {
+                RestSchemaActionCodecs::registerCodec(codec);
+            }
         }
-        RestSchemaActionCodecs::registerCodec(KlaviyoCodecs::getSortCodec());
-        map RestSchemaActionCodecs::registerCodec(KlaviyoCodecs::getFilterCodec($1.key, $1.value)),
-            FilterSpecs.pairIterator();
-        registered = True;
     }
 
     #! Returns the codec presenting Klaviyo's signed sort token as a field and a direction

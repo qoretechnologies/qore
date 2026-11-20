@@ -81,14 +81,24 @@ class McpPeer inherits McpServerHandler {
     }
 }
 
-#! returns the result of the call, or the error it raised
-string sub tryc(code c) {
+#! returns the result of the call, made with the given arguments, or the error it raised
+string sub tryc(code c, ...) {
     try {
-        c();
+        call_function_args(c, argv);
         return "ok";
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
     }
+}
+
+#! returns the result of a request check, which is bounded by the client's default timeouts
+/** The check is marked on stderr with <tt>[timed-begin <name>]</tt> and <tt>[timed-end <name>]</tt> lines, so that the
+    test can check that no code is compiled to native code while it runs (see warm_up())
+*/
+string sub timed(string name, code c, string client) {
+    stderr.printf("[timed-begin %s]\n", name);
+    on_exit stderr.printf("[timed-end %s]\n", name);
+    return tryc(c, client);
 }
 
 Logger logger("header-values", LoggerLevel::getLevelError());
@@ -107,49 +117,72 @@ mcp_http.setDefaultHandler("mcp", mcp);
 string mcp_url = sprintf("http://127.0.0.1:%d",
     mcp_http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port);
 
+# the request checks: name -> the call, given the X-Client header value and additional client options
+hash<string, code> calls = {
+    # JSON-RPC: through a connection, and through the options hash of the client
+    "jsonrpc-connection-call": sub (string client, *hash<auto> opts) {
+        JsonRpcIoConnection conn("jsonrpc", "test", replace(rpc_url, "http:", "jsonrpcio:"), {"monitor": False},
+            {"headers": Headers + {"X-Client": client}} + opts);
+        JsonRpcClientIo c = conn.get();
+        on_exit c.close();
+        c.call("echo");
+    },
+    "jsonrpc-options-call": sub (string client, *hash<auto> opts) {
+        JsonRpcClientIo c({"url": rpc_url, "http_protocol": "h1", "headers": Headers + {"X-Client": client}} + opts);
+        on_exit c.close();
+        c.call("echo");
+    },
+    # YAML-RPC
+    "yamlrpc-connection-call": sub (string client, *hash<auto> opts) {
+        YamlRpcIoConnection conn("yamlrpc", "test", replace(rpc_url, "http:", "yamlrpcio:"), {"monitor": False},
+            {"headers": Headers + {"X-Client": client}} + opts);
+        YamlRpcClientIo c = conn.get();
+        on_exit c.close();
+        c.call("echo");
+    },
+    "yamlrpc-options-call": sub (string client, *hash<auto> opts) {
+        YamlRpcClientIo c({"url": rpc_url, "http_protocol": "h1", "headers": Headers + {"X-Client": client}} + opts);
+        on_exit c.close();
+        c.call("echo");
+    },
+    # MCP
+    "mcp-connection-call": sub (string client, *hash<auto> opts) {
+        McpConnection conn("mcp", "test", mcp_url, {"monitor": False}, {"headers": Headers + {"X-Client": client}}
+            + opts);
+        # the connection initializes the client
+        McpClient::McpClient c = conn.get();
+        on_exit c.close();
+    },
+    "mcp-options-call": sub (string client, *hash<auto> opts) {
+        McpClient::McpClient c(mcp_url, {"headers": Headers + {"X-Client": client}} + opts);
+        on_exit c.close();
+        c.initialize(<McpClientInfo>{"name": "HeaderValues", "version": "1.0"});
+    },
+};
+
+#! makes each request check once with no time limit (qore#6731)
+/** With JIT execution, the test runs this script with synchronous native compilation (\c QORE_JIT_SYNC_COMPILE=1,
+    see ExecModeHarness), which compiles each function before its first call, on the thread that calls it.  The first
+    request of a client therefore includes the compilation of the code of its whole path, in the client and in the
+    server's threads: with the modules loaded from source, as when their AOT modules are out of date, that takes
+    seconds on an idle machine and more than the clients' default timeout of 45 seconds under the load of parallel
+    tests, which the request checks would report as \c HTTPCLIENT-TIMEOUT.  The warm-up requests make the same
+    calls, with the same headers and with no timeout, so that the code of the checks' requests is compiled before
+    they run; their results are not checked, as the checks make the same calls through the same functions.
+*/
+sub warm_up(hash<string, code> calls) {
+    foreach hash<auto> i in (calls.pairIterator()) {
+        tryc(i.value, "warm-up-" + i.key, {"timeout": 0});
+    }
+}
+
+warm_up(calls);
+
 hash<string, string> results;
-
-# JSON-RPC: through a connection, and through the options hash of the client
-results."jsonrpc-connection-call" = tryc(sub () {
-    JsonRpcIoConnection conn("jsonrpc", "test", replace(rpc_url, "http:", "jsonrpcio:"), {"monitor": False},
-        {"headers": Headers + {"X-Client": "jsonrpc-connection"}});
-    JsonRpcClientIo c = conn.get();
-    on_exit c.close();
-    c.call("echo");
-});
-results."jsonrpc-options-call" = tryc(sub () {
-    JsonRpcClientIo c({"url": rpc_url, "http_protocol": "h1", "headers": Headers + {"X-Client": "jsonrpc-options"}});
-    on_exit c.close();
-    c.call("echo");
-});
-
-# YAML-RPC
-results."yamlrpc-connection-call" = tryc(sub () {
-    YamlRpcIoConnection conn("yamlrpc", "test", replace(rpc_url, "http:", "yamlrpcio:"), {"monitor": False},
-        {"headers": Headers + {"X-Client": "yamlrpc-connection"}});
-    YamlRpcClientIo c = conn.get();
-    on_exit c.close();
-    c.call("echo");
-});
-results."yamlrpc-options-call" = tryc(sub () {
-    YamlRpcClientIo c({"url": rpc_url, "http_protocol": "h1", "headers": Headers + {"X-Client": "yamlrpc-options"}});
-    on_exit c.close();
-    c.call("echo");
-});
-
-# MCP
-results."mcp-connection-call" = tryc(sub () {
-    McpConnection conn("mcp", "test", mcp_url, {"monitor": False},
-        {"headers": Headers + {"X-Client": "mcp-connection"}});
-    # the connection initializes the client
-    McpClient::McpClient c = conn.get();
-    on_exit c.close();
-});
-results."mcp-options-call" = tryc(sub () {
-    McpClient::McpClient c(mcp_url, {"headers": Headers + {"X-Client": "mcp-options"}});
-    on_exit c.close();
-    c.initialize(<McpClientInfo>{"name": "HeaderValues", "version": "1.0"});
-});
+foreach hash<auto> i in (calls.pairIterator()) {
+    # the X-Client header value is the name of the check without "-call"
+    results{i.key} = timed(i.key, i.value, i.key.substr(0, -5));
+}
 
 # header values that cannot be sent raise an error when the client is created
 foreach hash<auto> bad in ({"name": "hash", "value": {"a": 1}}, {"name": "null", "value": NULL}) {

@@ -334,6 +334,18 @@ public:
         reinitAfterForkImpl(b, count);
     }
 
+    //! makes the counter usable in the child after fork(), releasing its lock, which this thread holds since
+    //! lockForFork()
+    /** As reinitAfterFork(), but the lock is released, so that the release is seen (by ThreadSanitizer, which
+        otherwise considers it held by this thread for the rest of the child's life; issue #6817)
+
+        @param count the count in the child, or -1 to keep the count
+    */
+    DLLLOCAL static void releaseAfterForkImpl(QoreCounter* b, int count);
+    DLLLOCAL void releaseAfterFork(int count = -1) {
+        releaseAfterForkImpl(b, count);
+    }
+
     //! releases the counter's lock in the parent after fork()
     DLLLOCAL static void unlockForForkImpl(QoreCounter* b);
     DLLLOCAL void unlockForFork() {

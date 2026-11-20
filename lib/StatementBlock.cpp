@@ -916,7 +916,8 @@ void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
         // locals of the context) are instantiated by the code of their blocks, as in the code that was parsed, and a
         // closure-bound one that the Program instantiated was found by the instantiation of its block, which then
         // pushed no variable of its own, so that the closures of all iterations of a loop shared it (#5869)
-        std::unordered_set<const LocalVar*> body_locals(ctx->all_body_locals.begin(), ctx->all_body_locals.end());
+        const auto& declared = ctx->getDeclaredBodyLocals();
+        std::unordered_set<const LocalVar*> body_locals(declared.begin(), declared.end());
         std::vector<LocalVar*> top_locals;
         for (int i = 0; i < ctx->num_locals; ++i) {
             if (ctx->locals[i] && !body_locals.count(ctx->locals[i])) {
@@ -1035,7 +1036,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 }
             }
             std::vector<LocalVar*> nested_locals;
-            for (LocalVar* lv : cached_toplevel_aot_ctx->all_body_locals) {
+            for (LocalVar* lv : cached_toplevel_aot_ctx->runtime_body_locals) {
                 if (toplevel_set.count(lv) == 0 && !lv->closureUse()) {
                     lv->instantiate(runtime_parse_options);
                     nested_locals.push_back(lv);
@@ -1048,7 +1049,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 // (QoreIROpcode::SetCodeParseOptions); they are restored when it ends (qore#6293)
                 ToplevelCodeParseOptionsHelper code_po(runtime_parse_options);
                 try {
-                    result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+                    result_bits = qore_aot_call_body(cached_toplevel_aot_fn, cached_toplevel_aot_ctx, xsink);
                 } catch (const QoreJITException&) {
                     // The raise site has already populated xsink. Keep the normal
                     // top-level cleanup and Qore exception propagation path intact.

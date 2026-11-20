@@ -165,7 +165,7 @@ int qore_fd_wait_ready(int fd, bool read, ExceptionSink* xsink, const char* oper
     if (xsink) {
         // the wait ends at once when the thread is cancelled or its Program is interrupted; a named pipe is waited on
         // with select(2) on Darwin, where poll(2) misses its hang-up (see QorePollCompat.h)
-        int rc = qore_cancellable_poll(&pfd, 1, -1, xsink, operation);
+        int rc = qore_quiescent_cancellable_poll(&pfd, 1, -1, xsink, operation);
         if (rc == QORE_POLL_CANCELLED) {
             return QORE_POLL_CANCELLED;
         }

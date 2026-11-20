@@ -90,7 +90,7 @@ private:
 
     DLLLOCAL int parseRT(const char* pstr, size_t len, ExceptionSink* xsink);
     DLLLOCAL static int concat(ExceptionSink& xsink, QoreString* str, PCRE2_SIZE* ovector, int olen, const char* ptr,
-            size_t len, const char* target, int rc);
+            size_t len, const char* target, int rc, const QoreEncoding* result_encoding);
 };
 
 #endif // _QORE_QOREREGEXSUBST_H

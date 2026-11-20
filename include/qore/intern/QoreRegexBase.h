@@ -137,6 +137,26 @@ DLLLOCAL int qore_pcre2_check_match_error(int rc, ExceptionSink* xsink, const ch
 
 #define check_re_options(a) (a & ~(PCRE2_CASELESS|PCRE2_DOTALL|PCRE2_EXTENDED|PCRE2_MULTILINE|PCRE2_UTF|PCRE2_UCP|PCRE2_UNGREEDY|PCRE2_DOLLAR_ENDONLY|PCRE2_ANCHORED|PCRE2_DUPNAMES))
 
+//! Advances the search past one validated UTF-8 character after an empty match, or past the end.
+static inline size_t qore_regex_after_empty_match(const char* text, size_t size, size_t offset) {
+    do {
+        ++offset;
+    } while (offset < size && (static_cast<unsigned char>(text[offset]) & 0xc0) == 0x80);
+    return offset;
+}
+
+//! Returns an owned UTF-8 match buffer in the encoding of the original subject.
+DLLLOCAL QoreStringNode* qore_regex_subject_result(QoreStringNode* utf8, const QoreEncoding* encoding,
+        ExceptionSink* xsink);
+
+//! Copies the bytes of a PCRE2 capture and converts the result back to the subject encoding.
+DLLLOCAL QoreStringNode* qore_regex_capture(const char* bytes, size_t len, const QoreEncoding* encoding,
+        ExceptionSink* xsink);
+
+//! Inserts a group under its PCRE2 UTF-8 name, using the process encoding for the hash key.
+DLLLOCAL void qore_regex_set_named_capture(QoreHashNode& groups, const char* utf8_name, QoreValue value,
+        ExceptionSink* xsink);
+
 class QoreRegexBase {
 public:
     DLLLOCAL QoreRegexBase() {

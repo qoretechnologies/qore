@@ -235,6 +235,10 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - implemented the \c "nowait" and \c "skip_locked" modes of the SqlUtil
+      @ref select_option_lock_wait "lock_wait" select option (PostgreSQL 9.5 and later), and the
+      classification of the lock-not-available error (SQLSTATE \c 55P03), also with the \c jdbc driver
+      (<a href="https://github.com/qoretechnologies/qore/issues/6803">issue 6803</a>)
     - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
       column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
       with \c VALUE-ERROR, and its quotes are doubled without a regular expression
@@ -614,6 +618,19 @@ int sub pgsql_get_server_version_num(AbstractDatasource ds) {
         return version.major_version.toInt() * 10000 + version.minor_version.toInt() * 100;
     }
     return version.toInt();
+}
+
+# returns True if the server supports the lock_wait mode: NOWAIT and SKIP LOCKED need PostgreSQL 9.5; PostgreSQL has no
+# lock wait with a time (lock_timeout is a setting of the session, not a clause of the statement)
+bool sub pgsql_supports_lock_wait(AbstractDatasource ds, string mode) {
+    return mode != "wait" && pgsql_get_server_version_num(ds) >= 90500;
+}
+
+# returns True if the exception is PostgreSQL's error for a lock that is not available, SQLSTATE 55P03
+# (lock_not_available): the pgsql driver gives the SQLSTATE in the "alterr" key of the exception's argument; the jdbc
+# driver gives the Java exception, whose getSQLState() gives it
+bool sub pgsql_is_lock_not_available(hash<ExceptionInfo> ex) {
+    return sqlutil_get_sql_state(ex) == "55P03";
 }
 
 # returns an SQL expression giving a relation's name as the connection resolves it: unqualified when the
@@ -2261,6 +2278,27 @@ public class PgsqlTriggerFunction inherits PgsqlFunction {
 
 #! provides the PostgreSQL-specific implementation of the AbstractDatabase interface
 public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
+    #! NOWAIT and SKIP LOCKED need PostgreSQL 9.5; there is no lock wait with a time
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private bool supportsLockWaitImpl(string mode) {
+        return pgsql_supports_lock_wait(ds, mode);
+    }
+
+    #! SQLSTATE 55P03 (lock_not_available)
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+        return pgsql_is_lock_not_available(ex);
+    }
+
+    #! A statement that fails releases its row locks (it is rolled back to the start of the statement)
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private bool lockNotAvailableReleasesLocksImpl() {
+        return True;
+    }
+
     public {
         #! options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()"
         /** @since PgsqlSqlUtilBase 1.19
@@ -6486,6 +6524,27 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private bool supportsEmptyPartitionDropImpl() {
+        return True;
+    }
+
+    #! NOWAIT and SKIP LOCKED need PostgreSQL 9.5; there is no lock wait with a time
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private bool supportsLockWaitImpl(string mode) {
+        return pgsql_supports_lock_wait(ds, mode);
+    }
+
+    #! SQLSTATE 55P03 (lock_not_available)
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+        return pgsql_is_lock_not_available(ex);
+    }
+
+    #! A statement that fails releases its row locks (it is rolled back to the start of the statement)
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private bool lockNotAvailableReleasesLocksImpl() {
         return True;
     }
 

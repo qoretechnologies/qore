@@ -140,6 +140,20 @@ static QoreClass* pseudo_get_class(qore_type_t t) {
     return QC_PSEUDOVALUE;
 }
 
+const QoreClass* qore_pseudo_find_class_by_path(const char* path) {
+    for (const QoreClass* qc : po_list) {
+        if (qc && !strcmp(qc->getPath(), path)) {
+            return qc;
+        }
+    }
+    for (const QoreClass* qc : {QC_PSEUDOVALUE, pseudo_buffer, pseudo_char}) {
+        if (qc && !strcmp(qc->getPath(), path)) {
+            return qc;
+        }
+    }
+    return nullptr;
+}
+
 const QoreClass* qore_pseudo_get_class(qore_type_t t) {
     return pseudo_get_class(t);
 }

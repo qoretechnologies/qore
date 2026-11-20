@@ -26,8 +26,13 @@
 public namespace GoogleCalendarDataProvider {
 #! The parent class for Google calendar REST APIs
 public class GoogleCalendarDataProvider inherits GoogleDataProvider::GoogleApiParentDataProvider {
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = {};
+    }
+
+    private {
     }
 
     #! Creates the object from a REST connection
@@ -46,7 +51,12 @@ public class GoogleCalendarDataProvider inherits GoogleDataProvider::GoogleApiPa
     }
 
     #! Register a new child data provider for Google calendars
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static registerChild(string pathname, Reflection::Class cls) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("register a child data provider");
         if (childMap{pathname} || pathname == "events") {
             throw "GOOGLE-CALENDAR-CHILD-ERROR", sprintf("child %y already registered", pathname);
         }
@@ -55,7 +65,12 @@ public class GoogleCalendarDataProvider inherits GoogleDataProvider::GoogleApiPa
     }
 
     #! Deregister the named child data provider
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     private static deregisterChild(string pathname) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("register a child data provider");
         remove childMap{pathname};
     }
 

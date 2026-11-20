@@ -1,0 +1,3 @@
+one Program, subclass: "base-member" "w1" "w1" "w1" "base-member" "w2" "w2" "mid-private" "mid-private" "mid-internal" "w3" "w3"
+child, subclass: "base-member" "w1" "w1" "w1" "base-member" "w2" "w2" "mid-private" "mid-private" "mid-internal" "w3" "w3"
+child, imported class: "base-member" "w1" "w1" "w1" "base-member" "w2" "w2" "mid-private" "mid-private" "mid-internal" "w3" "w3"

@@ -576,6 +576,13 @@ void WebSocketClientPollOperationPriv::processDecodedFrames(ExceptionSink* xsink
 }
 
 void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, ExceptionSink* xsink) {
+    // an RSV bit on a control frame, or RSV1 on a continuation frame, fails the connection whatever extensions are
+    // negotiated (RFC 6455 section 5.2, RFC 7692 section 6.1; qore#6781)
+    if (q_ws_rsv_position_error(frame.opcode, frame.rsv)) {
+        queueSendClose(WSCC_ProtocolError, "Invalid RSV bits", xsink);
+        return;
+    }
+
     // Control frames (PING, PONG, CLOSE) are never fragmented per RFC 6455
     if (frame.opcode >= WSOP_CLOSE) {
         switch (frame.opcode) {

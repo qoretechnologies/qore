@@ -26,6 +26,17 @@
 public namespace SqlUtil {
 #! base class for abstract SqlUtil classes
 public class AbstractSqlUtilBase inherits Qore::Serializable {
+    public {
+        #! the modes of the @ref select_option_lock_wait "lock_wait" select option
+        /** @since %SqlUtil 3.11.0
+        */
+        const LockWaitModes = {
+            "nowait": True,
+            "skip_locked": True,
+            "wait": True,
+        };
+    }
+
     private {
         #! datasource description
         string dsdesc;
@@ -478,6 +489,79 @@ string id = AbstractSqlUtilBase::getDelimitedIdentifier("a\"b", "\"", "\"", "pgs
                 }
                 break;
         } # switch
+    }
+
+    #! Returns True if the database supports the given mode of the @ref select_option_lock_wait "lock_wait" select option
+    /** @param mode the mode: \c "nowait" (the statement fails at once if a row that it would lock is locked),
+        \c "skip_locked" (the rows that are locked are skipped) or \c "wait" (the statement waits for a lock a given
+        number of seconds); another value is no mode, for which this method returns @ref False
+
+        @return True if the database supports the mode; support can depend on the version of the connected server
+
+        @see
+        - @ref select_option_lock_wait
+        - isLockNotAvailable()
+        - lockNotAvailableReleasesLocks()
+
+        @since %SqlUtil 3.11.0
+    */
+    bool supportsLockWait(string mode) {
+        return LockWaitModes{mode} ? supportsLockWaitImpl(mode) : False;
+    }
+
+    #! Returns True if the exception is the database's error for a lock that is not available
+    /** That is the error of a locking select with the \c "nowait" or \c "wait" mode of the
+        @ref select_option_lock_wait "lock_wait" select option that finds a row locked, or that waits for a lock until
+        its time runs out
+
+        @param ex the exception raised by the database driver
+
+        @return True if the exception is the error of a lock that is not available, False if not, also for a driver
+        that supports no @ref select_option_lock_wait "lock_wait" mode
+
+        @since %SqlUtil 3.11.0
+    */
+    bool isLockNotAvailable(hash<ExceptionInfo> ex) {
+        return isLockNotAvailableImpl(ex);
+    }
+
+    #! Returns True if a locking statement that failed because a lock was not available has released every lock that it took
+    /** A locking select that fails with the error of a lock that is not available (see isLockNotAvailable()) can have
+        locked rows before it reached the locked one; some databases release those locks when the statement fails,
+        others keep them until the transaction ends.  If this method returns False, a caller must end the
+        transaction (commit or roll back) before it waits for the locked row, or it could take part in a deadlock
+        with the holder of that row.
+
+        @return True if the database releases the locks of the failed statement, False if it keeps them until the
+        transaction ends, or if the driver supports no @ref select_option_lock_wait "lock_wait" mode
+
+        @since %SqlUtil 3.11.0
+    */
+    bool lockNotAvailableReleasesLocks() {
+        return lockNotAvailableReleasesLocksImpl();
+    }
+
+    #! Returns True if the database supports the given mode of the @ref select_option_lock_wait "lock_wait" select option
+    /** @param mode \c "nowait", \c "skip_locked" or \c "wait"
+
+        @since %SqlUtil 3.11.0
+    */
+    private bool supportsLockWaitImpl(string mode) {
+        return False;
+    }
+
+    #! Returns True if the exception is the database's error for a lock that is not available
+    /** @since %SqlUtil 3.11.0
+    */
+    private bool isLockNotAvailableImpl(hash<ExceptionInfo> ex) {
+        return False;
+    }
+
+    #! Returns True if a locking statement that failed because a lock was not available has released its locks
+    /** @since %SqlUtil 3.11.0
+    */
+    private bool lockNotAvailableReleasesLocksImpl() {
+        return False;
     }
 
     #! gets the underlying AbstractDatasource

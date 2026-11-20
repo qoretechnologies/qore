@@ -197,6 +197,8 @@ if (wg.wait(timeout_ms: 5000))
     @since %Qore 3.0
  */
 int WaitGroup::wait(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+    // a quiescent wait: no type read through a derived type is held across it (issue #6419)
+    QoreTypeQuiescentWaitHelper qwh;
     return wg->wait(timeout_ms, xsink);
 }
 

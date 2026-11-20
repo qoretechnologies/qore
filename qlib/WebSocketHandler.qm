@@ -35,6 +35,8 @@
 %modern
 
 module WebSocketHandler {
+    # the module arms heartbeat and idle timers for its own streams (see design/user-functional-domains.md)
+    domains = "THREAD_CONTROL";
     version = "2.8";
     desc = "User module for providing WebSocket server services";
     author = "David Nichols <david@qore.org>";
@@ -158,6 +160,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       (<a href="https://github.com/qoretechnologies/qore/issues/6554">issue 6554</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6755">issue 6755</a>)
+    - a control frame with an RSV bit set (RFC 6455 section 5.2), or a continuation frame with RSV1 set (the
+      "Per-Message Compressed" bit of permessage-deflate, RFC 7692 section 6.1), closes the connection with
+      @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002) on HTTP/1.1, HTTP/2 and HTTP/3
+      (<a href="https://github.com/qoretechnologies/qore/issues/6781">issue 6781</a>)
     - a connection closed because a message was larger than the maximum message size is reported with its close code
       1009 (Message Too Big) and reason, on HTTP/1.1, HTTP/2 and HTTP/3: added
       @ref WebSocketHandler::WebSocketConnection::getCloseCode() "WebSocketConnection::getCloseCode()" and
@@ -2368,9 +2374,8 @@ class WebSocketStreamProcessor {
         }
 
         int generation = heartbeat_generation;
-        AsyncSocketIo::AsyncSocketIoController controller =
-            AsyncSocketIo::getGlobalAsyncIoController();
-        heartbeat_timer_id = controller.addTimerDelay(milliseconds(delay_ms),
+        # the static API: no controller wrapper per frame (issue #6836)
+        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(delay_ms),
             sub () { self.handleHeartbeatTimer(generation); });
     }
 
@@ -2378,9 +2383,8 @@ class WebSocketStreamProcessor {
         ++heartbeat_generation;
         if (heartbeat_timer_id) {
             try {
-                AsyncSocketIo::AsyncSocketIoController controller =
-                    AsyncSocketIo::getGlobalAsyncIoController();
-                controller.cancelTimer(heartbeat_timer_id);
+                # the static API: no controller wrapper per frame (issue #6836)
+                Qore::AsyncIoController::cancelTimer(timer_id: heartbeat_timer_id);
             } catch (hash<ExceptionInfo> ex) {
             }
             remove heartbeat_timer_id;

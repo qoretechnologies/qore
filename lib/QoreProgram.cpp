@@ -2559,7 +2559,15 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     // delete pending changes to namespaces: only what the failed parse added is removed, also without
     // PO_ALLOW_REPARSE, as the namespaces hold what the Program had before the parse, including the classes and
     // other symbols inherited from its parent when it was created, which a new parse must still find
-    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
+    {
+        // the declarations that the rollback removes name each other's types without references: they are destroyed
+        // together, as a deleted Program's are, and the tombstones of those that derived types name are made while
+        // all of them are alive (issue #6419)
+        std::vector<QoreTypeOwner*> owners;
+        qore_root_ns_private::get(*RootNS)->getRollbackTypeOwners(owners);
+        QoreTypeOwnerBatch type_owner_batch(owners);
+        qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
+    }
 
     // delete pending statements
     sb.parseRollback();
@@ -5966,7 +5974,8 @@ QoreValue qore_parse_get_define_value(const QoreProgramLocation* loc, const char
         arg.trim_single_trailing(c);
         arg.trim_single_leading(c);
         size_t len = arg.strlen();
-        return new QoreStringNode(arg.giveBuffer(), len, len + 1, QCS_DEFAULT);
+        const QoreEncoding* encoding = arg.getEncoding();
+        return new QoreStringNode(arg.giveBuffer(), len, len + 1, encoding);
     }
 
     const char* p = arg.getBuffer();
@@ -7399,9 +7408,10 @@ public:
     }
 
     void child() noexcept override {
-        // the objects are created again in place: the waiters and the holder are gone with their threads
+        // the condition is created again in place: the waiters are gone with their threads; the mutex is held by this
+        // thread since prepare(): released, so that ThreadSanitizer sees the release (issue #6817)
         new (&exit_hook_cond) std::condition_variable();
-        new (&exit_hook_lock) std::mutex();
+        exit_hook_lock.unlock();
         system_threads_starting = 0;
     }
 };
@@ -7457,15 +7467,13 @@ void qore_run_exit_hook(QoreExitHook& hook) {
 }
 
 int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSink* xsink) {
-    // a hook runs, at the end of the process, with its Program's access and without a sandbox: sandboxed code
-    // cannot register one
-    {
-        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
-        if (policy) {
-            xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered by code that a sandbox "
-                "governs");
-            return -1;
-        }
+    // a hook runs, at the end of the process, with its Program's access and without a sandbox: the exit hooks are
+    // process-wide, so code that is sandboxed or acts for sandboxed code cannot register one, also through a policy
+    // barrier (as qore_check_process_wide_registration() decides, with the exception documented for this API)
+    if (qore_caller_is_sandboxed()) {
+        xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered by code that is sandboxed or acts "
+            "for sandboxed code: the exit hooks are process-wide");
+        return -1;
     }
     QoreProgram* pgm = getProgram();
     assert(pgm);

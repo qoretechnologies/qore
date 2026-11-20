@@ -1,0 +1,243 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires QUnit
+%requires SqlUtil
+
+%exec-class SelectLockWaitTest
+
+#! the "lock_wait" select option of a locking select, and the classification of the lock-not-available error (#6803)
+/** For each database that a datasource string is given for (\c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_ORACLE,
+    \c QORE_DB_CONNSTR_MYSQL and \c QORE_DB_CONNSTR_MARIADB; the MySQL driver's server is told apart by its version):
+    - the modes the server supports, the SQL of each, and \c SELECT-ERROR for the others and for invalid uses
+    - with a row locked by another session: \c "nowait" fails with the error that isLockNotAvailable() recognizes,
+      \c "skip_locked" returns the other rows, and \c "wait" (where supported) fails with that error after its time
+    - whether the failed \c "nowait" statement released the rows it locked before the locked one, which
+      lockNotAvailableReleasesLocks() must tell: a third session tries those rows with \c "nowait"
+*/
+class SelectLockWaitTest inherits QUnit::Test {
+    public {
+        #! the number of rows of the table; row LockedRow is locked by the first session
+        const Rows = 10;
+        const LockedRow = 5;
+    }
+
+    private {
+        int serial;
+    }
+
+    constructor() : QUnit::Test("SelectLockWait", "1.0", \ARGV) {
+        addTestCase("PostgreSQL", sub () { runDriver("pgsql", "pgsql", ENV.QORE_DB_CONNSTR_PGSQL); });
+        addTestCase("Oracle", sub () { runDriver("oracle", "oracle", ENV.QORE_DB_CONNSTR_ORACLE); });
+        addTestCase("MySQL driver (QORE_DB_CONNSTR_MYSQL)", sub () {
+            runDriver("mysql", "mysql", ENV.QORE_DB_CONNSTR_MYSQL);
+        });
+        addTestCase("MySQL driver (QORE_DB_CONNSTR_MARIADB)", sub () {
+            runDriver("mysql", "mysql", ENV.QORE_DB_CONNSTR_MARIADB);
+        });
+        # the jdbc driver gives the Java exception (java.sql.SQLException) as the exception's argument
+        addTestCase("PostgreSQL with JDBC", sub () { runDriver("pgsql", "jdbc", ENV.QORE_DB_CONNSTR_JDBC_PGSQL); });
+        addTestCase("Oracle with JDBC", sub () { runDriver("oracle", "jdbc", ENV.QORE_DB_CONNSTR_JDBC_ORACLE); });
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+        MysqlRunDatabase::teardown();
+        OracleRunSchema::teardown();
+    }
+
+    #! returns the datasource string of the run's own schema or database
+    private string getConnectionString(string db, string connstr) {
+        *string rv;
+        switch (db) {
+            case "pgsql":
+                PgsqlRunSchema::setup(connstr, "SelectLockWait");
+                rv = PgsqlRunSchema::getConnectionString(connstr);
+                break;
+            # the run's user for the jdbc driver is another user than the oracle driver's
+            case "oracle":
+                rv = OracleRunSchema::getConnectionString(connstr, "SelectLockWait",
+                    parse_datasource(connstr).type == "jdbc" ? "jdbc" : NOTHING);
+                break;
+            case "mysql": rv = MysqlRunDatabase::getConnectionString(connstr, "SelectLockWait"); break;
+        }
+        return rv ?? connstr;
+    }
+
+    #! returns the modes that the server is expected to support
+    private static hash<string, bool> getExpectedModes(string db, Datasource ds) {
+        switch (db) {
+            case "pgsql":
+                return {"nowait": True, "skip_locked": True, "wait": False};
+            case "oracle":
+                return {"nowait": True, "skip_locked": True, "wait": True};
+        }
+        int version = ds.getServerVersion();
+        if (version >= 100000) {
+            # MariaDB
+            return {"nowait": version >= 100300, "skip_locked": version >= 100600, "wait": version >= 100300};
+        }
+        return {"nowait": True, "skip_locked": True, "wait": False};
+    }
+
+    private Datasource open(string connstr) {
+        Datasource ds(connstr);
+        ds.open();
+        ds.setAutoCommit(False);
+        return ds;
+    }
+
+    #! runs the checks for a database (\c "pgsql", \c "oracle" or \c "mysql") with a driver module
+    private runDriver(string db, string driver, *string connstr) {
+        if (!connstr) {
+            testSkip("no datasource string for this database");
+        }
+        if (parse_datasource(connstr).type != driver) {
+            testSkip(sprintf("the datasource string is not for the %s driver", driver));
+        }
+        # the jdbc driver is provided by the jni module
+        string mod = driver == "jdbc" ? "jni" : driver;
+        try {
+            load_module(mod);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("the %s module cannot be loaded: %s", mod, ex.desc));
+        }
+        connstr = getConnectionString(db, connstr);
+        Datasource a = open(connstr);
+        Datasource b = open(connstr);
+        Datasource c = open(connstr);
+        on_exit {
+            map $1.rollback(), (a, b, c);
+        }
+        hash<string, bool> modes = SelectLockWaitTest::getExpectedModes(db, a);
+
+        string name = sprintf("lw_%d_%d", getpid(), ++serial);
+        hash<auto> column = {"qore_type": "number", "size": 10, "notnull": True};
+        AbstractTable ta = (new Table(a, {"columns": {"id": column, "v": column},
+            "primary_key": {"name": name + "_pk", "columns": ("id",)}}, name)).getTable();
+        ta.createCommit();
+        on_exit {
+            # every session's locks are released before the table is dropped
+            map $1.rollback(), (a, b, c);
+            ta.dropCommit();
+        }
+        for (int i = 1; i <= Rows; ++i) {
+            ta.insert({"id": i, "v": i});
+        }
+        a.commit();
+        AbstractTable tb = (new Table(b, name)).getTable();
+        AbstractTable tc = (new Table(c, name)).getTable();
+        AbstractDatabase db = AbstractDatabase::getDatabase(b);
+
+        checkContract(ta, db, modes);
+
+        # the first session locks a row
+        a.beginTransaction();
+        assertEq(LockedRow, ta.selectRow({"where": {"id": LockedRow}, "forupdate": True}).id);
+
+        hash<auto> lock_select = {
+            "where": {"id": op_between(1, Rows)},
+            "orderby": "id",
+            "forupdate": True,
+        };
+
+        # NOWAIT fails with the error of a lock that is not available
+        b.beginTransaction();
+        hash<ExceptionInfo> nowait_ex;
+        try {
+            tb.select(lock_select + {"lock_wait": "nowait"});
+            assertTrue(False, "the NOWAIT select did not fail");
+        } catch (hash<ExceptionInfo> ex) {
+            nowait_ex = ex;
+        }
+        assertTrue(tb.isLockNotAvailable(nowait_ex), sprintf("%s: %s", nowait_ex.err, nowait_ex.desc));
+        assertTrue(db.isLockNotAvailable(nowait_ex), "the database object classifies the error too");
+
+        # the rows that the failed statement locked before the locked row are released, or kept until its
+        # transaction ends, as lockNotAvailableReleasesLocks() says
+        bool released = True;
+        c.beginTransaction();
+        for (int i = 1; i < LockedRow; ++i) {
+            try {
+                tc.selectRow({"where": {"id": i}, "forupdate": True, "lock_wait": "nowait"});
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(tc.isLockNotAvailable(ex), sprintf("%s: %s", ex.err, ex.desc));
+                released = False;
+            }
+        }
+        c.rollback();
+        assertEq(tb.lockNotAvailableReleasesLocks(), released, "the failed statement's locks");
+        assertEq(db.lockNotAvailableReleasesLocks(), released, "the failed statement's locks (database)");
+        b.rollback();
+
+        # SKIP LOCKED returns the rows that are not locked
+        if (modes.skip_locked) {
+            b.beginTransaction();
+            list<auto> ids = tb.select(lock_select + {"lock_wait": "skip_locked"}).id;
+            assertEq((map $1, xrange(1, Rows + 1), $1 != LockedRow), (map $1.toInt(), ids));
+            b.rollback();
+        }
+
+        # WAIT n fails with the same error when the time runs out
+        if (modes.wait) {
+            b.beginTransaction();
+            try {
+                tb.select(lock_select + {"lock_wait": 1});
+                assertTrue(False, "the WAIT select did not fail");
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(tb.isLockNotAvailable(ex), sprintf("%s: %s", ex.err, ex.desc));
+            }
+            b.rollback();
+        }
+
+        # another error is not a lock that is not available
+        try {
+            b.select("select no_such_column from " + name);
+            assertTrue(False, "the invalid select did not fail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertFalse(tb.isLockNotAvailable(ex), sprintf("%s: %s", ex.err, ex.desc));
+        }
+        b.rollback();
+        a.rollback();
+    }
+
+    #! checks the supported modes, their SQL, and the refused uses of the option
+    private checkContract(AbstractTable t, AbstractDatabase db, hash<string, bool> modes) {
+        hash<string, string> sql_suffix = {
+            "nowait": " nowait",
+            "skip_locked": " skip locked",
+            "wait": " wait 3",
+        };
+        foreach hash<auto> i in (modes.pairIterator()) {
+            assertEq(i.value, t.supportsLockWait(i.key), "table: " + i.key);
+            assertEq(i.value, db.supportsLockWait(i.key), "database: " + i.key);
+            auto opt = i.key == "wait" ? 3 : i.key;
+            if (i.value) {
+                string sql = t.getSelectSql({"forupdate": True, "lock_wait": opt});
+                assertTrue(sql.endsWith(sql_suffix{i.key}), sprintf("%s: %s", i.key, sql));
+                assertRegex("for update.*" + sql_suffix{i.key} + "$", sql, i.key);
+            } else {
+                assertThrows("SELECT-ERROR", \t.getSelectSql(), {"forupdate": True, "lock_wait": opt}, i.key);
+            }
+        }
+        assertFalse(t.supportsLockWait("no_such_mode"));
+        foreach auto v in (("no_such_mode", -1, 1.5, True, {})) {
+            assertThrows("SELECT-ERROR", \t.getSelectSql(), {"forupdate": True, "lock_wait": v}, sprintf("%y", v));
+        }
+        # the option needs a locking select
+        assertThrows("SELECT-ERROR", \t.getSelectSql(), {"lock_wait": "nowait"});
+        assertThrows("SELECT-ERROR", \t.getSelectSql(), {"forupdate": False, "lock_wait": "nowait"});
+        assertThrows("SELECT-ERROR", \t.getSelectSql(), {"forupdate": True, "lock_wait": "nowait",
+            "superquery": {"columns": "id"}});
+    }
+}

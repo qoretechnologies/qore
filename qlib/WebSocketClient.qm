@@ -354,6 +354,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - a control frame with an RSV bit set (RFC 6455 section 5.2), or a continuation frame with RSV1 set (the
+      "Per-Message Compressed" bit of permessage-deflate, RFC 7692 section 6.1), closes the connection with
+      @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6781">issue 6781</a>)
     - a text message from the server that is not valid UTF-8, also once it is decompressed with permessage-deflate,
       or a close frame whose reason is not valid UTF-8 closes the connection with
       @ref WebSocketUtil::WSCC_InvalidData "WSCC_InvalidData" (1007) before the callback sees it (RFC 6455 section
@@ -4627,9 +4631,8 @@ ws.setEventQueue();
     private wakeAsyncIo() {
         try {
             if (async_wake_socket) {
-                AsyncSocketIo::AsyncSocketIoController controller =
-                    AsyncSocketIo::getGlobalAsyncIoController();
-                controller.wakeSocket(async_wake_socket);
+                # the static API: no controller wrapper per message (issue #6836)
+                Qore::AsyncIoController::wakeSocket(io_object: async_wake_socket);
             }
         } catch (hash<ExceptionInfo> ex) {
             logDebug("async I/O wake error: %s: %s", ex.err, ex.desc);
@@ -4711,9 +4714,8 @@ ws.setEventQueue();
         code<nothing(WscConnection)> deliver = \deliverPendingMessages();
         Counter cnt = delivery_thread_counter;
         try {
-            AsyncSocketIo::AsyncSocketIoController controller =
-                AsyncSocketIo::getGlobalAsyncIoController();
-            controller.submitTask(wrapAsyncCallback(sub () {
+            # the static API: no controller wrapper per delivery (issue #6836)
+            Qore::AsyncIoController::submitTask(task: wrapAsyncCallback(sub () {
                 WebSocketClientWithSerialization::deliverInBackground(deliver, cnt, c);
             }));
         } catch (hash<ExceptionInfo> ex) {
@@ -9151,9 +9153,8 @@ public class WebSocketClientHcioPollOp {
         }
 
         int generation = heartbeat_generation;
-        AsyncSocketIo::AsyncSocketIoController controller =
-            AsyncSocketIo::getGlobalAsyncIoController();
-        heartbeat_timer_id = controller.addTimerDelay(milliseconds(next_delay_ms),
+        # the static API: no controller wrapper per frame (issue #6836)
+        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(next_delay_ms),
             sub () { self.handleHeartbeatTimer(generation); });
     }
 
@@ -9161,9 +9162,8 @@ public class WebSocketClientHcioPollOp {
         ++heartbeat_generation;
         if (heartbeat_timer_id) {
             try {
-                AsyncSocketIo::AsyncSocketIoController controller =
-                    AsyncSocketIo::getGlobalAsyncIoController();
-                controller.cancelTimer(heartbeat_timer_id);
+                # the static API: no controller wrapper per frame (issue #6836)
+                Qore::AsyncIoController::cancelTimer(timer_id: heartbeat_timer_id);
             } catch (hash<ExceptionInfo> ex) {
             }
             remove heartbeat_timer_id;

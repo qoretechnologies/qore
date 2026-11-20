@@ -51,8 +51,10 @@
       sections acquires the lock, so that no other thread holds it, and the data it protects is consistent, when
       the process is copied
     - after fork(), in the parent, in decreasing rank order, each handler releases what it acquired
-    - after fork(), in the child, in decreasing rank order, each handler re-initializes its lock, and the
-      conditions bound to it, for the only thread that is left; a lock that the parent's other threads may hold
+    - after fork(), in the child, in decreasing rank order, each handler releases the lock that it acquired (a
+      recursive lock and the striped leaf locks are re-initialized), so that ThreadSanitizer sees the release
+      (qore#6817), and re-initializes the conditions
+      bound to it, for the only thread that is left; a lock that the parent's other threads may hold
       for a long time or across blocking operations (module loading, parsing, initialization of compiled code) is
       not acquired before fork(), since the forking thread could wait for it forever, but it is re-initialized in
       the child like the others

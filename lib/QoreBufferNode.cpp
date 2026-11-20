@@ -147,8 +147,14 @@ static std::string qore_buffer_decimal_to_string(__int128 unscaled, int32_t scal
     return digits;
 }
 
+/** @param precision the precision of the decimal value
+    @param scale the scale of the decimal value, or -1 if it is inferred from the value
+
+    A number is converted with its exact decimal value when it has one that fits \a precision and \a scale, and
+    otherwise with its display string (QoreNumberNode::getDecimalString(); issue #6837)
+*/
 static int qore_buffer_decimal_value_string(QoreValue value, std::string& str, const char* context,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, int32_t precision, int32_t scale) {
     switch (value.getType()) {
         case NT_INT:
             str = std::to_string(value.getAsBigInt());
@@ -161,7 +167,9 @@ static int qore_buffer_decimal_value_string(QoreValue value, std::string& str, c
                 return -1;
             }
             QoreString tmp;
-            number->getStringRepresentation(tmp);
+            if (number->getDecimalString(tmp, precision, scale, xsink)) {
+                return -1;
+            }
             str.assign(tmp.c_str(), tmp.size());
             return 0;
         }
@@ -291,10 +299,14 @@ static int qore_buffer_parse_decimal_string(const std::string& input, qore_buffe
     return 0;
 }
 
+/** @param precision the precision of the decimal value
+    @param scale the scale of the decimal value, or -1 if the scale is inferred from the value
+*/
 static int qore_buffer_parse_decimal_value(QoreValue value, qore_buffer_decimal_parse_result_t& out,
-        const char* context, ExceptionSink* xsink) {
+        const char* context, ExceptionSink* xsink, int32_t precision = QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION,
+        int32_t scale = -1) {
     std::string str;
-    if (qore_buffer_decimal_value_string(value, str, context, xsink)) {
+    if (qore_buffer_decimal_value_string(value, str, context, xsink, precision, scale)) {
         return -1;
     }
     return qore_buffer_parse_decimal_string(str, out, context, xsink);
@@ -1306,7 +1318,7 @@ QoreBufferNode::QoreBufferNode(QoreBufferElementType element_type, bool nullable
                 qore_buffer_decimal_parse_result_t parsed;
                 char context[64];
                 snprintf(context, sizeof(context), "element %d", (int)i.index());
-                if (qore_buffer_parse_decimal_value(value, parsed, context, xsink)) {
+                if (qore_buffer_parse_decimal_value(value, parsed, context, xsink, this->decimal_precision)) {
                     return;
                 }
                 inferred_scale = std::max(inferred_scale, parsed.scale);
@@ -2101,7 +2113,8 @@ int qore_buffer_node_private::setValueImpl(QoreBufferNode* b, size_t index, Qore
             qore_buffer_decimal_parse_result_t parsed;
             char context[64];
             snprintf(context, sizeof(context), "element %d", (int)index);
-            if (qore_buffer_parse_decimal_value(value, parsed, context, xsink)
+            if (qore_buffer_parse_decimal_value(value, parsed, context, xsink, b->decimal_precision,
+                        b->decimal_scale)
                     || qore_buffer_decimal_rescale(parsed, b->decimal_precision, b->decimal_scale, context, xsink)) {
                 return -1;
             }
@@ -2118,6 +2131,51 @@ int qore_buffer_node_private::setValueImpl(QoreBufferNode* b, size_t index, Qore
     }
     if (b->nullable_elements) {
         qore_buffer_node_private(b).setValidityBit(index, true);
+    }
+    return 0;
+}
+
+int qore_buffer_node_private::takeDecimalImpl(QoreBufferNode* b, const QoreBufferNode* source,
+        const size_t* indices, size_t count, const char* cancel_context, ExceptionSink* xsink) {
+    assert(xsink);
+    assert(b->element_type == QoreBufferElementType::Decimal128);
+    assert(source->element_type == QoreBufferElementType::Decimal128);
+    assert(b->decimal_precision == source->decimal_precision && b->decimal_scale == source->decimal_scale);
+    assert(b->nullable_elements == source->nullable_elements);
+    assert(b->length == count);
+    assert(!b->isView() && !b->external_data && !b->external_device_data);
+    if (!count) {
+        return 0;
+    }
+    if (source->ensureHostStorage(xsink)) {
+        return -1;
+    }
+
+    const qore_buffer_node_private src = view(source);
+    qore_buffer_node_private dst(b);
+    // the absolute value of each element is less than this bound
+    __int128 limit = qore_buffer_decimal_pow10(b->decimal_precision);
+    for (size_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, cancel_context)) {
+            return -1;
+        }
+        size_t index = indices[i];
+        assert(index < source->length);
+        // the elements of the new buffer are valid
+        if (source->nullable_elements && !src.getValidityBit(index)) {
+            dst.setNull(i);
+            continue;
+        }
+        QoreBufferDecimal128 value = src.getDecimalStorage(index);
+        __int128 unscaled = qore_buffer_decimal_storage_to_int128(value);
+        if (unscaled >= limit || unscaled <= -limit) {
+            ValueHolder number(source->getReferencedEntry(index, xsink), xsink);
+            if (*xsink || b->setEntry(i, *number, xsink)) {
+                return -1;
+            }
+            continue;
+        }
+        dst.setDecimalStorage(i, value);
     }
     return 0;
 }
@@ -2497,7 +2555,8 @@ int QoreBufferNode::fill(QoreValue value, ExceptionSink* xsink) {
     }
     if (element_type == QoreBufferElementType::Decimal128 && !(value.isNothing() || value.getType() == NT_NULL)) {
         qore_buffer_decimal_parse_result_t parsed;
-        if (qore_buffer_parse_decimal_value(value, parsed, "fill value", xsink)) {
+        if (qore_buffer_parse_decimal_value(value, parsed, "fill value", xsink, decimal_precision,
+                decimal_scale == QORE_BUFFER_DECIMAL128_DEFAULT_SCALE ? -1 : decimal_scale)) {
             return -1;
         }
         if (decimal_scale == QORE_BUFFER_DECIMAL128_DEFAULT_SCALE && parsed.scale > decimal_scale) {

@@ -73,7 +73,9 @@ static QoreHashNode* qore_buffer_device_info_hash(const QoreBufferNode* b, Excep
     unscaled integers.  Use Qore \c number literals, for example \c 12.34n, to
     avoid converting through binary floating-point values.  Decimal scale is
     inferred from list construction and \c filled() construction; values assigned
-    later must fit the buffer's scale without losing decimal precision.
+    later must fit the buffer's scale without losing decimal precision.  A
+    @ref number "number" is stored as its exact decimal value when it fits the
+    buffer's precision and scale (see @ref number_exact_decimal).
  */
 qclass <buffer> [arg=const QoreBufferNode* b = v.get<const QoreBufferNode>();vparent=<value>];
 

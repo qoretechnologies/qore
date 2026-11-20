@@ -2,8 +2,9 @@
 # the worker of deleted-program-own-generic-cycle.qtest: a Program whose global variables hold generic values whose
 # type arguments are its own classes (an object of its own generic class, a typed hash of its own generic hashdecl, a
 # list of objects of its own generic class and an object of a generic class of the parent Program) is deleted in each
-# generation; the values' destructors run, and in debug builds the declarations of the Program that are kept after it
-# is deleted (because derived types name them, issue #6419) are the same number in every generation
+# generation; the values' destructors run, and in debug builds no declaration of the Program is kept after it is
+# deleted: the ones that derived types name are retired, the derived types are repointed to their tombstones, and the
+# declarations are freed once no thread can read them (issue #6419), here when this thread is made quiescent
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -90,11 +91,15 @@ for (int gen = 0; gen < Generations; ++gen) {
             printf("generation %d: the values were not created\n", gen);
         }
     }
+    if (counted && exists_function("dbg_type_retirement_free")) {
+        # this thread is quiescent while the hook frees what no thread can read anymore
+        call_function("dbg_type_retirement_free");
+    }
     kept += count_kept() - before;
 }
 printf("destroyed: %y\n", destroyed);
 if (!counted) {
     printf("kept per generation: n/a\n");
 } else {
-    printf("kept per generation: %s\n", (select kept, $1 != kept[0]) ? sprintf("not constant: %y", kept) : "constant");
+    printf("kept per generation: %s\n", (select kept, $1) ? sprintf("not zero: %y", kept) : "0");
 }

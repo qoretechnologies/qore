@@ -108,4 +108,15 @@ Linenoise::set_callback(\my_callback());
     each one ends when the @ref Qore::Program "Program" that created its code or object is destroyed: the binding is
     removed and the callback or object is released while its Program can still run its destructors.  Kept after its
     Program is destroyed, it could neither be called nor destroyed.
+
+    @section linenoise_sandbox Callbacks and Sandboxed Code
+
+    Because the line editor and its callbacks are global to the process, code that is sandboxed or acts for sandboxed
+    code (see @ref sandbox_process_wide_registries) cannot set, replace or remove them:
+    @ref Qore::Linenoise::set_callback() "set_callback()",
+    @ref Qore::Linenoise::set_hints_callback() "set_hints_callback()",
+    @ref Qore::Linenoise::set_syntax_callback() "set_syntax_callback()",
+    @ref Qore::Linenoise::bind_key() "bind_key()", @ref Qore::Linenoise::unbind_key() "unbind_key()" and
+    @ref Qore::Linenoise::set_history_provider() "set_history_provider()" raise \c SANDBOX-REGISTRATION-ERROR for
+    such code; trusted code is not affected.
 */

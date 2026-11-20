@@ -37,13 +37,18 @@ public class GoogleDocumentAiDataProvider inherits GoogleDocumentAiDataProviderC
         });
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = {
             "process-document":
                 Class::forName("GoogleDocumentAiDataProvider::GoogleDocumentAiProcessDocumentDataProvider"),
             "wait-for-operation":
                 Class::forName("GoogleDocumentAiDataProvider::GoogleDocumentAiWaitOperationDataProvider"),
         };
+    }
+
+    private {
     }
 
     constructor(GoogleDocumentAiRestClient::GoogleDocumentAiRestClientIo rest,
