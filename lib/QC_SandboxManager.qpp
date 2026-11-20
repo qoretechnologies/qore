@@ -804,8 +804,8 @@ bool SandboxManager::getFilesystemDefaultPolicy() {
 
 //! Sets whether code that the sandbox governs may use uncontrolled APIs
 /** Uncontrolled APIs - functions, methods and classes of the @ref Qore::PO_NO_UNCONTROLLED_APIS
-    "uncontrolled API" functional domain, such as the Java classes of the \c jni module and the Python objects of the
-    \c python module - do I/O and run code that %Qore does not see, so neither the filesystem and network policy nor
+    "uncontrolled API" functional domain, such as the Java classes of the \c jni module, the Python objects of the
+    \c python module and the JavaScript programs of the \c v8 module - do I/O and run code that %Qore does not see, so neither the filesystem and network policy nor
     the parse options of the sandbox apply to what they do.  A sandbox that refuses them (the default) refuses the
     code that it governs every call of them at run time, as @ref Qore::PO_NO_UNCONTROLLED_APIS
     "PO_NO_UNCONTROLLED_APIS" does: a call raises \c INVALID-FUNCTION-ACCESS; a system-policy capability of trusted
@@ -820,6 +820,11 @@ bool SandboxManager::getFilesystemDefaultPolicy() {
 
     A host that attaches a sandbox only for its resource limits, interrupts or I/O policy, and trusts the code to use
     uncontrolled APIs, allows them.
+
+    @warning allowing uncontrolled APIs trusts the code with the whole process: the runtimes that they give access to
+    (Java, Python, JavaScript) reach files, processes, the network and the data of every %Program in the process
+    without any sandbox seeing it; never allow them for code that is not trusted, such as the code of a tenant (see
+    @ref sandbox_uncontrolled_api)
 
     @param allow @ref Qore::True "True" to allow code that the sandbox governs to use uncontrolled APIs,
     @ref Qore::False "False" (the default) to refuse them
