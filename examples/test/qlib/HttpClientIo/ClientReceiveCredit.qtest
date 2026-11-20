@@ -57,6 +57,14 @@ const ChunkSize = 32768;
 #! The data written to a client that does not read before its stream must be full (a hang guard)
 const MaxBytes = 256 * 1024 * 1024;
 
+#! The send limit of the stream of testSendLimitDrain(): below the backpressure threshold of the drain wait (1 MiB);
+#! the stream's window does not matter to the case
+const SendLimit = 256 * 1024;
+
+#! How long testSendLimitDrain() waits for a drain while the client does not read before it takes the stream as
+#! blocked (a longer wait only lets more data in first)
+const DrainProbeTimeout = 250ms;
+
 #! HTTP/3 advertises a smaller receive window for this process in Debug. Both sizes exercise real QUIC flow control.
 const H3Window = Option::HAVE_LIBRARY_DEBUGGING ? 256 * 1024 : 16 * 1024 * 1024;
 
@@ -241,6 +249,22 @@ class Writer {
         }
     }
 
+    #! Gives the stream its own send limit
+    setSendLimit(int limit) {
+        if (st.proto == "h2") {
+            st.sock.setHttp2StreamSendLimit(st.stream_id, limit);
+        } else {
+            st.sock.setQuicStreamSendLimit(st.session_id, st.stream_id, limit);
+        }
+    }
+
+    #! Waits for the stream's send buffer to drain; returns 0 if it drained, 1 if the wait timed out
+    int waitDrain(timeout t) {
+        return st.proto == "h2"
+            ? st.sock.waitForHttp2StreamDrain(st.stream_id, t)
+            : st.sock.waitForQuicStreamDrain(st.session_id, st.stream_id, t);
+    }
+
     #! Writes until the stream's send buffer is full; returns the bytes written, or -1 if MaxBytes were written
     int writeUntilFull() {
         binary chunk = binary(strmul("x", ChunkSize));
@@ -341,6 +365,8 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             }
             addTestCase(proto + ": a stream's channel outlives its session", \testChannelOutlivesSession(),
                 proto);
+            addTestCase(proto + ": a stream with its own send limit drains when its refused data fits",
+                \testSendLimitDrain(), proto);
         }
         addTestCase("h2: HTTPClient streaming (receive callback) gets every byte", \testHttpClientRecvCallback());
         set_return_value(main());
@@ -461,6 +487,63 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         assertEq(0, r.wait(), "the reader ended");
         assertNothing(r.err);
         assertEq(taken + 4 * 1024 * 1024, r.bytes, "every byte arrives");
+    }
+
+    #! A stream with its own send limit is drained only when the data that the limit refused fits (issue #6907)
+    /** The drain wait compared the buffered data with the fixed backpressure threshold (1 MiB), not with the stream's
+        limit: a writer refused by a smaller limit was told at once that the stream had drained, and retried in a busy
+        loop until the client granted credit
+    */
+    testSendLimitDrain(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr(proto);
+        on_exit delete mgr;
+        hash<auto> s = openStream(mgr);
+        Writer w = s.writer;
+        w.setSendLimit(SendLimit);
+        binary chunk = binary(strmul("x", ChunkSize));
+        # the client takes nothing: the server writes until its stream stops draining, as the client's window is
+        # used up; every drain that the writer is told of lets its next write in
+        int taken = 0;
+        int false_drains = 0;
+        bool blocked;
+        while (taken < MaxBytes) {
+            if (w.write(chunk)) {
+                taken += ChunkSize;
+                continue;
+            }
+            if (w.waitDrain(DrainProbeTimeout)) {
+                blocked = True;
+                break;
+            }
+            if (!w.write(chunk)) {
+                ++false_drains;
+                break;
+            }
+            taken += ChunkSize;
+        }
+        assertEq(0, false_drains, "a write after a drain is taken while the client does not read");
+        assertTrue(blocked, "the stream stops draining while the client does not read");
+        # the client reads now
+        BodyReader r(s.stream);
+        int written = 0;
+        while (written < 4 * 1024 * 1024) {
+            if (w.write(chunk)) {
+                written += ChunkSize;
+                continue;
+            }
+            # -1: HTTP/2 drops the buffer of a stream once nghttp2 has taken all its data
+            assertNeq(1, w.waitDrain(HangGuard), "the stream drains while the client reads");
+            if (w.write(chunk)) {
+                written += ChunkSize;
+            } else {
+                ++false_drains;
+            }
+        }
+        w.end();
+        assertEq(0, false_drains, "a write after a drain is taken while the client reads");
+        assertEq(0, r.wait(), "the reader ended");
+        assertNothing(r.err);
+        assertEq(taken + written, r.bytes, "every byte arrives");
     }
 
     testOneStreamNotRead(string proto) {

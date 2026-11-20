@@ -7893,6 +7893,9 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream
 
     Blocks the calling thread until the stream's internal buffer drops below the
     backpressure threshold (1 MB), the stream is closed, or the timeout expires.
+    For a stream with its own send limit (see
+    @ref Qore::Socket::setHttp2StreamSendLimit() "setHttp2StreamSendLimit()"), the buffer has drained when it is empty or
+    when the data that the limit refused last fits within the limit, so that sending that data again succeeds.
 
     Unlike polling with usleep(), this method uses a condition variable signaled by
     the I/O thread when buffer space is freed, providing deterministic wakeup with
@@ -9482,6 +9485,9 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
 
     Blocks the calling thread until the stream's internal buffer drops below the
     backpressure threshold (1 MB), the stream is closed, or the timeout expires.
+    For a stream with its own send limit (see
+    @ref Qore::Socket::setQuicStreamSendLimit() "setQuicStreamSendLimit()"), the buffer has drained when it is empty or
+    when the data that the limit refused last fits within the limit, so that sending that data again succeeds.
 
     Unlike polling with usleep(), this method uses a condition variable signaled by
     the I/O thread when buffer space is freed, providing deterministic wakeup with
