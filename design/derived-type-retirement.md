@@ -449,6 +449,30 @@ declarations, are counted in `ThreadData::type_unsafe_frames` (`qore_type_unsafe
 IR and AOT specialization guards of the lowering (`Function.cpp`, `QoreAOT.cpp`) and `IRClosureSpecializationGuard`
 run no user code and are not counted.
 
+An ordinary call runs develop's code in `CodeEvaluationHelper`: the frame is marked only in branches that generic calls
+take.
+- An explicit receiver is tested in `substituteCallerReceiverTypeParams()` with the value that it tested before: the
+  contains-type-parameter cache of `QoreTypeInfo` (-1 not known yet, 1 or 0) also holds `QTI_CTP_UNSAFE_RECEIVER`, so
+  the test of a value that is not 0 takes the receivers that can contain a type parameter or name user declarations;
+  the type of a plain class is 0, and the other readers of the cache (the IR and JIT coercions of local variables)
+  are unchanged.
+- The receiver of a call with an object only (`setObjectReceiverTypeInfo()`, inlined as
+  `qore_get_object_receiver_type_info()` was) is tested in the branch of an object instantiated with type arguments.
+- Inferred type arguments are scanned after the test for a generic variant (`setTypeParamInstantiation()`).
+- The mark and the restoration of the caller's type parameter instantiation share one byte (`generic_frame`), which the
+  destructor tests once, as it tested the restoration before; `markTypeUnsafe()` is out of line and cold.
+- `examples/test/qore/classes/type-retirement-unsafe-frames.qtest` checks the count in each kind of frame.
+
+The acquire loads of the pointers of a `QoreTypeSpec` are not moved before a test, merged into a conditional move or
+removed by the compiler, as the plain loads before them were: a getter whose callers usually find another kind loads
+only after its test, and `getComplexHash()` and `getComplexList()`, which hash and list types ask, load first and select
+(the union is always wholly set); they still take an instruction or two more than the plain loads on some paths.  The
+rows of the AST interpreter's and the JIT's assignments to local variables depended on the inlining of
+`LocalVar::tryGetLValue()` and of `getLValue()` in the JIT runtime, which the compiler stopped doing when the unity
+chunks that compile them grew: `tryGetLValue()` is always inlined, and the JIT runtime uses `getLValueInline()`;
+`getLValue()` itself is left to the compiler, which calls it from the IR interpreter's `execute()` (forcing it inline
+there raised the register pressure of that function).
+
 Checked and safe (no type read through a derived type held across user code): foreach; the functional value types of
 select, streaming and range; map, select and mapselect (every value is kept in the result); sort with a callback; the
 list and hash pseudo-methods; `LValueHelper` (index expressions are evaluated before the lvalue is navigated); the fold
@@ -502,28 +526,32 @@ six retired derived types per generation of the last Program (two type parameter
 complex hash type, `Box<Foo>`), which stage 2 would free.  Without a quiescent point (a thread that never waits and
 never leaves Qore code), nothing is freed before the thread does, as before.
 
-Callgrind instructions per iteration (`rows.sh` plus `bench-generic.q` and `bench-guardprof.q`, the minimum of 5
-allocation layouts, GCC 15.2, Release), develop `54285687c5` and this head at paths of equal length:
+Callgrind instructions per iteration (`rows.sh` plus `bench-generic.q`, `bench-guardprof.q` and `bench-pseudo.q`, the
+minimum of 5 allocation layouts, GCC 15.2, Release; the fix built with `-g`, which does not change the code),
+develop `f446244fba` and the head at paths of equal length:
 
 |Row|ast develop|ast fix|ir develop|ir fix|jit develop|jit fix|
 |---|---|---|---|---|---|---|
-|fc|14115|14089 (-26)|3013|3012 (-1)|315|315 (+0)|
-|sc|14034|14010 (-24)|8711|8710 (-1)|3431|3432 (+1)|
-|m|16455|16439 (-16)|10986|10985 (-1)|4985|4987 (+2)|
-|fs|16786|16770 (-16)|10049|10047 (-2)|4601|4602 (+1)|
-|mp|24859|24833 (-26)|15623|15625 (+2)|2059|2059 (+0)|
-|mm|63881|63887 (+6)|47606|47608 (+2)|24273|24290 (+17)|
-|tc|14984|14958 (-26)|14619|14620 (+1)|2214|2213 (-1)|
-|tl|14589|14558 (-31)|7517|7518 (+1)|3007|3009 (+2)|
-|tl0|14238|14207 (-31)|6855|6856 (+1)|1995|1995 (+0)|
-|th|16283|16245 (-38)|13279|13269 (-10)|8451|8458 (+7)|
-|go|34801|34837 (+36)|34241|34309 (+68)|24666|24743 (+77)|
-|hd|19180|19130 (-50)|13579|13564 (-15)|6103|6103 (+0)|
-|gp|30077|30028 (-49)|32891|32880 (-11)|17083|17075 (-8)|
+|fc|14025|14025 (+0)|2893|2894 (+1)|315|315 (+0)|
+|sc|13944|13946 (+2)|8119|8120 (+1)|3387|3381 (-6)|
+|m|16362|16363 (+1)|10259|10260 (+1)|4946|4937 (-9)|
+|fs|16674|16675 (+1)|9389|9389 (+0)|4553|4548 (-5)|
+|mp|24334|24335 (+1)|14813|14816 (+3)|2042|2042 (+0)|
+|mm|63232|63245 (+13)|44659|44661 (+2)|23520|23488 (-32)|
+|tc|14875|14875 (+0)|14228|14234 (+6)|2218|2216 (-2)|
+|tl|14545|14552 (+7)|7184|7186 (+2)|3044|3046 (+2)|
+|tl0|14194|14201 (+7)|6534|6537 (+3)|1856|1855 (-1)|
+|th|16228|16235 (+7)|12899|12914 (+15)|8445|8454 (+9)|
+|go|34651|34725 (+74)|33525|33679 (+154)|24694|24822 (+128)|
+|hd|19115|19094 (-21)|13112|13110 (-2)|6114|6114 (+0)|
+|gp|29967|29980 (+13)|31980|31988 (+8)|17096|17103 (+7)|
+|pv|9650|9655 (+5)|7845|7867 (+22)|2906|2913 (+7)|
+|pl|8955|8960 (+5)|3740|3740 (+0)|258|258 (+0)|
+|pt|9308|9313 (+5)|6062|6070 (+8)|3229|3236 (+7)|
 
-The rows outside generic code are within the noise of allocation layout (about +-30).  `go` (an object of a
-generic class with a class type argument) pays the count of its unsafe frame (two thread-local updates per
-call of the generic constructor); see the report for the check from a second script path.
+`go` (an object of a generic class with a class type argument) pays its unsafe frame; the other rows pay the
+acquire loads of the `QoreTypeSpec` getters (an instruction or two on some paths) and the remaining shifts of the
+compiler's inlining in the unity chunks (see above).
 
 ### Known limits and risks
 

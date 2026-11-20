@@ -2509,7 +2509,7 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
         }
     }
     LValueHelper helper(xsink);
-    if (var->getLValue(helper, false, true)) {
+    if (var->getLValueInline(helper, false, true)) {
         return;
     }
     // refSelf before assign — assign takes ownership of the reference

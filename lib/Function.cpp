@@ -1641,11 +1641,14 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     if (restore_receiver_type_info) {
         runtime_set_receiver_type_info(old_receiver_type_info);
     }
-    if (restore_type_param_instantiation) {
-        runtime_set_type_param_instantiation(old_type_param_instantiation);
-    }
-    if (type_unsafe_frame) {
-        qore_type_unsafe_frame_add(-1);
+    // one test for the calls that are not generic
+    if (generic_frame) {
+        if (generic_frame & GF_RESTORE_TYPE_PARAM_INSTANTIATION) {
+            runtime_set_type_param_instantiation(old_type_param_instantiation);
+        }
+        if (generic_frame & GF_TYPE_UNSAFE) {
+            qore_type_unsafe_frame_add(-1);
+        }
     }
     if (returnTypeInfo != (const QoreTypeInfo*)-1) {
         saveReturnTypeInfo(returnTypeInfo);
@@ -1817,19 +1820,54 @@ static const QoreTypeInfo* qore_merge_inferred_class_receiver(const QoreTypeInfo
     return qore_get_parameterized_class_type(rpti->getBaseClass(), args, rpti->isOrNothing());
 }
 
+void CodeEvaluationHelper::markTypeUnsafe() {
+    if (!(generic_frame & GF_TYPE_UNSAFE)) {
+        generic_frame |= GF_TYPE_UNSAFE;
+        qore_type_unsafe_frame_add(1);
+    }
+}
+
+QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::setObjectReceiverTypeInfo(const QoreObject* self) {
+    // as qore_get_object_receiver_type_info()
+    if (const QoreTypeInfo* ti = self->getInstantiatedTypeInfo()) {
+        receiver_type_info = ti;
+        // a parameterized receiver (Box<Foo>): the call substitutes its type arguments, which it reads through the
+        // derived type (issue #6419)
+        if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(ti)) {
+            markTypeUnsafe();
+        }
+    } else {
+        receiver_type_info = self->getClass()->getTypeInfo();
+    }
+}
+
 void CodeEvaluationHelper::substituteCallerReceiverTypeParams(const QoreFunction* func) {
     assert(receiver_type_info);
-    // the type's cached flag decides it after its first test
-    if (receiver_type_info->getContainsTypeParameterCache()
-            && qore_type_contains_type_parameter(receiver_type_info)) {
-        receiver_type_info = qore_substitute_type_params_if_needed(receiver_type_info);
-        // code that runs without an instantiation of its type parameters (a static method of G<T> called as G::m(),
-        // whose code calls id(v)) binds those of the method's class to the types of the arguments, as G::id(v)
-        // made there does (qore#6186)
-        if (qore_type_contains_type_parameter(receiver_type_info)) {
-            if (const QoreTypeInfo* inferred = qore_merge_inferred_class_receiver(receiver_type_info,
-                    func->runtimeInferClassReceiverTypeInfo(getArgs(), receiver_type_info))) {
-                receiver_type_info = inferred;
+    // the type's cached flags decide it after its first test, in one test: a receiver that can contain a type
+    // parameter, or a parameterized receiver whose type arguments name user declarations; a plain class receiver,
+    // the type of the object's class, which the object keeps, is neither (issue #6419)
+    signed char flags = receiver_type_info->getContainsTypeParameterCache();
+    if (flags) {
+        // the call substitutes the type arguments of a parameterized receiver (Box<Foo>), which it reads through the
+        // derived type (issue #6419); a value not known yet is tested here too
+        if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(receiver_type_info)) {
+            markTypeUnsafe();
+        }
+        if (!(flags & QoreTypeInfo::QTI_CTP_UNSAFE_RECEIVER && !(flags & 1))
+                && qore_type_contains_type_parameter(receiver_type_info)) {
+            receiver_type_info = qore_substitute_type_params_if_needed(receiver_type_info);
+            // code that runs without an instantiation of its type parameters (a static method of G<T> called as
+            // G::m(), whose code calls id(v)) binds those of the method's class to the types of the arguments, as
+            // G::id(v) made there does (qore#6186)
+            if (qore_type_contains_type_parameter(receiver_type_info)) {
+                if (const QoreTypeInfo* inferred = qore_merge_inferred_class_receiver(receiver_type_info,
+                        func->runtimeInferClassReceiverTypeInfo(getArgs(), receiver_type_info))) {
+                    receiver_type_info = inferred;
+                }
+            }
+            // the substituted receiver (Box<T> with T as Foo)
+            if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(receiver_type_info)) {
+                markTypeUnsafe();
             }
         }
     }
@@ -1855,7 +1893,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
         // out of line, so that the calls without a receiver keep their code (qore#6308)
         substituteCallerReceiverTypeParams(func);
     } else if (self) {
-        receiver_type_info = qore_get_object_receiver_type_info(self);
+        setObjectReceiverTypeInfo(self);
     }
 
 #ifdef QORE_MANAGE_STACK
@@ -1922,12 +1960,6 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     if (receiver_type_info) {
         old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
         restore_receiver_type_info = true;
-        // a parameterized receiver (Box<Foo>): the call substitutes its type arguments, which it reads through the
-        // derived type (issue #6419); a plain class receiver is the type of the object's class, which the object keeps
-        if (!type_unsafe_frame && QoreParameterizedClassTypeInfo::isUnsafeReceiver(receiver_type_info)) {
-            type_unsafe_frame = true;
-            qore_type_unsafe_frame_add(1);
-        }
     }
     PreparedCall prepared;
     if constexpr (LexicalInvocation) {
@@ -2133,9 +2165,9 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
             xsink2.clear();
             // A rejected generic variant may have installed its own instantiation. Restore the caller
             // before the replacement entry, which can be nongeneric and need no instantiation at all.
-            if (restore_type_param_instantiation) {
+            if (generic_frame & GF_RESTORE_TYPE_PARAM_INSTANTIATION) {
                 runtime_set_type_param_instantiation(old_type_param_instantiation);
-                restore_type_param_instantiation = false;
+                generic_frame &= ~GF_RESTORE_TYPE_PARAM_INSTANTIATION;
                 old_type_param_instantiation = nullptr;
             }
 #ifdef DEBUG
@@ -2282,9 +2314,9 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     variant_needs_type_param_substitution = sig && sig->needsTypeParameterSubstitution();
     if (!variant_needs_type_param_substitution && !variant->isUser()) {
         type_param_instantiation.clear();
-        if (restore_type_param_instantiation) {
+        if (generic_frame & GF_RESTORE_TYPE_PARAM_INSTANTIATION) {
             runtime_set_type_param_instantiation(old_type_param_instantiation);
-            restore_type_param_instantiation = false;
+            generic_frame &= ~GF_RESTORE_TYPE_PARAM_INSTANTIATION;
             old_type_param_instantiation = nullptr;
         }
         return 0;
@@ -2293,9 +2325,9 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     const UserSignature* generic_sig = qore_get_variant_generic_signature(variant);
     if (!generic_sig) {
         type_param_instantiation.clear();
-        if (restore_type_param_instantiation) {
+        if (generic_frame & GF_RESTORE_TYPE_PARAM_INSTANTIATION) {
             runtime_set_type_param_instantiation(old_type_param_instantiation);
-            restore_type_param_instantiation = false;
+            generic_frame &= ~GF_RESTORE_TYPE_PARAM_INSTANTIATION;
             old_type_param_instantiation = nullptr;
         }
         return 0;
@@ -2339,19 +2371,18 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     }
     // the inferred type arguments can be read through the arguments' derived types: a frame whose type arguments
     // name user declarations holds them (issue #6419)
-    if (!type_unsafe_frame) {
+    if (!(generic_frame & GF_TYPE_UNSAFE)) {
         for (const QoreTypeInfo* arg : type_param_instantiation.type_args) {
             if (qore_type_needs_decl_pin(arg)) {
-                type_unsafe_frame = true;
-                qore_type_unsafe_frame_add(1);
+                markTypeUnsafe();
                 break;
             }
         }
     }
 
-    if (!restore_type_param_instantiation) {
+    if (!(generic_frame & GF_RESTORE_TYPE_PARAM_INSTANTIATION)) {
         old_type_param_instantiation = runtime_set_type_param_instantiation(&type_param_instantiation);
-        restore_type_param_instantiation = true;
+        generic_frame |= GF_RESTORE_TYPE_PARAM_INSTANTIATION;
     } else {
         runtime_set_type_param_instantiation(&type_param_instantiation);
     }

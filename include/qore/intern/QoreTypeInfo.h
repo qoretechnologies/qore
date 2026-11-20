@@ -129,13 +129,31 @@ public:
     DLLLOCAL virtual ~QoreTypeInfo() = default;
 #endif
 
+    //! Adds QTI_CTP_UNSAFE_RECEIVER to a known value (constructors of parameterized class types, after
+    //! unsafe_receiver is set; an unknown value takes it when it is set)
+    DLLLOCAL void setUnsafeReceiverCache() const {
+        signed char c = contains_type_parameter_cache.load(std::memory_order_relaxed);
+        if (c != -1) {
+            contains_type_parameter_cache.store(static_cast<signed char>(c | QTI_CTP_UNSAFE_RECEIVER),
+                std::memory_order_relaxed);
+        }
+    }
+
+    //! Returns the cached value: -1 if not known yet, otherwise 1 if the type contains a type parameter, 0 if not,
+    //! with QTI_CTP_UNSAFE_RECEIVER for a parameterized class type whose type arguments name user declarations; so a
+    //! value that is not 0 is a type that can contain a type parameter or such a receiver
     DLLLOCAL signed char getContainsTypeParameterCache() const {
         return contains_type_parameter_cache.load(std::memory_order_relaxed);
     }
 
     DLLLOCAL void setContainsTypeParameterCache(bool contains_type_parameter) const {
-        contains_type_parameter_cache.store(contains_type_parameter ? 1 : 0, std::memory_order_relaxed);
+        contains_type_parameter_cache.store(static_cast<signed char>((contains_type_parameter ? 1 : 0)
+            | (unsafe_receiver ? QTI_CTP_UNSAFE_RECEIVER : 0)), std::memory_order_relaxed);
     }
+
+    //! a parameterized class type whose type arguments name user declarations: a call with it as its receiver holds
+    //! types read through it (contains_type_parameter_cache, with unsafe_receiver; issue #6419)
+    static constexpr signed char QTI_CTP_UNSAFE_RECEIVER = 4;
 
     // Accessors for accept_vec encapsulation
     DLLLOCAL bool isAcceptVecEmpty() const {
@@ -1627,6 +1645,7 @@ protected:
 
 private:
     const q_accept_vec_t accept_vec;
+    //! -1 if not known yet, otherwise 1 or 0, with QTI_CTP_UNSAFE_RECEIVER; see getContainsTypeParameterCache()
     mutable std::atomic<signed char> contains_type_parameter_cache {-1};
     //! whether the type takes NOTHING at run time: -1 = not known yet; see runtimeTakesNothing()
     mutable std::atomic<signed char> takes_nothing_cache {-1};

@@ -243,6 +243,8 @@ DLLLOCAL const QoreTypeInfo* get_or_nothing_base_type(const QoreTypeInfo* typeIn
 class QoreTypeSpec {
 public:
     DLLLOCAL QoreTypeSpec(qore_type_t t) : typespec(QTS_TYPE) {
+        // the whole union is set: the getters load its pointer before they test the kind (see getComplexList())
+        u.ti = nullptr;
         u.t = t;
     }
 
@@ -282,6 +284,10 @@ public:
 
     DLLLOCAL const QoreParameterizedClassTypeInfo* getParameterizedClassTypeInfo() const;
 
+    // the pointer of a spec is an atomic load, which the compiler neither moves before the test of the kind nor
+    // removes: a getter whose callers usually find another kind loads it only after the test; getComplexHash() and
+    // getComplexList(), whose callers usually ask hash and list types, load it first and select it without a branch
+    // (issue #6419)
     DLLLOCAL const QoreTypeParameterTypeInfo* getTypeParameterTypeInfo() const {
         return typespec == QTS_TYPEPARAM ? reinterpret_cast<const QoreTypeParameterTypeInfo*>(uTi()) : nullptr;
     }
@@ -299,11 +305,15 @@ public:
     }
 
     DLLLOCAL const QoreTypeInfo* getComplexHash() const {
-        return typespec == QTS_COMPLEXHASH ? uTi() : nullptr;
+        // the union is always wholly set (see QoreTypeSpec(qore_type_t))
+        const QoreTypeInfo* ti = uTi();
+        return typespec == QTS_COMPLEXHASH ? ti : nullptr;
     }
 
     DLLLOCAL const QoreTypeInfo* getComplexList() const {
-        return typespec == QTS_COMPLEXLIST || typespec == QTS_COMPLEXSOFTLIST ? uTi() : nullptr;
+        // the union is always wholly set (see QoreTypeSpec(qore_type_t))
+        const QoreTypeInfo* ti = uTi();
+        return typespec == QTS_COMPLEXLIST || typespec == QTS_COMPLEXSOFTLIST ? ti : nullptr;
     }
 
     DLLLOCAL const QoreTypeInfo* getComplexSoftList() const {
@@ -583,6 +593,8 @@ protected:
     }
 
     DLLLOCAL QoreTypeSpec(qore_type_t t, q_typespec_t ts) : typespec(ts) {
+        // the whole union is set (see QoreTypeSpec(qore_type_t))
+        u.ti = nullptr;
         u.t = t;
     }
 };

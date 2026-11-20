@@ -3030,6 +3030,8 @@ QoreParameterizedClassTypeInfo::QoreParameterizedClassTypeInfo(const QoreClass* 
         if (qore_type_needs_decl_pin(arg)) {
             user_type_args = true;
             unsafe_receiver = true;
+            // tested with the type parameter flags by the calls with this receiver
+            setUnsafeReceiverCache();
             break;
         }
     }
@@ -3388,7 +3390,7 @@ bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
 
     signed char cached = ti->getContainsTypeParameterCache();
     if (cached != -1) {
-        return cached != 0;
+        return cached & 1;
     }
 
     if (qore_get_type_parameter_type_info(ti)) {
