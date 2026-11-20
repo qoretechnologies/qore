@@ -2413,6 +2413,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a parse error message naming a built-in complex type such as \c hash<auto> or \c list<auto> no longer aborts a
+      debug build in a process whose @ref default_encoding "default encoding" is not UTF-8; type names are added to a
+      message in its encoding (issue #6814)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)

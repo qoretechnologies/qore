@@ -316,6 +316,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - WebSocketAsyncTextEncoding (#6619): each case runs in a child process with a default encoding of its own
         # - globalsetup-stop (#6659): the tests whose global setup stops run in child processes of its own binary
         # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
+        # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
         #   without an execution mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
@@ -399,6 +400,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/user-functional-domains/QlibAllModulesLoad-2.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-restricted-callers.qtest",
                                  "examples/test/qlib/DataProvider/TabularProfilerEncoding.qtest",
+                                 "examples/test/qore/parser/type-name-encoding.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
