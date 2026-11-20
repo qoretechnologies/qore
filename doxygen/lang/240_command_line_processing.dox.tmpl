@@ -410,7 +410,8 @@ bad.q:9:13: error[PARSE-EXCEPTION]: function 'calculateTotl()' cannot be found; 
     When linenoise is available, the REPL automatically saves command history to
     \c ~/.qore-repl-history (or \c %USERPROFILE%\\.qore-repl-history on Windows).
     History is loaded when the REPL starts and saved when it exits, so your
-    command history persists across sessions.
+    command history persists across sessions. The REPL writes a UTF-8 byte order mark followed by UTF-8 text.
+    It reads unmarked files in the process charset, so open a legacy file in its original charset to migrate it.
 
     @note The linenoise module is optional. If it is not installed, the REPL
     will still work but without line editing, history navigation, or tab completion.
