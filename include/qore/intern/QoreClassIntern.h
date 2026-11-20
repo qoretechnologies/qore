@@ -4104,7 +4104,9 @@ public:
         // only raise a parse error for illegal access to private members if there is not memberGate function; a member
         // inherited through a class inherited with private:internal only in this class or a class that it inherits
         // (issue #6640)
-        if ((access > Public) && !parseHasMemberGate()
+        // a class on the private:internal path to the member has the storage of the member in the objects of this
+        // class and uses it on them, as at run time (issue #6800)
+        if ((access > Public) && !parseHasMemberGate() && !omi->getClassContext(parse_get_class_priv())
                 && (!parseCheckPrivateClassAccess() || !parseCheckInheritedInternalMemberAccess(omi, qc, access)
                     || !parseCheckPrivateMemberAccess(qc, access))) {
             memberTypeInfo = nullptr;
@@ -6077,6 +6079,22 @@ public:
     */
     DLLLOCAL static bool runtimeCheckMethodVariantAccess(const QoreMethod& m, const AbstractQoreFunctionVariant* v,
             const qore_class_private* class_ctx);
+
+    //! returns the class context of an access of the member \a mem of an object of the class \a qc when the class
+    //! context has no private access to \a qc, as runtimeCheckPrivateClassAccess() checks (issue #6800)
+    /** The class context if it has the storage of the member in the objects of \a qc: the class that declares a member
+        and the classes between it and a class that inherits it with \c private:internal use the member on the objects
+        of the subclasses of that class, through any reference, as through \c self; otherwise nullptr
+    */
+    DLLLOCAL static const qore_class_private* runtimeGetMemberStorageContext(const QoreClass& qc, const char* mem,
+            const qore_class_private* class_ctx) {
+        return qc.priv->runtimeHasMemberStorageContext(mem, class_ctx) ? class_ctx : nullptr;
+    }
+
+    //! returns true if the member \a mem of this class has a storage of its own for the class context \a class_ctx:
+    //! \a class_ctx is on the path of a private:internal inheritance to the member (issue #6800)
+    DLLLOCAL QORE_INTERN_NOINLINE bool runtimeHasMemberStorageContext(const char* mem,
+            const qore_class_private* class_ctx) const;
 
     DLLLOCAL static qore_type_result_e parseCheckCompatibleClass(const QoreClass* qc, const QoreClass* oc) {
         if (!oc)

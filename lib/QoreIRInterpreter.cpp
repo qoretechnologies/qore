@@ -3084,7 +3084,8 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
         ExceptionSink* xsink) {
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj->getClass(), class_ctx)) {
-        class_ctx = nullptr;
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*obj->getClass(), key, class_ctx);
     }
 
     LValueHelper helper(xsink, true);
