@@ -1754,6 +1754,8 @@
     - @ref dataproviderintro "DataProvider" module
       - the process-wide registration and setter APIs declare the \c PROCESS @ref function_domains "functional domain"
         (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
+      - code parsed with \c PO_NO_PROCESS_CONTROL can no longer call \c registerChild(), \c addCatalogChangeListener(),
+        or \c removeCatalogChangeListener(); these APIs now declare the \c PROCESS_CONTROL @ref function_domains "functional domain"
       - added DPQL, the Data Provider Query Language (see @ref dataprovider_dpql)
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool

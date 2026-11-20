@@ -120,7 +120,7 @@ public class BcRestDataProvider inherits CdsRestDataProviderBase {
         @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot register a child
         generator: the registry is process-wide (see @ref sandbox_process_wide_registries)
     */
-    static registerChild(string name, code generator) {
+    static registerChild(string name, code generator) [dom=PROCESS_CONTROL] {
         # the generator runs for every caller that browses the provider, with its connection
         SandboxManager::checkProcessWideRegistration("register a child data provider generator");
         dynamic_children{name} = generator;
