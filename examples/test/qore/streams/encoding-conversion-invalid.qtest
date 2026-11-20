@@ -518,19 +518,45 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
     #! input that the platform's iconv decodes is converted: JOHAB "D9 31" is U+3000, whose trail byte 0x31 is in the
     #! JOHAB range 0x31 - 0x7e (qore#6796, #6665)
     multiByteValidTest() {
-        string s = binary_to_string(<41d93142>, "JOHAB");
-        string u;
-        try {
-            u = convert_encoding(s, "UTF-8");
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "ENCODING-CONVERSION-ERROR" && ex.desc =~ /cannot convert from/) {
-                testSkip("the iconv of the platform has no JOHAB: " + ex.desc);
+        # the encoding, its bytes, their text, and whether its character functions are those of its definition (the
+        # other names that iconv implementations know get the character functions of the encoding (qore#6796), and
+        # the input of a conversion from an encoding whose family was found by probing, such as glibc's T.61, whose
+        # diacritic prefixes make it look like a double-byte encoding, is left to iconv)
+        list<hash<auto>> cases = (
+            {"enc": "JOHAB", "data": <41d93142>, "text": "A\u{3000}B", "defined": True},
+            {"enc": "MSCP1361", "data": <41d93142>, "text": "A\u{3000}B", "defined": True},
+            # a C1 control character of EUC-JP or EUC-KR
+            {"enc": "EUCJP", "data": <418142>, "text": "A\u{81}B", "defined": True},
+            {"enc": "UJIS", "data": <418142>, "text": "A\u{81}B", "defined": True},
+            {"enc": "eucJP-win", "data": <418142>, "text": "A\u{81}B", "defined": True},
+            {"enc": "OSF00030010", "data": <418142>, "text": "A\u{81}B", "defined": True},
+            {"enc": "EUCKR", "data": <418142>, "text": "A\u{81}B", "defined": True},
+            {"enc": "OSF0004000A", "data": <418142>, "text": "A\u{81}B", "defined": True},
+            {"enc": "T.61", "data": <41804142>, "text": "A\u{80}AB", "defined": False},
+        );
+        list<string> unavailable = ();
+        foreach hash<auto> c in (cases) {
+            string label = c.enc + " " + c.data.toHex();
+            string s = binary_to_string(c.data, c.enc);
+            string u;
+            try {
+                u = convert_encoding(s, "UTF-8");
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "ENCODING-CONVERSION-ERROR" && ex.desc =~ /cannot convert from/) {
+                    unavailable += c.enc;
+                    continue;
+                }
+                rethrow;
             }
-            rethrow;
+            assertEq(c.text, u, label);
+            if (c.defined) {
+                assertTrue(s.isEncodingValid(), label);
+                assertEq(c.text.length(), s.length(), label);
+            }
         }
-        assertEq("A\u{3000}B", u);
-        assertTrue(s.isEncodingValid());
-        assertEq(3, s.length());
+        if (unavailable.size() == cases.size()) {
+            testSkip("the iconv of the platform has none of the encodings: " + unavailable.join(", "));
+        }
     }
 
     undefinedTest() {

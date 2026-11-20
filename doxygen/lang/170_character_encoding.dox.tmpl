@@ -152,9 +152,10 @@
     checked with the character functions of the encoding, as <tt><string>::isEncodingValid()</tt> does, on every
     platform: the \c iconv of some platforms decodes some sequences that are not characters of the encoding (musl's
     decodes the Shift_JIS bytes 0x81 0x20, glibc's the byte 0x80 of Big5, Big5-HKSCS and CP950, Apple's the Shift_JIS
-    sequences of the lead bytes 0xF0 - 0xF9, the user-defined area of CP932), which such a
-    conversion refuses (@ref Qore::convert_encoding() "convert_encoding()" raises \c ENCODING-CONVERSION-ERROR for
-    them, a conversion stream \c INVALID-ENCODING):
+    sequences of the lead bytes 0xF0 - 0xF9, the user-defined area of CP932), which such a conversion refuses
+    (@ref Qore::convert_encoding() "convert_encoding()" raises \c ENCODING-CONVERSION-ERROR for them, a conversion
+    stream \c INVALID-ENCODING); the input of a conversion from another multi-byte encoding, whose characters %Qore
+    finds by probing its conversions (ex: glibc's T.61), is checked by \c iconv:
     - \c "raise" (the default): input that is not valid in the source encoding (also a character or shift sequence
       cut off by the end of the input) raises \c INVALID-ENCODING when it is read (or written), with the byte offset
       of the invalid sequence in all of the input of the stream (counting a byte order mark that is removed):

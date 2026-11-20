@@ -38,8 +38,8 @@
     0xf0 - 0xf9, the user-defined area of CP932; neither is a character of the encoding, and isEncodingValid()
     refuses them), or "<encoding> unavailable" if the platform's iconv does not know the encoding, or "<encoding>
     no-character-functions" for an encoding that Qore handles without the character functions of a family (its
-    conversions are not validated: EUC-TW, whose characters of four bytes are handled as stateful text).  The test that runs it
-    (multibyte-iconv-parity.qtest) decides which differences are allowed on the platform.
+    conversions are not validated: EUC-TW, whose characters of four bytes are handled as stateful text).  The test
+    that runs it (multibyte-iconv-parity.qtest) decides which differences are allowed on the platform.
 */
 
 #include <qore/Qore.h>
@@ -107,18 +107,21 @@ int main(int argc, char** argv) {
     if (encs.empty()) {
         // the encodings, also by other names that iconv knows; EUC-TW has no character functions of a family (its
         // four-byte characters are handled as stateful text), which is reported
-        encs = {"Shift_JIS", "CP932", "EUC-JP", "EUCJP", "eucJP-ms", "EUC-KR", "EUCKR", "CP949", "UHC", "JOHAB", "GBK",
-            "CP936", "GB2312", "GB18030", "Big5", "BIG5HKSCS", "Big5-HKSCS", "CP950", "EUC-TW"};
+        encs = {"Shift_JIS", "CP932", "EUC-JP", "EUCJP", "eucJP-ms", "eucJP-win", "UJIS", "OSF00030010", "EUC-KR",
+            "EUCKR", "OSF0004000A", "CP949", "UHC", "JOHAB", "MSCP1361", "GBK", "CP936", "GB2312", "GB18030", "Big5",
+            "BIG5HKSCS", "Big5-HKSCS", "CP950", "EUC-TW"};
     }
     for (const char* name : encs) {
         const QoreEncoding* enc = QoreEncodingManager::findCreate(name);
-        if (!enc->isMultiByte()) {
-            std::printf("%s no-character-functions\n", name);
-            continue;
-        }
+        // an encoding that iconv does not know is not probed, so it has no character functions either
         iconv_t cd = iconv_open("UTF-8", enc->getCode());
         if (cd == reinterpret_cast<iconv_t>(static_cast<intptr_t>(-1))) {
             std::printf("%s unavailable\n", name);
+            continue;
+        }
+        if (!enc->isMultiByte()) {
+            iconv_close(cd);
+            std::printf("%s no-character-functions\n", name);
             continue;
         }
         unsigned long checked = 0, qore_only = 0, iconv_only = 0;
