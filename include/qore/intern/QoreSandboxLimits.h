@@ -279,6 +279,11 @@ public:
         return outer;
     }
 
+    //! Returns the isolation of the build that a continuation runs inline in (see join()), or nullptr
+    DLLLOCAL const QoreSandboxIsolation* getJoined() const {
+        return joined;
+    }
+
     //! Returns the isolation of a continuation (\a captured) that runs inline inside a build (\a current): code must
     //! pass both; may throw std::bad_alloc
     DLLLOCAL static QoreSandboxIsolation* join(QoreSandboxIsolation* captured, QoreSandboxIsolation* current);
@@ -348,13 +353,12 @@ public:
     /** @param in_build true if the budgets were captured in a trusted build: the continuation runs in a build with no
         caller (see suspendCharge()), until leave()
     */
-    /** \a iso is the isolation of the build in which the continuation was captured; with \a join, the
-        continuation runs inline in the current call (QoreSandboxContextHelper), and the isolation of a build that it
-        runs in holds as well; without it, the continuation is work that a thread runs for its submitter
-        (QoreSandboxCaptureHelper, a thread's start), governed by the submitter's isolation only (qore#6536)
+    /** \a iso is the isolation of the build in which the continuation was captured; the isolation of a build that
+        the thread runs holds as well (a continuation that runs on the thread of a build: a pool's cancel callback, a
+        native callback; the workers that run tasks inherit no sandbox, so they have no floor; qore#6536)
     */
     DLLLOCAL void attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner, bool in_build = false,
-            QoreSandboxIsolation* iso = nullptr, bool join = false);
+            QoreSandboxIsolation* iso = nullptr);
 
     //! Returns the number of frames of the thread (for tests)
     DLLLOCAL size_t frameCount() const {

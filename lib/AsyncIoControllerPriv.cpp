@@ -2740,7 +2740,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // the isolation of a trusted build that submitted the operation holds in its steps as well (qore#6536)
         if (async_item.sandbox_ctx && (async_item.sandbox_ctx->manager || async_item.sandbox_ctx->policy_manager
                 || async_item.sandbox_ctx->isolation)) {
-            sandbox_guard.reset(new QoreSandboxContextHelper(*async_item.sandbox_ctx, false));
+            sandbox_guard.reset(new QoreSandboxContextHelper(*async_item.sandbox_ctx));
         }
 
         // Check if the item's program or owner is shutting down — if so, skip

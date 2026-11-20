@@ -973,16 +973,11 @@ class ProgramThreadCountContextHelper;
 class QoreSandboxContextHelper {
 public:
     //! Applies the context; the context must remain valid while the helper exists
-    /** @param ctx the context
-        @param join true if the operation continues inline in the current call, so that the isolation of a trusted
-        build that the thread runs holds as well; false for work that a thread runs for its submitter (a pool task, a
-        step of an async operation), governed by the submitter's isolation only (see QoreSandboxBudgetStack::attach();
-        qore#6536)
-
-        A context without a sandbox (one that only keeps the isolation of a trusted build) is not made the thread's
-        sandbox context, so that the sandbox lookups of the thread resolve as without it
+    /** A context that only keeps the isolation of a trusted build (no sandbox) is not made the thread's sandbox
+        context, so that the sandbox lookups of the thread resolve as without it; the isolation of a build that the
+        thread runs holds as well (see QoreSandboxBudgetStack::attach(); qore#6536)
     */
-    DLLLOCAL QoreSandboxContextHelper(const QoreSandboxContext& ctx, bool join = true);
+    DLLLOCAL QoreSandboxContextHelper(const QoreSandboxContext& ctx);
 
     DLLLOCAL ~QoreSandboxContextHelper();
 

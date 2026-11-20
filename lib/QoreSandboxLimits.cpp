@@ -749,12 +749,30 @@ void QoreSandboxBudgetStack::raiseIsolation(ExceptionSink* xsink, const char* op
         refused_caller_domain.c_str());
 }
 
+//! Returns true if \a sm (a plain manager or a composite) or one of its members has an isolation domain
+static bool qore_sandbox_has_isolation_domain(const QoreSandboxManager* sm) {
+    if (!sm) {
+        return false;
+    }
+    if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
+        for (const QoreSandboxManager* member : *members) {
+            if (member->governingIsolationDomain()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return sm->governingIsolationDomain() != nullptr;
+}
+
 void QoreSandboxBudgetStack::setIsolation(QoreSandboxManager* callers, QoreSandboxManager* own,
         QoreSandboxManager* creator) {
     assert(!charge_floors.empty());
     // the isolation of the outer build holds in a nested one, whoever enters it: an entry must pass every level
     QoreSandboxIsolation* outer = charge_floors.size() > 1 ? charge_floors[charge_floors.size() - 2].iso : nullptr;
-    if (!callers && !outer) {
+    // only a caller of an isolation domain isolates anything: a host that sets no domains runs builds as without
+    // isolation (no isolation is captured by their continuations)
+    if (!outer && !qore_sandbox_has_isolation_domain(callers)) {
         return;
     }
     QoreSandboxIsolation* iso = new QoreSandboxIsolation(callers, outer);
@@ -774,9 +792,30 @@ void QoreSandboxBudgetStack::setIsolation(QoreSandboxManager* callers, QoreSandb
 
 const std::string* QoreSandboxBudgetStack::isolationRefuses(const QoreSandboxManager* sm, bool build_own) const {
     const QoreSandboxIsolation* iso = charge_floors.empty() ? nullptr : charge_floors.back().iso;
-    // the build's own code is checked against the outer builds only
-    if (iso && build_own) {
-        iso = iso->getOuter();
+    if (!iso) {
+        return nullptr;
+    }
+    // the build's own code is checked against the outer builds only; in a continuation that runs inline inside
+    // another build, that build's isolation holds in full
+    const QoreSandboxIsolation* also = nullptr;
+    if (build_own) {
+        if (iso->getJoined()) {
+            also = iso->getJoined();
+            iso = iso->getOuter() ? iso->getOuter()->getOuter() : nullptr;
+        } else {
+            iso = iso->getOuter();
+        }
+    }
+    if (also) {
+        if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
+            for (const QoreSandboxManager* member : *members) {
+                if (const std::string* domain = also->refuses(member)) {
+                    return domain;
+                }
+            }
+        } else if (const std::string* domain = also->refuses(sm)) {
+            return domain;
+        }
     }
     if (!iso) {
         return nullptr;
@@ -1137,18 +1176,15 @@ void QoreSandboxBudgetStack::startBudget(int tid, QoreSandboxManager* sm, int64 
 }
 
 void QoreSandboxBudgetStack::attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner,
-        bool in_build, QoreSandboxIsolation* iso, bool join) {
+        bool in_build, QoreSandboxIsolation* iso) {
     if (refused_owner) {
         return;
     }
-    // a continuation that runs inline inside a build keeps that build's isolation as well; work that a thread runs
-    // for its submitter (a pool task, a thread's start) is governed by the submitter's isolation only, so its floor
-    // also hides the isolation of a build in which the thread started (qore#6536)
-    QoreSandboxIsolation* current = (join && !charge_floors.empty()) ? charge_floors.back().iso : nullptr;
-    const bool push = in_build || (join ? current != nullptr : !charge_floors.empty());
+    // a continuation that runs on the thread of a build keeps that build's isolation as well (qore#6536)
+    QoreSandboxIsolation* current = charge_floors.empty() ? nullptr : charge_floors.back().iso;
     // the floor of a continuation in a build is pushed also for a continuation of a call whose limits cannot be
     // enforced: the isolation of the build holds in it (qore#6536)
-    if (push && (!lost_owner || iso || current || !join)) {
+    if ((in_build || current) && (!lost_owner || iso || current)) {
         // the code that a continuation of code in a trusted build runs is charged to the sandboxes that govern it,
         // as in the build (see enterInBuild()); it has no caller: no sandbox code is the caller's there; the
         // isolation of the build holds in it (qore#6536)
@@ -1167,8 +1203,14 @@ void QoreSandboxBudgetStack::attach(int tid, const QoreSandboxBudgetList& budget
             if (floor_iso) {
                 floor_iso->deref();
             }
-            // an isolation that cannot be recorded: no code runs in the continuation (the stack is closed)
-            lose(tid, owner, (iso || current) ? (QSB_LIMIT_MEMORY | QSB_LIMIT_STACK) : QSB_LIMIT_MEMORY, 0, 0, 0, 0);
+            // an isolation that cannot be recorded: no code runs in the continuation (the stack is closed); inside a
+            // call whose limits cannot be enforced, which is already lost, it is refused instead
+            if (lost_owner) {
+                refuseIsolation(tid, owner, std::string(), nullptr);
+            } else {
+                lose(tid, owner, (iso || current) ? (QSB_LIMIT_MEMORY | QSB_LIMIT_STACK) : QSB_LIMIT_MEMORY, 0, 0,
+                    0, 0);
+            }
             return;
         }
     }

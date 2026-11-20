@@ -7015,10 +7015,10 @@ QoreSandboxTrustedPolicyHelper::~QoreSandboxTrustedPolicyHelper() {
     td->trusted_policy_depth = old_depth;
 }
 
-QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx, bool join) {
+QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx) {
     ThreadData* td = thread_data.get();
     if (td) {
-        if (ctx.manager || ctx.policy_manager) {
+        if (ctx.manager || ctx.policy_manager || !ctx.isolation) {
             old_ctx = td->sandbox_context;
             old_pgm_ctx = td->sandbox_context_pgm_ctx;
             td->sandbox_context = &ctx;
@@ -7027,7 +7027,7 @@ QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx
         }
         active = true;
         // the operation continues the call that started it, under the same budgets and isolation
-        td->sandbox_budgets.attach(td->tid, ctx.budgets, this, ctx.in_build, ctx.isolation, join);
+        td->sandbox_budgets.attach(td->tid, ctx.budgets, this, ctx.in_build, ctx.isolation);
     }
 }
 
