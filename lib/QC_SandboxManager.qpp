@@ -967,9 +967,18 @@ nothing SandboxManager::addNetworkAllowedPortRange(int start_port, int end_port,
     - 172.16.0.0/12 (RFC 1918 Class B)
     - 192.168.0.0/16 (RFC 1918 Class C)
     - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
-    - ::1/128 (IPv6 localhost)
+    - 0.0.0.0/8 ("this network", which reaches the local host on common platforms; 0.0.0.0 itself is judged as the
+      local host for a connection, and a bind to it is a bind on all interfaces, which the ranges do not decide)
+    - 100.64.0.0/10 (shared address space of carrier-grade NAT)
+    - 224.0.0.0/4 (multicast)
+    - 240.0.0.0/4 (reserved, includes the limited broadcast address 255.255.255.255)
+    - ::1/128 (IPv6 localhost; a connection to the unspecified address :: is judged as one to it)
     - fe80::/10 (IPv6 link-local)
-    - fc00::/7 (IPv6 unique local)
+    - fc00::/7 (IPv6 unique local, includes fd00:ec2::254 of cloud metadata)
+    - ff00::/8 (IPv6 multicast)
+
+    An IPv6 address that embeds an IPv4 address (an IPv4-mapped address, an address of the NAT64 well-known prefix
+    64:ff9b::/96, or a 6to4 address of 2002::/16) is judged by its IPv4 address, for these ranges and every other rule
 
     @note This is essential for SSRF prevention in web applications.
 
