@@ -446,6 +446,10 @@ authenticate();
     - the build's own code (the sandboxes of the %Program that created the capability);
     - code that no sandbox governs (the host's code), and the code of sandboxes without a domain.
 
+    Such a build also cannot parse or commit code in a %Program of another domain, load a module into it, change its
+    global variables, call it or create an evaluation %Program from it (\c SANDBOX-ISOLATION-ERROR); reading its global
+    variables or taking call references to its functions is not refused, but calling them is.
+
     A build that trusted code calls may run the code of any domain: the host can orchestrate across tenants.  A host
     that sets no domains is not affected.
 

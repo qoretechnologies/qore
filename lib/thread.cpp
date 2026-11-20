@@ -6499,9 +6499,10 @@ int qore_sandbox_check_program_isolation(QoreProgram* pgm, ExceptionSink* xsink,
         }
         if (const std::string* domain = td->sandbox_budgets.isolationRefuses(sm)) {
             const std::string* caller = td->sandbox_budgets.currentIsolation()->callerDomain();
-            xsink->raiseException("SANDBOX-ISOLATION-ERROR", "%s: a Program of isolation domain '%s' cannot be "
-                "parsed or committed in a trusted build that sandboxed code of isolation domain '%s' called",
-                operation, domain->c_str(), caller ? caller->c_str() : "");
+            // the operation names what is refused (parsing, committing, accessing a Program)
+            xsink->raiseException("SANDBOX-ISOLATION-ERROR", "%s: a Program of isolation domain '%s' cannot be used "
+                "in a trusted build that sandboxed code of isolation domain '%s' called", operation, domain->c_str(),
+                caller ? caller->c_str() : "");
             return -1;
         }
     }

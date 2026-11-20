@@ -10596,13 +10596,11 @@ static void ut_sandbox_context_inner_program_id(UnitTestCounters& c, QoreProgram
     UT_ASSERT(c, !xsink, "the Program is destroyed");
 }
 
-//! A Program that sandboxed code creates keeps the sandbox of that code: entered alone (no sandboxed Program on the
-//! thread's stack), after QoreProgram::setSandboxManager() gave it a manager and removed it again, and by a foreign
-//! thread of a binary module with QoreExternalProgramContextHelper
 //! qore#6536: a continuation joined twice keeps the isolation of every build that it continues, also for the code of
 //! the Program that created its build
-/** The floor of a continuation that runs inline in build Z, captured in a continuation of build X that ran inline in
-    build Y, is join(join(Y, X), Z); the creator's sandbox (domain c), allowed by Y and Z, is refused by X alone.
+/** A continuation captured in build Y while it ran on the thread of build X has the isolation join(Y, X); run on the
+    thread of build Z, its floor is join(join(Y, X), Z).  The creator's sandbox (domain c), allowed by Y and Z, is
+    refused by X alone.
 */
 static void ut_sandbox_isolation_joined_twice(UnitTestCounters& c) {
     ExceptionSink xsink;
@@ -10662,6 +10660,9 @@ static void ut_sandbox_isolation_joined_twice(UnitTestCounters& c) {
     y->deref();
 }
 
+//! A Program that sandboxed code creates keeps the sandbox of that code: entered alone (no sandboxed Program on the
+//! thread's stack), after QoreProgram::setSandboxManager() gave it a manager and removed it again, and by a foreign
+//! thread of a binary module with QoreExternalProgramContextHelper
 static void ut_sandbox_creator_context(UnitTestCounters& c, QoreProgram* parent) {
     ExceptionSink xsink;
     QoreProgram* sandboxed = parent

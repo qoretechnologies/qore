@@ -129,6 +129,21 @@ nothing sub build_parse(Program p, string src) {
     p.parse(src, "build-parse");
 }
 
+#! trusted code that a build runs: parses code in a Program that the caller gives it without committing it
+nothing sub build_parse_pending(Program p, string src) {
+    p.parsePending(src, "build-parse-pending");
+}
+
+#! trusted code that a build runs: sets a global variable of a Program that the caller gives it
+nothing sub build_set_global(Program p, string name, auto value) {
+    p.setGlobalVarValue(name, value);
+}
+
+#! trusted code that a build runs: loads a module into a Program that the caller gives it
+nothing sub build_load_module(Program p, string mod) {
+    p.loadModule(mod);
+}
+
 #! trusted code that a build runs: starts the worker of a shared pool (a library's lazily started worker)
 ThreadPool sub build_start_pool() {
     ThreadPool tp(1, 1, 1);
@@ -181,6 +196,15 @@ auto sub build_on_pools(ThreadPool tp1, ThreadPool tp2, code c, softlist<auto> a
     return h.result;
 }
 
+#! trusted code that a build runs: the isolation domain that it works for, also in a thread that it starts
+list<*string> sub build_caller_domain() {
+    Queue q();
+    background sub () {
+        q.push(SandboxManager::getCallerIsolationDomain());
+    }();
+    return (SandboxManager::getCallerIsolationDomain(), q.get());
+}
+
 #! trusted code that a build runs: creates an eval Program from a Program that the caller gives it
 string sub build_eval(Program p) {
     ProgramControl pc = p.getProgram();
@@ -215,9 +239,13 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         code BuildCallPgm;
         code BuildCallLoop;
         code BuildEval;
+        code BuildCallerDomain;
         code BuildStartPool;
         code BuildOnPool;
         code BuildParse;
+        code BuildParsePending;
+        code BuildLoadModule;
+        code BuildSetGlobal;
 
         #! tenant A's interface, its second interface (same domain), tenant B's interface
         Program a;
@@ -250,13 +278,27 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         BuildCallPgm = SandboxManager::createTrustedBuildCall(\build_call_pgm());
         BuildCallLoop = SandboxManager::createTrustedBuildCall(\build_call_loop());
         BuildEval = SandboxManager::createTrustedBuildCall(\build_eval());
+        BuildCallerDomain = SandboxManager::createTrustedBuildCall(\build_caller_domain());
         BuildStartPool = SandboxManager::createTrustedBuildCall(\build_start_pool());
         BuildOnPool = SandboxManager::createTrustedBuildCall(\build_on_pool());
         BuildParse = SandboxManager::createTrustedBuildCall(\build_parse());
+        BuildParsePending = SandboxManager::createTrustedBuildCall(\build_parse_pending());
+        BuildLoadModule = SandboxManager::createTrustedBuildCall(\build_load_module());
+        BuildSetGlobal = SandboxManager::createTrustedBuildCall(\build_set_global());
 
         a = tenant("a", "tenant-a");
         a2 = tenant("a", "tenant-a2");
         b = tenant("b", "tenant-b");
+    }
+
+    #! creates a Program governed by a sandbox of the given domain, with no code
+    private Program tenantProgram(string domain) {
+        SandboxManager m();
+        m.setUncontrolledApiPolicy(True);
+        m.setIsolationDomain(domain);
+        Program p(PO_MODERN);
+        p.setSandboxManager(m);
+        return p;
     }
 
     #! creates the Program of a tenant's interface
@@ -297,6 +339,11 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         assertEq("a", a.callFunction("caller_domain"));
         assertEq("b", b.callFunction("call", \SandboxManager::getCallerIsolationDomain()));
         assertNothing(SandboxManager::getCallerIsolationDomain());
+        # the code of a trusted build works for the tenant that entered it (whose sandbox the build's barrier hides),
+        # also in a thread that it starts; for nobody in a build that the host entered
+        assertEq(("a", "a"), a.callFunction("call", BuildCallerDomain));
+        assertEq(("b", "b"), b.callFunction("call", BuildCallerDomain));
+        assertEq((NOTHING, NOTHING), BuildCallerDomain());
         # a sandbox that sandboxed code creates belongs to the tenant of that code
         assertEq("a", a.callFunction("new_manager_domain"));
         assertEq("b", b.callFunction("new_manager_domain"));
@@ -444,6 +491,32 @@ code sub mk() {
         assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildParse,
             (b, "our int build_parse_x = make(1).size();")));
         assertNothing(b.getGlobalVariable("build_parse_x"));
+        # parsing without committing (the parse is refused itself, not only its commit): nothing is pending
+        Program b_pending = tenantProgram("b");
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildParsePending,
+            (b_pending, "our int build_pending_x = 1;")));
+        b_pending.parseCommit();
+        assertNothing(b_pending.getGlobalVariable("build_pending_x"));
+        # loading a module into the other tenant's Program: the module is not loaded into it
+        Program b_module = tenantProgram("b");
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildLoadModule, (b_module, "Mime")));
+        b_module.parse("list<string> sub features() { return get_feature_list(); }", "module-check");
+        list<string> features = b_module.callFunction("features");
+        assertTrue(features.size() > 0);
+        assertFalse(inlist("Mime", features), sprintf("%y", features));
+        # changing a global variable of the other tenant's Program (no code of it runs: the Program access check)
+        Program b_global = tenantProgram("b");
+        b_global.parse("our int build_global;", "global");
+        b_global.setGlobalVarValue("build_global", 1);
+        assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildSetGlobal,
+            (b_global, "build_global", 2)));
+        assertEq(1, b_global.getGlobalVariable("build_global"));
+        # the tenant's own Program
+        Program a_global = tenantProgram("a");
+        a_global.parse("our int build_global;", "global");
+        a_global.setGlobalVarValue("build_global", 1);
+        a.callFunction("call", BuildSetGlobal, (a_global, "build_global", 2));
+        assertEq(2, a_global.getGlobalVariable("build_global"));
 
         # a call whose limits cannot be enforced (its budget could not be recorded) keeps the isolation
         try {
