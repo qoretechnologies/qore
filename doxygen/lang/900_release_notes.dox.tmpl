@@ -2446,6 +2446,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the text that the library appends to the description of an exception (such as the command of a failed
+      @ref Qore::Program::issueModuleCmd() "module command", cut at its first end of line or 200 characters) is
+      converted to the encoding of the description, where it was appended as its bytes (issue #6741)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)

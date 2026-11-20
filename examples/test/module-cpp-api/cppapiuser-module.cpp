@@ -178,11 +178,18 @@ static std::vector<std::string> module_cmds;
 
 // records the command, with " [sandboxed]" appended when the Program that the command runs in has a sandbox manager
 // (the sandbox that a module such as python gives what the command creates, see QoreSandboxManagerHelper(pgm)); the
-// command "fail" raises an exception instead
+// command "fail", or "fail" followed by a space and any text, raises an exception instead, and "fail-utf8" followed by
+// any text raises one whose description is in UTF-8
 static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
     assert(xsink);
-    if (cmd == "fail") {
+    if (cmd == "fail" || !strncmp(cmd.c_str(), "fail ", 5)) {
         xsink->raiseException("CPPAPIUSER-COMMAND-ERROR", "the command \"fail\" was issued");
+        return;
+    }
+    // a description in UTF-8 whatever the default encoding, as a module that makes it from UTF-8 data (qore#6741)
+    if (!strncmp(cmd.c_str(), "fail-utf8", 9)) {
+        xsink->raiseException("CPPAPIUSER-COMMAND-ERROR", new QoreStringNode("the command \"fail-utf8\" was issued "
+            "(\xc3\xa9)", QCS_UTF8));
         return;
     }
     // no C++ exception may leave the module's C callback

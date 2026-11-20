@@ -4178,6 +4178,10 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details
 
+    @note the description of an exception that the command raises ends with
+    <tt>: module command error from command '</tt><em>command</em><tt>'</tt>, in the encoding of the description; a
+    command longer than one line or 200 characters is cut there and followed by \c "..."
+
     @note the module decides what the command may do from the restrictions of the code that issues it (its effective
     parse options and whether a sandbox governs it), not from those of the Program that the command applies to; a
     module whose commands execute code, change a class path or a search path, or touch the filesystem or the network
@@ -4378,6 +4382,10 @@ Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + by
 
     @note command errors can result in other module- and command-specific exceptions being thrown; see
     documentation for the module and command in question for more details
+
+    @note the description of an exception that the command raises ends with
+    <tt>: module command error from command '</tt><em>command</em><tt>'</tt>, in the encoding of the description; a
+    command longer than one line or 200 characters is cut there and followed by \c "..."
 
     @note the module decides what the command may do from the restrictions of the code that issues it (its effective
     parse options and whether a sandbox governs it), not from those of the Program that the command applies to; a
