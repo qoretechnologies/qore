@@ -46,6 +46,8 @@ class QlibModuleDomainsTest inherits QUnit::Test {
 
         #! public APIs that perform a restricted operation, with the module that provides them
         const TaggedApis = (
+            ("module": "DiscordDataProvider",
+             "code": "sub f() { DiscordDataProvider::DiscordDataProviderBase::threadWait(1ms); }"),
             ("module": "ProviderIndexUtil", "code": "ProviderIndexUtil::ProviderIndexUtil::setEnvironmentVariable(\"/x\");"),
             ("module": "ProviderIndex", "code": "ProviderIndex::ProviderIndex::createDataProviderIndex();"),
             ("module": "DataProvider", "code": "DataProvider::DataProvider::registerKnownTypes();"),
@@ -152,6 +154,14 @@ printf(\"end\\n\");
                 assertEq(-1, out.find("loaded\n"), api.code);
             }
         }
+        # A source loaded outside the library path inherits its loader's restrictions.
+        string source = tmp.path + "/DiscordWebSocketClient.qm";
+        copy_file(qlib_dir + "/DiscordWebSocketClient.qm", source);
+        assertEq("loaded\nend\n", run(0, source));
+        string denied = run(PO_NO_THREAD_CONTROL, source);
+        assertRegex("^PARSE-EXCEPTION: .*background.*PO_NO_THREAD_CONTROL", denied);
+        assertEq(-1, denied.find("loaded\n"));
+
         # an indirect call is refused at run time
         string out = run(InterfaceRestrictions, "ProviderIndexUtil",
             "try { call_static_method(\"ProviderIndexUtil::ProviderIndexUtil\", \"setEnvironmentVariable\", \"/x\"); "
