@@ -2029,6 +2029,11 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - a connection that offers OAuth2 with a key as the fallback and is configured with the key does not use the
         default OAuth2 grant type (<a href="https://github.com/qoretechnologies/qore/issues/6901">issue 6901</a>)
+      - a client with invalid OAuth2 options raises an error when it is created also when it does not connect; an
+        empty required option counts as missing, so such a connection is reported as down, and an unconnected
+        asynchronous client of a connection that awaits authorization is created without logging in (see
+        @ref restclientv2_8 for every change in behavior;
+        <a href="https://github.com/qoretechnologies/qore/issues/6906">issue 6906</a>)
       - see @ref restclientv2_8 and @ref restclientv2_7 for all changes
 
     - @ref restschemavalidatorintro "RestSchemaValidator" and @ref swaggerintro "Swagger" modules

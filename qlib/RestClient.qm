@@ -175,6 +175,21 @@ printf("%Y\n", ans.body);
 
 
     @section restclientv2_8 RestClient v2.8
+    - a client with invalid OAuth2 options raises \c OAUTH2-ERROR when it is created also with \c do_not_connect, as
+      @ref restclientiointro "RestClientIo" does, instead of being created with a grant type that cannot acquire a
+      token; an empty value of an option that the grant type requires counts as missing, also for a connection's
+      status (see @ref RestClient::RestClient::checkOAuth2GrantOptions() "RestClient::checkOAuth2GrantOptions()";
+      <a href="https://github.com/qoretechnologies/qore/issues/6906">issue 6906</a>); in detail:
+      - a connection with an empty value of an option its grant type requires is reported as down
+      - the \c password grant requires a password as well as a username
+      - an empty \c oauth2_client_secret is refused, as RestClientIo already refused it
+      - a client that subclasses %RestClient (for example CdsRestClient and SalesforceRestClient) reports missing
+        OAuth2 client credentials with \c OAUTH2-ERROR, raised by %RestClient before the subclass's own checks
+      - a \c RestClientIo client with a non-string OAuth2 option raises \c OAUTH2-ERROR instead of
+        \c RUNTIME-TYPE-ERROR
+      - @ref RestClient::AbstractRestConnection::getAsync() "AbstractRestConnection::getAsync()" with \a connect
+        @ref False creates the client without logging in, as @ref RestClient::AbstractRestConnection::get() "get()"
+        does, so a connection that awaits OAuth2 authorization returns an unconnected client instead of an error
     - a connection whose \c required_options offer OAuth2 with a key as the fallback and that is configured with the
       key does not use its defaulted OAuth2 grant type: it is not reported as down for missing OAuth2 options, does
       not need authorization, claims no OAuth2 features and creates clients without the OAuth2 options (see
@@ -1337,7 +1352,12 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         const CompressionThreshold = 1024;
 
         #! Option requirements per OAuth2 grant type
-        /** @note the \c authorization_code grant type cannot be handled automatically
+        /** Each option must have a value that is not empty; the \c password grant type also requires \c username and
+            \c password.  Clients check them when they are created, also with \c do_not_connect (see
+            @ref checkOAuth2GrantOptions()).  \c oauth2_redirect_url has a default value
+            (@ref DefaultOAuth2RedirectUrl), which a client and a connection's status check also use when it is empty.
+
+            @note the \c authorization_code grant type cannot be handled automatically
             @note the \c implicit grant type returns the token directly in the redirect URL fragment,
             so no token URL is required
         */
@@ -1668,6 +1688,10 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         update_options = remove opts.update_options;
         # apply default option values
         opts = DefaultOptions + opts;
+        # an empty redirect URL takes the default, as with RestClientIo (qore#6906)
+        if (!opts.oauth2_redirect_url.val()) {
+            opts.oauth2_redirect_url = DefaultOAuth2RedirectUrl;
+        }
 
         setSerialization(opts."data");
         if (opts.send_encoding) {
@@ -3427,7 +3451,15 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     }
 
     #! Sets up authentication info
-    /** @since %RestClient 2.0
+    /** @param opts the options of the client
+        @param no_exceptions ignored; invalid OAuth2 options raise \c OAUTH2-ERROR also when the client does not
+        connect
+
+        @throw OAUTH2-ERROR invalid OAuth2 options; see @ref checkOAuth2GrantOptions()
+
+        @since
+        - %RestClient 2.0
+        - %RestClient 2.8 invalid OAuth2 options raise \c OAUTH2-ERROR also with \a no_exceptions
     */
     private setupAuth(hash<auto> opts, *bool no_exceptions) {
         # set any token
@@ -3450,16 +3482,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             setupUserPassword(opts);
         }
 
-        # check any OAuth2 options
-        try {
-            checkOAuth2Options(opts);
-        } catch (hash<ExceptionInfo> ex) {
-            if (no_exceptions) {
-                error("Error setting up OAuth2 options: %s: %s", ex.err, ex.desc);
-                return;
-            }
-            rethrow;
-        }
+        # check any OAuth2 options; invalid options are an error also when the client does not connect (qore#6906)
+        checkOAuth2Options(opts);
     }
 
     #! Setup username and password consistently
@@ -3671,55 +3695,127 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     }
 
     #! Validates and sets any OAuth2 options
-    /** A token that is given can be used without the options needed to acquire a new one with the grant type; the
+    /** The options are validated with @ref checkOAuth2GrantOptions(); invalid options raise \c OAUTH2-ERROR also when
+        the client is created with \a do_not_connect, and the grant type is set only if they are valid.
+
+        A token that is given can be used without the options needed to acquire a new one with the grant type; the
         grant type is then not set, and the token is not refreshed.
 
-        @since %RestClient 2.0
+        @throw OAUTH2-ERROR the grant type is unknown, or an option it requires is missing or empty and no token is
+        given, or an option it requires is not a string
+
+        @since
+        - %RestClient 2.0
+        - %RestClient 2.8 raises \c OAUTH2-ERROR for invalid options also with \a do_not_connect, an empty value of
+          an option counts as missing, and the grant type is not set when the options are invalid
     */
-    private checkOAuth2Options(hash<auto> opts, *bool no_exceptions) {
+    private checkOAuth2Options(hash<auto> opts) {
         *string grant_type = opts.oauth2_grant_type;
-        if (!exists grant_type || grant_type == "none") {
+        if (!grant_type.val() || grant_type == "none") {
             return;
         }
+        # the username and password of the "password" grant can also come from the URL
+        hash<auto> effective = opts + {
+            "username": opts.username ?? username ?? getUsername(),
+            "password": opts.password ?? password ?? getPassword(),
+        };
+        # a token that is given is used without the options to acquire a new one
+        if (!checkOAuth2GrantOptions(grant_type, effective, opts.token.val() || token.val())) {
+            debug("OAuth2 grant type %y requires options that are not set; the token given is used and cannot be "
+                "refreshed", grant_type);
+            return;
+        }
+        oauth2_grant_type = grant_type;
+        map self{$1} = opts{$1}, OAuth2GrantOptions{grant_type};
+    }
+
+    #! Validates the options of an OAuth2 grant type
+    /** This is the validation shared by @ref RestClient::RestClient "RestClient" and
+        @ref restclientiointro "RestClientIo" when a client is created (also with \c do_not_connect) and when its
+        OAuth2 options are set.
+
+        The options that a grant type requires are given in @ref OAuth2GrantOptions; the \c password grant type also
+        requires \c username and \c password.  An option is missing if it is not set or its value is empty.  A token
+        is not required: a client with the \c authorization_code or \c implicit grant type exists before it is
+        authorized, and the other grant types acquire their token when the client logs in.
+
+        @param grant_type the grant type; if not set or \c "none", OAuth2 is not used, and @ref True is returned
+        @param opts the options of the client; for the \c password grant type including its \c username and
+        \c password
+        @param token_given @ref True if the client is given a token; a missing option then raises no error: the token is
+        used, and the grant type cannot be used to acquire a new one
+        @param satisfied required options that the caller's own options replace, such as \c oauth2_client_secret when
+        the client authenticates to the token endpoint with a client assertion
+        @param check_types if @ref True (the default), the required options must be strings
+
+        @return @ref False if a token is given and an option that the grant type requires is missing, so the grant type
+        cannot be used to acquire a new token; @ref True otherwise
+
+        @throw OAUTH2-ERROR the grant type is unknown; an option it requires is missing and no token is given (the
+        exception argument is a hash with the \c grant_type and the \c option missing); an option it requires is not a
+        string
+
+        @see getMissingOAuth2GrantOptions()
+
+        @since %RestClient 2.8
+    */
+    static bool checkOAuth2GrantOptions(*string grant_type, hash<auto> opts, *bool token_given,
+            *hash<string, bool> satisfied, bool check_types = True) {
+        if (!grant_type.val() || grant_type == "none") {
+            return True;
+        }
+        if (*list<string> missing = RestClient::getMissingOAuth2GrantOptions(grant_type, opts, satisfied)) {
+            if (token_given) {
+                return False;
+            }
+            string opt = missing[0];
+            if (opt == "username" || opt == "password") {
+                throw "OAUTH2-ERROR", sprintf("the 'password' OAuth2 grant type requires a username and password; no "
+                    "%s is set", opt), {"grant_type": grant_type, "option": opt};
+            }
+            throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires option %y, but this option is not set or "
+                "is empty; options provided: %y", grant_type, opt, keys opts),
+                {"grant_type": grant_type, "option": opt};
+        }
+        if (check_types) {
+            foreach string req_opt in (OAuth2GrantOptions{grant_type}) {
+                if (satisfied{req_opt} || opts{req_opt}.typeCode() == NT_STRING) {
+                    continue;
+                }
+                # only the type of the value, which can be a credential
+                throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires option %y to be set with a string; "
+                    "type provided: %y", grant_type, req_opt, opts{req_opt}.fullType());
+            }
+        }
+        return True;
+    }
+
+    #! Returns the options that an OAuth2 grant type requires and that are missing or empty
+    /** @param grant_type the grant type; must be a key of @ref OAuth2GrantOptions
+        @param opts the options to check; for the \c password grant type including \c username and \c password
+        @param satisfied required options that the caller's own options replace; they are not reported as missing
+
+        @return the options that the grant type requires (see @ref OAuth2GrantOptions; with \c username and
+        \c password for the \c password grant type) that are not set or have an empty value, in the order of
+        @ref OAuth2GrantOptions
+
+        @throw OAUTH2-ERROR the grant type is unknown
+
+        @see checkOAuth2GrantOptions()
+
+        @since %RestClient 2.8
+    */
+    static *list<string> getMissingOAuth2GrantOptions(string grant_type, hash<auto> opts,
+            *hash<string, bool> satisfied) {
         *list<string> req_opts = OAuth2GrantOptions{grant_type};
         if (!req_opts) {
             throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y is unknown; known grant types: %y", grant_type,
                 keys OAuth2GrantOptions);
         }
-        # a token that is given is used without the options to acquire a new one
-        if (opts.token.val() || token.val()) {
-            foreach string req_opt in (req_opts) {
-                if (!opts{req_opt}.val()) {
-                    debug("OAuth2 grant type %y requires option %y, which is not set; the token given is used and "
-                        "cannot be refreshed", grant_type, req_opt);
-                    return;
-                }
-            }
-        }
-        oauth2_grant_type = grant_type;
-        foreach string req_opt in (req_opts) {
-            if (!opts.hasKey(req_opt)) {
-                throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires option %y, but this option is not "
-                    "set; options provided: %y", grant_type, req_opt, keys opts);
-            }
-            if (opts{req_opt}.typeCode() != NT_STRING) {
-                # only the type of the value, which can be a credential
-                throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires option %y to be set with a string; "
-                    "type provided: %y", grant_type, req_opt, opts{req_opt}.fullType());
-            }
-            self{req_opt} = opts{req_opt};
-        }
         if (grant_type == "password") {
-            # requires username and password
-            if (!exists username) {
-                throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and password; no "
-                    "username is set for the current connection";
-            }
-            if (!exists password) {
-                throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and password; no "
-                    "password is set for the current connection";
-            }
+            req_opts += ("username", "password");
         }
+        return map $1, req_opts, !satisfied{$1} && !opts{$1}.val();
     }
 
     #! Authenticates with OAuth2 or a custom token method if configured
@@ -5916,16 +6012,15 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
             # a connection authenticated by another credential does not use the grant type, which is usually a
             # default value (qore#6901)
             if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none" && !usesNonOAuth2Credential()) {
-                *list<string> req_opts = RestClient::OAuth2GrantOptions{opts.oauth2_grant_type};
-                if (!req_opts) {
-                    throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y is unknown; known grant types: %y",
-                        opts.oauth2_grant_type, keys RestClient::OAuth2GrantOptions);
-                }
-
-                if (*list<string> missing = keys ((map {$1: True}, req_opts) - keys opts)) {
+                # the options are checked as the clients check them: an empty value is missing, and an empty
+                # redirect URL takes the default (qore#6906)
+                *list<string> missing = RestClient::getMissingOAuth2GrantOptions(opts.oauth2_grant_type,
+                    opts + {"oauth2_redirect_url": opts.oauth2_redirect_url ?: RestClient::DefaultOAuth2RedirectUrl});
+                # the username and password of the "password" grant are checked below
+                if (missing = (map $1, missing, $1 != "username" && $1 != "password")) {
                     throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires the following options to be "
-                        "set: %y; the following are not set on this connection: %y",
-                        opts.oauth2_grant_type, req_opts, missing);
+                        "set: %y; the following are not set or are empty on this connection: %y",
+                        opts.oauth2_grant_type, RestClient::OAuth2GrantOptions{opts.oauth2_grant_type}, missing);
                 }
 
                 switch (opts.oauth2_grant_type) {
@@ -5939,9 +6034,13 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
                     }
 
                     case "password": {
-                        if (!opts.username && !urlh.username) {
+                        if (!opts.username.val() && !urlh.username.val()) {
                             throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
                                 "password; no username is set for the current connection";
+                        }
+                        if (!opts.password.val() && !urlh.password.val()) {
+                            throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
+                                "password; no password is set for the current connection";
                         }
                         break;
                     }
@@ -6114,9 +6213,21 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     /** Overrides the base class to propagate the alt token signer to the async client,
         similar to how @ref get() calls @ref setupRestClientConfig() for the sync client.
 
-        @since %RestClient 2.5
+        If \a connect is @ref False, the client is created with the \c skip_login option, so that, as a
+        @ref RestClient::RestClient "RestClient" created by @ref get() with \a connect @ref False, it does not log in
+        when it is created but before its first request; a client of a connection that awaits OAuth2 authorization
+        (\c authorization_code or \c implicit grant type without a token) can therefore be created.  Invalid OAuth2
+        options raise \c OAUTH2-ERROR in both cases.
+
+        @since
+        - %RestClient 2.5
+        - %RestClient 2.8 a client acquired with \a connect @ref False does not log in when it is created
     */
     object getAsync(bool connect = True, *hash<auto> rtopts) {
+        if (!connect && !exists rtopts.skip_login) {
+            # as get(False) creates a RestClient that does not connect (qore#6906)
+            rtopts.skip_login = True;
+        }
         object o = AbstractConnection::getAsync(connect, rtopts);
         if (alt_token_signer) {
             call_object_method(o, "setAltTokenSigner", alt_token_signer, alt_token_signer_header);
