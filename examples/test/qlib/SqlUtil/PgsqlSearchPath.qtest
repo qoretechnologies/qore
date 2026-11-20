@@ -73,7 +73,13 @@ class PgsqlSearchPathTest inherits QUnit::Test {
 
         {
             on_exit cleanup();
-            setup();
+            # a database that cannot be connected to fails a test case of its own (qore#6934)
+            *string precondition = TestRun::guardSetup(\setup());
+            if (precondition) {
+                connstr = NOTHING;
+                admin = NOTHING;
+                addTestCase("the database can be connected to", sub () { fail(precondition); });
+            }
             set_return_value(main());
         }
     }

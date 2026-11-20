@@ -287,6 +287,28 @@ public class TestRun {
         return ds;
     }
 
+    #! Runs the database setup of a test outside its test cases, and returns the precondition failure it raised
+    /** A test that sets up its database in its constructor, before QUnit runs its test cases, cannot fail a test
+        case there: it runs the setup with this function, and when it returns a reason, adds a test case that fails
+        with it (ex: <tt>addTestCase("the database can be connected to", sub () { fail(reason); })</tt>), so that a
+        database that cannot be connected to is a failure of the test, not an unhandled exception
+
+        @param setup the setup code
+
+        @return the precondition failure (getPreconditionFailure()) if the setup raised one, else no value; any
+        other exception is raised
+    */
+    static *string guardSetup(code setup) {
+        try {
+            setup();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "TEST-EXCEPTION" && ex.desc =~ /^precondition failure: /) {
+                return ex.desc;
+            }
+            rethrow;
+        }
+    }
+
     #! Returns the letters and digits of a string, in lower case, at most the given number of them
     static string getLabel(string str, int max) {
         string label = str.lwr();
