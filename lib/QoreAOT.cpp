@@ -2295,7 +2295,7 @@ std::string qore_aot_get_compile_runtime_identity() {
     produces the same bytes, whatever the source file's modification time (a checkout or a rebase rewrites files
     with unchanged content).  Nor is the git revision of the compiling Qore: a commit that changes nothing qcc
     compiles with would otherwise change every artifact, so that a build cache (design/qmod-build-cache.md) could
-    never reuse one; the AOT runtime identity and the Qore version identify the compiler.  No runtime reads such data from an artifact; the loader checks the sources of a module
+    never reuse one; the AOT runtime identity and the Qore version identify the compiler.  Apart from the AOT runtime identity, which the host API qore_aot_script_register() reads to check a script object (issue #6898), no runtime reads such data from an artifact; the loader checks the sources of a module
     linked into a source tree with the fingerprints file beside the module (see --depfile). */
 static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* binary_kind,
         const char* target_triple, int opt_level, bool include_source) {
@@ -25113,11 +25113,15 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
 //! Generate main() and function table for AOT binary.
 /** Embeds serialized metadata blob and calls qore_aot_run_v4() from main() with the AOT runtime identity of this
     libqore, which the runtime checks before anything else (issue #6898).
+
+    @param weak_runtime_entry true to reference qore_aot_run_v4() weakly and report a libqore without it from main()
+    (dynamic links); false for an executable that links libqore statically, where a weak reference would not pull the
+    runtime entry out of the archive
 */
 static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
         const QoreParseOptions& parse_options, const std::vector<AOTCompiledFunc>& compiled_funcs,
-        const std::vector<AOTCompiledInitFunc>& compiled_init_funcs = {}) {
+        const std::vector<AOTCompiledInitFunc>& compiled_init_funcs = {}, bool weak_runtime_entry = true) {
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
     auto* i64_type = llvm::Type::getInt64Ty(ctx);
     auto* ptr_type = llvm::PointerType::get(ctx, 0);
@@ -25226,10 +25230,12 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         i32_type        // num_functions
     }, false);
     auto aot_run_fn = module.getOrInsertFunction("qore_aot_run_v4", aot_run_type);
-    // referenced weakly: run with a libqore that predates it, main() reports the mismatch itself instead of the
-    // dynamic loader failing (libqore is linked weakly on macOS, see linkExecutable())
     auto* aot_run_decl = llvm::cast<llvm::Function>(aot_run_fn.getCallee());
-    aot_run_decl->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
+    if (weak_runtime_entry) {
+        // referenced weakly: run with a libqore that predates it, main() reports the mismatch itself instead of the
+        // dynamic loader failing (libqore is linked weakly on macOS, see linkExecutable())
+        aot_run_decl->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
+    }
 
     // Generate main()
     auto* main_type = llvm::FunctionType::get(i32_type, {i32_type, ptr_type}, false);
@@ -25242,7 +25248,7 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
     llvm::Value* argc_val = &*arg_it++;
     llvm::Value* argv_val = &*arg_it;
 
-    {
+    if (weak_runtime_entry) {
         auto* old_bb = llvm::BasicBlock::Create(ctx, "runtime_predates_entry", main_fn);
         auto* run_bb = llvm::BasicBlock::Create(ctx, "run", main_fn);
         builder.CreateCondBr(builder.CreateIsNull(aot_run_decl), old_bb, run_bb);
@@ -25250,10 +25256,10 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         // the error is written with write(2): nothing of the Qore library is called
         builder.SetInsertPoint(old_bb);
         std::string msg = "AOT-RUNTIME-MISMATCH: the AOT-compiled program (" + std::string(qore_aot_map_source_path(
-            label)) + ") was compiled for AOT runtime identity '" + identity + "', but the Qore library it was "
-            "started with predates the AOT runtime identity check of executables (it has no qore_aot_run_v4()); its "
-            "native code was generated for a different Qore library and cannot be run with this one; rebuild it with "
-            "the qcc of this Qore installation\n";
+            label)) + ") was compiled for AOT runtime identity '" + identity + "', but the Qore library could not be "
+            "loaded or predates the AOT runtime identity check of executables (it has no qore_aot_run_v4()); its "
+            "native code can only be run with the Qore library of the qcc that compiled it; check that the Qore "
+            "library is installed, or rebuild it with the qcc of this Qore installation\n";
         llvm::Constant* msg_data = llvm::ConstantDataArray::getString(ctx, msg, false);
         auto* msg_gv = new llvm::GlobalVariable(module, msg_data->getType(), true,
             llvm::GlobalValue::PrivateLinkage, msg_data, "qore_aot_runtime_mismatch_msg");
@@ -25912,7 +25918,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         bool report_metadata = qccReportMetadataSizeStart("compilation metadata", metadata.size());
         finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
         generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs,
-            compiled_init_funcs);
+            compiled_init_funcs, !static_link);
 
         split_codegen = !func_slots.empty();
     }

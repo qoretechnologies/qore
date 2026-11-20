@@ -413,12 +413,18 @@ fingerprinted sources define `qore_aot_run_v4()`. The public host API
 `qore_aot_script_register()` reads the identity from the image's `BUILD_INFO`.
 
 The executable references `qore_aot_run_v4()` weakly and reports the mismatch
-itself (with `write(2)`) when it does not resolve. On macOS, `qcc` links
-executables with `-weak-lqore`, so that dyld does not end an executable run
-with a libqore that lacks a helper it imports (`Symbol not found`) before
-`main()` can refuse it; on Linux, glibc binds functions lazily, while a loader
-that binds every symbol at load (musl, `-z now`) still reports a missing helper
-itself. Tests: `examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest`.
+itself (with `write(2)`) when it does not resolve: the library could not be
+loaded or predates the check. On macOS, `qcc` links executables with
+`-weak-lqore`, so that dyld does not end an executable run with a libqore that
+lacks a helper it imports (`Symbol not found`) before `main()` can refuse it;
+on Linux, glibc binds functions lazily, while a loader that binds every symbol
+at load (musl, `-z now`) still reports a missing helper itself. An executable
+linked statically (`qcc -S`) references the entry strongly, as a weak reference
+would not pull it out of `libqore_static.a`. The host that `qcc -o` writes for
+script objects links libqore normally, so there a libqore that lacks a symbol
+the objects import is still reported by the dynamic loader. A host that calls
+the register functions of script objects without a batch only gets the error
+on stderr (they return nothing); the refused object registers nothing. Tests: `examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest`.
 
 Outside the Qore tree, `QORE_USER_MODULE_AOT_RULES()` (cmake/QoreMacros.cmake)
 makes every `.qmod` depend on a build-local `qcc-format.stamp` that

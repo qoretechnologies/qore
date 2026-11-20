@@ -16320,14 +16320,17 @@ extern "C" DLLEXPORT int qore_aot_script_register_native_v2(const char* identity
 }
 
 //! Returns the AOT runtime identity that the build information of a script object's image records
-/** @return the identity, or an empty string if the image records none or cannot be read
+/** @return the identity, an empty string if the image records none, or a description in angle brackets of why it
+    cannot be read
 */
 static std::string qore_aot_script_image_identity(const uint8_t* metadata, int metadata_len) {
     std::vector<std::pair<std::string, std::string>> info;
     std::string error;
-    if (!metadata || metadata_len <= 0 || !readBuildInfo(metadata, static_cast<uint32_t>(metadata_len), info,
-            error)) {
-        return std::string();
+    if (!metadata || metadata_len <= 0) {
+        return "<unknown: no image>";
+    }
+    if (!readBuildInfo(metadata, static_cast<uint32_t>(metadata_len), info, error)) {
+        return "<unknown: the image cannot be read: " + error + ">";
     }
     for (const auto& [key, value] : info) {
         if (key == "aot-runtime-identity") {

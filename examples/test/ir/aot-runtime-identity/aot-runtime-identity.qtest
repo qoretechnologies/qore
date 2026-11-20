@@ -58,6 +58,7 @@ class AotRuntimeIdentityTest inherits QUnit::Test {
             libqore_dir, libqore_dir, source_root + "/include");
         dir = get_script_dir();
         addTestCase("executable", \executableTest());
+        addTestCase("executable without its Qore library (macOS)", \executableWithoutLibraryTest());
         addTestCase("script objects", \scriptObjectTest());
         addTestCase("script aggregate with native registers", \scriptAggregateTest());
         set_return_value(main());
@@ -93,6 +94,52 @@ class AotRuntimeIdentityTest inherits QUnit::Test {
             "'%s', but this Qore runtime (libqore %s) has AOT runtime identity '%s'; its native code was generated "
             "for a different Qore library and cannot be run with this one; rebuild it with the qcc of this Qore "
             "installation\n", src, OtherIdentity, Qore::VersionString, identity), r.out);
+    }
+
+    #! on macOS, an executable whose Qore library cannot be loaded is refused by its main()
+    /** qcc links libqore weakly on macOS, so that dyld does not end an executable that a libqore without a symbol it
+        imports runs; main() then finds no qore_aot_run_v4() and reports that the library could not be loaded or
+        predates the check, as for a libqore that predates the check (which a test cannot build).  The rpath to the
+        library is removed and no library path is given, so the library is not found.
+    */
+    executableWithoutLibraryTest() {
+        if (PlatformOS != "Darwin") {
+            testSkip("the weak linking of libqore applies to macOS only");
+        }
+        TmpDir tmp("aot-runtime-identity-nolib-");
+        string src = realpath(dir + "/aot-runtime-identity.q");
+        string exe = tmp.path + "/nolib";
+        int rc;
+        string out = backquote(sprintf("%s %s -O0 -o %s %s 2>&1", env, qcc_bin, exe, src), \rc);
+        assertEq(0, rc, "qcc: " + out);
+        # remove every rpath of the executable
+        out = backquote(sprintf("otool -l %s", exe), \rc);
+        assertEq(0, rc, out);
+        list<string> rpaths;
+        bool in_rpath;
+        foreach string line in (out.split("\n")) {
+            if (line =~ /cmd LC_RPATH$/) {
+                in_rpath = True;
+            } else if (in_rpath && (*list<*string> m = (line =~ x/^\s+path (.+) \(offset \d+\)$/))) {
+                rpaths += m[0];
+                in_rpath = False;
+            }
+        }
+        assertTrue(rpaths.size() > 0, "the executable has an rpath: " + out);
+        foreach string rpath in (rpaths) {
+            out = backquote(sprintf("install_name_tool -delete_rpath %s %s 2>&1", rpath, exe), \rc);
+            assertEq(0, rc, out);
+        }
+        out = backquote(sprintf("codesign -f -s - %s 2>&1", exe), \rc);
+        assertEq(0, rc, "codesign: " + out);
+        # the libqore is referenced by its rpath-relative install name, which no longer resolves
+        out = backquote(sprintf("env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH %s 2>&1", exe), \rc);
+        assertEq(2, rc, "refused with exit code 2, not ended by dyld: " + out);
+        assertEq(sprintf("AOT-RUNTIME-MISMATCH: the AOT-compiled program (%s) was compiled for AOT runtime identity "
+            "'%s', but the Qore library could not be loaded or predates the AOT runtime identity check of executables "
+            "(it has no qore_aot_run_v4()); its native code can only be run with the Qore library of the qcc that "
+            "compiled it; check that the Qore library is installed, or rebuild it with the qcc of this Qore "
+            "installation\n", src, identity), out);
     }
 
     #! a script object compiled for another identity is refused, and the batch of its program fails before it runs
