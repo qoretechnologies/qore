@@ -138,6 +138,12 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - a connection whose setup raises an exception after the connection was registered (for example when its
+      @ref WebSocketHandler::WebSocketConnection "WebSocketConnection" raises one, or an HTTP/2 stream has no data
+      queue) is deregistered, gets
+      @ref WebSocketHandler::WebSocketConnection::connectionClosed() "connectionClosed()" once and is removed from the
+      handler; it was kept by the handler, and connectionClosed() was not called
+      (<a href="https://github.com/qoretechnologies/qore/issues/6794">issue 6794</a>)
     - a text message from the client that is not valid UTF-8 closes the connection with
       @ref WebSocketUtil::WSCC_InvalidData "WSCC_InvalidData" (1007) before the connection's code sees it (RFC 6455
       section 8.1), also in the echo mode of
@@ -3149,6 +3155,14 @@ handler.setCloseTimeout(2s);
         *AsyncSocketIo::AsyncSocketIoController async_ctrl = cx."async_ctrl";
         # get new connection object
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
+        # True once the end of an asynchronous HTTP/1.1 connection has been handed to its poll operation, which then
+        # runs finishConnection() when the connection ends (see endAsyncConnection()); set up as soon as the
+        # connection is registered, so that a connection whose setup raises an exception is deregistered, gets
+        # connectionClosed() and is removed too (issue #6794)
+        bool deferred = False;
+        on_exit if (!deferred) {
+            finishConnection(wsc, ws_poll_op, cid);
+        }
         sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
         # Publish the listener id and observe whether the listener has already been stopped.
@@ -3252,13 +3266,6 @@ handler.setCloseTimeout(2s);
             wsc.setExtensions(ext_data.extensions, ext_data.rsv_mask ?? 0);
             logDebug("WebSocketHandler::startImpl() cid: %y extensions: %y", cx.id,
                 (map $1.getName(), ext_data.extensions));
-        }
-
-        # True once the end of an asynchronous HTTP/1.1 connection has been handed to its poll operation, which then
-        # runs finishConnection() when the connection ends (see endAsyncConnection())
-        bool deferred = False;
-        on_exit if (!deferred) {
-            finishConnection(wsc, ws_poll_op, cid);
         }
 
         # issue #3225: handle exceptions in registered()
