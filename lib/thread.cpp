@@ -3976,6 +3976,20 @@ int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatemen
 #endif
 }
 
+void enter_compiled_body_options(ExceptionSink* xsink, QoreParseOptions po, const AbstractStatement*& old_stmt,
+        const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
+    ThreadData* td = thread_data.get();
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    old_po = td->runtime_po_state.po;
+    td->runtime_po_state.po = apply_runtime_po_override(td, po);
+#ifdef QORE_MANAGE_STACK
+    if (xsink) {
+        check_stack_intern(xsink, td);
+    }
+#endif
+}
+
 void swap_runtime_location(const QoreProgramLocation* loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc) {
     ThreadData* td = thread_data.get();

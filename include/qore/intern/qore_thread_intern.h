@@ -487,6 +487,10 @@ DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const Abstrac
         const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 
+//! Enters a compiled body in the caller's statement, with the callee's options and the usual stack check.
+DLLLOCAL void enter_compiled_body_options(ExceptionSink* xsink, QoreParseOptions po,
+        const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
 //! saves the thread's current statement, location and runtime parse options and sets only its runtime parse options
 /** As swap_runtime_statement_location() with the thread's current statement and location, which it keeps, in one
     lookup of the thread's data and without a stack check; restored with update_runtime_statement_location()
@@ -2183,6 +2187,10 @@ public:
             const AbstractStatement* stat, const QoreParseOptions& parse_options) : has_po(true) {
         swap_runtime_statement_location(xsink, stat, loc, parse_options, statement, this->loc,
             this->parse_options);
+    }
+
+    DLLLOCAL QoreProgramLocationHelper(ExceptionSink* xsink, QoreParseOptions po) : has_po(true) {
+        enter_compiled_body_options(xsink, po, statement, loc, parse_options);
     }
 
     DLLLOCAL QoreProgramLocationHelper(const QoreProgramLocation* loc) : has_po(false) {

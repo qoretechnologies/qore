@@ -9601,8 +9601,7 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
             const AbstractStatement* old_stmt;
             const QoreProgramLocation* old_loc;
             QoreParseOptions old_po;
-            swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(), call_po, old_stmt, old_loc,
-                old_po);
+            enter_compiled_body_options(xsink, call_po, old_stmt, old_loc, old_po);
 
             QoreValue ir_return_value;
             bool ok = false;
@@ -9871,15 +9870,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                 }
 
-                // Swap in the variant's parse options and set runtime_loc to the
-                // function's parse location so that nested function/method calls
-                // (via CodeEvaluationHelper) report this function's source
-                // location as the caller.
+                // The body runs with the callee's options. Its entry location is the caller's statement.
                 const AbstractStatement* old_stmt;
                 const QoreProgramLocation* old_loc;
                 QoreParseOptions old_po;
-                swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(), po,
-                    old_stmt, old_loc, old_po);
+                enter_compiled_body_options(xsink, po, old_stmt, old_loc, old_po);
 
                 // Note: We used to isolate from outer AST stack location chain by nulling it,
                 // but this caused crashes when exceptions are thrown from builtins called during
@@ -10040,15 +10035,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                 }
 
-                // Swap in the variant's parse options and set runtime_loc to the
-                // function's parse location for the duration of IR execution. The
-                // IR interpreter updates runtime_loc per-instruction, but this
-                // ensures correct location from the start.
+                // The body runs with the callee's options. Its entry location is the caller's statement.
                 const AbstractStatement* old_stmt;
                 const QoreProgramLocation* old_loc;
                 QoreParseOptions old_po;
-                swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(), po,
-                    old_stmt, old_loc, old_po);
+                enter_compiled_body_options(xsink, po, old_stmt, old_loc, old_po);
 
                 // Note: We do NOT isolate from outer stack location chain here.
                 // CodeEvaluationHelper RAII properly manages the stack location chain

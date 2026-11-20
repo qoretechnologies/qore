@@ -792,6 +792,9 @@ static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
     "the format changes of batch AN share one format version (v50)");
 constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AN_VERSION;
 
+//! Serialized IR functions end with a map of local slots to their enclosing statement at destruction (#6672).
+constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
+
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
     //! the instruction has no runtime location (code outside the statements of the function)

@@ -763,6 +763,8 @@ private:
     // product exceeds getCleanupPhiBudget() -- every other function keeps the
     // inline triples and full SSA promotion of its locals.
     CleanupFrameTable boxed_exit_cleanup_table;
+    //! Lexical locals in the exact order of the boxed cleanup entries, for exception location changes.
+    std::vector<const LocalVar*> boxed_exit_cleanup_locals;
 
     // The slots of iterator_cleanup_allocas, as a table of the cleanup frame.  Same
     // problem and same remedy as boxed_exit_cleanup_table: emitLateExitCleanup()
@@ -1798,6 +1800,13 @@ private:
     // Runtime location tracking: per-function cached TLS pointers
     llvm::Value* loc_cache_ptr = nullptr;   //!< Cached ptr-to-ptr for runtime_loc TLS variable
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
+    //! The caller's statement, saved only for bodies with a root local whose release can run a destructor.
+    llvm::Value* body_entry_loc = nullptr;
+    llvm::Value* body_entry_stmt = nullptr;
+    void captureBodyEntryLocation();
+    void emitBodyCleanupLocation();
+    llvm::FunctionType* aotBodyFunctionType(bool takes_body_entry_location) const;
+
     //! Cached ptr-to-ptr for the thread's call site, the location of the call being made (QoreRcCallSiteHelper)
     llvm::Value* call_site_cache_ptr = nullptr;
     //! the runtime location (QoreIRInstruction::stmt_loc) that the code of the block being lowered stored last
@@ -2022,6 +2031,8 @@ private:
         bool pop_closure = false;
         //! true if \a alloca holds the iterator of a foreach statement (released with qore_rt_iterator_cleanup())
         bool iterator = false;
+        //! Lexical local whose released value or cache this entry owns.
+        const LocalVar* local = nullptr;
     };
 
     //! The locals released at the exit of the function, in declaration order (they are released last first)
@@ -2679,7 +2690,10 @@ private:
 
     //! The instructions that push the frame of an AOT call whose callee may run inline, as a body summary
     struct AotInlineCallFrame {
-        llvm::Instruction* push = nullptr;
+        llvm::CallInst* push = nullptr;
+
+        //! A real native entry establishes its own locations and inherits its caller's statement for body cleanup.
+        void useCallerStatement(llvm::Module& module);
     };
     //! Emits the push of the frame of an AOT call whose callee may run inline, which makes the location of the
     //! callee's body the runtime location, where the inline code runs

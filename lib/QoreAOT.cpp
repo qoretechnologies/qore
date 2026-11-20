@@ -5636,6 +5636,17 @@ private:
             }
         }
 
+        // The helper unwinds locals it owns. A function-root local must use the coordinator's caller
+        // statement even when the region is entered from a different statement in the coordinator.
+        for (const LocalVar* lv : region.contained_locals) {
+            if (auto it = fn->local_unwind_locations.find(lv); it != fn->local_unwind_locations.end()) {
+                helper->local_unwind_locations.insert(*it);
+                if (!it->second) {
+                    helper->takes_body_entry_location = true;
+                }
+            }
+        }
+
         // Mark in-region returns for the outline return token: the helper
         // signals immediately before returning the value; the coordinator
         // consumes the flag after the call and re-executes the return
@@ -5651,6 +5662,14 @@ private:
                     auto* r = static_cast<QoreIRReturnInstruction*>(inst_ptr.get());
                     r->outline_signal = true;
                     signaled_returns.push_back(r);
+                } else if (inst_ptr && inst_ptr->opcode == QoreIROpcode::UninstantiateLocal && !inst_ptr->stmt_loc) {
+                    // An early return can release a shared root local inside the helper, before the
+                    // coordinator consumes the return token. Use the same enclosing statement here.
+                    const auto* local = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get())->local;
+                    if (fn->releasesLocalAtCaller(local)) {
+                        helper->local_unwind_locations.emplace(local, nullptr);
+                        helper->takes_body_entry_location = true;
+                    }
                 }
             }
         }
@@ -5672,6 +5691,7 @@ private:
             call->shared_locals = region.shared_locals;
             call->written_shared_locals = region.written_shared_locals;
             call->function_body = true;
+            call->takes_body_entry_location = helper->takes_body_entry_location;
             call->result = fn->createValue();
             if (call->result.id > fn->max_value_id) {
                 fn->max_value_id = call->result.id;

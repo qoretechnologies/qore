@@ -13401,8 +13401,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         }
     } receiver_guard(receiver_type_info);
 
-    // Swap in the callee variant's parse options and set runtime_loc to the
-    // function's parse location.  This is critical for correctness: when the
+    // Swap in the callee variant's parse options, keeping the caller's statement for body cleanup. When the
     // caller's program has different parse options than the callee's (e.g. the
     // caller is a restricted sandbox but the callee is a module method), the
     // callee must run with its OWN parse options so that runtime domain checks
@@ -13415,7 +13414,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     QoreParseOptions old_po;
     bool swapped_runtime_ctx = false;
     if (parse_loc) {
-        swap_runtime_statement_location(xsink, nullptr, parse_loc, po, old_stmt, old_loc, old_po);
+        enter_compiled_body_options(xsink, po, old_stmt, old_loc, old_po);
         swapped_runtime_ctx = true;
     }
 
@@ -13582,8 +13581,8 @@ struct QoreRtCrossModuleCallState {
     */
     class RuntimeContextSwap {
     public:
-        RuntimeContextSwap(const QoreProgramLocation* loc, const QoreParseOptions& po) {
-            swap_runtime_statement_location(nullptr, nullptr, loc, po, old_stmt, old_loc, old_po);
+        explicit RuntimeContextSwap(const QoreParseOptions& po) {
+            swap_runtime_parse_options(po, old_stmt, old_loc, old_po);
         }
 
         ~RuntimeContextSwap() {
@@ -13688,11 +13687,10 @@ extern "C" DLLEXPORT int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, in
     // a normal function call: a calling closure's captured locals do not shadow the callee's
     state->closure_env_clear.emplace(nullptr);
     state->po_override.emplace(exec_pgm, uvb, caller_pgm);
-    // the function's parse options, after the override, as execJITWithDeopt() sets them (with the location only)
+    // A native fast entry inherits the caller's statement and uses the callee's parse options.
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     if (parse_loc) {
-        state->runtime_context.emplace(parse_loc,
-            uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm)));
+        state->runtime_context.emplace(uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm)));
     }
     return 0;
 }
