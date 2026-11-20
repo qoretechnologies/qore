@@ -2496,14 +2496,23 @@ static bool isLValueOp(QoreIROpcode op) {
 //! it sets `unknown_node_found` to true, which causes the caller to treat
 //! ALL locals as AST-visible.  This ensures correctness even if new AST node
 //! types are added to Qore.
+//!
+//! \a seen, if given, holds the expressions found so far by the walks that add to the same \a ast_locals,
+//! \a unknown_node_found and \a ref_created: an expression found again, such as the argument of a call that is the
+//! expression of an instruction of its own and part of the expression of the instruction of the call that takes it,
+//! is not walked again, as what its walk adds is there already, so that the walks of the instructions of nested calls
+//! take time in the number of their expressions and not in its square (issue #6920)
 static void collectLocalsFromExpr(const QoreValue& expr,
         std::unordered_set<const void*>& ast_locals, bool& unknown_node_found,
-        bool* ref_created = nullptr) {
+        bool* ref_created = nullptr, std::unordered_set<const void*>* seen = nullptr) {
     if (!expr.hasNode()) {
         return;
     }
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) {
+        return;
+    }
+    if (seen && !seen->insert(node).second) {
         return;
     }
 
@@ -2521,13 +2530,13 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
             if (const QoreParseListNode* pargs = vrn->getParseArgs()) {
                 for (size_t i = 0; i < pargs->size(); ++i) {
-                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found, ref_created);
+                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found, ref_created, seen);
                 }
             }
             if (const QoreListNode* eargs = vrn->getArgs()) {
                 ConstListIterator li(eargs);
                 while (li.next()) {
-                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created);
+                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created, seen);
                 }
             }
         }
@@ -2552,42 +2561,42 @@ static void collectLocalsFromExpr(const QoreValue& expr,
 
     // Binary operators: recurse left and right
     if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
-        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found, ref_created);
-        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found, ref_created, seen);
+        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found, ref_created, seen);
         return;
     }
 
     // Binary lvalue operators (=, +=, ... in an expression: f(x = g())); a reference that the right side creates is
     // found when it is walked
     if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(node)) {
-        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found, ref_created);
-        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found, ref_created, seen);
+        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found, ref_created, seen);
         return;
     }
 
     // Binary int-specific operators (inherit separately from QoreBinaryOperatorNode<>)
     if (auto* binop = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
-        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found, ref_created);
-        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found, ref_created, seen);
+        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found, ref_created, seen);
         return;
     }
 
     // Unary/single expression operators: recurse expression
     if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
-        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found, ref_created, seen);
         return;
     }
 
     // LValue single expression operators
     if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
-        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found, ref_created, seen);
         return;
     }
 
     // Single-value expression operators (e.g., exists, which inherits from
     // QoreSingleValueExpressionOperatorNode<QoreOperatorNode>)
     if (auto* unop = dynamic_cast<const QoreSingleValueExpressionOperatorNode<>*>(node)) {
-        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found, ref_created, seen);
         return;
     }
 
@@ -2598,12 +2607,12 @@ static void collectLocalsFromExpr(const QoreValue& expr,
 
     // Dot eval operator (method call on object): left.method()
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
-        collectLocalsFromExpr(dot->getExpression(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(dot->getExpression(), ast_locals, unknown_node_found, ref_created, seen);
         // Method call node has args that might reference locals
         if (const MethodCallNode* m = dot->getMethodCall()) {
             if (const QoreParseListNode* pargs = m->getParseArgs()) {
                 for (size_t i = 0; i < pargs->size(); ++i) {
-                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found, ref_created);
+                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found, ref_created, seen);
                 }
             }
             // Also check resolved args — after parse resolution, locals may only
@@ -2611,7 +2620,7 @@ static void collectLocalsFromExpr(const QoreValue& expr,
             if (const QoreListNode* rargs = m->getArgs()) {
                 ConstListIterator li(rargs);
                 while (li.next()) {
-                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created);
+                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created, seen);
                 }
             }
         }
@@ -2623,13 +2632,13 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     if (auto* call = dynamic_cast<const FunctionCallBase*>(node)) {
         if (const QoreParseListNode* args = call->getParseArgs()) {
             for (size_t i = 0; i < args->size(); ++i) {
-                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found, ref_created);
+                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found, ref_created, seen);
             }
         }
         if (const QoreListNode* args = call->getArgs()) {
             ConstListIterator li(args);
             while (li.next()) {
-                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created);
+                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created, seen);
             }
         }
         return;
@@ -2637,16 +2646,16 @@ static void collectLocalsFromExpr(const QoreValue& expr,
 
     // Call reference calls: adder(32)
     if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
-        collectLocalsFromExpr(crc->getExp(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(crc->getExp(), ast_locals, unknown_node_found, ref_created, seen);
         if (const QoreParseListNode* args = crc->getParseArgs()) {
             for (size_t i = 0; i < args->size(); ++i) {
-                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found, ref_created);
+                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found, ref_created, seen);
             }
         }
         if (const QoreListNode* args = crc->getArgs()) {
             ConstListIterator li(args);
             while (li.next()) {
-                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created);
+                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created, seen);
             }
         }
         return;
@@ -2675,7 +2684,7 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     // Object method reference: \obj.method() — recurse into the object expression
     if (ntype == NT_OBJMETHREF) {
         if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
-            collectLocalsFromExpr(omr->getExp(), ast_locals, unknown_node_found, ref_created);
+            collectLocalsFromExpr(omr->getExp(), ast_locals, unknown_node_found, ref_created, seen);
         }
         // ParseSelfMethodReferenceNode and ParseScopedSelfMethodReferenceNode have no local variable
         // references (self-based)
@@ -2688,7 +2697,7 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         if (ref_created) {
             *ref_created = true;
         }
-        collectLocalsFromExpr(pref->getLVExp(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(pref->getLVExp(), ast_locals, unknown_node_found, ref_created, seen);
         return;
     }
 
@@ -2706,7 +2715,7 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     if (ntype == NT_PARSE_LIST) {
         auto* plist = expr.get<const QoreParseListNode>();
         for (size_t i = 0; i < plist->size(); ++i) {
-            collectLocalsFromExpr(plist->get(i), ast_locals, unknown_node_found, ref_created);
+            collectLocalsFromExpr(plist->get(i), ast_locals, unknown_node_found, ref_created, seen);
         }
         return;
     }
@@ -3314,10 +3323,12 @@ static void collectLocalsFromIRFunction(const QoreIRFunction& func,
 static void collectLocalsFromIRFunction(const QoreIRFunction& func,
         std::unordered_set<const void*>& ast_locals,
         bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers) {
+    // the expressions found by the walks of the instructions' expressions: each is walked once (issue #6920)
+    std::unordered_set<const void*> seen;
     auto collect_context_exprs = [&](const QoreIRContextInstruction* ctx_inst) {
-        collectLocalsFromExpr(ctx_inst->exp, ast_locals, unknown_node_found);
-        collectLocalsFromExpr(ctx_inst->where_exp, ast_locals, unknown_node_found);
-        collectLocalsFromExpr(ctx_inst->sort_exp, ast_locals, unknown_node_found);
+        collectLocalsFromExpr(ctx_inst->exp, ast_locals, unknown_node_found, nullptr, &seen);
+        collectLocalsFromExpr(ctx_inst->where_exp, ast_locals, unknown_node_found, nullptr, &seen);
+        collectLocalsFromExpr(ctx_inst->sort_exp, ast_locals, unknown_node_found, nullptr, &seen);
     };
 
     for (const auto& block : func.blocks) {
@@ -3369,10 +3380,10 @@ static void collectLocalsFromIRFunction(const QoreIRFunction& func,
 
             if (isLValueOp(inst->opcode)) {
                 auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
-                collectLocalsFromExpr(lvinst->lvalue, ast_locals, unknown_node_found);
+                collectLocalsFromExpr(lvinst->lvalue, ast_locals, unknown_node_found, nullptr, &seen);
             }
             if (const QoreValue* expr = getInstructionExpr(inst.get())) {
-                collectLocalsFromExpr(*expr, ast_locals, unknown_node_found);
+                collectLocalsFromExpr(*expr, ast_locals, unknown_node_found, nullptr, &seen);
             }
 
             if (inst->opcode == QoreIROpcode::Find) {
@@ -3439,6 +3450,8 @@ bool QoreIRFunction::detectCreatesReference() const {
     std::unordered_set<const void*> ignored_locals;
     bool unknown_node_found = false;
     bool ref_created = false;
+    // the expressions found by the walks of the instructions' expressions: each is walked once (issue #6920)
+    std::unordered_set<const void*> seen;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
             if (ref_created || unknown_node_found) {
@@ -3456,19 +3469,19 @@ bool QoreIRFunction::detectCreatesReference() const {
             if (isLValueOp(inst->opcode)) {
                 auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
                 collectLocalsFromExpr(lvinst->lvalue, ignored_locals, unknown_node_found,
-                        &ref_created);
+                        &ref_created, &seen);
             }
             if (const QoreValue* expr = getInstructionExpr(inst.get())) {
-                collectLocalsFromExpr(*expr, ignored_locals, unknown_node_found, &ref_created);
+                collectLocalsFromExpr(*expr, ignored_locals, unknown_node_found, &ref_created, &seen);
             }
             if (inst->opcode == QoreIROpcode::Context) {
                 auto* ctx_inst = static_cast<const QoreIRContextInstruction*>(inst.get());
                 collectLocalsFromExpr(ctx_inst->exp, ignored_locals, unknown_node_found,
-                        &ref_created);
+                        &ref_created, &seen);
                 collectLocalsFromExpr(ctx_inst->where_exp, ignored_locals, unknown_node_found,
-                        &ref_created);
+                        &ref_created, &seen);
                 collectLocalsFromExpr(ctx_inst->sort_exp, ignored_locals, unknown_node_found,
-                        &ref_created);
+                        &ref_created, &seen);
             }
         }
     }
@@ -3960,13 +3973,16 @@ void QoreIRFunction::computeIROnlyLocals() {
     // land in parameter locals, which are not body locals.  When no reference is created here,
     // untyped body locals cannot alias anything and stay eligible for IR-only classification.
     bool reference_created = false;
+    // the expressions found by the walks of the instructions' expressions that report reference_created: each is
+    // walked once (issue #6920)
+    std::unordered_set<const void*> expr_seen;
     auto collect_context_exprs = [&](const QoreIRContextInstruction* ctx_inst) {
         collectLocalsFromExpr(ctx_inst->exp, ast_referenced_locals, unknown_node_found,
-                &reference_created);
+                &reference_created, &expr_seen);
         collectLocalsFromExpr(ctx_inst->where_exp, ast_referenced_locals, unknown_node_found,
-                &reference_created);
+                &reference_created, &expr_seen);
         collectLocalsFromExpr(ctx_inst->sort_exp, ast_referenced_locals, unknown_node_found,
-                &reference_created);
+                &reference_created, &expr_seen);
     };
 
     for (const auto& block : blocks) {
@@ -4097,13 +4113,13 @@ void QoreIRFunction::computeIROnlyLocals() {
             if (isLValueOp(inst->opcode)) {
                 auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
                 collectLocalsFromExpr(lvinst->lvalue, ast_referenced_locals,
-                        unknown_node_found, &reference_created);
+                        unknown_node_found, &reference_created, &expr_seen);
             }
 
             // Walk the expr AST tree for any instruction type that stores one
             if (const QoreValue* expr = getInstructionExpr(inst.get())) {
                 collectLocalsFromExpr(*expr, ast_referenced_locals,
-                        unknown_node_found, &reference_created);
+                        unknown_node_found, &reference_created, &expr_seen);
             }
 
             // Reference-creating instructions, plus instructions whose AST bodies are walked by
@@ -5116,24 +5132,26 @@ bool qore_ir_function_may_deopt(const QoreIRFunction& ir_func) {
 static bool qore_ir_add_handler_ast_locals(const QoreIRFunction& ir_func, std::unordered_set<const void*>& locals,
         bool handler, std::unordered_set<const QoreIRFunction*>& visited) {
     bool unknown_node_found = false;
+    // the expressions found by the walks of the instructions' expressions: each is walked once (issue #6920)
+    std::unordered_set<const void*> seen;
     for (const auto& block : ir_func.blocks) {
         for (const auto& inst : block->instructions) {
             if (handler) {
                 if (isLValueOp(inst->opcode)) {
                     collectLocalsFromExpr(static_cast<const QoreIRLValueInstruction*>(inst.get())->lvalue, locals,
-                        unknown_node_found);
+                        unknown_node_found, nullptr, &seen);
                 }
                 if (const QoreValue* expr = getInstructionExpr(inst.get())) {
-                    collectLocalsFromExpr(*expr, locals, unknown_node_found);
+                    collectLocalsFromExpr(*expr, locals, unknown_node_found, nullptr, &seen);
                 }
                 if (inst->opcode == QoreIROpcode::Find) {
                     collectLocalsFromFindInstruction(static_cast<const QoreIRFindInstruction*>(inst.get()), locals,
                         unknown_node_found);
                 } else if (inst->opcode == QoreIROpcode::Context) {
                     const auto* ctx = static_cast<const QoreIRContextInstruction*>(inst.get());
-                    collectLocalsFromExpr(ctx->exp, locals, unknown_node_found);
-                    collectLocalsFromExpr(ctx->where_exp, locals, unknown_node_found);
-                    collectLocalsFromExpr(ctx->sort_exp, locals, unknown_node_found);
+                    collectLocalsFromExpr(ctx->exp, locals, unknown_node_found, nullptr, &seen);
+                    collectLocalsFromExpr(ctx->where_exp, locals, unknown_node_found, nullptr, &seen);
+                    collectLocalsFromExpr(ctx->sort_exp, locals, unknown_node_found, nullptr, &seen);
                 }
             }
             if (inst->opcode == QoreIROpcode::OnBlockExit) {
