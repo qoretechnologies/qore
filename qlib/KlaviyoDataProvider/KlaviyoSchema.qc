@@ -143,9 +143,9 @@ public class KlaviyoSchema {
         manifest names them, so a set built before they exist would fail to resolve them.
     */
     static RestSchemaActionSet getActionSet() {
-        KlaviyoCodecs::register();
         AutoLock al(lck);
         if (!action_set) {
+            KlaviyoCodecs::register();
             action_set = new RestSchemaActionSet(KlaviyoSchema::getSchemaIntern(),
                 KlaviyoManifest::Manifest, KlaviyoManifest::ReferenceData,
                 NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
