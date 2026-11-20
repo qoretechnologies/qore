@@ -621,6 +621,12 @@ an instruction with a record and no target (the body of a handler lowered inline
 request.  A handler without paths never reports a request (`qore_ir_set_handler_flow()`), so the ScopeExit case gets
 none from it.
 
+For a qcc function call made after attachment, the direct-call helper checks the debugger of the callee's Program.
+A typed native entry checks the executing Program while obtaining its stack and location slots. When the Program has
+a debugger, both paths enter through the ordinary function binder, which exposes the callee's argument locals and
+reports its steps. The typed entry identifies the overload by its qualified name and standard native entry point.
+`debugger-native-callee-steps.qtest` exercises step, next, and step-out through both call paths.
+
 Native code has no path lowering: `QoreIRToLLVM::lowerFunction()` erases the path blocks (`debug_flow`) when it lowers
 the blocks, with no PHIs predeclared for them and no PHI incomings from them, in AOT code and in the closures of AOT
 code that the JIT compiles from their debug IR; the step hooks of native code ignore the requests, so no code branches
