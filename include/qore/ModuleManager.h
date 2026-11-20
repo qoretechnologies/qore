@@ -61,7 +61,9 @@
     ModuleManager::registerAOTStaticModule(): a statically linked AOT module registers with the register function that
     qcc emits for it, with its metadata record; modules built with the 2.2 headers are refused; additive in 2.3
     (no layout change for modules built with the earlier 2.3 headers): AbstractQoreProgramExternalDataEx (#6786) and
-    qore_check_process_wide_registration() with its feature macro QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION (#6743);
+    qore_check_process_wide_registration() with its feature macro QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION (#6743),
+    and qore_get_caller_program_id() and qore_get_caller_program() with their feature macro QORE_HAVE_CALLER_PROGRAM
+    (#6852);
     changed in 2.3 (never in a released module API): qore_type_get_code_param_types() and
     qore_type_get_type_arguments() copy the types to a type_vec_t that the caller gives and return a bool, instead of
     returning a pointer to internal storage (#6419)

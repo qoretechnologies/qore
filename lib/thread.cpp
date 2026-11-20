@@ -821,6 +821,12 @@ public:
     // current program context helper
     ProgramThreadCountContextHelper* current_pgm_ctx = nullptr;
 
+    //! the caller of work that runs on the thread for other code: a thread or a task that code submitted (qore#6852)
+    /** Set by QoreCallerProgramScope where the work starts, with the program context helper current then; the walk of
+        qore_find_caller_program() ends there with the caller that was captured when the work was submitted
+    */
+    const QoreCallerProgramScope* caller_scope = nullptr;
+
     //! the Program the thread has entered: the Program of its innermost ThreadEntryHandlerFrame, or nullptr
     /** Unlike current_pgm, which is also set without entering a Program (to parse it or to look up its metadata), this
         is set only where the thread starts running a Program's code; see ThreadEntryHandlerFrame.
@@ -1677,20 +1683,29 @@ public:
         allocate it), so the data that it replaces is kept here; the helpers are stack objects, which nest.  The first
         PCH_SAVED_INLINE levels need no allocation; deeper levels are kept in pch_saved_more, which grows as needed
     */
-    ThreadLocalProgramData* pch_saved_tlpd[PCH_SAVED_INLINE];
-    //! the number of entries of pch_saved_tlpd in use
+    //! what a QoreProgramContextHelper replaced
+    struct ProgramContextSave {
+        //! the thread-local data that it replaced
+        ThreadLocalProgramData* tlpd;
+        //! the program context helper current when it switched, which does not chain it (qore#6852)
+        const ProgramThreadCountContextHelper* ctx;
+        //! the Program that it replaced (qore#6852)
+        QoreProgram* pgm;
+    };
+    ProgramContextSave pch_saved[PCH_SAVED_INLINE];
+    //! the number of entries of pch_saved in use
     unsigned pch_saved_count = 0;
-    //! the thread-local data replaced by the helpers nested deeper than PCH_SAVED_INLINE, innermost last
-    std::vector<ThreadLocalProgramData*> pch_saved_more;
+    //! what the helpers nested deeper than PCH_SAVED_INLINE replaced, innermost last
+    std::vector<ProgramContextSave> pch_saved_more;
 
-    //! switches the thread's local data for QoreProgramContextHelper, saving the data that it replaces
+    //! switches the thread's local data for QoreProgramContextHelper, saving the data and the Program that it replaces
     /** If it throws (std::bad_alloc for a helper nested deeper than PCH_SAVED_INLINE), the thread is as it was
     */
-    DLLLOCAL void pushProgramContextData(ThreadLocalProgramData* new_tlpd) {
+    DLLLOCAL void pushProgramContextData(ThreadLocalProgramData* new_tlpd, QoreProgram* old_pgm) {
         if (pch_saved_count == PCH_SAVED_INLINE) {
-            pch_saved_more.push_back(tlpd);
+            pch_saved_more.push_back({tlpd, current_pgm_ctx, old_pgm});
         } else {
-            pch_saved_tlpd[pch_saved_count++] = tlpd;
+            pch_saved[pch_saved_count++] = {tlpd, current_pgm_ctx, old_pgm};
         }
         tlpd = new_tlpd;
     }
@@ -1698,12 +1713,22 @@ public:
     //! restores the thread's local data that the innermost QoreProgramContextHelper replaced
     DLLLOCAL void popProgramContextData() {
         if (!pch_saved_more.empty()) {
-            tlpd = pch_saved_more.back();
+            tlpd = pch_saved_more.back().tlpd;
             pch_saved_more.pop_back();
             return;
         }
         assert(pch_saved_count);
-        tlpd = pch_saved_tlpd[--pch_saved_count];
+        tlpd = pch_saved[--pch_saved_count].tlpd;
+    }
+
+    //! returns the number of active QoreProgramContextHelper switches
+    DLLLOCAL size_t programContextSaveCount() const {
+        return pch_saved_count + pch_saved_more.size();
+    }
+
+    //! returns what the active QoreProgramContextHelper switch with the given index replaced (0 = outermost)
+    DLLLOCAL const ProgramContextSave& programContextSave(size_t i) const {
+        return i < pch_saved_count ? pch_saved[i] : pch_saved_more[i - pch_saved_count];
     }
 };
 
@@ -2639,6 +2664,8 @@ public:
     std::unique_ptr<QoreInheritedSandbox> sandbox;
     //! the run-time parse options of the starting code, which the new thread runs with (qore#6208)
     QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::captureForThread();
+    //! the caller Program of the starting code, which the code of the new thread has as its caller (qore#6852)
+    std::unique_ptr<QoreCallerProgramCapture> caller{new QoreCallerProgramCapture};
     //! true if the starting thread runs the module cleanup or work that it handed over; the new thread is then part
     //! of the cleanup (see qore_module_cleanup_delegation())
     bool module_cleanup_delegate = qore_module_cleanup_delegation();
@@ -4734,7 +4761,7 @@ QoreProgramContextHelper::QoreProgramContextHelper(QoreProgram* pgm) {
     // the thread's local data is switched with the current Program; the data replaced is kept in the thread, as the
     // helper's public layout has room for the Program only (qore#6537).  First, as it can throw: the thread is then
     // as it was
-    td->pushProgramContextData(new_tlpd);
+    td->pushProgramContextData(new_tlpd, td->current_pgm);
     old_pgm = td->current_pgm;
     set_thread_current_pgm(td, pgm);
     sync_runtime_config_program(td);
@@ -6651,6 +6678,170 @@ bool qore_caller_is_sandboxed() {
     } catch (std::bad_alloc&) {
         // the sandbox cannot be resolved: what the code creates is not trusted
         return true;
+    }
+}
+
+bool qore_thread_in_trusted_build() {
+    ThreadData* td = thread_data.get();
+    return td && td->sandbox_budgets.inBuild();
+}
+
+namespace {
+//! the result of a step of the walk of qore_find_caller_program()
+enum class CallerWalkStep {
+    //! the Program is a module's Program: the walk continues to its caller
+    Skip,
+    //! the Program is the caller Program
+    Found,
+    //! the caller Program is unknown
+    Unknown,
+};
+
+//! classifies a Program on the walk of qore_find_caller_program()
+CallerWalkStep qore_caller_walk_step(const QoreProgram* pgm) {
+    if (!pgm) {
+        return CallerWalkStep::Skip;
+    }
+    const qore_program_private* priv = qore_program_private::get(*const_cast<QoreProgram*>(pgm));
+    // a Program that a trusted build created does not identify the code that the build serves (qore#6536 records
+    // the build's caller)
+    if (priv->created_in_trusted_build) {
+        return CallerWalkStep::Unknown;
+    }
+    // the Program of a module, library code or not, serves the code that calls it
+    return priv->module_lifetime.load(std::memory_order_acquire) ? CallerWalkStep::Skip : CallerWalkStep::Found;
+}
+}
+
+int qore_find_caller_program(QoreProgram*& pgm, qore_program_id_t& id) {
+    pgm = nullptr;
+    id = QORE_NO_PROGRAM_ID;
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return -1;
+    }
+    auto found = [&pgm, &id](QoreProgram* p) -> int {
+        pgm = p;
+        id = p->getProgramId();
+        return 0;
+    };
+    // the innermost module initialization barrier: the code that loads library code is the caller of its
+    // initialization; the barrier of a trusted build hides the code that the build serves
+    const ThreadData::ModuleInitBarrier* mib = td->module_init_barriers.empty()
+        ? nullptr : &td->module_init_barriers.back();
+    auto at_barrier = [&]() -> int {
+        if (mib->build || mib->loader_pgm_id == QORE_NO_PROGRAM_ID) {
+            return -1;
+        }
+        // the loader's Program is below the barrier on this thread's stack, so it is alive: the Program current when
+        // the barrier was set, if it is the loader's
+        id = mib->loader_pgm_id;
+        if (mib->pgm && mib->pgm->getProgramId() == id) {
+            pgm = const_cast<QoreProgram*>(mib->pgm);
+        }
+        return 0;
+    };
+    const QoreCallerProgramScope* scope = td->caller_scope;
+    // the end of the walk at a scope: the caller Program of the code that submitted the work
+    auto at_scope = [&]() -> int {
+        const QoreCallerProgramCapture* capture = scope->getCapture();
+        if (capture->getProgramId() == QORE_NO_PROGRAM_ID) {
+            return -1;
+        }
+        pgm = capture->getProgram();
+        id = capture->getProgramId();
+        return 0;
+    };
+
+    // the code that runs now, unless nothing switched since the barrier was set (its Program is the loader's)
+    if (!(mib && td->current_pgm_ctx == mib->ctx && td->current_pgm == mib->pgm)) {
+        switch (qore_caller_walk_step(td->current_pgm)) {
+            case CallerWalkStep::Found: return found(td->current_pgm);
+            case CallerWalkStep::Unknown: return -1;
+            case CallerWalkStep::Skip: break;
+        }
+    } else {
+        return at_barrier();
+    }
+
+    // the Programs that the switches replaced, innermost first: those of the program context helpers, and those of
+    // QoreProgramContextHelper, which switches without a helper of the chain: the ones made while a helper was
+    // current replaced Programs that are more inner than the one that helper replaced
+    size_t save = td->programContextSaveCount();
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ; ch = ch->getOldContext()) {
+        while (save && td->programContextSave(save - 1).ctx == ch) {
+            switch (qore_caller_walk_step(td->programContextSave(--save).pgm)) {
+                case CallerWalkStep::Found: return found(td->programContextSave(save).pgm);
+                case CallerWalkStep::Unknown: return -1;
+                case CallerWalkStep::Skip: break;
+            }
+        }
+        if (scope && ch == scope->getContext()) {
+            return at_scope();
+        }
+        if (mib && (ch == mib->ctx || (ch && ch->getOldContext() == mib->ctx))) {
+            return at_barrier();
+        }
+        if (!ch) {
+            // the start of the thread, with no caller of the code that started it
+            return -1;
+        }
+        QoreProgram* p = ch->getOldProgram();
+        switch (qore_caller_walk_step(p)) {
+            case CallerWalkStep::Found: return found(p);
+            case CallerWalkStep::Unknown: return -1;
+            case CallerWalkStep::Skip: break;
+        }
+    }
+}
+
+int qore_get_caller_program_id(qore_program_id_t& id) {
+    QoreProgram* pgm;
+    return qore_find_caller_program(pgm, id);
+}
+
+QoreProgram* qore_get_caller_program() {
+    QoreProgram* pgm;
+    qore_program_id_t id;
+    qore_find_caller_program(pgm, id);
+    return pgm;
+}
+
+QoreCallerProgramCapture::QoreCallerProgramCapture() {
+    QoreProgram* p;
+    if (!qore_find_caller_program(p, pgm_id) && p) {
+        p->depRef();
+        pgm = p;
+    }
+}
+
+QoreCallerProgramCapture::~QoreCallerProgramCapture() {
+    if (pgm) {
+        pgm->depDeref();
+    }
+}
+
+QoreCallerProgramScope::QoreCallerProgramScope(const QoreCallerProgramCapture* capture) : capture(capture) {
+    if (!capture) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    if (td) {
+        ctx = td->current_pgm_ctx;
+        old_scope = td->caller_scope;
+        td->caller_scope = this;
+        active = true;
+    }
+}
+
+QoreCallerProgramScope::~QoreCallerProgramScope() {
+    reset();
+}
+
+void QoreCallerProgramScope::reset() {
+    if (active) {
+        thread_data.get()->caller_scope = old_scope;
+        active = false;
     }
 }
 
@@ -8910,6 +9101,9 @@ struct ThreadArg {
     //! behalf of the starting code (\ref QTF_NO_SANDBOX_INHERIT), as with the sandbox (qore#6208)
     QoreThreadRuntimeParseOptions runtime_po;
     bool inherit_runtime_po;
+    //! the caller Program of the starting code, which the new thread's code has as its caller unless it does not work
+    //! on behalf of the starting code (\ref QTF_NO_SANDBOX_INHERIT), as with the sandbox (qore#6852)
+    std::unique_ptr<QoreCallerProgramCapture> caller;
 
     DLLLOCAL ThreadArg(q_thread_t n_f, void* a, int n_tid, int n_flags = QTF_NONE,
             std::unique_ptr<QoreInheritedSandbox>&& n_sandbox = std::unique_ptr<QoreInheritedSandbox>())
@@ -8917,6 +9111,7 @@ struct ThreadArg {
                 inherit_runtime_po(!(n_flags & QTF_NO_SANDBOX_INHERIT)) {
         if (inherit_runtime_po) {
             runtime_po = QoreThreadRuntimeParseOptions::captureForThread();
+            caller.reset(new QoreCallerProgramCapture);
         }
     }
 
@@ -9371,6 +9566,9 @@ namespace {
             // the run-time parse options of the starting code also govern everything this thread runs, including
             // its teardown (qore#6208)
             QoreThreadRuntimeParseOptionsHelper runtime_po_helper(ta->inherit_runtime_po ? &ta->runtime_po : nullptr);
+            // the code of the thread has the caller of the starting code as its caller (qore#6852)
+            std::unique_ptr<QoreCallerProgramCapture> caller(std::move(ta->caller));
+            QoreCallerProgramScope caller_scope(caller.get());
 
             ExceptionSink xsink;
 
@@ -9416,6 +9614,10 @@ namespace {
                 // the options' references to Programs are released while the thread's data exists, as releasing the
                 // last one deletes the Program (an external-lifecycle ThreadArg outlives the thread)
                 ta->runtime_po = QoreThreadRuntimeParseOptions();
+                // the caller Program is released while the thread's data exists, as releasing its last dependency
+                // reference can delete it
+                caller_scope.reset();
+                caller.reset();
                 sandbox_helper.reset();
                 sandbox.reset();
 
@@ -9477,6 +9679,9 @@ namespace {
             QoreThreadRuntimeParseOptions thread_po(btp->runtime_po);
             btp->runtime_po = QoreThreadRuntimeParseOptions();
             QoreThreadRuntimeParseOptionsHelper runtime_po_helper(&thread_po);
+            // the code of the thread has the caller of the starting code as its caller (qore#6852)
+            std::unique_ptr<QoreCallerProgramCapture> caller(std::move(btp->caller));
+            QoreCallerProgramScope caller_scope(caller.get());
             // a thread that the module cleanup started can enter the Programs of the modules, which the cleanup
             // closes to other threads, for its whole life, including the deletion of its data
             QoreModuleCleanupDelegateHelper cleanup_delegate(btp->module_cleanup_delegate);
@@ -9646,6 +9851,8 @@ namespace {
                 runtime_po_helper.reset();
                 // released while the thread's data exists, as releasing the last reference deletes the Program
                 thread_po = QoreThreadRuntimeParseOptions();
+                caller_scope.reset();
+                caller.reset();
                 sandbox_helper.reset();
                 sandbox.reset();
 
