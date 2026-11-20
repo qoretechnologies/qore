@@ -245,6 +245,27 @@ static QoreObject* qore_socket_new_poll_result_queue_object(Queue* queue) {
 
 static int qore_socket_close_private_from_controller(qore_socket_private* priv);
 
+#ifdef DEBUG
+//! set by dbg_socket_drop_network_policy(): the policy lookup of the thread finds no policy (issue #6913)
+static thread_local bool qore_socket_dbg_drop_policy = false;
+
+QoreSocketDbgDropPolicyHelper::QoreSocketDbgDropPolicyHelper() : old(qore_socket_dbg_drop_policy) {
+    qore_socket_dbg_drop_policy = true;
+}
+
+QoreSocketDbgDropPolicyHelper::~QoreSocketDbgDropPolicyHelper() {
+    qore_socket_dbg_drop_policy = old;
+}
+#endif
+
+//! Returns a manager that denies every network and file system access, for code whose policy cannot be resolved
+static QoreSandboxManager* qore_socket_ref_deny_all_sandbox_manager() {
+    // created once and kept for the life of the process: a manager with no rules and the default policy "deny"
+    static QoreSandboxManager* deny_all = new QoreSandboxManager();
+    deny_all->ref();
+    return deny_all;
+}
+
 //! Returns a reference to the sandbox manager whose network policy applies to the calling thread, if any
 /** Socket operations run on the async I/O controller's threads, which have no Program and therefore no sandbox, so
     every operation resolves the manager when it is created, on the thread that requests it, and keeps it for the
@@ -253,28 +274,39 @@ static int qore_socket_close_private_from_controller(qore_socket_private* priv);
 */
 QoreSandboxManager* qore_socket_ref_policy_sandbox_manager() {
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-    if (!smh) {
+    bool found = static_cast<bool>(smh);
 #ifdef DEBUG
-        // fails closed: code of a sandboxed Program is always governed by a network policy; a policy barrier or an
-        // applied sandbox context never lowers the sandbox of the Program that is running (see
-        // find_thread_sandbox_stack_ref_intern())
+    if (qore_socket_dbg_drop_policy) {
+        found = false;
+    }
+#endif
+    if (!found) {
+        // fails closed in every build: code of a sandboxed Program is always governed by a network policy; a policy
+        // barrier or an applied sandbox context never lowers the sandbox of the Program that is running (see
+        // find_thread_sandbox_stack_ref_intern()), so a sandboxed Program whose policy cannot be resolved is denied
+        // network access (issue #6913)
         if (QoreProgram* pgm = getProgram()) {
             // the Program's own manager and the policy manager of the code that created it, which it has unless that
             // code ran under a system-policy capability
             QoreSandboxManager* own;
             QoreSandboxManager* creator;
             qore_program_private::get(*pgm)->getSandboxManagerRefs(own, creator, true);
-            if (own || creator) {
-                if (own) {
-                    own->deref(nullptr);
-                }
-                if (creator) {
-                    creator->deref(nullptr);
-                }
-                assert(false && "a sandboxed Program has no network policy");
+            const bool sandboxed = own || creator;
+            if (own) {
+                own->deref(nullptr);
+            }
+            if (creator) {
+                creator->deref(nullptr);
+            }
+            // not while library code is initialized: the policy walk does not look at the Program that loads it, whose
+            // sandbox does not govern the initialization (see QoreModuleInitSandboxBarrierHelper)
+            if (sandboxed && !qore_module_init_library()) {
+#ifdef DEBUG
+                assert(qore_socket_dbg_drop_policy && "a sandboxed Program has no network policy");
+#endif
+                return qore_socket_ref_deny_all_sandbox_manager();
             }
         }
-#endif
         return nullptr;
     }
 
@@ -9711,7 +9743,10 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     assert(sock->sock == QORE_INVALID_SOCKET);
 
     addr.sun_family = AF_UNIX;
-    // copy path and terminate if necessary
+    // a path that does not fit the socket address is refused before it is checked or copied (issue #6910)
+    if (qore_socket_check_unix_path(name, "SOCKET-CONNECT-ERROR", xsink)) {
+        return;
+    }
     strncpy(addr.sun_path, name, sizeof(addr.sun_path) - 1);
     addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
 
@@ -12873,6 +12908,18 @@ AbstractPollState* QoreSocket::startRecvFrom(ExceptionSink* xsink, size_t max_si
     return new SocketRecvFromPollState(xsink, priv, max_size);
 }
 
+//! Starts a sendto operation without a check of the destination: for an operation that checked it with the policy
+//! that it captured when it was created
+static AbstractPollState* qore_socket_start_send_to_checked(QoreSocket* s, ExceptionSink* xsink, BinaryNode* bin,
+        const struct sockaddr* dest_addr, socklen_t dest_addr_len) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    if (priv->sock == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "startSendTo", xsink);
+        return nullptr;
+    }
+    return new SocketSendToPollState(xsink, priv, bin, dest_addr, dest_addr_len);
+}
+
 AbstractPollState* QoreSocket::startSendTo(ExceptionSink* xsink, BinaryNode* bin,
         const struct sockaddr* dest_addr, socklen_t dest_addr_len) {
     if (priv->sock == QORE_INVALID_SOCKET) {
@@ -12880,7 +12927,16 @@ AbstractPollState* QoreSocket::startSendTo(ExceptionSink* xsink, BinaryNode* bin
         return nullptr;
     }
 
-    return new SocketSendToPollState(xsink, priv, bin, dest_addr, dest_addr_len);
+    // the destination is checked against the network policy of the calling code, as Socket::sendTo() checks it
+    // (issue #6913)
+    {
+        SimpleRefHolder<QoreSandboxManager> sm(qore_socket_ref_policy_sandbox_manager());
+        if (sm && !sm->checkNetworkAccess(dest_addr, dest_addr_len, QSEC_NET_UDP, xsink)) {
+            return nullptr;
+        }
+    }
+
+    return qore_socket_start_send_to_checked(this, xsink, bin, dest_addr, dest_addr_len);
 }
 
 AbstractPollState* QoreSocket::startAccept(ExceptionSink* xsink) {
@@ -13685,6 +13741,19 @@ static void qore_socket_set_bind_no_address_error() {
 }
 
 #ifndef _Q_WINDOWS
+int qore_socket_check_unix_path(const char* path, const char* err, ExceptionSink* xsink) {
+    // the path must fit the socket address with its terminator: a longer one would be shortened when it is copied,
+    // so that the socket file reached would not be the one named, which every check judges (issue #6910)
+    size_t len = strlen(path);
+    if (len >= sizeof(((struct sockaddr_un*)nullptr)->sun_path)) {
+        sock_set_raw_error(ENAMETOOLONG);
+        xsink->raiseException(err, "UNIX socket path is %d bytes long; the maximum is %d bytes: '%s'", (int)len,
+            (int)sizeof(((struct sockaddr_un*)nullptr)->sun_path) - 1, path);
+        return -1;
+    }
+    return 0;
+}
+
 //! Applies the rules of a sandbox for a UNIX socket path; see qore_socket_check_unix_sandbox()
 /** Also used for the UNIX socket destinations of a DBI connection (qore#5747)
 
@@ -13692,6 +13761,9 @@ static void qore_socket_set_bind_no_address_error() {
 */
 int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* path, bool bind,
         ExceptionSink* xsink) {
+    if (qore_socket_check_unix_path(path, bind ? "SOCKET-BIND-ERROR" : "SOCKET-CONNECT-ERROR", xsink)) {
+        return -1;
+    }
     struct sockaddr_un addr = {};
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
@@ -22684,7 +22756,9 @@ int SocketSendToPollOperation::startSendToPollState(ExceptionSink* xsink) {
     }
 
     // startSendTo takes ownership of the BinaryNode reference if it returns a state.
-    AbstractPollState* ps = sock->priv->socket->startSendTo(xsink, data,
+    // the destination was checked above with the policy captured when the operation was created, not with that of the
+    // thread that drives it
+    AbstractPollState* ps = qore_socket_start_send_to_checked(sock->priv->socket, xsink, data,
         reinterpret_cast<const struct sockaddr*>(&dest_addr), dest_addr_len);
     if (!ps) {
         sock->priv->clearNonBlock();

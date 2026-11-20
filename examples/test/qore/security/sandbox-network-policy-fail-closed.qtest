@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxNetworkPolicyFailClosedTest
+
+#! The network policy of a sandboxed Program fails closed, and the C++ send API checks its destination (issue #6913)
+/** A sandboxed Program whose network policy could not be resolved was allowed network access in release builds (only
+    debug builds asserted), and QoreSocket::startSendTo() did not check its destination against the sandbox; the
+    checks use debug builtins, which only debug builds have
+*/
+class SandboxNetworkPolicyFailClosedTest inherits QUnit::Test {
+    private {
+        Socket listener();
+        int port;
+    }
+
+    const Source = "%modern
+auto sub drive(code c) {
+    try {
+        AbstractPollOperation op = c();
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (pi) {
+                Socket::poll((pi,), 5000);
+            }
+        }
+        return \"SENT\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+auto sub connect(int port) {
+    try {
+        Socket s();
+        s.connect(\"127.0.0.1:\" + port);
+        s.close();
+        return \"CONNECTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+    constructor() : Test("SandboxNetworkPolicyFailClosed", "1.0", \ARGV) {
+        addTestCase("a sandboxed Program without a resolvable policy is denied", \failClosedTest());
+        addTestCase("the C++ send API checks its destination", \sendToTest());
+        addTestCase("a send started by a capability is checked with its own policy", \capabilitySendTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+    }
+
+    globalTearDown() {
+        listener.close();
+    }
+
+    failClosedTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the check needs a debug build");
+        }
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse(Source, "sandboxed");
+        # the policy allows the connection
+        assertEq("CONNECTED", p.callFunction("connect", port));
+        # a policy that cannot be resolved denies it
+        assertEq("NETWORK-ACCESS-DENIED", call_function("dbg_socket_drop_network_policy",
+            auto sub () { return p.callFunction("connect", port); }));
+        # trusted code without a policy is not affected
+        assertEq(True, call_function("dbg_socket_drop_network_policy", bool sub () {
+            Socket s();
+            s.connect("127.0.0.1:" + port);
+            s.close();
+            return True;
+        }));
+    }
+
+    #! a datagram send that trusted code starts in a system-policy capability is checked with the policy that it was
+    #! started with, not with that of the sandboxed code that drives it
+    capabilitySendTest() {
+        Socket receiver();
+        receiver.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        on_exit receiver.close();
+        int udp_port = receiver.getSocketInfo().port;
+        list<Socket> senders = ();
+        on_exit map $1.close(), senders;
+        code cap = SandboxManager::createSystemPolicyCall(AbstractPollOperation sub () {
+            Socket s();
+            s.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+            senders += s;
+            return s.startPollSendTo("127.0.0.1", udp_port, <01>);
+        });
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse(Source, "deny-all");
+        assertEq("SENT", p.callFunction("drive", cap));
+        # a send that the sandboxed code starts (with a closure that it calls, which runs under its sandbox) is denied
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("drive", AbstractPollOperation sub () {
+            Socket s();
+            s.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+            senders += s;
+            return s.startPollSendTo("127.0.0.1", udp_port, <01>);
+        }));
+    }
+
+    sendToTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the check needs a debug build");
+        }
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.blockPrivateNetworks();
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse(Source, "sandboxed");
+        # the C++ call is made in the context of the sandboxed Program, as a call by its code is
+        assertThrows("NETWORK-ACCESS-DENIED", \call_function(), ("dbg_socket_start_send_to", p, "10.0.0.1", 9));
+        assertTrue(call_function("dbg_socket_start_send_to", p, "8.8.8.8", 9));
+        # in the context of a Program without a sandbox
+        Program trusted(PO_NEW_STYLE);
+        assertTrue(call_function("dbg_socket_start_send_to", trusted, "10.0.0.1", 9));
+    }
+}

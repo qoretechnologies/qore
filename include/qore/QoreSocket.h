@@ -344,8 +344,12 @@ public:
     DLLEXPORT AbstractPollState* startRecvFrom(ExceptionSink* xsink, size_t max_size);
 
     //! Starts a non-blocking sendto operation for UDP datagram sockets
-    /** @param xsink if an error occurs, the Qore-language exception information will be added here
-        @param bin the data to send; must be passed already referenced, this method takes ownership
+    /** The destination is checked against the network policy of the sandbox that governs the calling code, as a
+        datagram that the code sends with the %Qore API is; a denied destination raises \c NETWORK-ACCESS-DENIED
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param bin the data to send; must be passed already referenced; this method takes ownership if it returns a
+        poll state object, otherwise the caller keeps it
         @param dest_addr the destination address
         @param dest_addr_len the size of the destination address structure
 
