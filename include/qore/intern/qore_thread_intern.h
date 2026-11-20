@@ -3046,7 +3046,14 @@ public:
 
 class ProgramRuntimeParseAccessHelper {
 public:
-    DLLLOCAL ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm);
+    //! Enters the Program and switches to its context, unless it is the current Program
+    /** @param xsink for the exception if the Program cannot be entered; also used to leave it
+        @param pgm the Program
+        @param read_only true if the thread only reads the committed data of the Program and runs none of its code (a
+        method lookup): a Program that refuses runtime entry to the thread because code is parsed in it is then entered
+        without switching to its context, so that its teardown waits for the thread (qore#6752)
+    */
+    DLLLOCAL ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm, bool read_only = false);
     DLLLOCAL ~ProgramRuntimeParseAccessHelper();
 
 protected:
@@ -3055,7 +3062,57 @@ protected:
     ThreadLocalProgramData* old_tlpd;
     //! receives the exceptions of clearing a Program deleted while this context ran its code
     ExceptionSink* xsink;
+    //! the Program that the thread entered, which it leaves in the destructor, or nullptr
+    QoreProgram* count_pgm = nullptr;
+    //! true if the thread switched to the Program's context
     bool restore;
+};
+
+//! Enters the Program of the class of a native destructor without its context if the Program refuses runtime entry
+/** A destructor implemented in C++ (a builtin or external destructor) runs none of the Qore code of the Program of its
+    class; it only releases the object's private data, as the core does without entering the Program for a builtin
+    class without a destructor, and for any class whose destructor fails.  While code is parsed in that Program
+    (Program::parsePending() before Program::parseCommit(), or after Program::parseRollback() without
+    \c PO_ALLOW_REPARSE), it refuses runtime entry, which made the destruction of the objects that module code created
+    in it meanwhile raise \c PROGRAM-ERROR (module-python: the argument of a module command's exception, the constants
+    of an import; qore#6752).  Such a destructor then runs in the caller's Program instead, as the destructor of a
+    builtin class without a source Program does; the thread enters the class's Program without its context
+    (qore_program_private::enterWithoutContextIfParseRefused()), so that the Program's teardown waits until the
+    destructor has returned.  The thread that deletes the Program needs no entry, as for a reference
+    (qore_reference_program_needs_entry()).
+
+    A destructor implemented in Qore code is not affected: it enters the Program, which refuses it as before.
+*/
+class QoreNativeDestructorProgramEntry {
+public:
+    //! Creates the object without entering any Program; only the Program is initialized, as one is created for
+    //! every destructor call
+    DLLLOCAL QoreNativeDestructorProgramEntry() {
+    }
+
+    DLLLOCAL ~QoreNativeDestructorProgramEntry() {
+        if (pgm) {
+            leave();
+        }
+    }
+
+    //! Returns true if the native destructor must run without the context of \a p, the Program of its class
+    /** If so, the thread has entered \a p without its context, unless it is deleting it, until the destructor of this
+        object
+    */
+    DLLLOCAL bool runWithoutContext(QoreProgram* p, ExceptionSink* xsink);
+
+    DLLLOCAL QoreNativeDestructorProgramEntry(const QoreNativeDestructorProgramEntry&) = delete;
+    DLLLOCAL QoreNativeDestructorProgramEntry& operator=(const QoreNativeDestructorProgramEntry&) = delete;
+
+private:
+    //! the Program that the thread entered, or nullptr; the other members are set when it is set
+    QoreProgram* pgm = nullptr;
+    //! receives the exceptions of leaving the Program
+    ExceptionSink* xsink;
+    int tid;
+
+    DLLLOCAL void leave();
 };
 
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp

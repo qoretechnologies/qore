@@ -1404,6 +1404,33 @@ protected:
 #endif
     }
 
+    //! Appends the name of the type to a string, in the encoding of the string
+    /** The name of a type is made in the default encoding of the process when the type is made: UTF-8 for the types
+        made when the library is initialized, which is not the encoding of a message made in a process with another
+        default encoding (ex: \c --charset=ISO-8859-1) (qore#6814)
+    */
+    DLLLOCAL void concatName(QoreString& str) const {
+        qore_string_private* p = qore_string_private::get(str);
+        const qore_string_private* np = qore_string_private::get(tname);
+        if (np->encoding == p->encoding || !np->encoding) {
+            p->concat(np);
+            return;
+        }
+        concatNameConverted(str);
+    }
+
+    //! Appends the name of the given type to a string, in the encoding of the string; see concatName()
+    DLLLOCAL static void concatName(const QoreTypeInfo* ti, QoreString& str) {
+        if (ti && !ti->tname.empty()) {
+            ti->concatName(str);
+        } else {
+            str.concat(NO_TYPE_INFO);
+        }
+    }
+
+    //! Appends the name of the type to a string with another encoding, converting it; see concatName()
+    DLLLOCAL void concatNameConverted(QoreString& str) const;
+
     DLLLOCAL void setSimpleName() {
         ssize_t i = tname.find('<');
         if (i == -1) {
@@ -1564,7 +1591,9 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("type '%s'", tname.c_str());
+        str.concat("type '");
+        concatName(str);
+        str.concat('\'');
     }
 
     DLLLOCAL virtual const char* getPathImpl() const {
@@ -1695,7 +1724,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1765,7 +1794,7 @@ protected:
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
@@ -1847,7 +1876,7 @@ protected:
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
@@ -1877,7 +1906,7 @@ protected:
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
@@ -1917,7 +1946,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1996,7 +2025,7 @@ protected:
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2063,7 +2092,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2104,7 +2133,9 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("hash<string, %s> or no value (NOTHING)", QoreTypeInfo::getName(getFirstAcceptSpec().spec.getComplexHash()));
+        str.concat("hash<string, ");
+        concatName(getFirstAcceptSpec().spec.getComplexHash(), str);
+        str.concat("> or no value (NOTHING)");
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2164,7 +2195,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2330,7 +2361,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2356,7 +2387,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2383,7 +2414,7 @@ protected:
     QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2418,7 +2449,7 @@ protected:
     QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2470,7 +2501,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2504,7 +2535,9 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.sprintf("reference<%s> or no value (NOTHING)", QoreTypeInfo::getName(getFirstAcceptSpec().spec.getComplexReference()));
+        str.concat("reference<");
+        concatName(getFirstAcceptSpec().spec.getComplexReference(), str);
+        str.concat("> or no value (NOTHING)");
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -4679,7 +4712,7 @@ protected:
 
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -5046,7 +5079,7 @@ protected:
     QoreString pname;                //!< path name for type
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        qore_string_private::get(str)->concat(&tname);
+        concatName(str);
     }
 
     DLLLOCAL virtual bool canConvertToScalarImpl() const {

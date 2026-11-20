@@ -24,7 +24,11 @@
     - a catch block's exception variable had no value after the exit block of a catch block in a helper closed the
       wrong catch block (qore#6651);
     - the handlers of a scope that a region opened ran when the helper returned, and a handler run in a helper
-      assigned a local that the coordinator still held the old value of (qore#6652).
+      assigned a local that the coordinator still held the old value of (qore#6652);
+    - a closure created in a helper that captured locals of the region and of the coordinator could not find the
+      coordinator's (qore#6654);
+    - a private:internal method called from a helper was resolved to a base class's static method of the same name,
+      and a local that a helper removed was taken for assigned by the coordinator (qore#6653).
 
     The test compiles each script at -O0 and -O3 with several region sizes and checks that the executables print what
     the AST prints.

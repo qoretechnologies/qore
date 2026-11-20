@@ -45,8 +45,8 @@
     - in an encoding with characters of more than one byte (UTF-16, UTF-32), the bytes of a marker can also be the end
       of one character and the start of the next one; the marker is found only at a multiple of the code unit width
     - in a variable-width encoding whose characters can contain bytes that are other characters (Big5, Shift_JIS, GBK:
-      the second byte of Shift_JIS "ソ", 83 5C, is "\"), the characters of the text are followed from its start to find
-      their boundaries
+      the second byte of Shift_JIS "ソ", 83 5C, is the byte of "¥" in Shift_JIS, as of "\" in ASCII), the characters of
+      the text are followed from its start to find their boundaries
 
     The text starts at a character boundary.  update() is called each time a byte is added; endsWith() then says if the
     text ends with a marker.  memcmp() is used, as an encoding can have null bytes in characters (UTF-16*).

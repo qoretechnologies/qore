@@ -578,6 +578,10 @@ QoreValue ParseObjectMethodReferenceNode::makeReferenceForClass(QoreObject* o, c
             return QoreValue();
         }
     }
+    // the constructor, destructor and copy method of the object's class or of a base class (qore#6783)
+    if (qore_class_private::checkReferenceable(*om, xsink)) {
+        return QoreValue();
+    }
 
     if (access > Public) {
         // the access check depends on the class context of the caller, so the result is not cached

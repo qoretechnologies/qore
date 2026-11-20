@@ -2,12 +2,13 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
-# test-platform: macos - debugger attach in a frame of JIT native code and the native calls made after it
+# test-platform: macos - debugger attach in JIT and AOT native frames and the calls made after it
 
 %modern
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
 %requires QUnit
 %requires ../../../TestInterpreter.qm
 %requires ../../../ExecModeHarness.qm
@@ -60,7 +61,34 @@ class DebuggerNativeCalleeStepsTest inherits QUnit::Test {
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(mode + ": the step events of native calls after a debugger attaches", \modeTest(), (mode,));
         }
+        addTestCase("step, next and step-out in a callee entered after attach", \directCallSteps());
         set_return_value(main());
+    }
+
+    directCallSteps() {
+        string fixture = get_script_dir() + "/AOTCalleeSteps.q";
+        string expected = "";
+        foreach string trace in ("step 23 [\"step 14\", \"length > runProbe\", \"local 3\", \"step 7\", \"step 8\", \"step 15\", \"step 16\"]",
+                "next 23 [\"step 14\", \"length > runProbe\", \"local 3\", \"step 15\", \"step 16\"]",
+                "out 23 [\"step 14\", \"length > runProbe\", \"local 3\", \"step 7\", \"step 15\", \"step 16\"]") {
+            expected += "helper " + trace + "\nfast " + trace + "\n";
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected, ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 "
+                "QORE_JIT_THRESHOLD=1 %s -b --exec-mode=%s %s", qore_bin, mode, fixture)), mode);
+        }
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            return;
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        foreach int opt in (0, 3) {
+            string exe = dir + "/callee-" + opt;
+            string log = backquote(sprintf("%s -O%d -o %s %s 2>&1", qcc, opt, exe, fixture));
+            assertTrue(is_file(exe), log);
+            assertEq(expected, ExecModeHarness::run_any(exe + " -b"), "qcc -O" + opt);
+        }
     }
 
     modeTest(string mode) {

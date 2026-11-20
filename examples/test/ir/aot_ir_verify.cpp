@@ -13,6 +13,7 @@
 #include <qore/QoreAOT.h>
 #include <qore/intern/QoreIR.h>
 #include <qore/intern/QoreIRBuilder.h>
+#include <qore/intern/QoreIRVerifier.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QoreJITIncludes.h>
 
@@ -186,6 +187,25 @@ static bool check(QoreProgram* pgm, const char* label, const Build& b, const Mut
     bool ok = expected ? !ir && error.find(expected) != std::string::npos : ir && error.empty();
     if (!ok) {
         fprintf(stderr, "%s: accepted=%d, error='%s', expected='%s'\n", label, bool(ir), error.c_str(),
+            expected ? expected : "success");
+    }
+    return ok;
+}
+
+//! checks that the verifier accepts the function as it is in memory, or refuses it with the message once it is
+//! changed: for the fields that an image of the current format does not carry (the temp scopes, qore#6742)
+static bool checkInMemory(const char* label, const Build& b, const Mutate& mutate = nullptr,
+        const char* expected = nullptr) {
+    ++count;
+    std::unique_ptr<QoreIRFunction> fn = build(label, b);
+    if (mutate) {
+        mutate(*fn);
+    }
+    std::string error;
+    bool accepted = QoreIRVerifier::verifyModuleIR(*fn, error);
+    bool ok = expected ? !accepted && error.find(expected) != std::string::npos : accepted && error.empty();
+    if (!ok) {
+        fprintf(stderr, "%s: accepted=%d, error='%s', expected='%s'\n", label, accepted, error.c_str(),
             expected ? expected : "success");
     }
     return ok;
@@ -574,6 +594,32 @@ static void scopeHandler(QoreIRFunction& fn, QoreIRBuilder& b, bool landing_pad,
     b.createBranch(join);
     b.setBlock(join);
     b.createDiscardTemps();
+    b.createReturnNothing();
+}
+
+//! the temp scopes on the path of an exception (qore#6742): a raising instruction in an inner temp scope, whose
+//! handler, in the outer temp scope, meets the normal path in the outer temp scope; \a kind: 0 valid, 1 the handler
+//! closes a temp scope that is not open, 2 the handler closes the outer temp scope before it meets the normal path,
+//! which has it open
+static void tempsHandler(QoreIRFunction& fn, QoreIRBuilder& b, int kind) {
+    QoreIRBasicBlock* h = fn.createBlock("handler");
+    QoreIRBasicBlock* join = fn.createBlock("join");
+    QoreIRInstruction* outer = b.createPushTempMark();
+    b.createPushTempMark();
+    QoreIRInstruction* raising = b.createConstInt(2);
+    raising->exception_target = h;
+    b.createDiscardTemps();
+    b.createBranch(join);
+    b.setBlock(h);
+    b.createConstInt(3);
+    if (kind == 1) {
+        b.createDiscardTemps()->temp_scope_id = 77;
+    } else if (kind == 2) {
+        b.createDiscardTemps()->temp_scope_id = outer->temp_scope_id;
+    }
+    b.createBranch(join);
+    b.setBlock(join);
+    b.createDiscardTemps()->temp_scope_id = outer->temp_scope_id;
     b.createReturnNothing();
 }
 
@@ -1122,6 +1168,29 @@ int main(int argc, char** argv) {
         insts.insert(insts.end() - 1, std::move(discard));
     }, NotInnermost);
     run("handler with a landing pad", [](QoreIRFunction& fn, QoreIRBuilder& b) { scopeHandler(fn, b, true); });
+    // the temp scopes on the paths of exceptions, in memory, as the current format does not carry them (qore#6742)
+    auto runMem = [&](const char* label, const Build& b, const Mutate& mutate = nullptr,
+            const char* expected = nullptr) {
+        ok = checkInMemory(label, b, mutate, expected) && ok;
+    };
+    runMem("temp scopes of an exception path", [](QoreIRFunction& fn, QoreIRBuilder& b) { tempsHandler(fn, b, 0); });
+    // the branch releases nothing, as the interpreter's, for a temp scope that is not open
+    runMem("an exception drains a temp scope that is not open", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        tempsHandler(fn, b, 0);
+    }, [](QoreIRFunction& fn) {
+        find(fn, QoreIROpcode::ConstInt)->temp_scope_id = 99;
+    });
+    runMem("the path of an exception closes a temp scope that is not open", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        tempsHandler(fn, b, 1);
+    }, nullptr, "closes a temp scope that is not open on the path of an exception");
+    runMem("the path of an exception meets the normal path with fewer temp scopes",
+        [](QoreIRFunction& fn, QoreIRBuilder& b) { tempsHandler(fn, b, 2); }, nullptr,
+        "the temp scopes open differ from those of the normal paths");
+    runMem("IR without temp scopes: not followed", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        tempsHandler(fn, b, 1);
+    }, [](QoreIRFunction& fn) {
+        fn.temp_scope_ids_unknown = true;
+    });
     // the path of the exception, followed with the scopes of its raise point, meets the normal path with the scope of
     // the raise point still open (qore#6658)
     run("handler without a landing pad", [](QoreIRFunction& fn, QoreIRBuilder& b) {

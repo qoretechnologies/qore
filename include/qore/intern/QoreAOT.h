@@ -161,6 +161,9 @@ const FunctionEntry* qore_aot_resolve_deferred_source_function_entry(QoreProgram
 */
 std::string qore_aot_get_function_identity_name(const FunctionEntry* fe);
 
+//! Encodes a resolved function name and any explicit type arguments for qore_aot_resolve_function_ref().
+std::string qore_aot_encode_function_ref(std::string name, const QoreTypeParamInstantiation* inst);
+
 //! Returns the name that identifies the function of a function call reference in an AOT image
 /** The function's name, or "::name" if the parser resolved the reference to the function of that name in the root
     namespace (see qore_aot_get_function_identity_name())

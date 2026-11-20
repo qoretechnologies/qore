@@ -1,0 +1,191 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires cppapiuser
+
+%exec-class ProgramOwnedConstantObjectsTest
+
+#! the objects of a Program's own classes that its constants hold are destroyed while the Program can run code (#6791)
+/** Code that refers to a constant can hold its value; the release of the code comes after the Program has been
+    closed to every thread, so an object of a class of the Program (one that its code declares, or one that a module
+    creates in it at run time, as module-python's "import" command does) whose last reference the code held could not
+    run its destructor: the deletion printed PROGRAM-ERROR ("already been deleted") and skipped the destructor (a
+    debug build failed an assertion).  Such objects are now deleted when the constants are cleared, while the Program
+    can still run code: their destructors run once, can call the code of the Program, and an exception they raise is
+    raised by the deletion of the Program; a holder outside the Program then has a deleted object.
+*/
+class ProgramOwnedConstantObjectsTest inherits QUnit::Test {
+    public {
+        #! a class whose destructor calls the code of its Program in every way
+        const CallingSource = "%modern
+class X {
+    public {
+        static *Queue q;
+    }
+
+    destructor() {
+        X::q.push(f());
+        X::q.push(self.m());
+        X::q.push(X::s());
+        code c = string sub () { return \"closure\"; };
+        X::q.push(c());
+        code r = \\f();
+        X::q.push(r());
+        X::q.push(pre_ref());
+    }
+
+    string m() {
+        return \"method\";
+    }
+
+    static string s() {
+        return \"static\";
+    }
+}
+
+string sub f() {
+    return \"function\";
+}
+
+const K = new X();
+
+our *code pre_ref;
+
+sub setup(Queue q) {
+    X::q = q;
+    # a call reference made before the Program is deleted
+    pre_ref = \\f();
+}
+
+auto sub get() {
+    return K;
+}
+";
+
+        #! a class whose destructor waits while another thread tries to call into the Program
+        const WaitingSource = "%modern
+class W {
+    public {
+        static *Counter entered;
+        static *Counter go;
+    }
+
+    destructor() {
+        W::entered.dec();
+        W::go.waitForZero(30s);
+    }
+}
+
+string sub f() {
+    return \"entered\";
+}
+
+const K = new W();
+
+sub setup(Counter e, Counter g) {
+    W::entered = e;
+    W::go = g;
+}
+
+code sub fref() {
+    return \\f();
+}
+
+auto sub get() {
+    return K;
+}
+";
+    }
+
+    constructor() : QUnit::Test("program-owned-constant-objects", "1.0") {
+        addTestCase("a module class object that only code holds", \codeHeldTest());
+        addTestCase("a module class object that a holder outside the Program also holds", \externalHolderTest());
+        addTestCase("a raising C++ destructor", \raisingTest());
+        addTestCase("a Qore destructor that calls the Program's code", \callingDestructorTest());
+        addTestCase("another thread cannot enter the Program while the destructor runs", \otherThreadTest());
+        set_return_value(main());
+    }
+
+    #! returns a Program with the module's class and constant, and code that refers to it
+    private static Program makeProgram(string cmd) {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("cppapiuser");
+        p.issueModuleCmd("cppapiuser", cmd);
+        p.parse("%modern\nauto sub get() { return Owned::Obj; }", "get");
+        return p;
+    }
+
+    codeHeldTest() {
+        int destroyed = cpp_api_owned_probe_destroyed();
+        Program p = ProgramOwnedConstantObjectsTest::makeProgram("owned-constant Owned");
+        assertEq("OwnedProbe", p.callFunction("get").className());
+        delete p;
+        assertEq(destroyed + 1, cpp_api_owned_probe_destroyed(), "the C++ destructor ran once");
+    }
+
+    externalHolderTest() {
+        int destroyed = cpp_api_owned_probe_destroyed();
+        Program p = ProgramOwnedConstantObjectsTest::makeProgram("owned-constant Owned");
+        object ext = p.callFunction("get");
+        delete p;
+        assertEq(destroyed + 1, cpp_api_owned_probe_destroyed(), "the C++ destructor ran once");
+        # the holder has a deleted object
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { ext.name(); });
+        remove ext;
+        assertEq(destroyed + 1, cpp_api_owned_probe_destroyed(), "the C++ destructor did not run again");
+    }
+
+    raisingTest() {
+        int destroyed = cpp_api_owned_probe_destroyed();
+        Program p = ProgramOwnedConstantObjectsTest::makeProgram("owned-constant-raising Owned");
+        assertEq("OwnedProbe", p.callFunction("get").className());
+        # the exception is raised by the deletion of the Program, not reported as unhandled
+        assertThrows("OWNED-PROBE-DESTRUCTOR", sub () { delete p; });
+        assertEq(destroyed + 1, cpp_api_owned_probe_destroyed(), "the C++ destructor ran once");
+    }
+
+    otherThreadTest() {
+        Counter entered(1);
+        Counter go(1);
+        Program p(PO_NEW_STYLE);
+        p.parse(WaitingSource, "waiting");
+        p.callFunction("setup", entered, go);
+        object ext = p.callFunction("get");
+        # a call reference into the Program, made before it is deleted
+        code cf = p.callFunction("fref");
+        Queue q();
+        background sub () {
+            on_exit go.dec();
+            if (entered.waitForZero(30s)) {
+                q.push("the destructor did not run");
+                return;
+            }
+            try {
+                q.push(cf());
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        delete p;
+        # only the thread that deletes the Program runs code in it while its data is destroyed
+        assertEq("PROGRAM-ERROR", q.get(30s));
+        remove ext;
+    }
+
+    callingDestructorTest() {
+        Queue q();
+        Program p(PO_NEW_STYLE);
+        p.parse(CallingSource, "calling");
+        p.callFunction("setup", q);
+        object ext = p.callFunction("get");
+        delete p;
+        assertEq(("function", "method", "static", "closure", "function", "function"), (map q.get(), xrange(q.size())),
+            "the destructor called the Program's code");
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { ext.m(); });
+    }
+}

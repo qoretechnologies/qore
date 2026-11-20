@@ -1,16 +1,16 @@
-sibling untyped: RUNTIME-OVERLOAD-ERROR
+sibling untyped: "B2::m"
 sibling untyped private:hierarchy: RUNTIME-OVERLOAD-ERROR
 sibling untyped private:internal: METHOD-DOES-NOT-EXIST
 sibling untyped static: RUNTIME-OVERLOAD-ERROR
-sibling untyped temporary arg: RUNTIME-OVERLOAD-ERROR
+sibling untyped temporary arg: "B2::m2 t"
 sibling untyped variable arg: RUNTIME-OVERLOAD-ERROR
-sibling ref called inside: RUNTIME-OVERLOAD-ERROR
-sibling ref called outside: RUNTIME-OVERLOAD-ERROR
+sibling ref called inside: "B2::m"
+sibling ref called outside: "B2::m"
 sibling call_object_method: "B2::m"
 sibling call_object_method_args: "B2::m"
-sibling closure: RUNTIME-OVERLOAD-ERROR
-sibling background closure: RUNTIME-OVERLOAD-ERROR
-sibling on subclass object: RUNTIME-OVERLOAD-ERROR
+sibling closure: "B2::m"
+sibling background closure: "B2::m"
+sibling on subclass object: "B2::m"
 sibling without method untyped: RUNTIME-OVERLOAD-ERROR
 sibling without method ref: RUNTIME-OVERLOAD-ERROR
 sibling without method call_object_method: METHOD-IS-PRIVATE
@@ -28,7 +28,7 @@ Y5 code on X5 object: "A::m"
 unrelated static method: "B2::m"
 outside untyped: "B2::m"
 outside untyped without public method: METHOD-IS-PRIVATE
-typed from sibling: PARSE-TYPE-ERROR
+typed from sibling: parsed
 typed from sibling without method: PARSE-TYPE-ERROR
 typed from own class: parsed
 typed from private class: parsed

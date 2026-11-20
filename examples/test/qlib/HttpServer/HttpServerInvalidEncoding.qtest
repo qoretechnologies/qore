@@ -6,7 +6,8 @@
 # A request whose target (path or query) or header names are not valid text is answered with status 400 before any
 # handler sees it, over HTTP/1.1 (handler pool and inline path), HTTP/2 and HTTP/3, and the connection is never dropped
 # without a response; a header value that is not valid UTF-8 is obs-text (RFC 9110 section 5.5), given to the handler
-# in ISO-8859-1 with its bytes unchanged (qore#6554).
+# in ISO-8859-1 with its bytes unchanged (qore#6554).  A request body that is not valid text in its encoding is
+# answered with 400 before the handler processes it, also when it is chunked or compressed (qore#6604).
 
 %modern
 
@@ -17,6 +18,7 @@
 %requires HttpServerUtil
 %requires HttpServerAsyncIo
 %requires HttpServer
+%requires RestHandler
 %requires ../../TestCertificates.qm
 
 %exec-class HttpServerInvalidEncodingTest
@@ -46,12 +48,65 @@ class EchoHandler inherits AbstractHttpRequestHandler {
         if (body.typeCode() == NT_STRING) {
             return makeResponse(200, sprintf("body %s %s", body.encoding(), body.toBinary().toHex()));
         }
+        if (body.typeCode() == NT_BINARY) {
+            return makeResponse(200, sprintf("binary %s", body.toHex()));
+        }
         *string v = hdr."x-test";
         if (!exists v) {
             return makeResponse(200, "none");
         }
         return makeResponse(200, sprintf("%s %s %s", v.encoding(), v =~ /^caf/ ? "match" : "nomatch",
             v.toBinary().toHex()));
+    }
+}
+
+# an EchoHandler whose decompressed request bodies are binary data
+class BinaryEchoHandler inherits EchoHandler {
+    constructor() {
+        decompress_to_string = False;
+    }
+}
+
+# reads the request body itself with getMessageBody() and records the error that it raised
+class ReadingHandler inherits AbstractHttpRequestHandler {
+    public {
+        int calls = 0;
+        *string err;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        ++calls;
+        try {
+            body = getMessageBody(s, hdr, body, True, listener);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+            rethrow;
+        }
+        return makeResponse(200, sprintf("body %s %s", body.encoding(), body.toBinary().toHex()));
+    }
+}
+
+# raises INVALID-ENCODING for text of its own: an error of the handler, not of the client
+class OwnTextErrorHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        throw "INVALID-ENCODING", "the handler's own text is not valid";
+    }
+}
+
+# a REST class that counts the calls of its method
+class CountingRestClass inherits AbstractRestClass {
+    public {
+        int calls = 0;
+    }
+
+    string name() {
+        return "rest";
+    }
+
+    hash<HttpHandlerResponseInfo> post(hash<auto> cx, *hash<auto> ah) {
+        ++calls;
+        return RestHandler::makeResponse(200, cx.body);
     }
 }
 
@@ -62,6 +117,10 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         addTestCase("HTTP/1.1 header values", \http1HeaderValues());
         addTestCase("HTTP/1.1 inline path", \http1Inline());
         addTestCase("HTTP/1.1 request bodies", \http1Bodies());
+        addTestCase("HTTP/1.1 chunked request bodies", \http1ChunkedBodies());
+        addTestCase("HTTP/1.1 compressed request bodies", \http1CompressedBodies());
+        addTestCase("HTTP/1.1 handlers that read the body", \http1HandlerBodies());
+        addTestCase("HTTP/1.1 binary bodies and the default text encoding", \http1BinaryDefaultEncoding());
         addTestCase("HTTP/1.1 Content-Type and HTTP version", \http1ContentTypeVersion());
         addTestCase("HTTP/2", \http2());
         addTestCase("HTTP/3", \http3());
@@ -209,13 +268,23 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         hash<auto> response = rawRequest(port, binary_to_string(binary("POST /a HTTP/1.1\r\nHost: localhost\r\n"
             "Content-Type: application/json\r\nContent-Length: 10\r\n\r\n") + <7b2261223a2261ff227d>, "ISO-8859-1"));
         assertEq(400, response.hdr.status_code);
-        assertRegex("the request body of 10 bytes has an invalid encoding: it is not valid text in encoding UTF-8",
-            response.body);
+        assertRegex("the request body of 10 bytes has an invalid encoding: decode_http_body\\(\\): the HTTP message "
+            "body is not valid UTF-8", response.body);
         assertTrue(response.closed);
         # a declared UTF-8 charset
         response = rawRequest(port, binary_to_string(binary("POST /a HTTP/1.1\r\nHost: localhost\r\n"
             "Content-Type: text/plain; charset=utf-8\r\nContent-Length: 4\r\n\r\n") + <636166e9>, "ISO-8859-1"));
         assertEq(400, response.hdr.status_code);
+        assertEq(0, handler.calls);
+        # a byte that is not a character of a declared single-byte charset (0x81 in windows-1252)
+        response = rawRequest(port, binary_to_string(binary("POST /a HTTP/1.1\r\nHost: localhost\r\n"
+            "Content-Type: text/plain; charset=windows-1252\r\nContent-Length: 3\r\n\r\n") + <618162>,
+            "ISO-8859-1"));
+        assertEq(400, response.hdr.status_code);
+        assertRegex("not valid WINDOWS-1252: invalid byte sequence at byte offset 1", response.body);
+        response = rawRequest(port, chunkedRequest("text/plain; charset=windows-1252", (<6181>, <62>)));
+        assertEq(400, response.hdr.status_code, "chunked");
+        assertRegex("not valid WINDOWS-1252: invalid byte sequence at byte offset 1", response.body, "chunked");
         assertEq(0, handler.calls);
         # the same bytes in a declared Latin-1 charset are valid text
         response = rawRequest(port, binary_to_string(binary("POST /a HTTP/1.1\r\nHost: localhost\r\n"
@@ -224,6 +293,250 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         assertEq(200, response.hdr.status_code);
         assertEq("body ISO-8859-1 636166e9", response.body);
         assertEq(1, handler.calls);
+    }
+
+    # chunked bodies are read as bytes and decoded once, as a body with a Content-Length is (qore#6604)
+    private http1ChunkedBodies() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        EchoHandler handler();
+        server.setDefaultHandler("default", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        # JSON is UTF-8, and a declared UTF-8 charset: a byte that is not valid UTF-8 is refused before the handler
+        # runs
+        foreach list<auto> l in ((MimeTypeJson, <7b2261223a2261ff227d>), ("text/plain;charset=utf-8", <636166e9>)) {
+            hash<auto> response = rawRequest(port, chunkedRequest(l[0], (l[1],)));
+            assertEq(400, response.hdr.status_code, l[0]);
+            assertRegex(sprintf("the request body of %d bytes has an invalid encoding: decode_http_body\\(\\): the "
+                "HTTP message body is not valid UTF-8", l[1].size()), response.body, l[0]);
+            assertTrue(response.closed, l[0]);
+        }
+        assertEq(0, handler.calls);
+        # a character split over two chunks is not valid in either chunk, only in the body
+        hash<auto> response = rawRequest(port, chunkedRequest(MimeTypeJson, (<7b2261223a2263c3>, <a9227d>)));
+        assertEq(200, response.hdr.status_code);
+        assertEq("body UTF-8 7b2261223a2263c3a9227d", response.body);
+        # valid UTF-8 text in a declared charset, and the same bytes as Latin-1
+        response = rawRequest(port, chunkedRequest("text/plain;charset=utf-8", (<636166c3a9>,)));
+        assertEq(200, response.hdr.status_code);
+        assertEq("body UTF-8 636166c3a9", response.body);
+        response = rawRequest(port, chunkedRequest("text/plain; charset=iso-8859-1", (<636166>, <e9>)));
+        assertEq(200, response.hdr.status_code);
+        assertEq("body ISO-8859-1 636166e9", response.body);
+        # an XML declaration of the encoding, and a byte order mark, which is not part of the text
+        binary xml = binary("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><a>") + <e9> + binary("</a>");
+        response = rawRequest(port, chunkedRequest("text/xml", (xml,)));
+        assertEq(200, response.hdr.status_code);
+        assertEq("body ISO-8859-1 " + xml.toHex(), response.body);
+        response = rawRequest(port, chunkedRequest(MimeTypeJson, (<efbbbf7b>, <7d>)));
+        assertEq(200, response.hdr.status_code);
+        assertEq("body UTF-8 7b7d", response.body);
+        # binary data: the bytes are given unchanged, as a string in the server's default text encoding (ISO-8859-1
+        # here), or tagged ISO-8859-1 if they are not valid in it
+        response = rawRequest(port, chunkedRequest(MimeTypeOctetStream, (<00ff>, <c0af80>)));
+        assertEq(200, response.hdr.status_code);
+        assertEq("body ISO-8859-1 00ffc0af80", response.body);
+        assertEq(6, handler.calls);
+
+        # a body that is not valid text is refused also on a persistent connection, which is closed
+        Socket s();
+        on_exit s.close();
+        s.connect("127.0.0.1:" + port);
+        s.send(binary(chunkedRequest("text/plain;charset=utf-8", (<6f6b>,), NOTHING, False)));
+        hash<auto> h = s.readHTTPHeader(30s);
+        assertEq(200, h.status_code);
+        assertEq("body UTF-8 6f6b", s.recv(h."content-length".toInt(), 30s));
+        s.send(binary(chunkedRequest("text/plain;charset=utf-8", (<ff>,), NOTHING, False)));
+        h = s.readHTTPHeader(30s);
+        assertEq(400, h.status_code);
+        assertEq("close", h.connection);
+        assertEq(7, handler.calls);
+    }
+
+    # a compressed body is decompressed and then decoded as an uncompressed body is (qore#6604)
+    private http1CompressedBodies() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        EchoHandler handler();
+        BinaryEchoHandler binary_handler();
+        server.setHandler("binary", "/bin", NOTHING, binary_handler);
+        server.setDefaultHandler("default", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        hash<string, code> encoders = {
+            "gzip": \gzip(),
+            "deflate": \compress(),
+            "br": \brotli(),
+            "zstd": \zstd(),
+            "bzip2": \bzip2(),
+            "identity": binary sub (binary b) { return b; },
+        };
+        binary invalid = <7b2261223a2261ff227d>;
+        foreach hash<auto> i in (encoders.pairIterator()) {
+            # chunked and with a Content-Length; with a Content-Length, the server answered with 500 before
+            foreach bool chunked in ((True, False)) {
+                string label = sprintf("%s chunked: %y", i.key, chunked);
+                binary compressed = i.value(invalid);
+                string request = chunked
+                    ? chunkedRequest(MimeTypeJson, (compressed,), i.key)
+                    : lengthRequest(MimeTypeJson, compressed, i.key);
+                hash<auto> response = rawRequest(port, request);
+                assertEq(400, response.hdr.status_code, label);
+                assertRegex("HTTP-BODY-ENCODING-ERROR: the request body of 10 bytes has an invalid encoding: "
+                    "decode_http_body\\(\\): the HTTP message body is not valid UTF-8: invalid byte sequence at byte "
+                    "offset", response.body, label);
+                assertTrue(response.closed, label);
+                assertEq(0, handler.calls, label);
+            }
+        }
+        foreach hash<auto> i in (encoders.pairIterator()) {
+            foreach bool chunked in ((True, False)) {
+                string label = sprintf("%s chunked: %y", i.key, chunked);
+                # valid text in the declared charset
+                binary compressed = i.value(<636166e9>);
+                string request = chunked
+                    ? chunkedRequest("text/plain;charset=iso-8859-1", (compressed,), i.key)
+                    : lengthRequest("text/plain;charset=iso-8859-1", compressed, i.key);
+                hash<auto> response = rawRequest(port, request);
+                assertEq(200, response.hdr.status_code, label);
+                assertEq("body ISO-8859-1 636166e9", response.body, label);
+
+                # binary data is given with its bytes unchanged
+                compressed = i.value(<00ffc0af80>);
+                request = chunked
+                    ? chunkedRequest(MimeTypeOctetStream, (compressed,), i.key)
+                    : lengthRequest(MimeTypeOctetStream, compressed, i.key);
+                response = rawRequest(port, request);
+                assertEq(200, response.hdr.status_code, label);
+                assertEq("body ISO-8859-1 00ffc0af80", response.body, label);
+
+                # a handler that does not decompress to a string receives the bytes, also for text
+                compressed = i.value(invalid);
+                request = chunked
+                    ? chunkedRequest(MimeTypeJson, (compressed,), i.key, True, "/bin")
+                    : lengthRequest(MimeTypeJson, compressed, i.key, "/bin");
+                response = rawRequest(port, request);
+                assertEq(200, response.hdr.status_code, label);
+                assertEq("binary " + invalid.toHex(), response.body, label);
+            }
+        }
+        assertEq(24, handler.calls);
+        assertEq(12, binary_handler.calls);
+    }
+
+    # handlers that read the request body themselves; an INVALID-ENCODING error of a handler is not the client's
+    private http1HandlerBodies() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        ReadingHandler reading();
+        server.setHandler("reading", "/read", NOTHING, reading);
+        server.setHandler("own", "/own", NOTHING, new OwnTextErrorHandler());
+        RestHandler rest();
+        CountingRestClass rest_class();
+        rest.addClass(rest_class);
+        # a small limit for a decompressed body
+        rest.max_decoded_body_size = 100;
+        server.setHandler("rest", "/rest", NOTHING, rest);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        hash<auto> response = rawRequest(port, chunkedRequest(MimeTypeJson, (<7b2261223a2261ff227d>,), NOTHING, True,
+            "/read"));
+        assertEq(400, response.hdr.status_code);
+        assertRegex("HTTP-BODY-ENCODING-ERROR", response.body);
+        assertEq("HTTP-BODY-ENCODING-ERROR", reading.err);
+        remove reading.err;
+        response = rawRequest(port, chunkedRequest(MimeTypeJson, (gzip(<7b2261223a2261ff227d>),), "gzip", True,
+            "/read"));
+        assertEq(400, response.hdr.status_code);
+        assertEq("HTTP-BODY-ENCODING-ERROR", reading.err);
+        remove reading.err;
+        response = rawRequest(port, chunkedRequest(MimeTypeJson, (<7b2261223a2263c3>, <a9227d>), NOTHING, True,
+            "/read"));
+        assertEq(200, response.hdr.status_code);
+        assertEq("body UTF-8 7b2261223a2263c3a9227d", response.body);
+        assertNothing(reading.err);
+        assertEq(3, reading.calls);
+
+        # an INVALID-ENCODING error raised by a handler for its own text is a server error
+        response = rawRequest(port, lengthRequest("text/plain", <6f6b>, NOTHING, "/own"));
+        assertEq(500, response.hdr.status_code);
+        assertRegex("INVALID-ENCODING", response.body);
+
+        # a REST method without a stream handler, whose chunked body is read when the method is called
+        response = rawRequest(port, chunkedRequest(MimeTypeJson, (<7b2261223a2261ff227d>,), NOTHING, True,
+            "/rest"));
+        assertEq(400, response.hdr.status_code, response.body);
+        assertRegex("HTTP-BODY-ENCODING-ERROR", response.body);
+        assertTrue(response.closed);
+        assertEq(0, rest_class.calls);
+        response = rawRequest(port, chunkedRequest(MimeTypeJson, (<7b2261223a2263c3>, <a9227d>), NOTHING, True,
+            "/rest"));
+        assertEq(200, response.hdr.status_code);
+        assertEq(1, rest_class.calls);
+        # a chunked body that is too large once decompressed is answered with 413, as the server answers it
+        response = rawRequest(port, chunkedRequest(MimeTypeJson, (gzip(binary("\"" + strmul("a", 1000) + "\"")),),
+            "gzip", True, "/rest"));
+        assertEq(413, response.hdr.status_code);
+        assertRegex("HTTP-BODY-TOO-LARGE", response.body);
+        assertEq(1, rest_class.calls);
+    }
+
+    # binary data has no encoding and is never refused; every path assumes the server's default text encoding for
+    # text whose encoding is not declared (qore#6604)
+    private http1BinaryDefaultEncoding() {
+        foreach *string default_encoding in ((NOTHING, "utf-8")) {
+            HttpServer server(<HttpServerOptionInfo>{});
+            on_exit server.stop();
+            if (default_encoding) {
+                server.setDefaultTextEncoding(default_encoding);
+            }
+            EchoHandler handler();
+            server.setDefaultHandler("default", handler);
+            int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+            foreach string ct in ("application/octet-stream;charset=utf-8", "image/png", "image/png;charset=utf-8",
+                    "multipart/mixed; boundary=x") {
+                foreach bool chunked in ((True, False)) {
+                    string label = sprintf("%y %s chunked: %y", default_encoding, ct, chunked);
+                    hash<auto> response = rawRequest(port, chunked
+                        ? chunkedRequest(ct, (<ff00>,))
+                        : lengthRequest(ct, <ff00>));
+                    assertEq(200, response.hdr.status_code, label);
+                    # with a Content-Length, the server gives octet-stream and multipart bodies as binary data
+                    bool binary_body = !chunked && (ct =~ /^application\/octet-stream/ || ct =~ /^multipart\//);
+                    assertEq(binary_body ? "binary ff00" : "body ISO-8859-1 ff00", response.body, label);
+                }
+            }
+            # binary bytes that are valid in the assumed encoding are tagged with it
+            foreach bool chunked in ((True, False)) {
+                string label = sprintf("%y image/png valid chunked: %y", default_encoding, chunked);
+                hash<auto> response = rawRequest(port, chunked
+                    ? chunkedRequest("image/png", (<c3a9>,))
+                    : lengthRequest("image/png", <c3a9>));
+                assertEq(200, response.hdr.status_code, label);
+                assertEq(default_encoding ? "body UTF-8 c3a9" : "body ISO-8859-1 c3a9", response.body, label);
+            }
+            # text without a declared encoding: the same decision with a Content-Length and chunked
+            foreach bool chunked in ((True, False)) {
+                string label = sprintf("%y chunked: %y", default_encoding, chunked);
+                hash<auto> response = rawRequest(port, chunked
+                    ? chunkedRequest("text/plain", (<636166ff>,))
+                    : lengthRequest("text/plain", <636166ff>));
+                if (default_encoding) {
+                    assertEq(400, response.hdr.status_code, label);
+                    assertRegex("is not valid UTF-8: invalid byte sequence at byte offset", response.body, label);
+                    response = rawRequest(port, chunked
+                        ? chunkedRequest("text/plain", (<636166c3>, <a9>))
+                        : lengthRequest("text/plain", <636166c3a9>));
+                    assertEq(200, response.hdr.status_code, label);
+                    assertEq("body UTF-8 636166c3a9", response.body, label);
+                } else {
+                    assertEq(200, response.hdr.status_code, label);
+                    assertEq("body ISO-8859-1 636166ff", response.body, label);
+                }
+            }
+        }
     }
 
     #! a Content-Type with a Latin-1 byte on a request with a body is obs-text; an HTTP version that is not valid text is
@@ -278,6 +591,10 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         info = post(client, "/a", <7b2261223a2261ff227d>, "application/json");
         assertEq(400, info."response-headers".status_code);
         assertEq(1, handler.calls);
+        # and a compressed one, which is decoded after it is decompressed (qore#6604)
+        info = post(client, "/a", gzip(<7b2261223a2261ff227d>), "application/json", {"Content-Encoding": "gzip"});
+        assertEq(400, info."response-headers".status_code);
+        assertEq(1, handler.calls);
     }
 
     private http3() {
@@ -306,13 +623,17 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         info = post(client, "/a", <7b2261223a2261ff227d>, "application/json");
         assertEq(400, info."response-headers".status_code);
         assertEq(1, handler.calls);
+        # and a compressed one, which is decoded after it is decompressed (qore#6604)
+        info = post(client, "/a", gzip(<7b2261223a2261ff227d>), "application/json", {"Content-Encoding": "gzip"});
+        assertEq(400, info."response-headers".status_code);
+        assertEq(1, handler.calls);
     }
 
     # sends a POST request with the given body; returns the request information hash
-    private static hash<auto> post(HTTPClient client, string target, binary body, string ct) {
+    private static hash<auto> post(HTTPClient client, string target, binary body, string ct, *hash<auto> hdr) {
         hash<auto> info;
         try {
-            client.send(body, "POST", target, {"Content-Type": ct}, False, \info);
+            client.send(body, "POST", target, {"Content-Type": ct} + hdr, False, \info);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "HTTP-CLIENT-RECEIVE-ERROR") {
                 rethrow;
@@ -333,6 +654,27 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
             }
         }
         return info;
+    }
+
+    # returns an HTTP/1.1 POST request with a chunked body made of the given chunks
+    private static string chunkedRequest(string ct, list<binary> chunks, *string content_encoding, bool close = True,
+            string path = "/a") {
+        binary request = binary(sprintf("POST %s HTTP/1.1\r\nHost: localhost\r\n%sContent-Type: %s\r\n%s"
+            "Transfer-Encoding: chunked\r\n\r\n", path, close ? "Connection: close\r\n" : "", ct,
+            content_encoding ? sprintf("Content-Encoding: %s\r\n", content_encoding) : ""));
+        foreach binary chunk in (chunks) {
+            request += binary(sprintf("%x\r\n", chunk.size())) + chunk + binary("\r\n");
+        }
+        request += binary("0\r\n\r\n");
+        return binary_to_string(request, "ISO-8859-1");
+    }
+
+    # returns an HTTP/1.1 POST request with a body with a Content-Length
+    private static string lengthRequest(string ct, binary body, *string content_encoding, string path = "/a") {
+        return binary_to_string(binary(sprintf("POST %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
+            "Content-Type: %s\r\n%sContent-Length: %d\r\n\r\n", path, ct,
+            content_encoding ? sprintf("Content-Encoding: %s\r\n", content_encoding) : "", body.size())) + body,
+            "ISO-8859-1");
     }
 
     # sends the request as given over a socket; returns the response header, the body and whether the server closed

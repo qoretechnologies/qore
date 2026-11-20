@@ -1,0 +1,7 @@
+|map:C|join:C|foldl:C|select:C|concat:v0z|hash:2|fe:"v0"|fe:C|args:C/|dtor:C:DTOR
+|map:C|join:C|foldl:C|select:C|concat:C|hash:C|fe:C|args:C/|dtor:C:T
+|map:C|join:C|foldl:C|select:C|concat:v2z|hash:2|fe:"v2"|fe:C|args:C/|dtor:C:DTOR
+|map:C|join:C|foldl:C|select:C|concat:C|hash:C|fe:C|args:C/|dtor:C:T
+return:C
+after return
+rv: "end"

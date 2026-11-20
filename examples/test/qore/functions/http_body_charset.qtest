@@ -28,6 +28,7 @@ public class HttpBodyCharsetTest inherits QUnit::Test {
         addTestCase("binary types", \binaryTest());
         addTestCase("no Content-Type", \noContentTypeTest());
         addTestCase("decoding", \decodeTest());
+        addTestCase("text that is not valid in its encoding", \invalidTextTest());
         set_return_value(main());
     }
 
@@ -207,5 +208,66 @@ public class HttpBodyCharsetTest inherits QUnit::Test {
         # an empty body
         assertEq("", decode_http_body("text/plain", binary()));
         assertEq(binary(), decode_http_body("application/octet-stream", binary()));
+    }
+
+    #! the encoding_errors argument of decode_http_body() (qore#6604)
+    invalidTextTest() {
+        string msg = "^decode_http_body\\(\\): the HTTP message body is not valid UTF-8: invalid byte sequence at byte "
+            "offset 1$";
+        # "raise" (the default): any text that is not valid in its encoding
+        assertThrows("INVALID-ENCODING", msg, \decode_http_body(), ("application/json", <7bff7d>));
+        assertThrows("INVALID-ENCODING", msg, \decode_http_body(), ("text/plain;charset=utf-8", <61ff>));
+        assertThrows("INVALID-ENCODING", msg, \decode_http_body(), ("text/html;charset=utf-8", <61ff>, "ISO-8859-1",
+            "raise"));
+        # a body without a Content-Type that is text, in the assumed encoding
+        assertThrows("INVALID-ENCODING", msg, \decode_http_body(), (NOTHING, <61ff>, "UTF-8"));
+        # a lone surrogate in a UTF-16 body with a byte order mark: the offset is that in the body, with the byte
+        # order mark
+        assertThrows("INVALID-ENCODING", "not valid UTF-16LE: invalid byte sequence at byte offset 2$",
+            \decode_http_body(), ("text/plain", <fffe00d8>));
+        assertThrows("INVALID-ENCODING", "not valid UTF-8: invalid byte sequence at byte offset 4$",
+            \decode_http_body(), ("text/plain", <efbbbf61ff>));
+        # a UTF-32 byte order mark that the body keeps (the charset is the generic UTF-32): an invalid value after it
+        assertThrows("INVALID-ENCODING", "byte offset 4$", \decode_http_body(),
+            ("text/plain;charset=utf-32", <0000feff00110000>));
+        # a byte that is not a character of a single-byte encoding (0x81 in windows-1252), as
+        # <string>::isEncodingValid() says
+        assertThrows("INVALID-ENCODING", "^decode_http_body\\(\\): the HTTP message body is not valid WINDOWS-1252: "
+            "invalid byte sequence at byte offset 1$", \decode_http_body(),
+            ("text/plain;charset=windows-1252", <618162>));
+        string cp = decode_http_body("text/plain;charset=windows-1252", <618162>, "UTF-8", "latin1");
+        assertEq("ISO-8859-1", cp.encoding());
+        assertEq(<618162>, binary(cp));
+        # valid text
+        assertEq("aé", decode_http_body("text/plain;charset=utf-8", <61c3a9>));
+
+        # "latin1": HTML and other text are given in ISO-8859-1 with their bytes
+        foreach *string ct in (("text/plain;charset=utf-8", "text/html;charset=utf-8", NOTHING)) {
+            string str = decode_http_body(ct, <61ff>, "UTF-8", "latin1");
+            assertEq("ISO-8859-1", str.encoding(), ct ?? "no Content-Type");
+            assertEq(<61ff>, binary(str), ct ?? "no Content-Type");
+        }
+        # valid text keeps its encoding
+        string str = decode_http_body("text/plain;charset=utf-8", <61c3a9>, "ISO-8859-1", "latin1");
+        assertEq("UTF-8", str.encoding());
+        # structured types cannot be read in another encoding
+        foreach string ct in (("application/json", "application/yaml", "application/xml;charset=utf-8",
+                "application/x-www-form-urlencoded", "text/event-stream", "text/css;charset=utf-8")) {
+            assertThrows("INVALID-ENCODING", "not valid in its encoding", \decode_http_body(), (ct, <7bff7d>,
+                "ISO-8859-1", "latin1"));
+        }
+
+        # "keep": the text is given in its encoding without a check
+        str = decode_http_body("application/json", <7bff7d>, encoding_errors: "keep");
+        assertEq("UTF-8", str.encoding());
+        assertFalse(str.isEncodingValid());
+
+        # binary data has no encoding: it is returned as it is in every mode
+        foreach string mode in (("raise", "latin1", "keep")) {
+            assertEq(<ff00>, decode_http_body("image/png;charset=utf-8", <ff00>, "UTF-8", mode), mode);
+        }
+
+        # an unknown mode
+        assertThrows("ENCODING-ERRORS-ERROR", \decode_http_body(), ("text/plain", <61>, "UTF-8", "ignore"));
     }
 }

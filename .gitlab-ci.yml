@@ -683,3 +683,31 @@ test-cmake-alpine-amd64:
   script:
     - . test/docker_test/tree-tested-skip.sh
     - test/docker_test/test-cmake.sh
+
+# The ThreadSanitizer job: a Debug build of qore, qcc and the binary modules its tests load, with -fsanitize=thread in
+# the C, C++ and linker flags, and with it the tests that compile C++ fixtures against libqore (qore#6587,
+# qore#6682) and the qore/threads and qore/debug suites (test/docker_test/test-tsan.sh, with the options of "Running
+# Tests Under ThreadSanitizer" in CLAUDE.md).  It fails when a test fails or TSan writes a report, which the log
+# prints.  It builds on its own, so it needs no build job and starts with the pipeline; its log gives the times of the
+# build and of the tests.  Its tests need no database or other service.
+test-tsan-ubuntu-amd64:
+  stage: test
+  timeout: 60 minutes
+  needs: [{job: tree-already-tested, optional: true}]
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  variables:
+    TEST_TIMEOUT: "600"
+  script:
+    - . test/docker_test/tree-tested-skip.sh
+    - test/docker_test/test-tsan.sh
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+      - tsan-reports/
+    expire_in: 7 days
