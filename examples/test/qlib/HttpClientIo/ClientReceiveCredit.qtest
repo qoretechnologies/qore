@@ -57,8 +57,8 @@ const ChunkSize = 32768;
 #! The data written to a client that does not read before its stream must be full (a hang guard)
 const MaxBytes = 256 * 1024 * 1024;
 
-#! The largest initial stream window of the clients (HTTP/3: QUIC_CLIENT_INITIAL_MAX_STREAM_DATA)
-const MaxWindow = 16 * 1024 * 1024;
+#! HTTP/3 advertises a smaller receive window for this process in Debug. Both sizes exercise real QUIC flow control.
+const H3Window = Option::HAVE_LIBRARY_DEBUGGING ? 256 * 1024 : 16 * 1024 * 1024;
 
 #! The initial stream window of the HTTP/2 client (SETTINGS_INITIAL_WINDOW_SIZE)
 const H2Window = 1024 * 1024;
@@ -69,11 +69,11 @@ const H2Window = 1024 * 1024;
     its window.  Even with one DATA frame for each QUIC packet (about 14000 frames in 16 MiB), the framing is less than
     this.
 */
-const H3FramingSlack = 256 * 1024;
+const H3FramingSlack = H3Window / 64;
 
 #! The size of the plain response returned whole
-const PlainSize = 8 * 1024 * 1024;
-const RandomSize = 256 * 1024;
+const PlainSize = 2 * H2Window;
+const RandomSize = 32 * 1024;
 
 const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
@@ -159,7 +159,7 @@ class PlainHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! Serves 256 KiB of random data, which the server does not compress
+#! Serves random data spanning two HTTP/2 DATA frames, which the server does not compress
 class RandomHandler inherits AbstractHttpRequestHandler {
     public {
         #! the client ports of the connections that the requests came in on
@@ -312,6 +312,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         HttpServer server;
         PushHandler handler();
         int tls_port;
+        bool previous_small_window;
     }
 
     constructor() : Test("ClientReceiveCreditTest", "1.0") {
@@ -332,7 +333,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             addTestCase(proto + ": events larger than the stream window arrive", \testLargeEvents(), proto);
             addTestCase(proto + ": an event in progress waits for the unconsumed event before it",
                 \testItemBehindUnconsumed(), (proto, "sse"));
-            # the messages that this case needs on HTTP/3 (more than its 16 MiB window) exceed the decoder's maximum
+            # the messages that this case needs with the production HTTP/3 window exceed the decoder's maximum
             # message size (16 MiB), so it runs on HTTP/2 only
             if (proto == "h2") {
                 addTestCase(proto + ": a fragmented message waits for the unconsumed message before it",
@@ -346,6 +347,9 @@ class ClientReceiveCreditTest inherits QUnit::Test {
     }
 
     globalSetUp() {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            previous_small_window = call_function("dbg_quic_small_client_stream_window", True);
+        }
         Logger logger("client-receive-credit", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
@@ -369,6 +373,9 @@ class ClientReceiveCreditTest inherits QUnit::Test {
     }
 
     globalTearDown() {
+        on_exit if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_quic_small_client_stream_window", previous_small_window);
+        }
         if (server) {
             server.stop();
             delete server;
@@ -397,7 +404,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
 
     #! Returns the initial stream window of the client of the given protocol
     private static int getStreamWindow(string proto) {
-        return proto == "h3" ? MaxWindow : H2Window;
+        return proto == "h3" ? H3Window : H2Window;
     }
 
     #! Fills a stream that the client does not read: the server writes until its send buffer for the stream is full
@@ -424,7 +431,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         if (before) {
             # the HTTP/2 window counts only the data; the HTTP/3 window also counts the framing, so of a window's worth
             # of data or more, the client receives the window less the framing (see H3FramingSlack)
-            int admitted = min(taken, proto == "h3" ? MaxWindow - H3FramingSlack : H2Window);
+            int admitted = min(taken, proto == "h3" ? H3Window - H3FramingSlack : H2Window);
             assertGt(-1, call_function("dbg_http_stream_credit_wait_deferred", before.deferred + admitted,
                 HangGuard), "the client receives the data that its stream window admits");
         }
@@ -499,8 +506,8 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         {
             hash<auto> s = openStream(mgr);
             HttpClientStreamingIo::SseStreamReader reader(s.stream);
-            string payload = strmul("e", 65536);
             int events = proto == "h3" ? 400 : 64;
+            string payload = strmul("e", 1 + getStreamWindow(proto) / events);
             Counter written(1);
             *hash<ExceptionInfo> write_err;
             background sub () {
@@ -528,8 +535,8 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(getUrl());
             Queue q = stream.startSseStreaming("GET", "/", {"Accept": "text/event-stream"});
             Writer w(handler.streams.get(HangGuard));
-            string payload = strmul("q", 65536);
             int events = proto == "h3" ? 400 : 64;
+            string payload = strmul("q", 1 + getStreamWindow(proto) / events);
             Counter written(1);
             *hash<ExceptionInfo> write_err;
             background sub () {
@@ -567,13 +574,13 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         Queue q = stream.startSseStreaming("GET", "/", {"Accept": "text/event-stream"});
         Writer w(handler.streams.get(HangGuard));
         # the Queue refuses every event: their data counts as consumed, so the server can write far more than the
-        # stream's window (1 MiB on HTTP/2, 16 MiB on HTTP/3); lost credit would block its writes
+        # stream's window; lost credit would block its writes
         q.setError("TEST-ERROR", "the queue refuses its events");
         *hash<auto> before = Option::HAVE_LIBRARY_DEBUGGING ? call_function("dbg_http_stream_credit_stats") : NOTHING;
-        string payload = strmul("x", 65536);
         # more than twice the stream's window, plus what the server may still hold when its writes return (about 1
         # MiB), so that more than a window is certainly deferred
         int events = proto == "h3" ? 600 : 64;
+        string payload = strmul("x", 1 + (2 * getStreamWindow(proto) + 1024 * 1024) / events);
         Counter written(1);
         *hash<ExceptionInfo> write_err;
         background sub () {
@@ -593,8 +600,10 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             # the data still in flight is not known here, so only what flow control guarantees is checked: more than
             # the stream's window was deferred, which only credit granted for the refused events allows (a stream
             # credited as it receives its data defers nothing), and at most a window of it is not credited
+            int window = getStreamWindow(proto);
+            assertGt(-1, call_function("dbg_http_stream_credit_wait_deferred", before.deferred + window + 1,
+                HangGuard), "the client received more than one window of refused events");
             hash<auto> after = call_function("dbg_http_stream_credit_stats");
-            int window = proto == "h3" ? 16 * 1024 * 1024 : 1024 * 1024;
             int deferred = after.deferred - before.deferred;
             assertGt(window, deferred, "more than the stream's window was deferred");
             assertGe(deferred - window, after.credited - before.credited, "the refused events' data was credited");
@@ -608,9 +617,9 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         on_exit stream.cancel();
         Queue q = stream.startSseStreaming("GET", "/", {"Accept": "text/event-stream"});
         Writer w(handler.streams.get(HangGuard));
-        # each event is larger than the stream's window (1 MiB on HTTP/2, 16 MiB on HTTP/3): the credit of the event
+        # each event is larger than the stream's advertised window: the credit of the event
         # in progress is granted in advance, or the stream stalls
-        int size = proto == "h3" ? 20 * 1024 * 1024 : 3 * 1024 * 1024;
+        int size = getStreamWindow(proto) + ChunkSize;
         int events = 3;
         Counter written(1);
         *hash<ExceptionInfo> write_err;
@@ -656,7 +665,7 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         } else {
             s.stream.installFrameState(q);
         }
-        int window = proto == "h3" ? 16 * 1024 * 1024 : 1024 * 1024;
+        int window = getStreamWindow(proto);
         int piece = 64 * 1024;
         hash<auto> before = call_function("dbg_http_stream_credit_stats");
 
@@ -792,8 +801,8 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         on_exit delete mgr;
         hash<auto> s = openStream(mgr);
         hash<auto> before = call_function("dbg_http_stream_credit_stats");
-        # more than the stream's window (1 MiB on HTTP/2, 16 MiB on HTTP/3): lost credit stalls the stream
-        int size = 24 * 1024 * 1024;
+        # more than the stream's advertised window: lost credit stalls the stream
+        int size = 2 * getStreamWindow(proto);
         Counter written(1);
         *hash<ExceptionInfo> write_err;
         background sub () {
@@ -852,6 +861,22 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         on_exit if (Option::HAVE_LIBRARY_DEBUGGING) {
             call_function("dbg_http2_default_connection_window", False);
         }
+        # Hold the stream open after the first oversized DATA. The client must decide from the bytes it has,
+        # even when the final frame has not arrived. The writer stays idle until the request returns.
+        Queue outcome();
+        background sub () {
+            try {
+                mgr.request(getUrl(), "GET", "/", {"Accept": "text/event-stream"}, NOTHING, HangGuard, False);
+                outcome.push("request succeeded");
+            } catch (hash<ExceptionInfo> ex) {
+                outcome.push(ex.err);
+            }
+        }();
+        Writer w(handler.streams.get(HangGuard));
+        w.writeAll(binary(strmul("x", 4097)));
+        assertEq("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", outcome.get(HangGuard),
+            "the first oversized DATA is refused while the stream is open");
+
         # the data of each oversized response that the session discards is credited to the connection; without it,
         # each response leaked a DATA frame (about 16 KiB) of the 64 KiB connection window, which pinned the
         # connection after a few responses

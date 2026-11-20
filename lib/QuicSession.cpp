@@ -1791,6 +1791,11 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     params.initial_max_streams_uni = QUIC_INITIAL_MAX_STREAMS_UNI;
     params.initial_max_streams_bidi = QUIC_INITIAL_MAX_STREAMS_BIDI;
     params.initial_max_stream_data_bidi_local = QUIC_CLIENT_INITIAL_MAX_STREAM_DATA;
+#ifdef DEBUG
+    if (qore_dbg_quic_small_client_stream_window.load(std::memory_order_relaxed)) {
+        params.initial_max_stream_data_bidi_local = QUIC_SERVER_INITIAL_MAX_STREAM_DATA;
+    }
+#endif
     params.initial_max_stream_data_bidi_remote = QUIC_CLIENT_INITIAL_MAX_STREAM_DATA;
     params.initial_max_stream_data_uni = QUIC_CLIENT_INITIAL_MAX_STREAM_DATA;
     params.initial_max_data = QUIC_CLIENT_INITIAL_MAX_DATA;
