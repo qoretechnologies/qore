@@ -1,0 +1,266 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ColumnarResultDecimalExactWriteTest
+
+#! a number written to a decimal128 element stores its exact decimal value (qore#6837)
+/** The display rounding of numbers removes a run of more than 16 0 or 9 digits in the fraction (ex:
+    1.00000000000000000001n prints as 1); a number written to a decimal128 element stores the exact decimal value of
+    the number (its round-trip string) when it has one that fits the precision and scale of the element, and the
+    display string otherwise, which removes the noise of a number computed in binary (ex: 0.1n + 0.2n stores 0.3).
+*/
+class ColumnarResultDecimalExactWriteTest inherits QUnit::Test {
+    private {
+        #! the state of the random digit generator
+        int seed = 6837;
+    }
+
+    constructor() : QUnit::Test("ColumnarResultDecimalExactWrite", "1.0", \ARGV) {
+        addTestCase("the case of the issue", \issueCase());
+        addTestCase("runs of 0 and 9 digits", \runs());
+        addTestCase("buffer writes", \bufferWrites());
+        addTestCase("random values with runs", \randomValues());
+        addTestCase("values that do not fit", \noFit());
+        addTestCase("numbers computed in binary", \binaryNumbers());
+        set_return_value(main());
+    }
+
+    private issueCase() {
+        number n = number("1.00000000000000000001" + strmul("0", 20));
+        assertEq("1", string(n));
+        ColumnarResult r = ColumnarResult::fromColumnHash({"n": (n, number("-12.3400000000000000000000000001"))},
+            {"n": {"native_type": "numeric", "precision": 38, "scale": 28}});
+        assertEq(("1.00000000000000000001", "-12.3400000000000000000000000001"),
+            map $1.toStringRoundTrip(), r.getColumn("n").toList());
+        # number literals
+        r = ColumnarResult::fromColumnHash({"n": (1.00000000000000000001n, -12.3400000000000000000000000001n,
+            0.99999999999999999999n, -0.000000099999999999999999999n)},
+            {"n": {"native_type": "numeric", "precision": 38, "scale": 30}});
+        assertEq(("1.00000000000000000001", "-12.3400000000000000000000000001", "0.99999999999999999999",
+            "-0.000000099999999999999999999"), map $1.toStringRoundTrip(), r.getColumn("n").toList());
+        # the display string of the numbers stays rounded
+        assertEq(("1", "-12.34", "1", "-0.0000001"), map string($1), r.getColumn("n").toList());
+        # a sum of decimal values that is the number of the exact decimal value stores it
+        r = ColumnarResult::fromColumnHash({"n": (1n + 0.00000000000000000001n,)},
+            {"n": {"native_type": "numeric", "precision": 38, "scale": 20}});
+        assertEq("1.00000000000000000001", r.getColumn("n")[0].toStringRoundTrip());
+    }
+
+    #! values with runs of 17 to 30 0 or 9 digits in the fraction, at every scale of a (38, scale) column that fits
+    private runs() {
+        list<string> values = ();
+        for (int len = 17; len <= 30; ++len) {
+            foreach string d in ("0", "9") {
+                string run = strmul(d, len);
+                values += (
+                    "1." + run + "1", "-12.34" + run + "5", "0.5" + run + "7", "-0.0003" + run + "1",
+                    "123." + run + "45",
+                );
+                if (d == "9") {
+                    values += ("0." + run, "-5." + run);
+                }
+            }
+        }
+        checkValues(values, "run");
+    }
+
+    #! writes to buffer<decimal128> elements: list construction, element assignment, filled() and arithmetic
+    private bufferWrites() {
+        list<string> values = ("1.00000000000000000001", "-12.3400000000000000000000000001", "0.99999999999999999999",
+            "-0.5000000000000000000000000000007", "123.000000000000000000000000000045");
+        # the scale of a buffer made from a list is the largest scale of the values
+        buffer<decimal128> b = new buffer<decimal128>(map number($1), values);
+        assertEq(values, map $1.toStringRoundTrip(), b.toList(), "list construction");
+        foreach string v in (values) {
+            buffer<decimal128> b1 = new buffer<decimal128>((number(v),));
+            assertEq(v, b1[0].toStringRoundTrip(), "list construction " + v);
+            # element assignment in a buffer of a larger scale
+            b[0] = number(v);
+            assertEq(v, b[0].toStringRoundTrip(), "element assignment " + v);
+            buffer<decimal128> f = buffer<decimal128>::filled(2, number(v));
+            assertEq((v, v), map $1.toStringRoundTrip(), f.toList(), "filled() " + v);
+        }
+        # arithmetic with a number operand: the scale of the result is the scale of its exact value
+        buffer<decimal128> ones = new buffer<decimal128>((1n, 2n));
+        buffer<decimal128> sum = ones + 1.00000000000000000001n;
+        assertEq(("2.00000000000000000001", "3.00000000000000000001"), map $1.toStringRoundTrip(), sum.toList());
+    }
+
+    #! random values with a run of 17 to 30 0 or 9 digits in the fraction
+    private randomValues() {
+        list<string> values = ();
+        while (values.size() < 500) {
+            int len = 17 + randomInt(14);
+            int int_digits = randomInt(38 - len);
+            int frac_digits = randomInt(38 - len - int_digits);
+            int before = frac_digits ? randomInt(frac_digits + 1) : 0;
+            string v = int_digits ? randomDigits(int_digits, True) : "0";
+            v += "." + randomDigits(before, False) + strmul(randomInt(2) ? "9" : "0", len)
+                + randomDigits(frac_digits - before, False);
+            v =~ s/0+$//;
+            v =~ s/\.$//;
+            if (v != "0" && randomInt(2)) {
+                v = "-" + v;
+            }
+            values += v;
+        }
+        checkValues(values, "random");
+    }
+
+    #! values whose exact value does not fit the column keep the display string and its errors
+    private noFit() {
+        # the exact value has more digits after the decimal point than the scale; the display string fits
+        string v = "1.00000000000000000001";
+        for (int scale = 0; scale < 20; ++scale) {
+            assertEq("1", write(number(v), 38, scale).toStringRoundTrip(), sprintf("%s scale %d", v, scale));
+        }
+        v = "-12.3400000000000000000000000001";
+        for (int scale = 2; scale < 28; ++scale) {
+            assertEq("-12.34", write(number(v), 38, scale).toStringRoundTrip(), sprintf("%s scale %d", v, scale));
+        }
+        # neither fits the scale
+        for (int scale = 0; scale < 2; ++scale) {
+            assertThrows("BUFFER-RANGE-ERROR", "without losing precision", \write(), (number(v), 38, scale),
+                sprintf("%s scale %d", v, scale));
+        }
+        assertThrows("BUFFER-RANGE-ERROR", "without losing precision", \write(),
+            (number("1.5000000000000000001"), 38, 0));
+        # the exact value has more digits than the precision; the display string fits
+        v = "123456789012345678901.00000000000000000001";
+        assertEq("123456789012345678901", write(number(v), 38, 17).toStringRoundTrip());
+        assertEq("123456789012345678901", write(number(v), 21, 0).toStringRoundTrip());
+        # neither fits the precision
+        assertThrows("BUFFER-RANGE-ERROR", "precision exceeds 38 digits", \write(), (number(v), 38, 20));
+        # the scale of a buffer made from a list is limited by its precision
+        buffer<decimal128> b = new buffer<decimal128>((number(v),));
+        assertEq("123456789012345678901", b[0].toStringRoundTrip());
+        # an element of a smaller scale
+        b = new buffer<decimal128>((1.5n,));
+        b[0] = number("2.00000000000000000001");
+        assertEq("2", b[0].toStringRoundTrip());
+    }
+
+    #! numbers computed in binary store their display string as before
+    private binaryNumbers() {
+        list<number> numbers = (0.1n + 0.2n, 1n / 3n, 2n / 3n, 0.1n * 3, 1.1n * 1.1n, 10n / 7n, -0.7n - 0.1n,
+            1.00000000000000000001n / 3n, 1e20n / 3n);
+        number total = 0n;
+        for (int i = 0; i < 10; ++i) {
+            total += 0.1n;
+        }
+        numbers += total;
+        total = 0n;
+        for (int i = 0; i < 100; ++i) {
+            total += 1.000000000000000000013n / 7n;
+        }
+        numbers += total;
+        assertEq("0.3", write(0.1n + 0.2n, 38, 10).toStringRoundTrip());
+        assertEq("0.3", write(0.1n + 0.2n, 38, 38).toStringRoundTrip());
+        # the round trip strings have noise digits
+        assertEq("0.3", string(0.1n + 0.2n));
+        assertTrue((0.1n + 0.2n).toStringRoundTrip().size() > 30, (0.1n + 0.2n).toStringRoundTrip());
+        assertTrue((1n / 3n).toStringRoundTrip().size() > 30, (1n / 3n).toStringRoundTrip());
+        foreach number n in (numbers) {
+            foreach int scale in ((0, 1, 2, 10, 17, 20, 28, 37, 38)) {
+                # the outcome is that of the number of the display string of the number
+                string label = sprintf("%s (%s) scale %d", n, n.toStringRoundTrip(), scale);
+                *string expected;
+                *string expected_err;
+                try {
+                    expected = write(number(string(n)), 38, scale).toStringRoundTrip();
+                } catch (hash<ExceptionInfo> ex) {
+                    expected_err = ex.err;
+                }
+                try {
+                    assertEq(expected, write(n, 38, scale).toStringRoundTrip(), label);
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq(expected_err, ex.err, label);
+                }
+            }
+        }
+    }
+
+    #! checks that numbers of the values store them exactly at every scale of a (38, scale) column that fits
+    private checkValues(list<string> values, string label) {
+        for (int scale = 0; scale <= 38; ++scale) {
+            list<string> fit = select values, decimalScale($1) <= scale && intDigits($1) + scale <= 38;
+            if (!fit) {
+                continue;
+            }
+            # numbers of the precision of the string and of a greater precision
+            list<auto> sources = (
+                (map number($1), fit),
+                (map number($1 + ($1 =~ /\./ ? "" : ".") + strmul("0", 40)), fit),
+            );
+            list<buffer<*decimal128>> columns = ();
+            foreach list<auto> numbers in (sources) {
+                string l = sprintf("%s decimal(38,%d) [%d]", label, scale, $#);
+                buffer<*decimal128> actual = makeColumn(numbers, scale);
+                columns += actual;
+                # a decimal128 value is read as the number of its decimal string, whose round-trip string is the
+                # decimal string
+                list<auto> read = actual.toList();
+                foreach string v in (fit) {
+                    assertEq(v, read[$#].toStringRoundTrip(), sprintf("%s %s round trip", l, v));
+                    assertTrue(number(v) == read[$#], sprintf("%s %s equality", l, v));
+                }
+            }
+            # the columns hold the same decimal128 values
+            assertEq((map True, fit), (columns[0] == columns[1]).toList(), sprintf("%s decimal(38,%d) storage", label,
+                scale));
+        }
+    }
+
+    #! returns the decimal column of the values given
+    private static buffer<*decimal128> makeColumn(list<auto> values, int scale) {
+        return ColumnarResult::fromColumnHash({"n": values},
+            {"n": {"native_type": "numeric", "precision": 38, "scale": scale, "nullable": True}}).getColumn("n");
+    }
+
+    #! returns the value stored for a value in a decimal column
+    private static number write(auto value, int precision, int scale) {
+        return ColumnarResult::fromColumnHash({"n": (value,)},
+            {"n": {"native_type": "numeric", "precision": precision, "scale": scale}}).getColumn("n")[0];
+    }
+
+    #! returns the number of digits after the decimal point of a decimal string
+    private static int decimalScale(string v) {
+        *string frac = (v =~ x/\.([0-9]+)$/)[0];
+        return frac ? frac.size() : 0;
+    }
+
+    #! returns the number of integer digits of a decimal string
+    private static int intDigits(string v) {
+        string i = (v =~ x/^-?([0-9]+)/)[0];
+        i =~ s/^0+//;
+        return i.size();
+    }
+
+    #! returns a random int from 0 to max - 1 (a linear congruential generator, so that the values are the same in
+    #! every run)
+    private int randomInt(int max) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        return (seed >> 8) % max;
+    }
+
+    #! returns a string of random digits with no run of more than 3 equal digits
+    private string randomDigits(int count, bool first_nonzero) {
+        string str = "";
+        for (int i = 0; i < count; ++i) {
+            int d = randomInt(10);
+            if ((!i && first_nonzero && !d) || (i >= 3 && str.substr(-3) == strmul(string(d), 3))) {
+                d = (d + 1) % 10;
+                if (!i && first_nonzero && !d) {
+                    d = 1;
+                }
+            }
+            str += string(d);
+        }
+        return str;
+    }
+}
