@@ -1300,11 +1300,15 @@ public:
         return sent;
     }
 
+    DLLLOCAL bool started() const { return sent || tls_write_pending; }
+
 private:
     qore_socket_private* sock;
     const char* data;
     size_t size;
     size_t sent = 0;
+    size_t tls_awaiting_drain = 0;
+    bool tls_write_pending = false;
 };
 
 class SocketRecvPollState : public AbstractPollState {
@@ -1331,6 +1335,8 @@ public:
         return received;
     }
 
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retry_tls_read; }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
@@ -1338,6 +1344,7 @@ private:
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     size_t size;
+    bool retry_tls_read = false;
     size_t received = 0;
 };
 
@@ -1365,6 +1372,13 @@ public:
         return bin ? bin->size() : 0;
     }
 
+    //! Exchanges a DEFAULT_SOCKET_BUFSIZE buffer with the I/O thread driving HTTP/2.
+    DLLLOCAL void swapReadBuffer(std::unique_ptr<char[]>& spare) { rbuf.swap(spare); }
+
+    DLLLOCAL bool mustRetryTlsRead() const { return retry_tls_read; }
+
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retry_tls_read; }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
@@ -1376,6 +1390,7 @@ private:
     //! the thread that drives the operation (an I/O thread or a handler thread with a small stack)
     std::unique_ptr<char[]> rbuf;
     bool io = false;
+    bool retry_tls_read = false;
 };
 
 class SocketRecvPacketPollState : public AbstractPollState {
@@ -1399,8 +1414,10 @@ public:
 
     //! Returnd the number of bytes received so far
     DLLLOCAL size_t getBytesReceived() const {
-        return bin ? bin->size() : 0;
+        return retrying ? retry_offset : (bin ? bin->size() : 0);
     }
+
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retrying; }
 
 private:
     //! Receives data; continuePoll() records received data on the socket
@@ -1409,6 +1426,8 @@ private:
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     bool io = false;
+    bool retrying = false;
+    size_t retry_offset = 0; // logical length while the remainder is reserved for an unfinished TLS read
 };
 
 class SocketRecvUntilBytesPollState : public AbstractPollState {
@@ -1437,6 +1456,8 @@ public:
         return bin ? bin->size() : 0;
     }
 
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retry_tls_read; }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
@@ -1446,6 +1467,7 @@ private:
     SimpleRefHolder<QoreStringNode> bin;
     const char* bytes;
     size_t size;
+    bool retry_tls_read = false;
     size_t matched = 0;
     //! The KMP failure table of the pattern, or nullptr when it is all 0 (issue #6325)
     /** fail[i] is the length of the longest proper prefix of bytes[0..i] that is also a suffix of it: after a

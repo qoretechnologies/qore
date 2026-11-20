@@ -60,6 +60,7 @@ class QoreIoUring;
 #include "qore/intern/WebSocketCloseRecord.h"
 
 // Forward declarations
+class SocketRecvSomePollState;
 struct qore_socket_private;
 
 //! HTTP/2 stream state
@@ -637,9 +638,10 @@ public:
     //! Receive and process data
     /** @param timeout_ms Timeout in milliseconds (-1 for infinite)
         @param xsink Exception sink for error reporting
+        @param poll_events returns the transport readiness mask on a wait, zero on progress
         @return 0 on success/timeout (data may have been received), 1 if connection was closed by peer, -1 on error
     */
-    DLLLOCAL int receiveData(int timeout_ms, ExceptionSink* xsink);
+    DLLLOCAL int receiveData(int timeout_ms, ExceptionSink* xsink, int* poll_events = nullptr);
 
     //! Returns true if there is pending request/response body data for stream_id
     DLLLOCAL bool hasPendingBodyData(int32_t stream_id) const;
@@ -1187,6 +1189,10 @@ private:
     // Send buffer
     std::vector<char> send_buffer;
     size_t send_offset = 0;
+    //! An incomplete SSL write is retried with its original data and length.
+    size_t tls_awaiting_drain = 0;
+    // The I/O thread owns this read across retries, including its TLS buffer.
+    std::unique_ptr<SocketRecvSomePollState> io_read;
     //! The absolute position in the outgoing byte stream of send_buffer[0]; advanced when consumed data is removed
     uint64_t send_buffer_base = 0;
 
