@@ -550,6 +550,33 @@ const char* qore_mongo_driver_connection_reason(const mongoc_uri_t* uri) {
     return nullptr;
 }
 
+const char* qore_mongo_gssapi_reason(const mongoc_uri_t* uri, QoreSandboxManager* sm, ExceptionSink* xsink) {
+    const char* mech = mongoc_uri_get_auth_mechanism(uri);
+    if (!sm || !mech || strcasecmp(mech, "GSSAPI")) {
+        return nullptr;
+    }
+    // unrestricted: the default policy allows, and there are no host, port or range rules (as for the krb5 module)
+    ReferenceHolder<QoreHashNode> config(sm->network().getConfiguration(xsink), xsink);
+    if (*xsink || !config) {
+        return "authMechanism GSSAPI (Kerberos contacts the KDCs itself)";
+    }
+    QoreValue policy = config->getKeyValue("default_policy");
+    bool default_allow = false;
+    if (policy.getType() == NT_STRING) {
+        QoreStringValueHelper policy_str(policy);
+        default_allow = !strcmp(policy_str->c_str(), "allow");
+    }
+    const QoreListNode* allowed_hosts = config->getKeyValue("allowed_hosts").get<const QoreListNode>();
+    const QoreListNode* allowed_ports = config->getKeyValue("allowed_ports").get<const QoreListNode>();
+    bool unrestricted = default_allow
+        && (!allowed_hosts || allowed_hosts->empty())
+        && (!allowed_ports || allowed_ports->empty())
+        && !config->getKeyValue("allowed_ranges_count").getAsBigInt()
+        && !config->getKeyValue("denied_ranges_count").getAsBigInt();
+    return unrestricted ? nullptr : "authMechanism GSSAPI with a restricted network policy (Kerberos contacts the "
+        "KDCs itself, with no check of the policy)";
+}
+
 // the TLS options of libmongoc that mongoc_ssl_opt_t::internal points to: libmongoc's _mongoc_internal_tls_opts_t
 // (mongoc-ssl-private.h, the same layout since libmongoc 1.16, checked for 2.2.2); the module's stream initiator
 // replaces libmongoc's, which sets them from the URI
@@ -585,7 +612,17 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     // the driver connects by itself for some authentication mechanisms, through no stream that the module creates and
     // so with no check of the sandbox: they are refused for sandboxed code before anything else is done
     if (sandboxed) {
-        if (const char* reason = qore_mongo_driver_connection_reason(uri)) {
+        const char* reason = qore_mongo_driver_connection_reason(uri);
+        // GSSAPI: each policy that governs the connection must be unrestricted (qoretechnologies/qore#6912)
+        ExceptionSink gss_xsink;
+        if (!reason && smh) {
+            reason = qore_mongo_gssapi_reason(uri, smh.get(), &gss_xsink);
+        }
+        if (!reason && creation_policy) {
+            reason = qore_mongo_gssapi_reason(uri, *creation_policy, &gss_xsink);
+        }
+        gss_xsink.clear();
+        if (reason) {
             bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                 "MongoDB connection denied by sandbox: NETWORK-ACCESS-DENIED: %s", reason);
             return nullptr;

@@ -62,7 +62,15 @@ public:
         // the authentication mechanisms that make the driver connect by itself are refused to sandboxed code when
         // the client is created, before any connection (qoretechnologies/qore#6911)
         if (creation.isSandboxed()) {
-            if (const char* reason = qore_mongo_driver_connection_reason(uri)) {
+            const char* reason = qore_mongo_driver_connection_reason(uri);
+            if (!reason) {
+                // GSSAPI is allowed only with an unrestricted network policy (qoretechnologies/qore#6912)
+                QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+                ExceptionSink gss_xsink;
+                reason = qore_mongo_gssapi_reason(uri, smh.get(), &gss_xsink);
+                gss_xsink.clear();
+            }
+            if (reason) {
                 xsink->raiseException("NETWORK-ACCESS-DENIED", "the sandbox of the calling program does not allow "
                     "%s: its connections cannot be checked against the sandbox's network policy", reason);
                 mongoc_uri_destroy(uri);

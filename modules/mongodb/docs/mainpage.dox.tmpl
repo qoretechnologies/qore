@@ -113,5 +113,8 @@ list<hash<auto>> docs = users.aggregate((
       sandboxed code connects with such a client
     - the TLS connections of sandboxed code never contact an OCSP responder: a stapled OCSP response is still
       checked (as with the \c tlsDisableOCSPEndpointCheck option)
+    - \c GSSAPI authentication, for which Kerberos contacts the KDCs itself, is allowed to sandboxed code only when its
+      network policy is unrestricted (as for the krb5 module): it is refused with \c NETWORK-ACCESS-DENIED otherwise,
+      when the client is created and when it connects
 
 */
