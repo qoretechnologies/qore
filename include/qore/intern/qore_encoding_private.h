@@ -115,8 +115,9 @@ struct qore_encoding_private {
     /** (the Shift_JIS forms, the encodings of the named multi-byte families of charset.cpp by any of their names, and
         the built-in \c "WINDOWS-936"), not those of a family found by probing its conversions, which are an
         approximation (ex: glibc's \c "T.61", whose diacritic prefixes make it look like a double-byte encoding, and
-        whose C1 control characters the family refuses); the input of a conversion from such an encoding is checked
-        with its character functions (see IconvHelper::isStructuredMultiByte()) (qore#6796)
+        whose C1 control characters the family refuses), or those given to QoreEncodingManager::add() by a module;
+        the input of a conversion from such an encoding is checked with its character functions (see
+        IconvHelper::isStructuredMultiByte()) (qore#6796)
     */
     bool defined_multibyte = false;
 

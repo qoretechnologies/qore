@@ -1588,6 +1588,17 @@ const struct {
     {"OSF00030010", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
     {"OSF0004000A", QORE_MULTIBYTE_FAMILY("EUC-KR", (EUC_get_char_len<true, false>), 2, false)},
     {"MSCP1361", QORE_MULTIBYTE_FAMILY("JOHAB", DBCS_get_char_len<&johab_bytes>, 2, false)},
+    // EUC-CN (GB2312): code set 1 only, no C1 character (see EUC_get_char_len())
+    {"GB2312", QORE_MULTIBYTE_FAMILY("EUC-CN", (EUC_get_char_len<false, false>), 2, false)},
+    {"EUC-CN", QORE_MULTIBYTE_FAMILY("EUC-CN", (EUC_get_char_len<false, false>), 2, false)},
+    {"CN-GB", QORE_MULTIBYTE_FAMILY("EUC-CN", (EUC_get_char_len<false, false>), 2, false)},
+    {"csGB2312", QORE_MULTIBYTE_FAMILY("EUC-CN", (EUC_get_char_len<false, false>), 2, false)},
+    {"GB18030", QORE_MULTIBYTE_FAMILY("GB18030", GB18030_get_char_len, 4, false)},
+    // glibc: GB13000 (GBK), CN-BIG5 (Big5), MSCP949 and OSF100203B5 (UHC)
+    {"GB13000", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<&gbk_bytes>, 2, false)},
+    {"CN-BIG5", QORE_MULTIBYTE_FAMILY("Big5", DBCS_get_char_len<&big5_bytes>, 2, false)},
+    {"MSCP949", QORE_MULTIBYTE_FAMILY("UHC", DBCS_get_char_len<&uhc_bytes>, 2, false)},
+    {"OSF100203B5", QORE_MULTIBYTE_FAMILY("UHC", DBCS_get_char_len<&uhc_bytes>, 2, false)},
 };
 #undef QORE_MULTIBYTE_FAMILY
 
@@ -1813,10 +1824,12 @@ void qore_encoding_private::probe() {
         return to.valid() && from.valid();
     });
     // Select the named Shift_JIS forms directly. A probe of the platform converter can accept malformed
-    // pairs or identify the extended Windows repertoire as Shift_JIS.
-    const bool windows_sjis = code == "CP932" || code == "Windows-31J";
-    if (windows_sjis || code == "Shift_JIS" || code == "SHIFT-JIS" || code == "SHIFTJIS" || code == "SJIS"
-            || code == "MS_KANJI" || code == "CSSHIFTJIS") {
+    // pairs or identify the extended Windows repertoire as Shift_JIS.  The name is matched as iconv implementations
+    // match it, also with conversion flags (ex: "SJIS//IGNORE") (qore#6796)
+    const std::string name = normalize_multibyte_family_name(code);
+    const bool windows_sjis = name == "CP932" || name == "WINDOWS31J" || name == "MS932" || name == "SJISWIN"
+        || name == "SJISOPEN" || name == "CSWINDOWS31J";
+    if (windows_sjis || name == "SHIFTJIS" || name == "SJIS" || name == "MSKANJI" || name == "CSSHIFTJIS") {
         setCharFunctions(windows_sjis ? form_functions::get<SJIS_get_char_len<true>, nullptr>(1, 2)
             : form_functions::get<SJIS_get_char_len<false>, nullptr>(1, 2));
         needs_boundary_check = true;
