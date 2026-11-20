@@ -5386,8 +5386,12 @@ public:
 
     //! returns true if \a m is a private method of another class than the class context, which the class context
     //! may not be able to call (see parseContextCannotCall())
+    /** The class of the method is the class context also when it is another copy of its declaration, as at run time
+        (isClassContext())
+    */
     DLLLOCAL static bool parseContextMayNotCall(const QoreMethod* m, const qore_class_private* class_ctx) {
-        return m && class_ctx && m->getAccess() == Private && qore_class_private::get(*m->getClass()) != class_ctx;
+        return m && class_ctx && m->getAccess() == Private
+            && !qore_class_private::get(*m->getClass())->isClassContext(class_ctx);
     }
 
     //! returns true if \a m is a private method that the class context cannot call at parse time (qore#6759)

@@ -32,6 +32,7 @@ class SandboxManagerTest inherits QUnit::Test {
         addTestCase("Program sandbox integration test", \testProgramSandboxIntegration());
         addTestCase("Dir sandbox integration test", \testDirSandboxIntegration());
         addTestCase("File open sandbox integration test", \testFileOpenSandboxIntegration());
+        addTestCase("interrupt requested before parse", \testInterruptBeforeParse());
         addTestCase("Runtime interrupt test", \testRuntimeInterrupt());
         addTestCase("Interrupt from thread test", \testInterruptFromThread());
         addTestCase("Sleep interrupt test", \testSleepInterrupt());
@@ -480,6 +481,21 @@ sub testMkdirInSandbox(string path) {
         p3.callFunction("testMkdirInSandbox", subdir);
         assertEq(True, is_dir("/tmp/" + subdir), "Dir mkdir inside sandbox works");
         rmdir("/tmp/" + subdir);
+    }
+
+    testInterruptBeforeParse() {
+        SandboxManager sm();
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        sm.requestInterrupt();
+
+        # Make the source long enough to cross the old UTF-8 validation polling interval.
+        p.parse(sprintf("%%modern\n#%256s\n", "") + "int sub run() { RWLock rw(); rw.readLock(); "
+            "rw.readUnlock(); return 42; }", "interrupt_before_parse");
+        assertTrue(sm.isInterruptRequested(), "parse preserves the pending interrupt");
+        assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("run",));
+        sm.clearInterrupt();
+        assertEq(42, p.callFunction("run"));
     }
 
     testRuntimeInterrupt() {

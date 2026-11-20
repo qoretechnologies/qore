@@ -11661,6 +11661,7 @@ int64 q_get_cancel_sandbox_lookup_count() {
 #endif
 
 // the check of qore_check_cancel() for the thread's data
+template <bool check_sandbox>
 static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const char* operation) {
     // a cleanup critical section must be able to complete on a cancelled or interrupted thread;
     // the pending request is deliberately left untouched here, so the first cancellation point
@@ -11675,7 +11676,7 @@ static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const
     int tid = td ? td->tid : 0;
     unsigned bits = thread_list.getCancelBits(tid);
     // an expired sandbox call budget first: it cannot be cleared by the thread and ends the whole call
-    if ((bits & QCR_SANDBOX_LIMIT) && td) {
+    if (check_sandbox && (bits & QCR_SANDBOX_LIMIT) && td) {
         if (const QoreSandboxCallBudget* budget = td->sandbox_budgets.findExpired()) {
             if (xsink) {
                 td->sandbox_budgets.raise(budget, xsink, operation);
@@ -11718,7 +11719,7 @@ static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const
     // check program-level interrupt: the governing sandbox, never suppressed by a policy barrier; the governing manager
     // is looked up only while an interrupt is requested of any manager, so a check with no request pending makes no
     // lookup (see qore_sandbox_interrupt_count)
-    if (!qore_sandbox_interrupt_count.load(std::memory_order_seq_cst)) {
+    if (!check_sandbox || !qore_sandbox_interrupt_count.load(std::memory_order_seq_cst)) {
         return false;
     }
 #ifdef DEBUG
@@ -11738,12 +11739,13 @@ static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const
     return false;
 }
 
-bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+template <bool check_sandbox>
+static bool qore_check_cancel_impl(ExceptionSink* xsink, const char* operation) {
 #ifdef DEBUG
     ++cancel_check_count;
 #endif
     ThreadData* td = thread_data.get();
-    if (!qore_check_cancel_intern(td, xsink, operation)) {
+    if (!qore_check_cancel_intern<check_sandbox>(td, xsink, operation)) {
         return false;
     }
     // a cancellation or an interrupt raised in the thread is counted: see qore_get_cancel_raise_count()
@@ -11751,6 +11753,14 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
         ++td->cancel_raise_count;
     }
     return true;
+}
+
+bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+    return qore_check_cancel_impl<true>(xsink, operation);
+}
+
+bool qore_check_thread_cancel(ExceptionSink& xsink, const char* operation) {
+    return qore_check_cancel_impl<false>(&xsink, operation);
 }
 
 unsigned qore_get_cancel_raise_count() {
