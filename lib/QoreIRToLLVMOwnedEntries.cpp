@@ -38,6 +38,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/QoreIRFrameCheck.h"
+#include "qore/intern/QoreValueEncoding.h"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
@@ -47,6 +48,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <string>
@@ -218,11 +220,15 @@ QoreIRToLLVM::FastEntryTakeOver QoreIRToLLVM::fastEntryTakeOverSlots(const Abstr
 }
 
 // documented in QoreIRToLLVM.h
-llvm::Function* QoreIRToLLVM::ownedFastEntry(llvm::Function* fast_fn,
-        const std::vector<llvm::Value*>& take_over_slots, llvm::Module& module) const {
+llvm::Function* QoreIRToLLVM::ownedFastEntry(llvm::Function* fast_fn, const FastEntryTakeOver& take_over,
+        llvm::Module& module, bool& releases_given) const {
+    if (std::none_of(take_over.slots.begin(), take_over.slots.end(), [](llvm::Value* v) { return v != nullptr; })) {
+        return nullptr;
+    }
+    releases_given = take_over.releases_given;
     std::string name = fast_fn->getName().str() + QORE_OWNED_FAST_ENTRY_INFIX;
-    name.reserve(name.size() + take_over_slots.size());
-    for (llvm::Value* slot : take_over_slots) {
+    name.reserve(name.size() + take_over.slots.size());
+    for (llvm::Value* slot : take_over.slots) {
         name += slot ? '1' : '0';
     }
     if (llvm::Function* fn = module.getFunction(name)) {
@@ -237,13 +243,40 @@ llvm::Function* QoreIRToLLVM::ownedFastEntry(llvm::Function* fast_fn,
 }
 
 // documented in QoreIRToLLVM.h
-void QoreIRToLLVM::emitFastEntryPrologueRelease(llvm::Module& module) {
+llvm::Value* QoreIRToLLVM::emitOwnedFastEntryCall(llvm::Function* owned_fn, const FastEntryTakeOver& take_over,
+        const std::vector<llvm::Value*>& call_args) {
+    // the entry takes over the references of the temporaries whose slots are cleared here: it releases them when the
+    // parameters are written or when it returns, and the caller's landing pad finds the slots empty if it raises an
+    // exception
+    for (llvm::Value* slot : take_over.slots) {
+        if (slot) {
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
+        }
+    }
+    return builder->CreateCall(owned_fn, call_args);
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitFastEntryEarlyExitReleases(llvm::Module& module, llvm::BasicBlock* stack_overflow_bb) {
+    if (fast_entry_param_allocas.empty() && fast_entry_converted_arg_refs.empty()) {
+        return;
+    }
+    llvm::IRBuilderBase::InsertPoint saved_ip = builder->saveIP();
     auto decref = module.getOrInsertFunction("qore_rt_decref",
         llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    for (llvm::AllocaInst* alloca : fast_entry_param_allocas) {
-        builder->CreateCall(decref, {builder->CreateLoad(i64_type, alloca), xsink_arg});
+    for (llvm::BasicBlock* bb : {stack_overflow_bb, debug_fast_entry_end}) {
+        llvm::Instruction* exit = bb ? bb->getTerminator() : nullptr;
+        if (!exit) {
+            continue;
+        }
+        assert(llvm::isa<llvm::ReturnInst>(exit));
+        builder->SetInsertPoint(exit);
+        for (llvm::AllocaInst* alloca : fast_entry_param_allocas) {
+            builder->CreateCall(decref, {builder->CreateLoad(i64_type, alloca), xsink_arg});
+        }
+        for (llvm::Value* arg : fast_entry_converted_arg_refs) {
+            builder->CreateCall(decref, {arg, xsink_arg});
+        }
     }
-    for (llvm::Value* arg : fast_entry_converted_arg_refs) {
-        builder->CreateCall(decref, {arg, xsink_arg});
-    }
+    builder->restoreIP(saved_ip);
 }

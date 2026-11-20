@@ -10262,7 +10262,8 @@ bool QoreIRToLLVM::emitAOTDebugFastEntry(llvm::Module& module, llvm::Function& f
         builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {boxed, xsink_arg});
     }
-    debug_fast_entry_ret = builder->CreateRet(rv);
+    debug_fast_entry_end = builder->GetInsertBlock();
+    builder->CreateRet(rv);
     return true;
 }
 
@@ -13237,15 +13238,9 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     // the call hands the references of the temporaries in take_over over to the entry that takes them over
     // (issue #6105), which is never the entry of another module or a summary of the callee's body
     assert(!take_over || (!cross_module && !callee_info.preloaded_fast_entry));
-    llvm::Function* owned_fn = nullptr;
     // whether the cleanup array holds a given slot that the call does not hand over, which is released after it
     bool releases_given_slots = has_arg_cleanups;
-    if (take_over) {
-        if (std::any_of(take_over->slots.begin(), take_over->slots.end(), [](llvm::Value* v) { return v; })) {
-            owned_fn = ownedFastEntry(fast_fn, take_over->slots, module);
-            releases_given_slots = take_over->releases_given;
-        }
-    }
+    llvm::Function* owned_fn = take_over ? ownedFastEntry(fast_fn, *take_over, module, releases_given_slots) : nullptr;
     assert(cross_module ? !fast_fn && !object_base && !callee_info.context_independent_fast_entry : fast_fn != nullptr);
     auto ctx_helper = module.getOrInsertFunction(
         "qore_rt_try_get_aot_call_target_context",
@@ -13435,15 +13430,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         ? emitPushNativeFunctionContext(module, llvm_func) : nullptr;
     llvm::Value* fast_result = nullptr;
     if (owned_fn) {
-        // the entry takes over the references of the temporaries whose slots are cleared here: it releases them
-        // when the parameters are written or when it returns, and the caller's landing pad finds the slots empty
-        // if it raises an exception
-        for (llvm::Value* slot : take_over->slots) {
-            if (slot) {
-                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
-            }
-        }
-        fast_result = builder->CreateCall(owned_fn, call_args);
+        fast_result = emitOwnedFastEntryCall(owned_fn, *take_over, call_args);
     } else {
         fast_result = cross_module
             ? emitCrossModuleFastEntryCall(callee_info, cross_module_fn, call_args)
@@ -16156,7 +16143,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     fast_entry_param_allocas.clear();
     fast_entry_param_allocas_by_local.clear();
     fast_entry_converted_arg_refs.clear();
-    debug_fast_entry_ret = nullptr;
+    debug_fast_entry_end = nullptr;
     owned_ir_local_allocas.clear();
     owned_ir_local_alloca_keys.clear();
     invoke_result_allocas.clear();
@@ -16417,17 +16404,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         preCreateLocalAllocas(module, llvm_func);
 
         // the paths that leave a fast entry after its prologue took references to the arguments and before its body
-        // runs release them: the entry that takes its arguments over holds the caller's references (issue #6105)
-        if (fast_entry_args && (!fast_entry_param_allocas.empty() || !fast_entry_converted_arg_refs.empty())) {
-            llvm::IRBuilderBase::InsertPoint saved_ip = builder->saveIP();
-            for (llvm::Instruction* exit : {stack_overflow_bb ? stack_overflow_bb->getTerminator() : nullptr,
-                    static_cast<llvm::Instruction*>(debug_fast_entry_ret)}) {
-                if (exit) {
-                    builder->SetInsertPoint(exit);
-                    emitFastEntryPrologueRelease(module);
-                }
-            }
-            builder->restoreIP(saved_ip);
+        // runs release them (issue #6105)
+        if (fast_entry_args) {
+            emitFastEntryEarlyExitReleases(module, stack_overflow_bb);
         }
 
         // Save on_block_exit handler count at function entry so we can
@@ -21242,7 +21221,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCondBr(is_int, int_bb, check_bb, llvm::MDBuilder(ctx).createBranchWeights(1000, 1));
                     builder->SetInsertPoint(int_bb);
                     // sign-extend the 48-bit payload
-                    llvm::Value* int_val = builder->CreateAShr(builder->CreateShl(val, 16), 16);
+                    llvm::Value* int_val = builder->CreateAShr(builder->CreateShl(val, 16),
+                        llvm::ConstantInt::get(i64_type, 16));
                     llvm::BasicBlock* int_end = builder->GetInsertBlock();
                     builder->CreateBr(merge_bb);
                     builder->SetInsertPoint(check_bb);

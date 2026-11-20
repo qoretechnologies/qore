@@ -283,6 +283,9 @@ public:
 private:
     llvm::LLVMContext& ctx;
 
+    //! The arguments that a call hands over to the fast entry that takes its arguments over (defined below)
+    struct FastEntryTakeOver;
+
     // Type cache
     llvm::Type* i64_type = nullptr;
     llvm::Type* i32_type = nullptr;
@@ -668,12 +671,15 @@ private:
     //! the arguments of native locals that the prologue of a fast entry took a reference to, released at exit with
     //! preinstantiated_entry_loads
     std::vector<llvm::Value*> fast_entry_converted_arg_refs;
-    //! the return of the debugger entry of an AOT fast entry (emitAOTDebugFastEntry())
-    llvm::ReturnInst* debug_fast_entry_ret = nullptr;
-    //! Emits the release of the references that the prologue of a fast entry took to its arguments at the insert
-    //! point, for a path that leaves the entry before its body runs (a stack overflow, the debugger entry; issue
-    //! #6105)
-    DLLLOCAL void emitFastEntryPrologueRelease(llvm::Module& module);
+    //! the block that returns from the debugger entry of an AOT fast entry (emitAOTDebugFastEntry())
+    llvm::BasicBlock* debug_fast_entry_end = nullptr;
+    //! Emits the release of the references that the prologue of a fast entry took to its arguments in the paths that
+    //! leave the entry before its body runs: \a stack_overflow_bb and the debugger entry (issue #6105)
+    DLLLOCAL void emitFastEntryEarlyExitReleases(llvm::Module& module, llvm::BasicBlock* stack_overflow_bb);
+    //! Emits the call of the fast entry \a owned_fn that takes over the arguments of \a take_over: the slots that it
+    //! hands over are cleared right before the call (issue #6105)
+    DLLLOCAL llvm::Value* emitOwnedFastEntryCall(llvm::Function* owned_fn, const FastEntryTakeOver& take_over,
+            const std::vector<llvm::Value*>& call_args);
 
     // Boxed IR-only locals that are neither fast-entry params nor backed by a
     // pre-instantiated cleanup slot. Their alloca owns the current value and
@@ -1329,9 +1335,10 @@ private:
     DLLLOCAL FastEntryTakeOver fastEntryTakeOverSlots(const AbstractQoreFunctionVariant* variant,
             const BatchCalleeInfo& info, const std::vector<llvm::Value*>& given_slots) const;
     //! Returns the declaration of the copy of \a fast_fn that takes over the arguments of the parameters with a slot in
-    //! \a take_over_slots (fastEntryTakeOverSlots()), which materializeOwnedFastEntries() defines (issue #6105)
-    DLLLOCAL llvm::Function* ownedFastEntry(llvm::Function* fast_fn, const std::vector<llvm::Value*>& take_over_slots,
-            llvm::Module& module) const;
+    //! \a take_over (fastEntryTakeOverSlots()), which materializeOwnedFastEntries() defines, or nullptr if the call
+    //! hands nothing over; sets \a releases_given if the call then releases a given slot (issue #6105)
+    DLLLOCAL llvm::Function* ownedFastEntry(llvm::Function* fast_fn, const FastEntryTakeOver& take_over,
+            llvm::Module& module, bool& releases_given) const;
     //! Returns the slot of the reference that the read of argument \a value_id through a reference took, if the call
     //! \a inst gives it to the callee (buildArgCleanupArray()), or nullptr
     /** The value read through a reference by a local with a reference flag is kept in the slot of its read site
