@@ -589,16 +589,18 @@ class KilledRunnerTest(unittest.TestCase):
                         os.close(fd)
 
 
-# The driver of OrphanedWatchdogTest (arguments: the tree, the runner, and 1 to have a process take the test's process
-# ID).  It runs a runner whose test blocks, kills the runner alone with SIGKILL, as a kill by process ID does (the
-# runner's trap, which stops the watchdog, does not run then), lets the test end, and then lets the time limit of the
-# orphaned watchdog pass: the tree's stand-in timeout reads it from the latch.  With 1, the driver is process 1 of a
-# PID namespace of its own (Linux), which the test is reparented to; it reaps the test and has a process take its ID
-# (through ns_last_pid) before the limit passes, as the watchdog subshell of a test of another run did (#6875).  That
-# process ignores SIGABRT, so that a watchdog that signals it sends it SIGKILL too.  Prints the result as JSON.
-ORPHAN_DRIVER = r'''
+# The driver of OrphanedWatchdogTest (arguments: the tree, the runner, the mode, and the seconds it waits for a report).
+# It runs a runner whose test blocks, kills the runner alone with SIGKILL, as a kill by process ID does (the runner's
+# trap, which stops the watchdog, does not run then), lets the test end, and then lets the time limit of the orphaned
+# watchdog pass: the tree's stand-in timeout reads it from the latch.  Modes 1 and 2 need a PID namespace of the
+# driver's own (Linux), where it is process 1, which the test is reparented to: it reaps the test, and a shell starts a
+# process that takes the test's ID (through ns_last_pid) before the limit passes, as the watchdog subshell of a test
+# of another run did (#6875).  In mode 2 that shell takes the runner's ID first, so that the process is a child of the
+# runner's ID, as when another runner has taken it.  The process ignores SIGABRT, so that a watchdog that signals it
+# sends it SIGKILL too.  Whatever happens, the driver releases the test and the latch when it ends.  Prints the result
+# as JSON.
+ORPHAN_DRIVER = r"""
 import fcntl
-import json
 import json
 import os
 import select
@@ -606,15 +608,15 @@ import signal
 import subprocess
 import sys
 
-tree, runner_sh, reuse = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
-result = {"test_pid": None, "victim_pid": None, "victim_signal": None, "victim_exit": None, "left": False}
+tree, runner_sh, mode, wait_secs = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+result = {"test_pid": None, "victim_pid": None, "victim_status": None, "left": False}
 
 
 def read_line(fd, what):
-    """Reads whole lines (a write of the ready pipe is one line, and two writes may be read at once)"""
+    # Reads whole lines (a write of a pipe here is one line, and two writes may be read at once)
     line = b""
     while not line.endswith(b"\n"):
-        readable, _, _ = select.select([fd], [], [], 120)
+        readable, _, _ = select.select([fd], [], [], wait_secs)
         if not readable:
             raise SystemExit("timed out waiting for " + what)
         data = os.read(fd, 100)
@@ -625,9 +627,9 @@ def read_line(fd, what):
 
 
 def wait_for_end(fd, what):
-    """Waits until no process holds the write end of the pipe or FIFO"""
+    # Waits until no process holds the write end of the pipe or FIFO
     while True:
-        readable, _, _ = select.select([fd], [], [], 120)
+        readable, _, _ = select.select([fd], [], [], wait_secs)
         if not readable:
             raise SystemExit("timed out waiting for " + what)
         if not os.read(fd, 100):
@@ -648,79 +650,111 @@ def children(parent):
     return pids
 
 
-# the test reports its process ID through the ready pipe; every process of the run inherits the write end of the alive
-# pipe, which is at its end once all of them have ended
-ready_r, ready_w = os.pipe()
-alive_r, alive_w = os.pipe()
-write_ends = []
-for fd in (ready_w, alive_w):
-    write_ends.append(fcntl.fcntl(fd, fcntl.F_DUPFD, 50))
-    os.close(fd)
-# only the test opens the test-alive FIFO for writing: it is at its end once the test has ended
-test_alive = os.open(os.path.join(tree, "test-alive"), os.O_RDONLY | os.O_NONBLOCK)
-with open(os.path.join(tree, "runner.out"), "wb") as out:
-    runner = subprocess.Popen(["sh", runner_sh], cwd=tree, stdout=out, stderr=subprocess.STDOUT,
-                              pass_fds=tuple(write_ends))
-for fd in write_ends:
-    os.close(fd)
-# the test reports its ID, and the watchdog that it has started its read (see the stand-in timeout), in either order
-reports = []
-while len(reports) < 2:
-    reports += read_line(ready_r, "the reports of the test and the watchdog").splitlines()
-result["test_pid"] = test_pid = int([r for r in reports if r.startswith("running ")][0].split()[1])
-watchdogs = [pid for pid in children(runner.pid) if pid != test_pid] if reuse else []
-# the runner is killed alone: its watchdog runs on, orphaned
-os.kill(runner.pid, signal.SIGKILL)
-runner.wait()
-with open(os.path.join(tree, "hold"), "w") as f:
-    f.write("end\n")
-fl = fcntl.fcntl(test_alive, fcntl.F_GETFL)
-fcntl.fcntl(test_alive, fcntl.F_SETFL, fl & ~os.O_NONBLOCK)
-wait_for_end(test_alive, "the end of the test")
-victim = None
-if reuse:
-    # the test has been reparented to this process: once it is reaped, its ID is free
-    os.waitpid(test_pid, 0)
+def set_next_pid(pid):
     with open("/proc/sys/kernel/ns_last_pid", "w") as f:
-        f.write(str(test_pid - 1))
-    victim_r, victim_w = os.pipe()
-    victim = subprocess.Popen([sys.executable, "-c", "import os, signal; signal.signal(signal.SIGABRT, signal.SIG_IGN);"
-                               " os.write(%d, b'ready\\n'); signal.pause()" % victim_w], pass_fds=(victim_w,))
-    os.close(victim_w)
-    result["victim_pid"] = victim.pid
-    read_line(victim_r, "the report of the process that took the test's ID")
-# the watchdog's time limit passes
-with open(os.path.join(tree, "limit-latch"), "w") as f:
-    f.write("limit\n")
-if reuse:
-    # until the process that took the test's ID or the watchdog ends
-    while watchdogs:
-        pid, status = os.waitpid(-1, 0)
-        if pid == victim.pid:
-            if os.WIFSIGNALED(status):
-                result["victim_signal"] = os.WTERMSIG(status)
-            else:
-                result["victim_exit"] = os.WEXITSTATUS(status)
-            victim = None
-            break
-        if pid in watchdogs:
-            watchdogs.remove(pid)
-    if victim is not None:
-        # the watchdog has ended, but a process it killed may not have ended yet: SIGTERM ends one that is alive, and
-        # one that has been sent SIGKILL ends by that (the kernel sets its exit status when the signal is sent)
-        victim.terminate()
-        _, status = os.waitpid(victim.pid, 0)
-        if os.WIFSIGNALED(status) and os.WTERMSIG(status) != signal.SIGTERM:
-            result["victim_signal"] = os.WTERMSIG(status)
-        elif not os.WIFSIGNALED(status):
-            result["victim_exit"] = os.WEXITSTATUS(status)
-# every process of the run ends
-readable, _, _ = select.select([alive_r], [], [], 120)
-result["left"] = not readable or os.read(alive_r, 1) != b""
-with open(os.path.join(tree, "runner.out")) as f:
-    result["output"] = f.read()
-print(json.dumps(result))
-'''
+        f.write(str(pid - 1))
+
+
+def release(name, line):
+    # Writes the line to the FIFO if a process reads it
+    try:
+        fd = os.open(os.path.join(tree, name), os.O_WRONLY | os.O_NONBLOCK)
+    except OSError:
+        return
+    try:
+        os.write(fd, line)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def run():
+    # the test reports its process ID through the ready pipe; every process of the run inherits the write end of the
+    # alive pipe, which is at its end once all of them have ended
+    ready_r, ready_w = os.pipe()
+    alive_r, alive_w = os.pipe()
+    write_ends = []
+    for fd in (ready_w, alive_w):
+        write_ends.append(fcntl.fcntl(fd, fcntl.F_DUPFD, 50))
+        os.close(fd)
+    # only the test opens the test-alive FIFO for writing: it is at its end once the test has ended
+    test_alive = os.open(os.path.join(tree, "test-alive"), os.O_RDONLY | os.O_NONBLOCK)
+    with open(os.path.join(tree, "runner.out"), "wb") as out:
+        runner = subprocess.Popen(["sh", runner_sh], cwd=tree, stdout=out, stderr=subprocess.STDOUT,
+                                  pass_fds=tuple(write_ends))
+    for fd in write_ends:
+        os.close(fd)
+    # the test reports its ID, and the watchdog that it has started its read (see the stand-in timeout), in either
+    # order
+    reports = []
+    while len(reports) < 2:
+        reports += read_line(ready_r, "the reports of the test and the watchdog").splitlines()
+    result["test_pid"] = test_pid = int([r for r in reports if r.startswith("running ")][0].split()[1])
+    watchdogs = [pid for pid in children(runner.pid) if pid != test_pid] if mode else []
+    # the runner is killed alone: its watchdog runs on, orphaned
+    os.kill(runner.pid, signal.SIGKILL)
+    runner.wait()
+    with open(os.path.join(tree, "hold"), "w") as f:
+        f.write("end\n")
+    fl = fcntl.fcntl(test_alive, fcntl.F_GETFL)
+    fcntl.fcntl(test_alive, fcntl.F_SETFL, fl & ~os.O_NONBLOCK)
+    wait_for_end(test_alive, "the end of the test")
+    shell = None
+    if mode:
+        # the test has been reparented to this process: once it is reaped, its ID is free
+        os.waitpid(test_pid, 0)
+        # the shell waits for "go" (its input), starts the process, which reports its ID (the shell's error output),
+        # and reports how the process ended (its output)
+        go_r, go_w = os.pipe()
+        status_r, status_w = os.pipe()
+        report_r, report_w = os.pipe()
+        if mode == 2:
+            set_next_pid(runner.pid)
+        victim = ("import os, signal; signal.signal(signal.SIGABRT, signal.SIG_IGN); "
+                  "os.write(2, ('ready %d\\n' % os.getpid()).encode()); signal.pause()")
+        shell = subprocess.Popen(["sh", "-c", 'read go; "$0" -c "$1" & v=$!; wait $v; echo "status $?"',
+                                  sys.executable, victim], stdin=go_r, stdout=status_w, stderr=report_w)
+        for fd in (go_r, status_w, report_w):
+            os.close(fd)
+        result["shell_pid"] = shell.pid
+        result["runner_pid"] = runner.pid
+        set_next_pid(test_pid)
+        os.write(go_w, b"go\n")
+        os.close(go_w)
+        result["victim_pid"] = victim_pid = int(read_line(report_r, "the report of the process").split()[1])
+    # the watchdog's time limit passes
+    with open(os.path.join(tree, "limit-latch"), "w") as f:
+        f.write("limit\n")
+    if mode:
+        # until the watchdog ends (the shell ends after the process)
+        while watchdogs:
+            pid, _ = os.waitpid(-1, 0)
+            if pid in watchdogs:
+                watchdogs.remove(pid)
+        # a process that the watchdog has sent SIGKILL may not have ended yet: SIGTERM ends one that is alive, and one
+        # that has been sent SIGKILL ends by that (the kernel sets its exit status when the signal is sent)
+        try:
+            os.kill(victim_pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        result["victim_status"] = int(read_line(status_r, "the status of the process").split()[1])
+        shell.wait()
+    # every process of the run ends
+    readable, _, _ = select.select([alive_r], [], [], wait_secs)
+    result["left"] = not readable or os.read(alive_r, 1) != b""
+
+
+try:
+    run()
+finally:
+    # a case that fails leaves nothing waiting: the test and the watchdog's stand-in timeout are released
+    release("hold", b"end\n")
+    release("limit-latch", b"limit\n")
+    with open(os.path.join(tree, "runner.out")) as f:
+        result["output"] = f.read()
+    print(json.dumps(result))
+"""
 
 
 def can_reuse_process_ids():
@@ -747,7 +781,17 @@ class OrphanedWatchdogTest(unittest.TestCase):
     "Killed: 9", and its run as a watchdog error with exit code 137).
     """
 
-    def run_orphan(self, reuse):
+    TEST = """\
+        # test-timeout: 600
+        import os
+        alive = open(os.path.join(os.environ["TREE"], "test-alive"), "w")
+        os.write(50, ("running %d\\n" % os.getpid()).encode())
+        open(os.path.join(os.environ["TREE"], "hold")).read()
+        """
+
+    def run_orphan(self, mode, test=TEST, wait=120):
+        """Runs the driver in a session of its own, and returns its exit code and its result; every process of the
+        session has ended then, whatever the driver did (see end_session())"""
         with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
             tree = RunnerTree(directory)
             for name in ("hold", "test-alive", "limit-latch"):
@@ -770,21 +814,27 @@ class OrphanedWatchdogTest(unittest.TestCase):
                 esac
                 exec '{real_timeout}' "$@"
                 """)
-            tree.add_test("ends.qtest", """\
-                # test-timeout: 600
-                import os
-                alive = open(os.path.join(os.environ["TREE"], "test-alive"), "w")
-                os.write(50, ("running %d\\n" % os.getpid()).encode())
-                open(os.path.join(os.environ["TREE"], "hold")).read()
-                """)
+            tree.add_test("ends.qtest", test)
             driver = tree.root / "driver.py"
             driver.write_text(ORPHAN_DRIVER)
-            command = [sys.executable, "-B", str(driver), str(tree.root), str(RUN_TESTS), "1" if reuse else "0"]
-            if reuse:
+            command = [sys.executable, "-B", str(driver), str(tree.root), str(RUN_TESTS), str(mode), str(wait)]
+            if mode:
                 command[:0] = ["unshare", "-Urpf", "--mount-proc"]
-            result = run_in_session(command, 300, cwd=tree.root, env=tree.env(), capture_output=True, text=True)
-            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-            return json.loads(result.stdout)
+            process = start_in_session(command, cwd=tree.root, env=tree.env(), stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, text=True)
+            try:
+                stdout, stderr = process.communicate(timeout=300)
+            finally:
+                end_session(process)
+            self.assertEqual([], session_processes(process.pid), "a process of the case is left")
+            result = json.loads(stdout) if stdout.strip() else {"output": ""}
+            result["driver"] = stdout + stderr
+            return process.returncode, result
+
+    def run_and_check(self, mode):
+        rc, result = self.run_orphan(mode)
+        self.assertEqual(0, rc, result["driver"])
+        return result
 
     def assert_nothing_sent(self, result):
         output = result["output"]
@@ -793,18 +843,37 @@ class OrphanedWatchdogTest(unittest.TestCase):
         self.assertFalse(result["left"], "a process of the run is left: " + output)
 
     def test_an_orphaned_watchdog_does_not_signal_a_test_that_has_ended(self):
-        self.assert_nothing_sent(self.run_orphan(False))
+        self.assert_nothing_sent(self.run_and_check(0))
+
+    def test_a_failing_case_leaves_no_process(self):
+        # the test ends without reporting, so the driver fails: the runner, its watchdog and its stand-in timeout,
+        # which waits for the latch, are ended all the same
+        rc, result = self.run_orphan(0, test="# test-timeout: 600\n", wait=5)
+        self.assertNotEqual(0, rc, result["driver"])
+        self.assertIn("timed out waiting for the reports of the test and the watchdog", result["driver"])
+
+    def assert_process_not_signalled(self, result):
+        self.assertEqual(result["test_pid"], result["victim_pid"],
+                         "the process did not get the test's ID: the case cannot check anything")
+        # 143: the case's own SIGTERM ended it
+        self.assertEqual(143, result["victim_status"], "the watchdog signalled the process that took the test's ID: "
+                         + result["output"])
+        self.assert_nothing_sent(result)
 
     @unittest.skipUnless(can_reuse_process_ids(), "a process ID is chosen through ns_last_pid in a PID namespace of "
                          "its own (Linux, unshare, user namespaces)")
     def test_an_orphaned_watchdog_does_not_kill_a_process_that_took_the_test_s_id(self):
-        result = self.run_orphan(True)
-        self.assertEqual(result["test_pid"], result["victim_pid"],
-                         "the process did not get the test's ID: the case cannot check anything")
-        self.assertIsNone(result["victim_signal"], "the watchdog signalled the process that took the test's ID: "
-                          + result["output"])
-        self.assertIsNone(result["victim_exit"], result["output"])
-        self.assert_nothing_sent(result)
+        self.assert_process_not_signalled(self.run_and_check(1))
+
+    @unittest.skipUnless(can_reuse_process_ids(), "a process ID is chosen through ns_last_pid in a PID namespace of "
+                         "its own (Linux, unshare, user namespaces)")
+    def test_an_orphaned_watchdog_does_not_kill_a_child_of_a_shell_that_took_the_runner_s_id(self):
+        # the process is the child of the runner's process ID, as when another runner has taken it, so a check of the
+        # test's parent alone passes
+        result = self.run_and_check(2)
+        self.assertEqual(result["runner_pid"], result["shell_pid"],
+                         "the shell did not get the runner's ID: the case cannot check anything")
+        self.assert_process_not_signalled(result)
 
 
 class FailedFifoTest(unittest.TestCase):
@@ -957,6 +1026,7 @@ class WatchdogReadTest(unittest.TestCase):
                 TEST_SIGNALS_ENABLED={signals_enabled}
                 TEST_EVENT_FIFO="$PWD/events"
                 RUNNER_SHELL_PID=$$
+                TEST_EVENT_DIR="$PWD"
                 TEST_PROCESS_MARK=watchdog-read-test.$$
                 """) + watchdog_functions() + textwrap.dedent(read_test_event) + textwrap.dedent(f"""\
                 run_with_watchdog {limit} {command}

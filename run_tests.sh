@@ -1190,7 +1190,15 @@ test_has_mark() {
     if [ -r /proc/self/environ ]; then
         tr '\0' '\n' < /proc/$1/environ 2>/dev/null | grep -qx "QORE_TEST_PROCESS_MARK=$2"
     else
-        ps -E -ww -o command= -p $1 2>/dev/null | grep -q "QORE_TEST_PROCESS_MARK=$2\( \|$\)"
+        # ps -E prints the environment after the arguments: they are removed first, so that a process whose arguments
+        # name the mark (the "env QORE_TEST_PROCESS_MARK=..." that starts a test) does not count.  If the process
+        # executes another program between the two calls, its arguments are not removed, and are searched too.
+        mark_args=`ps -ww -o command= -p $1 2>/dev/null`
+        mark_all=`ps -E -ww -o command= -p $1 2>/dev/null`
+        case " ${mark_all#"$mark_args"} " in
+            *" QORE_TEST_PROCESS_MARK=$2 "*) return 0 ;;
+        esac
+        return 1
     fi
 }
 
@@ -1693,25 +1701,44 @@ event $1
             return 0
         }
 
-        # Returns 0 if test_pid is still the test's process: the child of the runner's shell that the shell has not
-        # waited for (test_is_shell_child()), or, once that shell has ended, a process with the test's
+        # The watchdog's own process ID (a subshell's $$ is the runner's), for watchdog_check_test(): its parent is the
+        # runner's shell while that shell runs; "sh -c" is its child, as a command substitution would run it in one more
+        # subshell
+        watchdog_self=""
+        if sh -c 'echo $PPID' > "$TEST_EVENT_DIR/watchdog-self" 2>/dev/null; then
+            read -r watchdog_self < "$TEST_EVENT_DIR/watchdog-self"
+        fi
+        rm -f "$TEST_EVENT_DIR/watchdog-self"
+
+        # Returns 0 if test_pid is still the test's process: while the runner's shell runs (it is still the watchdog's
+        # parent), its child that it has not waited for (test_is_shell_child()); and always a process with the test's
         # QORE_TEST_PROCESS_MARK (test_has_mark()).  A shell that is killed with SIGKILL (a kill by process ID) runs no
         # trap, so nothing stops its watchdog (see runner_signaled()) or tells it that the test has ended; at the
         # test's time limit, the test's process ID may then be another process's, which must not be signalled
-        # (qore#6875: the watchdog subshell of a test of another run was killed with SIGKILL).  Otherwise this prints
-        # that nothing is sent, and the watchdog ends.  The runner's shell may wait for the test between the check and
-        # the signal (it then writes "exit"): the ID would have to be taken by another process in that instant.
+        # (qore#6875: the watchdog subshell of a test of another run was killed with SIGKILL).  Once that shell has
+        # ended, its process ID may be another shell's too, whose child may have the test's ID: only the mark counts
+        # then.  So an orphaned test that hangs is still ended, unless its process shows no environment (macOS shows
+        # none of a system binary, ps -E: a test that is a shell script, for example), which is then left running.
+        # Otherwise this prints that nothing is sent, and the watchdog ends.  The runner's shell may wait for the test
+        # between the check and the signal (it then writes "exit"): the ID would have to be taken by another process in
+        # that instant.
         watchdog_check_test() {
-            if test_is_shell_child $test_pid || test_has_mark $test_pid "$TEST_PROCESS_MARK"; then
+            if [ -n "$watchdog_self" ] && test_is_shell_child $watchdog_self && test_is_shell_child $test_pid; then
+                return 0
+            fi
+            if test_has_mark $test_pid "$TEST_PROCESS_MARK"; then
                 return 0
             fi
             echo "*** process $test_pid is no longer the test: nothing is sent to it ***"
             exit $status
         }
 
-        # Sends the given signal to the test (see watchdog_check_test())
+        # Sends the given signal to the test, after the message given, if any, once watchdog_check_test() has passed
         watchdog_signal() {
             watchdog_check_test
+            if [ -n "$2" ]; then
+                echo "$2"
+            fi
             kill -$1 $test_pid 2>/dev/null
         }
 
@@ -1724,22 +1751,23 @@ event $1
         status=$((status | 1))
         watchdog_check_test
         print_test_threads "at its time limit"
+        timeout_message=""
         if [ $TEST_SIGNALS_ENABLED -eq 0 ]; then
-            echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent (signal handling is" \
-                "disabled) ***"
+            timeout_message="*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent (signal handling is \
+disabled) ***"
         elif usr1_cannot_end_test; then
-            echo "*** the test exceeded its ${limit}s limit: SIGUSR1 sent for the call stacks of its threads ***"
-            watchdog_signal USR1
+            watchdog_signal USR1 \
+                "*** the test exceeded its ${limit}s limit: SIGUSR1 sent for the call stacks of its threads ***"
             if watchdog_wait $TEST_STACK_DUMP_WAIT dumped exit && watchdog_got exit; then
                 exit $status
             fi
             # again after the wait for the call stacks, so that the CPU time each thread used meanwhile shows
             print_test_threads "before SIG$TEST_TIMEOUT_SIGNAL"
         else
-            echo "*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent at once, as it does not" \
-                "handle SIGUSR1, which would end it without its call stacks or a core dump ***"
+            timeout_message="*** the test exceeded its ${limit}s limit: SIG$TEST_TIMEOUT_SIGNAL sent at once, as it \
+does not handle SIGUSR1, which would end it without its call stacks or a core dump ***"
         fi
-        watchdog_signal $TEST_TIMEOUT_SIGNAL
+        watchdog_signal $TEST_TIMEOUT_SIGNAL "$timeout_message"
         if ! watchdog_wait 60 exit; then
             watchdog_signal KILL
         fi
