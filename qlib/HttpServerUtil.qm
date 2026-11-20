@@ -1970,6 +1970,10 @@ public class AbstractLogger {
 }
 
 #! this abstract class defines the public interface of the private HttpListener class defined in the HttpServer module
+/** The handlers of a listener's requests and connections get an object of this type for the listener, which has only
+    the methods of this class: not the listener itself, whose other methods are for the server only.  The object is
+    the same for the whole life of the listener, so a handler can keep it and use it later, also on another thread.
+*/
 public class HttpListenerInterface inherits AbstractLogger {
     #! method to log a response message
     /** @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
@@ -1982,6 +1986,18 @@ public class HttpListenerInterface inherits AbstractLogger {
     #! Removes a dedicated socket handler from the listener
     removeExternalDedicatedSocket(softstring id) {
         throw "UNIMPLEMENTED";
+    }
+
+    #! Removes the given dedicated socket handler from the listener, if it is the handler of the given connection
+    /** @param id the ID of the connection
+        @param handler the handler of the connection; the handler of the connection is removed only if it is this one
+
+        This implementation calls removeExternalDedicatedSocket(softstring)
+
+        @since HttpServerUtil 1.6
+    */
+    removeExternalDedicatedSocket(softstring id, AbstractHttpSocketHandlerInterface handler) {
+        removeExternalDedicatedSocket(id);
     }
 
     #! Returns the maximum size in bytes of a decompressed request body for this listener
@@ -4884,7 +4900,8 @@ public class AbstractHttpSocketHandlerInterface {
         # return a closure to confirm that the connection has been closed
         return sub () {
             handlerStopped(lid);
-            listener.removeExternalDedicatedSocket(cid);
+            # only this handler's own connection is removed (qore#6921)
+            listener.removeExternalDedicatedSocket(cid, self);
             s.shutdown();
             s.close();
         };

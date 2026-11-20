@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpServerHandlerListenerViewTest
+
+#! A trusted handler: keeps the listener object of one request and uses it in a later one, also on another thread
+class KeepingHandler inherits AbstractHttpRequestHandler {
+    public {
+        *HttpListenerInterface kept;
+        Queue results();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        if (!kept) {
+            kept = listener;
+            return makeResponse(200, "kept");
+        }
+        hash<auto> r = {
+            "same": kept === listener,
+            "iface": listener instanceof HttpListenerInterface,
+            "encoding": listener.getDefaultTextEncoding(),
+        };
+        # the user thread context added through the object is the one that the server keeps for this thread (in
+        # the thread data of the module, which also gives it to the request contexts), and is removed through it
+        listener.addUserThreadContext({"k6921": "v"});
+        r.uctx_added = listener.removeUserThreadContext("k6921");
+        r.uctx_removed = !exists listener.removeUserThreadContext("k6921");
+        # the kept object works on another thread
+        Queue q();
+        HttpListenerInterface k = kept;
+        background sub () {
+            try {
+                q.push(k.getMaxDecodedBodySize());
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        r.other_thread = q.get(10s);
+        results.push(r);
+        return makeResponse(200, "ok");
+    }
+}
+
+#! the handler objects of a listener's requests and connections do not give the listener itself (qore#6921)
+/** A handler gets the listener of its request as an @ref HttpServer::HttpListenerInterface "HttpListenerInterface";
+    the object that it gets has only the methods of that interface, so that the code of a handler, which may be
+    sandboxed and serve one of the listeners of a shared server, cannot reach the listener's other methods or those
+    of its socket, whatever type it casts the object to and however it calls its methods.  Before the change, a
+    handler got the listener itself.
+*/
+class HttpServerHandlerListenerViewTest inherits QUnit::Test {
+    public {
+        #! a sandboxed tenant's handler: each attempt gives "ok" or the code of the exception raised
+        const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+
+string sub try_it(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+class TenantHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        hash<string, string> r = {
+            \"cast\": try_it(sub () { HttpListener l = cast<HttpListener>(listener); }),
+            \"call_object_method\": try_it(sub () { call_object_method(listener, \"getSslPrivateKey\"); }),
+            \"string_name\": try_it(sub () {
+                string m = \"getSslCertificate\";
+                call_object_method_args(listener, m);
+            }),
+            \"call_reference\": try_it(sub () {
+                auto l = listener;
+                code c = \\l.getDedicatedSocketHandlers();
+                c();
+            }),
+            \"socket\": try_it(sub () { call_object_method(listener, \"getSocketInfo\"); }),
+            \"remove_other\": try_it(sub () { listener.removeExternalDedicatedSocket(1000000); }),
+            \"iface\": listener instanceof HttpListenerInterface ? \"yes\" : \"no\",
+            \"encoding\": listener.getDefaultTextEncoding(),
+        };
+        return makeResponse(200, (map $1.key + \"=\" + $1.value, r.pairIterator()).join(\"\\n\"));
+    }
+}
+
+AbstractHttpRequestHandler sub get_handler() {
+    return new TenantHandler();
+}
+";
+    }
+
+    constructor() : QUnit::Test("HttpServer handler listener view", "1.0", \ARGV) {
+        addTestCase("a sandboxed handler cannot reach the listener", \sandboxedTest());
+        addTestCase("a trusted handler keeps the object of its listener", \trustedTest());
+        set_return_value(main());
+    }
+
+    sandboxedTest() {
+        Program tenant(PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        tenant.setSandboxManager(sm);
+        AbstractHttpRequestHandler handler = tenant.callFunction("get_handler");
+
+        hash<string, string> r = getResult(handler);
+        r.encoding = r.encoding.upr();
+        # in one comparison, so that a failure shows every attempt
+        assertEq({
+            # the object is not the listener: no cast to HttpListener
+            "cast": "RUNTIME-CAST-ERROR",
+            # nor any of its other methods or those of its socket, however they are called
+            "call_object_method": "METHOD-DOES-NOT-EXIST",
+            "string_name": "METHOD-DOES-NOT-EXIST",
+            "call_reference": "OBJECT-METHOD-REFERENCE-ERROR",
+            "socket": "METHOD-DOES-NOT-EXIST",
+            # sandboxed code can remove only the connection of its own handler
+            "remove_other": "HTTPLISTENER-ACCESS-ERROR",
+            # the methods of the interface work
+            "iface": "yes",
+            "encoding": "ISO-8859-1",
+        }, r);
+    }
+
+    trustedTest() {
+        KeepingHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("keep", "", NOTHING, handler);
+        server.setDefaultHandler("keep", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": "http://127.0.0.1:" + port, "timeout": 10s});
+        assertEq("kept", hc.get("/"));
+        # a later request, on another connection
+        hc.disconnect();
+        assertEq("ok", hc.get("/"));
+        hash<auto> r = handler.results.get(10s);
+        assertTrue(r.same, "the object of a later request is the same");
+        assertTrue(r.iface, "the object is an HttpListenerInterface");
+        assertEq("ISO-8859-1", r.encoding.upr());
+        assertEq("v", r.uctx_added);
+        assertTrue(r.uctx_removed);
+        assertEq(DefaultMaxDecodedBodySize, r.other_thread, "the kept object works on another thread");
+    }
+
+    #! runs one request with the given handler and returns what it found
+    private hash<string, string> getResult(AbstractHttpRequestHandler handler) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("tenant", "", NOTHING, handler);
+        server.setDefaultHandler("tenant", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": "http://127.0.0.1:" + port, "timeout": 10s});
+        string body = hc.get("/");
+        hash<string, string> r;
+        foreach string line in (body.split("\n")) {
+            (*string k, *string v) = (line =~ x/^([^=]+)=(.*)$/);
+            r{k} = v ?? "";
+        }
+        return r;
+    }
+}
