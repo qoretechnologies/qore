@@ -355,16 +355,10 @@ public:
     */
     DLLEXPORT void addAllowedPortRange(int low, int high, int proto = QSEC_NET_ALL);
 
-    //! Preset: Blocks all private/internal networks
-    /** Blocks the following ranges:
-        - 127.0.0.0/8 (localhost)
-        - 10.0.0.0/8 (RFC 1918 Class A)
-        - 172.16.0.0/12 (RFC 1918 Class B)
-        - 192.168.0.0/16 (RFC 1918 Class C)
-        - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
-        - ::1/128 (IPv6 localhost)
-        - fe80::/10 (IPv6 link-local)
-        - fc00::/7 (IPv6 unique local)
+    //! Preset: Blocks every address that is not a public unicast destination
+    /** Blocks every IPv4 and IPv6 range that is not a public unicast destination (see
+        SandboxManager::blockPrivateNetworks() in the language reference for the list); an IPv6 address that embeds an
+        IPv4 address is judged by the IPv4 address
 
         @note This is essential for SSRF prevention in web applications.
     */
@@ -434,7 +428,9 @@ public:
         @return true if allowed, false if denied (exception raised)
 
         The rules are applied in this order:
-        - an IPv4-mapped IPv6 address (<tt>::%ffff:a.b.c.d</tt>) is checked as the IPv4 address it carries, and an
+        - an IPv6 address that embeds an IPv4 address (IPv4-mapped, IPv4-compatible, NAT64 64:%ff9b::/96, 6to4 or
+          Teredo) is checked as the IPv4 address it carries (a denied or allowed range also applies to the address as
+          given), and an
           unspecified destination address (\c 0.0.0.0 or <tt>::</tt>), which the system connects to the local host, is
           checked as the loopback address
         - a denied IP range containing the address denies the connection, also for an allowed host name, so a host
@@ -456,9 +452,10 @@ public:
 
         @return true if allowed, false if denied (exception raised)
 
-        Binding is controlled like a connection to the local address, without host names: an IPv4-mapped address is
-        checked as the IPv4 address it carries; a denied IP range containing the address denies the bind, unless
-        the address is a loopback address (\c 127.0.0.0/8 or <tt>::1</tt>), because a socket bound there can only be
+        Binding is controlled like a connection to the local address, without host names: an IPv6 address that embeds
+        an IPv4 address is checked as the IPv4 address it carries; a denied IP range containing the address denies the
+        bind, unless the address is a loopback address (\c 127.0.0.0/8 or <tt>::1</tt>, also as an IPv4-mapped
+        address, but not in another form that embeds it), because a socket bound there can only be
         reached from the local host, which is less than a bind on all interfaces exposes (denied ranges still deny
         connections to loopback addresses); a
         specific port outside the allowed ports for the protocol denies the bind (a system-assigned port, port 0, is
