@@ -90,8 +90,8 @@ public:
        the fly accepts them (qore_encoding_private::iconv_accepts_invalid, ex: glibc's \c "UCS-4").  Input in a
        multi-byte encoding that %Qore recognizes by the byte ranges of its characters (Shift_JIS, Big5, GBK, EUC-JP
        and the other families of \c charset.cpp; see isStructuredMultiByte()) is validated the same way on every
-       platform, as the iconv of some platforms decodes an invalid sequence (musl's decodes the Shift_JIS lead byte
-       0x81 followed by 0x20 as U+301C), so that its conversions refuse the input that
+       platform, as the iconv of some platforms decodes an invalid sequence (musl 1.2.5's decodes the Shift_JIS lead
+       byte 0x81 followed by 0x20 as U+301C), so that its conversions refuse the input that
        <tt><string>::isEncodingValid()</tt> refuses (qore#6796).
 
        @param xsink if given, the validation is a cancellation point; when it is cancelled, the exception is raised
