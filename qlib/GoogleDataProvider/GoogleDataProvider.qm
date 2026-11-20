@@ -85,7 +85,9 @@ AbstractDataProviderType event = GoogleDataProviderBase::getResponseTypeForSchem
     - the process-wide Discovery caches of \c GoogleDataProviderBase are private to the class, so a subclass cannot
       change what other callers build their requests from; a subclass that has a document of its own publishes it
       with \c GoogleDataProviderBase::registerSchemaInfo(), which keeps the first document of an API and refuses
-      sandboxed code (<a href="https://github.com/qoretechnologies/qore/issues/6838">issue 6838</a>)
+      sandboxed code; the static rebuilders \c getInputSchemaMap() and \c getOutputSchemaMap(), which wrote the schema
+      maps from a document that the caller passed, are private to the class as well
+      (<a href="https://github.com/qoretechnologies/qore/issues/6838">issue 6838</a>)
     - \c GoogleApiParentDataProvider::getChildProviderImpl() is declared to return any data provider, as the
       subclasses do (see @ref override_return_types)
     - compose origin-absolute request targets for Discovery APIs with an empty base path, including Gmail;
