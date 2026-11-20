@@ -791,6 +791,9 @@ public:
         * warnSink = nullptr,
         * pendingParseSink = nullptr;
     RootQoreNamespace* RootNS = nullptr;
+    //! the objects of the Program's own classes that its cleared constants held, deleted while only the thread that
+    //! deletes the Program can run code in it (see deleteOwnedConstantObjects(); #6791)
+    std::vector<QoreObject*> owned_constant_objects;
     QoreNamespace* QoreNS = nullptr;
 
     // when true, parse errors and warnings are also captured as structured diagnostics (machine-readable
@@ -2483,6 +2486,14 @@ public:
         on); with \a idle_only, also if a thread is counted in the Program: the rollback deletes code that such a
         thread could still run, so it is made once the threads of the Program have ended
     */
+    //! collects, with a reference, the objects of the Program's own classes that the values of its cleared constants
+    //! hold, if anything else holds them: they are deleted by deleteOwnedConstantObjects() (#6791)
+    DLLLOCAL void collectOwnedConstantObjects(const QoreListNode& l);
+
+    //! deletes the objects collected by collectOwnedConstantObjects(): their destructors must run while the Program
+    //! can run code, and only the thread that deletes it can (#6791)
+    DLLLOCAL void deleteOwnedConstantObjects(ExceptionSink* xsink);
+
     DLLLOCAL void discardPendingParse(ExceptionSink* xsink, bool idle_only);
 
     // called when the program's ref count = 0 (but the dc count may not go to 0 yet)

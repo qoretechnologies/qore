@@ -3062,6 +3062,9 @@ public:
     */
     qore_ns_private* ns = nullptr;
     BCList* scl = nullptr;          // base class list
+    //! true if the class is the copy of a class of another namespace (a builtin class, a module's class, a class
+    //! that a Program imports), which outlives the Program the copy is in; see ownedByProgram()
+    bool ns_copy = false;
     //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
     //! the class (issue #3286)
     bool parse_abr = false;
@@ -4925,6 +4928,13 @@ public:
         return 0;
     }
     */
+
+    //! returns true if the class exists only in \a pgm, whose code its methods and destructor run in
+    /** A class that \a pgm declares (its source Program), or one that a module creates at run time in a namespace of
+        \a pgm (with no source Program: its code runs in the Program of its namespace, see
+        qore_get_method_pgm_context()); not the copy of a class of another namespace, such as a builtin class (#6791)
+    */
+    DLLLOCAL bool ownedByProgram(const QoreProgram* pgm) const;
 
     DLLLOCAL const QoreMethod* getMethodForEval(const char* nme, QoreProgram* pgm,
         const qore_class_private* class_ctx, ExceptionSink* xsink) const;

@@ -71,6 +71,9 @@ DLLLOCAL void init_cppapiuser_functions(QoreNamespace& ns);
 //! returns the module commands that the module has received, in the order received (see cppapiuser_parse_cmd())
 DLLLOCAL QoreListNode* cppapiuser_get_module_cmds();
 
+//! returns the number of objects of the classes of the "owned-constant" command whose C++ destructor has run
+DLLLOCAL int64 cppapiuser_get_owned_probe_destroyed();
+
 #include "QC_ProgramContextProbe.h"
 #include "QC_SerializationIndexProbe.h"
 #include "QC_ExceptionResultProbe.h"

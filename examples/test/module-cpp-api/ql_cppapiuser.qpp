@@ -432,6 +432,13 @@ list<string> cpp_api_module_cmds() [flags=RET_VALUE_ONLY] {
     return cppapiuser_get_module_cmds();
 }
 
+//! returns the number of objects of the classes that the \c "owned-constant" module command creates whose C++ destructor has run
+/** @return the number of objects destroyed so far in the process (#6791)
+*/
+int cpp_api_owned_probe_destroyed() [flags=RET_VALUE_ONLY] {
+    return cppapiuser_get_owned_probe_destroyed();
+}
+
 //! returns whether the Program of the calling code has a sandbox manager
 /** Called from a user module's code, it tells whether the module's own Program is governed by a sandbox, which is
     what a module that takes the sandbox from the Program (QoreSandboxManagerHelper(QoreProgram*)) uses

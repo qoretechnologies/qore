@@ -564,6 +564,18 @@ std::atomic<qore_class_private::dbg_source_program_taken_t> qore_class_private::
 //! Returns the Program that a method of the class runs in; \a holder keeps the source Program for the call
 /** The holder must be declared before the CodeEvaluationHelper that enters the Program; see QoreSourceProgramHolder
 */
+bool qore_class_private::ownedByProgram(const QoreProgram* pgm) const {
+    if (ns_copy) {
+        return false;
+    }
+    // as qore_get_method_pgm_context(): the source Program, or else the Program of the class's namespace
+    const QoreProgram* owner = spgm.load();
+    if (!owner) {
+        owner = ns ? ns->getProgram() : nullptr;
+    }
+    return owner == pgm;
+}
+
 QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
         QoreProgram* explicit_pgm) {
     const qore_class_private* c = qore_class_private::get(cls);
@@ -1383,6 +1395,9 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
     //printd(5, "qore_class_private::qore_class_private() old name: %s (%p) new name: %s (%p)\n", old.name.c_str(), old.name.c_str(), name.c_str(), name.c_str());
 
+    // the copy of a class of another namespace outlives the Program it is in (see ownedByProgram())
+    ns_copy = true;
+
     // copy methods and maintain method pointers
     for (auto& i : old.hm) {
         QoreMethod* nf = i.second->copy(cls);
@@ -1557,6 +1572,9 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     scl = old.scl ? new BCList(*old.scl) : nullptr;
 
     //printd(5, "qore_class_private::qore_class_private() old name: %s (%p) new name: %s (%p)\n", old.name.c_str(), old.name.c_str(), name.c_str(), name.c_str());
+
+    // the copy of a class of another namespace outlives the Program it is in (see ownedByProgram())
+    ns_copy = true;
 
     // copy methods and maintain method pointers
     for (auto& i : old.hm) {
