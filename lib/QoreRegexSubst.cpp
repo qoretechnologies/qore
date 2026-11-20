@@ -334,7 +334,7 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
     const size_t subject_len = t->size();
     const QoreEncoding* subject_encoding = t.is_temp() ? target->getEncoding() : QCS_UTF8;
 
-    SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode(QCS_UTF8));
+    SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode(nullptr, QCS_UTF8));
 
     TempEncodingHelper replacement;
     const char* ptr = subject;
@@ -452,7 +452,7 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
         pcre2_pattern_info(p, PCRE2_INFO_NAMETABLE, &nametable);
     }
 
-    SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode(QCS_UTF8));
+    SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode(nullptr, QCS_UTF8));
     const char* ptr = subject;
     PCRE2_SIZE last_match = (PCRE2_SIZE)-1;
 
