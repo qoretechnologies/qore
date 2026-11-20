@@ -9,7 +9,7 @@ outside BIP: m=METHOD-DOES-NOT-EXIST pub=PRIVATE-MEMBER set=PRIVATE-MEMBER self=
 A B: m=ok pub=ok set=ok self=ok keys=pub
 A C: m=ok pub=ok set=ok self=ok keys=pub
 A BI: m=METHOD-DOES-NOT-EXIST pub=ok set=ok self=METHOD-DOES-NOT-EXIST keys=pub
-A CI: m=METHOD-DOES-NOT-EXIST pub=INVALID-MEMBER set=INVALID-MEMBER self=METHOD-DOES-NOT-EXIST keys=ok
+A CI: m=METHOD-DOES-NOT-EXIST pub=ok set=ok self=METHOD-DOES-NOT-EXIST keys=ok
 A D1: m=ok pub=ok set=ok self=ok keys=pub
 A D2: m=ok pub=ok set=ok self=ok keys=pub
 A DP: m=ok pub=ok set=ok self=ok keys=pub

@@ -2256,7 +2256,8 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove, c
 
     const qore_class_private* ctx = class_ctx;
     if (ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), ctx)) {
-        ctx = nullptr;
+        // a class on the private:internal path to the member uses it (issue #6800)
+        ctx = qore_class_private::runtimeGetMemberStorageContext(*o->getClass(), mem, ctx);
     }
     int rc = qore_object_private::getLValue(*o, mem, *this, ctx, for_remove, vl.xsink);
     if (!rc && !ctx) {

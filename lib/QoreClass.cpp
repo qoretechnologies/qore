@@ -1931,6 +1931,12 @@ bool qore_class_private::runtimeCheckMemberAccessContext(const QoreMemberInfo* i
     return checkPrivateMemberContext(class_ctx, info->getClass());
 }
 
+bool qore_class_private::runtimeHasMemberStorageContext(const char* mem,
+        const qore_class_private* class_ctx) const {
+    const QoreMemberInfo* info = members.find(mem);
+    return info && info->getClassContext(class_ctx);
+}
+
 bool qore_class_private::checkPrivateMemberContext(const qore_class_private* class_ctx,
         const qore_class_private* decl) {
     if (!decl) {

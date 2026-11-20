@@ -1151,8 +1151,10 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
-        class_ctx = nullptr;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, key, class_ctx);
+    }
     const qore_class_private* member_class_ctx = nullptr;
     if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti)) {
         return QoreValue();
@@ -1226,8 +1228,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     }
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
-        class_ctx = nullptr;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, key, class_ctx);
+    }
     const QoreTypeInfo* mti = nullptr;
 
     const qore_class_private* member_class_ctx = nullptr;
@@ -2517,7 +2521,8 @@ QoreValue QoreObject::evalMember(const char* mem, ExceptionSink* xsink) {
     // get the current class context
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx)) {
-        class_ctx = nullptr;
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*priv->theclass, mem, class_ctx);
     }
     const qore_class_private* member_class_ctx = nullptr;
     int rc = priv->checkMemberAccess(mem, class_ctx, member_class_ctx);
@@ -2686,8 +2691,10 @@ QoreValue QoreObject::getMemberValueNoMethod(const char* key, const QoreClass* c
     const qore_class_private* member_class_ctx = nullptr;
     if (cls) {
         class_ctx = qore_class_private::get(*cls);
-        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx))
-            class_ctx = nullptr;
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx)) {
+            // a class on the private:internal path to the member uses it (issue #6800)
+            class_ctx = qore_class_private::runtimeGetMemberStorageContext(*priv->theclass, key, class_ctx);
+        }
 
         member_class_ctx = nullptr;
         // check for illegal access
@@ -2753,8 +2760,10 @@ void QoreObject::deleteMemberValue(const QoreString* key, ExceptionSink* xsink) 
 void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
     // get the current class context
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx))
-        class_ctx = nullptr;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx)) {
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*priv->theclass, key, class_ctx);
+    }
 
     const qore_class_private* member_class_ctx = nullptr;
     // check for external access to private members
@@ -2873,8 +2882,10 @@ bool QoreObject::hasMember(const char* mem, ExceptionSink* xsink) const {
 
     // get the current class context
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx))
-        class_ctx = nullptr;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx)) {
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*priv->theclass, mem, class_ctx);
+    }
 
     const qore_class_private* member_class_ctx = nullptr;
     // check for illegal access
