@@ -60,7 +60,8 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
         #! introspection-only constructions (e.g., fetching example event data).
         *RestClientIo::RestClientIo rest;
 
-        #! Cached SendCloud credentials (\c {public_key, secret_key}) used to lazily
+        #! Cached SendCloud credentials (\c {public_key, secret_key}, plus \c oauth2, \c oauth2_token_url
+        #! and \c oauth2_scopes for an OAuth2 client) used to lazily
         #! build separate clients for cross-host or cross-prefix endpoints
         #! (service points, v3).  NOTHING when constructed from a raw RestClientIo
         #! without access to the original options.
@@ -133,12 +134,10 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
         }
     }
 
-    #! Populates sc_creds from a raw options hash (accepts both naming conventions)
+    #! Populates sc_creds from a raw options hash (accepts both naming conventions and the OAuth2 options)
     private extractCredentialsFromOptions(*hash<auto> opts) {
-        *string pk = opts.public_key ?? opts.username;
-        *string sk = opts.secret_key ?? opts.password;
-        if (pk.val() && sk.val()) {
-            sc_creds = {"public_key": pk, "secret_key": sk};
+        if (*hash<auto> creds = SendCloudRestClient::SendCloudRestClientIo::getCredentials(opts)) {
+            sc_creds = creds;
         }
     }
 
@@ -361,12 +360,29 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
                 "cannot build a SendCloud client for another base URL: no credentials are available "
                 "(the data provider was constructed without access to the SendCloud public_key/secret_key)";
         }
-        c = new RestClientIo::RestClientIo({
+        # "auto!": a literal hash of strings would otherwise narrow to hash<string, string>, and the OAuth2 options
+        # added below are not all strings
+        hash<auto!> copts = {
             "url": base_url,
-            "username": sc_creds.public_key,
-            "password": sc_creds.secret_key,
             "data": "json",
-        });
+        };
+        if (sc_creds.oauth2) {
+            # the client requests its own token with the client credentials of the connection
+            copts += {
+                "oauth2_grant_type": SendCloudRestClient::SendCloudRestClientBase::DefaultGrantType,
+                "oauth2_client_id": sc_creds.public_key,
+                "oauth2_client_secret": sc_creds.secret_key,
+                "oauth2_token_url": sc_creds.oauth2_token_url,
+                "oauth2_scopes": sc_creds.oauth2_scopes,
+                "oauth2_token_use_basic_auth": True,
+            };
+        } else {
+            copts += {
+                "username": sc_creds.public_key,
+                "password": sc_creds.secret_key,
+            };
+        }
+        c = new RestClientIo::RestClientIo(copts);
         base_url_clients{base_url} = c;
         return c;
     }

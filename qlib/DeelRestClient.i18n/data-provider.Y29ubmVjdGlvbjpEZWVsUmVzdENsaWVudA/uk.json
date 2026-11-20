@@ -4,8 +4,8 @@
     "uk": {
       "messages": {
         "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.desc": {
-          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.",
-          "message": "Підключення до REST API Deel для управління глобальною робочою силою.\n\nDeel — це глобальна HR-платформа для найму, управління та виплати заробітної плати фрілансерам та повночасним співробітникам у світі. Це інтеграція підтримує контракти, табелі обліку робочого часу, корекції рахунків, працівників, відпустки, юридичні особи, рахунки та події-тригери."
+          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.\n\n**Authentication** is OAuth2 (authorization code with refresh tokens) with an app registered in Deel's Developer Center, or an **API token** as the fallback.",
+          "message": "Підключення до REST API Deel для управління глобальною робочою силою.\n\nDeel — це глобальна HR-платформа для найму, управління та виплати заробітної плати фрілансерам та повночасним співробітникам у світі. Це інтеграція підтримує контракти, табелі обліку робочого часу, корекції рахунків, працівників, відпустки, юридичні особи, рахунки та події-тригери.\n\n**Автентифікація** виконується через OAuth2 (код авторизації з токенами оновлення) із застосунком, зареєстрованим у Developer Center Deel, або, як запасний варіант, через **API-токен**."
         },
         "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.display_name": {
           "source": "Deel REST Connection",

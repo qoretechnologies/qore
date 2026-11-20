@@ -41,7 +41,7 @@
 %requires DataProvider
 
 module SendCloudRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "SendCloud REST client module";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -64,8 +64,9 @@ module SendCloudRestClient {
 
     SendCloud is a shipping automation platform used by e-commerce merchants across Europe to
     manage parcels, carriers, labels, returns and tracking.  The SendCloud Public API is
-    authenticated with HTTP Basic Auth, where the username is the integration's
-    <em>public_key</em> and the password is the corresponding <em>secret_key</em>.
+    authenticated with OAuth2 (client credentials) or with HTTP Basic Auth, where the username is the integration's
+    <em>public_key</em> and the password is the corresponding <em>secret_key</em>; see
+    @ref sendcloudrestclient_auth.
 
     To use this module, use \c "%requires SendCloudRestClient" in your code.
 
@@ -74,7 +75,7 @@ module SendCloudRestClient {
     The main classes are:
     - @ref SendCloudRestClient::SendCloudRestClient "SendCloudRestClient":
       provides the synchronous REST client API for communication with the SendCloud API;
-      authentication is performed via HTTP Basic Auth
+      authentication is performed with OAuth2 or HTTP Basic Auth
     - @ref SendCloudRestClient::SendCloudRestClientIo "SendCloudRestClientIo":
       provides a non-blocking (async I/O) REST client for the SendCloud API
     - @ref SendCloudRestClient::SendCloudRestConnection "SendCloudRestConnection":
@@ -106,7 +107,29 @@ printf("User: %Y\n", result.body);
     method ID \c 8 (\c "Unstamped letter") because it does not result in a real parcel being
     produced or billed.
 
+    @section sendcloudrestclient_auth Authentication
+
+    |!Method|!What it is|!Options
+    |OAuth2|the client credentials grant: the integration's keys are exchanged for an access token that lasts \
+one hour|\c oauth2_client_id, \c oauth2_client_secret
+    |HTTP Basic Auth|the integration's keys sent with every request|\c public_key, \c secret_key
+
+    OAuth2 is the first alternative of the connection (see
+    <a href="https://sendcloud.dev/docs/getting-started/authentication">SendCloud authentication</a>).  The client ID
+    and secret are the integration's public and secret keys; the client requests a token from
+    \c https://account.sendcloud.com/oauth2/token with the \c client_credentials grant and the \c api scope, sending
+    the keys by HTTP basic authentication, and requests a new one when it expires.  An integration set to
+    <em>Use OAuth2 authentication</em> in the SendCloud panel accepts only OAuth2.
+
+    When \c public_key and \c secret_key are given, they are sent by HTTP Basic Auth and the OAuth2 options are
+    removed, so that the client does not request a token.
+
     @section sendcloudrestclientrelnotes Release Notes
+
+    @subsection sendcloudrestclientv1_1 SendCloudRestClient v1.1
+    - added OAuth2 client credentials authentication as the first alternative of the connection, with the HTTP
+      Basic public and secret keys kept as the fallback
+      (<a href="https://github.com/qoretechnologies/qore/issues/6896">issue 6896</a>)
 
     @subsection sendcloudrestclientv1_0 SendCloudRestClient v1.0
     - initial release
@@ -174,6 +197,37 @@ public class SendCloudRestClientBase {
             },
         );
 
+        #! Default OAuth2 token request URL
+        const DefaultTokenUrl = "https://account.sendcloud.com/oauth2/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "client_credentials";
+
+        #! Default OAuth2 scopes
+        const DefaultScopes = ("api",);
+
+        #! OAuth2 options set by default when the OAuth2 client ID is given
+        const OAuth2Options = {
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_scopes": DefaultScopes,
+            "oauth2_token_url": DefaultTokenUrl,
+            "oauth2_token_use_basic_auth": True,
+        };
+
+        #! Options that only apply to OAuth2; removed when the HTTP Basic Auth keys are given
+        const OAuth2OptionNames = (
+            "oauth2_auth_args",
+            "oauth2_auth_url",
+            "oauth2_client_id",
+            "oauth2_client_secret",
+            "oauth2_grant_type",
+            "oauth2_redirect_url",
+            "oauth2_refresh_token",
+            "oauth2_scopes",
+            "oauth2_token_url",
+            "oauth2_token_use_basic_auth",
+        );
+
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
@@ -215,12 +269,17 @@ public class SendCloudRestClientBase {
         - \c secret_key becomes the HTTP Basic Auth password
         - \c version controls the base URL and is consumed here (not passed through)
 
+        With the keys (or the username and password), the OAuth2 options are removed.  Without them, the OAuth2
+        client ID and secret are used, and the other OAuth2 options default to the SendCloud client credentials
+        flow (see @ref sendcloudrestclient_auth).
+
         @param opts raw constructor options
 
         @return the option hash as expected by the
         @ref RestClient::RestClient::constructor() "RestClient constructor"
 
-        @throw SENDCLOUD-ERROR missing required option \c public_key or \c secret_key
+        @throw SENDCLOUD-ERROR missing required option \c public_key or \c secret_key, and no OAuth2 client ID
+        or token is given
         @throw SENDCLOUD-UNSUPPORTED-VERSION the \c version option is set to a value other
         than \c "v2"
     */
@@ -240,11 +299,22 @@ public class SendCloudRestClientBase {
             rv.password = opts.secret_key;
         }
 
-        if (!rv.username) {
-            throw "SENDCLOUD-ERROR", "missing required option 'public_key' (SendCloud public API key)";
-        }
-        if (!rv.password) {
-            throw "SENDCLOUD-ERROR", "missing required option 'secret_key' (SendCloud secret API key)";
+        if (rv.username || rv.password) {
+            if (!rv.username) {
+                throw "SENDCLOUD-ERROR", "missing required option 'public_key' (SendCloud public API key)";
+            }
+            if (!rv.password) {
+                throw "SENDCLOUD-ERROR", "missing required option 'secret_key' (SendCloud secret API key)";
+            }
+            # a client authenticating with HTTP Basic Auth does not use OAuth2; the OAuth2 options are removed
+            # after the defaults are applied, or a defaulted grant type would make the client request a token
+            rv -= OAuth2OptionNames;
+        } else if (rv.oauth2_client_id.val()) {
+            # set the OAuth2 defaults for the options not given
+            map rv{$1.key} = $1.value, OAuth2Options.pairIterator(), !exists rv{$1.key};
+        } else if (!rv.token.val()) {
+            throw "SENDCLOUD-ERROR", "missing required options 'public_key' and 'secret_key' (SendCloud API keys) "
+                "or the OAuth2 options 'oauth2_client_id' and 'oauth2_client_secret'";
         }
 
         # Validate and apply version (only if a version was explicitly requested)
@@ -305,13 +375,15 @@ public class SendCloudRestClientBase {
 }
 
 #! This class provides the REST client API for communication with SendCloud servers
-/** SendCloud exposes a REST API authenticated with HTTP Basic Auth where:
+/** SendCloud exposes a REST API authenticated with an OAuth2 access token (client credentials) or with HTTP
+    Basic Auth where:
     - Username = \c public_key
     - Password = \c secret_key
 
     @par API Information:
     - Base URL: https://panel.sendcloud.sc/api/v2
-    - Authentication: HTTP Basic Auth (public/secret key pair)
+    - Authentication: OAuth2 client credentials or HTTP Basic Auth (public/secret key pair); see
+      @ref sendcloudrestclient_auth
     - No sandbox: use shipment method ID \c 8 (\c "Unstamped letter") for safe end-to-end
       integration tests.
 
@@ -334,8 +406,11 @@ SendCloudRestClient sendcloud({"public_key": "pub-key", "secret_key": "sec-key"}
 
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
-        - \c public_key: the SendCloud public API key (required)
-        - \c secret_key: the SendCloud secret API key (required)
+        - \c public_key: the SendCloud public API key (required for HTTP Basic Auth)
+        - \c secret_key: the SendCloud secret API key (required for HTTP Basic Auth)
+
+        Without \c public_key and \c secret_key, the OAuth2 client credentials flow is used with
+        \c oauth2_client_id and \c oauth2_client_secret (the integration's public and secret keys).
         - \c version: API version (optional, default \c "v2"); only \c "v2" is currently
           supported
 
@@ -343,7 +418,8 @@ SendCloudRestClient sendcloud({"public_key": "pub-key", "secret_key": "sec-key"}
         remote server
 
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
-        @throw SENDCLOUD-ERROR missing required option \c public_key or \c secret_key
+        @throw SENDCLOUD-ERROR missing required option \c public_key or \c secret_key, and no OAuth2 client ID
+        or token is given
         @throw SENDCLOUD-UNSUPPORTED-VERSION the \c version option is set to a value other
         than \c "v2"
     */
@@ -463,16 +539,39 @@ public class SendCloudRestClientIo inherits RestClientIo::RestClientIo, SendClou
         # (api/v3) calls without having to reach back into the connection.
         # Both shapes are accepted: the user-facing public_key/secret_key pair
         # and the already-translated username/password pair.
+        sc_creds = SendCloudRestClientIo::getCredentials(opts);
+    }
+
+    #! Returns the SendCloud credentials in the given client options (or NOTHING)
+    /** @param opts client options
+
+        @return a hash with \c public_key and \c secret_key keys, or NOTHING if the options hold no credentials;
+        for OAuth2, the keys are the OAuth2 client ID and secret (which are the integration's public and secret
+        keys), and the hash also has \c oauth2 set to @ref True and the \c oauth2_token_url and \c oauth2_scopes of
+        the options
+
+        @since SendCloudRestClient 1.1
+    */
+    static *hash<auto> getCredentials(*hash<auto> opts) {
         *string pk = opts.public_key ?? opts.username;
         *string sk = opts.secret_key ?? opts.password;
         if (pk.val() && sk.val()) {
-            sc_creds = {"public_key": pk, "secret_key": sk};
+            return {"public_key": pk, "secret_key": sk};
+        }
+        if (!pk.val() && !sk.val() && opts.oauth2_client_id.val() && opts.oauth2_client_secret.val()) {
+            return {
+                "public_key": opts.oauth2_client_id,
+                "secret_key": opts.oauth2_client_secret,
+                "oauth2": True,
+                "oauth2_token_url": opts.oauth2_token_url ?? DefaultTokenUrl,
+                "oauth2_scopes": opts.oauth2_scopes ?? DefaultScopes,
+            };
         }
     }
 
     #! Returns the SendCloud credentials used to construct this client (or NOTHING)
     /** @return a hash with \c public_key and \c secret_key keys, or NOTHING if the
-        client was constructed without recoverable credentials
+        client was constructed without recoverable credentials; see @ref getCredentials()
     */
     *hash<auto> getSendCloudCredentials() {
         return sc_creds;
@@ -486,6 +585,9 @@ public class SendCloudRestClientIo inherits RestClientIo::RestClientIo, SendClou
     - \c secret_key: the SendCloud secret API key (used as password for Basic Auth)
     - \c version: API version; only \c "v2" is currently supported
 
+    The OAuth2 options default to the SendCloud client credentials flow, the first alternative of the connection;
+    see @ref sendcloudrestclient_auth.
+
     @see @ref SendCloudRestClient::SendCloudRestClient::constructor() for more information
     on the above options
 */
@@ -495,7 +597,7 @@ public class SendCloudRestConnection inherits RestClient::RestConnection {
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SendCloudRestClient",
             "SendCloudRestConnection", "en", <ConnectionSchemeInfo>{
             "display_name": "SendCloud REST Connection",
-            "short_desc": "Connect to SendCloud shipping with HTTP Basic authentication",
+            "short_desc": "Connect to SendCloud shipping with OAuth2 or HTTP Basic authentication",
             "desc": "A connection to the SendCloud REST API for shipping automation.\n\n"
                 "SendCloud is a shipping platform used by European e-commerce merchants to "
                 "manage parcels, carriers, shipping labels, returns and tracking.  The "
@@ -504,7 +606,10 @@ public class SendCloudRestConnection inherits RestClient::RestConnection {
                 "associated **secret_key**.\n\n"
                 "**Important:** SendCloud does **not** provide a sandbox environment.  When "
                 "writing integration tests, use shipment method ID `8` (*Unstamped letter*) "
-                "so that no real parcel is produced or billed.",
+                "so that no real parcel is produced or billed.\n\n"
+                "Instead of HTTP Basic Auth, the connection can authenticate with **OAuth2** (client "
+                "credentials): set the OAuth2 client ID and secret to the integration's public and secret "
+                "keys; an access token is requested with the `api` scope and renewed when it expires.",
             "cls": Class::forName("SendCloudRestConnection"),
             "auto_url": True,
             "schemes": {
@@ -562,6 +667,21 @@ public class SendCloudRestConnection inherits RestClient::RestConnection {
                     "default_value": SendCloudRestClientBase::DefaultApiVersion,
                     "allowed_values": SendCloudRestClientBase::AllowedVersions,
                 },
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": SendCloudRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_scopes": connection_option_override(RestConnection::ConnectionScheme.options.oauth2_scopes, {
+                    "default_value": SendCloudRestClientBase::DefaultScopes,
+                }),
+                "oauth2_token_url": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_url, {
+                        "default_value": SendCloudRestClientBase::DefaultTokenUrl,
+                    }),
+                "oauth2_token_use_basic_auth": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_use_basic_auth, {
+                        "default_value": True,
+                    }),
                 "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": SendCloudRestClientBase::DefaultPingHeaders,
                 }),
@@ -572,14 +692,15 @@ public class SendCloudRestConnection inherits RestClient::RestConnection {
                     "default_value": SendCloudRestClientBase::DefaultPingPath,
                 }),
             },
-            "required_options": "public_key,secret_key",
+            # OAuth2 (client credentials) is the first alternative; HTTP Basic Auth with the keys is the fallback
+            "required_options": "oauth2_client_id,oauth2_client_secret|public_key,secret_key",
             "messages": (
                 <UiMessageInfo>{
                     "presentation_id": "setup-1",
                     "title": "How to Obtain Your SendCloud API Credentials",
                     "intent": "info",
-                    "content": "This integration uses the **SendCloud Public API** with HTTP "
-                        "Basic Auth.\n\n"
+                    "content": "This integration uses the **SendCloud Public API** with OAuth2 or "
+                        "HTTP Basic Auth.\n\n"
                         "**Steps to generate API credentials:**\n"
                         "1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n"
                         "2. Navigate to **Settings > Integrations**\n"
@@ -653,6 +774,27 @@ public class SendCloudRestConnection inherits RestClient::RestConnection {
     #! returns \c "sendcloudrest"
     string getType() {
         return "sendcloudrest";
+    }
+
+    #! Returns the OAuth2 grant type this connection authenticates with, if any
+    /** A connection with the HTTP Basic Auth keys does not use OAuth2, although the OAuth2 options have default
+        values; otherwise the grant type of the \c oauth2_grant_type option (\c client_credentials by default) is
+        returned
+    */
+    private *string getOAuth2GrantType() {
+        if (!opts.public_key.val() && !opts.secret_key.val()) {
+            return RestConnection::getOAuth2GrantType();
+        }
+    }
+
+    #! Checks if the connection can communicate
+    /** A connection with the HTTP Basic Auth keys does not need the OAuth2 options that the defaulted grant type
+        requires
+    */
+    private checkCanConnect() {
+        if (!opts.public_key.val() && !opts.secret_key.val()) {
+            RestConnection::checkCanConnect();
+        }
     }
 
     #! Returns connection options, translating SendCloud keys into RestClient keys
