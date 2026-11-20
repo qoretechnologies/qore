@@ -1152,8 +1152,8 @@ socket) and connects to the checked addresses only
     Code that a sandbox governs is refused uncontrolled APIs at run time, as code restricted with
     @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" is: a call of a function, method or class of the
     uncontrolled-API functional domain (for example a Java class of the \c jni module, a Python object of the
-    \c python module, @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" or
-    the debug hooks) raises \c INVALID-FUNCTION-ACCESS, unless the sandbox allows uncontrolled APIs.  The check is
+    \c python module, a JavaScript program of the \c v8 module,
+    @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" or the debug hooks) raises \c INVALID-FUNCTION-ACCESS, unless the sandbox allows uncontrolled APIs.  The check is
     made when the call runs, also for a call resolved when it was parsed, in every execution mode and in code compiled
     with \c qcc.  The sandbox is resolved as for a filesystem or network policy check: the Programs on the call stack,
     the provenance of an object or callback created under a sandbox (also when trusted code calls it later), and the
@@ -1163,6 +1163,16 @@ socket) and connects to the checked addresses only
     sandboxed code is refused as well: a module that makes such calls for its callers refuses them itself first with
     an error of its own (for example the data provider apps that declare
     @ref DataProvider::DataProviderAppInfo::external_io "external_io").
+
+    A sandbox that allows uncontrolled APIs trusts the code with the whole process: the runtimes that they give access
+    to (the JVM of the \c jni module, the Python interpreter of the \c python module, the Node.js runtime of the
+    \c v8 module) do I/O, start processes and reach the memory of the process without any sandbox seeing it, and
+    their code can reach the data of every %Program in the process.  A host must therefore never allow uncontrolled
+    APIs (@ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()") for code
+    that it does not trust, such as the code of a tenant: the isolation of tenants from each other and from the host
+    relies on this rule.  The modules check what they can for code that is trusted with them (the \c jni module, for
+    example, makes a call from Java into %Qore for code that a sandbox governs only in the %Program of that code), but
+    this does not make the runtimes safe for code that is not trusted.
 
     A refused call runs no code: the refusal comes once the variant of the call is known and before any of its
     default arguments is evaluated.  The rule applies to builtin code (implemented in C++, such as the Java and Python
