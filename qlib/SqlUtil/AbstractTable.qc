@@ -13090,6 +13090,22 @@ list<auto> l = table.getAlignSql(table2);
                     # option is supported in which case update the constraint to be based on the index and do not drop
                     # the index
                     if (ix.unique && !t.primaryKey.empty() && t.primaryKey.matchKeys(ix.columns)) {
+                        # the index of a unique constraint, found by its name or by the index (a constraint can use an
+                        # index of another name), cannot be the base of the primary key: a constraint that the
+                        # template does not have drops it, and a database refuses an index that another constraint
+                        # uses; the index is left to its constraint (a database that links them refuses to drop the
+                        # index first), and the primary key gets an index of its own (issue #6734)
+                        bool constraint_index;
+                        foreach AbstractColumnConstraint csc in ((getAllSupportingConstraints(ix.name) ?? ())
+                                + (ix.getAllSupportingConstraints() ?? ())) {
+                            if (csc instanceof AbstractUniqueConstraint) {
+                                constraint_index = True;
+                                break;
+                            }
+                        }
+                        if (constraint_index) {
+                            continue;
+                        }
                         if (t.primaryKey.setIndexBase(ix.name)) {
                             ix.setSupportingConstraint(primaryKey);
                             continue;

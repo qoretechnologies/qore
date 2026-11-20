@@ -156,6 +156,10 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - fixed a schema alignment that turns a unique constraint into the primary key on the same columns on PostgreSQL
+      and Oracle, which based the primary key on the constraint's index (\c "using index"), which the drop of the
+      constraint drops, so that the SQL failed; the primary key gets an index of its own
+      (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>)
     - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" with a description of another
       table name, which raised \c LOCK-ERROR instead of giving the SQL that renames the table
       (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>)
