@@ -4070,6 +4070,9 @@ QoreSocket* QoreSocket::createAcceptedSocket(int descriptor) {
     }
     s->priv->ssl_ca_file = priv->ssl_ca_file;
     s->priv->ssl_ca_path = priv->ssl_ca_path;
+    // the placement of the fields of the HTTP messages read (qore#6761)
+    s->priv->http_fields_at_top_level.store(priv->http_fields_at_top_level.load(std::memory_order_relaxed),
+        std::memory_order_relaxed);
     return s;
 }
 
@@ -5427,8 +5430,12 @@ private:
                         false, "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
                     return -1;
                 }
+                // the trailer fields are given under "trailers", and at the top level as the socket's field
+                // placement allows, never with a name that is a key of the result (qore#6761)
+                QoreHashNode* fields = new QoreHashNode(autoTypeInfo);
+                out->setKeyValue("trailers", fields, nullptr);
                 priv.convertHeaderToHash(*out, const_cast<char*>(trailers.c_str()), 0, nullptr, nullptr,
-                    "response-headers-raw");
+                    "response-headers-raw", fields, priv.http_fields_at_top_level.load(std::memory_order_relaxed));
                 if (*xsink) {
                     return -1;
                 }
@@ -6549,7 +6556,7 @@ void my_socket_priv::doReadHttpHeaderEvent(int event, const QoreHashNode& hdr, i
 }
 
 int my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr, ExceptionSink* xsink,
-        QoreHashNode* info) const {
+        QoreHashNode* info, bool in_trailers) const {
     // the trailer text is parsed as a C string, which a NUL character would cut off
     if (qore_socket_private::checkHttpHeaderNul(xsink, hdr.c_str(), hdr.size(), "READ-HTTP-CHUNK-ERROR",
             "chunked body trailer")) {
@@ -6561,9 +6568,22 @@ int my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr, Except
             "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
         return -1;
     }
+    QoreHashNode* fields = nullptr;
+    if (in_trailers) {
+        fields = new QoreHashNode(autoTypeInfo);
+        h.setKeyValue("trailers", fields, nullptr);
+    }
     socket->priv->convertHeaderToHash(&h, const_cast<char*>(hdr.c_str()), 0, info, nullptr,
-        "response-headers-raw");
+        "response-headers-raw", fields, socket->priv->http_fields_at_top_level.load(std::memory_order_relaxed));
     return 0;
+}
+
+void my_socket_priv::setHttpFieldsAtTopLevel(bool top_level) const {
+    socket->priv->http_fields_at_top_level.store(top_level, std::memory_order_relaxed);
+}
+
+bool my_socket_priv::getHttpFieldsAtTopLevel() const {
+    return socket->priv->http_fields_at_top_level.load(std::memory_order_relaxed);
 }
 
 void my_socket_priv::clearHttpExpectChunkedBody() const {
@@ -19429,7 +19449,8 @@ int SocketReadHttpChunkedBodyPollOperation::handleTrailer(ExceptionSink* xsink) 
     if (line == "\r\n") {
         if (!trailers.empty()) {
             my_socket_priv* priv = my_socket_priv::getPriv(*sock);
-            if (priv->convertHeaderToHash(**out, trailers, xsink)) {
+            // the result holds the body: the trailer fields are given under "trailers" (qore#6761)
+            if (priv->convertHeaderToHash(**out, trailers, xsink, nullptr, true)) {
                 return -1;
             }
             priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, **out, source);
