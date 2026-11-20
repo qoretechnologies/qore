@@ -1,18 +1,15 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
+# the cases of the AOTSymbolIndex-<n>.qtest tests: each runs one part of them, so that each takes a short time, and
+# together they run every case (see addPartCase()); the whole test took 45 s of CPU time alone in a debug build
+# and was killed at the runner's 300 s limit under load
 
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
-%requires ../TestInterpreter.qm
-%requires FsUtil
-
-%exec-class AOTSymbolIndexTest
-
-class AOTSymbolIndexTest inherits QUnit::Test {
+class AOTSymbolIndexBase inherits QUnit::Test {
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
         string qore_bin;
         string qcc_bin;
         string libqore_dir;
@@ -21,93 +18,101 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string last_out;
     }
 
-    constructor() : QUnit::Test("AOTSymbolIndexTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
-        addTestCase("definitions and native symbols", \testDefinitionsAndNativeSymbols());
-        addTestCase("symbol hash behavior", \testHashBehavior());
-        addTestCase("complex constant value hashing", \testComplexConstantValueHashing());
-        addTestCase("symbol index JSON dump", \testDumpIndexJson());
-        addTestCase("slot-map dump parses global slot flags", \testDumpInfoGlobalSlotFlags());
-        addTestCase("source parse defines in symbol index", \testSourceParseDefines());
-        addTestCase("standalone global import resolves at link time", \testStandaloneGlobalImport());
-        addTestCase("qo link accepts builtin runtime imports", \testQoLinkBuiltinRuntimeImports());
-        addTestCase("standalone deferred global lvalue paths resolve at link time",
+        addPartCase(1, "definitions and native symbols", \testDefinitionsAndNativeSymbols());
+        addPartCase(1, "symbol hash behavior", \testHashBehavior());
+        addPartCase(1, "complex constant value hashing", \testComplexConstantValueHashing());
+        addPartCase(1, "symbol index JSON dump", \testDumpIndexJson());
+        addPartCase(1, "slot-map dump parses global slot flags", \testDumpInfoGlobalSlotFlags());
+        addPartCase(1, "source parse defines in symbol index", \testSourceParseDefines());
+        addPartCase(1, "standalone global import resolves at link time", \testStandaloneGlobalImport());
+        addPartCase(1, "qo link accepts builtin runtime imports", \testQoLinkBuiltinRuntimeImports());
+        addPartCase(1, "standalone deferred global lvalue paths resolve at link time",
             \testStandaloneDeferredGlobalLValuePathImport());
-        addTestCase("standalone class type import resolves at link time", \testStandaloneClassTypeImport());
-        addTestCase("source symbol manifest defers shadowed loaded classes",
+        addPartCase(1, "standalone class type import resolves at link time", \testStandaloneClassTypeImport());
+        addPartCase(1, "source symbol manifest defers shadowed loaded classes",
             \testSourceSymbolManifestDefersShadowedLoadedClasses());
-        addTestCase("source symbol manifest records exact callable providers",
+        addPartCase(1, "source symbol manifest records exact callable providers",
             \testSourceSymbolManifestRecordsExactCallableProviders());
-        addTestCase("source symbol manifest records typedefs and refreshes old caches",
+        addPartCase(1, "source symbol manifest records typedefs and refreshes old caches",
             \testSourceSymbolManifestTypedefs());
-        addTestCase("exec-class is a reference and preserves global type contracts in partial parses",
+        addPartCase(1, "exec-class is a reference and preserves global type contracts in partial parses",
             \testExecClassPreservesGlobalTypeContract());
-        addTestCase("source symbol manifest preserves namespaces across scanner edge tokens",
+        addPartCase(1, "source symbol manifest preserves namespaces across scanner edge tokens",
             \testSourceSymbolManifestPreservesNamespacesAcrossListIndexToken());
-        addTestCase("source-order cache incrementally refreshes changed providers and consumers",
+        addPartCase(1, "source-order cache incrementally refreshes changed providers and consumers",
             \testSourceOrderCacheIncrementalRefresh());
-        addTestCase("source order requires static parameter default providers",
+        addPartCase(1, "source order requires static parameter default providers",
             \testSourceOrderRequiresStaticParameterDefaultProvider());
-        addTestCase("standalone abstract returns match deferred class types",
+        addPartCase(1, "standalone abstract returns match deferred class types",
             \testStandaloneDeferredAbstractReturnTypes());
-        addTestCase("manifest-deferred abstract returns match rooted loaded class types",
+        addPartCase(1, "manifest-deferred abstract returns match rooted loaded class types",
             \testManifestDeferredAbstractReturnTypes());
-        addTestCase("a deferred constant is not cached as a known NOTHING value",
+        addPartCase(1, "a deferred constant is not cached as a known NOTHING value",
             \testDeferredParseValueIsNotNothing());
-        addTestCase("standalone deferred class overload types stay distinct",
+        addPartCase(2, "standalone deferred class overload types stay distinct",
             \testStandaloneDeferredClassOverloadTypes());
-        addTestCase("standalone static complex defaults preserve nested object types",
+        addPartCase(2, "standalone static complex defaults preserve nested object types",
             \testStandaloneStaticComplexDefaultTypeImport());
-        addTestCase("sibling object defaults resolve during source preload",
+        addPartCase(2, "sibling object defaults resolve during source preload",
             \testSiblingObjectDefaultPreloadImport());
-        addTestCase("resolved constructor defaults retain sibling class imports",
+        addPartCase(2, "resolved constructor defaults retain sibling class imports",
             \testResolvedConstructorDefaultClassImport());
-        addTestCase("sibling namespaced object type import resolves at link time",
+        addPartCase(2, "sibling namespaced object type import resolves at link time",
             \testSiblingNamespacedObjectTypeImport());
-        addTestCase("standalone hashdecl type import resolves at link time", \testStandaloneHashdeclTypeImport());
-        addTestCase("standalone hashdecl implied constructor resolves at link time",
+        addPartCase(2, "standalone hashdecl type import resolves at link time", \testStandaloneHashdeclTypeImport());
+        addPartCase(2, "standalone hashdecl implied constructor resolves at link time",
             \testStandaloneHashdeclImpliedConstructorImport());
-        addTestCase("standalone constructor import resolves at link time", \testStandaloneConstructorImport());
-        addTestCase("standalone cast import resolves at link time", \testStandaloneCastImport());
-        addTestCase("standalone implied constructor import resolves at link time",
+        addPartCase(2, "standalone constructor import resolves at link time", \testStandaloneConstructorImport());
+        addPartCase(2, "standalone cast import resolves at link time", \testStandaloneCastImport());
+        addPartCase(2, "standalone implied constructor import resolves at link time",
             \testStandaloneImpliedConstructorImport());
-        addTestCase("standalone static method import resolves at link time", \testStandaloneStaticMethodImport());
-        addTestCase("standalone static method call reference resolves at link time",
+        addPartCase(2, "standalone static method import resolves at link time", \testStandaloneStaticMethodImport());
+        addPartCase(2, "standalone static method call reference resolves at link time",
             \testStandaloneStaticMethodCallReferenceImport());
-        addTestCase("standalone static member import resolves at link time", \testStandaloneStaticMemberImport());
-        addTestCase("inherited static class members are linkable aliases",
+        addPartCase(2, "standalone static member import resolves at link time", \testStandaloneStaticMemberImport());
+        addPartCase(2, "inherited static class members are linkable aliases",
             \testInheritedStaticMemberAliases());
-        addTestCase("standalone deferred switch constants resolve at link time",
+        addPartCase(2, "standalone deferred switch constants resolve at link time",
             \testStandaloneDeferredSwitchConstantImport());
-        addTestCase("static member constant initializer resolves at link time",
+        addPartCase(2, "static member constant initializer resolves at link time",
             \testStaticMemberConstantInitializerImport());
-        addTestCase("pending static constant base constructor args stay typed",
+        addPartCase(2, "pending static constant base constructor args stay typed",
             \testPendingStaticConstantBaseConstructorArgs());
-        addTestCase("static member variable initializer resolves at link time",
+        addPartCase(2, "static member variable initializer resolves at link time",
             \testStaticMemberVariableInitializerImport());
-        addTestCase("static member object initializer resolves at link time",
+        addPartCase(2, "static member object initializer resolves at link time",
             \testStaticMemberObjectInitializerImport());
-        addTestCase("reflection class initializer resolves at link time",
+        addPartCase(2, "reflection class initializer resolves at link time",
             \testReflectionClassInitializerImport());
-        addTestCase("standalone namespaced suffix imports resolve at link time",
+        addPartCase(2, "standalone namespaced suffix imports resolve at link time",
             \testStandaloneNamespacedSuffixImports());
-        addTestCase("standalone function import resolves at link time", \testStandaloneFunctionImport());
-        addTestCase("serialized constructor function calls defer during preload",
+        addPartCase(2, "standalone function import resolves at link time", \testStandaloneFunctionImport());
+        addPartCase(2, "serialized constructor function calls defer during preload",
             \testSerializedConstructorFunctionCallPreload());
-        addTestCase("a subset parse resolves providers it is compiling itself",
+        addPartCase(2, "a subset parse resolves providers it is compiling itself",
             \testSubsetParseResolvesItsOwnProviders());
-        addTestCase("a parse against shells publishes the whole-group parse's declarations",
+        addPartCase(2, "a parse against shells publishes the whole-group parse's declarations",
             \testShellParseDeclarationsMatchGroupParse());
-        addTestCase("an object carries one copy of its AOT metadata",
+        addPartCase(2, "an object carries one copy of its AOT metadata",
             \testSingleMetadataBlobPerObject());
-        addTestCase("qo link aggregate", \testQoLinkAggregate());
-        addTestCase("prelinked call disable switch", \testPrelinkedCallDisableSwitch());
+        addPartCase(2, "qo link aggregate", \testQoLinkAggregate());
+        addPartCase(2, "prelinked call disable switch", \testPrelinkedCallDisableSwitch());
 
         set_return_value(main());
+    }
+
+    #! adds the test case if it is in the part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     private string run(string cmd) {
