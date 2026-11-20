@@ -50,7 +50,7 @@
 %requires json
 
 module RestClient {
-    version = "2.8";
+    version = "2.7";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -174,14 +174,12 @@ printf("%Y\n", ans.body);
 /** @page restclientrelnotes Release Notes
 
 
-    @section restclientv2_8 RestClient v2.8
+    @section restclientv2_7 RestClient v2.7
     - a connection whose \c required_options offer OAuth2 with a key as the fallback and that is configured with the
       key does not use its defaulted OAuth2 grant type: it is not reported as down for missing OAuth2 options, does
       not need authorization, claims no OAuth2 features and creates clients without the OAuth2 options (see
       @ref RestClient::AbstractRestConnection::usesNonOAuth2Credential() "usesNonOAuth2Credential()";
       <a href="https://github.com/qoretechnologies/qore/issues/6901">issue 6901</a>)
-
-    @section restclientv2_7 RestClient v2.7
     - the \c headers of a @ref RestClient::RestResponseInfo "RestResponseInfo" hash are the header fields of the
       response, without the \c headers and \c trailers sub-hashes that an @ref Qore::HTTPClient "HTTPClient" response
       now has; RestClient raises \c RESTCLIENT-ERROR for the HTTPClient option \c http_fields_at_top_level set to
@@ -5167,7 +5165,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         #! The generic credentials of a REST connection, used with a \c required_options alternative naming none
         /** @see usesNonOAuth2Credential()
 
-            @since %RestClient 2.8
+            @since %RestClient 2.7
         */
         const list<string> GenericCredentialOptions = ("password", "token");
     }
@@ -5849,7 +5847,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         Connection classes whose fallback credential is not an alternative of their \c required_options can
         override this method.
 
-        @since %RestClient 2.8
+        @since %RestClient 2.7
     */
     private bool usesNonOAuth2Credential() {
         hash<ConnectionSchemeInfo> scheme = getConnectionSchemeInfo();
@@ -5930,7 +5928,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     }
 
     #! Returns @ref True if the connection uses an OAuth2 grant type with an authorization step
-    /** @since %RestClient 2.8
+    /** @since %RestClient 2.7
     */
     private bool hasInteractiveOAuth2Grant() {
         return (opts.oauth2_grant_type == "authorization_code" || opts.oauth2_grant_type == "implicit")

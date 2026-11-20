@@ -29,7 +29,7 @@
 %modern
 
 %requires(reexport) Mime >= 1.3
-%requires(reexport) RestClient >= 2.8
+%requires(reexport) RestClient >= 2.7
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
