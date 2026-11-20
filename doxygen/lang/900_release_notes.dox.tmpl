@@ -1912,6 +1912,9 @@
       - memory-based backpressure for @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
       - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - a message can be logged as it is, with no formatting, with
+        @ref Qore::Logger::Logger::logPreformatted() "Logger::logPreformatted()"
+        (<a href="https://github.com/qoretechnologies/qore/issues/3420">issue 3420</a>)
       - see @ref logger_v1_1 for all changes
 
     - @ref mailmessageintro "MailMessage" module

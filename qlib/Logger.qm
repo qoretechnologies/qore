@@ -288,6 +288,8 @@ if (laq.isFull()) {
     @tableofcontents
 
     @section logger_v1_1 v1.1
+    - @ref Logger::LoggerWrapper::logPreformatted() "LoggerWrapper::logPreformatted()" logs a message as it is, with no
+      formatting (<a href="https://github.com/qoretechnologies/qore/issues/3420">issue 3420</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"):
       @ref Logger::StdoutAppender "StdoutAppender" writes with @ref Qore::stdout "stdout", which needs terminal I/O only
       when it is written (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -2942,6 +2944,51 @@ public class LoggerWrapper inherits LoggerInterface {
         *LoggerInterface logger = getLogger();
         if (logger) {
             logger.logArgs(level, message, args);
+        }
+    }
+
+    #! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+    /** Logging is only performed if a logger is set
+
+        @param level the logging level
+        @param message the message, which is logged as it is
+
+        @since Logger 1.1
+    */
+    logPreformatted(Qore::Logger::LoggerLevel level, string message) {
+        *LoggerInterface logger = getLogger();
+        if (logger) {
+            logger.logPreformatted(level, message);
+        }
+    }
+
+    #! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+    /** Logging is only performed if a logger is set
+
+        @param level the logging level
+        @param message the message, which is logged as it is
+
+        @since Logger 1.1
+    */
+    logPreformatted(int level, string message) {
+        *LoggerInterface logger = getLogger();
+        if (logger) {
+            logger.logPreformatted(level, message);
+        }
+    }
+
+    #! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+    /** Logging is only performed if a logger is set
+
+        @param level the logging level
+        @param message the message, which is logged as it is
+
+        @since Logger 1.1
+    */
+    logPreformatted(string level, string message) {
+        *LoggerInterface logger = getLogger();
+        if (logger) {
+            logger.logPreformatted(level, message);
         }
     }
 
