@@ -74,7 +74,25 @@ static bool ends_with(const std::string& str, const char* suffix) {
     return str.size() > len && !str.compare(str.size() - len, len, suffix);
 }
 
+static bool starts_with(const std::string& str, const char* prefix) {
+    return !str.compare(0, strlen(prefix), prefix);
+}
+
+// returns true if the media type is that of a body of length-prefixed message envelopes: a Connect stream
+// ("application/connect+<codec>", also "application/connect+datagram+<codec>") or gRPC ("application/grpc",
+// "application/grpc+<codec>") and gRPC-Web ("application/grpc-web", "application/grpc-web+<codec>"); the suffix names
+// the codec of the messages, not the format of the body, whose length prefixes and compressed messages are binary
+// data, so that a "+json", "+yaml" or "+xml" suffix does not make it text
+static bool is_envelope_media_type(const std::string& media_type) {
+    return starts_with(media_type, "application/connect+")
+        || media_type == "application/grpc" || starts_with(media_type, "application/grpc+")
+        || media_type == "application/grpc-web" || starts_with(media_type, "application/grpc-web+");
+}
+
 static QoreHttpBodyKind http_media_type_kind(const std::string& media_type) {
+    if (is_envelope_media_type(media_type)) {
+        return QoreHttpBodyKind::Binary;
+    }
     if (media_type == "application/json" || media_type == "text/json" || ends_with(media_type, "+json")) {
         return QoreHttpBodyKind::Json;
     }
@@ -111,6 +129,7 @@ static QoreHttpBodyKind http_media_type_kind(const std::string& media_type) {
 // returns true if the media type is binary by definition, so that a charset parameter does not make it text
 static bool is_binary_media_type(const std::string& media_type) {
     return media_type == "application/octet-stream"
+        || is_envelope_media_type(media_type)
         || !media_type.compare(0, 6, "image/")
         || !media_type.compare(0, 6, "audio/")
         || !media_type.compare(0, 6, "video/")

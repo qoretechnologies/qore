@@ -26,6 +26,7 @@ public class HttpBodyCharsetTest inherits QUnit::Test {
         addTestCase("JavaScript and form data", \scriptTest());
         addTestCase("other text", \textTest());
         addTestCase("binary types", \binaryTest());
+        addTestCase("Connect and gRPC enveloped streams", \envelopedStreamTest());
         addTestCase("no Content-Type", \noContentTypeTest());
         addTestCase("decoding", \decodeTest());
         addTestCase("text that is not valid in its encoding", \invalidTextTest());
@@ -162,6 +163,41 @@ public class HttpBodyCharsetTest inherits QUnit::Test {
                 "application/pdf", "multipart/form-data; boundary=x") {
             assertNothing(get_http_body_encoding(ct, binary("abc")), ct);
             assertEq(binary("abc"), decode_http_body(ct, binary("abc")), ct);
+        }
+    }
+
+    # the bodies of Connect streaming and gRPC are length-prefixed envelopes, binary data whatever codec the suffix of
+    # the media type names (a "+json" suffix is the codec of the messages, not the format of the body): the length
+    # prefix and a compressed message are not text in any encoding
+    envelopedStreamTest() {
+        # an envelope: flags (compressed), a big-endian length, and a gzip-compressed JSON message
+        binary msg = gzip(binary("{\"index\":0,\"value\":\"msg-0\"}"));
+        binary compressed = <01> + parse_hex_string(sprintf("%08x", msg.size())) + msg;
+        # an uncompressed message of 128 bytes: its length prefix ends with 0x80, which is not valid UTF-8 there
+        binary json = binary("{\"value\":\"" + strmul("x", 116) + "\"}");
+        assertEq(128, json.size());
+        binary uncompressed = <00> + parse_hex_string(sprintf("%08x", json.size())) + json;
+        foreach string ct in ("application/connect+json", "application/connect+yaml", "application/connect+proto",
+                "application/connect+cbor", "application/connect+xml", "application/connect+datagram+json",
+                "Application/Connect+JSON", "application/connect+json; charset=utf-8", "application/grpc",
+                "application/grpc+json", "application/grpc+proto; charset=utf-8", "application/grpc-web",
+                "application/grpc-web+json", "application/grpc-web+yaml") {
+            foreach binary body in ((compressed, uncompressed)) {
+                assertNothing(get_http_body_encoding(ct, body), ct);
+                # binary data whatever encoding_errors says
+                foreach string mode in ("raise", "latin1", "keep") {
+                    auto rv = decode_http_body(ct, body, encoding_errors: mode);
+                    assertEq(NT_BINARY, rv.typeCode(), ct + " " + mode);
+                    assertEq(body, rv, ct + " " + mode);
+                }
+            }
+        }
+        # the unary Connect protocol sends a bare message: its JSON is text
+        assertEq("UTF-8", get_http_body_encoding("application/json", json));
+        # other types with a "+json" suffix are JSON: only the media types of the envelope protocols are binary
+        foreach string ct in ("application/connector+json", "application/grpcx+json", "application/grpc-webx+json",
+                "application/x-connect+json") {
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("{}")), ct);
         }
     }
 
