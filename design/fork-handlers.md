@@ -20,7 +20,7 @@ Each handler belongs to one rank (the lock order below) and one mode:
 
 | Mode | Before `fork()` | In the parent | In the child |
 |---|---|---|---|
-| `QFLM_ACQUIRE` | acquires the lock (waits for its holder) | releases it | initializes it again (it is held by the forking thread) |
+| `QFLM_ACQUIRE` | acquires the lock (waits for its holder) | releases it | releases it (it is held by the forking thread); a recursive lock is initialized again |
 | `QFLM_TRY` | acquires the lock only if it is free | releases it if acquired | initializes it again; the owner learns from `wasAcquired()` whether the protected data is consistent |
 | `QFLM_RESET` | nothing | nothing | initializes it again; the owner repairs or abandons the protected data |
 
@@ -38,6 +38,14 @@ Each handler belongs to one rank (the lock order below) and one mode:
   unlocked in the child, so that ThreadSanitizer sees the release: a lock that it considers held for the rest of the
   child's life makes it report a lock order inversion for every lock that the child takes after it and that was taken
   before it in the parent (qore#6177's leaf lock, which the parent takes under a Program's options lock, showed it).
+  The handlers with fork code of their own release such locks in the child too (qore#6817: one that they initialized
+  again made TSan report double locks, and races on every access made under the lock afterwards): the thread list's
+  lock, the signal manager's mutex and the lock of its thread count, the process-wide thread counters, the condition
+  waker's and the external thread reaper's locks, the DBI object registry's, the asynchronous I/O controller
+  singleton's, the sandbox watchdog's and the exit hooks' locks, the counters of `QoreForkCounter`
+  (`qore_counter_ops::releaseAfterFork()`), and the locks that `qore_fork_prepare_thread_lock()` acquired, which
+  `qore_fork_child_thread_lock()` releases.  The striped leaf locks are the exception: they are initialized again in the
+  child (TSan builds do not acquire them before `fork()`, so TSan never considers them held; `QFLM_STRIPED`, below).
   Any other lock is initialized again in the child rather than unlocked: a recursive mutex held by the forking thread
   cannot be unlocked there on glibc (its owner is the parent's thread ID), and a lock that the handler did not
   acquire can be held by a thread that does not exist in the child. It is first reset by assigning its static

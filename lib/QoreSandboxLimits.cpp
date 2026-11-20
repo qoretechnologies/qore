@@ -262,7 +262,8 @@ public:
     void forkChild() {
         started = stopping = false;
         qore_condition_ops(cond).reinitAfterFork();
-        lck.reinitAfterFork();
+        // released, so that ThreadSanitizer sees the release (issue #6817)
+        lck.unlock();
     }
 
     QoreThreadLock lck;

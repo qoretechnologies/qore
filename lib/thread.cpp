@@ -8891,7 +8891,8 @@ public:
         head = tail = nullptr;
         counted_head = counted_tail = nullptr;
         qore_condition_ops(condition).reinitAfterFork();
-        mutex.reinitAfterFork();
+        // held by this thread since forkPrepare(): released (issue #6817)
+        mutex.unlock();
     }
 
 private:
@@ -10923,7 +10924,8 @@ public:
         head = tail = -1;
         qore_condition_ops(done).reinitAfterFork();
         qore_condition_ops(cond_ready).reinitAfterFork();
-        lck.reinitAfterFork();
+        // held by this thread since the prepare handler: released (issue #6817)
+        lck.unlock();
     }
 
 private:
@@ -10995,8 +10997,10 @@ void QoreThreadList::forkChild(int tid) {
         }
     }
     num_threads = (tid > 0 && !entry[tid].available()) ? 1 : 0;
-    // held by this thread since forkPrepare()
-    lck.reinitAfterFork();
+    // held by this thread since forkPrepare(): released, so that the release is seen (by ThreadSanitizer, which
+    // otherwise considers it held by this thread for the rest of the child's life; issue #6817), as
+    // QoreForkThreadLock::child() does
+    lck.unlock();
     // the joiners of the parent do not exist in the child, and one of them may have held join_lck
     join_lck.reinitAfterFork();
     qore_condition_ops(join_cond).reinitAfterFork();
@@ -11051,8 +11055,9 @@ public:
     }
 
     void child() noexcept override {
-        qore_counter_ops(tp_thread_counter).reinitAfterFork(qore_tp_thread_counter_share);
-        qore_counter_ops(thread_counter).reinitAfterFork(qore_thread_counter_share);
+        // held by this thread since prepare(): released (issue #6817)
+        qore_counter_ops(tp_thread_counter).releaseAfterFork(qore_tp_thread_counter_share);
+        qore_counter_ops(thread_counter).releaseAfterFork(qore_thread_counter_share);
     }
 };
 
