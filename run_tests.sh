@@ -1471,7 +1471,9 @@ done
 # seconds (default 30), and all of them together take at most QORE_TEST_STACK_CAPTURE_TOTAL seconds (default 120), so
 # a debugger that hangs cannot hold up the run; a tool that is missing, fails or is ended for its time is reported, as
 # is each process left without its stacks.  A debugger that cannot attach prints why (Linux: ptrace restricted by
-# yama's ptrace_scope, or a container without CAP_SYS_PTRACE; macOS: lldb cannot attach to a system binary).
+# yama's ptrace_scope, or a container without CAP_SYS_PTRACE; macOS: lldb cannot attach to a system binary).  The
+# watchdog reads no event while it captures, so a run interrupted meanwhile ends its test once the captures have
+# ended (see runner_signaled()), within QORE_TEST_STACK_CAPTURE_TOTAL seconds.
 TEST_STACK_CAPTURE_WAIT=${QORE_TEST_STACK_CAPTURE_WAIT:-30}
 TEST_STACK_CAPTURE_TOTAL=${QORE_TEST_STACK_CAPTURE_TOTAL:-120}
 if [ -n "$QORE_TEST_STACK_TOOLS" ]; then
