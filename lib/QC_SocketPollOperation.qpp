@@ -100,8 +100,8 @@ SocketPollOperation::constructor(Socket[QoreSocketObject] socket, string goal, *
     poller->setSelf(self);
     self->setPrivate(CID_SOCKETPOLLOPERATION, poller.release());
     if (!*xsink) {
-        self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, obj_socket->objectRefSelf(), xsink);
-        self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, goal->stringRefSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", obj_socket->objectRefSelf(), xsink);
+        qore_poll_op_set_member(self, "goal", goal->stringRefSelf(), xsink);
     }
 }
 

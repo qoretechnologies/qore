@@ -3721,11 +3721,9 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE,
-            sock_obj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_obj->refSelf(), xsink);
     }
-    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
-        new QoreStringNode("http1_client"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("http1_client"), xsink);
 
     // Set self on the connect op so it can build SocketPollInfo hashes
     SocketConnectPollOperation* connect_ptr = connect_op.release();
@@ -3769,7 +3767,7 @@ int Http1ClientPollOperationBase::getIdleTime() [flags=CONSTANT] {
 /** @return the goal string
 */
 string Http1ClientPollOperationBase::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -4340,5 +4338,5 @@ nothing Http1ClientPollOperationBase::installSseState(int stream_id, Queue[Queue
 /** @return the socket
 */
 Socket Http1ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }

@@ -65,8 +65,9 @@
     QoreNumberNode::getDecimalString() (#6837), QoreObject::setInternalMemberValue() (#6839);
     changed in 2.3 (never in a released module API): qore_type_get_code_param_types() and
     qore_type_get_type_arguments() copy the types to a type_vec_t that the caller gives and return a bool, instead of
-    returning a pointer to internal storage (#6419); SocketPollOperationBase::getReferencedSocketObject() reads the
-    "sock" member, which is private:internal to SocketPollOperationBase, with that class (#6839)
+    returning a pointer to internal storage (#6419); SocketPollOperationBase::getReferencedSocketObject() is exported
+    instead of inline, and the classes of qore/SocketPollOperation.h (SocketPollSocketOperationBase and its subclasses)
+    have the base class SocketPollOperationMembers, which keeps the socket and goal of their objects (#6839)
 */
 #define QORE_MODULE_API_MINOR 3
 

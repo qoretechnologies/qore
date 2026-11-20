@@ -44,9 +44,10 @@
     A subclass gets the goal with getGoal() and the socket with the \c getSocket() method of the poll operations
     that have one; a subclass of @ref Qore::PollPipeline "PollPipeline" sets the goal with
     @ref Qore::PollPipeline::setGoal() "PollPipeline::setGoal()".  A member of the same name that a subclass declares
-    is a member of its own.  C++ code accesses the members with this class
-    (\c QoreObject::setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, ...), and read them with
-    \c QoreObject::getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, ...)).
+    is a member of its own.  The operations of @ref Qore::SocketPollOperation "SocketPollOperation" objects (also
+    those of the synchronous @ref Qore::Socket "Socket" calls) keep the socket and the goal with the operation instead
+    of in these members, so that no member storage is allocated for them; the library accesses both forms with
+    \c qore_poll_op_set_member() and \c qore_poll_op_get_referenced_member().
 
     This class is only usable by internal classes; it is not directly usable by %Qore classes.
 
@@ -75,6 +76,9 @@ SocketPollOperationBase::constructor() {
 /**
 */
 SocketPollOperationBase::destructor() {
+    // the socket and the goal that the operation keeps with it are released with the object, as its members are
+    // (qore#6839)
+    qore_poll_op_release_members(poll, xsink);
     poll->deref(xsink);
 }
 
@@ -82,7 +86,7 @@ SocketPollOperationBase::destructor() {
 /** @return the goal set in the constructor
 */
 string SocketPollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state

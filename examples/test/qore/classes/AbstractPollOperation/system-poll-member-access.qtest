@@ -22,6 +22,7 @@ class SystemPollMemberAccessTest inherits QUnit::Test {
         addTestCase("setGoal()", \setGoalTest());
         addTestCase("the members are not shown with the object", \formatTest());
         addTestCase("a member of the name written from outside", \outsideWriteTest());
+        addTestCase("SocketPollOperation keeps its socket and goal with the operation", \socketPollOperationTest());
         set_return_value(main());
     }
 
@@ -115,6 +116,36 @@ list<auto> sub t() {
     }
     return (o.goal, s.getGoal(), dumped);
 }"));
+    }
+
+    #! a SocketPollOperation keeps its socket and goal with the operation, where no Qore code reaches them
+    socketPollOperationTest() {
+        Socket sock();
+        SocketPollOperation op(sock, "connect", {"url": "localhost:1"});
+        assertEq("connect", op.getGoal());
+        # a value written from outside with the name goes to the object's own data and changes nothing
+        auto o = op;
+        o.goal = "outside";
+        o.sock = "outside";
+        assertEq("outside", o.goal);
+        assertEq("connect", op.getGoal());
+        # the object does not show them
+        string str = sprintf("%y", op);
+        assertNRegex("connect", str);
+        # a subclass cannot name them
+        foreach string mem in ("goal", "sock") {
+            assertTrue(exists parseError("class S inherits SocketPollOperation { auto r() { return " + mem + "; } }"),
+                mem);
+            assertTrue(exists parseError("class S inherits SocketPollOperation { auto r() { return self." + mem
+                + "; } }"), mem);
+        }
+        # nor can a sandboxed Program that gets the object (qore#6839)
+        Program p(PO_MODERN | PO_NO_PROCESS_CONTROL);
+        p.parse("auto sub t(object o) { return o.goal; } string sub g(SocketPollOperation o) { return o.getGoal(); }",
+            "sandboxed");
+        SocketPollOperation op2(sock, "connect", {"url": "localhost:1"});
+        assertNothing(p.callFunction("t", op2));
+        assertEq("connect", p.callFunction("g", op2));
     }
 
     formatTest() {

@@ -72,8 +72,8 @@ FilePollOperation::constructor(ReadOnlyFile[File] file, string path, bool as_str
     poller->setSelf(self);
     self->setPrivate(CID_FILEPOLLOPERATION, poller.release());
     if (!*xsink) {
-        self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, obj_file->objectRefSelf(), xsink);
-        self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("read-done"), xsink);
+        qore_poll_op_set_member(self, "sock", obj_file->objectRefSelf(), xsink);
+        qore_poll_op_set_member(self, "goal", new QoreStringNode("read-done"), xsink);
     }
 }
 

@@ -465,11 +465,11 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
 
     // 9. Set the poll op's "sock" and "goal" members so SocketPollInfo
     //    hashes from inner ops have the right socket ref.
-    poll_obj_holder->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj_holder->refSelf(), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "sock", sock_obj_holder->refSelf(), xsink);
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("negotiate"), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "goal", new QoreStringNode("negotiate"), xsink);
     if (*xsink) {
         return -1;
     }

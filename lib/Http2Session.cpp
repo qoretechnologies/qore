@@ -320,8 +320,8 @@ static QoreValue http2_exec_poll(qore_socket_private* sock, SocketPollOperationB
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(op_obj, "sock", (*sock_obj)->objectRefSelf(), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
         return QoreValue();

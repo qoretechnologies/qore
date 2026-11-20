@@ -600,7 +600,7 @@ HttpAcceptPollOperationBase::constructor(Socket[QoreSocketObject] listener, obje
     // status to OS_DELETED before the inner accept op releases its own "sock" ref,
     // leaving the Socket with a non-zero ref count.
     // The C++ listener_sock ref provides the needed listener reference for I/O operations.
-    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("http_accept"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("http_accept"), xsink);
 
     // Extract SSLCertificate from the certificate QoreObject (if provided)
     QoreSSLCertificate* cert_ptr = nullptr;
@@ -674,7 +674,7 @@ HttpAcceptPollOperationBase::copy() {
 /** @return "http_accept"
 */
 string HttpAcceptPollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state

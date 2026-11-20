@@ -281,12 +281,11 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     inner_ptr->setSelf(*poll_obj_holder);
 
     // 6. Set QoreObject members.
-    poll_obj_holder->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj_holder->refSelf(), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "sock", sock_obj_holder->refSelf(), xsink);
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
-        new QoreStringNode("http3_client"), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "goal", new QoreStringNode("http3_client"), xsink);
     if (*xsink) {
         return -1;
     }

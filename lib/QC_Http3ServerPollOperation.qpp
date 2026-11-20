@@ -1112,11 +1112,9 @@ Http3ServerPollOperation::constructor(Socket[QoreSocketObject] socket,
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE,
-            sock_obj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_obj->refSelf(), xsink);
     }
-    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
-        new QoreStringNode("http3_connection"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("http3_connection"), xsink);
 
     // Create private data — ref sock for ownership
     sock_ptr->ref();
@@ -1154,7 +1152,7 @@ Http3ServerPollOperation::copy() {
 /** @return the goal string "http3_connection"
 */
 string Http3ServerPollOperation::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -1192,7 +1190,7 @@ bool Http3ServerPollOperation::goalReached() [flags=RET_VALUE_ONLY] {
 /** @return the socket object
 */
 Socket Http3ServerPollOperation::getSocket() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }
 
 //! Returns True if the connection should be kept alive

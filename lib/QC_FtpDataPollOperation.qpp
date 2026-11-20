@@ -68,7 +68,7 @@ static QoreObject* ftp_data_keep_sock_object(QoreObject* self) {
         return nullptr;
     }
     ExceptionSink xsink;
-    ValueHolder v(self->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, &xsink), &xsink);
+    ValueHolder v(qore_poll_op_get_referenced_member(self, "sock", &xsink), &xsink);
     if (xsink) {
         xsink.clear();
         return nullptr;
@@ -626,7 +626,7 @@ QoreObject* FtpDataPollOperationPriv::submitToController(ExceptionSink* xsink, c
     }
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
-    ValueHolder sock_val((*self)->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink), xsink);
+    ValueHolder sock_val(qore_poll_op_get_referenced_member((*self), "sock", xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -675,12 +675,12 @@ FtpDataPollOperation::constructor(string host, int port, bool secure_data = Fals
     // op owns the only extra ref. The FTP priv keeps a raw pointer.
     QoreSocketObject* sock_priv = new QoreSocketObject;
     QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
-    self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj, xsink);
+    qore_poll_op_set_member(self, "sock", sock_obj, xsink);
     if (*xsink) {
         sock_obj->deref(xsink);
         return;
     }
-    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("ftp-data-recv"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("ftp-data-recv"), xsink);
     if (*xsink) {
         return;
     }
@@ -722,12 +722,12 @@ FtpDataPollOperation::constructor(string host, int port, binary data, bool secur
     // op owns the only extra ref. The FTP priv keeps a raw pointer.
     QoreSocketObject* sock_priv = new QoreSocketObject;
     QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
-    self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj, xsink);
+    qore_poll_op_set_member(self, "sock", sock_obj, xsink);
     if (*xsink) {
         sock_obj->deref(xsink);
         return;
     }
-    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("ftp-data-send"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("ftp-data-send"), xsink);
     if (*xsink) {
         return;
     }
@@ -766,7 +766,7 @@ FtpDataPollOperation::destructor() {
 /** @return the goal string describing this data transfer
 */
 string FtpDataPollOperation::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state

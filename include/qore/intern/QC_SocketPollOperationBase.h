@@ -48,6 +48,35 @@ DLLLOCAL QoreClass* initSocketPollOperationBaseClass(QoreNamespace& qorens);
 */
 DLLLOCAL void qore_socket_poll_op_object_deleted(SocketPollOperationBase* op);
 
+//! Sets the \c "sock" or \c "goal" of the object of a poll operation (qore#6839)
+/** An operation of qore/SocketPollOperation.h keeps them with the operation (SocketPollOperationMembers); the other
+    operations in the private:internal members of SocketPollOperationBase
+
+    @param op_obj the object of the operation
+    @param key \c "sock" or \c "goal"
+    @param val the value; its reference is consumed
+    @param xsink for Qore-language exceptions
+
+    @return 0 = OK, -1 = exception raised
+*/
+DLLLOCAL int qore_poll_op_set_member(QoreObject* op_obj, const char* key, QoreValue val, ExceptionSink* xsink);
+
+//! Sets the \c "sock" or \c "goal" of the object of a poll operation held by a ReferenceHolder (qore#6839)
+template <typename T>
+DLLLOCAL int qore_poll_op_set_member(ReferenceHolder<T>& op_obj, const char* key, QoreValue val,
+        ExceptionSink* xsink) {
+    return qore_poll_op_set_member(*op_obj, key, val, xsink);
+}
+
+//! Returns the referenced \c "sock" or \c "goal" of the object of a poll operation (qore#6839)
+/** see qore_poll_op_set_member()
+*/
+DLLLOCAL QoreValue qore_poll_op_get_referenced_member(const QoreObject* op_obj, const char* key,
+        ExceptionSink* xsink);
+
+//! Releases the \c "sock" and \c "goal" that an operation keeps with it, when its object is deleted (qore#6839)
+DLLLOCAL int qore_poll_op_release_members(SocketPollOperationBase* op, ExceptionSink* xsink);
+
 //! Called by the destructor of the Qore object of a poll operation without a C++ poll operation (one implemented in
 //! %Qore): a submitted operation is canceled (qore#6531)
 /** Does not wait for the I/O threads and runs no Qore code; nothing is done for an operation that was not submitted

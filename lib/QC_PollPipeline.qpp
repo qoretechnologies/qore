@@ -2285,10 +2285,9 @@ PollPipeline::constructor(Socket[QoreSocketObject] socket) [flags=NAMED_ARGS] {
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_obj->refSelf(), xsink);
     }
-    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
-        new QoreStringNode("poll_pipeline"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("poll_pipeline"), xsink);
 
     sock_ptr->ref();
     self->setPrivate(CID_POLLPIPELINE,
@@ -2304,7 +2303,7 @@ PollPipeline::constructor(Socket[QoreSocketObject] socket) [flags=NAMED_ARGS] {
     @since %Qore 3.0
 */
 PollPipeline::constructor(*string goal) [flags=NAMED_ARGS] {
-    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+    qore_poll_op_set_member(self, "goal",
         goal ? new QoreStringNode(goal->c_str()) : new QoreStringNode("poll_pipeline"), xsink);
 
     self->setPrivate(CID_POLLPIPELINE,
@@ -3228,7 +3227,7 @@ nothing PollPipeline::setResultChannel(object channel) [flags=NAMED_ARGS] {
 /** @return the goal string ("poll_pipeline")
 */
 string PollPipeline::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Sets the goal of the operation
@@ -3249,7 +3248,7 @@ class MyPollOperation inherits PollPipeline {
     @since %Qore 3.0
 */
 private nothing PollPipeline::setGoal(string goal) [flags=NAMED_ARGS] {
-    self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, goal->stringRefSelf(), xsink);
+    qore_poll_op_set_member(self, "goal", goal->stringRefSelf(), xsink);
 }
 
 //! Returns the current state

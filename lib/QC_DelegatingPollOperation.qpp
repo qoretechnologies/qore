@@ -331,12 +331,12 @@ DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code o
     // Copy goal and sock from inner operation
     ValueHolder goal_val(inner_obj->evalMethod("getGoal", nullptr, xsink), xsink);
     if (!*xsink) {
-        self->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, goal_val.release(), xsink);
+        qore_poll_op_set_member(self, "goal", goal_val.release(), xsink);
     }
     // Try to get sock from inner's members (for SocketPollOperationBase subclasses)
-    ValueHolder sock_val(inner_obj->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink), xsink);
+    ValueHolder sock_val(qore_poll_op_get_referenced_member(inner_obj, "sock", xsink), xsink);
     if (!*xsink && sock_val->getType() == NT_OBJECT) {
-        self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_val.release(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_val.release(), xsink);
     } else if (*xsink) {
         xsink->clear();
     }
@@ -385,7 +385,7 @@ DelegatingPollOperation::destructor() {
 /** @return the goal string from the inner operation
 */
 string DelegatingPollOperation::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", QC_SOCKETPOLLOPERATIONBASE, xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state

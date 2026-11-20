@@ -1491,8 +1491,8 @@ QoreObject* File::startPollRead(ExceptionSink* xsink, QoreObject* self, const ch
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_FILEPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, self->objectRefSelf(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("read-done"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("read-done"), xsink);
     }
     return rv.release();
 }

@@ -988,7 +988,7 @@ struct qore_ftp_private {
         ctrl_op_obj = new QoreObject(QC_FTPCONTROLPOLLOPERATION, getProgram());
         // Set sock member (setMemberValue takes ownership)
         QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
-        ctrl_op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj, xsink);
+        qore_poll_op_set_member(ctrl_op_obj, "sock", sock_obj, xsink);
         if (*xsink) {
             sock_obj->deref(xsink);
             connect_op->deref(xsink);
@@ -996,8 +996,7 @@ struct qore_ftp_private {
             ctrl_op_obj = nullptr;
             return -1;
         }
-        ctrl_op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
-            new QoreStringNode("ftp-login"), xsink);
+        qore_poll_op_set_member(ctrl_op_obj, "goal", new QoreStringNode("ftp-login"), xsink);
         if (*xsink) {
             connect_op->deref(xsink);
             ctrl_op_obj->deref(xsink);
@@ -1131,14 +1130,14 @@ struct qore_ftp_private {
         // Create QoreObject for the data poll op
         QoreObject* dop_obj = new QoreObject(QC_FTPDATAPOLLOPERATION, getProgram());
         QoreObject* dsock_obj = new QoreObject(QC_SOCKET, getProgram(), dsock);
-        dop_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, dsock_obj, xsink);
+        qore_poll_op_set_member(dop_obj, "sock", dsock_obj, xsink);
         if (*xsink) {
             dsock_obj->deref(xsink);
             dconnect->deref(xsink);
             dop_obj->deref(xsink);
             return nullptr;
         }
-        dop_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+        qore_poll_op_set_member(dop_obj, "goal",
             new QoreStringNode(recv_mode ? "ftp-data-recv" : "ftp-data-send"), xsink);
         if (*xsink) {
             dconnect->deref(xsink);
@@ -1351,9 +1350,8 @@ struct qore_ftp_private {
         // Create FtpPortAcceptPollOperation (composite: accept + optional SSL)
         QoreObject* accept_op_obj = new QoreObject(QC_FTPPORTACCEPTPOLLOPERATION, getProgram());
         listen_obj->ref();
-        accept_op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, listen_obj, xsink);
-        accept_op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
-            new QoreStringNode("ftp-port-accept"), xsink);
+        qore_poll_op_set_member(accept_op_obj, "sock", listen_obj, xsink);
+        qore_poll_op_set_member(accept_op_obj, "goal", new QoreStringNode("ftp-port-accept"), xsink);
         if (*xsink) {
             raw_accept->deref(xsink);
             accept_op_obj->deref(xsink);
@@ -1449,9 +1447,9 @@ struct qore_ftp_private {
         // 8. Create FtpDataPollOperation with adopt-socket constructor.
         QoreObject* data_op_obj = new QoreObject(QC_FTPDATAPOLLOPERATION, getProgram());
         accepted_obj->ref();
-        data_op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, accepted_obj, xsink);
+        qore_poll_op_set_member(data_op_obj, "sock", accepted_obj, xsink);
         bool recv_mode = recv_output || recv_output_stream;
-        data_op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+        qore_poll_op_set_member(data_op_obj, "goal",
             new QoreStringNode(recv_mode ? "ftp-data-recv" : "ftp-data-send"), xsink);
         if (*xsink) {
             data_op_obj->deref(xsink);

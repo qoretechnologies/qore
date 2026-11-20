@@ -376,12 +376,11 @@ int Http1ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
 
     // Set poll op QoreObject members: "sock" and "goal" — same as the
     // connect-path constructor does.
-    poll_obj_holder->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj_holder->refSelf(), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "sock", sock_obj_holder->refSelf(), xsink);
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
-        new QoreStringNode("http1_client"), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "goal", new QoreStringNode("http1_client"), xsink);
     if (*xsink) {
         return -1;
     }
@@ -416,12 +415,11 @@ int Http1ClientConnection::finalizePollOpSubmission(
     // "goal" — same as the QPP binding would.  Idempotent when already
     // set by the caller (adopt-socket path sets them before calling
     // initAdoptedReady, which must run before this helper).
-    poll_obj_holder->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_obj_holder->refSelf(), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "sock", sock_obj_holder->refSelf(), xsink);
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
-        new QoreStringNode("http1_client"), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "goal", new QoreStringNode("http1_client"), xsink);
     if (*xsink) {
         return -1;
     }

@@ -9342,8 +9342,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
         if (!*xsink) {
             p->setSelf(*rv);
-            rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, notifier_obj.release(), xsink);
-            rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("received"), xsink);
+            qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+            qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
         }
         return rv.release();
     };
@@ -9599,8 +9599,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, notifier_obj.release(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -9653,8 +9653,8 @@ QoreObject* qore_httpclient_priv::deferredAcquireErrorPollOp(ExceptionSink& acqu
         new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, notifier_obj.release(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode(goal), xsink);
     }
     return rv.release();
 }
@@ -9752,8 +9752,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
             new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
         if (!*xsink) {
             p->setSelf(*rv);
-            rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, notifier_obj.release(), xsink);
-            rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("connect"), xsink);
+            qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+            qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
         }
         return rv.release();
     }
@@ -9805,8 +9805,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
                 new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
             if (!*xsink) {
                 p->setSelf(*rv);
-                rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, n2_obj.release(), xsink);
-                rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("connect"), xsink);
+                qore_poll_op_set_member(rv, "sock", n2_obj.release(), xsink);
+                qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
             }
             return rv.release();
         }
@@ -9861,8 +9861,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
             new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), err_poller.release()), xsink);
         if (!*xsink) {
             err_p->setSelf(*err_rv);
-            err_rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, err_notifier_obj.release(), xsink);
-            err_rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("connect"), xsink);
+            qore_poll_op_set_member(err_rv, "sock", err_notifier_obj.release(), xsink);
+            qore_poll_op_set_member(err_rv, "goal", new QoreStringNode("connect"), xsink);
         }
         return err_rv.release();
     }
@@ -9881,8 +9881,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, notifier_obj.release(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("connect"), xsink);
+        qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
     }
     return rv.release();
 }

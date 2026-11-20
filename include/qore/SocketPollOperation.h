@@ -38,6 +38,7 @@
 #include <qore/QoreSandboxManager.h>
 #include <qore/AbstractPollState.h>
 #include <qore/ReferenceHolder.h>
+#include <qore/QoreThreadLock.h>
 #include <qore/AbstractQoreNode.h>
 #include <qore/QoreString.h>
 #include <qore/Transform.h>
@@ -93,6 +94,37 @@ constexpr int SPS_CONNECTED = 3;
 
 struct qore_socket_private;
 
+//! The socket and the goal of a poll operation that the library keeps with the operation (qore#6839)
+/** The operations of the classes in this header (the operations of the synchronous Socket calls and of the
+    SocketPollOperation objects) keep the socket and the goal of their object here instead of as private:internal
+    members of the object, so that creating the object of an operation allocates no member storage.  The values are
+    released when the object is deleted, as its members were.  %Qore code gets the goal with getGoal(), and the
+    library gets the socket with SocketPollOperationBase::getReferencedSocketObject().
+
+    @since %Qore 3.0
+*/
+class SocketPollOperationMembers {
+public:
+    DLLLOCAL SocketPollOperationMembers() = default;
+
+    DLLLOCAL ~SocketPollOperationMembers();
+
+    //! sets the value of \c "sock" or \c "goal"; the reference of the value is consumed
+    DLLLOCAL void setPollMember(const char* key, QoreValue val, ExceptionSink* xsink);
+
+    //! returns a referenced value of \c "sock" or \c "goal", or no value if none is set
+    DLLLOCAL QoreValue getReferencedPollMember(const char* key) const;
+
+    //! releases the values; called when the object of the operation is deleted
+    DLLLOCAL void releasePollMembers(ExceptionSink* xsink);
+
+private:
+    //! the lock of the values: the async I/O controller reads the socket while the object can be deleted
+    mutable QoreThreadLock poll_member_lock;
+    QoreValue poll_sock;
+    QoreValue poll_goal;
+};
+
 //! Intermediate base class that owns a socket reference and an AbstractPollState
 /** Provides the abort() logic that clears non-blocking state and optionally
     closes the socket.  All concrete socket poll operations that work on a
@@ -100,7 +132,7 @@ struct qore_socket_private;
 
     @since %Qore 3.0
 */
-class SocketPollSocketOperationBase : public SocketPollOperationBase {
+class SocketPollSocketOperationBase : public SocketPollOperationBase, public SocketPollOperationMembers {
 public:
     //! Creates the operation with a QoreObject self reference (for Qore-space ops)
     DLLEXPORT SocketPollSocketOperationBase(QoreObject* self);
