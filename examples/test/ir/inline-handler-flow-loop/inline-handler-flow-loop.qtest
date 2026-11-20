@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - debugger attach, and AOT code generation and linking of the debug IR of handlers
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class InlineHandlerFlowLoopTest
+
+#! a handler declared in the body of a handler that runs inline at an exit of a loop compiles with qcc (qore#6905)
+/** The debug IR of a qcc executable has the paths of a debugger's break, continue and return requests at the step
+    events of the statements of a handler's body; the paths of a handler declared in the body of a handler that the
+    lowering runs inline at a return or a throw out of a loop took the loop, which the exit had left, for the target of
+    a break or a continue, and qcc aborted on an assertion in QoreIRLowering::emitBlockCleanups() (an assertion-free
+    build lowered the cleanups of blocks that the exit had already left).  A break or a continue that no loop or switch
+    statement around the handler takes is a return, as in the AST interpreter.
+
+    handler-flow.q gives the output of the AST interpreter in every execution mode and in qcc executables compiled with
+    -O0 and -O3, without a debugger and with a debugger's request at a step event of a statement of such a handler.
+    The requests in a handler that a return runs, whose qcc executables lose the value of the return (qore#6949), are
+    compared without their results.
+*/
+class InlineHandlerFlowLoopTest inherits QUnit::Test {
+    public {
+        #! the functions of handler-flow.q
+        const Functions = ("loopThrow", "loopReturn", "switchBreak", "nestedLoops");
+
+        #! the function, the request, the tag of its statement and the hit of its step event
+        const Requests = (
+            ("loopThrow", "break", "throw_inner", 1),
+            ("loopThrow", "continue", "throw_inner", 1),
+            ("loopThrow", "return", "throw_inner", 1),
+            ("loopThrow", "break", "throw_loop_inner", 2),
+            ("loopThrow", "continue", "throw_loop_inner", 2),
+            ("loopThrow", "return", "throw_loop_inner", 2),
+            ("loopReturn", "continue", "return_loop_inner", 2),
+            ("switchBreak", "break", "switch_case_inner", 1),
+            # a loop around the handler is a target, and the inner loop that the return left is not
+            ("nestedLoops", "break", "nested_inner", 2),
+            ("nestedLoops", "continue", "nested_inner", 2),
+        );
+
+        #! requests in a handler that a return runs: their qcc executables lose the value of the return (qore#6949),
+        #! so the result is not compared, but the handlers that run and the step events are; a build of qcc without
+        #! assertions ran handlers again and resumed the loop that the return left (qore#6905)
+        const ReturnRequests = (
+            ("loopReturn", "break", "return_inner", 1),
+            ("switchBreak", "continue", "switch_inner", 1),
+            ("nestedLoops", "return", "nested_inner", 2),
+        );
+
+        #! the qcc optimization levels
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+        #! the lines of the tagged statements of the script
+        hash<string, int> tags = {};
+    }
+
+    constructor() : QUnit::Test("InlineHandlerFlowLoopTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        script = get_script_dir() + "/handler-flow.q";
+        list<string> lines = ReadOnlyFile::readTextFile(script).split("\n");
+        for (int i = 0; i < lines.size(); ++i) {
+            *list<*string> tag = lines[i] =~ x/### ([a-z_]+)$/;
+            if (tag) {
+                tags{tag[0]} = i + 1;
+            }
+        }
+        addTestCase("the handlers run alike in every execution mode", \testModes());
+        addTestCase("qcc compiles the handlers, which run as with the AST interpreter", \testQcc());
+        set_return_value(main());
+    }
+
+    testModes() {
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        foreach string f in (Functions) {
+            string expected = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin, script,
+                f));
+            assertRegex("^RESULT:", expected, f + ": AST");
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(expected, ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s %s", env, qore_bin, mode,
+                    script, f)), sprintf("%s: %s", f, mode));
+            }
+            assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --exec-mode=tiered %s %s", env,
+                qore_bin, script, f)), f + ": IR tier");
+        }
+    }
+
+    testQcc() {
+        TmpDir dir("qore-inline-handler-flow-loop-");
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        foreach int opt in (OptLevels) {
+            string exe = join_paths(dir.path, sprintf("handler-flow-O%d", opt));
+            int rc;
+            string out = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env, qcc_bin, opt, exe, script), \rc);
+            # the compile aborted on an assertion (qore#6905)
+            assertEq(0, rc, sprintf("qcc -O%d: exit status (output: %s)", opt, out.substr(-2000)));
+            if (!is_file(exe)) {
+                continue;
+            }
+            # without a debugger
+            foreach string f in (Functions) {
+                string expected = backquote(sprintf("%s %s -b --exec-mode=ast %s %s 2>&1", env, qore_bin, script, f));
+                assertEq(expected, backquote(sprintf("%s %s -b %s 2>&1", env, exe, f)), sprintf("qcc -O%d: %s", opt,
+                    f));
+            }
+            # with a debugger's request in a handler: the AST interpreter is the reference
+            foreach list<auto> r in (Requests) {
+                string args = sprintf("%s %s %d %d", r[0], r[1], tags{r[2]}, r[3]);
+                string expected = backquote(sprintf("%s %s -b --exec-mode=ast %s %s 2>&1", env, qore_bin, script,
+                    args));
+                assertRegex("^RESULT:", expected, args + ": AST");
+                assertEq(expected, backquote(sprintf("%s %s -b %s 2>&1", env, exe, args)), sprintf("qcc -O%d: %s", opt,
+                    args));
+            }
+            foreach list<auto> r in (ReturnRequests) {
+                string args = sprintf("%s %s %d %d", r[0], r[1], tags{r[2]}, r[3]);
+                string expected = backquote(sprintf("%s %s -b --exec-mode=ast %s %s 2>&1", env, qore_bin, script,
+                    args));
+                assertRegex("^RESULT:", expected, args + ": AST");
+                assertEq(withoutResult(expected), withoutResult(backquote(sprintf("%s %s -b %s 2>&1", env, exe,
+                    args))), sprintf("qcc -O%d: %s: the handlers and the step events", opt, args));
+            }
+        }
+    }
+
+    #! returns the output of handler-flow.q without its result
+    static string withoutResult(string out) {
+        return regex_subst(out, "^RESULT:.* LOG:", "LOG:");
+    }
+}

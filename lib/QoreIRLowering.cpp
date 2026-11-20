@@ -5573,10 +5573,25 @@ bool QoreIRLowering::lowerReturnWithoutValue(std::string& error, bool debug_flow
     return true;
 }
 
+bool QoreIRLowering::flowTargetLeftByHandlerExit(size_t cleanup_depth) const {
+    for (size_t b = cleanup_depth; b < cleanup_stack.size(); ++b) {
+        const BlockCleanupEntry& entry = cleanup_stack[b];
+        if (entry.type == BlockCleanupEntry::HandlerBarrier && entry.handler_start
+                && entry.handler_start <= cleanup_depth) {
+            return true;
+        }
+    }
+    return false;
+}
+
 QoreIRLowering::LoopJumpTarget QoreIRLowering::findLoopJumpTarget(bool is_break, size_t max_cleanup_depth) const {
     LoopJumpTarget jt;
     for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
         if (it->cleanup_stack_depth > max_cleanup_depth) {
+            continue;
+        }
+        // a loop or switch statement that the exit lowering the handler being lowered has left (qore#6905)
+        if (flowTargetLeftByHandlerExit(it->cleanup_stack_depth)) {
             continue;
         }
         QoreIRBasicBlock* target = is_break ? it->break_target : it->continue_target;
@@ -6009,6 +6024,9 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
     for (size_t j = top_depth; j > target_depth; --j) {
         if (cleanup_stack[j - 1].type == BlockCleanupEntry::HandlerBarrier) {
             const size_t clamp_to = cleanup_stack[j - 1].handler_start;
+            // an exit from the code of a handler lowered inline does not end in the blocks that the exit running the
+            // handler has left, between its protected scope and its barrier (qore#6905, flowTargetLeftByHandlerExit())
+            assert(!clamp_to || clamp_to > target_depth || j - 1 == target_depth);
             if (clamp_to > target_depth && clamp_to != 0) {
                 barriers.push_back({clamp_to - 1, j - 1, cleanup_stack[j - 1].keep_handlers});
                 // the entries below the protected scope are the next to look at
