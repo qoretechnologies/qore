@@ -53,6 +53,8 @@ class QoreHistoryTest inherits QUnit::Test {
         addTestCase("search regex", \testSearchRegex());
         addTestCase("search no results", \testSearchNoResults());
         addTestCase("save/load round-trip new format", \testSaveLoadNewFormat());
+        addTestCase("search UTF-8 input against loaded history", \testUtf8History());
+        addTestCase("BOM reader and default writer", \testMarkedHistory());
         addTestCase("load legacy format", \testLoadLegacyFormat());
         addTestCase("save/load multiline entries", \testSaveLoadMultiline());
         addTestCase("load nonexistent file", \testLoadNonexistent());
@@ -273,6 +275,49 @@ class QoreHistoryTest inherits QUnit::Test {
     }
 
     # --- Persistence tests ---
+
+    testUtf8History() {
+        string path = getTmpFile();
+        on_exit cleanupFile(path);
+        FileOutputStream f(path);
+        f.write(binary(convert_encoding("écho legacy\n", get_default_encoding())));
+        f.close();
+        QoreHistory::History h({"utf8_entries": True});
+        h.load(path);
+        assertEq("UTF-8", h.last().encoding());
+        assertEq("écho legacy", h.prev("é"));
+        assertEq(NOTHING, h.prev("😀"));
+        assertEq("écho legacy", h.expand("!é"));
+        assertEq(NOTHING, h.expand("!😀"));
+        h.add(binary_to_string(<e963686f>, "ISO-8859-1"));
+        assertEq("écho", h.expand("!é"));
+        assertEq("UTF-8", h.last().encoding());
+        assertEq(0, h.search("😀").size());
+    }
+
+    testMarkedHistory() {
+        string path = getTmpFile();
+        on_exit cleanupFile(path);
+        FileOutputStream f(path);
+        f.write(<efbbbf23313737303030303030300a>);
+        f.write(<f09f98800a>);
+        f.close();
+        QoreHistory::History h();
+        h.load(path);
+        assertEq(1, h.size());
+        assertEq("UTF-8", h.first().encoding());
+        assertEq(<f09f9880>, binary(h.first()));
+        if (get_default_encoding() == "UTF-8") {
+            FileOutputStream invalid(path);
+            invalid.write(<66697273740aff0a>);
+            invalid.close();
+            assertThrows("INVALID-ENCODING", sub () { h.load(path); });
+        }
+        h.clear();
+        h.add("plain");
+        h.save(path);
+        assertEq(<23>, File::readBinaryFile(path).substr(0, 1), "default writer starts with the timestamp");
+    }
 
     testSaveLoadNewFormat() {
         string path = getTmpFile();

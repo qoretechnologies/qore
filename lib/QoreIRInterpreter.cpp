@@ -29,6 +29,7 @@
 #include <qore/QoreValue.h>
 #include <qore/QoreStringNode.h>
 #include <qore/DateTimeNode.h>
+#include "qore/intern/qore_string_private.h"
 #include <qore/intern/AbstractStatement.h>
 #include <qore/intern/qore_program_private.h>
 #include <qore/intern/ContextStatement.h>
@@ -87,7 +88,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 440,
+static_assert(QORE_IR_MAX_OPCODE == 443,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -152,6 +153,11 @@ static bool qore_ir_try_string_no_arg_pseudo_fast_path(bool pseudo, bool base_kn
         return false;
     }
     switch (intrinsic) {
+        case QoreIRIntrinsic::StringLength: {
+            QoreStringValueHelper str(base);
+            res = QoreValue(static_cast<int64>(qore_string_private::characterCount(**str, xsink)));
+            return true;
+        }
         case QoreIRIntrinsic::StringLower:
             res = fromBits(qore_rt_pseudo_string_lwr_noguard(toBits(base), xsink));
             return true;
@@ -256,11 +262,9 @@ static bool qore_ir_try_common_no_arg_pseudo_fast_path(QoreIRIntrinsic intrinsic
             }
             return false;
         case QoreIRIntrinsic::StringStrlen:
-        case QoreIRIntrinsic::StringLength:
             if (base_type == NT_STRING) {
                 QoreStringValueHelper s(base);
-                res = QoreValue(static_cast<int64_t>(intrinsic == QoreIRIntrinsic::StringStrlen
-                    ? s->strlen() : s->length()));
+                res = QoreValue(static_cast<int64_t>(s->strlen()));
                 return true;
             }
             return false;
@@ -496,6 +500,8 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/qore_list_private.h>
 #include <qore/intern/qore_date_private.h>
+#include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // the trace switches, which the interpreter reads on every return of a function, read from the environment once
@@ -1340,6 +1346,14 @@ public:
         v.discard(xsink);
     }
 
+    //! Clears a slot. Only a node (including an opaque reference) or an enum owns a reference to release.
+    DLLLOCAL void clearSlot(size_t i, ExceptionSink* xsink) {
+        if (slots[i].isPointer() || slots[i].isEnum()) {
+            release(i, xsink);
+        }
+        slots[i] = QoreValue();
+    }
+
     //! As release(), and returns true if the value released was a node whose release left an exception in the sink
     /** A value that holds a reference is released: a node, and an enum value, which holds a reference to its enum
         although it is not a node (QoreValue::isReferenceCounted()); a scalar holds none, and is not.  Only the release
@@ -1381,6 +1395,8 @@ public:
 
     //! Keeps a reference to the value of a return that an exception interrupted until releaseHeldReturns() (#5920)
     DLLLOCAL void holdReturn(QoreValue v) {
+        // only nodes: the marker of the handed-over return is the first entry that is not one (#6137)
+        assert(v.hasNode());
         held_returns.push_back(v);
     }
 
@@ -1391,12 +1407,53 @@ public:
         }
     }
 
-    //! Releases the values that holdReturn() keeps, after the locals of the frame
+    //! Releases the values that holdReturn() keeps, after the locals of the frame, with the handed-over return
+    /** The handed-over return (see handOverReturn()) is one of them, after its marker: the value of the return that
+        an exception interrupts, or that the try statement that catches it releases (#6137)
+    */
     DLLLOCAL void releaseHeldReturns(ExceptionSink* xsink) {
         for (QoreValue& v : held_returns) {
             v.discard(xsink);
         }
         held_returns.clear();
+    }
+
+    //! Replaces the handed-over return with \a v, whose reference it takes, releasing the value before (#6137)
+    /** The value that a handler run out of line past the inline cap hands over in the block cleanups of a return
+        statement (QoreIRScopeExitInstruction::hand_over_return), which the return takes (takeHandedOverReturn()).
+        It is kept with the held returns, after a marker entry (see findHandedOverReturn()), so that the frame has no
+        member more and the end of the frame, which releases them, does nothing more.  The handed-over return's
+        functions are out of line and cold, so that they add nothing to QoreIRInterpreter::execute(), which runs them
+        only past the cap
+    */
+    DLLLOCAL __attribute__((noinline, cold)) void handOverReturn(QoreValue v, ExceptionSink* xsink) {
+        size_t i = findHandedOverReturn();
+        if (i == NoHandedOver) {
+            held_returns.push_back(handedOverMarker());
+            held_returns.push_back(v);
+            return;
+        }
+        QoreValue prev = held_returns[i];
+        held_returns[i] = v;
+        prev.discard(xsink);
+    }
+
+    //! Returns the handed-over return, whose reference passes to the caller, and clears it, if one was handed over,
+    //! or a reference of its own to \a value otherwise (QoreIROpcode::TakeHandedOverReturn, #6137)
+    DLLLOCAL __attribute__((noinline, cold)) QoreValue takeHandedOverReturn(QoreValue value) {
+        size_t i = findHandedOverReturn();
+        if (i == NoHandedOver) {
+            return value.refSelf();
+        }
+        return removeHandedOverReturn(i);
+    }
+
+    //! Releases the handed-over return, if any (QoreIROpcode::ReleaseHandedOverReturn, #6137)
+    DLLLOCAL __attribute__((noinline, cold)) void releaseHandedOverReturn(ExceptionSink* xsink) {
+        size_t i = findHandedOverReturn();
+        if (i != NoHandedOver) {
+            removeHandedOverReturn(i).discard(xsink);
+        }
     }
 
     //! Releases the values of every slot, last slot first, and resets them
@@ -1427,6 +1484,12 @@ public:
         slots.resize(size);
     }
 
+    //! Forgets the slots of the object locals, for a frame whose slots releaseAll() has set to NOTHING and which keeps
+    //! its size (IRCallFrame::resetInPlace(), qore#6627)
+    DLLLOCAL void clearRealSlots() {
+        real_slots.clear();
+    }
+
     DLLLOCAL std::vector<QoreValue>::iterator begin() {
         return slots.begin();
     }
@@ -1439,18 +1502,57 @@ private:
     std::vector<QoreValue> slots;
     //! non-zero for the slots of object locals (see QoreIRFunction::real_reference_locals); empty if none
     std::vector<uint8_t> real_slots;
-    //! the values of a return that an exception interrupted, released after the locals of the frame (#5920)
+    //! the values of a return that an exception interrupted, released after the locals of the frame (#5920), and the
+    //! handed-over return after its marker (see findHandedOverReturn())
     std::vector<QoreValue> held_returns;
+    static constexpr size_t NoHandedOver = static_cast<size_t>(-1);
+    //! Returns the marker entry of the handed-over return in held_returns: no value
+    /** The held returns are otherwise always nodes (holdReturn() is given only nodes), so the first entry that is not
+        a node is the marker, whatever the values are: the handed-over return, the value that handlers run out of line
+        past the inline cap handed over to the return whose cleanups run them (any value, also no value), is the entry
+        after it (#6137)
+    */
+    static QoreValue handedOverMarker() {
+        return QoreValue();
+    }
+
+private:
+    //! Returns the index of the handed-over return in held_returns, or NoHandedOver
+    DLLLOCAL size_t findHandedOverReturn() const {
+        for (size_t i = 0, e = held_returns.size(); i + 1 < e; ++i) {
+            if (!held_returns[i].hasNode()) {
+                return i + 1;
+            }
+        }
+        return NoHandedOver;
+    }
+
+    //! Removes the handed-over return at \a i and its marker from the held returns and returns it, with its reference
+    DLLLOCAL QoreValue removeHandedOverReturn(size_t i) {
+        assert(i && i < held_returns.size());
+        QoreValue rv = held_returns[i];
+        held_returns.erase(held_returns.begin() + (i - 1), held_returns.begin() + (i + 1));
+        return rv;
+    }
 
     //! Releases the references that holdReturn() keeps to \a v, if any (see releaseHeldReturn())
     /** A value can be held more than once: each slot of a return that holds it (the Return's, a RefSelf's, a
         DiscardTempsKeep's) is held with a reference of its own.
     */
     DLLLOCAL __attribute__((noinline, cold)) void releaseHeldReturnIntern(QoreValue v, ExceptionSink* xsink) {
+        // the handed-over return is not the value of a return that an exception interrupted: it is kept, also when it
+        // is the same value (#6137)
+        size_t handed_over = findHandedOverReturn();
         for (size_t i = held_returns.size(); i; --i) {
+            if (i - 1 == handed_over) {
+                continue;
+            }
             if (held_returns[i - 1].hasNode() && held_returns[i - 1].getInternalNode() == v.getInternalNode()) {
                 QoreValue held = held_returns[i - 1];
                 held_returns.erase(held_returns.begin() + (i - 1));
+                if (handed_over != NoHandedOver && i - 1 < handed_over) {
+                    --handed_over;
+                }
                 held.discard(xsink);
             }
         }
@@ -1697,6 +1799,14 @@ static void releaseActiveIteratorsFrom(std::unordered_map<FunctionalOperatorInte
     }
 }
 
+struct IRCatchEntry {
+    QoreException* caught;  // the caught exception
+    QoreException* saved;   // the previous td->catchException value
+    //! the number of scopes open when the catch block was entered (those that enclose the try statement): the
+    //! catch block is in every scope below that depth, and is left when one of them is (#5969)
+    size_t scope_depth;
+};
+
 //! A statement that a frame is in, for the debugger's exception events of the statements that an exception leaves
 //! (#5816)
 struct QoreIRDebugNestEntry {
@@ -1704,6 +1814,11 @@ struct QoreIRDebugNestEntry {
     const AbstractStatement* stmt = nullptr;
     //! the number of scopes of the frame (scope_stack) at its start
     size_t scope_depth = 0;
+    //! the number of temp scope marks of the frame (temp_cleanup_marks) at its start: the statement's own temp scope,
+    //! if it has one, is the next one (qore#6626)
+    size_t mark_depth = 0;
+    //! Number of active catches when this statement began.
+    size_t catch_depth = 0;
     //! the depth and the QORE_IR_DEBUG_NEST_* flags of the statement
     uint16_t depth = 0;
     uint8_t flags = 0;
@@ -1720,6 +1835,7 @@ struct QoreIRDebugNestEntry {
 */
 struct QoreIRDebugNest {
     std::vector<QoreIRDebugNestEntry> entries;
+    std::vector<IRCatchEntry>* catches = nullptr;
     //! the function of the frame and its pre-instantiated locals, for the release of the locals of a block (#5921)
     const QoreIRFunction* func = nullptr;
     const IRPreInstantiated* pre_instantiated = nullptr;
@@ -1731,12 +1847,16 @@ struct QoreIRDebugNest {
 
     DLLLOCAL void reset() {
         entries.clear();
+        catches = nullptr;
         chain = -1;
         last_end = QoreIRDebugNestEntry();
     }
 };
 
 struct IRCallFrame {
+    const QoreIRFunction* unwinding_function = nullptr;
+    const QoreProgramLocation* body_entry_loc = nullptr;
+    const AbstractStatement* body_entry_stmt = nullptr;
     std::vector<QoreValue> values;
     //! the lookup of the call's pre-instantiated locals (see QoreIRInterpreter::execute())
     IRPreInstantiated pre_instantiated_lookup;
@@ -1778,6 +1898,7 @@ struct IRCallFrame {
     // Used by UninstantiateLocal's container DGC scan to distinguish temporary expression
     // results from variable-held values — only temporaries are cleared at block exit.
     // indexed by value slot id; a set allocated a node for each slot in every call
+    enum LocalSlotFlag : uint8_t { LocalOwned = 1, ReadThroughReference = 2 };
     std::vector<uint8_t> local_owned_slots;
     //! a temp scope mark: the size of the cleanup vector when the scope was entered
     struct TempCleanupMark {
@@ -1809,7 +1930,31 @@ struct IRCallFrame {
         locals_slot_cache.releaseAll(xsink);
     }
 
-    void reset(size_t reserve_size, size_t local_slot_count) {
+    //! the sizes of the frame's last reset: a frame taken again for the same sizes is reset in place (qore#6627)
+    size_t pooled_reserve_size = SIZE_MAX;
+    size_t pooled_local_slot_count = SIZE_MAX;
+
+    //! returns true if the frame was last reset for these sizes, so that its vectors have them
+    DLLLOCAL bool hasSizes(size_t reserve_size, size_t local_slot_count) const {
+        return pooled_reserve_size == reserve_size && pooled_local_slot_count == local_slot_count;
+    }
+
+    //! makes the frame ready for a call with these sizes: every slot NOTHING, every per-local entry cleared
+    /** A frame last reset for the same sizes, as a pooled frame reused by the same function is, is overwritten in
+        place, inline; any other is reset as before the in-place reset (qore#6627), out of line, so that a frame of
+        another size costs no more than it did (qore#6627 follow-up: functions of different sizes that alternate at
+        one depth missed the in-place reset on every call and paid more than the plain reset)
+    */
+    QORE_INTERN_ALWAYS_INLINE void reset(size_t reserve_size, size_t local_slot_count) {
+        unwinding_function = nullptr;
+        if (hasSizes(reserve_size, local_slot_count)) {
+            resetInPlace(reserve_size, local_slot_count);
+        } else {
+            resetResize(reserve_size, local_slot_count);
+        }
+    }
+
+    QORE_INTERN_ALWAYS_INLINE void resetInPlace(size_t reserve_size, size_t local_slot_count) {
         // Do NOT iterate values[] and discard — slots may hold borrowed (non-owning)
         // references intentionally stored by opcodes like ListGetInt/HashGetKey. These
         // are not added to `cleanup` because the caller doesn't own them; the container
@@ -1818,9 +1963,61 @@ struct IRCallFrame {
         // Owned references are tracked in `cleanup` and drained by cleanupValues() at
         // every execute() return path; by the time we reach reset(), all owned slots
         // are already NOTHING.
-        // every slot is NOTHING again, and the vector has exactly reserve_size slots, which the instructions check
-        // their ids against
-        qore_ir_reset_vector(values, reserve_size, QoreValue());
+        // every slot is NOTHING again; the vector has exactly reserve_size slots, which the instructions check their
+        // ids against
+        std::fill(values.begin(), values.end(), QoreValue());
+        cleanup.reset(reserve_size);
+        if (borrowed_temp_active) {
+            std::fill(borrowed_temp_remaining.begin(), borrowed_temp_remaining.end(), 0);
+            borrowed_temp_active = 0;
+        }
+        if (borrowed_temp_remaining.size() < reserve_size) {
+            borrowed_temp_remaining.resize(reserve_size, 0);
+        }
+        if (local_slot_count > 0) {
+            // the slots are NOTHING after the release and keep their number
+            locals_slot_cache.releaseAll(nullptr);
+            locals_slot_cache.clearRealSlots();
+            std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
+            std::fill(locals_ir_only.begin(), locals_ir_only.end(), false);
+            std::fill(locals_instantiated.begin(), locals_instantiated.end(), false);
+            std::fill(local_init_slots.begin(), local_init_slots.end(), UINT32_MAX);
+            // the vectors kept keep their capacity, so a call reading a local does not allocate one; there is one for
+            // each local already
+            for (std::vector<uint32_t>& load_slots : local_load_slots) {
+                load_slots.clear();
+            }
+        } else {
+            locals_slot_cache.releaseAll(nullptr);
+            locals_slot_cache.clear();
+            locals_lvar_cache.clear();
+            locals_ir_only.clear();
+            locals_instantiated.clear();
+            local_init_slots.clear();
+            local_load_slots.clear();
+        }
+        load_slot_registered.assign(reserve_size, false);
+        instantiated_locals.clear();
+        instantiated_locals_ordered.clear();
+        locally_uninstantiated.clear();
+        ephemeral_weak_ref_slots.clear();
+        active_iterators.clear();
+        on_block_exit_handlers.clear();
+        local_owned_slots.assign(reserve_size, 0);
+        temp_cleanup_marks.clear();
+    }
+
+    QORE_INTERN_NOINLINE void resetResize(size_t reserve_size, size_t local_slot_count) {
+        // Do NOT iterate values[] and discard — slots may hold borrowed (non-owning)
+        // references intentionally stored by opcodes like ListGetInt/HashGetKey. These
+        // are not added to `cleanup` because the caller doesn't own them; the container
+        // (list/hash) owns them. Discarding borrowed references here UAFs when the
+        // container has been freed between function exit and pool reuse.
+        // Owned references are tracked in `cleanup` and drained by cleanupValues() at
+        // every execute() return path; by the time we reach reset(), all owned slots
+        // are already NOTHING.
+        values.clear();
+        values.resize(reserve_size);
         cleanup.reset(reserve_size);
         if (borrowed_temp_active) {
             std::fill(borrowed_temp_remaining.begin(), borrowed_temp_remaining.end(), 0);
@@ -1833,10 +2030,10 @@ struct IRCallFrame {
             locals_slot_cache.releaseAll(nullptr);
             locals_slot_cache.clear();
             locals_slot_cache.resize(local_slot_count);
-            qore_ir_reset_vector(locals_lvar_cache, local_slot_count, nullptr);
-            qore_ir_reset_vector(locals_ir_only, local_slot_count, false);
-            qore_ir_reset_vector(locals_instantiated, local_slot_count, false);
-            qore_ir_reset_vector(local_init_slots, local_slot_count, UINT32_MAX);
+            locals_lvar_cache.assign(local_slot_count, nullptr);
+            locals_ir_only.assign(local_slot_count, false);
+            locals_instantiated.assign(local_slot_count, false);
+            local_init_slots.assign(local_slot_count, UINT32_MAX);
             // the vectors kept keep their capacity, so a call reading a local does not allocate one
             if (local_load_slots.size() > local_slot_count) {
                 local_load_slots.resize(local_slot_count);
@@ -1863,6 +2060,8 @@ struct IRCallFrame {
         on_block_exit_handlers.clear();
         local_owned_slots.assign(reserve_size, 0);
         temp_cleanup_marks.clear();
+        pooled_reserve_size = reserve_size;
+        pooled_local_slot_count = local_slot_count;
     }
     //! the statements that the frame is in while a debugger is attached (#5816); reset when first used in a call; last,
     //! so that the members used in every call keep their offsets
@@ -1953,21 +2152,53 @@ static QORE_INTERN_NOINLINE void qore_ir_remove_released_temp(IRCleanupSlots& cl
 }
 
 struct IRCallFramePool {
+    //! the frame of each call depth; frames[top - 1] is the frame of the innermost running call
     std::vector<std::unique_ptr<IRCallFrame>> frames;
+    //! a second frame of each depth, made when calls of other sizes alternate at the depth (qore#6627 follow-up)
+    /** Calls of two functions at one depth (t += o.m(f(i)): f() and o.m() run in turn in the frame of that depth)
+        each keep a frame of their sizes: the frame of the depth and its spare are swapped when the spare has the
+        sizes of the call and the frame does not, so that the frame is reset in place (IRCallFrame::reset())
+    */
+    std::vector<std::unique_ptr<IRCallFrame>> spares;
     size_t top = 0;
 
     IRCallFrame& push(size_t reserve_size, size_t local_slot_count) {
-        if (top >= frames.size()) {
-            frames.push_back(std::make_unique<IRCallFrame>());
+        // the frame of the depth was last used by a call of these sizes, as when a function calls the same one in a
+        // loop: it is reset in place
+        if (top < frames.size() && frames[top]->hasSizes(reserve_size, local_slot_count)) {
+            IRCallFrame& frame = *frames[top++];
+            frame.resetInPlace(reserve_size, local_slot_count);
+            return frame;
         }
-        IRCallFrame& frame = *frames[top++];
-        frame.reset(reserve_size, local_slot_count);
-        return frame;
+        return pushOther(reserve_size, local_slot_count);
     }
 
     void pop() {
         assert(top > 0);
         --top;
+    }
+
+private:
+    //! the frame of the depth does not have the sizes of the call, or there is none yet
+    /** The spare of the depth is taken if it has the sizes, or made the first time (the frame then keeps the sizes of
+        the call that used it, for the next call of those); otherwise the frame of the depth is reset to the sizes
+    */
+    QORE_INTERN_NOINLINE IRCallFrame& pushOther(size_t reserve_size, size_t local_slot_count) {
+        if (top >= frames.size()) {
+            frames.push_back(std::make_unique<IRCallFrame>());
+            spares.emplace_back();
+        } else {
+            std::unique_ptr<IRCallFrame>& spare = spares[top];
+            if (!spare) {
+                spare = std::make_unique<IRCallFrame>();
+                frames[top].swap(spare);
+            } else if (spare->hasSizes(reserve_size, local_slot_count)) {
+                frames[top].swap(spare);
+            }
+        }
+        IRCallFrame& frame = *frames[top++];
+        frame.reset(reserve_size, local_slot_count);
+        return frame;
     }
 };
 
@@ -2304,6 +2535,39 @@ static QORE_INTERN_NOINLINE void qore_ir_drain_innermost_temp_scope(IRValueSlots
     assert(cleanup.size() == cleanup_size);
 }
 
+#ifdef DEBUG
+//! The drain of qore_ir_drain_innermost_temp_scope() with the checks that it releases what the general drain would
+/** The general drain (cleanupToTempScope()) selects the last mark with the scope's id: before the drain, it is the
+    innermost one, whose size both drains release down to; after it, the temps down to that size and the mark are gone,
+    and no temp is held by a weak-reference load or borrowed (whose bookkeeping the fast drain leaves out).  The
+    sentinel of the mark is not always at that size: the removal of a temp entry pushed before the mark moves the
+    entries after it down without the mark (except for ReleaseOwnedTemp, qore_ir_remove_released_temp()), as both
+    drains find (qore#6444, qore#6541).
+
+    Out of line, so that the locals of the checks are not in the frame of QoreIRInterpreter::execute() of a debug
+    build, which every level of a recursion of IR code has on its stack (qore#6609: the checks made inline cost 48
+    bytes per level)
+*/
+static QORE_INTERN_NOINLINE void qore_ir_checked_drain_innermost_temp_scope(IRValueSlots& values,
+        IRCleanupSlots& cleanup, std::vector<IRCallFrame::TempCleanupMark>& marks,
+        std::vector<uint32_t>& ephemeral_weak_ref_slots, ExceptionSink* xsink, uint32_t scope_id,
+        const std::unordered_map<uint32_t, int32_t>& weak_load_temp_slots, bool borrowed_temp_active) {
+    auto general_mark = std::find_if(marks.rbegin(), marks.rend(),
+        [scope_id](const IRCallFrame::TempCleanupMark& candidate) {
+            return candidate.scope_id == scope_id;
+        });
+    assert(general_mark == marks.rbegin());
+    // the size that both drains stop at
+    size_t cleanup_size = general_mark->cleanup_size;
+    size_t mark_count = marks.size();
+    assert(cleanup.size() >= cleanup_size);
+    qore_ir_drain_innermost_temp_scope(values, cleanup, marks, ephemeral_weak_ref_slots, xsink);
+    assert(cleanup.size() == cleanup_size);
+    assert(marks.size() == mark_count - 1);
+    assert(weak_load_temp_slots.empty() && !borrowed_temp_active);
+}
+#endif
+
 static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
         ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log,
         const std::vector<uint32_t>* release_groups = nullptr) {
@@ -2487,6 +2751,50 @@ static void qore_ir_hold_pending_returns(const QoreIRFunction& func, const Value
     }
 }
 
+//! Runs a local's destructor in its enclosing statement while an exception leaves the frame.
+class IRLocalUnwindLocation {
+public:
+    IRLocalUnwindLocation(const IRCallFrame& frame, const LocalVar* var) {
+        if (frame.unwinding_function && var) {
+            enter(frame, var);
+        }
+    }
+    ~IRLocalUnwindLocation() {
+        if (cache.loc_ptr) {
+            *cache.loc_ptr = old_loc;
+            *cache.stmt_ptr = old_stmt;
+        }
+    }
+private:
+    RuntimeLocationCache cache{};
+    const QoreProgramLocation* old_loc;
+    const AbstractStatement* old_stmt;
+
+    QORE_INTERN_NOINLINE void enter(const IRCallFrame& frame, const LocalVar* var) {
+        const auto& locations = frame.unwinding_function->local_unwind_locations;
+        auto it = locations.find(var);
+        if (it == locations.end()) {
+            return;
+        }
+        cache = get_runtime_location_cache();
+        old_loc = *cache.loc_ptr;
+        old_stmt = *cache.stmt_ptr;
+        *cache.loc_ptr = it->second ? it->second : frame.body_entry_loc;
+        *cache.stmt_ptr = it->second ? nullptr : frame.body_entry_stmt;
+    }
+};
+
+//! A frame leaving by an exception releases each lexical local at its recorded enclosing statement. Keep
+//! the location lookup, saved TLS state and restoration out of both normal cache-release loops.
+template <typename Visit, typename Release>
+static QORE_INTERN_NOINLINE void qore_ir_release_unwinding_slots(const IRCallFrame& frame,
+        const std::vector<const LocalVar*>& locals, const Visit& visit, const Release& release) {
+    visit([&](size_t i) {
+        IRLocalUnwindLocation location(frame, i < locals.size() ? locals[i] : nullptr);
+        release(i);
+    });
+}
+
 //! Releases the locals of a scope that an exception leaves, last declared first, as the end of the block releases them
 //! (#5867)
 /** The values that the frame caches for them are released, and the value of a local on the runtime stack, which the
@@ -2498,6 +2806,7 @@ static void qore_ir_release_block_locals(const std::vector<LocalVar*>& locals, c
         ExceptionSink* xsink) {
     for (size_t i = locals.size(); i; --i) {
         const LocalVar* lv = locals[i - 1];
+        IRLocalUnwindLocation unwind_location(frame, lv);
         uint32_t slot = i - 1 < slots.size() ? slots[i - 1] : UINT32_MAX;
         if (slot == UINT32_MAX && func) {
             auto it = func->local_var_slots.find(lv);
@@ -2671,16 +2980,16 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_ir_local_stores_simple_value(const Qo
         && QoreTypeInfo::parseAcceptsReturns(ti, vt) && !QoreTypeInfo::returnsEnum(ti);
 }
 
-//! Returns the line given, which the compiler cannot evaluate a test of before the code that calls this function
+//! Returns the location given, which the compiler cannot evaluate a test of before the code that calls this function
 /** An empty asm statement that "changes" the value: the compiler does not move a volatile asm statement out of the
     branch that it is in, so a test of the value it returns is made in that branch (see the line test in execute()).
     It emits no instruction.
 */
-static QORE_INTERN_ALWAYS_INLINE int32_t qore_ir_opaque_line(int32_t line) {
+static QORE_INTERN_ALWAYS_INLINE const QoreProgramLocation* qore_ir_opaque_loc(const QoreProgramLocation* loc) {
 #if defined(__GNUC__) || defined(__clang__)
-    __asm__ __volatile__("" : "+r"(line));
+    __asm__ __volatile__("" : "+r"(loc));
 #endif
-    return line;
+    return loc;
 }
 
 //! returns the number of instructions that the release of a local \a inst (UninstantiateLocal) advances by: 2 if it
@@ -2832,7 +3141,8 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
         ExceptionSink* xsink) {
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj->getClass(), class_ctx)) {
-        class_ctx = nullptr;
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*obj->getClass(), key, class_ctx);
     }
 
     LValueHelper helper(xsink, true);
@@ -2841,6 +3151,13 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
     }
     if (!class_ctx) {
         helper.vl.addMemberNotification(obj, key);
+    }
+    // a member that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+    if (const ReferenceNode* ref = helper.getReference()) {
+        helper.clearPtr();
+        if (helper.doLValue(ref, false)) {
+            return;
+        }
     }
 
     QoreValue stored = value.needsRef() ? value.refSelf() : value;
@@ -2927,6 +3244,139 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
 // argument releases
 // when it returns if the read gave the frame a reference of its own; an implicit argument ($1) is not one: a later $1
 // reads its element slot again
+//! Returns true if \a local is the untyped variable of a foreach loop, which can hold a reference given by an element
+/** Such a variable reads as the referenced lvalue: it does not hold the value read, which the read owns, so a call
+    that writes the referenced lvalue and its parameter must be given it, to destroy it at the parameter's write as
+    the AST interpreter does (c.m(r) in foreach auto r in ((\o,)); issues #6441, #6538).  Decided statically, when the
+    function is analyzed, from the facts of its lowering (QoreIRFunction::reference_element_locals,
+    reference_store_locals): such a read is a consumed argument of its call, whose instruction then has
+    QORE_IR_GIVES_CALL_ARGS and QORE_IR_GIVES_CALL_TEMPS, which the interpreter's call sites already test, so that the
+    interpreter's loop is the same code as for any other call
+*/
+static bool qore_ir_element_local_may_read_reference(const QoreIRFunction& func, const LocalVar* local) {
+    // a variable that no element and no store that can be a reference is assigned to (a loop over a list of ints)
+    // is not one
+    const void* key = reinterpret_cast<const void*>(local);
+    return func.element_store_locals.count(key)
+        && (func.reference_element_locals.count(key) || func.reference_store_locals.count(key));
+}
+
+//! Returns true if the call \a inst is known, when the function is analyzed, to call a variant none of whose
+//! parameters takes its argument over
+/** A function, a static method, or a method that cannot be overridden (of a final class, or a final variant) whose IR
+    is known or can be lowered now and shows that no parameter takes its argument over
+    (QoreIRFunction::param_take_over), or a builtin
+    variant, whose argument list holds its arguments until it returns, as in the AST interpreter.  Anything else (an
+    overridable method, a call reference, a closure, a callee whose IR is not known yet) can take an argument over
+    (issue #6538)
+*/
+static bool qore_ir_call_known_to_take_no_arg_over(const QoreIRInstruction* inst) {
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    const QoreMethod* method = nullptr;
+    const QoreClass* qc = nullptr;
+    const char* name = nullptr;
+    switch (inst->opcode) {
+        case QoreIROpcode::CallDirect: {
+            const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
+            variant = call->variant;
+            name = call->func ? call->func->getName() : nullptr;
+            break;
+        }
+        case QoreIROpcode::CallStaticDirect: {
+            const auto* call = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
+            variant = call->variant;
+            name = call->method ? call->method->getName() : nullptr;
+            break;
+        }
+        case QoreIROpcode::CallMethodDirect: {
+            const auto* call = static_cast<const QoreIRCallMethodDirectInstruction*>(inst);
+            variant = call->variant;
+            method = call->method;
+            qc = call->qc;
+            break;
+        }
+        case QoreIROpcode::InvokeMethodDirect: {
+            const auto* call = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
+            variant = call->variant;
+            method = call->method;
+            qc = call->qc;
+            break;
+        }
+        case QoreIROpcode::DotEvalMethodDirect: {
+            const auto* call = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+            if (call->pseudo) {
+                return false;
+            }
+            variant = call->variant;
+            method = call->method;
+            qc = call->qc;
+            if (!method) {
+                // the lowering leaves the target to the run-time dispatch when the parser did not resolve the
+                // variant (an argument of an unknown type): the method and class resolved at parse time are those of
+                // the call's expression
+                const auto* dot = call->expr.hasNode()
+                    ? dynamic_cast<const QoreDotEvalOperatorNode*>(call->expr.getInternalNode()) : nullptr;
+                const MethodCallNode* m = dot ? dot->getMethodCall() : nullptr;
+                if (m && !m->isPseudo()) {
+                    method = m->getMethod();
+                    qc = m->getClass();
+                }
+            }
+            break;
+        }
+        default:
+            return false;
+    }
+    if (!variant) {
+        // a call whose variant is resolved when it is made (an argument of an unknown type) calls the single
+        // variant of a function or method that has no other
+        const QoreFunction* f = nullptr;
+        if (method) {
+            f = qore_method_private::get(*method)->getFunction();
+        } else if (inst->opcode == QoreIROpcode::CallDirect) {
+            f = static_cast<const QoreIRCallDirectInstruction*>(inst)->func;
+        } else if (inst->opcode == QoreIROpcode::CallStaticDirect) {
+            const QoreMethod* static_method = static_cast<const QoreIRCallStaticDirectInstruction*>(inst)->method;
+            f = static_method ? qore_method_private::get(*static_method)->getFunction() : nullptr;
+        }
+        if (!f || f->numVariants() != 1 || f->hasInheritedVariants() || f->hasGenericClassAncestor()) {
+            return false;
+        }
+        variant = f->first();
+    }
+    if (inst->opcode != QoreIROpcode::CallDirect && inst->opcode != QoreIROpcode::CallStaticDirect) {
+        // a method that can be overridden calls a variant known only when the call is made
+        if (!method || !qc || method->getClass() != qc) {
+            return false;
+        }
+        const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
+        if (!qc->isFinal() && !(method_variant && method_variant->isFinal())) {
+            return false;
+        }
+        name = method->getName();
+    }
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb) {
+        return true;
+    }
+    const QoreIRFunction* callee_ir = uvb->getCachedIR();
+    // a callee that has not run yet has no IR: it is lowered now, without promoting its tier, as the batch
+    // compilation of native code lowers its callees (a variant without statements, from a source-stripped qmod, has
+    // none to lower)
+    if (!callee_ir && name && uvb->getStatementBlock() && !uvb->irLoweringFailed()) {
+        uvb->forceIRLowering(name, false, false);
+        callee_ir = uvb->getCachedIR();
+    }
+    return callee_ir && !callee_ir->param_take_over;
+}
+
+//! Returns true if the read of \a local is given to the call \a call_inst: the variable can hold a reference given by
+//! an element (qore_ir_element_local_may_read_reference()) and the call can take an argument over
+static bool qore_ir_element_read_given_to_call(const QoreIRFunction& func, const LocalVar* local,
+        const QoreIRInstruction* call_inst) {
+    return qore_ir_element_local_may_read_reference(func, local) && !qore_ir_call_known_to_take_no_arg_over(call_inst);
+}
+
 static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::LoadLocal:
@@ -3261,6 +3711,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             return true;
         }
         const auto& insts = call_block[id]->instructions;
+        if (qore_ir_element_read_given_to_call(func, load->local, insts[call_pos[id]].get())) {
+            return true;
+        }
         const uint32_t scope = insts[call_pos[id]]->temp_scope_id;
         if (!scope) {
             return true;
@@ -3402,6 +3855,16 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     && inst_ptr->result.id < return_protected_slots.size()) {
                 return_protected_slots[inst_ptr->result.id] = 1;
                 return_preserve_slot_ids.push_back(inst_ptr->result.id);
+            } else if (inst_ptr->opcode == QoreIROpcode::TakeHandedOverReturn && !inst_ptr->operands.empty()
+                    && inst_ptr->operands.front().isValid()
+                    && inst_ptr->operands.front().id < return_protected_slots.size()) {
+                // the value of a return whose cleanups run handlers out of line past the inline cap, which the Return
+                // gives through the TakeHandedOverReturn after them: an exception in the cleanups interrupts the
+                // return of that value, which is kept until the locals of the frame are released, as the value of a
+                // Return is (#6762)
+                uint32_t id = inst_ptr->operands.front().id;
+                return_protected_slots[id] = 1;
+                return_value_slot_ids.push_back(id);
             }
             if (inst_ptr->opcode == QoreIROpcode::CallDirect) {
                 auto* direct_inst = static_cast<const QoreIRCallDirectInstruction*>(inst_ptr.get());
@@ -3547,7 +4010,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                 return false;
             }
             const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
-            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()) {
+            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()
+                    || qore_ir_element_read_given_to_call(func, load->local,
+                        call_block->instructions[call_pos].get())) {
                 return false;
             }
             auto w = last_write.find(load->local);
@@ -3672,10 +4137,30 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
             const auto& insts = block->instructions;
             for (size_t i = 0; i < insts.size(); ++i) {
                 const QoreIRInstruction* load = insts[i].get();
+                if (load->opcode == QoreIROpcode::IteratorCreate) {
+                    // Recompute the pair even if a previous preparation saw a different instruction stream.
+                    auto* iter = static_cast<QoreIRIteratorCreateInstruction*>(insts[i].get());
+                    iter->interpreter_ends_source_borrow = false;
+                    if (i && i + 1 < insts.size() && insts[i - 1]->opcode == QoreIROpcode::LoadLocal
+                            && insts[i + 1]->opcode == QoreIROpcode::ReleasePlainLocalRead && !iter->iterator_func) {
+                        auto* local = static_cast<QoreIRLocalInstruction*>(insts[i - 1].get());
+                        const uint32_t rid = local->result.id;
+                        const auto& release = insts[i + 1]->operands;
+                        if (rid == iter->iterable.id && rid < func.interpreter_value_use_counts.size()
+                                && func.interpreter_value_use_counts[rid] == 2 && release.size() == 1
+                                && release.front().id == rid && local->local && func.ir_only_locals.count(local->local)) {
+                            local->interpreter_borrow = QoreIRLocalInstruction::Borrow::Iterator;
+                            iter->interpreter_ends_source_borrow = true;
+                        }
+                    }
+                }
                 if (load->opcode != QoreIROpcode::LoadLocal || !load->result.isValid()) {
                     continue;
                 }
                 const uint32_t rid = load->result.id;
+                auto* local = static_cast<QoreIRLocalInstruction*>(insts[i].get());
+                local->interpreter_borrow = local->borrowed_local_load
+                    ? QoreIRLocalInstruction::Borrow::Mutation : QoreIRLocalInstruction::Borrow::None;
                 // the base of a method call, or the operand of an operator that does not keep it, used once
                 if (rid >= bases.size() || (!bases[rid] && (rid >= func.interpreter_value_use_counts.size()
                         || func.interpreter_value_use_counts[rid] != 1))) {
@@ -3863,11 +4348,17 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     // functional loop's body, qore#6072) has the operand bookkeeping after the dispatch, and is never stepped over
     for (const auto& b : func.blocks) {
         auto& insts = b->instructions;
-        for (size_t i = 0; i + 1 < insts.size(); ++i) {
+        for (size_t i = 0; i < insts.size(); ++i) {
             QoreIRInstruction* release = insts[i].get();
-            const QoreIRInstruction* check = insts[i + 1].get();
-            if (release->opcode == QoreIROpcode::UninstantiateLocal && check->opcode == QoreIROpcode::CheckException
-                    && check->operands.empty()) {
+            if (release->opcode != QoreIROpcode::UninstantiateLocal) {
+                continue;
+            }
+            const LocalVar* local = static_cast<const QoreIRLocalInstruction*>(release)->local;
+            if (!release->stmt_loc && func.releasesLocalAtCaller(local)) {
+                release->interpreter_gives_call_args |= QORE_IR_BODY_LOCAL_CLEANUP;
+            }
+            if (i + 1 < insts.size() && insts[i + 1]->opcode == QoreIROpcode::CheckException
+                    && insts[i + 1]->operands.empty()) {
                 release->interpreter_gives_call_args |= QORE_IR_STEPS_OVER_CHECK;
             }
         }
@@ -4071,7 +4562,7 @@ static void acceptInterpreterIRReturnType(const UserSignature* sig, const QoreTy
     if (value.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
         QoreTypeInfo::acceptAssignment(rt, "<block return>", value, xsink, nullptr);
         if (xsink && *xsink && sig) {
-            xsink->overrideLocation(*sig->getParseLocation());
+            qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
             xsink->appendLastDescription(": block missing return statement");
         }
     } else {
@@ -4932,15 +5423,14 @@ static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
             || ret->value.id != operation->result.id) {
         return false;
     }
+    // the intrinsic of a method known when the instruction was made is final (#6709)
     QoreIRIntrinsic intrinsic = operation->intrinsic;
-    if (intrinsic == QoreIRIntrinsic::None) {
+    if (intrinsic == QoreIRIntrinsic::None && !operation->method) {
         intrinsic = qore_ir_resolve_pseudo_intrinsic(
             operation->method, operation->qc, operation->fallback_method_name);
     }
     if (intrinsic == QoreIRIntrinsic::Size || intrinsic == QoreIRIntrinsic::StringStrlen) {
         kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringSize;
-    } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-        kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringLength;
     } else {
         return false;
     }
@@ -5246,16 +5736,15 @@ static QORE_INTERN_NOINLINE bool computeInterpreterNativeLeafState(QoreIRCallDir
                 || ret->value.id != operation->result.id || inst->cached_return_type != bigIntTypeInfo) {
             return reject();
         }
+        // the intrinsic of a method known when the instruction was made is final (#6709)
         QoreIRIntrinsic intrinsic = operation->intrinsic;
-        if (intrinsic == QoreIRIntrinsic::None) {
+        if (intrinsic == QoreIRIntrinsic::None && !operation->method) {
             intrinsic = qore_ir_resolve_pseudo_intrinsic(
                 operation->method, operation->qc, operation->fallback_method_name);
         }
         QoreIRCallDirectInstruction::NativeLeafKind kind;
         if (intrinsic == QoreIRIntrinsic::Size || intrinsic == QoreIRIntrinsic::StringStrlen) {
             kind = QoreIRCallDirectInstruction::NativeLeafKind::StringSize;
-        } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-            kind = QoreIRCallDirectInstruction::NativeLeafKind::StringLength;
         } else {
             return reject();
         }
@@ -6075,8 +6564,7 @@ public:
     DLLLOCAL QORE_INTERN_NOINLINE QoreIRInlineCalleeParseOptionsHelper(ExceptionSink* xsink, QoreProgram* exec_pgm,
             const UserVariantBase* uvb, QoreProgram* caller_pgm)
             : po_override(exec_pgm, uvb, caller_pgm),
-            loc_helper(xsink, uvb->getUserSignature()->getParseLocation(), nullptr,
-                uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm))) {
+            loc_helper(xsink, uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm))) {
     }
 
     //! the same, inlined explicitly into the inline method calls of the interpreter, on a hot path whose inlining
@@ -6085,8 +6573,7 @@ public:
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreIRInlineCalleeParseOptionsHelper(HotInline, ExceptionSink* xsink,
             QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm)
             : po_override(exec_pgm, uvb, caller_pgm),
-            loc_helper(xsink, uvb->getUserSignature()->getParseLocation(), nullptr,
-                uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm))) {
+            loc_helper(xsink, uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm))) {
     }
 
 private:
@@ -6528,6 +7015,11 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
         variant = getSingleInterpreterMethodVariant(method);
         if (!variant) {
             inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
+            return false;
+        }
+        // a variant that the class context cannot call is not cached: the generic call path raises the error of the
+        // AST interpreter, whose variant search skips it (qore#6735)
+        if (!qore_class_private::runtimeCheckMethodVariantAccess(*method, variant, class_ctx)) {
             return false;
         }
         // a variant with functional domains declared in Qore source is checked against the caller on each call
@@ -6993,6 +7485,10 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         }
     }
 
+    // the closure's statements store their own locations: the caller continues in its own, which it does not store
+    // again (QoreIRInstruction::stmt_loc), as after a function run inline (QoreIRInlineCalleeParseOptionsHelper) and
+    // a closure run on the call path (execJITWithDeopt()) (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     QoreValue ir_return_value;
     IRDirectParams dp{args, nargs};
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
@@ -7690,7 +8186,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     if (lt == NT_OBJECT) {
                         QoreObject* o = const_cast<QoreObject*>(lhs_val.get<const QoreObject>());
                         if (rhs_val.getType() == NT_LIST) {
-                            return o->getSlice(rhs_val.get<const QoreListNode>(), xsink);
+                            return qore_object_ops(o).getSlice(rhs_val.get<const QoreListNode>(), xsink);
                         }
                         QoreStringNodeValueHelper key(rhs_val);
                         return o->evalMember(*key, xsink);
@@ -8477,7 +8973,13 @@ struct IRHandlerHandOver {
     //! function that catches the exception (QoreIRFunction::catch_interrupted_returns), or nullptr for all of the
     //! function's returns (the exception or thread_exit leaves the function)
     const std::vector<uint32_t>* try_returns;
+    //! the values that the first hand-over of a run in the block cleanups of a return past the inline cap releases:
+    //! the value of the return and the value that it took a reference of its own to (the operands of a ScopeExit with
+    //! QoreIRScopeExitInstruction::hand_over_return, #6137), or nullptr
+    const std::vector<QoreIRValue>* return_values = nullptr;
     bool replaced = false;
+    //! the count of the values handed over in the run (QoreHandlerRunContext::hand_over_count, #6552)
+    uint64_t count = 0;
 
     //! Releases the value of the return slot \a id if it holds a reference of its own to it: a borrowed value has none
     void releaseReturnSlot(uint32_t id, ExceptionSink* xsink) {
@@ -8540,6 +9042,65 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over(void* data, QoreValue
     }
 }
 
+// The value of a return statement of a handler run out of line past the inline cap in the block cleanups of a return
+// statement replaces the value of that return, which takes it when its cleanups end (QoreIROpcode::TakeHandedOverReturn),
+// as in the AST interpreter, where the handler runs with a reference to the return value of its function: the frame
+// keeps it, releasing the value of the hand-over before.  A return without a value replaces it with no value.  \a data
+// is an IRHandlerHandOver, \a value is borrowed (#6137).
+// The first hand-over releases the value of the return in its slots, as the AST interpreter releases the value that a
+// handler's return replaces (see qore_ir_handler_hand_over()); a slot that holds no reference of its own is left.
+static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over_return(void* data, QoreValue value, ExceptionSink* xsink) {
+    IRHandlerHandOver& h = *static_cast<IRHandlerHandOver*>(data);
+    if (!h.replaced) {
+        h.replaced = true;
+        if (h.return_values) {
+            for (const QoreIRValue& v : *h.return_values) {
+                h.releaseReturnSlot(v.id, xsink);
+            }
+        }
+    }
+    h.frame->locals_slot_cache.handOverReturn(value.refSelf(), xsink);
+}
+
+// The IR interpreter's QoreIROpcode::TakeHandedOverReturn and ReleaseHandedOverReturn (#6137): the value that handlers
+// run out of line past the inline cap handed over to the return, if any, or the value of the return, is its result;
+// a return in a handler replaces the value handed over, which is released, and an exception that a destructor raises
+// is pending for the instructions after it, as with ReleaseOwnedTemp.  Out of line and cold, so that
+// QoreIRInterpreter::execute(), which runs it only past the cap, keeps its code and frame
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_handed_over_return_op(IRCallFrame& frame,
+        IRValueSlots& values, IRCleanupSlots& cleanup, const QoreIRInstruction* inst, ExceptionSink* xsink) {
+    if (inst->opcode == QoreIROpcode::ReleaseHandedOverReturn) {
+        if (!inst->operands.empty()) {
+            // the form that clears the result of the ScopeExit whose handlers handed the value over, at the start of
+            // the return of the value that it branched to (#6552, see qore_ir_scope_exit_handed_over())
+            uint32_t id = inst->operands.front().id;
+            if (id < values.size()) {
+                values[id] = QoreValue();
+            }
+            return;
+        }
+        frame.locals_slot_cache.releaseHandedOverReturn(xsink);
+        return;
+    }
+    QoreValue rv = frame.locals_slot_cache.takeHandedOverReturn(inst->operands.empty() ? QoreValue()
+        : getIRValue(values, inst->operands.front()));
+    setOwnedValueSlot(values, cleanup, inst->result.id, rv, xsink);
+}
+
+// The result of a ScopeExit past the inline cap outside the cleanups of a return statement: whether its handlers
+// handed a value over (#6552), set to true by the run of the handler that hands one over (see executeHandlerBody()):
+// the slot is never set otherwise, as the frame starts with its slots empty (no value is false) and a true value
+// branches to the return of the value, whose first instruction, a ReleaseHandedOverReturn with the result as its
+// operand, clears it again (see qore_ir_handed_over_return_op()), so that a later run of the ScopeExit that runs no
+// handler (one reached again after an exception that a try statement of the function catches) does not see it.
+// Nothing of this runs in QoreIRInterpreter::execute() on a path that the cap does not reach.
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_scope_exit_handed_over(IRCallFrame& frame,
+        uint32_t id) {
+    if (id < frame.values.size()) {
+        frame.values[id] = QoreValue(true);
+    }
+}
+
 // The IR interpreter's QoreIROpcode::HandlerReturn: hands the value of a return statement of a handler run out of line
 // to the function that it runs for (see QoreHandlerRunContext); returns true if the release of a replaced value
 // raised an exception
@@ -8552,10 +9113,19 @@ static QORE_INTERN_NOINLINE bool qore_ir_handler_return(QoreValue value, Excepti
 // Returns true if execution encountered an error.
 // Returns the debugger's request that the handler ended with (qore_ir_take_handler_flow()), or 0 (#6201)
 // The handler hands the values of its return statements to \a parent_frame (see qore_ir_handler_hand_over()) while it
-// runs during an unwind (\a unwinding: an exception or a thread_exit)
+// runs during an unwind (\a unwinding: an exception or a thread_exit), or, if \a scope_exit, the ScopeExit that runs it,
+// is one in the block cleanups of a return statement past the inline cap (hand_over_return), to the return (see
+// qore_ir_handler_hand_over_return(), #6137); \a try_returns does not apply then
 static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
         IRCallFrame* parent_frame = nullptr, const StatementBlock* dbg_statements = nullptr,
-        QoreProgram* dbg_pgm = nullptr, bool unwinding = false, const std::vector<uint32_t>* try_returns = nullptr) {
+        QoreProgram* dbg_pgm = nullptr, bool unwinding = false, const std::vector<uint32_t>* try_returns = nullptr,
+        const QoreIRScopeExitInstruction* scope_exit = nullptr) {
+    const QoreIRScopeExitInstruction* returning = scope_exit && scope_exit->hand_over_return ? scope_exit : nullptr;
+    if (returning) {
+        try_returns = nullptr;
+    }
+    // the handler's statements store their own locations: the caller continues in its own (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     std::vector<QoreValue>* parent_slot_cache = parent_frame ? &parent_frame->locals_slot_cache.vector() : nullptr;
     // Every on_block_exit handler must have been compiled to IR by
     // QoreIRLowering::compileAllHandlerIRs/compileBlockHandlerIRs before
@@ -8579,7 +9149,7 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
     }
     // the values of the handler's return statements are handed to the frame as they execute (#6074): the value that
     // the handler's function returns is not used
-    IRHandlerHandOver hand_over{parent_frame, try_returns};
+    IRHandlerHandOver hand_over{parent_frame, try_returns, returning ? &returning->operands : nullptr};
     QoreHandlerRunContext run_ctx;
     IRCallFramePool& pool = TlFramePool::get();
     QoreHandlerRunContext* outer = qore_handler_run_context();
@@ -8591,14 +9161,20 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
         run_ctx.forwardFrom(*outer);
     } else {
         run_ctx.unwinding = unwinding;
+        run_ctx.returning = returning != nullptr;
         if (parent_frame) {
-            run_ctx.hand_over = qore_ir_handler_hand_over;
+            run_ctx.hand_over = returning ? qore_ir_handler_hand_over_return : qore_ir_handler_hand_over;
             run_ctx.data = &hand_over;
+            run_ctx.hand_over_count = &hand_over.count;
         }
     }
     // the frame that execute() pushes for the handler
     run_ctx.ir_frame_index = pool.top;
     QoreHandlerRunGuard run_guard(run_ctx);
+    // a ScopeExit with a result gives whether a value was handed over to the function that takes the values of its
+    // handlers: the delta of its count in the runs (#6552)
+    uint64_t* count = scope_exit && scope_exit->result.isValid() ? run_ctx.hand_over_count : nullptr;
+    uint64_t count_before = count ? *count : 0;
     QoreValue rv;
     // the handler runs with the debug context of its frame, so that a debugger gets the events of its statements, as
     // with the AST interpreter, but not those of a function (see QoreIRInterpreter::execute())
@@ -8612,6 +9188,9 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
         qore_ir_set_handler_flow(outer_flow);
     }
     rv.discard(obe_xsink);
+    if (count && parent_frame && *count - count_before) {
+        qore_ir_scope_exit_handed_over(*parent_frame, scope_exit->result.id);
+    }
     return flow;
 }
 
@@ -8636,7 +9215,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                     std::unique_ptr<SingleArgvContextHelper> argv_helper;
                     std::unique_ptr<CatchExceptionHelper> ex_helper;
                     if (type == OBE_Error && xsink) {
-                        QoreException* except = xsink->getException();
+                        QoreException* except = qore_exception_sink_ops(xsink).getException();
                         if (except) {
                             ex_helper.reset(new CatchExceptionHelper(except));
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
@@ -8743,7 +9322,8 @@ static QoreIRDebugNest& qore_ir_dbg_frame_nest() {
 
 //! Records the statement of a DebugStatement instruction in the statements that the frame is in
 static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameState& st,
-        const QoreIRDebugStatementInstruction* inst, const AbstractStatement* stmt, size_t scope_depth) {
+        const QoreIRDebugStatementInstruction* inst, const AbstractStatement* stmt, size_t scope_depth,
+        size_t mark_depth, std::vector<IRCatchEntry>& catches) {
     QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
     if (!st.nest_used) {
         n.reset();
@@ -8754,6 +9334,9 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameStat
     QoreIRDebugNestEntry& e = entries.back();
     e.stmt = stmt;
     e.scope_depth = scope_depth;
+    e.mark_depth = mark_depth;
+    n.catches = &catches;
+    e.catch_depth = catches.size();
     e.depth = inst->nest_depth;
     e.flags = inst->nest_flags;
     e.block = nullptr;
@@ -8793,6 +9376,298 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_statement_end(QoreIRDebugFrameState
         st.frame_stmt = entries.empty() ? nullptr : entries.back().stmt;
         *stmt_ptr = st.frame_stmt;
     }
+}
+
+//! Returns the number of temp scope marks of the frame when the given statement started, if it is one of the
+//! statements that the frame is in, or -1 (qore#6626)
+/** The statements nested in it that it ran before (the statements of a foreach body in an earlier iteration) are
+    still recorded after it: the innermost entry of the statement is searched from the innermost one outward
+*/
+static QORE_INTERN_NOINLINE ptrdiff_t qore_ir_dbg_statement_mark_depth(const QoreIRDebugFrameState& st,
+        const AbstractStatement* stmt) {
+    if (!st.nest_used || !stmt) {
+        return -1;
+    }
+    const QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    for (size_t i = n.entries.size(); i > 0; --i) {
+        if (n.entries[i - 1].stmt == stmt) {
+            return static_cast<ptrdiff_t>(n.entries[i - 1].mark_depth);
+        }
+    }
+    return -1;
+}
+
+//! Finds the point where the code continues after a dismissed exception event of a call (qore#6626)
+/** As the AST interpreter continues after the statement whose exception it was: if the statement has a temp scope of
+    its own, whose mark records \a stmt_scope_id, the DiscardTemps that closes it (the instruction's temp_scope_id,
+    which pairs it with its PushTempMark), past the temp scopes opened in the statement, such as those of the elements
+    of a map, whose own DiscardTemps comes first; otherwise (code without the pairing, such as IR read from an AOT
+    module) the first DiscardTemps reached before a nested temp scope starts; with \a find_return, the return or throw
+    that ends a statement whose own temp scope ends without a DiscardTemps (a return or a throw statement).  The search
+    follows the normal edges from \a start; \a path is the blocks from \a start to the block of the target, whose
+    instructions before it are skipped.  Out of line, as only a debugger's dismissal runs it.
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) bool qore_ir_find_dismiss_target(QoreIRBasicBlock* start,
+        uint32_t stmt_scope_id, bool find_return, QoreIRBasicBlock*& target_block, size_t& target_ip,
+        std::vector<QoreIRBasicBlock*>& path) {
+    if (!start) {
+        return false;
+    }
+    // each block with the block that it was reached from
+    std::vector<std::pair<QoreIRBasicBlock*, QoreIRBasicBlock*>> stack{{start, nullptr}};
+    std::unordered_map<QoreIRBasicBlock*, QoreIRBasicBlock*> parent;
+    while (!stack.empty() && parent.size() < 1024) {
+        auto [b, from] = stack.back();
+        stack.pop_back();
+        if (!b || !parent.emplace(b, from).second) {
+            continue;
+        }
+        for (size_t i = 0; i < b->instructions.size(); ++i) {
+            QoreIRInstruction* candidate = b->instructions[i].get();
+            if (find_return ? (candidate->opcode == QoreIROpcode::Return
+                        || candidate->opcode == QoreIROpcode::ReturnNothing
+                        || candidate->opcode == QoreIROpcode::Throw
+                        || candidate->opcode == QoreIROpcode::Rethrow)
+                    : (candidate->opcode == QoreIROpcode::DiscardTemps
+                        && (!stmt_scope_id || candidate->temp_scope_id == stmt_scope_id))) {
+                target_block = b;
+                target_ip = i;
+                path.clear();
+                for (QoreIRBasicBlock* pb = b; pb; pb = parent[pb]) {
+                    path.push_back(pb);
+                }
+                std::reverse(path.begin(), path.end());
+                return true;
+            }
+            if (!stmt_scope_id && !find_return && (candidate->opcode == QoreIROpcode::PushTempMark
+                    || candidate->opcode == QoreIROpcode::PushTempMarkPair)) {
+                break;
+            }
+            // the block ends at its first terminator: the instructions after it never run (qore#6468); its normal
+            // successors are followed (every kind of branch, the loops of operators such as map, and the normal
+            // targets of the invokes)
+            const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(candidate->opcode));
+            if ((oi && oi->is_terminator) || i + 1 == b->instructions.size()) {
+                qore_ir_visit_successors(*candidate, [&](QoreIRBasicBlock* succ) {
+                    stack.emplace_back(succ, b);
+                });
+                break;
+            }
+        }
+    }
+    return false;
+}
+
+//! Skips the code between a dismissed exception event of a call and the point where the code continues (qore#6626)
+/** The implicit arguments and elements that the skipped code would restore are restored, innermost first (the pops
+    on the path whose push is not on it); the values that the skipped instructions define are added to \a to_clear,
+    so that the caller clears them and the code that continues reads defined values, except a value registered for
+    the release of a temp scope, which the DiscardTemps that releases it releases
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_dismiss_skip_code(
+        const std::vector<QoreIRBasicBlock*>& path, const QoreIRBasicBlock* target_block, size_t target_ip,
+        IRValueSlots& values, const IRCleanupSlots& cleanup, ExceptionSink* xsink, std::vector<uint32_t>& to_clear) {
+    std::unordered_set<uint32_t> pushed;
+    for (QoreIRBasicBlock* pb : path) {
+        size_t end = pb == target_block ? target_ip : pb->instructions.size();
+        for (size_t k = 0; k < end; ++k) {
+            const QoreIRInstruction* si = pb->instructions[k].get();
+            switch (si->opcode) {
+                case QoreIROpcode::PushImplicitArg:
+                case QoreIROpcode::SetImplicitArgv:
+                case QoreIROpcode::PushImplicitElement:
+                    pushed.insert(si->result.id);
+                    break;
+                case QoreIROpcode::PopImplicitArg:
+                case QoreIROpcode::PopImplicitElement: {
+                    if (si->operands.empty() || pushed.count(si->operands[0].id)
+                            || si->operands[0].id >= values.size()) {
+                        break;
+                    }
+                    QoreValue old_val = getIRValue(values, si->operands[0]);
+                    if (si->opcode == QoreIROpcode::PopImplicitElement) {
+                        save_implicit_element(static_cast<int>(old_val.getAsBigInt()));
+                    } else {
+                        // as PopImplicitArg does
+                        const QoreListNode* current = thread_get_implicit_args();
+                        if (current) {
+                            const_cast<QoreListNode*>(current)->deref(xsink);
+                        }
+                        thread_set_implicit_args(old_val.get<QoreListNode>());
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+    for (QoreIRBasicBlock* pb : path) {
+        size_t end = pb == target_block ? target_ip : pb->instructions.size();
+        for (size_t k = 0; k < end; ++k) {
+            QoreIRValue r = pb->instructions[k]->result;
+            if (r.isValid() && r.id < values.size() && !pushed.count(r.id) && !hasCleanupEntry(cleanup, r.id)) {
+                to_clear.push_back(r.id);
+            }
+        }
+    }
+}
+
+//! The state of the frame of QoreIRInterpreter::execute() that the dismissal of a call's exception event needs, and
+//! where the code continues after it (see qore_ir_dismiss_call(); qore#6626)
+struct QoreIRDismissCall {
+    //! the frame: its values, temps, temp scope marks and the bookkeeping of its borrowed temps
+    IRCallFrame* frame;
+    //! the weak-load temps of the frame (a local of execute())
+    std::unordered_map<uint32_t, int32_t>* weak_load_temp_slots;
+    //! the order of the release of a statement's temps by an exception
+    const std::vector<uint32_t>* release_groups;
+    //! the names of the values that the release of temps releases, for a test (see QoreIRInterpreter::execute())
+    std::vector<std::string>* cleanup_log;
+    //! the debugger's state of the frame
+    QoreIRDebugFrameState* dbg_state;
+    //! the call whose exception event the debugger dismissed
+    const QoreIRInvokeInstruction* inv;
+    //! the statement of the exception event
+    const AbstractStatement* stmt;
+    ExceptionSink* xsink;
+    //! in: the call's block and position; out: where the code continues, or the return or throw at which the
+    //! function ends
+    QoreIRBasicBlock* block;
+    size_t ip;
+};
+
+//! Clears a slot as clearSlotForOverwrite() in QoreIRInterpreter::execute() does
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_dismiss_clear_slot(QoreIRDismissCall& dc,
+        uint32_t id) {
+    IRCallFrame& f = *dc.frame;
+    if (id >= f.values.size()) {
+        return;
+    }
+    bool had_borrowed_value = dc.weak_load_temp_slots->erase(id) > 0;
+    if (id < f.borrowed_temp_remaining.size() && f.borrowed_temp_remaining[id] > 0) {
+        f.borrowed_temp_remaining[id] = 0;
+        --f.borrowed_temp_active;
+        had_borrowed_value = true;
+    }
+    bool had_cleanup = removeAllCleanupEntries(f.cleanup, id);
+    if (had_cleanup && !had_borrowed_value) {
+        f.values[id].discard(dc.xsink);
+    }
+    f.values[id] = QoreValue();
+}
+
+//! Releases the temps of the temp scope at the given index of the frame's marks, and the temp scopes opened after it,
+//! as cleanupToTempMark() in QoreIRInterpreter::execute() does for an exception (no_throw); the mark is kept if
+//! \a keep_mark
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_dismiss_release_temps(QoreIRDismissCall& dc,
+        size_t mark_index, bool keep_mark) {
+    IRCallFrame& f = *dc.frame;
+    // the dismissal's sink takes the exceptions of the destructors (the lambda falls back to a sink of its own only
+    // without one)
+    assert(dc.xsink);
+    assert(mark_index < f.temp_cleanup_marks.size());
+    size_t cleanup_size = f.temp_cleanup_marks[mark_index].cleanup_size + (keep_mark ? 1 : 0);
+    if (f.cleanup.size() > cleanup_size + 1) {
+        f.cleanup.orderForException(cleanup_size, *dc.release_groups);
+    }
+    while (f.cleanup.size() > cleanup_size) {
+        uint32_t id = f.cleanup.back();
+        f.cleanup.pop_back();
+        if (id >= f.values.size()) {
+            continue;
+        }
+        QoreValue& slot = f.values[id];
+        if (dc.cleanup_log && slot.hasNode()) {
+            if (slot.getType() == NT_STRING) {
+                QoreStringValueHelper str(slot);
+                dc.cleanup_log->push_back(str->getBuffer());
+            } else {
+                dc.cleanup_log->push_back(slot.getTypeName());
+            }
+        }
+        slot.discard(dc.xsink);
+        slot = QoreValue();
+        dc.weak_load_temp_slots->erase(id);
+        // as releaseBorrowedTemp()
+        if (id < f.borrowed_temp_remaining.size() && f.borrowed_temp_remaining[id] > 0) {
+            f.borrowed_temp_remaining[id] = 0;
+            --f.borrowed_temp_active;
+            f.values[id] = QoreValue();
+        }
+    }
+    f.temp_cleanup_marks.erase(f.temp_cleanup_marks.begin() + mark_index + (keep_mark ? 1 : 0),
+        f.temp_cleanup_marks.end());
+    f.ephemeral_weak_ref_slots.clear();
+}
+
+//! Dismisses the exception event of a call: the call gives no value, and the code continues after the statement
+//! (qore#6626)
+/** Out of line, with the frame's state passed explicitly, so that the interpreter's loop does not pay for it: only a
+    debugger's dismissal runs it.
+
+    The statement's own temp scope is found by the mark depth that the statement recorded when it started
+    (qore_ir_dbg_statement_mark_depth()), and the code continues at the DiscardTemps that closes it
+    (qore_ir_find_dismiss_target()); the statement's temporaries are released now, as the AST interpreter releases
+    them while the exception unwinds, before its event, so that the exceptions of their destructors are dismissed with
+    it.  A statement with a temp scope of its own whose end is not found (a return or a throw statement, whose scope
+    ends with the function's exit) ends the function, which returns no value, as a dismissed exception of a throw
+    statement does (#5825).  The restores of the skipped code are done and the values that it defines cleared
+    (qore_ir_dismiss_skip_code()).
+
+    @return true if the function ends: the caller unwinds the frame at dc.block / dc.ip (the return or throw reached,
+    whose open implicit contexts the frame's exit restores, or the call); false if the code continues at dc.block /
+    dc.ip
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) bool qore_ir_dismiss_call(QoreIRDismissCall& dc) {
+    IRCallFrame& f = *dc.frame;
+    QoreIRBasicBlock* dismiss_block = nullptr;
+    size_t dismiss_ip = 0;
+    std::vector<QoreIRBasicBlock*> dismiss_path;
+    ptrdiff_t stmt_marks = qore_ir_dbg_statement_mark_depth(*dc.dbg_state, dc.stmt);
+    size_t cur_marks = f.temp_cleanup_marks.size();
+    // the scope of the statement's own temp scope, if it has one and the scopes are paired
+    uint32_t stmt_scope_id = stmt_marks >= 0 && cur_marks > static_cast<size_t>(stmt_marks)
+        ? f.temp_cleanup_marks[static_cast<size_t>(stmt_marks)].scope_id : 0;
+    bool found = qore_ir_find_dismiss_target(dc.inv->normal_target, stmt_scope_id, false, dismiss_block, dismiss_ip,
+        dismiss_path);
+    bool exit_function = !found && stmt_scope_id;
+    bool exit_path = exit_function && qore_ir_find_dismiss_target(dc.inv->normal_target, 0, true, dismiss_block,
+        dismiss_ip, dismiss_path);
+    if (stmt_scope_id && (found || exit_function)) {
+        // the statement's mark stays for its DiscardTemps if the code continues there, and goes if the function ends
+        qore_ir_dismiss_release_temps(dc, static_cast<size_t>(stmt_marks), found);
+        if (*dc.xsink) {
+            dc.xsink->clear();
+        }
+    }
+    if (found || exit_path) {
+        std::vector<uint32_t> to_clear;
+        IRValueSlots values{f.values};
+        qore_ir_dismiss_skip_code(dismiss_path, dismiss_block, dismiss_ip, values, f.cleanup, dc.xsink, to_clear);
+        for (uint32_t id : to_clear) {
+            qore_ir_dismiss_clear_slot(dc, id);
+        }
+    }
+    if (dc.inv->result.isValid() && !hasCleanupEntry(f.cleanup, dc.inv->result.id)) {
+        qore_ir_dismiss_clear_slot(dc, dc.inv->result.id);
+    }
+    if (exit_function) {
+        if (exit_path) {
+            dc.block = dismiss_block;
+            dc.ip = dismiss_ip;
+        }
+        dc.dbg_state->exit_dismissed = true;
+        return true;
+    }
+    if (found) {
+        dc.block = dismiss_block;
+        dc.ip = dismiss_ip;
+    } else {
+        dc.block = dc.inv->normal_target;
+        dc.ip = 0;
+    }
+    return false;
 }
 
 //! Starts the events of the statements that contain the given statement, whose exception event was made
@@ -8884,6 +9759,19 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_enclosing(QoreIRDebugFrameSt
             qore_ir_release_block_locals(block->block_locals->locals, block->block_locals->slots, *pool.frames[pool.top - 1],
                 n.func, n.pre_instantiated, xsink);
         }
+        // A catch owns the original exception as well as its local. Release it at the same boundary as the
+        // catch block's locals, before an enclosing block releases its locals. Keep the stack entries for the
+        // normal unwind instructions, which still count them when restoring the enclosing catches.
+        if ((e.flags & QORE_IR_DEBUG_NEST_TRY) && n.catches) {
+            for (size_t i = n.catches->size(); i > e.catch_depth; --i) {
+                auto& entry = (*n.catches)[i - 1];
+                if (QoreException* caught = entry.caught) {
+                    entry.caught = nullptr;
+                    catch_swap_exception(entry.saved);
+                    caught->del(xsink);
+                }
+            }
+        }
         --n.chain;
         if (!e.stmt) {
             continue;
@@ -8891,7 +9779,7 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_enclosing(QoreIRDebugFrameSt
         tlpd->dbgException(e.stmt, xsink);
         rc = true;
         if (*xsink) {
-            st.exc_reported = xsink->getException();
+            st.exc_reported = qore_exception_sink_ops(xsink).getException();
             continue;
         }
         // the debugger dismissed the exception: the function ends, which returns no value (#5825)
@@ -8911,13 +9799,13 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_exception(QoreIRDebugFrameSt
     if (!xsink || !xsink->isException()) {
         return false;
     }
-    const QoreException* except = xsink->getException();
+    const QoreException* except = qore_exception_sink_ops(xsink).getException();
     if (except == st.exc_reported || !st.frame_stmt) {
         return false;
     }
     tlpd->dbgException(st.frame_stmt, xsink);
     if (*xsink) {
-        st.exc_reported = xsink->getException();
+        st.exc_reported = qore_exception_sink_ops(xsink).getException();
         qore_ir_dbg_start_chain(st, st.frame_stmt);
     } else {
         // the debugger dismissed the exception: the function ends, which returns no value (#5825)
@@ -9162,8 +10050,10 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
                 pseudo_qc = resolved_qc;
             }
         }
+        // the intrinsic of a method known when the instruction was made is final: None is the answer then, not a
+        // reason to compare the names again on every call; only a method resolved here by name needs it (#6709)
         QoreIRIntrinsic intrinsic = direct_inst->intrinsic;
-        if (intrinsic == QoreIRIntrinsic::None) {
+        if (intrinsic == QoreIRIntrinsic::None && !direct_inst->method) [[unlikely]] {
             intrinsic = qore_ir_resolve_pseudo_intrinsic(pseudo_method, pseudo_qc, method_name);
         }
 
@@ -9295,8 +10185,9 @@ static QORE_IR_INLINE_SITE void irInvokeDotEvalMethodDirect(Given& given,
                 pseudo_qc = resolved_qc;
             }
         }
+        // see the DotEvalMethodDirect case (#6709)
         QoreIRIntrinsic intrinsic = de_invoke_inst->intrinsic;
-        if (intrinsic == QoreIRIntrinsic::None) {
+        if (intrinsic == QoreIRIntrinsic::None && !de_invoke_inst->method) [[unlikely]] {
             intrinsic = qore_ir_resolve_pseudo_intrinsic(pseudo_method, pseudo_qc, method_name);
         }
 
@@ -9551,14 +10442,6 @@ DLLLOCAL QoreValue irEvalInvokeGiven(const IRConsumedCallArgs& consumed, const Q
 #endif
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
-struct IRCatchEntry {
-    QoreException* caught;  // the caught exception
-    QoreException* saved;   // the previous td->catchException value
-    //! the number of scopes open when the catch block was entered (those that enclose the try statement): the
-    //! catch block is in every scope below that depth, and is left when one of them is (#5969)
-    size_t scope_depth;
-};
-
 //! Closes the catch blocks opened since the try statement of a catch block's exit block began (#5968)
 /** Returns false if \a inst is the CatchCleanup of no exit block, which closes the innermost catch block. */
 static QORE_INTERN_NOINLINE bool qore_ir_catch_exit_cleanup(const QoreIRFunction& func, const QoreIRInstruction* inst,
@@ -9639,9 +10522,9 @@ static QORE_INTERN_NOINLINE void qore_ir_release_failed_method_call(QoreListNode
 #define QORE_IR_DISPATCH_FOLDED_DEBUG_STEP() \
     if (debug_active) [[unlikely]] { \
         if (QoreIRDebugStatementInstruction* folded_step = qore_ir_folded_debug_step(inst)) { \
-            if (folded_step->cached_start_line >= 0) { \
-                *rl_cache.loc_ptr = folded_step->loc; \
-                last_ephemeral_line = folded_step->cached_start_line; \
+            if (folded_step->stmt_loc) { \
+                *rl_cache.loc_ptr = folded_step->stmt_loc; \
+                last_stmt_loc = folded_step->stmt_loc; \
             } \
             inst = folded_step; \
             goto dispatch_folded_step; \
@@ -9907,7 +10790,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             local_owned_slots.resize(id + 1, 0);
         }
-        local_owned_slots[id] = owned ? 1 : 0;
+        if (owned) {
+            local_owned_slots[id] |= IRCallFrame::LocalOwned;
+        } else {
+            local_owned_slots[id] &= ~IRCallFrame::LocalOwned;
+        }
     };
     if (!ensureInterpreterAnalysis(func, xsink)) {
         return false;
@@ -10325,7 +11212,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             std::unique_ptr<SingleArgvContextHelper> argv_helper;
                             std::unique_ptr<CatchExceptionHelper> ex_helper;
                             if (type == OBE_Error && xsink) {
-                                QoreException* except = xsink->getException();
+                                QoreException* except = qore_exception_sink_ops(xsink).getException();
                                 if (except) {
                                     ex_helper.reset(new CatchExceptionHelper(except));
                                     argv_helper.reset(new SingleArgvContextHelper(
@@ -10403,21 +11290,25 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // Clear local slot cache, preserving IR-only locals (loop counters etc.)
         // that only exist in the cache and have no variable-stack backing.  The slots are released last slot first,
         // as the AST interpreter releases the variables of a frame (see SlotCacheCleanup)
-        for (size_t ri = locals_slot_cache.size(); ri; --ri) {
-            const size_t i = ri - 1;
-            // at the exit of the function, the iterator of a foreach statement still running is released at its
-            // place among the slots (see IRActiveIterator)
-            if (!preserve_ir_only) {
-                releaseActiveIteratorsFrom(active_iterators, ri);
+        auto visit = [&](const auto& clear) {
+            for (size_t ri = locals_slot_cache.size(); ri; --ri) {
+                const size_t i = ri - 1;
+                // at the exit of the function, the iterator of a foreach statement still running is released at its
+                // place among the slots (see IRActiveIterator)
+                if (!preserve_ir_only) {
+                    releaseActiveIteratorsFrom(active_iterators, ri);
+                }
+                if (preserveParentSlotForWriteback(i)) {
+                    continue;
+                }
+                if (preserve_ir_only && i < locals_ir_only.size() && locals_ir_only[i]) {
+                    continue;  // Preserve IR-only locals
+                }
+                clear(i);
             }
-            if (preserveParentSlotForWriteback(i)) {
-                continue;
-            }
-            if (preserve_ir_only && i < locals_ir_only.size() && locals_ir_only[i]) {
-                continue;  // Preserve IR-only locals
-            }
-            locals_slot_cache.release(i, xsink);
-            locals_slot_cache.set(i, QoreValue());
+        };
+        auto release = [&](size_t i) {
+            locals_slot_cache.clearSlot(i, xsink);
             // a local that a handler declares is released at the exit of the handler, whose frame it belongs to,
             // though its variable on the runtime stack is the function's (#6002)
             if (!preserve_ir_only && i < handler_own_slot_lvar.size() && handler_own_slot_lvar[i]
@@ -10433,6 +11324,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 releaseFrameRuntimeLocal(func.interpreter_slot_locals[i], instantiated_locals, pre_instantiated,
                     xsink);
             }
+        };
+        if (frame.unwinding_function) [[unlikely]] {
+            qore_ir_release_unwinding_slots(frame, func.interpreter_slot_locals, visit, release);
+        } else {
+            visit(release);
         }
         if (!preserve_ir_only) {
             releaseActiveIteratorsFrom(active_iterators, 0);
@@ -10581,6 +11477,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     } iter_cleanup{active_iterators};
 
     struct SlotCacheCleanup {
+        const IRCallFrame& frame;
         IRLocalSlotCache& cache;
         ExceptionSink* xsink;
         const std::vector<const LocalVar*>& slot_locals;
@@ -10598,20 +11495,28 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // they have.  The iterator of a foreach statement that is still running is released at its place among them
         // (see IRActiveIterator)
         ~SlotCacheCleanup() {
-            for (size_t i = cache.size(); i; --i) {
-                releaseActiveIteratorsFrom(iters, i);
-                // the object of an object local is released with the real reference it has from the slot
-                cache.release(i - 1, xsink);
-                cache.set(i - 1, QoreValue());
-                if (i - 1 < slot_locals.size() && !(i - 1 < ir_only.size() && ir_only[i - 1])) {
-                    releaseFrameRuntimeLocal(slot_locals[i - 1], instantiated, pre_instantiated, xsink);
+            auto visit = [&](const auto& clear) {
+                for (size_t i = cache.size(); i; --i) {
+                    releaseActiveIteratorsFrom(iters, i);
+                    clear(i - 1);
                 }
+            };
+            auto release = [&](size_t i) {
+                cache.clearSlot(i, xsink);
+                if (i < slot_locals.size() && !(i < ir_only.size() && ir_only[i])) {
+                    releaseFrameRuntimeLocal(slot_locals[i], instantiated, pre_instantiated, xsink);
+                }
+            };
+            if (frame.unwinding_function) [[unlikely]] {
+                qore_ir_release_unwinding_slots(frame, slot_locals, visit, release);
+            } else {
+                visit(release);
             }
             releaseActiveIteratorsFrom(iters, 0);
             // the value of a return that an exception interrupted, after the locals of the frame (#5920)
             cache.releaseHeldReturns(xsink);
         }
-    } slot_cache_cleanup{locals_slot_cache, xsink, func.interpreter_slot_locals, locals_ir_only,
+    } slot_cache_cleanup{frame, locals_slot_cache, xsink, func.interpreter_slot_locals, locals_ir_only,
         instantiated_locals, pre_instantiated, active_iterators};
 
     // Declared after SlotCacheCleanup so dirty parent slots are published before
@@ -10862,6 +11767,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Avoids repeated TLS lookups (pthread_getspecific + std::map::find) per instruction.
     // These pointers remain valid for the duration of this function (same thread).
     RuntimeLocationCache rl_cache = get_runtime_location_cache();
+    if (!func.local_unwind_locations.empty()) {
+        frame.body_entry_loc = *rl_cache.loc_ptr;
+        frame.body_entry_stmt = *rl_cache.stmt_ptr;
+    }
 
     // Debug hook support
     ThreadLocalProgramData* tlpd = get_thread_local_program_data();
@@ -10932,61 +11841,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             return stmt;
         }
         return getDebugStatement(inst);
-    };
-
-    auto findDismissTarget = [](QoreIRBasicBlock* start, QoreIRBasicBlock*& target_block,
-            size_t& target_ip) -> bool {
-        if (!start) {
-            return false;
-        }
-        std::vector<QoreIRBasicBlock*> stack{start};
-        std::unordered_set<QoreIRBasicBlock*> seen;
-        while (!stack.empty() && seen.size() < 64) {
-            QoreIRBasicBlock* b = stack.back();
-            stack.pop_back();
-            if (!b || !seen.insert(b).second) {
-                continue;
-            }
-            for (size_t i = 0; i < b->instructions.size(); ++i) {
-                QoreIRInstruction* candidate = b->instructions[i].get();
-                if (candidate->opcode == QoreIROpcode::DiscardTemps) {
-                    target_block = b;
-                    target_ip = i;
-                    return true;
-                }
-                if (candidate->opcode == QoreIROpcode::PushTempMark
-                        || candidate->opcode == QoreIROpcode::PushTempMarkPair) {
-                    break;
-                }
-                if (auto* br = qore_ir_inst_cast<QoreIRBranchInstruction*>(candidate)) {
-                    stack.push_back(br->target);
-                    break;
-                }
-                if (auto* br_if = qore_ir_inst_cast<QoreIRBranchIfInstruction*>(candidate)) {
-                    stack.push_back(br_if->false_target);
-                    stack.push_back(br_if->true_target);
-                    break;
-                }
-                if (auto* inv = qore_ir_inst_cast<QoreIRInvokeInstruction*>(candidate)) {
-                    stack.push_back(inv->normal_target);
-                    break;
-                }
-                if (auto* inv_md = qore_ir_inst_cast<QoreIRInvokeMethodDirectInstruction*>(candidate)) {
-                    stack.push_back(inv_md->normal_target);
-                    break;
-                }
-                if (auto* inv_dot = qore_ir_inst_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(candidate)) {
-                    stack.push_back(inv_dot->normal_target);
-                    break;
-                }
-                // the block ends at its first terminator: the instructions after it never run (qore#6468)
-                if (const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(candidate->opcode));
-                        oi && oi->is_terminator) {
-                    break;
-                }
-            }
-        }
-        return false;
     };
 
     // Call dbgFunctionEnter if debug is active, then fire block-entry event.
@@ -11081,7 +11935,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Uses a vector (not set) — duplicates are harmless (discard on NOTHING is a no-op)
     // and 0-2 entries per statement makes linear scan faster than hash table overhead.
     auto& ephemeral_weak_ref_slots = frame.ephemeral_weak_ref_slots;
-    int last_ephemeral_line = -1;
+    // the runtime location that the frame stored last (QoreIRInstruction::stmt_loc)
+    const QoreProgramLocation* last_stmt_loc = nullptr;
 
     std::unordered_map<uint32_t, int32_t> weak_load_temp_slots;
     auto& borrowed_temp_remaining = frame.borrowed_temp_remaining;
@@ -11105,6 +11960,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return held && qore_ir_release_weak_receiver(val, xsink);
     };
 
+    // keep in sync with qore_ir_dismiss_clear_slot(), which the dismissal of a call's exception event runs
     auto clearSlotForOverwrite = [&](uint32_t id) {
         if (id >= values.size()) {
             return;
@@ -11255,6 +12111,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
     // Releases the temps registered after the sentinel of the temp scope at the given index of temp_cleanup_marks,
     // and the sentinel and the temp scopes opened after it unless keep_mark is given (see cleanupToTempScope())
+    // keep in sync with qore_ir_dismiss_release_temps(), which the dismissal of a call's exception event runs
     auto cleanupToTempMark = [&](size_t mark_index, bool no_throw, bool keep_mark) {
         assert(mark_index < temp_cleanup_marks.size());
         // the mark's sentinel is at cleanup_size; keeping the mark keeps its sentinel too
@@ -11319,31 +12176,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         cleanupToTempMark(temp_cleanup_marks.size() - 1
             - static_cast<size_t>(std::distance(temp_cleanup_marks.rbegin(), mark)), no_throw, keep_mark);
     };
-
-#ifdef DEBUG
-    // The fast drain of the innermost temp scope (qore_ir_drain_innermost_temp_scope(), qore#6444, qore#6541) releases
-    // what the general drain (cleanupToTempScope()) would: before it, the mark that the general drain selects (the last
-    // one with the scope's id) is the innermost one, whose size both drains release down to; after it, the temps down
-    // to that size and the mark are gone, and no temp is held by a weak-reference load or borrowed (whose bookkeeping
-    // the fast drain leaves out).  The sentinel of the mark is not always at that size: the removal of a temp entry
-    // pushed before the mark moves the entries after it down without the mark (except for ReleaseOwnedTemp,
-    // qore_ir_remove_released_temp()), as both drains find
-    auto debugInnermostDrainStart = [&](uint32_t scope_id) -> std::pair<size_t, size_t> {
-        auto general_mark = std::find_if(temp_cleanup_marks.rbegin(), temp_cleanup_marks.rend(),
-            [scope_id](const IRCallFrame::TempCleanupMark& candidate) {
-                return candidate.scope_id == scope_id;
-            });
-        assert(general_mark == temp_cleanup_marks.rbegin());
-        // the size that both drains stop at
-        assert(cleanup.size() >= general_mark->cleanup_size);
-        return {general_mark->cleanup_size, temp_cleanup_marks.size()};
-    };
-    auto debugInnermostDrainEnd = [&](std::pair<size_t, size_t> start) {
-        assert(cleanup.size() == start.first);
-        assert(temp_cleanup_marks.size() == start.second - 1);
-        assert(weak_load_temp_slots.empty() && !borrowed_temp_active);
-    };
-#endif
 
     // Returns the temp scope that an exception that the given instruction raised drains to before it branches to its
     // handler in this frame: the temp scopes that the exception leaves are those opened after the handler's
@@ -11421,7 +12253,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // block
     auto dbgHandlersRan = [&]() QORE_IR_LAMBDA_INLINE {
         if (debug_active && xsink && xsink->isException()) {
-            dbg_state.exc_reported = xsink->getException();
+            dbg_state.exc_reported = qore_exception_sink_ops(xsink).getException();
         }
     };
     // the result of the frame after unwindForException() on an exception: false, or true if the debugger dismissed
@@ -11457,6 +12289,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto unwindForException = [&func, &block, &ip, &values, &frame, &scope_stack, &releaseScopeTemps, &fireScopeExits,
             &dbgReportException, &dbgReportEnclosing, &dbgHandlerStatements, &dbgHandlerProgram, &dbgFunctionExit,
             &debug_active, can_debug, tlpd, xsink, cleanup_log]() QORE_IR_LAMBDA_NOINLINE {
+        frame.unwinding_function = &func;
         // a debugger attached while the instruction that raised the exception ran, as in a call, gets the events of
         // the handlers that the exception runs, as with the AST interpreter and native code
         if (can_debug) {
@@ -11733,23 +12566,26 @@ next_instruction:
         }
         // the dispatch of the step event of a statement that an operation keeps (qore_ir_folded_debug_step())
 dispatch_folded_step:
-        // the line usually does not change from one instruction to the next: that test comes first, as GCC otherwise
-        // may order the two tests either way, and the sign test first costs two more instructions per instruction
-        // executed (8-20 per iteration of the benchmark loops); no branch hint, as the line changes often enough that
-        // moving the update out of line costs more.  Neither writing the test first nor nesting the sign test keeps
-        // the order: the two tests have no side effects, so the compiler may evaluate them in either order, and GCC
-        // swapped them when the rest of this function grew.  The sign test therefore reads the line through
-        // qore_ir_opaque_line(), which the compiler cannot evaluate before the first test
-        if (inst->cached_start_line != last_ephemeral_line) {
-            if (qore_ir_opaque_line(inst->cached_start_line) >= 0) {
+        // the runtime location is the location of the statement whose code the instruction is (stmt_loc), stored when
+        // it changes: not when the line changes, as a statement can start on the line of the statement or the block
+        // that contains it (qore#6646).  It usually does not change from one instruction to the next: that test
+        // comes first, as GCC otherwise may order the two tests either way, and the null test first costs two more
+        // instructions per instruction executed (8-20 per iteration of the benchmark loops); no branch hint, as the
+        // statement changes often enough that moving the update out of line costs more.  Neither writing the test
+        // first nor nesting the null test keeps the order: the two tests have no side effects, so the compiler may
+        // evaluate them in either order, and GCC swapped them when the rest of this function grew.  The null test
+        // therefore reads the location through qore_ir_opaque_loc(), which the compiler cannot evaluate before the
+        // first test
+        if (inst->stmt_loc != last_stmt_loc) {
+            if (qore_ir_opaque_loc(inst->stmt_loc)) {
                 // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is
                 // attached, the current statement is set by the DebugStatement instruction of each statement and kept,
                 // so that the call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
                 if (!debug_active) {
                     *rl_cache.stmt_ptr = nullptr;
                 }
-                *rl_cache.loc_ptr = inst->loc;
-                last_ephemeral_line = inst->cached_start_line;
+                *rl_cache.loc_ptr = inst->stmt_loc;
+                last_stmt_loc = inst->stmt_loc;
             }
         }
         // Log instruction execution for diagnostics (zero-cost path when disabled)
@@ -11808,7 +12644,7 @@ dispatch_folded_step_host:
             }
             case QoreIROpcode::ConstString: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
-                QoreStringNode* str = new QoreStringNode(cinst->constant.string_value);
+                QoreStringNode* str = new QoreStringNode(cinst->constant.string_value, QCS_UTF8);
                 // a literal that is ASCII text has its ASCII prefix known, so that the operations on it do not scan
                 // it at each evaluation (qore#6625)
                 if (cinst->constant.string_ascii) {
@@ -12870,10 +13706,11 @@ dispatch_folded_step_host:
                         fflush(stderr);
                     }
                     if (debug_active) {
-                        tlpd->dbgException(get_exception_statement(inst), xsink);
-                        dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
+                        const AbstractStatement* exc_stmt = get_exception_statement(inst);
+                        tlpd->dbgException(exc_stmt, xsink);
+                        dbg_state.exc_reported = *xsink ? qore_exception_sink_ops(xsink).getException() : nullptr;
                         if (*xsink) {
-                            qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
+                            qore_ir_dbg_start_chain(dbg_state, exc_stmt);
                         }
                         // the debugger can set the local variables of the frame at the stop of the exception
                         invalidateExternalCaches();
@@ -12886,16 +13723,20 @@ dispatch_folded_step_host:
                         // dbgException may dismiss the exception. AST execution aborts the
                         // statement that raised and then continues at statement cleanup; it
                         // does not resume the failed expression's normal continuation.
-                        if (!*xsink) {
-                            QoreIRBasicBlock* dismiss_block = nullptr;
-                            size_t dismiss_ip = 0;
+                        if (!*xsink) [[unlikely]] {
+                            // the call gives no value, and the code continues after the statement (qore#6626)
+                            // release_groups, not the address in func again: the interpreter computes the address
+                            // once for every call, and a second expression costs it a second copy
+                            QoreIRDismissCall dc{&frame, &weak_load_temp_slots, release_groups, cleanup_log,
+                                &dbg_state, inv, exc_stmt, xsink, block, ip};
                             prev_block = block;
-                            if (findDismissTarget(inv->normal_target, dismiss_block, dismiss_ip)) {
-                                block = dismiss_block;
-                                ip = dismiss_ip;
-                            } else {
-                                block = inv->normal_target;
-                                ip = 0;
+                            bool exit_function = qore_ir_dismiss_call(dc);
+                            block = dc.block;
+                            ip = dc.ip;
+                            if (exit_function) {
+                                // the function ends as after the dismissal of an exception at a landing pad; the
+                                // call's call-site scope ends first, as on the way to a landing pad
+                                goto dbg_dismissed_exit;
                             }
                             break;
                         }
@@ -12934,6 +13775,9 @@ dispatch_folded_step_host:
                     dbgReportException();
                     dbgReportEnclosing();
                     if (dbg_state.exit_dismissed) {
+                        // also reached from the dismissal of a call's exception event that ends the function
+                        // (qore_ir_dismiss_call())
+dbg_dismissed_exit:
                         unwindForException();
                         cleanupLocalCaches();
                         return exitAfterUnwind();
@@ -12953,6 +13797,9 @@ dispatch_folded_step_host:
                 // CatchExceptionHelper for rethrow support, rethrown check + xsink->clear(),
                 // executeHandlerBody() for IR-compiled handlers, and error flag update.
                 auto* lp_inst = static_cast<QoreIRLandingPadInstruction*>(inst);
+                // the scopes that the handler unwinds to are open: a path that closed one of them has closed a scope
+                // twice (qore#6658, see ScopeExit)
+                assert(scope_stack.size() >= lp_inst->scope_depth);
                 while (scope_stack.size() > lp_inst->scope_depth) {
                     // the temporaries of the statements of the scope that the exception left are released before
                     // its handlers run, as in the AST (see unwindForException()); the statement that raised the
@@ -12975,7 +13822,7 @@ dispatch_folded_step_host:
                                     std::unique_ptr<SingleArgvContextHelper> argv_helper;
                                     std::unique_ptr<CatchExceptionHelper> ex_helper;
                                     if (type == OBE_Error && xsink) {
-                                        QoreException* except = xsink->getException();
+                                        QoreException* except = qore_exception_sink_ops(xsink).getException();
                                         if (except) {
                                             ex_helper.reset(new CatchExceptionHelper(except));
                                             argv_helper.reset(new SingleArgvContextHelper(
@@ -13073,7 +13920,7 @@ dispatch_folded_step_host:
                     ++ip;
                     break;
                 }
-                QoreException* caught = xsink->catchException();
+                QoreException* caught = qore_exception_sink_ops(xsink).catchException();
                 if (ir_trace_exceptions_env.get()) {
                     fprintf(stderr, "[ir-exception] func='%s' catch.exception caught=%p xsink=%d\n",
                         func.name.c_str(), static_cast<void*>(caught), xsink && *xsink ? 1 : 0);
@@ -13197,7 +14044,7 @@ dispatch_folded_step_host:
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 QoreValue out;
                 bool result_slot_owned = false;
-                bool weak_ref_load = false;
+                uint8_t local_flags = IRCallFrame::LocalOwned;
 
                 if (local_inst->is_closure) {
                     // Closure path: always read from runtime stack (closures can
@@ -13227,27 +14074,39 @@ dispatch_folded_step_host:
                         result_slot_owned = true;
                     } else if (!needs_deref && out.needsRef()) {
                         LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
-                        weak_ref_load = lvv && isWeakReferenceType(lvv->val.getType());
+                        if (lvv && isWeakReferenceType(lvv->val.getType())) {
+                            local_flags = 0;
+                        }
                     }
-                } else if (local_inst->auto_ref) {
-                    // FAST PATH: direct slot cache access (most common case)
+                } else if (local_inst->auto_ref || (local_inst->slot_id < locals_ir_only.size()
+                        && locals_ir_only[local_inst->slot_id])) {
+                    // An IR-only local has no runtime-stack value to borrow. Read it from its slot for
+                    // non-owning loads too, honoring strong and weak references before borrowing a plain value.
                     uint32_t sid = local_inst->slot_id;
                     bool is_ir_only_local = sid < locals_ir_only.size()
                         && locals_ir_only[sid];
                     if (sid != UINT32_MAX && sid < locals_slot_cache.size()) {
                         // raw slot: the weak reference of a foreach variable is read below
                         QoreValue cached_val = locals_slot_cache.storage(sid);
-                        bool cache_has_value = !cached_val.isNothing()
-                            || (is_ir_only_local && sid < locals_instantiated.size()
-                                && locals_instantiated[sid]);
                         qore_type_t cached_node_type = qore_ir_value_node_type(cached_val);
+                        bool cache_has_value = true;
+                        if (cached_node_type == NT_NOTHING) {
+                            // Inline values have no node. An instantiated IR-only slot can also hold NOTHING.
+                            cache_has_value = !qore_value_is_nothing(cached_val)
+                                || (is_ir_only_local && sid < locals_instantiated.size()
+                                    && locals_instantiated[sid]);
+                            if (cache_has_value && is_ir_only_local && !cached_val.needsRef()) {
+                                out = cached_val;
+                                goto load_local_done;
+                            }
+                        }
                         if (cache_has_value && isWeakReferenceType(cached_node_type)) {
                             // the variable of a foreach loop that was assigned a weak reference
                             // (AssignmentMode::Element) reads as its target, which is borrowed, as
                             // for a weak local on the runtime stack: a reference taken here would let
                             // this frame run the target's destructor
                             out = locals_slot_cache.read(sid);
-                            weak_ref_load = true;
+                            local_flags = 0;
                             result_slot_owned = false;
                             goto load_local_done;
                         }
@@ -13258,6 +14117,7 @@ dispatch_folded_step_host:
                             // the lvalue is read as a read of the variable reads it, which does not create a missing
                             // hash key or list element (see qore_local_reference_eval())
                             bool ref_needs_deref = true;
+                            local_flags = IRCallFrame::LocalOwned | IRCallFrame::ReadThroughReference;
                             out = qore_local_reference_eval(
                                 *reinterpret_cast<const ReferenceNode*>(cached_val.getInternalNode()),
                                 ref_needs_deref, xsink);
@@ -13277,12 +14137,13 @@ dispatch_folded_step_host:
                             goto load_local_done;
                         }
                         if (cache_has_value) {
-                            if (local_inst->borrowed_local_load
+                            if (!local_inst->auto_ref || local_inst->interpreter_borrow != QoreIRLocalInstruction::Borrow::None
                                     || (local_inst->auto_local_string_append && cached_node_type == NT_STRING)) {
-                                // Load pairs with a local mutation and has no
-                                // other consumers: borrow the slot-cache reference
-                                // so the builder node stays unique at the mutation
-                                // site (native code borrows via alloca loads)
+                                // The consumer borrows this local until it mutates the value or the iterator
+                                // takes its own reference (#6638); a load that pairs with a local string append
+                                // and has no other consumers borrows the slot-cache reference so the builder
+                                // node stays unique at the mutation site (#6279; native code borrows via alloca
+                                // loads)
                                 out = cached_val;
                                 if ((local_inst->auto_local_string_append || local_inst->string_append_local_cow
                                         || local_inst->list_push_local_cow)
@@ -13360,6 +14221,7 @@ dispatch_folded_step_host:
                                         || raw_type == NT_WEAKREF_LIST) {
                                     is_weak_ref_local = true;
                                 } else if (raw_type == NT_REFERENCE) {
+                                    local_flags = IRCallFrame::LocalOwned | IRCallFrame::ReadThroughReference;
                                     reference_value = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                                 }
                             }
@@ -13390,13 +14252,19 @@ dispatch_folded_step_host:
                                 // Clear cache entirely for weak-ref locals so next
                                 // access re-evaluates via TLS (weak-ref target check)
                                 locals_slot_cache.set(sid, QoreValue());
+                            } else if (local_inst->interpreter_borrow == QoreIRLocalInstruction::Borrow::Iterator) {
+                                // On a cache miss, give eval's owned reference to the cache, or
+                                // acquire one if eval borrowed. The adjacent iterator borrows that cache entry.
+                                locals_slot_cache.set(sid, !needs_deref && val.needsRef() ? val.refSelf() : val);
+                                out = val;
+                                goto load_local_done;
                             } else {
                                 locals_slot_cache.set(sid, val.needsRef() ? val.refSelf() : val);
                             }
                         }
                         if (is_weak_ref_local && val.hasNode()) {
                             out = val;
-                            weak_ref_load = true;
+                            local_flags = 0;
                         } else {
                             out = val.needsRef() ? val.refSelf() : val;
                             result_slot_owned = out.needsRef();
@@ -13436,7 +14304,9 @@ dispatch_folded_step_host:
                             result_slot_owned = true;
                         } else if (!needs_deref && out.needsRef()) {
                             LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
-                            weak_ref_load = lvv && isWeakReferenceType(lvv->val.getType());
+                            if (lvv && isWeakReferenceType(lvv->val.getType())) {
+                                local_flags = 0;
+                            }
                         }
                     }
                 }
@@ -13453,7 +14323,7 @@ load_local_done:
                     // a borrowed value left in this slot from an earlier iteration.
                     clearSlotForOverwrite(local_inst->result.id);
                     setValueSlotDirect(values, local_inst->result.id, out);
-                    if (weak_ref_load && out.hasNode()) {
+                    if (!local_flags && out.hasNode()) {
                         // the receiver of a call keeps the object of a weak reference until the call returns, as the
                         // AST interpreter keeps the object of a method call (qore_object_private::startCall()), so
                         // that a method that removes the last strong reference to its object can still use it; the
@@ -13473,9 +14343,11 @@ load_local_done:
                     }
                 }
                 // Mark as local-owned for DGC container scan
-                if (!weak_ref_load && local_inst->result.id >= 0) {
-                    markLocalOwnedSlot(local_inst->result.id, true);
+                uint32_t value_id = local_inst->result.id;
+                if (value_id >= local_owned_slots.size()) {
+                    local_owned_slots.resize(value_id + 1, 0);
                 }
+                local_owned_slots[value_id] = local_flags;
                 if (result_slot_owned && out.needsRef()) {
                     cleanup.push_back(local_inst->result.id);
                 }
@@ -13739,7 +14611,10 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                 }
-                if (!preserve_weak_result) {
+                // a weak reference to an object is read as its object also as the base of a call: the receiver
+                // of a call read from a container is a temporary of the statement, which keeps the object until
+                // the statement ends, as in the AST interpreter (qore#6594)
+                if (!preserve_weak_result || qore_value_is_object_weak_reference(out)) {
                     evaluateOwnedWeakReferenceResult(out, xsink);
                     if (xsink && *xsink) {
                         unwindForException();
@@ -13840,8 +14715,13 @@ load_local_done:
                         }
 
                         // Make the update with already-referenced value.
-                        // (hash is already in TLS and will be cleaned up normally)
-                        qore_hash_private::setKeyValueCanonical(*h, hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                        // (hash is already in TLS and will be cleaned up normally); an element that holds a
+                        // reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+                        if (!qore_assign_through_element_reference(h->getKeyValue(hks_inst->key_name.c_str()), val,
+                                xsink)) {
+                            qore_hash_private::setKeyValueCanonical(*h, hks_inst->key_name.c_str(), val.refSelf(),
+                                xsink);
+                        }
 
                         // Cleanup must happen AFTER modification completes and locks are released.
                         // Defer clearing refs that may trigger destructors.
@@ -13987,7 +14867,10 @@ load_local_done:
                             }
                             h = new_h;
                         }
-                        qore_hash_private::setKeyValueCanonical(*h, key_str.c_str(), val.refSelf(), xsink);
+                        // an element that holds a reference is assigned through it (qore#6661)
+                        if (!qore_assign_through_element_reference(h->getKeyValue(key_str.c_str()), val, xsink)) {
+                            qore_hash_private::setKeyValueCanonical(*h, key_str.c_str(), val.refSelf(), xsink);
+                        }
                         clearLoadSlots(hksd_inst->container_slot_id);
                         uint32_t csid = hksd_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
@@ -14172,7 +15055,11 @@ load_local_done:
 
                         // an assignment past the end of a list whose element type does not take NOTHING would
                         // leave a gap: setEntry() refuses it (qore#6435)
-                        if (!(xsink && *xsink)) {
+                        if (!(xsink && *xsink)
+                            // an element that holds a reference is assigned through it, as the AST interpreter
+                            // assigns it, before the value is checked against the element type (qore#6661)
+                            && !(static_cast<size_t>(index) < l->size()
+                                && qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink))) {
                             // Apply element type coercion if the list has a typed value type
                             // (e.g. list<softint> converts "50" → 50 before storing)
                             const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
@@ -14886,7 +15773,11 @@ load_local_done:
                 // Dot-eval method dispatch handles weak refs itself. Preserve the raw
                 // reference when this load is only used as a dot-eval base; a weak reference to a destroyed
                 // object is read as no value, as the AST interpreter reads a member without "self."
-                bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
+                // a weak reference to an object is read as its object also as the base of a call: the receiver of
+                // a call read from a member is a temporary of the statement, kept until the statement ends, as in
+                // the AST interpreter (qore#6594)
+                bool needs_eval = (!isDotEvalOnlyBase(inst)
+                    || qore_value_is_object_weak_reference(*val)) && val->needsEval();
                 QoreValue out = needs_eval ? val->eval(xsink)
                     : (qore_weak_reference_target_destroyed(*val) ? QoreValue() : val.release());
                 if (xsink && *xsink) {
@@ -14952,7 +15843,11 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
+                // a weak reference to an object is read as its object also as the base of a call: the receiver of
+                // a call read from a member is a temporary of the statement, kept until the statement ends, as in
+                // the AST interpreter (qore#6594)
+                bool needs_eval = (!isDotEvalOnlyBase(inst)
+                    || qore_value_is_object_weak_reference(*val)) && val->needsEval();
                 QoreValue out = needs_eval ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
                     unwindForException();
@@ -15106,7 +16001,7 @@ load_local_done:
                     }
                     // Set exception location to the constant location if an exception occurred
                     if (xsink && *xsink && rcr->loc) {
-                        xsink->setLastLocation(*rcr->loc);
+                        qore_exception_sink_ops(xsink).setLastLocation(*rcr->loc);
                     }
                 } else {
                     // AOT mode: expr holds the resolved constant value directly.
@@ -16035,6 +16930,13 @@ load_local_done:
             }
             case QoreIROpcode::UninstantiateLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                // The root block has no enclosing statement in this function. The caller's statement was
+                // current when the body began, as in StatementBlock::exec() after its last statement returns.
+                if (inst->interpreter_gives_call_args & QORE_IR_BODY_LOCAL_CLEANUP) {
+                    *rl_cache.loc_ptr = frame.body_entry_loc;
+                    *rl_cache.stmt_ptr = frame.body_entry_stmt;
+                    last_stmt_loc = nullptr;
+                }
                 // resolved once: this opcode runs at every block scope exit
                 static constinit QoreEnvFlag debug_uninst_env("QORE_DEBUG_UNINST");
                 const bool debug_uninst = debug_uninst_env.get();
@@ -16325,7 +17227,7 @@ load_local_done:
                                                 traceIRRef(inst, "uninst.container-scan", vi, values[vi], "keep");
                                                 continue;
                                             }
-                                            if (vi < local_owned_slots.size() && local_owned_slots[vi]) {
+                                            if (vi < local_owned_slots.size() && (local_owned_slots[vi] & IRCallFrame::LocalOwned)) {
                                                 traceIRRef(inst, "uninst.container-scan", vi, values[vi],
                                                     "keep-local-owned");
                                                 continue;
@@ -17016,6 +17918,12 @@ load_local_done:
                     iter = FunctionalOperatorInterface::getFunctionalIteratorForValue(value_type, iterable, true,
                         "foreach statement", xsink);
                 }
+                // The iterator now owns its source or construction failed. End the borrow on either path:
+                // iterable is a named operand, so the generic operand loop cannot retire its slot. Only a plain
+                // value borrows from the cache. A read through a reference keeps its normal statement cleanup.
+                if (iter_inst->interpreter_ends_source_borrow && releaseBorrowedTemp(iter_inst->iterable.id)) {
+                    ++ip;  // the adjacent ReleasePlainLocalRead has no owned source left to release
+                }
                 if (iter && xsink && !*xsink && !ir_pointer_fits(iter)) {
                     ir_pointer_raise(iter, xsink);
                 }
@@ -17467,9 +18375,9 @@ load_local_done:
                         // statement on the same line or the statement that contains this one (#6248).  The
                         // statement's location is the instruction's for lowered code; the location of the
                         // instruction of deserialized AOT closure IR has no columns, unlike its statement's
-                        if (dbg_inst->cached_start_line >= 0 && dbg_stmt->loc) {
+                        if (dbg_inst->stmt_loc && dbg_stmt->loc) {
                             *rl_cache.loc_ptr = dbg_stmt->loc;
-                            last_ephemeral_line = dbg_inst->cached_start_line;
+                            last_stmt_loc = dbg_inst->stmt_loc;
                         }
                         // the current statement of the frame, which the frames of its calls record
                         *rl_cache.stmt_ptr = dbg_stmt;
@@ -17477,7 +18385,7 @@ load_local_done:
                         // the statements that the frame is in, for the exception events (#5816)
                         if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_VALID) {
                             qore_ir_dbg_nest_statement(dbg_state, dbg_inst, dbg_stmt,
-                                scope_stack.size());
+                                scope_stack.size(), temp_cleanup_marks.size(), catch_exception_stack);
                         }
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
                         // the debugger can set the local variables of the frame while the thread is stopped,
@@ -17537,11 +18445,11 @@ load_local_done:
                     assert(ip + 1 < block->instructions.size());
                     inst = folded_host;
                     debug_active = false;
-                    // the operation's location, if it starts on another line, as the dispatch of the operation after
-                    // a DebugStatement instruction sets it
-                    if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
-                        *rl_cache.loc_ptr = inst->loc;
-                        last_ephemeral_line = inst->cached_start_line;
+                    // the operation's runtime location, if it differs, as the dispatch of the operation after a
+                    // DebugStatement instruction sets it
+                    if (inst->stmt_loc && inst->stmt_loc != last_stmt_loc) {
+                        *rl_cache.loc_ptr = inst->stmt_loc;
+                        last_stmt_loc = inst->stmt_loc;
                     }
                     goto dispatch_folded_step_host;
                 }
@@ -17621,12 +18529,12 @@ load_local_done:
                         && temp_cleanup_marks.back().scope_id == inst->temp_scope_id && !cleanup_log
                         && !borrowed_temp_active && weak_load_temp_slots.empty()) {
 #ifdef DEBUG
-                    auto debug_start = debugInnermostDrainStart(inst->temp_scope_id);
-#endif
+                    qore_ir_checked_drain_innermost_temp_scope(values, cleanup, temp_cleanup_marks,
+                        ephemeral_weak_ref_slots, xsink, inst->temp_scope_id, weak_load_temp_slots,
+                        borrowed_temp_active);
+#else
                     qore_ir_drain_innermost_temp_scope(values, cleanup, temp_cleanup_marks, ephemeral_weak_ref_slots,
                         xsink);
-#ifdef DEBUG
-                    debugInnermostDrainEnd(debug_start);
 #endif
                 } else {
                     cleanupToTempScope(inst->temp_scope_id, false, true);
@@ -17661,22 +18569,29 @@ load_local_done:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::IteratorRelease:
-            case QoreIROpcode::ReleaseOwnedTemp: {
-                // a return or break leaves a foreach statement: its iterator, or the reference that the function owns
-                // to a temporary of an enclosing statement, is released on this path only, as the AST interpreter
-                // releases it when the statement ends; the slot is cleared, so the release at the end of the frame
-                // finds nothing (see design/temporary-lifetime.md)
+            case QoreIROpcode::IteratorRelease: {
                 uint32_t id = inst->operands.front().id;
-                if (inst->opcode == QoreIROpcode::IteratorRelease) {
-                    FunctionalOperatorInterface* iter = ir_value_pointer<FunctionalOperatorInterface>(
-                        getIRValue(values, inst->operands.front()));
-                    if (iter) {
-                        setValueSlotDirect(values, id, QoreValue(static_cast<int64_t>(0)));
-                        active_iterators.erase(iter);
-                        delete iter;
-                    }
-                } else if (id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
+                FunctionalOperatorInterface* iter = ir_value_pointer<FunctionalOperatorInterface>(
+                    getIRValue(values, inst->operands.front()));
+                if (iter) {
+                    setValueSlotDirect(values, id, QoreValue(static_cast<int64_t>(0)));
+                    active_iterators.erase(iter);
+                    delete iter;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ReleasePlainLocalRead: {
+                uint32_t id = inst->operands.front().id;
+                if (id < local_owned_slots.size() && (local_owned_slots[id] & IRCallFrame::ReadThroughReference)) {
+                    ++ip;
+                    break;
+                }
+                [[fallthrough]];
+            }
+            case QoreIROpcode::ReleaseOwnedTemp: {
+                uint32_t id = inst->operands.front().id;
+                if (id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
                         && (weak_load_temp_slots.empty() || !weak_load_temp_slots.count(id))
                         && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)
                         // a value that is the kept value (a second operand, see
@@ -17719,6 +18634,12 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::TakeHandedOverReturn:
+            case QoreIROpcode::ReleaseHandedOverReturn:
+                // the value that handlers run out of line past the inline cap handed over to the return (#6137)
+                qore_ir_handed_over_return_op(frame, values, cleanup, inst, xsink);
+                ++ip;
+                break;
             case QoreIROpcode::HandlerReturn: {
                 // the value of a return statement of a handler run out of line is handed to the function that the
                 // handler runs for, as the AST interpreter's handler has a reference to its return value (#6074)
@@ -17848,12 +18769,12 @@ load_local_done:
                         && temp_cleanup_marks.back().scope_id == inst->temp_scope_id && !cleanup_log
                         && !borrowed_temp_active && weak_load_temp_slots.empty()) {
 #ifdef DEBUG
-                    auto debug_start = debugInnermostDrainStart(inst->temp_scope_id);
-#endif
+                    qore_ir_checked_drain_innermost_temp_scope(values, cleanup, temp_cleanup_marks,
+                        ephemeral_weak_ref_slots, xsink, inst->temp_scope_id, weak_load_temp_slots,
+                        borrowed_temp_active);
+#else
                     qore_ir_drain_innermost_temp_scope(values, cleanup, temp_cleanup_marks, ephemeral_weak_ref_slots,
                         xsink);
-#ifdef DEBUG
-                    debugInnermostDrainEnd(debug_start);
 #endif
                 } else {
                     cleanupToTempScope(inst->temp_scope_id, false, true);
@@ -17892,6 +18813,12 @@ load_local_done:
             }
             case QoreIROpcode::ScopeExit: {
                 auto* scope_inst = static_cast<QoreIRScopeExitInstruction*>(inst);
+                // a scope exit names the innermost scope open: the interpreter closes the innermost one whatever its
+                // id, so an exit of a scope that is closed already closes an enclosing one (qore#6658: native code
+                // closes the scope that the id names, and is not affected); the lowering and the verification of IR
+                // read from a module guarantee it, which a debug build checks
+                assert(scope_stack.empty() || !scope_stack.back().enter
+                    || scope_stack.back().enter->scope_id == scope_inst->scope_id);
                 if (scope_inst->trim) {
                     // The scope stays open: only the handlers registered after its first keep_handlers ones are
                     // dropped, without running them, because they are lowered inline; the handlers kept run on the
@@ -17952,7 +18879,7 @@ load_local_done:
                                     std::unique_ptr<SingleArgvContextHelper> argv_helper;
                                     std::unique_ptr<CatchExceptionHelper> ex_helper;
                                     if (type == OBE_Error && xsink) {
-                                        QoreException* except = xsink->getException();
+                                        QoreException* except = qore_exception_sink_ops(xsink).getException();
                                         if (except) {
                                             ex_helper.reset(new CatchExceptionHelper(except));
                                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
@@ -17962,8 +18889,11 @@ load_local_done:
                                         dbgHandlerStatements(), dbgHandlerProgram(),
                                         error || (xsink && xsink->isThreadExit()),
                                         // where a try statement of the function catches the exception, a handler's
-                                        // return replaces the value of its try block's return (#6074)
-                                        qore_ir_exception_catch_returns(func, scope_inst->exception_target));
+                                        // return replaces the value of its try block's return (#6074); in the
+                                        // cleanups of a return past the inline cap, the value of the return (#6137,
+                                        // see executeHandlerBody())
+                                        qore_ir_exception_catch_returns(func, scope_inst->exception_target),
+                                        scope_inst);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -19652,6 +20582,17 @@ load_local_done:
                 } else {
                     res.discard(xsink);
                 }
+                // releasing the removed value (when the result is not used) or the interpreter's references to the
+                // local can run a destructor that raises an exception; it is the instruction's own, as in the AST,
+                // where the remove expression's statement raises it (qore#6823)
+                if (*xsink) {
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return exitAfterUnwind();
+                }
                 ++ip;
                 break;
             }
@@ -20451,7 +21392,7 @@ load_local_done:
                         } else if (lt == NT_OBJECT) {
                             QoreObject* o = const_cast<QoreObject*>(lhs_val.get<const QoreObject>());
                             if (rhs_val.getType() == NT_LIST) {
-                                res = o->getSlice(rhs_val.get<const QoreListNode>(), xsink);
+                                res = qore_object_ops(o).getSlice(rhs_val.get<const QoreListNode>(), xsink);
                             } else {
                                 QoreStringNodeValueHelper key(rhs_val);
                                 res = o->evalMember(*key, xsink);
@@ -21489,13 +22430,13 @@ load_local_done:
                     }
                 } else if (xsink) {
                     QoreValue arg = getIRValue(values, inst->operands[0]);
-                    // Set the runtime location to the throw statement's location so
-                    // that the exception gets the correct source file/line info
-                    QoreProgramOptionalLocationHelper loc_helper(inst->loc);
+                    // the exception is raised in the throw statement's location (its runtime location, which the
+                    // dispatch has stored already unless the frame keeps the statement's location of a debugger)
+                    QoreProgramOptionalLocationHelper loc_helper(inst->stmt_loc ? inst->stmt_loc : inst->loc);
                     // throw args are always a list: (err, desc[, arg])
                     // use the same raiseException(list) API as the AST path
                     if (arg.getType() == NT_LIST) {
-                        xsink->raiseException(arg.get<const QoreListNode>());
+                        qore_exception_sink_ops(xsink).raiseException(arg.get<const QoreListNode>());
                     } else {
                         QoreValue owned_arg = arg.needsRef() ? arg.refSelf() : arg;
                         xsink->raiseExceptionArg("IR-EXEC-THROW", owned_arg, "throw");
@@ -21503,7 +22444,7 @@ load_local_done:
                 }
                 if (debug_active && xsink && *xsink) {
                     tlpd->dbgException(get_exception_statement(inst), xsink);
-                    dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
+                    dbg_state.exc_reported = *xsink ? qore_exception_sink_ops(xsink).getException() : nullptr;
                     // the debugger can set the local variables of the frame at the stop of the exception
                     invalidateExternalCaches();
                     if (*xsink) {
@@ -21583,7 +22524,7 @@ load_local_done:
                     }
                 } else if (debug_active && *xsink) {
                     tlpd->dbgException(get_exception_statement(inst), xsink);
-                    dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
+                    dbg_state.exc_reported = *xsink ? qore_exception_sink_ops(xsink).getException() : nullptr;
                     // the debugger can set the local variables of the frame at the stop of the exception
                     invalidateExternalCaches();
                     if (*xsink) {
@@ -21887,7 +22828,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
             }
             if (t == NT_STRING) {
                 QoreStringValueHelper str(value);
-                return QoreValue(static_cast<int64>(str->length()));
+                return QoreValue(static_cast<int64>(qore_string_private::characterCount(**str, xsink)));
             }
             if (t == NT_BINARY) {
                 return QoreValue(static_cast<int64>(value.get<const BinaryNode>()->size()));
@@ -23265,7 +24206,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (bt == NT_OBJECT) {
                 QoreObject* o = const_cast<QoreObject*>(left.get<const QoreObject>());
                 if (right.getType() == NT_LIST) {
-                    return o->getSlice(right.get<const QoreListNode>(), xsink);
+                    return qore_object_ops(o).getSlice(right.get<const QoreListNode>(), xsink);
                 }
                 QoreHashKeyHelper key(right, xsink);
                 if (*xsink) {

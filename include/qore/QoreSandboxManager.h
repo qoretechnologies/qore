@@ -718,10 +718,10 @@ public:
         trust).  The default is @ref false
 
         A binary module that refuses an operation that only an unrestricted caller may use (for example an
-        operation with effects outside the process) should refuse it if and only if
-        <tt>!trustsUncontrolledApis() && restricts()</tt> on the governing manager resolved with
-        QoreSandboxManagerHelper::Policy: a sandbox that restricts nothing, or that trusts its code, does not make the
-        caller untrusted.
+        operation that runs code or does I/O that %Qore does not see) should refuse it unless trustsUncontrolledApis()
+        is true on the governing manager resolved with QoreSandboxManagerHelper::Policy, whatever the sandbox
+        restricts: a sandbox that allows all I/O but does not trust its code keeps that code from such operations (see
+        setUncontrolledApiPolicy()).
 
         @note there is no unreadable state in this predicate; callers that obtain the state another way must treat
         it as not trusting (fail closed)
@@ -1066,7 +1066,12 @@ public:
     QoreSandboxManagerHelper(Purpose purpose);
 
     //! Acquires a ref'd sandbox manager for the given program
-    /** @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
+    /** The manager is the one set with QoreProgram::setSandboxManager().  A program that sandboxed code created, or
+        changed, also keeps the sandbox of that code, which is not returned here: it adds to the sandbox of the code
+        that calls the program, so a module must not install it as the manager of another program, which would govern
+        that program's code alone
+
+        @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
     */
     QoreSandboxManagerHelper(QoreProgram* pgm);
 
@@ -1143,6 +1148,29 @@ DLLEXPORT bool qore_caller_restricts_domain(int64 domain);
 
 //! defined if qore_caller_restricts_domain() is available
 #define QORE_HAVE_CALLER_RESTRICTS_DOMAIN 1
+
+//! Refuses a change to a process-wide registry of callbacks, hooks, handlers or listeners by sandboxed code
+/** A registry that a module or the library keeps for the whole process is shared by the code of every Program, and
+    what it holds is run or used later for every caller, also for the code of other sandboxes and for trusted code.
+    Such a registry therefore refuses registrations, replacements and removals by code that is sandboxed or acts for
+    sandboxed code: the code of a sandboxed Program or of a Program that sandboxed code created, code that such a
+    Program calls, and code that a sandbox governs, also through a policy barrier or a system-policy capability (as
+    \c SandboxManager::isSandboxed() sees it).  Trusted code is not affected, nor is the initialization of library
+    code (a module from the module path), whatever code loads the module first.
+
+    It fails closed: a change is refused if the governing sandbox cannot be resolved for lack of memory.
+
+    @param what what the caller tried to do, for the exception (ex: \c "set a signal handler")
+    @param xsink raises \c SANDBOX-REGISTRATION-ERROR if the change is refused
+
+    @return 0 if the change is allowed, -1 if an exception was raised
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_check_process_wide_registration(const char* what, ExceptionSink* xsink);
+
+//! defined if qore_check_process_wide_registration() is available
+#define QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION 1
 
 //! defined if the uncontrolled-API policy of sandboxes is available
 /** QoreSandboxManager::setUncontrolledApiPolicy(), QoreSandboxManager::getUncontrolledApiPolicy() and

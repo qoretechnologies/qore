@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and qcc AOT code generation of method call references
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class PrivateFirstBaseMethodRefTest
+
+#! a call reference resolves the method that a call resolves past a private method of the first parent class (qore#6680)
+/** When a class inherits a method name from two public parent classes and the method of the first one is not
+    accessible, a call of the method from outside the class calls the method of the second parent class, but a call
+    reference to it was refused (\c ILLEGAL-CALL-REFERENCE) in every mode: \c \\o.m() for an object of the declared
+    class.  The program \c probe covers \c private, \c private:hierarchy and \c private:internal methods,
+    references made inside the class (which refer to the private method, as a call does), methods overridden in a
+    subclass, and a method that is private in the first parent class only or in both, which stays refused; the output
+    of every execution mode and of qcc executables (-O0, -O3) must be the expected one.
+
+    The program \c probe-static covers the references to a static method (\c \\Class::s(), \c \\o.s()) in every
+    execution mode; qcc executables still refer to the private method of the first parent class, as they look the
+    method up by the name of the class that the reference was written with (qore#6679), so their check is skipped
+    until that is fixed.
+
+    The program \c probe-module covers the classes of a module compiled with qcc -m (\c PrivateFirstBaseMod), whose
+    objects have the module's own class while a compiled image resolves the declared class to its copy in the Program
+    that imports the module: a call and a reference in that Program, in a default argument value and in a member's
+    initial value there and in the module, in every execution mode and in qcc executables.
+
+    The programs are in \c private-first-base-method-ref/.
+*/
+class PrivateFirstBaseMethodRefTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/private-first-base-method-ref";
+
+        const Programs = ("probe", "probe-static");
+    }
+
+    constructor() : QUnit::Test("PrivateFirstBaseMethodRefTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("tiered execution on the IR tier prints the output of the AST", \testIrTier());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("qcc executables print the output of the AST for references to static methods",
+            \testCompiledStatic());
+        addTestCase("the classes of a compiled module in every mode and in qcc executables", \testModule());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string command(string name, string mode) {
+        return sprintf("%s -b --enable-debug --exec-mode=%s %s/%s.q", qore_bin, mode, dir, name);
+    }
+
+    private string run(string name, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(name, mode));
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        foreach string name in (Programs) {
+            assertEq(expected(name), run(name, "ast"), name + " ast");
+        }
+    }
+
+    testModes() {
+        foreach string name in (Programs) {
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+
+    testIrTier() {
+        foreach string name in (Programs) {
+            assertEq(expected(name), ExecModeHarness::run_ir_tier(command(name, "tiered")), name + " IR tier");
+        }
+    }
+
+    testCompiled() {
+        checkCompiled("probe");
+    }
+
+    testCompiledStatic() {
+        # to be replaced with checkCompiled("probe-static") when qore#6679 is fixed
+        testSkip("qcc executables resolve a reference to a static method by the name of the class it was written "
+            "with (qore#6679)");
+    }
+
+    testModule() {
+        string qcc_bin = getQcc();
+        TmpDir tmp("qore-private-first-base-method-ref-module-");
+        int rc;
+        string out = backquote(sprintf("%s -m -o %s/PrivateFirstBaseMod.qmod %s/PrivateFirstBaseMod.qm 2>&1", qcc_bin,
+            tmp.path, dir), \rc);
+        if (rc || !is_file(tmp.path + "/PrivateFirstBaseMod.qmod")) {
+            testSkip("qcc is not available or cannot compile the module: " + out);
+        }
+        # the compiled module comes first in the module path
+        string env = sprintf("QORE_MODULE_DIR=%s:%s", tmp.path, ENV.QORE_MODULE_DIR ?? "");
+        string name = "probe-module";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(env + " " + command(name, mode));
+            assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+            ExecModeHarness::check_native(r);
+            assertEq(expected(name), r.stdout, name + " " + mode);
+        }
+        assertEq(expected(name), ExecModeHarness::run_ir_tier(env + " " + command(name, "tiered")),
+            name + " IR tier");
+        checkCompiled(name, env + " ");
+    }
+
+    private string getQcc() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    private checkCompiled(string name, string env = "") {
+        string qcc_bin = getQcc();
+        TmpDir tmp("qore-private-first-base-method-ref-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
+            int rc;
+            string out = backquote(sprintf("%s%s -O%s -o %s %s/%s.q 2>&1", env, qcc_bin, opt, exe, dir, name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s%s -b 2>&1", env, exe), \rc);
+            assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
+            assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+        }
+    }
+}

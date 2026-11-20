@@ -35,26 +35,47 @@
 //! Helper class for converting between Qore hashes and protobuf messages
 class ProtobufHelper {
 public:
+    //! the maximum number of message levels nested in a message that is converted to or from a hash
+    /** a map entry is a message level, as in protobuf; the default recursion limit of protobuf's parsers, so a message
+        that can be parsed can be converted, and a message that is converted can be parsed
+    */
+    static constexpr int MaxNesting = 100;
+
     //! Convert a protobuf Message to a Qore hash
-    DLLLOCAL static QoreHashNode* messageToHash(const google::protobuf::Message& msg,
+    /** @param msg the message to convert
+        @param where the method converting it, for the \c INVALID-ENCODING exception of a string that is not valid
+        UTF-8 (ex: \c "ProtobufSchema::decode()")
+        @param xsink for Qore-language exceptions
+    */
+    DLLLOCAL static QoreHashNode* messageToHash(const google::protobuf::Message& msg, const char* where,
         ExceptionSink* xsink);
 
     //! Convert a Qore hash to a protobuf Message
     DLLLOCAL static bool hashToMessage(const QoreHashNode* hash,
         google::protobuf::Message* msg, ExceptionSink* xsink);
 
+    //! Returns the hash key of an extension field: its full name in square brackets
+    DLLLOCAL static std::string extensionKey(const google::protobuf::FieldDescriptor* field);
+
+    //! Returns an extension field that is set in the message or in a message nested in it, if any
+    DLLLOCAL static const google::protobuf::FieldDescriptor* findSetExtension(const google::protobuf::Message& msg);
+
 private:
+    //! Returns the extension field of the message type for a hash key (\c "[full.name]" or \c "full.name"), if any
+    DLLLOCAL static const google::protobuf::FieldDescriptor* findExtension(const google::protobuf::Descriptor* desc,
+        const char* key);
+
     DLLLOCAL static QoreValue fieldToQore(const google::protobuf::Message& msg,
         const google::protobuf::FieldDescriptor* field,
-        const google::protobuf::Reflection* ref, ExceptionSink* xsink);
+        const google::protobuf::Reflection* ref, const char* where, ExceptionSink* xsink);
 
     DLLLOCAL static QoreListNode* repeatedFieldToList(const google::protobuf::Message& msg,
         const google::protobuf::FieldDescriptor* field,
-        const google::protobuf::Reflection* ref, ExceptionSink* xsink);
+        const google::protobuf::Reflection* ref, const char* where, ExceptionSink* xsink);
 
     DLLLOCAL static QoreValue repeatedElementToQore(const google::protobuf::Message& msg,
         const google::protobuf::FieldDescriptor* field,
-        const google::protobuf::Reflection* ref, int index, ExceptionSink* xsink);
+        const google::protobuf::Reflection* ref, int index, const char* where, ExceptionSink* xsink);
 
     DLLLOCAL static bool setFieldFromQore(google::protobuf::Message* msg,
         const google::protobuf::FieldDescriptor* field,
@@ -68,7 +89,7 @@ private:
 
     DLLLOCAL static QoreHashNode* mapFieldToHash(const google::protobuf::Message& msg,
         const google::protobuf::FieldDescriptor* field,
-        const google::protobuf::Reflection* ref, ExceptionSink* xsink);
+        const google::protobuf::Reflection* ref, const char* where, ExceptionSink* xsink);
 
     DLLLOCAL static bool setMapFieldFromHash(google::protobuf::Message* msg,
         const google::protobuf::FieldDescriptor* field,

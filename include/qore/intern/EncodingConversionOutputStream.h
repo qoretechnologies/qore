@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2023 - 2024 Qore Technologies, sro
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -42,12 +42,36 @@ class EncodingConversionOutputStream : public TransformOutputStream {
 
 public:
    DLLLOCAL EncodingConversionOutputStream(OutputStream *os, const QoreEncoding *srcEncoding,
-         const QoreEncoding *dstEncoding, ExceptionSink *xsink)
-         : TransformOutputStream(os, new EncodingConvertor(srcEncoding, dstEncoding, xsink)) {
+         const QoreEncoding *dstEncoding, ExceptionSink *xsink,
+         qore_encoding_errors_t mode = qore_encoding_errors_t::RAISE)
+         : EncodingConversionOutputStream(os, new EncodingConvertor(srcEncoding, dstEncoding, xsink, mode,
+            "EncodingConversionOutputStream", "data written"), mode) {
    }
 
    DLLLOCAL const char *getName() override {
       return "EncodingConversionOutputStream";
+   }
+
+   //! returns the encoding_errors option of the stream
+   DLLLOCAL qore_encoding_errors_t getEncodingErrors() const {
+      return mode;
+   }
+
+   DLLLOCAL void close(ExceptionSink* xsink) override {
+      // errors in the data written (a character cut off at the end) are reported for the method called; the
+      // method is not restored, as the stream cannot be used once it has been closed
+      conv->setMethod("close");
+      TransformOutputStream::close(xsink);
+   }
+
+private:
+   //! the convertor, owned by the base class
+   EncodingConvertor* conv;
+   qore_encoding_errors_t mode;
+
+   DLLLOCAL EncodingConversionOutputStream(OutputStream *os, EncodingConvertor* conv, qore_encoding_errors_t mode)
+         : TransformOutputStream(os, conv), conv(conv), mode(mode) {
+      conv->setMethod("write");
    }
 };
 

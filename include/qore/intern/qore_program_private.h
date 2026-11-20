@@ -40,6 +40,7 @@ extern QoreHashNode* ENV;
 #include <deque>
 #include <memory>
 #include <new>
+#include <string_view>
 
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreCompletionAnalysis.h"
@@ -63,6 +64,9 @@ extern QoreHashNode* ENV;
 // Forward declaration to avoid circular includes
 class QoreSandboxManager;
 
+// Update the process-wide fast path for prelinked AOT calls when a Program gains or loses its debugger.
+DLLLOCAL void qore_aot_debug_program_change(bool attached);
+
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
@@ -85,6 +89,16 @@ class RSetHelper;
 // suspends the inlined calls of the IR interpreter whose callees belong to a Program that a debugger attaches to
 // (declared in QoreIR.h; issue #6473)
 DLLLOCAL void qore_ir_suspend_inline_states(const void* dpgm_addr);
+
+// the calls of the callbacks of AbstractQoreProgramExternalData: an AbstractQoreProgramExternalDataEx gets the sink,
+// and a C++ exception that a legacy callback lets escape is converted into it (issue #6786)
+//! returns the copy of the external data for a child Program; a copy made with an exception is released
+DLLLOCAL AbstractQoreProgramExternalData* qore_ext_data_copy(const AbstractQoreProgramExternalData* data,
+        QoreProgram* pgm, ExceptionSink* xsink);
+//! calls init() on a copy made by qore_ext_data_copy()
+DLLLOCAL void qore_ext_data_init(AbstractQoreProgramExternalData* data, ExceptionSink* xsink);
+//! releases external data
+DLLLOCAL void qore_ext_data_deref(AbstractQoreProgramExternalData* data, ExceptionSink* xsink);
 
 typedef vector_map_t<int, unsigned> ptid_map_t;
 //typedef std::map<int, unsigned> ptid_map_t;
@@ -156,6 +170,8 @@ public:
 
 #include "qore/intern/ThreadLocalVariableData.h"
 #include "qore/intern/ThreadClosureVariableStack.h"
+#include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 struct ThreadLocalProgramData {
 public:
@@ -184,8 +200,15 @@ public:
     // declaration order counter for proper destruction order (issue #5168)
     uint64_t var_order_counter = 0;
 
-    DLLLOCAL ThreadLocalProgramData() : tz_set(false), inst(false), thread_init_pending(false), inst_count(0) {
-        printd(5, "ThreadLocalProgramData::ThreadLocalProgramData() this: %p\n", this);
+    //! the Program that this thread-local data belongs to
+    /** Code of a Program runs only with the thread-local data of that Program (qore#6185)
+    */
+    QoreProgram* const pgm;
+
+    DLLLOCAL ThreadLocalProgramData(QoreProgram* pgm) : tz_set(false), inst(false), thread_init_pending(false),
+            inst_count(0), pgm(pgm) {
+        assert(pgm);
+        printd(5, "ThreadLocalProgramData::ThreadLocalProgramData() this: %p pgm: %p\n", this, pgm);
     }
 
     DLLLOCAL ~ThreadLocalProgramData() {
@@ -227,6 +250,8 @@ public:
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {
+        // the records of the frames that were running when a debugger attached leave the thread's count (#6602)
+        dbgDropAttachFrames(0);
         lvstack.del(xsink);
         cvstack.del(xsink);
         delete this;
@@ -350,7 +375,64 @@ public:
         return breakFlag;
     }
 
+    //! Makes the function exit event of a frame running native code that returns (issue #6602)
+    /** Called by qore_jit_debug_frame_return() while the frame is the top of the call stack (\a top); the frame
+        makes its exit event if it was running when the debugger attached
+
+        @param block the frame's block, if known, else the one recorded at the attach
+        @param val the frame's return value: the debugger cannot change it
+    */
+    DLLLOCAL void dbgNativeFrameReturn(const QoreStackLocation* top, const StatementBlock* block, const QoreValue& val,
+            ExceptionSink* xsink);
+
 private:
+    //! A frame of the Program's code that was running when the debugger attached (issue #6602)
+    /** Native code makes no function exit event: the frame makes it when it returns normally into the C++ code that
+        called it (dbgNativeFrameReturn()), and, when it ends with an exception, with no value at the next event of
+        the debugger in the thread (dbgCheckAttachFrames()), as the interpreters make it when the exception leaves the
+        frame.  A frame of the AST or IR interpreter makes its own exit event, and its record is removed then
+        (dbgFunctionExit()).
+    */
+    struct DbgAttachFrame {
+        //! the frame's call stack location
+        const QoreStackLocation* loc;
+        //! the frame's block, if known (a location of native code: a native entry or a direct native call)
+        const StatementBlock* block;
+        //! true for a location of native code, which is tagged (qore_rt_native_frame_tagged()), else the location of
+        //! a call (CodeEvaluationHelper)
+        bool native_loc;
+    };
+    //! the frames of the Program's code that were running when the debugger attached, the outermost first
+    std::vector<DbgAttachFrame> dbg_attach_frames;
+    //! the count of the records of all Programs in the thread (qore_jit_debug_frame_count()), set when frames are
+    //! recorded; the native returns keep the exit events requested while it is not zero
+    std::atomic<int>* dbg_frame_count = nullptr;
+
+    //! records the frames of the Program's code on the thread's call stack when the debugger attaches
+    DLLLOCAL void dbgRecordAttachFrames();
+
+    //! makes the exit events of the frames that were running when the debugger attached and have left the call stack
+    DLLLOCAL void dbgCheckAttachFrames(ExceptionSink* xsink) {
+        if (!dbg_attach_frames.empty()) {
+            dbgFlushReturnedFrames(xsink);
+        }
+    }
+
+    //! makes the exit events of the recorded frames that are no longer on the call stack, innermost first
+    /** @return the number of the recorded frames that are still on the call stack
+    */
+    DLLLOCAL size_t dbgFlushReturnedFrames(ExceptionSink* xsink);
+
+    //! removes the records after the first \a keep ones and updates the thread's count
+    DLLLOCAL void dbgDropAttachFrames(size_t keep);
+
+    //! returns true if a recorded frame is the location \a loc
+    DLLLOCAL static bool dbgIsAttachFrame(const DbgAttachFrame& frame, const QoreStackLocation* loc);
+
+    //! the function exit event, without the check of the frames that were running when the debugger attached
+    DLLLOCAL void dbgFunctionExitIntern(const StatementBlock* statement, QoreValue& returnValue,
+            ExceptionSink* xsink);
+
     // not implemented
     DLLLOCAL ThreadLocalProgramData(const ThreadLocalProgramData& old) = delete;
 
@@ -723,6 +805,9 @@ public:
         * warnSink = nullptr,
         * pendingParseSink = nullptr;
     RootQoreNamespace* RootNS = nullptr;
+    //! the objects of the Program's own classes that its cleared constants held, deleted while only the thread that
+    //! deletes the Program can run code in it (see deleteOwnedConstantObjects(); #6791)
+    std::vector<QoreObject*> owned_constant_objects;
     QoreNamespace* QoreNS = nullptr;
 
     // when true, parse errors and warnings are also captured as structured diagnostics (machine-readable
@@ -1262,6 +1347,54 @@ public:
         trusted; the flag also outlives the manager, which is cleared when the Program is deleted.
     */
     std::atomic<bool> sandboxed{false};
+
+    //! the sandbox of the code that created the Program or added code to it (referenced), or nullptr
+    /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or commits code
+        that it parsed in it (internParseCommit()), to the manager that governs that code (qore_caller_sandbox_refs());
+        a later addition combines its manager with the one already set, so it never loosens the sandbox.  It governs
+        the Program's code together with \c sandbox_manager wherever the code runs, called by trusted code included
+        (an imported function, a function copied into an evaluation Program, a call by a thread that a binary module
+        entered the Program with), as every lookup of a Program's sandbox resolves it (getSandboxManagerRefs()).
+        Program::setSandboxManager() does not change it, so the Program's code cannot lose the sandbox of the code
+        that created it.  Written only under sm_lock; released with \c sandbox_manager when the Program is cleared or
+        destroyed.
+    */
+    std::atomic<QoreSandboxManager*> creator_sandbox_manager{nullptr};
+
+    //! true once any sandbox manager of the Program was set (own, kept or kept policy); cleared when they are released
+    /** The check made on every entry into the Program and at every cancellation point (hasSandboxManager()), so that
+        a Program with no manager costs one load, as before.  Set before a manager is published, so a lookup that finds
+        it false finds no manager, exactly as if it had run just before the manager was set.
+    */
+    std::atomic<bool> any_sandbox_manager{false};
+
+    //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
+    /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
+        setOwnSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes on to the callers,
+        as for \c creator_sandbox_manager, so that the manager never governs the calling code's own calls into the
+        Program alone.  A manager that trusted code that no sandbox governs sets (and one set with the C++ API) governs
+        the Program's code alone, as before.  Written with \c sandbox_manager under \c sm_lock, and read with it
+        (getSandboxManagerRefs()).
+    */
+    std::atomic<bool> own_manager_additive{false};
+
+    //! the policy sandbox of the code that created the Program or added code to it (referenced), or nullptr
+    /** The manager for policy checks (filesystem, network, uncontrolled APIs) of the same code as
+        \c creator_sandbox_manager, resolved as a policy check resolves it (qore_find_thread_sandbox_policy_manager_ref()):
+        a Program that trusted code creates under a policy barrier or a system-policy capability for a sandboxed
+        caller (SandboxManager::createSystemPolicyCall()) has the caller's sandbox for everything but its policy, as
+        the code that created it does.  Written with \c creator_sandbox_manager.
+    */
+    std::atomic<QoreSandboxManager*> creator_policy_manager{nullptr};
+
+    //! the sandbox of the code that parsed the pending code of the Program (referenced), or nullptr
+    /** Set by a parse entry point for sandboxed code (pendCreatorSandbox()) once the parse may go ahead, attached to
+        the Program (addCreatorSandbox()) when internParseCommit() commits the code, and dropped when the code is
+        rolled back, so that a parse that is refused or fails changes nothing.  Accessed with the parse lock held.
+    */
+    QoreSandboxManager* pending_creator_sandbox = nullptr;
+    //! the policy manager of \c pending_creator_sandbox (referenced), or nullptr
+    QoreSandboxManager* pending_creator_policy = nullptr;
 
     //! true if the Program stays allocated while any code can run: a module's Program (see
     //! qore_program_set_module_lifetime()); never cleared once set
@@ -1895,7 +2028,12 @@ protected:
         Qore code, which needs a Program that can be attached to.  setParent() runs from
         qore_program_private_base's constructor, where no member of the derived class exists yet.
     */
-    DLLLOCAL void copyExternalData();
+    /** @param xsink for the errors of the modules' callbacks; if nullptr, they are reported as unhandled exceptions
+
+        @return 0 for OK, -1 if a copy or an init() failed: then the copies made are released, the Program has none of
+        the parent's data, and its creator must delete it (issue #6786)
+    */
+    DLLLOCAL int copyExternalData(ExceptionSink* xsink);
 
     // for independent programs (not inherited from another QoreProgram object)
     DLLLOCAL void newProgram();
@@ -1957,7 +2095,7 @@ public:
                     break;
                 }
             }
-            cnt->dec();
+            qore_counter_ops(cnt).dec();
         }
     }
 
@@ -2056,6 +2194,23 @@ public:
     DLLLOCAL virtual void run() = 0;
 };
 
+//! The sandbox of the code that parses code in a Program, from the parse entry point to the pending code
+/** Resolved by qore_program_private::getParseCreatorSandbox() before the parse switches to the Program, and given to
+    qore_program_private::pendCreatorSandbox() once the parse may go ahead; owns its references
+*/
+struct QoreParseCreatorSandbox {
+    //! the manager for all purposes but policy checks (referenced), or nullptr
+    QoreSandboxManager* sm = nullptr;
+    //! the manager for policy checks (referenced), or nullptr
+    QoreSandboxManager* policy = nullptr;
+
+    DLLLOCAL QoreParseCreatorSandbox() = default;
+    DLLLOCAL ~QoreParseCreatorSandbox();
+
+    QoreParseCreatorSandbox(const QoreParseCreatorSandbox&) = delete;
+    QoreParseCreatorSandbox& operator=(const QoreParseCreatorSandbox&) = delete;
+};
+
 class qore_program_private : public qore_program_private_base {
 public:
     //! the del closures of the local modules that a compiled script embeds, in the order that the compiler gave them
@@ -2128,9 +2283,16 @@ public:
     //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
 
     DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
-            QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr);
+            QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr,
+            ExceptionSink* xsink = nullptr);
 
     DLLLOCAL ~qore_program_private();
+
+    //! deletes a child Program whose creation failed, as its external data could not be copied (issue #6786)
+    /** The Program has none of the parent's data and has never been used: no object holds it and no code runs in it;
+        the exceptions of its deletion are added to \a xsink after the one of the failure
+    */
+    DLLLOCAL static void deleteFailedChild(QoreProgram* pgm, ExceptionSink* xsink);
 
     DLLLOCAL void registerProgram();
 
@@ -2207,12 +2369,86 @@ public:
         }
     }
 
-    //! Returns a ref'd sandbox manager pointer, or nullptr if none/already deleted
-    /** The caller must call deref() on the returned pointer when done.
+    //! Returns a ref'd pointer to the sandbox that governs the Program's code, or nullptr if none/already deleted
+    /** The sandbox is the Program's own manager combined with the sandbox of the code that created it (see
+        \c creator_sandbox_manager); a composition is allocated only when the Program has both and they differ.
+
+        The caller must call deref() on the returned pointer when done.
         Thread-safe: a program with no manager is recognized without any lock; otherwise it acquires sm_lock and
         calls optRef() to avoid use-after-free.
+
+        @throw std::bad_alloc the composition of the two managers could not be allocated
     */
     DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
+
+    //! Returns references to the Program's own sandbox manager and to the sandbox of the code that created it
+    /** Allocates nothing; the caller must call deref() on each pointer returned that is not nullptr.  The managers
+        govern the Program's code together (see \c creator_sandbox_manager).  If \a own_additive is not nullptr, it is
+        set to \c own_manager_additive as it was when \a own was read (under the same lock).
+    */
+    DLLLOCAL void getSandboxManagerRefs(QoreSandboxManager*& own, QoreSandboxManager*& creator, bool policy = false,
+            bool* own_additive = nullptr);
+
+    //! Returns a ref'd pointer to the sandbox manager set with QoreProgram::setSandboxManager(), or nullptr
+    DLLLOCAL QoreSandboxManager* getOwnSandboxManagerRef();
+
+    //! Sets the Program's own sandbox manager for Program::setSandboxManager()
+    /** The manager and \c own_manager_additive are changed together under \c sm_lock, after the check that code that
+        is not trusted does not replace a manager, so that concurrent setters cannot combine one setter's manager with
+        another one's flag.
+
+        @param sm the manager (borrowed), or nullptr
+        @param additive true if the manager adds to the sandbox of the Program's callers (see \c own_manager_additive)
+        @param no_replace true if a manager other than \a sm that the Program already has must not be replaced
+
+        @return 0 for OK, -1 if the Program has another manager and \a no_replace is true (nothing is changed)
+    */
+    DLLLOCAL int setOwnSandboxManager(QoreSandboxManager* sm, bool additive, bool no_replace);
+
+    //! Returns true if the Program has a sandbox manager of its own or the sandbox of the code that created it
+    /** Reads the pointers without the lock, for the checks made on every entry into the Program
+    */
+    DLLLOCAL bool hasSandboxManager() const {
+        return any_sandbox_manager.load(std::memory_order_acquire);
+    }
+
+    //! Adds the sandbox of the code that creates the Program or adds code to it (see \c creator_sandbox_manager)
+    /** @param sm the manager, borrowed; combined with the one already set, if any
+
+        @throw std::bad_alloc the composition of the managers could not be allocated
+    */
+    DLLLOCAL void addCreatorSandbox(QoreSandboxManager* sm, QoreSandboxManager* policy_sm);
+
+    //! Resolves the sandbox of the calling code for a parse in the Program and marks the Program sandboxed
+    /** Called by every parse entry point that adds code before it switches to the Program: if the calling code is
+        sandboxed (qore_caller_is_sandboxed()), the Program is marked sandboxed (see markSandboxedParse()) and the
+        caller's managers are returned in \a pcs, for pendCreatorSandbox() once the parse may go ahead.
+
+        @return 0 for OK, -1 if the managers could not be resolved for lack of memory (an exception is raised): the
+        parse must not go ahead, as its code would not be governed
+    */
+    DLLLOCAL int getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, ExceptionSink* xsink);
+
+    //! Records the sandbox of the code that parses the pending code; called with the parse lock held
+    /** Called just before the code is parsed, after every check that can refuse the parse: from then on the parse
+        either commits the code (internParseCommit(), which attaches the managers) or rolls it back
+        (internParseRollback(), which drops them).  The managers are combined with those already pending.
+
+        @return 0 for OK, -1 if the managers could not be combined for lack of memory (an exception is raised)
+    */
+    DLLLOCAL int pendCreatorSandbox(QoreParseCreatorSandbox& pcs, ExceptionSink* xsink);
+
+    //! Drops the sandbox of the pending code; called with the parse lock held when the pending code is rolled back
+    DLLLOCAL void dropPendingCreatorSandbox();
+
+    //! Releases every sandbox manager of the Program; when it is cleared, and when it is destroyed without being so
+    DLLLOCAL void releaseSandboxManagers(ExceptionSink* xsink);
+
+    //! Attaches the sandbox of the pending code to the Program; called with the parse lock held before the commit
+    /** @return 0 for OK, -1 if it could not be attached for lack of memory (an exception is raised in \a xsink): the
+        code must not be committed
+    */
+    DLLLOCAL int commitPendingCreatorSandbox(ExceptionSink* xsink);
 
     //! Returns true if the Program's code may not change the state of trusted modules (qore#5664)
     /** The state of a trusted module is its public variables and the static members of its classes: one value that
@@ -2239,7 +2475,7 @@ public:
         programSandboxedFlag())
     */
     DLLLOCAL static bool isSandboxedForModuleState(const qore_program_private& pp) {
-        return pp.sandbox_manager.load(std::memory_order_acquire) || programSandboxedFlag(pp, 0);
+        return pp.hasSandboxManager() || programSandboxedFlag(pp, 0);
     }
 
     //! Returns the permanent \c sandboxed flag of the Program where the Program has one (qore#5659)
@@ -2265,6 +2501,26 @@ public:
     }
 
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink);
+
+    //! Discards the parse state of a Program that is deleted: its pending code is rolled back (qore#6795)
+    /** A Program with code pending (Program::parsePending() without a commit or a rollback), or whose parse was rolled
+        back without PO_ALLOW_REPARSE, refuses every thread to enter it (parsing_in_progress, see incThreadCount()).
+        The code that runs when it is deleted (its exit hooks, the destructors of its saved objects and of the values
+        of its variables) enters it, so the parse is rolled back and the state cleared before that code runs.
+
+        Nothing is done if the Program is not in the parse state or if a thread holds its parse lock (a parse goes
+        on); with \a idle_only, also if a thread is counted in the Program: the rollback deletes code that such a
+        thread could still run, so it is made once the threads of the Program have ended
+    */
+    //! collects, with a reference, the objects of the Program's own classes that the values of its cleared constants
+    //! hold, if anything else holds them: they are deleted by deleteOwnedConstantObjects() (#6791)
+    DLLLOCAL void collectOwnedConstantObjects(const QoreListNode& l);
+
+    //! deletes the objects collected by collectOwnedConstantObjects(): their destructors must run while the Program
+    //! can run code, and only the thread that deletes it can (#6791)
+    DLLLOCAL void deleteOwnedConstantObjects(ExceptionSink* xsink);
+
+    DLLLOCAL void discardPendingParse(ExceptionSink* xsink, bool idle_only);
 
     // called when the program's ref count = 0 (but the dc count may not go to 0 yet)
     DLLLOCAL void clear(ExceptionSink* xsink);
@@ -2419,6 +2675,81 @@ public:
         return 0;
     }
     */
+
+    //! Returns true if code parsed in the Program refuses the given thread runtime entry; plock must be held
+    /** As ProgramThreadCountContextHelper::set() refuses it: the thread that holds the parse lock enters the Program
+        without its thread count and is not refused (see incThreadCount() for the others) (qore#6752)
+    */
+    DLLLOCAL bool parseRefusesEntryIntern(int tid) const {
+        return !parsingLocked(tid) && (refusesRuntimeEntry() || refusedByCommit(tid));
+    }
+
+    //! Returns true if code parsed in the Program refuses the given thread runtime entry (qore#6752)
+    DLLLOCAL bool parseRefusesEntry(int tid) const {
+        AutoLocker al(plock);
+        return parseRefusesEntryIntern(tid);
+    }
+
+    //! Enters the Program for native code that runs none of the Program's code, without its context if it refuses runtime entry to the thread because code is parsed in it (qore#6752)
+    /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).  The decision and the entry are
+        made under one lock, so a parse that starts meanwhile cannot refuse the entry.
+
+        @param tid the current thread's TID
+        @param with_context set to true if incThreadCount() would let the thread enter the Program, so that it can
+        switch to its context, false if it entered the Program without its context (see enterWithoutContext()); also
+        false for the thread that holds the parse lock while code is parsed, which incThreadCount() refuses as well
+        @param xsink for the exception if the Program has been deleted
+
+        @return 0 if the thread entered the Program, -1 if not (the Program's teardown has marked it)
+    */
+    DLLLOCAL int enterForNativeCode(int tid, bool& with_context, ExceptionSink* xsink) {
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid)) {
+            if (xsink) {
+                xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
+                    "therefore cannot be accessed at runtime");
+            }
+            return -1;
+        }
+        // the condition of incThreadCount()
+        with_context = !refusesRuntimeEntry() && !refusedByCommit(tid);
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
+        return 0;
+    }
+
+    //! Enters the Program without its context if code parsed in it refuses the thread runtime entry (qore#6752)
+    /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).
+
+        @param tid the current thread's TID
+
+        @return true if the thread entered the Program without its context; false if it did not enter it: the Program
+        does not refuse it runtime entry because of a parse (the entry that follows enters it), or its teardown has
+        marked it (the entry that follows raises the exception)
+    */
+    DLLLOCAL bool enterWithoutContextIfParseRefused(int tid) {
+        // a Program that no code is parsed or committed in, the usual case, is decided without the lock; a parse that
+        // another thread starts after this read can still refuse the normal entry that follows, as it could before
+        // (qore#6752 covers the objects created while the Program is parsed, not a parse that races with the entry)
+        if (!parsing_in_progress.load() && !commit_entry_restricted.load()) {
+            return false;
+        }
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid) || !parseRefusesEntryIntern(tid)) {
+            return false;
+        }
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
+        return true;
+    }
 
     //! Enters the Program without switching to it or running its code: its teardown waits until the thread leaves it
     /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).  Used where the Program's data
@@ -3195,7 +3526,7 @@ public:
     };
 
     // call must push the current program on the stack and pop it afterwards
-    DLLLOCAL int internParsePending(ExceptionSink* xsink, const char* code, const char* label,
+    DLLLOCAL int internParsePending(ExceptionSink* xsink, std::string_view code, const char* label,
             const char* orig_src = nullptr, int offset = 0, bool standard_parse = true) {
         // the scoped options of the parse end with it in any case
         ParseOverlayScope pos(*this);
@@ -3216,7 +3547,7 @@ public:
         //printd(5, "qore_program_private::internParsePending() code: %p %d bytes label: '%s' src: '%s' offset: %d\n",
         //    code, strlen(code), label, orig_src ? orig_src : "(null)", offset);
 
-        assert(code && code[0]);
+        assert(!code.empty());
 
         // save this file name for storage in the parse tree and deletion
         // when the QoreProgram object is deleted
@@ -3240,21 +3571,30 @@ public:
         //printd(5, "qore_program_private::internParsePending() parsing tag: %s (%p): '%s'\n", label, label, code);
 
         yyscan_t lexer;
-        QoreParseState state;
+        QoreParseState state(*xsink);
         yylex_init_extra(&state, &lexer);
 
         // the rules of the parse directives end with a newline, which a directive on the last line of the code
         // without one would not match: such code gets one at its end; other code is not changed, so that an error
         // at its end keeps its location (issue #2740)
-        size_t code_len = strlen(code);
-        const char* last_nl = strrchr(code, '\n');
-        const char* last_line = last_nl ? last_nl + 1 : code;
-        if (*last_line == '%') {
-            std::string terminated(code, code_len);
+        bool final_directive = false;
+        if (code.size() > INT_MAX - 3) {
+            parse_error(*getLocation(1, 1), "source is too large for the scanner");
+            state.stop = true;
+        } else if (int line = qore_invalid_source_utf8_line(code.data(), code.size(), *xsink, &final_directive)) {
+            if (line > 0) {
+                parse_error(*getLocation(line, line), "invalid UTF-8 in source");
+            }
+            state.stop = true;
+        }
+        if (state.stop) {
+            yy_scan_bytes("", 0, lexer);
+        } else if (final_directive) {
+            std::string terminated(code);
             terminated += '\n';
-            yy_scan_bytes(terminated.c_str(), terminated.size(), lexer);
+            yy_scan_bytes(terminated.data(), terminated.size(), lexer);
         } else {
-            yy_scan_string(code, lexer);
+            yy_scan_bytes(code.data(), code.size(), lexer);
         }
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
@@ -3283,7 +3623,9 @@ public:
     }
 
     //! Marks the Program sandboxed if sandboxed code, or code acting for it, adds code to it (issue #5659)
-    /** Called by every parse of source code (parse(), parsePending(), parseExpression()) before it switches to the
+    /** Called by the parse entry points that resolve no sandbox for the code (parseExpression(), whose expression is
+        governed through the provenance of its Expression object, and the definition of command-line defines), and by
+        getParseCreatorSandbox() for the others; called before the parse switches to the
         Program, so that the caller's code is looked at (see qore_caller_is_sandboxed()).  Whether a Program is trusted
         is decided when it is created, but code that sandboxed code supplies later is the sandbox's as well: a
         trusted Program that sandboxed code parses its own code in (one that it was handed, one that library code's
@@ -3472,8 +3814,11 @@ public:
     */
     DLLLOCAL int beginParse(ExceptionSink* xsink, ParseStartGuard& guard, bool nested = false);
 
-    DLLLOCAL int parsePending(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
+    DLLLOCAL int parsePending(std::string_view code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
             const char* orig_src = nullptr, int offset = 0) {
+        if (code.empty()) {
+            return 0;
+        }
         //printd(5, "qore_program_private::parsePending() wm=0x%x UV=0x%x on: %d\n", wm, QP_WARN_UNREFERENCED_VARIABLE, wm & QP_WARN_UNREFERENCED_VARIABLE);
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
@@ -3481,7 +3826,11 @@ public:
         if (*xsink) {
             return -1;
         }
-        markSandboxedParse();
+        // the sandbox of the calling code, attached to the Program when the code is committed
+        QoreParseCreatorSandbox pcs;
+        if (getParseCreatorSandbox(pcs, xsink)) {
+            return -1;
+        }
 
         ProgramRuntimeParseContextHelper pch(xsink, pgm);
         assert(xsink);
@@ -3490,7 +3839,7 @@ public:
         }
 
         ParseStartGuard psg(*this);
-        if (beginParse(xsink, psg)) {
+        if (beginParse(xsink, psg) || pendCreatorSandbox(pcs, xsink)) {
             return -1;
         }
 
@@ -3597,9 +3946,13 @@ public:
         return 0;
     }
 
-    //! @param nested true for the parse of parseFile(), which has started it (see beginParse())
+    //! Parses and commits the code in \a fp
+    /** @param nested true for the parse of parseFile(), which has started it (see beginParse())
+        @param outer_pcs the sandbox of the calling code if it was resolved before the parse switched to the Program
+        (parseFile()), otherwise nullptr
+    */
     DLLLOCAL void parse(FILE *fp, const char* name, ExceptionSink* xsink, ExceptionSink* wS, int wm,
-            bool nested = false) {
+            bool nested = false, QoreParseCreatorSandbox* outer_pcs = nullptr) {
         assert(xsink);
         printd(5, "QoreProgram::parse(fp: %p, name: %s, xsink: %p, wS: %p, wm: %d)\n", fp, name, xsink, wS, wm);
 
@@ -3614,7 +3967,7 @@ public:
         ungetc(c, fp);
 
         yyscan_t lexer;
-        QoreParseState state;
+        QoreParseState state(*xsink);
         // the number of exceptions not shown, reported when the parse lock has been released
         int skipped = 0;
 
@@ -3623,7 +3976,12 @@ public:
         if (*xsink) {
             return;
         }
-        markSandboxedParse();
+        // the sandbox of the calling code, attached to the Program when the code is committed
+        QoreParseCreatorSandbox own_pcs;
+        QoreParseCreatorSandbox& pcs = outer_pcs ? *outer_pcs : own_pcs;
+        if (!outer_pcs && getParseCreatorSandbox(pcs, xsink)) {
+            return;
+        }
 
         {
             ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
@@ -3632,7 +3990,7 @@ public:
             }
 
             ParseStartGuard psg(*this);
-            if (beginParse(xsink, psg, nested)) {
+            if (beginParse(xsink, psg, nested) || pendCreatorSandbox(pcs, xsink)) {
                 return;
             }
 
@@ -3699,8 +4057,8 @@ public:
         if (!str->strlen())
             return;
 
-        // ensure code string has correct character set encoding
-        TempEncodingHelper tstr(str, QCS_DEFAULT, xsink);
+        // Decode tagged source to the encoding of the scanner.
+        TempEncodingHelper tstr(str, QCS_UTF8, xsink);
         if (*xsink)
             return;
 
@@ -3713,14 +4071,17 @@ public:
         if (source && !source->empty() && !src.set(source, QCS_DEFAULT, xsink))
             return;
 
-        parse(tstr->c_str(), tlstr->c_str(), xsink, wS, wm, source ? src->c_str() : nullptr, offset);
+        parse(std::string_view(tstr->c_str(), tstr->size()), tlstr->c_str(), xsink, wS, wm,
+            source ? src->c_str() : nullptr, offset);
     }
 
-    DLLLOCAL void parse(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
+    DLLLOCAL void parse(std::string_view code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
             const char* orig_src = nullptr, int offset = 0) {
         //printd(5, "qore_program_private::parse(%s) pgm: %p po: %lld\n", label, pgm, pwo.parse_options);
 
-        assert(code && code[0]);
+        if (code.empty()) {
+            return;
+        }
         assert(xsink);
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
@@ -3728,7 +4089,11 @@ public:
         if (*xsink) {
             return;
         }
-        markSandboxedParse();
+        // the sandbox of the calling code, attached to the Program when the code is committed
+        QoreParseCreatorSandbox pcs;
+        if (getParseCreatorSandbox(pcs, xsink)) {
+            return;
+        }
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink) {
@@ -3736,7 +4101,7 @@ public:
         }
 
         ParseStartGuard psg(*this);
-        if (beginParse(xsink, psg)) {
+        if (beginParse(xsink, psg) || pendCreatorSandbox(pcs, xsink)) {
             return;
         }
 
@@ -3864,8 +4229,8 @@ public:
             return nullptr;
         }
 
-        // ensure code string has correct character set encoding
-        TempEncodingHelper tstr(str, QCS_DEFAULT, xsink);
+        // Decode tagged source to the encoding of the scanner.
+        TempEncodingHelper tstr(str, QCS_UTF8, xsink);
         if (*xsink)
             return nullptr;
 
@@ -3878,14 +4243,15 @@ public:
         if (source && !source->empty() && !src.set(source, QCS_DEFAULT, xsink))
             return nullptr;
 
-        return parseExpression(tstr->c_str(), tlstr->c_str(), xsink, wS, wm, source ? src->c_str() : nullptr, offset);
+        return parseExpression(std::string_view(tstr->c_str(), tstr->size()), tlstr->c_str(), xsink, wS, wm,
+            source ? src->c_str() : nullptr, offset);
     }
 
-    DLLLOCAL q_exp_t parseExpression(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS,
+    DLLLOCAL q_exp_t parseExpression(std::string_view code, const char* label, ExceptionSink* xsink, ExceptionSink* wS,
             int wm, const char* orig_src = nullptr, int offset = 0) {
         //printd(5, "qore_program_private::parseExpression(%s) pgm: %p po: %lld\n", label, pgm, pwo.parse_options);
 
-        assert(code && code[0]);
+        assert(!code.empty());
         assert(xsink);
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
@@ -3933,13 +4299,15 @@ public:
             qore_program_private& pp;
         } epoh(*this);
 
-        QoreStringMaker exp_code("return (%s);", code);
+        std::string exp_code("return (");
+        exp_code.append(code);
+        exp_code += ");";
 
         NonStandardParseFlagHelper nspfh(*this);
         startParsing(xsink, wS, wm);
 
         // parse text given; the Program had no code pending, so the parse state ends with the expression's parse
-        if (!internParsePending(xsink, exp_code.c_str(), label, orig_src, offset, false)) {
+        if (!internParsePending(xsink, exp_code, label, orig_src, offset, false)) {
             internParseCommit(false);   // finalize parsing, back out or commit all changes
         } else {
             // the Program had no code pending: what its namespaces have pending was added by the failed expression,
@@ -4021,7 +4389,12 @@ public:
         if (*xsink) {
             return;
         }
-        markSandboxedParse();
+        // the sandbox of the calling code, resolved before the switch to the Program; attached to the Program when
+        // the code is committed (see parse(FILE*))
+        QoreParseCreatorSandbox pcs;
+        if (getParseCreatorSandbox(pcs, xsink)) {
+            return;
+        }
 
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         if (*xsink)
@@ -4044,15 +4417,15 @@ public:
         }
         setScriptPath(filename);
 
-        parse(fp, filename, xsink, wS, wm, true);
+        parse(fp, filename, xsink, wS, wm, true, &pcs);
     }
 
     DLLLOCAL void parsePending(const QoreString *str, const QoreString *lstr, ExceptionSink* xsink, ExceptionSink* wS, int wm, const QoreString* source = 0, int offset = 0) {
         assert(!str->empty());
         assert(xsink);
 
-        // ensure code string has correct character set encoding
-        TempEncodingHelper tstr(str, QCS_DEFAULT, xsink);
+        // Decode tagged source to the encoding of the scanner.
+        TempEncodingHelper tstr(str, QCS_UTF8, xsink);
         if (*xsink)
             return;
 
@@ -4065,7 +4438,8 @@ public:
         if (source && !source->empty() && !src.set(source, QCS_DEFAULT, xsink))
             return;
 
-        parsePending(tstr->c_str(), tlstr->c_str(), xsink, wS, wm, source ? src->c_str() : nullptr, offset);
+        parsePending(std::string_view(tstr->c_str(), tstr->size()), tlstr->c_str(), xsink, wS, wm,
+            source ? src->c_str() : nullptr, offset);
     }
 
     // called during run time (not during parsing)
@@ -4230,6 +4604,39 @@ public:
         pgm.priv->instantiateThreadVarData(tlpd);
     }
 
+    //! returns the thread's local data in the Program if the thread has any, or nullptr; never creates it
+    /** The caller must keep the data from being cleared while it uses the result: it holds the Program's thread count
+        or its parse lock (see findThreadVarDataIfEntered()).  Once the Program's thread data is being cleared, no data
+        is returned, also to the thread that clears it (qore#6537)
+    */
+    DLLLOCAL ThreadLocalProgramData* findThreadVarData(ThreadProgramData* td) {
+        AutoLocker al(tlock);
+        if (tclear) {
+            return nullptr;
+        }
+        pgm_data_map_t::iterator i = pgm_data_map.find(td);
+        return i == pgm_data_map.end() ? nullptr : i->second;
+    }
+
+    //! returns the thread's local data in the Program if the thread is in the Program, or nullptr; never creates it
+    /** The thread is in the Program if it holds the Program's thread count: its data cannot be cleared then.  A thread
+        that is not in the Program gets no data, so that the entry that runs code of the Program is a full entry
+        (qore#6537)
+
+        @param td the thread's Program data
+        @param tid the current thread's TID
+    */
+    DLLLOCAL ThreadLocalProgramData* findThreadVarDataIfEntered(ThreadProgramData* td, int tid) {
+        {
+            AutoLocker al(plock);
+            if (tidmap.find(tid) == tidmap.end()) {
+                return nullptr;
+            }
+        }
+        // the thread holds the Program's thread count, which only this thread can release
+        return findThreadVarData(td);
+    }
+
     DLLLOCAL bool setThreadVarData(ThreadProgramData* td, ThreadLocalProgramData*& new_tlpd, bool run) {
         SafeLocker sl(tlock);
         // wait for data to finished being cleared if applicable
@@ -4255,7 +4662,7 @@ public:
                 throw std::bad_alloc();
             }
 #endif
-            std::unique_ptr<ThreadLocalProgramData> tlpd(new ThreadLocalProgramData);
+            std::unique_ptr<ThreadLocalProgramData> tlpd(new ThreadLocalProgramData(pgm));
 
             printd(5, "qore_program_private::setThreadVarData() (first) this: %p pgm: %p td: %p run: %s inst: %s\n", this, pgm, td, run ? "true" : "false", tlpd->inst ? "true" : "false");
 
@@ -4705,7 +5112,7 @@ public:
                 if (collect_diagnostics) {
                     markDiagnostic(*ne);
                 }
-                sink->raiseException(ne);
+                qore_exception_sink_ops(sink).raiseException(ne);
             }
             exceptions_raised++;
         }
@@ -5121,7 +5528,7 @@ public:
 
         if (loc) {
             // ensure that all exceptions reflect the current parse location
-            xsink.overrideLocation(*loc);
+            qore_exception_sink_ops(xsink).overrideLocation(*loc);
         }
 
         parseSink->assimilate(xsink);
@@ -5710,7 +6117,7 @@ public:
         const qore_program_private* pp = pgm->priv;
         // the flag is set whenever a manager is set; the manager is read as well, so that the answer never depends on
         // the order of the two stores
-        return pp->sandboxed.load(std::memory_order_acquire) || pp->sandbox_manager.load(std::memory_order_acquire);
+        return pp->sandboxed.load(std::memory_order_acquire) || pp->hasSandboxManager();
     }
 
     //! returns the parse options of the Program, as QoreProgram::getParseOptions() does, without a call into the
@@ -5881,6 +6288,17 @@ public:
     DLLLOCAL static bool setThreadVarData(QoreProgram* pgm, ThreadProgramData* td, ThreadLocalProgramData* &tlpd,
             bool run) {
         return pgm->priv->setThreadVarData(td, tlpd, run);
+    }
+
+    //! returns the thread's local data in the Program if the thread has any, or nullptr; never creates it
+    DLLLOCAL static ThreadLocalProgramData* findThreadVarData(QoreProgram* pgm, ThreadProgramData* td) {
+        return pgm->priv->findThreadVarData(td);
+    }
+
+    //! returns the thread's local data in the Program if the thread is in the Program, or nullptr; never creates it
+    DLLLOCAL static ThreadLocalProgramData* findThreadVarDataIfEntered(QoreProgram* pgm, ThreadProgramData* td,
+            int tid) {
+        return pgm->priv->findThreadVarDataIfEntered(td, tid);
     }
 
     //! removes the thread's data that setThreadVarData() just created, before any of the Program's code used it
@@ -6278,7 +6696,7 @@ public:
             pgm.priv->markDiagnostic(*ne);
         }
         ne->arg = arg_holder.release();
-        wsink.raiseException(ne);
+        qore_exception_sink_ops(wsink).raiseException(ne);
     }
 
     DLLLOCAL static void makeParseWarning(QoreProgram* pgm, const QoreProgramLocation &loc, int code,
@@ -6306,7 +6724,7 @@ public:
         if (pgm->priv->collect_diagnostics) {
             pgm->priv->markDiagnostic(*ne);
         }
-        pgm->priv->warnSink->raiseException(ne);
+        qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
     DLLLOCAL static void makeParseWarning(QoreProgram* pgm, const QoreProgramLocation& loc, int code,
@@ -6326,7 +6744,7 @@ public:
         if (pgm->priv->collect_diagnostics) {
             pgm->priv->markDiagnostic(*ne);
         }
-        pgm->priv->warnSink->raiseException(ne);
+        qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
     //! Raises a parse warning and attaches structured metadata when diagnostic collection is enabled
@@ -6344,7 +6762,7 @@ public:
         if (pgm->priv->collect_diagnostics) {
             pgm->priv->markDiagnostic(*ne);
         }
-        pgm->priv->warnSink->raiseException(ne);
+        qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
     DLLLOCAL void attachDebug(const qore_debug_program_private* n_dpgm) {
@@ -6355,6 +6773,9 @@ public:
 
         if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
             return;
+        if (!dpgm.load(std::memory_order_relaxed)) {
+            qore_aot_debug_program_change(true);
+        }
         dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
         // the IR interpreter no longer inlines the calls of this Program's methods (issue #6473)
         qore_ir_suspend_inline_states(&dpgm);
@@ -6379,7 +6800,9 @@ public:
         assert(n_dpgm==dpgm.load(std::memory_order_relaxed));
         if (!n_dpgm)
             return;
-        dpgm.store(nullptr, std::memory_order_release);
+        if (dpgm.exchange(nullptr, std::memory_order_release)) {
+            qore_aot_debug_program_change(false);
+        }
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
@@ -6485,7 +6908,7 @@ public:
     DLLLOCAL void deleteAllBreakpoints() {
         QoreAutoRWWriteLocker al(&lck_breakpoint);
         for (QoreBreakpointList_t::iterator it = breakpointList.begin(); it != breakpointList.end(); ++it) {
-            (*it)->unassignAllStatements();
+            qore_breakpoint_ops((*it)).unassignAllStatements();
             (*it)->pgm = nullptr;
             (*it)->deref();
         }
@@ -6952,6 +7375,7 @@ private:
         return std::find(breakpointList.begin(), breakpointList.end(), bkpt) != breakpointList.end();
     }
     friend class QoreBreakpoint;
+    friend class qore_breakpoint_ops;
 
     //! all Program instances, from their construction to their destruction, for fixupAllAfterFork() only
     /** No reference is taken from this set: a Program without references stays in it until it is destroyed
@@ -7277,7 +7701,7 @@ public:
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink) {
         removeAllPrograms();
         // wait till all debug calls finished, avoid deadlock as it might be handled in current thread
-        debug_program_counter.waitForZero();
+        qore_counter_ops(debug_program_counter).waitForZero();
     }
 
     DLLLOCAL int getInterruptedCount() {
@@ -7289,8 +7713,8 @@ public:
         exist in the child: only the forking thread's share of the count is kept
     */
     DLLLOCAL void fixupAfterFork() {
-        tlock.reinitAfterFork();
-        debug_program_counter.reinitAfterFork(qore_thread_debug_counter_share(&debug_program_counter));
+        qore_rwlock_ops(tlock).reinitAfterFork();
+        qore_counter_ops(debug_program_counter).reinitAfterFork(qore_thread_debug_counter_share(&debug_program_counter));
     }
 
 private:

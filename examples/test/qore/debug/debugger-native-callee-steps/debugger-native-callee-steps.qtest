@@ -2,19 +2,21 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
-# test-platform: macos - debugger attach in a frame of JIT native code and the native calls made after it
+# test-platform: macos - debugger attach in JIT and AOT native frames and the calls made after it
 
 %modern
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
 %requires QUnit
 %requires ../../../TestInterpreter.qm
 %requires ../../../ExecModeHarness.qm
 
 %exec-class DebuggerNativeCalleeStepsTest
 
-#! The step events of the calls that native code makes after a debugger attaches in a frame of it (#6289)
+#! The step events of the calls that native code makes after a debugger attaches in a frame of it (#6289), and the exit
+#! events of the native frames that were running when it attached (#6602)
 /** With a debugger attached, a call runs on the AST tier (UserVariantBase::evalTiered()), which makes the function
     entry event and the step event of the function's block before those of its statements.  A frame of JIT native code
     that is running when the debugger attaches goes on as native code; a call that it made of a function compiled in
@@ -23,14 +25,29 @@
     missing.  NativeCalleeSteps.q attaches the debugger in a call made by a loop and in a recursive call, with the
     thresholds that make its functions native code at once in the jit modes; its output is that of the AST
     interpreter in every execution mode.
+
+    A frame of native code that was running when the debugger attached made no function exit event (#6602): it now
+    makes it with its result when it returns into the C++ code that called it, and with no value when it ends with an
+    exception, at the next event of the debugger, as the interpreters make it then.  The cases: the exits of callee(),
+    loop() and outer() with their results; a frame that ends with an exception, whose exit, and that of a frame of the
+    interpreter that ends with an exception while frames of the attach are pending, is made once with no value; and a
+    frame whose native return follows that of another Program in the same thread, which must not take its event.
 */
 class DebuggerNativeCalleeStepsTest inherits QUnit::Test {
     public {
-        #! the output of NativeCalleeSteps.q with the AST interpreter
-        const Expected = "callee called again: 210 [61, 62, \"b69\", 69, \"e58\", \"b58\", 58, 61, 62, \"b69\", 69, "
-            "\"e58\", \"b58\", 58, 61, 62, 71, \"e52\", \"b52\", 52, \"b53\", 53]\n"
-            "recursive call: 4 [80, 84, \"e77\", \"b77\", 77, 80, 84, \"e77\", \"b77\", 77, 80, \"b81\", 81, \"e52\", "
-            "\"b52\", 52, \"b53\", 53]\n";
+        #! the output of NativeCalleeSteps.q with the AST interpreter (exits as "x<line>=<result>")
+        const Expected = "callee called again: 210 [62, 63, \"x59=42\", \"b70\", 70, \"e59\", \"b59\", 59, 62, 63, "
+            "\"x59=42\", \"b70\", 70, \"e59\", \"b59\", 59, 62, 63, \"x59=42\", 72, \"e53\", \"b53\", 53, "
+            "\"b54\", 54]\n"
+            "recursive call: 4 [81, 85, \"e78\", \"b78\", 78, 81, 85, \"e78\", \"b78\", 78, 81, \"b82\", 82, "
+            "\"e53\", \"b53\", 53, \"b54\", 54]\n"
+            "exits of the frames running at the attach: 127 [62, 63, \"x59=42\", \"b92\", 92, \"e59\", \"b59\", 59, "
+            "62, 63, \"x59=42\", 94, \"x90=126\", 100, \"x99=127\", 168, \"e53\", \"b53\", 53, \"b54\", 54]\n"
+            "exception: 20 [108, 109, \"b110\", 110, \"x105=null\", \"b122\", 122, \"b119\", 119, \"b120\", 120, "
+            "\"e105\", \"b105\", 105, 108, 109, \"b110\", 110, \"x105=null\", \"b122\", 122, 125, \"x117=20\", 170, "
+            "\"e53\", \"b53\", 53, \"b54\", 54]\n"
+            "return of another Program: 84 [139, \"x136=42\", \"b146\", 146, \"e136\", \"b136\", 136, 139, "
+            "\"x136=42\", 148, \"x144=84\", 172, \"e53\", \"b53\", 53, \"b54\", 54]\n";
     }
 
     private {
@@ -41,10 +58,38 @@ class DebuggerNativeCalleeStepsTest inherits QUnit::Test {
     constructor() : QUnit::Test("DebuggerNativeCalleeStepsTest", "1.0") {
         qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("steps in pure functions, methods and closures with constant arguments", \pureCallSteps());
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(mode + ": the step events of native calls after a debugger attaches", \modeTest(), (mode,));
         }
+        addTestCase("step, next and step-out in a callee entered after attach", \directCallSteps());
         set_return_value(main());
+    }
+
+    directCallSteps() {
+        string fixture = get_script_dir() + "/AOTCalleeSteps.q";
+        string expected = "";
+        foreach string trace in ("step 23 [\"step 14\", \"length > runProbe\", \"local 3\", \"step 7\", \"step 8\", \"step 15\", \"step 16\"]",
+                "next 23 [\"step 14\", \"length > runProbe\", \"local 3\", \"step 15\", \"step 16\"]",
+                "out 23 [\"step 14\", \"length > runProbe\", \"local 3\", \"step 7\", \"step 15\", \"step 16\"]") {
+            expected += "helper " + trace + "\nfast " + trace + "\n";
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected, ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 "
+                "QORE_JIT_THRESHOLD=1 %s -b --exec-mode=%s %s", qore_bin, mode, fixture)), mode);
+        }
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            return;
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        foreach int opt in (0, 3) {
+            string exe = dir + "/callee-" + opt;
+            string log = backquote(sprintf("%s -O%d -o %s %s 2>&1", qcc, opt, exe, fixture));
+            assertTrue(is_file(exe), log);
+            assertEq(expected, ExecModeHarness::run_any(exe + " -b"), "qcc -O" + opt);
+        }
     }
 
     modeTest(string mode) {
@@ -52,5 +97,40 @@ class DebuggerNativeCalleeStepsTest inherits QUnit::Test {
             "QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s", libqore_dir,
             libqore_dir, qore_bin, mode, get_script_dir() + "/NativeCalleeSteps.q"));
         assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    pureCallSteps() {
+        string fixture = get_script_dir() + "/PureCalleeSteps.q";
+        string expected = "54 [5, 6, 11, 12, 39, 40]\n";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected, ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 "
+                "QORE_JIT_THRESHOLD=1 %s -b --exec-mode=%s %s", qore_bin, mode, fixture)), mode);
+        }
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            return;
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        foreach int opt in (0, 3) {
+            string exe = dir + "/pure-" + opt;
+            string log = backquote(sprintf("%s -O%d -g -o %s %s 2>&1", qcc, opt, exe, fixture));
+            assertTrue(is_file(exe), log);
+            string actual = ExecModeHarness::run_any(exe + " -b");
+            if (opt == 0) {
+                assertEq(expected, actual, "qcc -O0 -g");
+            } else {
+                # Optimized code can fold any of the three calls.
+                assertTrue(actual.startsWith("54 ["), actual);
+            }
+        }
+
+        string outlined = dir + "/outlined";
+        string log = backquote(sprintf("QORE_DUMP_LLVM_IR=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=20 "
+            "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 QORE_AOT_OUTLINE_FN_TARGET_INSTS=20 %s -O0 -g -o %s %s 2>&1",
+            qcc, outlined, fixture));
+        assertTrue(is_file(outlined), log);
+        assertTrue(log =~ /define i64 @runOutlined_[A-Za-z0-9_]+_outline_[0-9]+\(/, "native outlined helper");
+        assertEq("28 [51, 52, 51, 52]\n", ExecModeHarness::run_any(outlined + " -b outlined"));
     }
 }

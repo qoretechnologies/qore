@@ -65,7 +65,7 @@ def start_in_session(args, **kwargs):
 
 
 def session_processes(sid):
-    """Returns the IDs of the processes of the session that have not ended (zombies are left out on Linux)"""
+    """Returns the IDs of the processes of the session that have not ended (zombies are left out)"""
     if os.path.isdir("/proc/self"):
         pids = []
         for entry in os.listdir("/proc"):
@@ -81,8 +81,20 @@ def session_processes(sid):
             if fields[0] != "Z" and int(fields[3]) == sid:
                 pids.append(int(entry))
         return pids
-    result = subprocess.run(["pgrep", "-s", str(sid)], capture_output=True, text=True)
-    return [int(pid) for pid in result.stdout.split()]
+    # elsewhere (macOS) the session of each process: "pgrep -s" finds none there, as ps shows no session IDs
+    result = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "stat="], capture_output=True, text=True)
+    pids = []
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) < 2 or fields[1].startswith("Z"):
+            continue
+        try:
+            if os.getsid(int(fields[0])) == sid:
+                pids.append(int(fields[0]))
+        except OSError:
+            # ended since, or not ours to see
+            continue
+    return pids
 
 
 def end_session(process):
@@ -472,6 +484,20 @@ class InterruptedRunnerTest(unittest.TestCase):
         self.interrupt(signal.SIGTERM, "import subprocess; subprocess.Popen(['sleep', '600'], start_new_session=True, "
                        "pass_fds=({ready}, {alive}))")
 
+    # The processes that a test started in its own process group are ended with it, on every platform (#6835): one
+    # that the signal ends, and one that ignores it, which is killed once the test has ended.  Before, only the test's
+    # own process was signalled, and the processes it left were found and ended only on Linux.
+    TEST_CHILDREN = ("import subprocess",
+                     "subprocess.Popen(['sleep', '600'], pass_fds=({ready}, {alive}))",
+                     "subprocess.Popen(['sh', '-c', 'trap \"\" HUP TERM; exec sleep 600'],"
+                     " pass_fds=({ready}, {alive}))")
+
+    def test_the_processes_of_a_test_are_ended_with_it(self):
+        self.interrupt(signal.SIGTERM, list(self.TEST_CHILDREN))
+
+    def test_the_processes_of_a_test_are_ended_with_it_in_a_parallel_run(self):
+        self.interrupt(signal.SIGHUP, list(self.TEST_CHILDREN), jobs=2)
+
     # A parallel run (QORE_TEST_JOBS) ended by a signal ends each test that runs as a run of one test at a time does:
     # its traps were "exit", which left the tests, their watchdogs and their shells running, and the event FIFO
     # directory behind.  Its shells run in the background, where SIGINT cannot be trapped, so the runner sends them
@@ -673,10 +699,15 @@ class RunnerDescendantsTest(unittest.TestCase):
 
 
 def watchdog_functions():
-    """Returns the source of read_test_event() and run_with_watchdog() in the runner tested"""
+    """Returns the source of read_test_event() and run_with_watchdog() in the runner tested, with the functions that
+    run_with_watchdog() calls to start and end the test's process group (#6835), where the runner has them; without
+    TEST_GROUP_TOOL set, the test runs in the shell's own group"""
     source = RUN_TESTS.read_text()
     functions = []
-    for name in ("read_test_event", "run_with_watchdog"):
+    names = ["read_test_event", "run_with_watchdog"]
+    if re.search(r"^exec_in_test_group\(\) \{", source, re.M):
+        names[:0] = ["exec_in_test_group", "end_test_group"]
+    for name in names:
         match = re.search(r"^" + name + r"\(\) \{\n.*?^\}\n", source, re.S | re.M)
         if match is None:
             raise AssertionError(f"{name}() is not in {RUN_TESTS}")

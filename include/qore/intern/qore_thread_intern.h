@@ -47,6 +47,7 @@ class RuntimeConfig;
 #include <new>
 
 #include "qore/intern/QoreSandboxLimits.h"
+#include "qore/intern/QoreTypeOwner.h"
 #include "qore/QoreSandboxManager.h"
 
 #ifndef QORE_THREAD_STACK_SIZE
@@ -487,6 +488,10 @@ DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const Abstrac
         const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 
+//! Enters a compiled body in the caller's statement, with the callee's options and the usual stack check.
+DLLLOCAL void enter_compiled_body_options(ExceptionSink* xsink, QoreParseOptions po,
+        const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
 //! saves the thread's current statement, location and runtime parse options and sets only its runtime parse options
 /** As swap_runtime_statement_location() with the thread's current statement and location, which it keeps, in one
     lookup of the thread's data and without a stack check; restored with update_runtime_statement_location()
@@ -547,6 +552,27 @@ DLLLOCAL RuntimeLocationCache get_runtime_location_cache();
     Qore-language module (which executes in the module's own QoreProgram) invoked from a
     sandboxed application program inherits the caller's sandbox. */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
+
+//! returns true if a sandbox governs the calling code itself, not counting the sandbox that the thread inherited from
+//! the code that started it
+/** For Qore::Thread::ThreadCapabilityScope: whether code may set the capabilities of a thread is decided by that
+    code (its Program and the Programs of its callers on the thread, including Programs sandboxed by their flag only,
+    a continued operation's or a task's sandbox, and the provenance of the objects and callbacks it runs in), never
+    by the sandbox of the thread's creator alone: a host's code that no sandbox governs sets the capabilities of the
+    code it runs also in a thread that sandboxed code started.
+*/
+DLLLOCAL bool qore_scope_creator_is_sandboxed();
+
+//! Returns why the calling code may not run ThreadCapabilityScope::call(), or nullptr if it may (qore#6737)
+/** The call is bound to the frame of the code that makes it, so only that code is judged: it must be Qore code that
+    calls the builtin directly (not a call reference to the builtin, which runs it for the reference's caller, nor
+    another builtin, such as call_static_method()), and neither its Program nor the Program running on the thread
+    may be sandboxed (by a manager or by its flag).  Sandboxed callers further up the stack do not count, unlike for
+    a scope object (qore_scope_creator_is_sandboxed()), whose set stays in effect after the call that creates it.
+
+    @param call_name the call name of the builtin's own frame
+*/
+DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
 
 #ifdef DEBUG
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
@@ -638,6 +664,23 @@ DLLLOCAL qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* cal
 */
 DLLLOCAL bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id);
 
+//! Enters a capability scope of the current thread (qorus#867, design/thread-capability-scope.md)
+/** The thread's set becomes \a caps merged over the current set, or \a caps only with \a replace.
+
+    @param level set to the level of the scope, for thread_pop_capability_scope()
+    @param gen set to the identity of the scope, for thread_pop_capability_scope()
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+DLLLOCAL int thread_push_capability_scope(const QoreHashNode* caps, bool replace, size_t& level, uint64_t& gen,
+    ExceptionSink* xsink);
+
+//! Leaves a capability scope, and the scopes still open inside it, if it is open in the current thread
+DLLLOCAL void thread_pop_capability_scope(size_t level, uint64_t gen, ExceptionSink* xsink);
+
+//! Returns the current thread's capability set with a reference, or nullptr if it has none
+DLLLOCAL QoreHashNode* thread_get_capabilities();
+
 //! checks code that a builtin variant flagged with @ref QCF_MODULE_OWNED runs for module code
 /** Module code that runs in its own Program for a caller with restrictions may run code asynchronously, or with
     thread cancellation deferred, only if the code's own Program allows what the caller may not: the module's own
@@ -674,6 +717,14 @@ DLLLOCAL bool qore_caller_is_untrusted();
 /** the caller owns the reference returned; see QoreAbstractModule::isTenantChosen()
 */
 DLLLOCAL QoreSandboxManager* qore_caller_sandbox_ref();
+
+//! Returns the sandbox of the code running on the current thread for all purposes and for policy checks
+/** \a sm is the manager that qore_caller_sandbox_ref() returns, \a policy_sm the manager that a policy check of the
+    same code resolves (qore_find_thread_sandbox_policy_manager_ref()): none under a policy barrier or a system-policy
+    capability; for the sandbox that a Program keeps of the code that creates it or adds code to it.  The caller owns
+    the references returned; may throw std::bad_alloc, and then returns none
+*/
+DLLLOCAL void qore_caller_sandbox_refs(QoreSandboxManager*& sm, QoreSandboxManager*& policy_sm);
 
 //! the Program ID returned when there is no Program
 #define QORE_NO_PROGRAM_ID (~(qore_program_id_t)0)
@@ -725,6 +776,44 @@ DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
     its static initializers and init closure belong to no sandbox, and so do the objects they create.  Every later
     call into the module is governed by its caller as any other call.
 */
+//! The memory accounting of a trusted build (SandboxManager::createTrustedBuildCall()) while the object exists
+/** The memory that the build's own code allocates is charged to no call, the caller's code that it calls to the
+    caller's call budget (see QoreSandboxBudgetStack::suspendCharge()), and the continuations of its work capture none
+    of the caller's budgets
+*/
+class QoreTrustedBuildChargeHelper {
+public:
+    //! Starts it; established() is false if it could not be recorded for lack of memory
+    /** @param creator the Program that created the capability, or nullptr: its sandboxes are entered in the build,
+        so that its memory limit governs the build also when its own code called the capability (it is current
+        already, so entering it does not enter its sandboxes again)
+        @param callers the sandboxes that governed the caller before the build's barrier was set (a referenced manager
+        or composite, which the helper takes over), or nullptr: the code that they govern is the caller's code (see
+        QoreSandboxBudgetStack::suspendCharge())
+    */
+    DLLLOCAL QoreTrustedBuildChargeHelper(QoreProgram* creator, QoreSandboxManager* callers);
+    DLLLOCAL ~QoreTrustedBuildChargeHelper();
+
+    //! returns true if the accounting is in effect
+    DLLLOCAL bool established() const {
+        return started;
+    }
+
+    DLLLOCAL QoreTrustedBuildChargeHelper(const QoreTrustedBuildChargeHelper&) = delete;
+    DLLLOCAL QoreTrustedBuildChargeHelper& operator=(const QoreTrustedBuildChargeHelper&) = delete;
+
+private:
+    //! the sandboxes of the caller (referenced), or nullptr
+    QoreSandboxManager* callers;
+    bool started = false;
+    //! the TID of the thread
+    int tid = 0;
+};
+
+//! Selects the barrier of a trusted build (see QoreModuleInitSandboxBarrierHelper)
+struct QoreTrustedBuildTag {
+};
+
 class QoreModuleInitSandboxBarrierHelper {
 public:
     //! Establishes the barrier for a module that is library code (\a active), or a lift for one that is not
@@ -739,6 +828,14 @@ public:
         be initialized as library code otherwise.
     */
     DLLLOCAL QoreModuleInitSandboxBarrierHelper(bool active);
+
+    //! The barrier of a trusted build (SandboxManager::createTrustedBuildCall()): its loader is trusted
+    /** The code that runs under it is trusted library code built by trusted code, whoever called the capability: no
+        sandbox of the code below the barrier is seen, and none is recorded as the loader's (the capability was created
+        by code that no sandbox governed, and runs a fixed callback)
+    */
+    DLLLOCAL explicit QoreModuleInitSandboxBarrierHelper(const struct QoreTrustedBuildTag&);
+
     DLLLOCAL ~QoreModuleInitSandboxBarrierHelper();
 
     //! returns true if a lift was needed and could not be recorded
@@ -840,6 +937,8 @@ public:
     QoreSandboxManager* provenance_policy_manager = nullptr;
     //! The call budgets of the capturing thread (referenced) for a continuation, empty otherwise
     QoreSandboxBudgetList budgets;
+    //! true if the context was captured in a trusted build (see QoreSandboxBudgetStack::attach())
+    bool in_build = false;
     //! The functional-domain restrictions of the code that created an object or call reference of library module code
     //! (sandbox provenance only; qore#6520)
     /** Recorded when restricted code, or library code that restricted code called, creates the object or call
@@ -852,6 +951,16 @@ public:
     //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
     //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())
     bool module_cleanup_delegate = false;
+    //! True if only the sandbox that the capturing thread inherited from the code that started it governed the
+    //! capture (no sandboxed Program, continued operation or provenance of its own): host code that ran in a thread
+    //! that sandboxed code started.  Such a context does not count for qore_scope_creator_is_sandboxed(),
+    //! as the inherited sandbox itself does not
+    bool inherited_only = false;
+    //! True if the capturing code's current Program is sandboxed (its manager or its flag): the code that started a
+    //! thread with this context was sandboxed code itself (ex: call_async() or parallel_map() with a callable that
+    //! host code created), not the API of a host that starts a thread for a sandboxed caller.  The thread-start
+    //! context of such a thread counts for qore_scope_creator_is_sandboxed()
+    bool capturer_sandboxed = false;
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists
@@ -930,6 +1039,7 @@ public:
 
 private:
     const QoreSandboxContext* old_ctx = nullptr;
+    const QoreSandboxContext* old_start_ctx = nullptr;
     bool active = false;
 };
 
@@ -1634,6 +1744,13 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
 */
 DLLLOCAL bool qore_caller_is_sandboxed();
 
+//! returns true if the calling code may have the process load native code that it chose (a binary module from outside
+//! the module path)
+/** Native code is trusted code: no sandbox governs it.  Trusted code may load it, and code that is not trusted only if
+    it may use uncontrolled APIs: neither its options nor any sandbox that governs it forbid them (qore#6776)
+*/
+DLLLOCAL bool qore_caller_may_load_native_code();
+
 //! returns the domains of \a domain that the code calling a module's user variant that declares them is restricted from
 /** As qore_caller_restricts_domain(), but the initialization of library module code is not a call by the code that
     loads the module; only the restricting functional domains are returned, not the positive options (qore#6337)
@@ -2084,6 +2201,10 @@ public:
             this->parse_options);
     }
 
+    DLLLOCAL QoreProgramLocationHelper(ExceptionSink* xsink, QoreParseOptions po) : has_po(true) {
+        enter_compiled_body_options(xsink, po, statement, loc, parse_options);
+    }
+
     DLLLOCAL QoreProgramLocationHelper(const QoreProgramLocation* loc) : has_po(false) {
         swap_runtime_location(loc, statement, this->loc);
     }
@@ -2101,6 +2222,32 @@ protected:
     const AbstractStatement* statement;
     QoreParseOptions parse_options;
     bool has_po;
+};
+
+//! Restores the thread's runtime location and statement when it goes out of scope
+/** For runtime code that runs Qore code in the frame of its caller, such as the on_exit and on_error handlers of a
+    block, whose statements store their own locations: the caller's code continues in the location that it had, as
+    the AST interpreter restores the location of each statement when it ends (AbstractStatement::exec()), which the
+    IR interpreter and native code assume of the code that they call (see QoreIRInstruction::stmt_loc, qore#6646)
+*/
+class QoreRuntimeLocationRestoreHelper {
+public:
+    DLLLOCAL QoreRuntimeLocationRestoreHelper() : cache(get_runtime_location_cache()), loc(*cache.loc_ptr),
+            statement(*cache.stmt_ptr) {
+    }
+
+    DLLLOCAL ~QoreRuntimeLocationRestoreHelper() {
+        *cache.loc_ptr = loc;
+        *cache.stmt_ptr = statement;
+    }
+
+    QoreRuntimeLocationRestoreHelper(const QoreRuntimeLocationRestoreHelper&) = delete;
+    QoreRuntimeLocationRestoreHelper& operator=(const QoreRuntimeLocationRestoreHelper&) = delete;
+
+private:
+    RuntimeLocationCache cache;
+    const QoreProgramLocation* loc;
+    const AbstractStatement* statement;
 };
 
 class QoreProgramOptionalLocationHelper {
@@ -2260,6 +2407,10 @@ DLLLOCAL cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist);
 DLLLOCAL void thread_push_frame_boundary();
 DLLLOCAL void thread_pop_frame_boundary();
 
+//! Add a declaration whose value lives in a native frame to the result of get_local_vars().
+DLLLOCAL void qore_add_unavailable_local(QoreHashNode& h, const LocalVar& lv, ExceptionSink* xsink);
+//! Report a write that native code could not see from the runtime stack.
+DLLLOCAL void qore_raise_native_local_set_error(const char* name, ExceptionSink* xsink);
 DLLLOCAL QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink);
 //! Returns the number of local variables on the current thread's runtime stack of the current Program, for tests
 DLLLOCAL int64 thread_get_local_var_count(ExceptionSink* xsink);
@@ -2659,6 +2810,94 @@ struct QoreTypeRetirementThread {
 */
 DLLLOCAL uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads);
 
+//! Publishes the current epoch of type retirement in a thread's slot (see qore_type_retire_epoch; issue #6419)
+/** The epoch is read again after it is published: a scan that read the slot before the store is ordered before the
+    second load in the total order of sequentially consistent operations, so that load reads the epoch of the
+    retirement that the scan was made for (or a later one) and synchronizes with its orphaning stores; the thread then
+    reads only tombstones where that retirement orphaned a pointer.  The slot holds the higher epoch afterwards.
+*/
+static inline void qore_publish_type_epoch(std::atomic<uint64_t>& slot) {
+    uint64_t e = qore_type_retire_epoch.load(std::memory_order_seq_cst);
+    slot.store(e, std::memory_order_seq_cst);
+    uint64_t e2 = qore_type_retire_epoch.load(std::memory_order_seq_cst);
+    if (e2 != e) {
+        slot.store(e2, std::memory_order_seq_cst);
+    }
+}
+
+//! Publishes the thread's epoch of type retirement while it reads types outside Qore code (issue #6419)
+/** For library code that reads derived types without a Program context (the orphaning of retired derived types, for
+    example); nothing is done in a thread that runs Qore code or has no thread data
+*/
+class QoreTypeEpochEntryHelper {
+public:
+    DLLLOCAL QoreTypeEpochEntryHelper();
+    DLLLOCAL ~QoreTypeEpochEntryHelper();
+
+private:
+    std::atomic<uint64_t>* slot = nullptr;
+};
+
+//! Makes the thread quiescent while it waits in a builtin's blocking wait made for the program (issue #6419)
+/** The thread's epoch is cleared before the wait and published again after it, unless the thread runs a frame that
+    holds a type read through a derived type (QoreTypeUnsafeFrameHelper); afterwards, the retired declarations that are
+    pending are freed if they can be.  Only for waits that no type check spans: see "Quiescent waits" in
+    design/derived-type-retirement.md for the list and the review of each.
+*/
+class QoreTypeQuiescentWaitHelper {
+public:
+    DLLLOCAL QoreTypeQuiescentWaitHelper();
+    DLLLOCAL ~QoreTypeQuiescentWaitHelper();
+
+    DLLLOCAL QoreTypeQuiescentWaitHelper(const QoreTypeQuiescentWaitHelper&) = delete;
+    DLLLOCAL QoreTypeQuiescentWaitHelper& operator=(const QoreTypeQuiescentWaitHelper&) = delete;
+
+private:
+    std::atomic<uint64_t>* slot = nullptr;
+};
+
+//! Marks a frame that holds a type read through a derived type across the code that it runs (issue #6419)
+/** The waits of the thread are not quiescent while it lives (see QoreTypeQuiescentWaitHelper)
+*/
+class QoreTypeUnsafeFrameHelper {
+public:
+    DLLLOCAL QoreTypeUnsafeFrameHelper();
+    DLLLOCAL ~QoreTypeUnsafeFrameHelper();
+
+    DLLLOCAL QoreTypeUnsafeFrameHelper(const QoreTypeUnsafeFrameHelper&) = delete;
+    DLLLOCAL QoreTypeUnsafeFrameHelper& operator=(const QoreTypeUnsafeFrameHelper&) = delete;
+
+private:
+    void* td;
+};
+
+//! Enters (\a delta 1) or leaves (\a delta -1) a frame that holds a type read through a derived type; see
+//! QoreTypeUnsafeFrameHelper
+DLLLOCAL void qore_type_unsafe_frame_add(int delta);
+//! Returns the number of such frames that the current thread runs (debug checks and tests)
+DLLLOCAL unsigned qore_type_unsafe_frames();
+
+#ifdef DEBUG
+//! Returns true if the current thread has thread data and publishes no epoch of type retirement (issue #6419)
+DLLLOCAL bool qore_thread_has_no_type_epoch();
+
+//! Waits until the thread \a tid has entered \a count builtin waits (QoreTypeQuiescentWaitHelper) or the timeout
+//! has passed; returns true in the first case (debug builds, for the tests of issue #6419)
+DLLLOCAL bool qore_type_dbg_wait_entered(int tid, int64 count, int64 timeout_ms);
+
+//! Returns the number of builtin waits (QoreTypeQuiescentWaitHelper) that the thread \a tid has entered, or -1 if
+//! there is no such thread (debug builds, for the tests of issue #6419)
+DLLLOCAL int64 qore_type_dbg_wait_entries(int tid);
+#endif
+
+//! qore_cancellable_poll() as a quiescent wait (see QoreTypeQuiescentWaitHelper), for the waits of builtins made for
+//! the program: file, stream and backquote I/O (issue #6419)
+static inline int qore_quiescent_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms,
+        ExceptionSink* xsink, const char* operation) {
+    QoreTypeQuiescentWaitHelper qwh;
+    return qore_cancellable_poll(fds, nfds, timeout_ms, xsink, operation);
+}
+
 //! A thread's entry into a Program, counted with its thread count, which is left with
 //! qore_program_private::decThreadCount(*pgm, tid, xsink)
 struct QoreReferenceProgramEntry {
@@ -2846,12 +3085,29 @@ private:
 
     //! switches the thread's context to a Program that is not its current one; see set()
     DLLLOCAL void setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+
+    //! Starts the call budgets of the sandbox managers of the Program entered (see setOtherProgram())
+    /** Out of line, so that the entry into a Program that has no manager, almost every one, keeps no locals whose
+        address is taken (and so no stack protector code)
+    */
+    DLLLOCAL void enterSandboxBudgets(ThreadData* td, qore_program_private* pp);
 };
 
 class ProgramRuntimeParseContextHelper {
 protected:
     QoreProgram* old_pgm;
+    //! the thread's local data before the switch, which the destructor restores
+    ThreadLocalProgramData* old_tlpd;
     bool restore;
+
+    //! switches the thread to the Program locked for parsing: the current Program and its thread-local data
+    /** The thread's local data is switched with the current Program, as code of the Program can run under the parse
+        context: it uses the Program's own data (qore#6537).  The switch is to the thread's existing data in the
+        Program; if the thread has none there, the thread is left with no data, and it is not created here, nor is the
+        Program's thread initialization code run: a runtime entry under the parse context creates it, and a
+        parse-time entry needs none.  The destructor restores the data that the switch replaced.  It cannot fail
+    */
+    DLLLOCAL void switchTo(QoreProgram* pgm);
 
 public:
     DLLLOCAL ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm);
@@ -2887,14 +3143,73 @@ public:
 
 class ProgramRuntimeParseAccessHelper {
 public:
-    DLLLOCAL ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm);
+    //! Enters the Program and switches to its context, unless it is the current Program
+    /** @param xsink for the exception if the Program cannot be entered; also used to leave it
+        @param pgm the Program
+        @param read_only true if the thread only reads the committed data of the Program and runs none of its code (a
+        method lookup): a Program that refuses runtime entry to the thread because code is parsed in it is then entered
+        without switching to its context, so that its teardown waits for the thread (qore#6752)
+    */
+    DLLLOCAL ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm, bool read_only = false);
     DLLLOCAL ~ProgramRuntimeParseAccessHelper();
 
 protected:
     QoreProgram* old_pgm;
+    //! the thread's local data before the switch, which the destructor restores
+    ThreadLocalProgramData* old_tlpd;
     //! receives the exceptions of clearing a Program deleted while this context ran its code
     ExceptionSink* xsink;
+    //! the Program that the thread entered, which it leaves in the destructor, or nullptr
+    QoreProgram* count_pgm = nullptr;
+    //! true if the thread switched to the Program's context
     bool restore;
+};
+
+//! Enters the Program of the class of a native destructor without its context if the Program refuses runtime entry
+/** A destructor implemented in C++ (a builtin or external destructor) runs none of the Qore code of the Program of its
+    class; it only releases the object's private data, as the core does without entering the Program for a builtin
+    class without a destructor, and for any class whose destructor fails.  While code is parsed in that Program
+    (Program::parsePending() before Program::parseCommit(), or after Program::parseRollback() without
+    \c PO_ALLOW_REPARSE), it refuses runtime entry, which made the destruction of the objects that module code created
+    in it meanwhile raise \c PROGRAM-ERROR (module-python: the argument of a module command's exception, the constants
+    of an import; qore#6752).  Such a destructor then runs in the caller's Program instead, as the destructor of a
+    builtin class without a source Program does; the thread enters the class's Program without its context
+    (qore_program_private::enterWithoutContextIfParseRefused()), so that the Program's teardown waits until the
+    destructor has returned.  The thread that deletes the Program needs no entry, as for a reference
+    (qore_reference_program_needs_entry()).
+
+    A destructor implemented in Qore code is not affected: it enters the Program, which refuses it as before.
+*/
+class QoreNativeDestructorProgramEntry {
+public:
+    //! Creates the object without entering any Program; only the Program is initialized, as one is created for
+    //! every destructor call
+    DLLLOCAL QoreNativeDestructorProgramEntry() {
+    }
+
+    DLLLOCAL ~QoreNativeDestructorProgramEntry() {
+        if (pgm) {
+            leave();
+        }
+    }
+
+    //! Returns true if the native destructor must run without the context of \a p, the Program of its class
+    /** If so, the thread has entered \a p without its context, unless it is deleting it, until the destructor of this
+        object
+    */
+    DLLLOCAL bool runWithoutContext(QoreProgram* p, ExceptionSink* xsink);
+
+    DLLLOCAL QoreNativeDestructorProgramEntry(const QoreNativeDestructorProgramEntry&) = delete;
+    DLLLOCAL QoreNativeDestructorProgramEntry& operator=(const QoreNativeDestructorProgramEntry&) = delete;
+
+private:
+    //! the Program that the thread entered, or nullptr; the other members are set when it is set
+    QoreProgram* pgm = nullptr;
+    //! receives the exceptions of leaving the Program
+    ExceptionSink* xsink;
+    int tid;
+
+    DLLLOCAL void leave();
 };
 
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp

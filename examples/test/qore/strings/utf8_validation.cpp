@@ -93,8 +93,34 @@ static Expected reference(const unsigned char* p, size_t len) {
     return {len == n ? n : 0, false};
 }
 
+//! the UTF-8 encoding's character functions use the same definition as the validator (qore#6604): the length of
+//! the character, 0 for a malformed one, minus its length for a truncated one, and the string length with its
+//! validity
+static void check_encoding(const unsigned char* p, size_t len, const Expected& e) {
+    const char* c = reinterpret_cast<const char*>(p);
+    qore_offset_t cl = QCS_UTF8->getCharLen(c, len);
+    bool invalid = false;
+    size_t chars = QCS_UTF8->getLength(c, c + len, invalid);
+    if (e.valid == 0 && !e.incomplete) {
+        require(cl == 0, "getCharLen() of malformed " + hex(p, len) + ": " + std::to_string(cl));
+        require(invalid, "getLength() of malformed " + hex(p, len) + " valid");
+        return;
+    }
+    if (e.incomplete) {
+        // minus the length of the whole character, which the lead byte gives
+        qore_offset_t full = p[0] < 0xe0 ? 2 : (p[0] < 0xf0 ? 3 : 4);
+        require(cl == -full, "getCharLen() of truncated " + hex(p, len) + ": " + std::to_string(cl));
+        require(invalid, "getLength() of truncated " + hex(p, len) + " valid");
+        return;
+    }
+    require(cl == static_cast<qore_offset_t>(len),
+        "getCharLen() of well-formed " + hex(p, len) + ": " + std::to_string(cl));
+    require(!invalid && chars == 1, "getLength() of well-formed " + hex(p, len) + ": " + std::to_string(chars));
+}
+
 static void check(const unsigned char* p, size_t len) {
     Expected e = reference(p, len);
+    check_encoding(p, len, e);
     bool incomplete = true;
     size_t valid = IconvHelper::validUtf8Prefix(reinterpret_cast<const char*>(p), len, incomplete);
     // a sequence longer than one character: the validator also checks the rest, the reference only the first
@@ -160,6 +186,56 @@ static void check_all() {
     require(IconvHelper::validUtf8Prefix(truncated, strlen(truncated), incomplete) == 2 && incomplete,
         "prefix before a truncated sequence");
     require(IconvHelper::validUtf8Prefix("", 0, incomplete) == 0 && !incomplete, "empty input");
+}
+
+//! a character after any number of ASCII bytes, and text with short ASCII runs between other characters: the validator
+//! and the string length give the result of the reference (qore#6604)
+static void check_ascii_runs() {
+    struct Seq {
+        const char* bytes;
+        // the result after the ASCII prefix: 1 = valid, 0 = malformed, -1 = truncated at the end of the input
+        int kind;
+    };
+    static const Seq seqs[] = {
+        {"\xc3\xa9", 1}, {"\xe2\x82\xac", 1}, {"\xf0\x9f\x98\x80", 1}, {"\x80", 0}, {"\xc0\xaf", 0},
+        {"\xed\xa0\x80", 0}, {"\xf4\x90\x80\x80", 0}, {"\xff", 0}, {"\xc3", -1}, {"\xe2\x82", -1},
+    };
+    for (size_t k = 0; k <= 24; ++k) {
+        for (const Seq& q : seqs) {
+            for (size_t after : {static_cast<size_t>(0), static_cast<size_t>(3), static_cast<size_t>(11)}) {
+                // a truncated sequence is truncated only at the end of the input
+                if (q.kind < 0 && after) {
+                    continue;
+                }
+                std::string in = std::string(k, 'a') + q.bytes + std::string(after, 'b');
+                bool incomplete = q.kind >= 0;
+                size_t valid = IconvHelper::validUtf8Prefix(in.data(), in.size(), incomplete);
+                std::string label = std::to_string(k) + " ASCII bytes + " +
+                    hex(reinterpret_cast<const unsigned char*>(q.bytes), strlen(q.bytes)) + " + " +
+                    std::to_string(after);
+                if (q.kind == 1) {
+                    require(valid == in.size() && !incomplete, "valid " + label);
+                } else {
+                    require(valid == k && incomplete == (q.kind < 0), "prefix of " + label);
+                }
+                bool invalid = false;
+                size_t chars = QCS_UTF8->getLength(in.data(), in.data() + in.size(), invalid);
+                size_t expected_chars = q.kind == 1 ? k + 1 + after : k;
+                require(invalid == (q.kind != 1) && chars == expected_chars, "getLength() of " + label);
+            }
+        }
+    }
+    // short ASCII runs between other characters, then an invalid byte after them
+    std::string text;
+    for (int i = 0; i < 64; ++i) {
+        text += "caf\xc3\xa9 na\xc3\xafve r\xc3\xa9sum\xc3\xa9 ";
+    }
+    bool incomplete = true;
+    require(IconvHelper::validUtf8Prefix(text.data(), text.size(), incomplete) == text.size() && !incomplete,
+        "short ASCII runs");
+    std::string bad = text + "x\x80";
+    require(IconvHelper::validUtf8Prefix(bad.data(), bad.size(), incomplete) == text.size() + 1 && !incomplete,
+        "an invalid byte after short ASCII runs");
 }
 
 //! clears a cancellation request of the current thread
@@ -238,13 +314,78 @@ static void check_conversion() {
     }
 }
 
+// the public check of the text of a parser or another input (q_get_invalid_text_offset(), q_check_text_encoding())
+static void check_public_api() {
+    struct Case {
+        const QoreEncoding* enc;
+        const char* bytes;
+        size_t len;
+        qore_offset_t offset;
+    };
+    const QoreEncoding* sjis = QEM.findCreate("Shift_JIS");
+    const QoreEncoding* utf32 = QEM.findCreate("UTF-32");
+    const Case cases[] = {
+        {QCS_UTF8, "", 0, -1},
+        {QCS_UTF8, "abc", 3, -1},
+        {QCS_UTF8, "a\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80", 10, -1},
+        {QCS_UTF8, "ab\xe9", 3, 2},
+        {QCS_UTF8, "a\xed\xa0\x80" "b", 5, 1},          // a surrogate
+        {QCS_UTF8, "abc\xc0\xaf" "d", 6, 3},             // an overlong form
+        {QCS_UTF8, "\xf4\x90\x80\x80", 4, 0},          // above U+10FFFF
+        {QCS_UTF8, "ab\xe2\x82", 4, 2},               // cut off by the end of the text
+        {QCS_UTF8, "a\0b\xff", 4, 3},                 // a NUL byte is a character
+        {QCS_ISO_8859_1, "\xe9\xff\x80", 3, -1},       // a single-byte encoding has no invalid bytes
+        {QCS_USASCII, "ab\x80", 3, 2},
+        {sjis, "a\x83\x5c", 3, -1},
+        {sjis, "a\x83", 2, 1},
+        {QCS_UTF16LE, "a\0\0\xd8", 4, 2},             // a lone high surrogate
+        // the generic UTF-16: a byte order mark gives the byte order ("Ü" is dc 00 in UTF-16LE, a lone low
+        // surrogate if read as UTF-16BE); without one, the text is UTF-16BE
+        {QCS_UTF16, "\xff\xfe\xdc\0a\0", 6, -1},
+        {QCS_UTF16, "\xfe\xff\0\xdc\0a", 6, -1},
+        {QCS_UTF16, "\0\xdc", 2, -1},
+        {QCS_UTF16, "\xff\xfe" "a\0\0\xd8", 6, 4},        // a lone high surrogate after the byte order mark
+        {QCS_UTF16, "\xdc\0", 2, 0},                    // no byte order mark: a lone low surrogate in UTF-16BE
+        // UTF-32, created on the fly (big-endian): a little-endian byte order mark gives the byte order
+        {utf32, "\xff\xfe\0\0\xdc\0\0\0", 8, -1},
+        {utf32, "\0\0\xfe\xff\0\0\0\xdc", 8, -1},
+        {utf32, "\xff\xfe\0\0\0\xd8\0\0", 8, 4},     // a surrogate after the byte order mark
+        {utf32, "\xff\xfe\0\0\0\0\x11\0", 8, 4},     // above U+10FFFF after the byte order mark
+    };
+    for (const Case& c : cases) {
+        std::string label = std::string(c.enc->getCode()) + " " + hex(reinterpret_cast<const unsigned char*>(c.bytes),
+            c.len);
+        require(q_get_invalid_text_offset(c.enc, c.bytes, c.len) == c.offset, "q_get_invalid_text_offset() of "
+            + label);
+        ExceptionSink xsink;
+        int rc = q_check_text_encoding(c.enc, c.bytes, c.len, "test()", "test text", &xsink);
+        if (c.offset < 0) {
+            require(!rc && !xsink, "q_check_text_encoding() of valid " + label + " raised an exception");
+            continue;
+        }
+        require(rc == -1 && xsink, "q_check_text_encoding() of " + label + " raised no exception");
+        QoreValue err = xsink.getExceptionErr();
+        QoreValue desc = xsink.getExceptionDesc();
+        require(err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "INVALID-ENCODING"),
+            "q_check_text_encoding() of " + label + " raised another exception");
+        std::string expected = std::string("test(): the test text is not valid ") + c.enc->getCode()
+            + ": invalid byte sequence at byte offset " + std::to_string(c.offset);
+        require(desc.getType() == NT_STRING && expected == desc.get<const QoreStringNode>()->c_str(),
+            "q_check_text_encoding() of " + label + ": description: "
+                + (desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "(none)"));
+        xsink.clear();
+    }
+}
+
 int main() {
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
     int status = 0;
     try {
         check_all();
+        check_ascii_runs();
         check_cancellation();
         check_conversion();
+        check_public_api();
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAIL: %s\n", error.what());
         status = 1;

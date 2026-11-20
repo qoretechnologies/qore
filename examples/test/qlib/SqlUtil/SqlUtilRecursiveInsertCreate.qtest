@@ -434,10 +434,19 @@ class SqlUtilRecursiveInsertCreateTest inherits QUnit::Test {
         assertThrows("VALUE-ERROR", "invalid", lit, invalid);
         assertThrows("VALUE-ERROR", "invalid", lit, binary_to_string(<ff27>, "UTF-8"));
         assertThrows("VALUE-ERROR", "NUL", lit, binary_to_string(<610062>, "UTF-8"));
-        # a lone surrogate in a UTF-16 string
-        assertThrows("VALUE-ERROR", "surrogate", lit, binary_to_string(<d8000061>, "UTF-16BE"));
-        assertThrows("VALUE-ERROR", "surrogate", lit, binary_to_string(<dc00>, "UTF-16BE"));
+        # a lone surrogate in a UTF-16 string: the string is not valid UTF-16, which its conversion refuses
+        # (qore#6730)
+        assertThrows("VALUE-ERROR", "invalid UTF-16BE encoding.*INVALID-ENCODING", lit,
+            binary_to_string(<d8000061>, "UTF-16BE"));
+        assertThrows("VALUE-ERROR", "invalid UTF-16BE encoding.*INVALID-ENCODING", lit,
+            binary_to_string(<dc00>, "UTF-16BE"));
         assertThrows("VALUE-ERROR", lit, binary_to_string(<d800>, "UTF-16BE"));
+        # a lone surrogate in a string of another encoding is refused by the conversion too, which is the only check
+        # of surrogates that the literal has
+        foreach list<auto> l in ((<00d86100>, "UTF-16LE"), (<0000d800>, "UTF-32BE"), (<61eda08062>, "UTF-8"),
+                (<fffe00d8>, "UTF-16")) {
+            assertThrows("VALUE-ERROR", "invalid", lit, binary_to_string(l[0], l[1]));
+        }
         assertEq("UNISTR('\\D83D\\DE00')", lit(binary_to_string(<d83dde00>, "UTF-16BE")));
         assertEq(2010, lit(strmul("a", 2000)).size());
         assertThrows("VALUE-ERROR", "2000", lit, strmul("a", 2001));

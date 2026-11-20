@@ -99,11 +99,11 @@ public class CsvReadOptionMetadataTest inherits QUnit::Test {
         assertNeq(read(headers), read(headers + {"header_reorder": False}));
 
         # every option with a default in the reader code declares it
-        assertEq(("encoding", "header_lines", "header_names", "header_reorder", "ignore_empty", "ignore_whitespace",
-            "quote", "quote_escape", "separator", "tolwr", "verify_columns"),
+        assertEq(("encoding", "encoding_errors", "header_lines", "header_names", "header_reorder", "ignore_empty",
+            "ignore_whitespace", "quote", "quote_escape", "separator", "tolwr", "verify_columns"),
             sort(keys (map {$1.key: True}, CsvReadDataProvider::ConstructorOptions.pairIterator(),
                 exists $1.value.default_value)));
-        assertEq(11, checked);
+        assertEq(12, checked);
     }
 
     private interactionTest() {

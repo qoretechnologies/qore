@@ -38,6 +38,7 @@
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/xxhash.h"
 #include "qore/intern/QoreModuleSourceFingerprints.h"
 
@@ -780,6 +781,8 @@ static bool code_frames = false;
 static bool show_help = false;
 static bool show_version = false;
 static bool dump_info = false;
+//! --check-module-sources: whether the sources of AOT modules of a build have changed since they were compiled
+static bool check_module_sources = false;
 static bool dump_symbols = false;
 static bool dump_sections = false;
 static bool dump_index_json = false;
@@ -1457,6 +1460,12 @@ static void print_usage(const char* prog) {
     printf("      --dump-symbols     Include an nm-like symbol table view\n");
     printf("      --dump-sections    Include object and AOT section tables\n");
     printf("      --dump-index-json  Emit build-consumable AOT symbol-index JSON\n");
+    printf("      --check-module-sources <qmod|@list-file>...\n"
+           "                         For the build of AOT modules: rewrite <qmod>.sources.stamp\n"
+           "                         for each module that the module loader would find out of\n"
+           "                         date (a source or dependency of its depfile with another\n"
+           "                         content, or an optional module that is available now);\n"
+           "                         fails if a module cannot be checked\n");
     printf("\n");
     printf("Examples:\n");
     printf("  %s script.qr                   # Compile to 'script' executable\n", prog);
@@ -1482,6 +1491,10 @@ static void print_version() {
     printf("qcc (Qore Code Compiler) v%s\n", QCC_VERSION);
     printf("Using Qore library v%s\n", qore_version_string);
     printf("AOT runtime identity: %s\n", qore_aot_runtime_identity);
+    // the version of the format of the images that this qcc writes (a test skips what an earlier format lacks)
+    printf("AOT binary format: %u\n", (unsigned)QORE_AOT_BINARY_VERSION);
+    // the build checks the AOT modules with this qcc (QoreMacros.cmake, qore#6598)
+    printf("Build checks: module-sources\n");
     printf("Built with LLVM for JIT/AOT compilation\n");
 #ifdef QORE_QCC_TEST_HOOKS
     // the tests that need them skip without them (see QORE_QCC_TEST_HOOKS in CMakeLists.txt)
@@ -1563,6 +1576,7 @@ static struct option long_options[] = {
     {"declaration-contract-stamp", required_argument, nullptr, 0x12b},
     {"diag-format",       required_argument, nullptr, 0x12c},
     {"code-frames",       no_argument,       nullptr, 0x12d},
+    {"check-module-sources", no_argument, nullptr, 0x12e},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1670,6 +1684,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x105:  // --dump-info
                 dump_info = true;
+                break;
+            case 0x12e:  // --check-module-sources
+                check_module_sources = true;
                 break;
             case 0x106:  // --dump-symbols
                 dump_symbols = true;
@@ -2942,9 +2959,14 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         }
 
         case AOTExprKind::DOT_EVAL_TARGET: {
+            uint8_t flags;
+            const char* owner = nullptr;
             if (!dump_skip_string_ref(reader, p, end)
                     || !dump_skip_string_ref(reader, p, end)
-                    || !dump_skip_bytes(p, end, 1)) {
+                    || !dump_read_u8(p, end, flags)
+                    || !qore_aot_valid_dot_target_flags(flags, slot_form)
+                    || ((flags & QORE_AOT_DOT_EVAL_TARGET_FAMILY)
+                        && (!dump_skip_string_ref(reader, p, end, &owner) || !owner || !*owner))) {
                 return false;
             }
             if (!slot_form) {
@@ -8448,6 +8470,95 @@ static void add_existing_qo_inputs_from_args(std::vector<std::string>& inputs,
     }
 }
 
+//! qcc --check-module-sources: rewrites the sources stamp of each AOT module of a build that the module loader would
+//! find out of date (qore#6598)
+/** The build (QoreMacros.cmake) runs it once before the modules are compiled, with the modules of the build tree in
+    a list file (\c \@file) or as arguments; each module depends on <tt>\<module\>.sources.stamp</tt>, which is
+    rewritten only for a module that qore_aot_check_module_sources() finds out of date, so that the build compiles it
+    again.  A stamp that does not exist is made with a modification time older than any module, so that it does not
+    make a module out of date by itself.  A module that does not exist is not checked (it is compiled anyway).
+
+    @return 0 if every module was checked; 1 if a module could not be checked, which fails the build (the module and
+    the dependency are named)
+*/
+static int run_check_module_sources(int nargs, char** args) {
+    std::vector<std::string> qmods;
+    for (int i = 0; i < nargs; ++i) {
+        if (args[i][0] != '@') {
+            qmods.emplace_back(args[i]);
+            continue;
+        }
+        std::ifstream list(args[i] + 1);
+        if (!list) {
+            fprintf(stderr, "error: --check-module-sources: cannot read the module list '%s'\n", args[i] + 1);
+            return 1;
+        }
+        std::string line;
+        while (std::getline(list, line)) {
+            if (!line.empty()) {
+                qmods.emplace_back(std::move(line));
+            }
+        }
+        if (list.bad()) {
+            fprintf(stderr, "error: --check-module-sources: cannot read the module list '%s'\n", args[i] + 1);
+            return 1;
+        }
+    }
+
+    int rc = 0;
+    for (size_t i = 0; i < qmods.size(); ++i) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT module source check")) {
+            return 1;
+        }
+        const std::string& qmod = qmods[i];
+        std::string stamp = qmod + ".sources.stamp";
+        struct stat sb;
+        if (stat(stamp.c_str(), &sb)) {
+            FILE* f = fopen(stamp.c_str(), "w");
+            if (!f) {
+                fprintf(stderr, "error: --check-module-sources: cannot write '%s': %s\n", stamp.c_str(),
+                    strerror(errno));
+                rc = 1;
+                continue;
+            }
+            fclose(f);
+            struct utimbuf old_time = {0, 0};
+            if (utime(stamp.c_str(), &old_time)) {
+                fprintf(stderr, "error: --check-module-sources: cannot set the time of '%s': %s\n", stamp.c_str(),
+                    strerror(errno));
+                rc = 1;
+                continue;
+            }
+        }
+        if (stat(qmod.c_str(), &sb)) {
+            continue;
+        }
+        std::string reason, dependency, error;
+        switch (qore_aot_check_module_sources(qmod.c_str(), reason, dependency, error)) {
+            case QoreAOTModuleCheck::CURRENT:
+                break;
+            case QoreAOTModuleCheck::STALE: {
+                printf("qcc: AOT module '%s' is out of date: %s%s%s%s\n", qmod.c_str(), reason.c_str(),
+                    dependency.empty() ? "" : " ('", dependency.c_str(), dependency.empty() ? "" : "')");
+                FILE* f = fopen(stamp.c_str(), "w");
+                if (!f || fprintf(f, "%s: %s\n", reason.c_str(), dependency.c_str()) < 0 || fclose(f)) {
+                    fprintf(stderr, "error: --check-module-sources: cannot write '%s': %s\n", stamp.c_str(),
+                        strerror(errno));
+                    rc = 1;
+                }
+                break;
+            }
+            case QoreAOTModuleCheck::ERROR:
+                fprintf(stderr, "error: cannot check AOT module '%s'%s%s%s: %s\n", qmod.c_str(),
+                    dependency.empty() ? "" : " (dependency '", dependency.c_str(), dependency.empty() ? "" : "')",
+                    error.c_str());
+                rc = 1;
+                break;
+        }
+    }
+    return rc;
+}
+
 //! Prints the AOT module metadata that qcc stores in a section of a qmod's image
 /** The loader reads the same metadata before it maps the module; see QoreAOTModuleFileInfo.
 */
@@ -10101,6 +10212,17 @@ int main(int argc, char** argv) {
     if (dump_symbols || dump_sections) {
         dump_info = true;
     }
+    if (check_module_sources) {
+        if (optind >= argc) {
+            fprintf(stderr, "error: --check-module-sources requires at least one AOT module path or list file\n");
+            return 1;
+        }
+        qcc_init_qore();
+        int rc = run_check_module_sources(argc - optind, argv + optind);
+        qore_cleanup();
+        return rc;
+    }
+
     if (dump_info) {
         if (optind >= argc) {
             fprintf(stderr, "error: --dump-info requires at least one binary/object path\n");

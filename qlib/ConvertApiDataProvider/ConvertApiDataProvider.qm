@@ -60,6 +60,17 @@ module ConvertApiDataProvider {
                 "**Actions**: `convert-file` runs any converter by its source and destination formats; the other "
                 "actions are shortcuts for common conversions.",
             "scheme": "convertapi",
+            # the files are converted by ConvertAPI; plans include conversions, and further ones are billed each
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "convertapi.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "unit": "conversion",
+                "source": "https://www.convertapi.com/prices",
+                "effective_date": 2026-11-20,
+            },
             "logo": ConvertApiDataProvider::ConvertApiLogo,
             "logo_file_name": "convertapi-logo.svg",
             "logo_mime_type": MimeTypeSvg,

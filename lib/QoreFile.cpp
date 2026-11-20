@@ -165,7 +165,7 @@ int qore_fd_wait_ready(int fd, bool read, ExceptionSink* xsink, const char* oper
     if (xsink) {
         // the wait ends at once when the thread is cancelled or its Program is interrupted; a named pipe is waited on
         // with select(2) on Darwin, where poll(2) misses its hang-up (see QorePollCompat.h)
-        int rc = qore_cancellable_poll(&pfd, 1, -1, xsink, operation);
+        int rc = qore_quiescent_cancellable_poll(&pfd, 1, -1, xsink, operation);
         if (rc == QORE_POLL_CANCELLED) {
             return QORE_POLL_CANCELLED;
         }
@@ -418,7 +418,14 @@ QoreHashNode* FileReadPollOperationBase::continuePoll(ExceptionSink* xsink) {
                 ok = false;
             } else {
                 nbuf[len] = '\0';
-                data = new QoreStringNode(nbuf, len, len + 1, file->getEncoding());
+                SimpleRefHolder<QoreStringNode> str(new QoreStringNode(nbuf, len, len + 1, file->getEncoding()));
+                // a character cut off by the limit of bytes read is not an error
+                if (q_check_read_text(**str, file->priv->encoding_errors, "ReadOnlyFile", "startPollRead",
+                        "text read", xsink, 0, max_bytes > 0 && len == static_cast<size_t>(max_bytes))) {
+                    ok = false;
+                } else {
+                    data = str.release();
+                }
             }
         } else {
             data = d.release();
@@ -439,6 +446,7 @@ QoreHashNode* FileReadPollOperationBase::continuePoll(ExceptionSink* xsink) {
 
 FileReadPollOperation::FileReadPollOperation(ExceptionSink* xsink, File* file, const char* path, ssize_t size,
         bool to_string) : FileReadPollOperationBase(file, to_string), path(path), size(size) {
+    max_bytes = size;
     // the file is opened directly below, so the sandbox policy must be checked here as for QoreFile::open2()
     if (qore_qf_private::checkOpenAccess(path, O_RDONLY, xsink)) {
         return;
@@ -950,60 +958,95 @@ size_t QoreFile::getPos() const {
 }
 
 QoreStringNode* QoreFile::getchar(ExceptionSink* xsink) {
-    {
-        AutoLocker al(priv->m);
-        if (priv->checkNonBlock(xsink) || priv->checkReadOpen(xsink)) {
+    AutoLocker al(priv->m);
+    if (priv->checkNonBlock(xsink) || priv->checkReadOpen(xsink)) {
+        return nullptr;
+    }
+
+    // a character of text in a stateful encoding is read in the shift state left by the text read before it
+    if (priv->useDecoder(true)) {
+        return priv->readDecoderChar(xsink);
+    }
+
+    const QoreEncoding* enc = priv->charset;
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
+
+    int c = priv->readChar(xsink);
+    if (c < 0) {
+        return nullptr;
+    }
+
+    str->concat((char)c);
+    if (!enc->isMultiByte()) {
+        // a single-byte encoding: only US-ASCII has bytes that are not characters
+        if (q_check_read_text(**str, priv->encoding_errors, "ReadOnlyFile", "getchar", "character read", xsink)) {
             return nullptr;
-        }
-
-        // a character of text in a stateful encoding is read in the shift state left by the text read before it
-        if (priv->useDecoder(true)) {
-            return priv->readDecoderChar(xsink);
-        }
-
-        SimpleRefHolder<QoreStringNode> str(new QoreStringNode(priv->charset));
-
-        int c = priv->readChar(xsink);
-        if (c < 0) {
-            return nullptr;
-        }
-
-        str->concat((char)c);
-        if (!priv->charset->isMultiByte()) {
-            return str.release();
-        }
-
-        // read in more characters for multi-byte chars if needed
-        qore_offset_t rc = priv->charset->getCharLen(str->c_str(), 1);
-        if (!rc) {
-            xsink->raiseException("FILE-GETCHAR-ERROR", "invalid multi-byte character received: initial byte 0x%x "
-                "is an invalid initial character for '%s' character encoding", c, priv->charset->getCode());
-            return nullptr;
-        }
-
-        // rc == 1: we have a valid character already with the single byte
-        if (rc == 1)
-            return str.release();
-
-        assert(rc < 0);
-        rc = -rc;
-        while (--rc) {
-            c = priv->readChar(xsink);
-            if (c < 0) {
-                // a wait for data that was cancelled has raised its exception
-                if (*xsink) {
-                    return nullptr;
-                }
-                xsink->raiseException("FILE-GETCHAR-ERROR", "invalid multi-byte character received: EOF "
-                    "encountered after %lu byte%s read of a %lu byte string with %s encoding", str->strlen(),
-                    str->strlen() == 1 ? "" : "s", str->strlen() + rc + 1, priv->charset->getCode());
-                return nullptr;
-            }
-
-            str->concat((char)c);
         }
         return str.release();
     }
+
+    // the bytes of a multi-byte character are read one at a time, and each byte is checked as it is read, so that
+    // no byte after an invalid one is read, except for the rest of its code unit (qore#6620)
+    // true if the bytes read start with an invalid code unit (and are not a character cut off by the end of the file)
+    bool invalid_unit = false;
+    while (true) {
+        qore_offset_t rc = enc->getCharLen(str->c_str(), str->size());
+        if (rc > 0) {
+            assert((size_t)rc == str->size());
+            return str.release();
+        }
+        // a character function that asks for more bytes than a character of the encoding has is not followed
+        if (!rc || str->size() >= (size_t)enc->getMaxCharWidth()) {
+            invalid_unit = !rc;
+            // an invalid byte sequence
+            break;
+        }
+        c = priv->readChar(xsink);
+        if (c < 0) {
+            // a wait for data that was cancelled has raised its exception
+            if (*xsink) {
+                return nullptr;
+            }
+            // the character is cut off by the end of the file
+            break;
+        }
+        str->concat((char)c);
+    }
+
+    // in an encoding of code units of more than one byte (UTF-16, UTF-32), the rest of the last code unit is read,
+    // so that the next read starts at a code unit boundary, in either byte order
+    const size_t unit = enc->getMinCharWidth();
+    while (unit > 1 && (str->size() % unit)) {
+        c = priv->readChar(xsink);
+        if (c < 0) {
+            if (*xsink) {
+                return nullptr;
+            }
+            break;
+        }
+        str->concat((char)c);
+    }
+
+    // the invalid sequence is its first code unit: in a regular file, the bytes read after it are given back, so
+    // that the next character read starts after the invalid code unit (ex: UTF-8 E2 41: the 0x41 is the next
+    // character read; UTF-16LE 3D D8 41 00, an unpaired surrogate: "A" is); on a pipe or a device, they stay
+    // consumed and are returned with it
+    if (invalid_unit && str->size() > unit && priv->isRegularFile()) {
+        size_t extra = str->size() - unit;
+        if (lseek(priv->fd, -static_cast<off_t>(extra), SEEK_CUR) >= 0) {
+            str->terminate(unit);
+        }
+    }
+
+    // the bytes read are not a valid character
+    if (priv->encoding_errors == qore_encoding_errors_t::RAISE) {
+        q_raise_invalid_read_text(xsink, "ReadOnlyFile", "getchar", "character read", enc, 0);
+        return nullptr;
+    }
+    if (priv->encoding_errors == qore_encoding_errors_t::LATIN1) {
+        str->setEncoding(QCS_ISO_8859_1);
+    }
+    return str.release();
 }
 
 QoreStringNode* QoreFile::getchar() {
@@ -1077,6 +1120,8 @@ int QoreFile::read(QoreString &str, qore_offset_t size, ExceptionSink* xsink) {
     if (!size) {
         return 0;
     }
+    // the number of bytes requested; readBlock() sets size to the number of bytes read
+    const qore_offset_t req_size = size;
 
     char *buf;
     {
@@ -1092,6 +1137,11 @@ int QoreFile::read(QoreString &str, qore_offset_t size, ExceptionSink* xsink) {
     }
 
     str.takeAndTerminate(buf, size, priv->charset);
+    // a character cut off by the number of bytes read is not an error
+    if (q_check_read_text(str, priv->encoding_errors, "ReadOnlyFile", "read", "text read", xsink, 0,
+            req_size > 0 && size == req_size)) {
+        return -1;
+    }
     return 0;
 }
 

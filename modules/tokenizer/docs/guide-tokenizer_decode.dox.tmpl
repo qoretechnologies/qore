@@ -13,4 +13,17 @@ string with_special = tok.decode(enc.input_ids);
 string clean = tok.decode(enc.input_ids, True);
 # "hello , world !"
     @endcode
+
+    Decoded text is UTF-8.  IDs that give only a part of a character, as when the IDs of a text are decoded in
+    parts, give the replacement character U+FFFD for the part, as in Hugging Face tokenizers (see
+    @ref tokenizer_text_encoding):
+
+    @code{.py}
+# GPT-2: "😀" is two byte-level tokens
+hash<auto> enc = tok.encode("😀");
+string part = tok.decode(enc.input_ids[0..0]);
+# "�" (UTF-8)
+string whole = tok.decode(enc.input_ids);
+# "😀"
+    @endcode
 */

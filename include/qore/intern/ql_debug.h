@@ -148,6 +148,11 @@ DLLLOCAL extern std::atomic<qore_dbg_file_read_ready_hook_t> qore_dbg_file_read_
 typedef void (*qore_dbg_reference_lvalue_hook_t)(int64 value);
 DLLLOCAL extern std::atomic<qore_dbg_reference_lvalue_hook_t> qore_dbg_reference_lvalue_hook;
 
+//! called by qore_removed_object_needs_scan() after it has compared the sets of a removed object and of the object
+//! that it was removed from, before it reads the set; set by dbg_hold_removed_object_scan() (#6792)
+typedef void (*qore_dbg_removed_object_scan_hook_t)();
+DLLLOCAL extern std::atomic<qore_dbg_removed_object_scan_hook_t> qore_dbg_removed_object_scan_hook;
+
 typedef void (*qore_dbg_closure_var_decide_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure_var_decide_hook;
 

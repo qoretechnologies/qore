@@ -85,7 +85,9 @@ class HashKeyNulTest inherits QUnit::Test {
         expected = lines.join("\n") + "\n";
 
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
-            addTestCase(mode, sub () { checkMode(mode); });
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase(mode, sub () { checkMode(mode_value); });
         }
         addTestCase("tiered, promoted", \checkPromoted());
         addTestCase("AOT", \checkAot());

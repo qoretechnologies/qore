@@ -388,7 +388,7 @@ class A2aClientTest inherits QUnit::Test {
 
         # Set callbacks
         bool status_callback_called = False;
-        client.setCallback("onTaskStatusUpdate", sub (hash<auto> event) {
+        client.setCallback("onTaskStatusUpdate", sub (string kind, hash<auto> event) {
             status_callback_called = True;
         });
 
@@ -397,8 +397,8 @@ class A2aClientTest inherits QUnit::Test {
         assertTrue(True, "Callback removal should work");
 
         # Set multiple callbacks
-        client.setCallback("onTaskArtifactUpdate", sub (hash<auto> event) {});
-        client.setCallback("onTaskMessageUpdate", sub (hash<auto> event) {});
+        client.setCallback("onTaskArtifactUpdate", sub (string kind, hash<auto> event) {});
+        client.setCallback("onTaskMessageUpdate", sub (string kind, hash<auto> event) {});
         assertTrue(True, "Multiple callbacks should work");
 
         client.close();

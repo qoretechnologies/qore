@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of handlers run out of line in the cleanups of a return
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include HandlerReturnPastCap.qc
+
+%exec-class HandlerReturnPastCapPart1
+
+#! runs part 1 of 2 of the cases of HandlerReturnPastCapBase: the AST interpreter, the IR interpreter, the IR tier and JIT
+class HandlerReturnPastCapPart1 inherits HandlerReturnPastCapBase {
+    constructor() : HandlerReturnPastCapBase("HandlerReturnPastCapPart1", 1) {
+    }
+}

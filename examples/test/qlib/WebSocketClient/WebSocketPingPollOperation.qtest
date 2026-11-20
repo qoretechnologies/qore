@@ -35,30 +35,60 @@ class RecordingWsHandler inherits WebSocketHandler {
     }
 }
 
-#! An HTTP handler that returns status codes and blocks requests to /block until released
+#! A ping operation whose deadline the test sets once the server holds its request
+class DeadlinePingPollOperation inherits WebSocketPingPollOperation {
+    constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers, *Logger::LoggerInterface logger)
+            : WebSocketPingPollOperation(base_url, http_opts, headers, logger) {
+        # no deadline (not even the connection manager's default request timeout) until the test sets one
+        setDeadlineTimeout(0);
+    }
+
+    #! Sets the deadline of the operation to the given time from now
+    setDeadline(timeout to) {
+        setDeadlineTimeout(to);
+    }
+}
+
+#! An HTTP handler that returns status codes and holds the requests to /block/<name> on the latch of the name
+/** Each test case blocks requests with a name of its own, so that a request of another case that arrives late, and
+    a release of another case, cannot touch its latch.
+*/
 class StatusHandler inherits AbstractHttpRequestHandler {
-    public {
-        #! Signaled when a request is blocked in the handler
-        Queue entered();
-    }
-
     private {
-        #! Blocked requests wait on this queue
-        Queue gate();
+        Mutex m();
+        #! The latch of each name: \c entered is signaled when a request is held, which waits on \c gate
+        hash<string, hash<string, Queue>> latches();
     }
 
-    #! Releases a blocked request
-    release() {
-        gate.push(True);
+    #! Returns the queue signaled when a request to /block/<name> is held in the handler
+    Queue entered(string name) {
+        return getLatch(name).entered;
+    }
+
+    #! Releases the requests to /block/<name>, also those that arrive later
+    release(string name) {
+        getLatch(name).gate.push(True);
     }
 
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        if (cx.raw_path == "/block") {
-            entered.push(True);
+        *string name = (cx.raw_path =~ x/^\/block\/(.+)$/)[0];
+        if (name) {
+            hash<string, Queue> latch = getLatch(name);
+            latch.entered.push(True);
             # bounded so that a failing test cannot leave the server thread blocked forever
-            gate.get(60s);
+            bool token = latch.gate.get(60s);
+            # the release lets every later request of the name through
+            latch.gate.push(token);
         }
         return makeResponse(404, "not found", {"Content-Type": MimeTypeText});
+    }
+
+    private hash<string, Queue> getLatch(string name) {
+        AutoLock al(m);
+        if (!latches{name}) {
+            latches{name} = {"entered": new Queue(), "gate": new Queue()};
+        }
+        return latches{name};
     }
 }
 
@@ -124,11 +154,14 @@ class ResultPollingConnectionMonitor inherits PollingConnectionMonitor {
     }
 
     constructor() : PollingConnectionMonitor() {
-        ping_timeout = 20s;
+        # no timeout of the monitor: a ping ends with its handshake, whatever the load of the machine, so that the
+        # result does not depend on the time it takes (the operation's own default deadline of 60s still bounds it)
+        ping_timeout = -1ms;
     }
 
     hash<auto> waitForResult() {
-        return msgq.get(30s);
+        # a hang guard only, after the operation's own deadline
+        return msgq.get(90s);
     }
 
     private failedToStartPing(string name, hash<ExceptionInfo> ex) {
@@ -154,6 +187,11 @@ class ResultPollingConnectionMonitor inherits PollingConnectionMonitor {
 
 public class WebSocketPingPollOperationTest inherits QUnit::Test {
     private {
+        #! The description of the timeout of a response, raised by the operation's check of its deadline
+        const ResponseTimeoutDesc = "timed out waiting for the response";
+        #! The description of the timeout of a connection or of a response
+        const ConnectOrResponseTimeoutDesc = "timed out waiting for the (connection|response)";
+
         HttpServer m_server;
         RecordingWsHandler ws_handler();
         StatusHandler status_handler();
@@ -169,6 +207,7 @@ public class WebSocketPingPollOperationTest inherits QUnit::Test {
         addTestCase("invalid handshake response", \invalidHandshakeTest());
         addTestCase("connection refused", \connectionRefusedTest());
         addTestCase("timeout", \timeoutTest());
+        addTestCase("timeout of a request that the server holds", \heldRequestTimeoutTest());
         addTestCase("TLS and HTTP/2", \tlsTest());
         addTestCase("connection monitor", \monitorTest());
 
@@ -293,14 +332,46 @@ public class WebSocketPingPollOperationTest inherits QUnit::Test {
     }
 
     timeoutTest() {
-        WebSocketConnectionObject conn("ws-timeout", "test", "ws://127.0.0.1:" + port + "/block",
+        WebSocketConnectionObject conn("ws-timeout", "test", "ws://127.0.0.1:" + port + "/block/timeout",
             {"monitor": False}, {"timeout": 250ms});
         AbstractPollOperation poller = conn.startPollConnect(logger);
-        on_exit status_handler.release();
-        # the handler never answers until released, so the operation must time out by itself
-        assertThrows("SOCKET-TIMEOUT", \drivePoll(), poller);
-        assertTrue(status_handler.entered.get(10s));
+        # the handler holds a request it gets on the test's latch, so it never answers before the test releases it,
+        # and the operation must time out by itself
+        on_exit status_handler.release("timeout");
+        # whether the server gets the request before the client's deadline is not checked: the request is written by
+        # the connection's I/O, which can be later than the deadline on a loaded machine (or the connection is not
+        # even established by then), and then the client ends the connection before the server reads it; either way,
+        # the operation ends at its deadline (see heldRequestTimeoutTest() for a deadline reached while the server
+        # holds the request)
+        assertThrows("SOCKET-TIMEOUT", ConnectOrResponseTimeoutDesc, \drivePoll(), poller);
         assertEq("aborted", poller.getState());
+    }
+
+    #! The deadline of a request that the server holds ends the operation
+    /** The operation has no deadline until the server's handler holds the request, so the deadline is reached
+        while the handler runs, whatever the load of the machine.
+    */
+    heldRequestTimeoutTest() {
+        DeadlinePingPollOperation poller("ws://127.0.0.1:" + port + "/block/held", NOTHING, NOTHING, logger);
+        on_exit status_handler.release("held");
+        # the request is sent; no deadline applies yet
+        driveUntil(poller, "receiving");
+        # a hang guard only: the request is read by the server
+        assertTrue(status_handler.entered("held").get(60s), "the handler holds the request");
+        poller.setDeadline(250ms);
+        assertThrows("SOCKET-TIMEOUT", ResponseTimeoutDesc, \drivePoll(), poller);
+        assertEq("aborted", poller.getState());
+    }
+
+    #! Drives the operation until it reaches the given state, without a deadline of the operation
+    private driveUntil(AbstractPollOperation poller, string state) {
+        while (poller.getState() != state) {
+            assertFalse(poller.goalReached(), sprintf("the operation reaches %y before its goal", state));
+            *hash<SocketPollInfo> info = poller.continuePoll();
+            if (info) {
+                Socket::poll((info,), 1s);
+            }
+        }
     }
 
     tlsTest() {

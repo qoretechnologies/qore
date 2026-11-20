@@ -40,6 +40,11 @@ public namespace XeroDataProvider {
     converting to UTC first would move the boundary by a day for anyone east or west of Greenwich.
 */
 public class XeroCodecs {
+    private:internal {
+        #! Serializes registration
+        static Mutex register_lock();
+    }
+
     public {
         #! Codec name: a calendar date written as \c YYYY-MM-DD
         const QueryDate = "xero-query-date";
@@ -65,7 +70,14 @@ public class XeroCodecs {
         process-wide registry at that point.
     */
     static register() {
-        map RestSchemaActionCodecs::registerCodec($1), Codecs.iterator();
+        AutoLock al(register_lock);
+        # registered in the module's initialization; a later call registers only a codec that trusted code removed
+        # since, as the registry is process-wide and refuses sandboxed callers
+        foreach hash<RestSchemaWireCodecInfo> codec in (Codecs.iterator()) {
+            if (!RestSchemaActionCodecs::getCodec(codec.name)) {
+                RestSchemaActionCodecs::registerCodec(codec);
+            }
+        }
     }
 }
 }

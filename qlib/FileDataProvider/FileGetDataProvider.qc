@@ -74,7 +74,7 @@ public class FileGetDataProvider inherits FileDataProviderBase {
         return {
             "path": req.path,
             "data": req.text
-                ? ReadOnlyFile::readTextFile(req.path, req.encoding, req.max_len)
+                ? ReadOnlyFile::readTextFile(req.path, req.encoding, req.max_len, req.encoding_errors)
                 : ReadOnlyFile::readBinaryFile(req.path, req.max_len),
         };
     }

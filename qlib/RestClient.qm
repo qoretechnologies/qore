@@ -175,6 +175,10 @@ printf("%Y\n", ans.body);
 
 
     @section restclientv2_7 RestClient v2.7
+    - a response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other
+      text and raises \c INVALID-ENCODING when it is of a structured type, as with
+      @ref Qore::HTTPClient "HTTPClient", also for streamed and polled responses (see
+      @ref Qore::decode_http_body() "decode_http_body()"; issue #6604)
     - errors no longer contain the values of options or credentials, which can be passwords or tokens
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - a character set given as the \c Content-Encoding of a response selects only an encoding that %Qore knows or a
@@ -1157,7 +1161,8 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
         if (content_encoding_charset && (!body_ct || body_ct !~ /;\s*charset\s*=/i)) {
             body_ct = (body_ct ?? "text/plain") + "; charset=" + content_encoding_charset;
         }
-        return decode_http_body(body_ct, data, assumed_encoding);
+        # the rule of the HTTP clients for a response body (qore#6604)
+        return decode_http_body(body_ct, data, assumed_encoding, "latin1");
     }
 
     #! Checks a decimal Content-Length value without narrowing it to a bounded integer type
@@ -2738,7 +2743,8 @@ hash<auto> ans = rest.del("/orders/1");
         *hash<auto> hdr = resp.info."response-headers";
         *string content_type = RestClient::getSingleHeaderValue(hdr."_qore_orig_content_type"
             ?? hdr."content-type");
-        data rv = decode_http_body(content_type, body, assumed_encoding);
+        # the rule of the HTTP clients for a response body (qore#6604)
+        data rv = decode_http_body(content_type, body, assumed_encoding, "latin1");
         return rv.typeCode() == NT_STRING ? rv : body.toString(assumed_encoding);
     }
 

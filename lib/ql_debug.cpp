@@ -105,7 +105,10 @@
 #include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -371,7 +374,53 @@ static QoreValue f_dbg_type_retirement_info(const QoreListNode* params, RuntimeC
     h->setKeyValue("oldest pending epoch", static_cast<int64>(info.oldest_pending_epoch), xsink);
     h->setKeyValue("newest pending epoch", static_cast<int64>(info.newest_pending_epoch), xsink);
     h->setKeyValue("min active epoch", static_cast<int64>(info.min_active_epoch), xsink);
+    h->setKeyValue("freed declarations", static_cast<int64>(info.freed_declarations), xsink);
+    h->setKeyValue("tombstone classes", static_cast<int64>(info.tombstone_classes), xsink);
+    h->setKeyValue("tombstone hashdecls", static_cast<int64>(info.tombstone_hashdecls), xsink);
+    h->setKeyValue("tombstone enums", static_cast<int64>(info.tombstone_enums), xsink);
     return h.release();
+}
+
+//! Frees the retired declarations that can be freed now and returns their number (issue #6419)
+/** The calling thread runs Qore code: it is quiescent for the scan, as a builtin's quiescent wait makes it, so that
+    the items that only it holds back are freed
+*/
+static QoreValue f_dbg_type_retirement_free(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    size_t freed;
+    {
+        QoreTypeQuiescentWaitHelper qwh;
+        freed = qore_type_retirement_free();
+    }
+    return static_cast<int64>(freed + qore_type_retirement_free());
+}
+
+//! Waits until a thread has entered a number of builtin waits (issue #6419); returns false on timeout
+static QoreValue f_dbg_type_wait_entered(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    int tid = static_cast<int>(HARD_QORE_VALUE_INT(params, 0));
+    int64 count = HARD_QORE_VALUE_INT(params, 1);
+    int64 timeout_ms = HARD_QORE_VALUE_INT(params, 2);
+    return qore_type_dbg_wait_entered(tid, count, timeout_ms);
+#else
+    return false;
+#endif
+}
+
+//! Returns the number of builtin waits that a thread has entered, or -1 if there is no such thread (issue #6419)
+/** With dbg_type_wait_entered(), a test makes sure that a thread waits in a given wait: the thread takes its count
+    before the wait, and another thread waits for one more
+*/
+static QoreValue f_dbg_type_wait_entries(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    return qore_type_dbg_wait_entries(static_cast<int>(HARD_QORE_VALUE_INT(params, 0)));
+#else
+    return -1;
+#endif
+}
+
+//! Returns the number of frames of the calling thread that hold a type read through a derived type (issue #6419)
+static QoreValue f_dbg_type_unsafe_frames(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_type_unsafe_frames());
 }
 
 //! Returns the threads that the retired declarations and derived types wait for: each thread that runs Qore code
@@ -432,7 +481,7 @@ static QoreValue f_dbg_cyclic_type_declarations(const QoreListNode* params, Runt
 }
 
 static QoreValue f_dbg_global_vars(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    return getProgram()->getVarList();
+    return qore_program_ops(getProgram()).getVarList();
 }
 
 // --- C++ unit tests for AsyncIoControllerPriv (debug builds only) ---
@@ -10595,6 +10644,115 @@ static void ut_sandbox_context_inner_program_id(UnitTestCounters& c, QoreProgram
     UT_ASSERT(c, !xsink, "the Program is destroyed");
 }
 
+//! A Program that sandboxed code creates keeps the sandbox of that code: entered alone (no sandboxed Program on the
+//! thread's stack), after QoreProgram::setSandboxManager() gave it a manager and removed it again, and by a foreign
+//! thread of a binary module with QoreExternalProgramContextHelper
+static void ut_sandbox_creator_context(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* sandboxed = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    QoreSandboxManager* sm = new QoreSandboxManager;
+    sm->setUncontrolledApiPolicy(false);
+    sandboxed->setSandboxManager(sm);
+    // the Program that the sandboxed code creates
+    QoreProgram* child = nullptr;
+    {
+        ProgramThreadCountContextHelper tch(&xsink, sandboxed, true);
+        UT_ASSERT(c, !xsink, "the sandboxed Program is entered");
+        child = new QoreProgram(sandboxed, QoreParseOptions());
+    }
+    UT_ASSERT(c, qore_program_is_sandboxed(child), "the child is sandboxed");
+    // the uncontrolled-API policy (resolved without combining the managers) and the combined manager both see the
+    // creator's sandbox wherever the child is entered
+    auto check = [&c, sm](const char* label) {
+        UT_ASSERT(c, !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy),
+            (std::string(label) + ": the creator's sandbox governs policy checks").c_str());
+        UT_ASSERT(c, !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All),
+            (std::string(label) + ": the creator's sandbox governs").c_str());
+        qore_program_id_t pgm_id = 0;
+        QoreSandboxManager* found = qore_dbg_find_thread_sandbox_manager_ref(&pgm_id);
+        UT_ASSERT(c, found, (std::string(label) + ": a manager is found").c_str());
+        if (found) {
+            UT_ASSERT(c, found == sm || QoreSandboxComposition::members(found),
+                (std::string(label) + ": the manager is the creator's sandbox or contains it").c_str());
+            if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(found)) {
+                UT_ASSERT(c, std::find(members->begin(), members->end(), sm) != members->end(),
+                    (std::string(label) + ": the composition contains the creator's sandbox").c_str());
+            }
+            found->deref(nullptr);
+        }
+    };
+    {
+        ProgramThreadCountContextHelper tch(&xsink, child, true);
+        UT_ASSERT(c, !xsink, "the child is entered");
+        check("entered alone");
+    }
+    // a manager of its own that allows uncontrolled APIs does not loosen the sandbox, and removing it does not remove
+    // the creator's sandbox
+    {
+        QoreSandboxManager* lax = new QoreSandboxManager;
+        lax->setUncontrolledApiPolicy(true);
+        child->setSandboxManager(lax);
+        lax->deref(nullptr);
+        {
+            ProgramThreadCountContextHelper tch(&xsink, child, true);
+            UT_ASSERT(c, !xsink, "the child is entered with a manager of its own");
+            check("with a lax manager of its own");
+        }
+        QoreSandboxManager* own = qore_program_private::get(*child)->getOwnSandboxManagerRef();
+        UT_ASSERT(c, own == lax, "the manager set is the Program's own manager");
+        if (own) {
+            own->deref(nullptr);
+        }
+        child->setSandboxManager(nullptr);
+        UT_ASSERT(c, !qore_program_private::get(*child)->getOwnSandboxManagerRef(), "the manager is removed");
+        {
+            ProgramThreadCountContextHelper tch(&xsink, child, true);
+            UT_ASSERT(c, !xsink, "the child is entered after its manager was removed");
+            check("after setSandboxManager(nullptr)");
+        }
+    }
+    // a foreign thread of a binary module enters the child with no Qore caller
+    {
+        bool entered = false;
+        bool policy_refused = false;
+        bool all_refused = false;
+        std::thread foreign([&]() {
+            QoreForeignThreadHelper fth;
+            ExceptionSink txsink;
+            QoreExternalProgramContextHelper pch(&txsink, child);
+            if (txsink) {
+                txsink.clear();
+                return;
+            }
+            entered = true;
+            policy_refused = !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy);
+            all_refused = !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All);
+        });
+        foreign.join();
+        UT_ASSERT(c, entered, "the foreign thread enters the child");
+        UT_ASSERT(c, policy_refused, "foreign thread: the creator's sandbox governs policy checks");
+        UT_ASSERT(c, all_refused, "foreign thread: the creator's sandbox governs");
+    }
+    // a Program that trusted code creates has no sandbox
+    {
+        QoreProgram* trusted = new QoreProgram(sandboxed, QoreParseOptions());
+        UT_ASSERT(c, !qore_program_is_sandboxed(trusted), "a Program that trusted code creates is not sandboxed");
+        {
+            ProgramThreadCountContextHelper tch(&xsink, trusted, true);
+            UT_ASSERT(c, !xsink, "the trusted Program is entered");
+            UT_ASSERT(c, qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All),
+                "no sandbox governs a Program that trusted code creates");
+        }
+        trusted->waitForTerminationAndDeref(&xsink);
+    }
+    sm->deref(nullptr);
+    child->waitForTerminationAndDeref(&xsink);
+    sandboxed->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "the Programs are destroyed");
+}
+
 //! qore#5741: inside a sandbox context continued for another thread, the context's manager and the managers of the
 //! Programs entered in its scope govern together (the continued-context branch of the walk of the thread's sandboxes)
 /** The uncontrolled-API policy is resolved without combining the managers (qore_sandbox_allows_uncontrolled_apis()),
@@ -11508,7 +11666,7 @@ public:
             }
             xsink->raiseException("DEBUGGER-ERROR", "raised by the debugger at line %d", line);
             LineColumn ex;
-            if (const QoreException* e = xsink->getException()) {
+            if (const QoreException* e = qore_exception_sink_ops(xsink).getException()) {
                 ex = {e->start_line, e->start_column};
             }
             std::lock_guard<std::mutex> lg(m);
@@ -13068,6 +13226,22 @@ struct UtServerReleaseGuard {
 // Deterministic lock-order regression fixture.  Pool checkout calls
 // tryReserveStream() while holding pool_lock_; this connection pauses in the
 // capacity query so a concurrent close callback can be timed independently.
+//! the longest wait for a thread of the close callback tests to reach a point: a hang guard only
+constexpr int UT_CLOSE_CALLBACK_HANG_GUARD_MS = 30000;
+
+//! waits until the flag is set; the limit is a hang guard only
+static bool ut_wait_for_flag(const std::atomic<bool>& flag) {
+    auto deadline = std::chrono::steady_clock::now()
+        + std::chrono::milliseconds(UT_CLOSE_CALLBACK_HANG_GUARD_MS);
+    while (!flag.load(std::memory_order_acquire)) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
+}
+
 class UtBlockingPoolConnection : public HttpClientConnectionBase {
 public:
     DLLLOCAL UtBlockingPoolConnection()
@@ -13201,7 +13375,7 @@ static void ut_manager_close_callback_does_not_wait_for_pool(UnitTestCounters& c
         reservation_done.store(true, std::memory_order_release);
     });
 
-    bool entered = conn->waitForCapacityCheck(1000);
+    bool entered = conn->waitForCapacityCheck(UT_CLOSE_CALLBACK_HANG_GUARD_MS);
     UT_ASSERT(c, entered, "pool checkout reaches paused connection capacity check");
 
     std::thread callback([&] {
@@ -13209,13 +13383,12 @@ static void ut_manager_close_callback_does_not_wait_for_pool(UnitTestCounters& c
         callback_done.store(true, std::memory_order_release);
     });
 
-    // The close callback must finish while checkout still owns pool_lock_.
-    // Before the queue-based fix it waits on pool_lock_ here, reproducing the
-    // same ABBA edge that stalls the global AsyncIoController thread.
-    for (int i = 0; i < 100 && !callback_done.load(std::memory_order_acquire); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
-    UT_ASSERT(c, callback_done.load(std::memory_order_acquire),
+    // The close callback must finish while checkout still owns pool_lock_,
+    // which it holds until the capacity check is released below.  Before the
+    // queue-based fix it waits on pool_lock_ here, reproducing the same ABBA
+    // edge that stalls the global AsyncIoController thread: it would never
+    // finish, and the hang guard ends the wait.
+    UT_ASSERT(c, ut_wait_for_flag(callback_done),
         "close callback does not wait for the connection pool lock");
     UT_ASSERT(c, !reservation_done.load(std::memory_order_acquire),
         "pool checkout remains paused while close callback completes");
@@ -13252,19 +13425,20 @@ static void ut_manager_close_callback_lifetime_handshake(UnitTestCounters& c) {
         callback_done.store(true, std::memory_order_release);
     });
 
-    bool entered = mgr->waitForCallback(1000);
+    bool entered = mgr->waitForCallback(UT_CLOSE_CALLBACK_HANG_GUARD_MS);
     UT_ASSERT(c, entered, "close hook enters manager callback");
     std::thread detach([&] {
         detach_started.store(true, std::memory_order_release);
         conn->setManager(nullptr);
         detach_done.store(true, std::memory_order_release);
     });
-    for (int i = 0; i < 100
-            && !detach_started.load(std::memory_order_acquire); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    UT_ASSERT(c, detach_started.load(std::memory_order_acquire),
+    // the start of the thread is waited for, however long it takes
+    UT_ASSERT(c, ut_wait_for_flag(detach_started),
         "manager detach starts while callback is active");
+    // The callback is held until it is released below, so the detach cannot
+    // finish before then, however the threads are scheduled: the pause only
+    // gives a detach that would not wait the time to finish, and a slow
+    // machine can only make the check miss such a regression, never fail it.
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     UT_ASSERT(c, !detach_done.load(std::memory_order_acquire),
         "manager detach waits for the active close callback");
@@ -19408,6 +19582,117 @@ static QoreValue f_dbg_fork_while_parse_scope_active(const QoreListNode* params,
     return ut_wait_child(pid);
 }
 
+//! Debug-only test hook: fork() while another thread holds the lock that constructing an object takes for a class
+/** Another thread holds the data lock of the class of \a obj (see qore_class_private::dataLock()), and releases it
+    when the prepare handlers of fork() reach the class data locks (as dbg_fork_while_handler_held()), so fork()
+    waits for it if a fork handler covers the lock.  The child constructs an object of the class with its handle in
+    the Program \a pgm, a copy for a class that the Program inherited, which takes the lock (refClass(),
+    qore#6732): it runs \a child, which constructs one (the deserialization of an object finds the class in the
+    Program and constructs it with that handle) and exits with the value that it returns (99 if it raised an
+    exception), or without \a child it finds the class \a cname in \a pgm (QoreProgram::findClass()) and constructs
+    an object with QoreClass::execConstructor() and that handle as the object's class, as module-python does, and
+    exits with 0 if it was constructed.  The parent reports a child that has not ended after 60 seconds as hung, and
+    kills it.  DEBUG builds only.
+
+    @return a hash: \c copy: True if the handle that the child uses is a copy, \c hang: True if the child did not end,
+    \c status: its exit status (-1 if it hung or did not exit normally)
+
+    @throw DBG-FORK-ERROR the class was not found, or fork() failed
+*/
+static QoreValue f_dbg_fork_while_class_lock_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    const QoreObject* pobj = get_param_value(params, 1).get<const QoreObject>();
+    QoreStringNodeValueHelper cname(get_param_value(params, 2));
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 3).get<const ResolvedCallReferenceNode>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(pobj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    const qore_class_private* priv = qore_class_private::get(*obj->getClass());
+    const QoreClass* found = pgm->findClass(cname->c_str(), xsink);
+    if (!found) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-FORK-ERROR", "no class '%s' in the Program", cname->c_str());
+        }
+        return QoreValue();
+    }
+    bool is_copy = found != qore_class_private::get(*found)->cls;
+    ForkHoldTest t;
+    t.target = "class_data_locks";
+    // with ThreadSanitizer, the striped leaf locks are not acquired before fork() (QFLM_STRIPED), so the lock is not
+    // held across it either: TSan reports the reset of a lock held by another thread in the child
+    std::thread holder([&t, priv]() {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            priv->dataLock().lock();
+        }
+        std::unique_lock<std::mutex> ul(t.m);
+        t.held = true;
+        t.cv.notify_all();
+        t.cv.wait(ul, [&t] { return t.release; });
+        ul.unlock();
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            priv->dataLock().unlock();
+        }
+    });
+    {
+        std::unique_lock<std::mutex> ul(t.m);
+        t.cv.wait(ul, [&t] { return t.held; });
+    }
+    fork_hold_test = &t;
+    qore_fork_prepare_hook = fork_hold_hook;
+    pid_t pid = fork();
+    if (!pid) {
+        ExceptionSink child_xsink;
+        int status;
+        if (child_code) {
+            ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+            status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        } else {
+            // the object is constructed with the copy, as module-python constructs one
+            ReferenceHolder<QoreObject> o(found->execConstructor(*found, nullptr, true, &child_xsink),
+                &child_xsink);
+            status = child_xsink || !o ? 99 : 0;
+        }
+        child_xsink.clear();
+        _exit(status);
+    }
+    int fork_errno = errno;
+    qore_fork_prepare_hook = nullptr;
+    fork_hold_test = nullptr;
+    {
+        // releases the holder if the prepare handlers did not (no handler covers the lock, or fork() failed)
+        std::lock_guard<std::mutex> lg(t.m);
+        t.release = true;
+        t.cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    // a hang detector, not a timing check: a child that does not wait for the lock ends at once
+    bool hang = true;
+    int status = 0;
+    for (int i = 0; i < 600; ++i) {
+        if (waitpid(pid, &status, WNOHANG) == pid) {
+            hang = false;
+            break;
+        }
+        usleep(100000);
+    }
+    if (hang) {
+        kill(pid, SIGKILL);
+        waitpid(pid, &status, 0);
+    }
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("copy", is_copy, nullptr);
+    h->setKeyValue("hang", hang, nullptr);
+    h->setKeyValue("status", hang ? -1 : (WIFEXITED(status) ? WEXITSTATUS(status) : -1), nullptr);
+    return h;
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -20291,6 +20576,7 @@ static void ut_parse_find_variant_no_args_type_param_inst(UnitTestCounters& c) {
     UT_ASSERT(c, ext, "the generic function is found");
     if (ext) {
         const QoreFunction* func = reinterpret_cast<const QoreFunction*>(ext);
+        // a lookup, which runs no code of the Program, so the Program is only made current (qore#6185)
         QoreProgramContextHelper pch(pgm);
         QoreTypeParamInstantiation inst;
         const AbstractQoreFunctionVariant* variant = func->parseFindVariantNoDiagnostics(type_vec_t(), nullptr,
@@ -21733,6 +22019,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
+    ut_sandbox_creator_context(c, rc.getProgram());
     ut_datasource_option_commit_window(c);
 #endif
     return make_unit_test_result(c, xsink);
@@ -22134,6 +22421,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
+    ut_sandbox_creator_context(c, rc.getProgram());
     ut_datasource_option_commit_window(c);
 #endif
     ut_event_loop_remove_recycled_fd(c);
@@ -24740,6 +25028,42 @@ void dbg_hold_closure_var_deref_hook(const char* name) {
     }
 }
 
+//! the hold armed by dbg_hold_removed_object_scan()
+struct RemovedObjectScanHold {
+    std::mutex m;
+    Counter* held = nullptr;
+    Counter* release = nullptr;
+};
+
+RemovedObjectScanHold removed_object_scan_hold;
+
+//! runs in the thread that checks a removed object, with no lock of the objects held; disarms itself
+void dbg_hold_removed_object_scan_hook() {
+    RemovedObjectScanHold& h = removed_object_scan_hold;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.held) {
+            return;
+        }
+        held = h.held;
+        release = h.release;
+        h.held = nullptr;
+        h.release = nullptr;
+        qore_dbg_removed_object_scan_hook.store(nullptr);
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+    if (xsink) {
+        printd(0, "dbg_hold_removed_object_scan(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+
 //! the collections of closure-bound variables counted by dbg_count_closure_var_collections()
 struct ClosureVarCollections {
     std::mutex m;
@@ -24789,6 +25113,38 @@ static QoreValue f_dbg_hold_closure_var_deref(const QoreListNode* params, Runtim
     h.held = held.release();
     h.release = release.release();
     qore_dbg_closure_var_decide_hook.store(dbg_hold_closure_var_deref_hook);
+    return QoreValue();
+}
+
+//! holds the next thread that checks whether an object removed from an object in a recursive set needs a scan
+/** The hold is taken once, in qore_removed_object_needs_scan(), after the check has found the removed object in the
+    set of the object that it was removed from (by comparing the pointers) and before it reads the set, with no lock
+    of the objects held: another thread can then recompute the set (#6792).
+
+    @param held decremented once the checking thread is held
+    @param release the checking thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_removed_object_scan(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<Counter> held(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    RemovedObjectScanHold& h = removed_object_scan_hold;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a removed object scan hold is already armed");
+        return QoreValue();
+    }
+    h.held = held.release();
+    h.release = release.release();
+    qore_dbg_removed_object_scan_hook.store(dbg_hold_removed_object_scan_hook);
     return QoreValue();
 }
 
@@ -27170,9 +27526,65 @@ static QoreValue f_dbg_system_threads_starting(const QoreListNode* params, Runti
 #endif
 
 #ifdef DEBUG
+//! Tries to create a trusted build capability in a Program that is sandboxed by its flag only, and returns it
+/** The Program is a child of the current one that had a sandbox manager, which was removed with the C++ API
+    (QoreProgram::setSandboxManager(nullptr)): no sandbox governs its code, but the code is sandboxed, so the creation
+    must be refused (qore_create_trusted_build_call()).  DEBUG builds only.
+
+    @param call the callback of the capability
+
+    @throw SANDBOX-CAPABILITY-ERROR the creation is refused
+*/
+static QoreValue f_dbg_trusted_build_from_flag_only_program(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* call = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    QoreProgram* pgm = new QoreProgram(rc.getProgram(), PO_NO_CHILD_PO_RESTRICTIONS);
+    ON_BLOCK_EXIT([pgm, xsink] () {
+        pgm->waitForTerminationAndDeref(xsink);
+    });
+    {
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        pgm->setSandboxManager(sm);
+        sm->deref(nullptr);
+    }
+    pgm->setSandboxManager(nullptr);
+    assert(qore_program_is_sandboxed(pgm));
+    ProgramThreadCountContextHelper tch(xsink, pgm, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_create_trusted_build_call(call, xsink);
+}
+
+//! Makes a Program sandboxed by its flag only: a manager is set and removed with the C++ API (DEBUG builds only)
+/** A Program with code cannot get there from Qore; used to test a Program that is sandboxed with no manager to
+    govern it
+*/
+static QoreValue f_dbg_make_program_flag_only(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    {
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        (*pgm)->setSandboxManager(sm);
+        sm->deref(nullptr);
+    }
+    (*pgm)->setSandboxManager(nullptr);
+    assert(qore_program_is_sandboxed(*pgm));
+    return QoreValue();
+}
+
 //! Returns the CPU time in nanoseconds used by the current call into a sandbox with a CPU time limit, or -1
 static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_sandbox_dbg_cpu_used();
+}
+
+//! Returns the number of call budget frames of the current thread
+static QoreValue f_dbg_sandbox_budget_frames(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_sandbox_dbg_budget_frames();
 }
 #endif
 
@@ -27269,6 +27681,15 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_type_retirement_info", f_dbg_type_retirement_info, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_type_retirement_free", f_dbg_type_retirement_free, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_type_unsafe_frames", f_dbg_type_unsafe_frames, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_type_wait_entered", f_dbg_type_wait_entered, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_type_wait_entries", f_dbg_type_wait_entries, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
     qns.addBuiltinVariant("dbg_type_retirement_blockers", f_dbg_type_retirement_blockers, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_live_type_declarations", f_dbg_live_type_declarations, QCF_NO_FLAGS,
@@ -27322,6 +27743,8 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo);
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_sandbox_budget_frames", f_dbg_sandbox_budget_frames, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_finish", f_dbg_hold_next_thread_finish, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
     qns.addBuiltinVariant("dbg_file_redirect_rendezvous", f_dbg_file_redirect_rendezvous, QCF_NO_FLAGS,
@@ -27349,6 +27772,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
+    qns.addBuiltinVariant("dbg_trusted_build_from_flag_only_program", f_dbg_trusted_build_from_flag_only_program,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, codeTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_make_program_flag_only", f_dbg_make_program_flag_only, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_string_scan_bytes", f_dbg_get_string_scan_bytes, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_string_is_view", f_dbg_string_is_view, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
@@ -27792,6 +28219,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_hold_removed_object_scan", f_dbg_hold_removed_object_scan,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
     qns.addBuiltinVariant("dbg_count_closure_var_collections", f_dbg_count_closure_var_collections,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_get_closure_var_collections", f_dbg_get_closure_var_collections,
@@ -27936,6 +28366,10 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo);
     qns.addBuiltinVariant("dbg_release_parse_start_gate", f_dbg_release_parse_start_gate, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fork_while_class_lock_held", f_dbg_fork_while_class_lock_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 4, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", objectTypeInfo,
+        QORE_PARAM_NO_ARG, "pgm", stringTypeInfo, QORE_PARAM_NO_ARG, "cname", codeOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "child");

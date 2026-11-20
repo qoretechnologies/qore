@@ -69,6 +69,7 @@ class LocalVar;
 class QoreClass;
 class QoreFunction;
 class LocalFunctionCallReferenceNode;
+class ParseObjectMethodReferenceNode;
 class QoreIRFunction;
 class QoreIRLValuePathInstruction;
 class QoreMethod;
@@ -159,6 +160,9 @@ const FunctionEntry* qore_aot_resolve_deferred_source_function_entry(QoreProgram
     @param fe the function entry that the parser resolved
 */
 std::string qore_aot_get_function_identity_name(const FunctionEntry* fe);
+
+//! Encodes a resolved function name and any explicit type arguments for qore_aot_resolve_function_ref().
+std::string qore_aot_encode_function_ref(std::string name, const QoreTypeParamInstantiation* inst);
 
 //! Returns the name that identifies the function of a function call reference in an AOT image
 /** The function's name, or "::name" if the parser resolved the reference to the function of that name in the root
@@ -289,6 +293,25 @@ class FunctionCallBase;
 class QoreAOTBinaryWriter;
 class QoreAOTBinaryReader;
 
+//! Common identity of inline and slot DOT_EVAL_TARGET records. The declaration can be bound before overload selection.
+struct QoreAOTDotTarget {
+    std::string name;
+    std::string type_args;
+    QoreAOTNamedCallArgs named;
+    const QoreClass* receiver = nullptr;
+    const QoreMethod* method = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    uint8_t flags = 0;
+};
+
+DLLLOCAL std::string qore_aot_dot_method_ref(const char* name, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, bool pseudo);
+DLLLOCAL uint8_t qore_aot_dot_target_flags(const QoreMethod* method, bool pseudo, bool name_dispatch);
+DLLLOCAL void qore_aot_write_dot_target_family(QoreAOTBinaryWriter& writer, const QoreMethod* method, bool pseudo);
+bool qore_aot_read_dot_target(const QoreAOTBinaryReader& reader, const uint8_t*& ptr, const uint8_t* end,
+    QoreProgram* pgm, bool slot, QoreAOTDotTarget& target, std::string& error);
+
+
 //! writes the names of the arguments of a named call reference call (AOTExprKind::CALLREF_CALL_NAMED): u8 count, then
 //! a string ref per name; returns false if there are more than 255
 DLLLOCAL bool qore_aot_write_callref_arg_names(QoreAOTBinaryWriter& writer, const name_vec_t& names);
@@ -303,6 +326,17 @@ DLLLOCAL const name_vec_t* qore_aot_read_callref_arg_names(const QoreAOTBinaryRe
     arguments are written in source order); the arguments of a compiled call are passed at their positions
 */
 DLLLOCAL std::string qore_aot_named_call_arg_prefix(const FunctionCallBase* call, bool with_map = true);
+
+//! The AOT variant key name(type1,type2,...), using serializable parameter type paths.
+std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
+
+//! Encodes an inline constructor's class and, for named arguments, the binding and selected constructor signature.
+DLLLOCAL std::string qore_aot_inline_constructor_ref(const FunctionCallBase* call, std::string class_ref,
+        const char* deferred_signature = nullptr);
+
+//! Finds the exact constructor selected by a named call when the class's variants are available.
+DLLLOCAL const AbstractQoreFunctionVariant* qore_aot_find_constructor_variant(const QoreClass* qc,
+        const char* signature);
 
 //! sets the binding of the arguments of a named call read with qore_aot_parse_named_call_arg_prefix() on the call
 /** a function call resolved at run time by parameter name is replaced with a RuntimeNamedFunctionCallNode
@@ -414,8 +448,8 @@ struct QoreAOTContext {
     QoreIRLValuePathInstruction** lv_path_insts = nullptr;  //!< LValuePath instruction pointers
     int num_lv_path_insts = 0;
 
-    //! All body locals from the fresh IR (needed by evalTiered for instantiation)
-    std::vector<LocalVar*> all_body_locals;
+    //! Body locals whose stack slots the standard native entry uses, in instantiation order.
+    std::vector<LocalVar*> runtime_body_locals;
 
     //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
     bool all_body_locals_ir_only = false;
@@ -513,6 +547,20 @@ struct QoreAOTContext {
 
     void validateBuiltinTypePath(size_t slot) {
         builtin_type_path_validated[slot / 64].fetch_or(uint64_t{1} << (slot % 64), std::memory_order_relaxed);
+    }
+
+    //! The stack slots required by the standard native entry. The full table retains declaration identities
+    //! for deserialization of nested closures and handlers. A context built from source can lack ownership
+    //! information for its already-compiled entry, in which case the wrapper instantiates the full list.
+    struct NativeBodyLocals {
+        std::vector<LocalVar*> declarations;
+        uint64_t (*entry)(QoreAOTContext*, ExceptionSink*) = nullptr;
+        std::vector<LocalVar*> omitted;
+    };
+    std::unique_ptr<NativeBodyLocals> native_body_locals;
+
+    const std::vector<LocalVar*>& getDeclaredBodyLocals() const {
+        return native_body_locals ? native_body_locals->declarations : runtime_body_locals;
     }
 
     //! Destructor: deref all held expression values, then free arrays.
@@ -1032,6 +1080,40 @@ DLLLOCAL const QoreMethod* qore_aot_find_named_method(const QoreClass* qc, const
 DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         const char* class_ref, bool pseudo = false);
 
+//! Returns the name of an object method reference as an AOT image stores it, with the method resolved when parsing
+/** For a normal method of a parent class resolved for the receiver's declared class, which a reference to the method
+    of an object of that class refers to, as a call does (qore#6680), the name is given with both classes, as
+    "\x02<declared class reference>\x01<method class reference>\x01<method name>"; otherwise it is the method name.
+    Native code passes it to qore_rt_create_object_method_ref_aot(), and the serialized expressions of an image (such
+    as default argument values and member initializers) store it; qore_aot_decode_object_method_ref() reads it.
+*/
+DLLLOCAL std::string qore_aot_object_method_ref_name(const ParseObjectMethodReferenceNode* omr);
+
+//! Decodes a name of qore_aot_object_method_ref_name()
+/** @param pgm the Program whose classes the class references are resolved in
+    @param ref the name as stored
+    @param method_name set to the method name in \a ref
+    @param declared_class set to the declared class of the receiver, or nullptr if \a ref gives none or it cannot be
+    resolved
+    @param method set to the method resolved when parsing (the method class's own normal method of the name, also
+    while the class is being loaded), or nullptr if \a ref gives none or it cannot be resolved
+
+    @return true if \a ref is valid (also when the classes cannot be resolved), false if it is malformed
+*/
+DLLLOCAL bool qore_aot_decode_object_method_ref(QoreProgram* pgm, const char* ref, const char*& method_name,
+        const QoreClass*& declared_class, const QoreMethod*& method);
+
+//! Creates an object method reference node of an expression read from an AOT image
+/** @param pgm the Program whose classes the class references are resolved in
+    @param target the object expression, whose reference is taken over
+    @param ref the name as stored (see qore_aot_object_method_ref_name())
+
+    @return the node, with the declared class and the method resolved when parsing restored if \a ref gives them, or
+    nullptr if \a ref is malformed (then \a target is released)
+*/
+DLLLOCAL ParseObjectMethodReferenceNode* qore_aot_make_object_method_ref(QoreProgram* pgm, QoreValue target,
+        const char* ref);
+
 //! Finds a method of a class or of its parent classes that may not be committed yet, without an access check
 /** A method reference in an expression that is read while a module's classes are being loaded, such as the initial
     value of a static member, names a method whose variants are not committed yet, and is read with no class context:
@@ -1043,6 +1125,34 @@ DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
     @param is_static true for a static method, false for a normal one
 */
 DLLLOCAL const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* name, bool is_static);
+
+//! Encodes the method of a static method call reference for AOT metadata
+/** The method's name, followed by a newline and the class reference of the class that declares the method when that
+    is not the class that the reference names (@a scope_qc), so that the method that the compiler resolved is loaded:
+    a lookup of the name in the named class finds the first parent class that has a method of the name, which can be
+    another one than the compiler resolved with the access of the code that makes the reference (qore#6679)
+
+    @param method the method of the reference
+    @param scope_qc the class that the reference names
+*/
+DLLLOCAL std::string qore_aot_encode_static_method_ref_target(const QoreMethod* method, const QoreClass* scope_qc);
+
+//! Resolves the method of a static method call reference encoded by qore_aot_encode_static_method_ref_target()
+/** @param pgm the Program the image is loaded into
+    @param scope_qc the class that the reference names
+    @param target the encoded method
+    @param have_class set to true if @a target names the class that declares the method, in which case the method is
+    found only in that class, which must be @a scope_qc or one of its parent classes, and nullptr is returned if it is
+    not found there; set to false if it does not, in which case nullptr is returned and the caller looks the name up
+    as for a reference written before the class was recorded
+
+    @return the method, or nullptr
+*/
+DLLLOCAL const QoreMethod* qore_aot_resolve_static_method_ref_target(QoreProgram* pgm, const QoreClass* scope_qc,
+        const char* target, bool& have_class);
+
+//! Returns the method name of a static method call reference encoded by qore_aot_encode_static_method_ref_target()
+DLLLOCAL std::string qore_aot_static_method_ref_target_name(const char* target);
 
 //! Clears namespace/global/static data for all registered AOT user modules.
 /** AOT user modules are loaded as binary modules, so they are skipped by

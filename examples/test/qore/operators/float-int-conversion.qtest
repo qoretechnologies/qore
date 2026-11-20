@@ -21,8 +21,9 @@
     limits of an int (also a negative NaN and a negative value that a float node holds) and their number equivalents
     with int(), softint assignments and parameters, %, the bitwise operators, +=, |= and &= on int and untyped lvalues,
     substr(), sprintf("%d"), list and string indexing and native float locals, as constants and as typed and untyped
-    values, and build dense int64 ColumnarResult columns from them (fromColumnHash() and fromRows()), with the buffer
-    errors of a column naming it;
+    values, and build dense int64 ColumnarResult columns from them (fromColumnHash() and fromRows()), which refuse a
+    value outside the range of an int64 with COLUMNAR-RESULT-ERROR (qore#6681), with the buffer errors of a column naming
+    it;
     they run in each execution mode in a child process, with tiered execution at the IR tier and promoted to native
     code, and as qcc-compiled executables (-O0, -O3).  The expected output is float-int-conversion/expected.txt.
 */

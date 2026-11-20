@@ -479,7 +479,10 @@ class StreamReaderTest inherits QUnit::Test {
         # a mark alone, a single byte and no data
         sr = new StreamReader(new BinaryInputStream(<fffe>), "UTF-16");
         assertEq(NOTHING, sr.readLine());
+        # a single byte is a code unit cut off by the end of the stream
         sr = new StreamReader(new BinaryInputStream(<ff>), "UTF-16");
+        assertThrows("INVALID-ENCODING", "not valid UTF-16: invalid byte sequence at byte offset 0$", \sr.readLine());
+        sr = new StreamReader(new BinaryInputStream(<ff>), "UTF-16", "keep");
         assertThrows("ENCODING-CONVERSION-ERROR", auto sub () { return convert_encoding(sr.readLine(), "UTF-8"); });
         sr = new StreamReader(new BinaryInputStream(binary()), "UTF-16");
         assertEq(NOTHING, sr.readLine());

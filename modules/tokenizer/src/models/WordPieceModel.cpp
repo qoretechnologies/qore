@@ -50,7 +50,11 @@ WordPieceModel::WordPieceModel(const QoreHashNode* config, ExceptionSink* xsink)
 
         ConstHashIterator vi2(vocab_hash);
         while (vi2.next()) {
-            std::string token = vi2.getKey();
+            // the key is in the default encoding, and the token is UTF-8 text, as the text to tokenize is
+            std::string token;
+            if (configKey(vi2.getKey(), "vocabulary token", token, xsink)) {
+                return;
+            }
             int id = (int)vi2.get().getAsBigInt();
             vocab[token] = id;
             if (id >= 0 && id < (int)id_to_token.size()) {
@@ -62,14 +66,21 @@ WordPieceModel::WordPieceModel(const QoreHashNode* config, ExceptionSink* xsink)
     // Read unk_token - can be a string or an object with "content"
     QoreValue unk_val = config->getKeyValue("unk_token");
     if (unk_val.getType() == NT_STRING) {
-        std::string unk_str = safeGetStdString(unk_val);
+        std::string unk_str = configString(unk_val, "configuration value 'unk_token'", xsink);
+        if (*xsink) {
+            return;
+        }
         if (!unk_str.empty()) {
             unk_token = std::move(unk_str);
         }
     } else if (unk_val.getType() == NT_HASH) {
         const QoreHashNode* unk_hash = safeGetHash(unk_val);
         if (unk_hash) {
-            std::string content = safeGetStringKey(unk_hash, "content");
+            std::string content = configString(unk_hash->getKeyValue("content"),
+                "configuration value 'unk_token' content", xsink);
+            if (*xsink) {
+                return;
+            }
             if (!content.empty()) {
                 unk_token = content;
             }
@@ -79,7 +90,10 @@ WordPieceModel::WordPieceModel(const QoreHashNode* config, ExceptionSink* xsink)
     // Read continuing_subword_prefix
     QoreValue prefix_val = config->getKeyValue("continuing_subword_prefix");
     if (prefix_val.getType() == NT_STRING) {
-        std::string prefix_str = safeGetStdString(prefix_val);
+        std::string prefix_str = configString(prefix_val, "configuration value 'continuing_subword_prefix'", xsink);
+        if (*xsink) {
+            return;
+        }
         if (!prefix_str.empty()) {
             continuing_subword_prefix = std::move(prefix_str);
         }

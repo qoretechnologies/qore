@@ -212,7 +212,11 @@ The AST interpreter gives a parameter these arguments with no other reference, s
   temporaries, or the list that the stages of a lazy pipeline gave it (`FunctionalSourceCapture::intermediate`), and
   its value, which `lowerWithSourceRelease()` gives a reference of its own (RefSelf), is a temporary that the IR
   interpreter's call gives (`def_by_call`), as native code gives its cleanup slot; the accumulator Phi that is its own
-  incoming value on the loop's back edge does not keep the Phi after the loop from taking it over;
+  incoming value on the loop's back edge does not keep the Phi after the loop from taking it over; an accumulator
+  Phi that another Phi also uses (the value of a conditional fold expression, `foldl ($1 ?? $2), l`, and the
+  accumulator of a fold over a fused pipeline, `foldl $1, (select l, c)`) holds a reference of its own, which is
+  released once the fold's value has its own (`FunctionalSourceCapture::accumulator`, issue #6442), also for a source
+  that is not released;
 - the value of a fold or of such a conditional expression is released once a list or hash literal holds it, as a
   temporary is (`qore_ir_expr_gives_owned_value()`);
 - a value read through a reference by a local with a reference flag (an untyped or `auto` parameter given `\v`) is
@@ -237,9 +241,23 @@ helper also sets a flag of the frame (`element_read_held_flag`), and the end of 
 one test of the flag, so that a frame that never reads a reference through such a variable pays one load and one branch
 per statement. Only a variable that an element or a store that can be a reference is assigned to
 (`QoreIRFunction::reference_element_locals`, `reference_store_locals`) has these slots: the variable of a loop over a
-list of ints reads its cache as before. The IR interpreter does not give such a read to a call: it releases the value
-read at the end of the statement, so a method that writes the referenced variable and its parameter destroys the object
-after the call, not at the write as in the AST interpreter (as on develop; a follow-up, qore#6538). Native
+list of ints reads its cache as before. The IR interpreter gives such a read to a call that can take an argument over
+(issue #6538): the interpreter's analysis of the function makes it a consumed argument
+(`qore_ir_element_read_given_to_call()` in `buildValueUseCounts()`), decided from static facts, so the call's
+instruction has `QORE_IR_GIVES_CALL_ARGS | QORE_IR_GIVES_CALL_TEMPS` before the function runs and the IR is not
+changed afterwards: a method that writes the referenced variable and its parameter destroys the object at the write,
+as in the AST interpreter, in every frame and thread.  A call known to take nothing over is not given the read and is
+made as before, with no test of its arguments (`qore_ir_call_known_to_take_no_arg_over()`): a function, a static
+method, or a method of a final class or a final variant (the method and class that the parser resolved, also when
+the call is dispatched by name at run time) whose single variant's IR shows that no parameter takes its argument over (a
+callee that has not run yet is lowered then, without promoting its tier, as the batch compilation of native code
+lowers its callees), or a builtin variant, whose argument list holds its arguments until it returns.  Anything else (an
+overridable method, a call reference, a closure, a callee that cannot be lowered) is given the read.
+`QoreIRInterpreter::execute()` is the same machine code as on develop.  A call that is given the read runs the code of
+a call that may give, whether or not the variable holds a reference: the test of every giving call
+(`hasConsumedCallArgs()`, +68 instructions per call of an overridable `c.m(r)` over a list of ints in ir and tiered,
+callgrind against develop 97f6f3f552), and for a read that owns its value, an object read from the variable's slot,
+the given call path (+732 per call of an overridable `c.m(r)` over a list of objects in ir).  Native
 code makes a call that may give such a read in both forms and makes the call that gives nothing when no slot holds its
 value (`emitGivenOrPlainCall()`, also for method calls), and releases a slot after the call only if it holds the value,
 tested inline. A typed variable is never assigned a reference.

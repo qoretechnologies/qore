@@ -1456,14 +1456,16 @@ public class MssqlFunction inherits SqlUtil::AbstractFunction {
 
     #! returns a string that can be used to create the function in the database
     softlist getCreateSql(*hash opt) {
-        return sprintf("create function %s %s", name, src);
+        # the name is an identifier (qore#6579)
+        return sprintf("create function %s %s", mssql_get_sql_object_name(name), src);
     }
 
     #! returns a string that can be used to drop the function from the database
     /** @param opt this argument is ignored
         */
     string getDropSql(*hash opt) {
-        return sprintf("drop function %s", name);
+        # the name is an identifier (qore#6579)
+        return sprintf("drop function %s", mssql_get_sql_object_name(name));
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -1477,8 +1479,9 @@ public class MssqlFunction inherits SqlUtil::AbstractFunction {
         */
     softlist getRenameSql(string new_name, *hash opt) {
         # a function is defined by its SQL source, and its name is given as it is; the names are string literals
+        # the new name must be an identifier, as for the other objects (qore#6579)
         return sprintf("exec sp_rename %s, %s, 'OBJECT'", mssql_get_string_literal(name),
-            mssql_get_string_literal(new_name));
+            mssql_get_new_name_literal(new_name));
     }
 
     #! sets the new name of the function
@@ -2781,6 +2784,13 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         if (!ss_has_merge)
             return AbstractTable::getUpsertClosure(row, upsert_strategy, opt);
 
+        # a row of list values (bulk DML) is upserted row by row (issue #6691)
+        return getUpsertRowsClosure(row, getMssqlMergeUpsertClosure(getBulkUpsertExampleRow(row), upsert_strategy,
+            opt));
+    }
+
+    #! returns the upsert closure with a merge statement for a row that is not a row of list values
+    private code getMssqlMergeUpsertClosure(hash<auto> row, int upsert_strategy, *hash<auto> opt) {
         # check upsert options
         validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
 
@@ -2810,6 +2820,12 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         map updc += $1, keys row, !cols.hasKey($1) && !suh.$1;
         # cannot use merge where only the join columns are present
         if (!updc) {
+            # nothing to update: an update-only upsert leaves a row unchanged and inserts no row (issue #6692)
+            if (upsert_strategy == UpsertUpdateOnly) {
+                return int sub (hash<auto> crow) {
+                    return UR_Unchanged;
+                };
+            }
             return getUpsertInsertOnly(cols, row, opt);
         }
 
@@ -2818,7 +2834,9 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         sql += ") as source (";
         sql += foldl $1 + "," + $2, getColumnSqlNames(row.keys());
         sql += ") on (";
-        sql += foldl $1 + " and " + $2, (map sprintf("t.%s=source.%s", $1, $1), getColumnSqlNames(cols.keys()));
+        # the stored key is compared with the bound value converted as the column stores it; the value inserted is the
+        # value as bound, as with a plain insert (issue #6676)
+        sql += getUpsertMergeKeyConditions(cols, row, "=");
         sql += ")";
         if (upsert_strategy != UpsertInsertOnly) {
             sql += sprintf(" when matched then update set ");
@@ -3133,6 +3151,61 @@ so.name = %v", name);
         }
 
         return new Columns(rv);
+    }
+
+    #! returns the types that the "delete_others" upsert option converts the values of numeric, date and time key columns to (issue #6635)
+    /** the types are given by the catalog as the columns are declared (ex: \c "numeric(10,2)",
+        \c "datetime2(0)", \c "int"), so that a bound value is rounded as the column rounds it when it stores it
+    */
+    private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+        # Sybase has no information_schema: the values are compared as they are bound
+        if (is_sybase) {
+            return;
+        }
+        *hash<auto> qh = ds.select("select column_name, data_type, numeric_precision, numeric_scale, "
+            "datetime_precision from information_schema.columns where table_schema = %v and table_name = %v",
+            schema, name);
+        hash<string, string> rv;
+        context (qh) {
+            string col = %column_name.lwr();
+            if (!inlist(col, pkl)) {
+                continue;
+            }
+            string dt = %data_type.lwr();
+            *string type;
+            switch (dt) {
+                case "tinyint":
+                case "smallint":
+                case "int":
+                case "bigint":
+                case "date":
+                case "datetime":
+                case "smalldatetime":
+                    type = dt;
+                    break;
+                case "decimal":
+                case "numeric":
+                    type = sprintf("%s(%d,%d)", dt, %numeric_precision, %numeric_scale);
+                    break;
+                case "datetime2":
+                case "datetimeoffset":
+                case "time":
+                    type = sprintf("%s(%d)", dt, %datetime_precision);
+                    break;
+                case "real":
+                case "money":
+                case "smallmoney":
+                    type = dt;
+                    break;
+                case "float":
+                    type = sprintf("float(%d)", %numeric_precision);
+                    break;
+            }
+            if (type) {
+                rv{col} = type;
+            }
+        }
+        return rv;
     }
 
     private Columns describeMssqlImpl() {

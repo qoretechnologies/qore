@@ -146,12 +146,15 @@ static inline bool isoctaldigit(const char x) {
 #if defined(__GNUC__) || defined(__clang__)
 #define QORE_INTERN_ALWAYS_INLINE __attribute__((always_inline)) inline
 #define QORE_INTERN_NOINLINE __attribute__((noinline))
+#define QORE_INTERN_COLD __attribute__((cold))
 #elif defined(_MSC_VER)
 #define QORE_INTERN_ALWAYS_INLINE __forceinline
 #define QORE_INTERN_NOINLINE __declspec(noinline)
+#define QORE_INTERN_COLD
 #else
 #define QORE_INTERN_ALWAYS_INLINE inline
 #define QORE_INTERN_NOINLINE
+#define QORE_INTERN_COLD
 #endif
 
 // here we define virtual types
@@ -2551,7 +2554,9 @@ DLLLOCAL size_t q_find_last_path_sep(const QoreString& path);
 
 // reutrns the given file's mode or 0 if the stat() call fails
 DLLLOCAL int q_get_mode(const QoreString& path);
-//! returns the byte length of the next UTF-8 character or 0 for an encoding error or a negative number if the string is too short to represent the character
+//! returns the byte length of the next UTF-8 character, 0 for an invalid character (RFC 3629: also an overlong form,
+//! a surrogate or a code point above U+10FFFF) or minus the length of the character if the valid_len bytes are a
+//! valid start of it (qore#6604)
 DLLLOCAL qore_offset_t q_UTF8_get_char_len(const char* p, size_t valid_len);
 
 //! returns the byte length of the next UTF-16 (big-endian encoded) character or 0 for an encoding error or a negative number if the string is too short to represent the character

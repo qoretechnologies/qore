@@ -26,7 +26,10 @@ std::unique_ptr<AbstractTokenizerModel> AbstractTokenizerModel::fromConfig(
     }
 
     // Get the "type" field; if absent, infer from config keys (legacy format)
-    std::string type = safeGetStringKey(config, "type");
+    std::string type = configStringKey(config, "type", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     if (!type.empty()) {
         // type already set
     } else {

@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreProgramObjectLockOps.h"
 #include <qore/QoreCounter.h>
 #include <qore/QoreCondition.h>
 
@@ -177,23 +178,35 @@ QoreCounter::~QoreCounter() {
     delete priv;
 }
 
-void QoreCounter::lockForFork() {
-    priv->l.lock();
+void qore_counter_ops::lockForForkImpl(QoreCounter* b) {
+    b->priv->l.lock();
 }
 
-void QoreCounter::unlockForFork() {
-    priv->l.unlock();
+void qore_counter_ops::unlockForForkImpl(QoreCounter* b) {
+    b->priv->l.unlock();
 }
 
-void QoreCounter::reinitAfterFork(int count) {
+void qore_counter_ops::reinitAfterForkImpl(QoreCounter* b, int count) {
     // the waiting threads do not exist in the child
-    priv->waiting = 0;
-    priv->count_waiting = 0;
+    b->priv->waiting = 0;
+    b->priv->count_waiting = 0;
     if (count >= 0) {
-        priv->cnt = count;
+        b->priv->cnt = count;
     }
-    priv->cond.reinitAfterFork();
-    priv->l.reinitAfterFork();
+    qore_condition_ops(b->priv->cond).reinitAfterFork();
+    b->priv->l.reinitAfterFork();
+}
+
+void qore_counter_ops::releaseAfterForkImpl(QoreCounter* b, int count) {
+    // the waiting threads do not exist in the child
+    b->priv->waiting = 0;
+    b->priv->count_waiting = 0;
+    if (count >= 0) {
+        b->priv->cnt = count;
+    }
+    qore_condition_ops(b->priv->cond).reinitAfterFork();
+    // held by this thread since lockForFork(): released, so that ThreadSanitizer sees the release (issue #6817)
+    b->priv->l.unlock();
 }
 
 void QoreCounter::destructor(ExceptionSink* xsink) {
@@ -223,15 +236,15 @@ int QoreCounter::getWaiting() const {
 }
 
 // internal only
-void QoreCounter::waitForZero() {
-    priv->waitForZero();
+void qore_counter_ops::waitForZeroImpl(QoreCounter* b) {
+    b->priv->waitForZero();
 }
 
 // internal only
-int QoreCounter::waitForCountAtMost(int n, int timeout_ms) {
-    return priv->waitForCountAtMost(n, timeout_ms);
+int qore_counter_ops::waitForCountAtMostImpl(QoreCounter* b, int n, int timeout_ms) {
+    return b->priv->waitForCountAtMost(n, timeout_ms);
 }
 
-void QoreCounter::dec() {
-    priv->dec();
+void qore_counter_ops::decImpl(QoreCounter* b) {
+    b->priv->dec();
 }

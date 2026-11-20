@@ -1,0 +1,244 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - validation of unpaired UTF-16 surrogates that some Apple libiconv versions convert silently
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class Utf16ValidationTest
+
+#! A UTF-16 character is a code unit that is not a surrogate or a high surrogate followed by a low surrogate
+/** Every check of UTF-16 uses the one definition (qore#6604): the character functions of UTF-16 strings, their
+    validity, the conversions, and the readers; an unpaired surrogate is invalid everywhere.
+*/
+class Utf16ValidationTest inherits QUnit::Test {
+    public {
+        #! unpaired surrogates as code units, between the characters "a" and "b": a low surrogate on its own, and a
+        #! high surrogate followed by a code unit that is not a low surrogate
+        const Unpaired = ((0xdc00,), (0xdfff,), (0xd800, 0x41), (0xdbff, 0xd800), (0xd83d, 0xe000), (0xd800, 0xdbff),
+            (0xdc00, 0xd800));
+
+        #! valid characters at the boundaries: code units that are not surrogates, and surrogate pairs
+        const Valid = ((0x0000,), (0xd7ff,), (0xe000,), (0xffff,), (0xd800, 0xdc00), (0xdbff, 0xdfff),
+            (0xd83d, 0xde00));
+
+        #! the explicit byte orders, and the generic encoding, which is big-endian
+        const Encodings = ("UTF-16LE", "UTF-16BE", "UTF-16");
+    }
+
+    constructor() : Test("Utf16ValidationTest", "1.0") {
+        addTestCase("unpaired surrogates are invalid", \unpaired());
+        addTestCase("valid characters round-trip", \valid());
+        addTestCase("a high surrogate cut off by the end", \truncated());
+        addTestCase("the text after an unpaired surrogate is decoded", \decodedText());
+        addTestCase("readers", \readers());
+        addTestCase("other Unicode forms", \otherForms());
+        addTestCase("Unicode forms created on the fly", \onTheFlyForms());
+        addTestCase("the native definition", \native());
+        set_return_value(main());
+    }
+
+    #! returns the bytes of the code units in the given encoding
+    static binary units(list<int> l, string enc) {
+        binary rv = binary();
+        foreach int u in (l) {
+            rv += enc == "UTF-16LE" ? parse_hex_string(sprintf("%02x%02x", u & 0xff, u >> 8))
+                : parse_hex_string(sprintf("%04x", u));
+        }
+        return rv;
+    }
+
+    #! an encoding created on the fly with the characters of UTF-16, and reverse() of the other Unicode forms by
+    #! code unit
+    otherForms() {
+        string bad = binary_to_string(units((0x61, 0xdc00, 0x62), "UTF-16LE"), "UTF-16LE//");
+        assertFalse(bad.isEncodingValid(), "UTF-16LE// unpaired surrogate");
+        assertThrows("INVALID-ENCODING", sub () { bad.substr(2); }, NOTHING, "UTF-16LE// substr()");
+        string good = binary_to_string(units((0x61, 0xd83d, 0xde00, 0x62), "UTF-16LE"), "UTF-16LE//");
+        assertTrue(good.isEncodingValid(), "UTF-16LE// surrogate pair");
+        assertEq(3, good.length(), "UTF-16LE// length()");
+        foreach string enc in ("UTF-32LE", "UCS-2LE") {
+            string text = enc == "UCS-2LE" ? "aé€b" : "aé😀b";
+            string s = convert_encoding(text, enc);
+            assertEq(convert_encoding(reverse(text), enc), reverse(s), enc + " reverse()");
+            assertEq(4, s.length(), enc + " length()");
+        }
+    }
+
+    #! returns the bytes of the code units in an encoding with code units of the given width in bytes, in the byte
+    #! order of the encoding's conversion of "a"
+    static binary formUnits(list<int> l, string enc, int width) {
+        bool le = binary(convert_encoding("a", enc))[0] == 0x61;
+        binary rv = binary();
+        foreach int u in (l) {
+            string hex = sprintf(width == 4 ? "%08x" : "%04x", u);
+            if (le) {
+                hex = foldl $2 + $1, (map hex.substr($1 * 2, 2), xrange(width));
+            }
+            rv += parse_hex_string(hex);
+        }
+        return rv;
+    }
+
+    #! the Unicode encoding forms that an encoding created on the fly can have, with and without iconv conversion
+    #! flags after "//", which some iconv implementations do not accept (musl): every one is as strict as the
+    #! built-in UTF-16 encodings, and a name with the flags is the same encoding as the name without them
+    onTheFlyForms() {
+        # the encodings, the width of their code units, whether they have characters outside the BMP, and their
+        # invalid code unit sequences between "a" and "b"
+        list<hash<auto>> forms = (
+            {"enc": "UTF-16LE", "width": 2, "non_bmp": True, "invalid": Unpaired},
+            {"enc": "UTF-16BE", "width": 2, "non_bmp": True, "invalid": Unpaired},
+            {"enc": "UTF-16", "width": 2, "non_bmp": True, "invalid": Unpaired},
+            {"enc": "UTF-32LE", "width": 4, "non_bmp": True, "invalid": ((0xd800,), (0xdfff,), (0x110000,))},
+            {"enc": "UTF-32BE", "width": 4, "non_bmp": True, "invalid": ((0xd800,), (0xdfff,), (0x110000,))},
+            {"enc": "UTF-32", "width": 4, "non_bmp": True, "invalid": ((0xd800,), (0xdfff,), (0x110000,))},
+            {"enc": "UCS-4LE", "width": 4, "non_bmp": True, "invalid": ((0xd800,), (0xdfff,), (0x110000,))},
+            {"enc": "UCS-4BE", "width": 4, "non_bmp": True, "invalid": ((0xd800,), (0xdfff,), (0x110000,))},
+            {"enc": "UCS-4", "width": 4, "non_bmp": True, "invalid": ((0xd800,), (0xdfff,), (0x110000,))},
+            {"enc": "UCS-2LE", "width": 2, "non_bmp": False, "invalid": ((0xd800,), (0xdc00,), (0xdfff,))},
+            {"enc": "UCS-2BE", "width": 2, "non_bmp": False, "invalid": ((0xd800,), (0xdc00,), (0xdfff,))},
+            {"enc": "UCS-2", "width": 2, "non_bmp": False, "invalid": ((0xd800,), (0xdc00,), (0xdfff,))},
+        );
+        foreach hash<auto> form in (forms) {
+            foreach string enc in ((form.enc, form.enc + "//")) {
+                string text = form.non_bmp ? "aé😀b" : "aé€b";
+                string s = convert_encoding(text, enc);
+                assertEq(binary(convert_encoding(text, form.enc)), binary(s), enc + " the bytes of the base form");
+                assertTrue(s.isEncodingValid(), enc + " valid isEncodingValid()");
+                assertEq(4, s.length(), enc + " valid length()");
+                assertEq(text, convert_encoding(s, "UTF-8"), enc + " round trip");
+                assertEq(form.non_bmp ? "😀" : "€", convert_encoding(s.substr(2, 1), "UTF-8"), enc + " valid substr()");
+                assertEq(binary(convert_encoding(reverse(text), form.enc)), binary(reverse(s)), enc + " reverse()");
+                foreach list<int> l in (form.invalid) {
+                    string label = Utf16ValidationTest::label(l, enc);
+                    binary b = Utf16ValidationTest::formUnits((0x61,) + l + (0x62,), enc, form.width);
+                    string bad = binary_to_string(b, enc);
+                    assertFalse(bad.isEncodingValid(), label + " isEncodingValid()");
+                    assertThrows("INVALID-ENCODING", \bad.length(), NOTHING, label + " length()");
+                    assertThrows("INVALID-ENCODING", \length(), (bad,), label + " length(s)");
+                    assertThrows("INVALID-ENCODING", \bad.substr(), (2,), label + " substr(2)");
+                    assertThrows("INVALID-ENCODING", \bad.substr(), (1, 1), label + " substr(1, 1)");
+                    assertThrows("INVALID-ENCODING", \bad.substr(), (-1,), label + " substr(-1)");
+                    assertThrows("INVALID-ENCODING", \index(), (bad, binary_to_string(
+                        Utf16ValidationTest::formUnits((0x62,), enc, form.width), enc)), label + " index()");
+                    assertThrows("INVALID-ENCODING", \trunc_str(), (bad, bad.size()), label + " trunc_str()");
+                    assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), (bad, "UTF-8"),
+                        label + " convert");
+                    # the first character is before the invalid code unit
+                    assertEq("a", convert_encoding(bad.substr(0, 1), "UTF-8"), label + " substr() before");
+                }
+            }
+        }
+    }
+
+    static string label(list<int> l, string enc) {
+        return enc + " " + foldl $1 + " " + $2, (map sprintf("%04x", $1), l);
+    }
+
+    unpaired() {
+        foreach string enc in (Encodings) {
+            foreach list<int> l in (Unpaired) {
+                string label = Utf16ValidationTest::label(l, enc);
+                string s = binary_to_string(units((0x61,) + l + (0x62,), enc), enc);
+                assertFalse(s.isEncodingValid(), label + " isEncodingValid()");
+                assertThrows("INVALID-ENCODING", \s.substr(), (1, 1), label + " substr()");
+                # reverse() reverses each code unit that does not start a character as a character of its own
+                assertEq(units(reverse((0x61,) + l + (0x62,)), enc), binary(reverse(s)), label + " reverse()");
+                assertThrows("INVALID-ENCODING", \index(), (s, binary_to_string(units((0x62,), enc), enc)),
+                    label + " index()");
+                assertThrows("INVALID-ENCODING", \trunc_str(), (s, s.size()), label + " trunc_str()");
+                # the first character is before the unpaired surrogate
+                assertEq("a", convert_encoding(s.substr(0, 1), "UTF-8"), label + " substr() before");
+                # a character count of text that is not valid in its encoding raises an exception (qore#6655)
+                assertThrows("INVALID-ENCODING", \s.length(), NOTHING, label + " length()");
+                assertThrows("INVALID-ENCODING", \length(), (s,), label + " length(s)");
+                assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), (s, "UTF-8"), label + " convert");
+                # as the first character of a string
+                string first = binary_to_string(units(l + (0x62,), enc), enc);
+                assertThrows("INVALID-ENCODING", \first.substr(), (0, 1), label + " first substr()");
+                assertFalse(first.isEncodingValid(), label + " first isEncodingValid()");
+            }
+        }
+    }
+
+    valid() {
+        foreach string enc in (Encodings) {
+            foreach list<int> l in (Valid) {
+                string label = Utf16ValidationTest::label(l, enc);
+                binary b = units((0x61,) + l + (0x62,), enc);
+                string s = binary_to_string(b, enc);
+                assertTrue(s.isEncodingValid(), label + " isEncodingValid()");
+                # one character between the ASCII ones
+                assertEq(3, s.length(), label + " length()");
+                assertEq(units(l, enc), binary(s.substr(1, 1)), label + " substr()");
+                assertEq(binary(binary_to_string(units((0x62,) + l + (0x61,), enc), enc)), binary(reverse(s)),
+                    label + " reverse()");
+                assertEq(2, index(s, binary_to_string(units((0x62,), enc), enc)), label + " index()");
+                assertEq(b, binary(trunc_str(s, b.size())), label + " trunc_str()");
+                # the conversion to UTF-8 and back gives the same bytes
+                string u = convert_encoding(s, "UTF-8");
+                assertEq(3, u.length(), label + " UTF-8 length()");
+                assertEq(b, binary(convert_encoding(u, enc)), label + " round trip");
+            }
+        }
+    }
+
+    #! a high surrogate at the end is a character cut off by the end, which trunc_str() leaves out where the length
+    #! cuts it
+    truncated() {
+        foreach string enc in (Encodings) {
+            string s = binary_to_string(units((0x61, 0xd83d), enc), enc);
+            assertFalse(s.isEncodingValid(), enc);
+            assertThrows("INVALID-ENCODING", \s.substr(), (1, 1), enc + " substr()");
+            assertThrows("INVALID-ENCODING", \trunc_str(), (s, 10), enc + " trunc_str() whole");
+            assertEq("a", convert_encoding(trunc_str(s, 3), "UTF-8"), enc + " trunc_str() cut");
+            assertThrows("INVALID-ENCODING", \s.length(), NOTHING, enc + " length()");
+        }
+    }
+
+    #! the text of a string is decoded after an unpaired surrogate, which is replaced: a check of the text finds the
+    #! characters after it
+    decodedText() {
+        foreach string enc in (Encodings) {
+            foreach list<int> l in (Unpaired) {
+                string label = Utf16ValidationTest::label(l, enc);
+                string s = binary_to_string(units((0x61,) + l + (0x0a, 0x62), enc), enc);
+                assertThrows("LINE-ERROR", \check_line_text(), (s, "text", "LINE-ERROR"), label);
+            }
+            # a number ends at an unpaired surrogate
+            assertEq(12, int(binary_to_string(units((0x31, 0x32, 0xdc00, 0x33), enc), enc)), enc + " int()");
+        }
+    }
+
+    #! StreamReader reads a surrogate pair as one character and raises an exception for an unpaired surrogate
+    readers() {
+        foreach string enc in ("UTF-16LE", "UTF-16BE") {
+            StreamReader sr(new BinaryInputStream(units((0xd83d, 0xde00, 0x41), enc)), enc);
+            assertEq("😀A", convert_encoding(sr.readString(2), "UTF-8"), enc + " readString()");
+            foreach list<int> l in (Unpaired) {
+                string label = Utf16ValidationTest::label(l, enc);
+                sr = new StreamReader(new BinaryInputStream(units(l + (0x62,), enc)), enc);
+                assertThrows("INVALID-ENCODING", \sr.readString(), (l.size() + 1), label + " readString()");
+            }
+        }
+    }
+
+    native() {
+        string qore = TestInterpreter::qore_interpreter();
+        string native = ENV.QORE_UTF16_VALIDATION_TEST ?? dirname(qore) + "/qore-utf16-validation-test";
+        if (!is_file(native)) {
+            testSkip("the native UTF-16 validation test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("PASS: UTF-16 validation\n", output);
+    }
+}

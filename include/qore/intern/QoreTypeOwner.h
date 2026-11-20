@@ -42,6 +42,9 @@
 #include <vector>
 
 class QoreTypeInfo;
+class QoreClass;
+class TypedHashDecl;
+class QoreEnumDecl;
 
 class qore_ns_private;
 struct QoreTypeOwnerGroup;
@@ -137,6 +140,11 @@ public:
     */
     DLLLOCAL virtual void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const = 0;
 
+    //! Adds the declarations that the declaration's caches hold (the concrete declarations of a generic hashdecl),
+    //! referenced; the caller releases the references (issue #6419)
+    DLLLOCAL virtual void getTypeOwnerCachedDecls(std::vector<QoreTypeOwner*>& owners) const {
+    }
+
     //! Takes a reference to the declaration (QoreTypeOwnerBatch)
     DLLLOCAL virtual void refTypeOwner() = 0;
 
@@ -169,8 +177,30 @@ public:
     bool type_owner_group_live = false;
     //! true if the declaration holds a reference to itself for its group
     bool type_owner_group_hold = false;
-    //! true if a declaration kept until library cleanup (a retired hashdecl) names it: it is retired, not freed
+    //! true if a retired hashdecl names it: it is retired, not freed, until no such hashdecl is left
+    /** see type_owner_kept_by
+    */
     bool type_owner_forever_named = false;
+    //! the number of retired or concrete declarations that name it without a reference (issue #6419)
+    /** A retired hashdecl, which keeps its members (type_owner_keeps), and a concrete declaration of a generic hashdecl
+        whose type arguments name it (HD<Foo>); a retired declaration is freed only once this is zero
+    */
+    size_t type_owner_kept_by = 0;
+    //! the declarations that this one keeps (their type_owner_kept_by counts it), released when it is freed
+    std::vector<QoreTypeOwner*> type_owner_keeps;
+    //! the epoch of the retirement once every derived type that named the declaration was orphaned (issue #6419)
+    /** 0 while it is retired and its derived types are not orphaned yet
+    */
+    uint64_t type_owner_retire_epoch = 0;
+    //! true if a derived type could not be orphaned from the declaration: it is kept until library cleanup
+    bool type_owner_unfreeable = false;
+    //! true once the declaration is being freed after its retirement (qore_type_owner_released() returns false)
+    bool type_owner_freeing = false;
+    //! the tombstone of the declaration once it has been made, guarded by the tombstone registry's lock
+    /** Made while the declaration and what it names are alive (QoreTypeOwnerBatch), so that a later lookup does not
+        read what can have been freed since
+    */
+    const void* type_owner_tombstone = nullptr;
 };
 
 //! The QoreTypeOwner of a class, hashdecl or enum declaration's private data \a T
@@ -223,6 +253,10 @@ public:
         owner->getTypeOwnerHeldRefs(refs);
     }
 
+    DLLLOCAL virtual void getTypeOwnerCachedDecls(std::vector<QoreTypeOwner*>& owners) const {
+        owner->getTypeOwnerCachedDecls(owners);
+    }
+
     DLLLOCAL virtual void refTypeOwner() {
         owner->refTypeOwner();
     }
@@ -270,11 +304,17 @@ public:
     //! Takes a reference to each user declaration of the namespace and of its subnamespaces
     DLLLOCAL QoreTypeOwnerBatch(qore_ns_private& ns);
 
+    //! Takes a reference to each of the given user declarations, which are destroyed together (the declarations that
+    //! a rollback of a parse removes)
+    DLLLOCAL QoreTypeOwnerBatch(const std::vector<QoreTypeOwner*>& all);
+
     //! Decides the fate of the declarations and releases the references
     DLLLOCAL ~QoreTypeOwnerBatch();
 
 private:
     std::vector<QoreTypeOwner*> owners;
+
+    DLLLOCAL void init(const std::vector<QoreTypeOwner*>& all);
 };
 
 //! Returns the number of declarations retired and not freed yet (see QoreTypeOwner)
@@ -318,10 +358,100 @@ struct QoreTypeRetirementInfo {
     uint64_t newest_pending_epoch = 0;
     //! the lowest epoch of the threads that run Qore code, or 0 if no thread does
     uint64_t min_active_epoch = 0;
+    //! the number of retired declarations freed before library cleanup
+    int64_t freed_declarations = 0;
+    //! the numbers of tombstones made (see qore_class_tombstone())
+    size_t tombstone_classes = 0;
+    size_t tombstone_hashdecls = 0;
+    size_t tombstone_enums = 0;
 };
 
 //! Returns the bookkeeping of the retired declarations and derived types; the threads are scanned after the items are
 //! counted, so an item counted as freeable is one that no thread can read
 DLLLOCAL void qore_type_retirement_info(QoreTypeRetirementInfo& info);
+
+//! Frees the retired declarations that no thread can read and nothing leads to anymore (issue #6419)
+/** Every thread has passed a quiescent point since the declaration's retirement epoch, no derived type or declaration
+    names it, and nothing but its retirement holds a reference to it.  Cheap when nothing is pending; never waits.
+    Called after retirements, at the outermost exit of a thread from Qore code, at the end of a quiescent wait and by
+    the debug hooks; a call made while one runs in the same thread does nothing.
+
+    @return the number of declarations freed
+*/
+DLLLOCAL size_t qore_type_retirement_free();
+
+//! Called when library cleanup starts (every thread has ended): from then on, the declarations retired are kept until
+//! library cleanup frees them, with their derived types, without tombstones (see qore_type_retirement_free())
+DLLLOCAL void qore_type_retirement_shutdown();
+
+//! true while retired declarations wait to be freed (see qore_type_retirement_free())
+DLLLOCAL extern std::atomic<bool> qore_type_retirement_pending;
+
+//! Returns the tombstone of a class: an empty, immortal class equal to it (see lib/QoreTypeTombstone.cpp), the class
+//! itself if it is builtin, or nullptr if it cannot be made; the caller holds no type lock
+DLLLOCAL const QoreClass* qore_class_tombstone(const QoreClass* qc);
+//! Returns the tombstone of a hashdecl; see qore_class_tombstone()
+DLLLOCAL const TypedHashDecl* qore_hashdecl_tombstone(const TypedHashDecl* hd);
+//! Returns the tombstone of an enum; see qore_class_tombstone()
+DLLLOCAL const QoreEnumDecl* qore_enum_tombstone(const QoreEnumDecl* ed);
+//! Returns the type built on the tombstones of the declarations that a type names (the type itself if it names none);
+//! \a ok is false if one cannot be made
+DLLLOCAL const QoreTypeInfo* qore_type_tombstone(const QoreTypeInfo* ti, bool& ok);
+//! Returns true if the declaration is a tombstone
+DLLLOCAL bool qore_is_type_tombstone(const void* decl);
+//! Returns the numbers of tombstones made
+DLLLOCAL void qore_type_tombstone_counts(size_t& classes, size_t& hashdecls, size_t& enums);
+//! Frees the tombstones at library cleanup
+DLLLOCAL void qore_free_type_tombstones();
+//! Makes the tombstone of a declaration whose types a derived type names, while it is alive (QoreTypeOwnerBatch)
+DLLLOCAL void qore_type_owner_make_tombstone(QoreTypeOwner* owner);
+
+//! Holds back the free of what is retired after the epoch of the thread that armed it, while it lives (issue #6419)
+/** For work that a thread hands to a thread that has no epoch of its own (a work item of the JIT's background compiler,
+    whose IR the handing thread read): the scan of the threads counts each armed hold as a thread with that epoch.
+    Movable with the work; empty until it is armed.
+*/
+class QoreTypeEpochHold {
+public:
+    DLLLOCAL QoreTypeEpochHold() = default;
+    DLLLOCAL QoreTypeEpochHold(QoreTypeEpochHold&& old) : id(old.id) {
+        old.id = 0;
+    }
+    DLLLOCAL QoreTypeEpochHold& operator=(QoreTypeEpochHold&& old) {
+        if (this != &old) {
+            release();
+            id = old.id;
+            old.id = 0;
+        }
+        return *this;
+    }
+    DLLLOCAL QoreTypeEpochHold(const QoreTypeEpochHold&) = delete;
+    DLLLOCAL QoreTypeEpochHold& operator=(const QoreTypeEpochHold&) = delete;
+
+    DLLLOCAL ~QoreTypeEpochHold() {
+        release();
+    }
+
+    //! Records the epoch of the current thread (the current epoch if it runs no Qore code)
+    DLLLOCAL void arm();
+
+    //! Releases the hold
+    DLLLOCAL void release();
+
+private:
+    //! the hold's key in the registry of holds, or 0
+    uint64_t id = 0;
+};
+
+//! Returns the lowest epoch of the armed holds, or 0 if there is none (see QoreTypeEpochHold)
+DLLLOCAL uint64_t qore_type_epoch_hold_min();
+
+//! A concrete declaration of a generic hashdecl whose type arguments name user declarations keeps them (issue #6419)
+/** They are retired, not freed, while it lives, as its members name their types; released with
+    qore_type_owner_release_kept()
+*/
+DLLLOCAL void qore_type_owner_keep_type_args(QoreTypeOwner* keeper, const std::vector<const QoreTypeInfo*>& args);
+//! Releases what qore_type_owner_keep_type_args() kept
+DLLLOCAL void qore_type_owner_release_kept(QoreTypeOwner* keeper);
 
 #endif

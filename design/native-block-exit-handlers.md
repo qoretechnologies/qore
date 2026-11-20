@@ -6,6 +6,11 @@ its block the handler is also lowered inline, so most executions run the inline 
 the block is left by an exception, and when the block's handlers are not lowered inline (a `ScopeExit` that is not
 `inline_lowered`).
 
+The lowering can reuse a compiled handler when another registration of the same body sees extra parent locals
+(#6701). The inherited slots must keep their numbers. Any additional slots must hold plain scalars and the
+handler's statements and IR, including nested handlers, must use only the original slots. A closure cell, a value
+whose lifetime the handler frame could extend, or an unknown local dependency requires the original layout.
+
 ## Registration and execution
 
 Native code (JIT and AOT) registers each handler when its statement is reached (`OnBlockExit`) on a thread-local
@@ -36,6 +41,11 @@ function, and a nested handler is named after the handler containing it, such as
 
 The handler reads the locals of its function from the thread-local variable stack, to which the function publishes
 them before it runs its handlers (`syncLocalsToRuntimeForHandlers()`), and the function reloads them afterwards.
+
+The analysis of writes used for parameter ownership and native local reloads follows the handler functions reachable
+from the enclosing function. Registrations in inline and out-of-line copies can share the same handler IR. Because the
+analysis accumulates a set of written locals, it scans each distinct handler body once per collection (#6647).
+`QORE_IR_OPT_STATS=1` reports that count as `scans` in the function's `IR-OPT-HANDLER-WRITES` line.
 
 At each pending handler call, `finalizeHandlerSites()` releases the parent's cached owners of locals that its
 handlers can access. This includes the entry-time owner of a pre-instantiated local, as well as its reload tracker

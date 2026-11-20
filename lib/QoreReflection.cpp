@@ -133,9 +133,14 @@ const QoreTypeInfo* qore_type_get_code_return_type(const QoreTypeInfo* ti) {
     return code_type ? code_type->getReturnType() : nullptr;
 }
 
-const type_vec_t* qore_type_get_code_param_types(const QoreTypeInfo* ti) {
+bool qore_type_get_code_param_types(const QoreTypeInfo* ti, type_vec_t& params) {
     const QoreComplexCodeTypeInfo* code_type = QoreTypeInfo::getComplexCodeType(ti);
-    return code_type ? &code_type->getParamTypes() : nullptr;
+    if (!code_type) {
+        return false;
+    }
+    // a copy: the types can be orphaned (issue #6419)
+    params = code_type->getParamTypes().toVector();
+    return true;
 }
 
 bool qore_type_code_has_varargs(const QoreTypeInfo* ti) {
@@ -151,16 +156,19 @@ bool qore_type_is_parameterized(const QoreTypeInfo* ti) {
     return hd && typed_hash_decl_private::get(*hd)->isParameterizedHashDecl();
 }
 
-const type_vec_t* qore_type_get_type_arguments(const QoreTypeInfo* ti) {
+bool qore_type_get_type_arguments(const QoreTypeInfo* ti, type_vec_t& args) {
     const QoreParameterizedClassTypeInfo* parameterized_type = QoreTypeInfo::getParameterizedClassType(ti);
     if (parameterized_type) {
-        return &parameterized_type->getTypeArgs();
+        // a copy: the types can be orphaned (issue #6419)
+        args = parameterized_type->getTypeArgs().toVector();
+        return true;
     }
     const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
     if (hd && typed_hash_decl_private::get(*hd)->isParameterizedHashDecl()) {
-        return &typed_hash_decl_private::get(*hd)->getTypeArgs();
+        args = typed_hash_decl_private::get(*hd)->getTypeArgs();
+        return true;
     }
-    return nullptr;
+    return false;
 }
 
 bool qore_type_is_type_parameter(const QoreTypeInfo* ti) {
@@ -848,8 +856,10 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
         }
     }
     if (privileged && sm) {
+        // the target's own manager: the sandbox that a Program keeps of the code that created it gives that code no
+        // privileges in it (a helper Program that trusted code created for a sandboxed caller stays trusted code's)
         QoreSandboxManager* target_sm = qore_program_private::get(*const_cast<QoreProgram*>(target))
-            ->getSandboxManagerRef();
+            ->getOwnSandboxManagerRef();
         // A user module Program has no manager of its own: sandbox resolution walks out of it to the code that
         // calls it, so code that runs there for this caller is governed by the caller's manager, as it is when the
         // caller calls the module directly.  Any other Program must have the governing manager as its own.

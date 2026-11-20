@@ -402,6 +402,37 @@ unless a sandbox governs the code entered inside it: ask in the code that acts o
 entering the barrier. `examples/test/qore/classes/SandboxManager/sandbox-inherited-methods.qtest` covers each
 resolution path.
 
+#### Process-wide registries
+
+A registry that a module keeps in a static class member or a module variable (callbacks, hooks, handlers, listeners,
+loggers, plugins) is shared by every Program in the process: a module from the module path is loaded once, and what
+the registry holds runs or is used later for every caller, with that caller's data (connection settings, records,
+requests).  A functional-domain tag on the registration method is not enough: it stops only a Program that has the
+matching `PO_NO_*` option, and a sandboxed Program need not have it.
+
+The rule (issue #6743): such a registry refuses registration, replacement and removal by code that is sandboxed or
+acts for sandboxed code, with `SANDBOX-REGISTRATION-ERROR`:
+
+- Qore code calls `SandboxManager::checkProcessWideRegistration(<what>)` first in each method that changes the
+  registry; where the registration is only a side effect of an operation that the caller may perform (a server
+  setting its logger on the process-wide controller), it leaves the registration out when
+  `SandboxManager::isProcessWideRegistrationAllowed()` returns `False`, instead of refusing the operation;
+- C++ code calls `qore_check_process_wide_registration(<what>, xsink)` (`QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION`).
+
+Both decide with `qore_caller_is_sandboxed()`: the code of a sandboxed Program or of a Program that sandboxed code
+created, code that such a Program calls, and code that a sandbox governs, also through a policy barrier or a
+system-policy capability; fails closed.  The initialization of library code is not refused, so registrations made in
+a module's `init` closure or static initializers work whatever code loads the module first.  A registry that is an
+object the caller can also create for itself (`YamlTagHandlerRegistry`) refuses only on the process-wide instance,
+which it creates in its module's initialization, so that it carries no caller's sandbox.
+
+A registry that tenants are meant to use may instead keep the entries of each isolation domain apart and use only the
+caller's own, once isolation domains exist (qore#6536); until then it refuses.  A module that raises its own
+exception for this rule (`DataProvider`: `DATA-PROVIDER-CALLBACK-ERROR`, `DATA-PROVIDER-LISTENER-ERROR`) keeps it,
+as do the registries, lookups, resolvers, serializers, codecs, schemas and type caches of the standard modules,
+which use `DataProvider::checkSharedRegistration()` / `mayRegisterShared()` or a check of their own (qore#6747; see
+`examples/test/runner/test_shared_registry_checks.py`).
+
 ### Destructors of Builtin Classes in the Uncontrolled-API Domain
 
 A sandbox that refuses uncontrolled APIs refuses, at run time, every builtin variant in the `QDOM_UNCONTROLLED_API`
@@ -447,10 +478,12 @@ missing or has another type), it must count the sandbox as restricting.
 `trustsUncontrolledApis()` is the fifth predicate: true if the sandbox's uncontrolled-API policy allows them, that is,
 the host that attached the sandbox trusts the code it governs (for a combination of managers, true only if every member
 trusts: the AND over the members, the opposite direction to the others, which are ORs). The rule for a module that
-refuses an operation that only an unrestricted caller may use is: refuse if and only if
-`!trustsUncontrolledApis() && restricts()` on the governing manager (the `QoreSandboxManagerHelper::Policy` manager).
-A sandbox that restricts nothing, or whose host trusts its code, does not make the caller untrusted. There is no
-unreadable state; a module that gets the policy another way and cannot read it counts the sandbox as not trusting.
+refuses an operation that only an unrestricted caller may use (one that runs code or does I/O that Qore does not see)
+is trust-only: refuse unless `trustsUncontrolledApis()` is true on the governing manager (the
+`QoreSandboxManagerHelper::Policy` manager), whatever the sandbox restricts. A sandbox that allows all I/O and sets no
+limit but does not trust its code still keeps that code from such operations, as `setUncontrolledApiPolicy()`
+documents; the `restricts()` predicates are for a module that applies the sandbox's I/O policy or limits itself. There
+is no unreadable state; a module that gets the policy another way and cannot read it counts the sandbox as not trusting.
 
 ### Key Principle: Sandbox Manager May Be Absent
 

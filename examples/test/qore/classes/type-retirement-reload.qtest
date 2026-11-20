@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class TypeRetirementReloadTest
+
+#! Values typed with the declarations of a deleted Program accept the values of a reloaded Program of the same source
+/** A Program is deleted while values typed with its declarations live on (list<Foo>, list<hash<HD>>, list<E>, a list
+    of a union of them, as a server keeps typed data across reloads of the same code); a Program parsed from the same
+    source then has equal declarations, whose values the kept values accept, and an empty list<Foo> is a list<Base> of
+    the new Program, as Foo inherits Base in both.  The declarations of the deleted Program are freed once no thread
+    can read them, and the derived types name their tombstones, which are equal to them (issue #6419); in debug builds,
+    they are freed before the new Program's values are added.
+*/
+class TypeRetirementReloadTest inherits QUnit::Test {
+    public {
+        const Opts = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
+
+        const Src = "
+class Base {
+    public {
+        int b = 1;
+    }
+}
+
+class Foo inherits Base {
+    public {
+        int x = 1;
+    }
+}
+
+hashdecl HD {
+    int a = 1;
+}
+
+enum E {
+    A = 1,
+    B = 2,
+}
+
+list<auto> sub mk() {
+    list<Foo> a = ();
+    list<hash<HD>> b = ();
+    list<E> c = ();
+    list<union<hash<HD>, Foo, int>> d = ();
+    return (a, b, c, d);
+}
+
+Foo sub obj() { return new Foo(); }
+hash<HD> sub hdv() { return <HD>{}; }
+E sub ev() { return E::B; }
+
+# the empty list<Foo> of the deleted Program is a list<Base> of this one
+int sub as_base(list<auto> l) {
+    list<Base> lb = l;
+    return lb.size();
+}
+";
+    }
+
+    constructor() : QUnit::Test("TypeRetirementReloadTest", "1.0", \ARGV) {
+        addTestCase("values typed with a deleted Program's declarations accept a reloaded Program's values",
+            \reloadTest());
+        set_return_value(main());
+    }
+
+    reloadTest() {
+        list<auto> kept;
+        {
+            Program a(Opts);
+            a.parse(Src, "a");
+            kept = a.callFunction("mk");
+        }
+        # a debug build of a library that frees retired declarations frees them now
+        if (Option::HAVE_LIBRARY_DEBUGGING && exists_function("dbg_type_retirement_free")) {
+            call_function("dbg_type_retirement_free");
+        }
+
+        Program b(Opts);
+        b.parse(Src, "b");
+
+        # the empty list<Foo> of the deleted Program is a list<Base> of the reloaded one
+        assertEq(0, b.callFunction("as_base", kept[0]));
+
+        list<auto> l = kept[0];
+        l += b.callFunction("obj");
+        assertEq("list<object<Foo>>", l.fullType());
+        assertEq(1, l[0].x);
+
+        l = kept[1];
+        l += b.callFunction("hdv");
+        assertEq("list<hash<HD>>", l.fullType());
+        assertEq(1, l[0].a);
+
+        l = kept[2];
+        l += b.callFunction("ev");
+        assertEq("list<enum<E>>", l.fullType());
+        assertEq(1, l.size());
+
+        # a union that names the deleted Program's declarations accepts the reloaded Program's values, whose types are
+        # not its exact members
+        l = kept[3];
+        l += b.callFunction("hdv");
+        l += b.callFunction("obj");
+        l += 2;
+        assertEq(3, l.size());
+        assertEq(1, l[0].a);
+        assertEq(1, l[1].x);
+        assertEq(2, l[2]);
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { list<auto> u = kept[3]; u += "string"; });
+
+        # a value of an unrelated type is still refused
+        l = kept[0];
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { l += "string"; });
+    }
+}

@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - iconv conversion of protobuf JSON from ISO-8859-1 to UTF-8
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Protobuf JSON is UTF-8: ProtobufSchema::fromJson() converts its argument to UTF-8 before it parses it, and
+# ProtobufSchema::toJson() returns a string tagged UTF-8 (issue #6616).  The test runs its cases in its own process
+# and again in a child process whose default encoding is ISO-8859-1; the strings are made from bytes, since a string
+# literal has the default encoding.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires protobuf
+%requires ../../../examples/test/TestInterpreter.qm
+
+%exec-class ProtobufJsonEncodingTest
+
+class ProtobufJsonEncodingTest inherits QUnit::Test {
+    public {
+        const Proto = "syntax = \"proto3\";\n"
+            "package test;\n"
+            "message Text {\n"
+            "  string text = 1;\n"
+            "}\n";
+
+        #! the environment variable that marks the child process
+        const ChildVar = "QORE_PROTOBUF_JSON_TEST_CHILD";
+    }
+
+    private {
+        # "café" in UTF-8
+        string utf8 = binary_to_string(<636166c3a9>, "UTF-8");
+    }
+
+    constructor() : QUnit::Test("ProtobufJsonEncodingTest", "1.0", \ARGV) {
+        addTestCase("fromJson() converts its argument to UTF-8", \testFromJson());
+        addTestCase("toJson() returns UTF-8", \testToJson());
+        if (!ENV{ChildVar}) {
+            addTestCase("a default encoding that is not UTF-8", \testChild());
+        }
+        set_return_value(main());
+    }
+
+    testFromJson() {
+        ProtobufSchema schema(Proto);
+        string json = convert_encoding("{\"text\": \"" + utf8 + "\"}", "UTF-8");
+        assertEq("UTF-8", json.encoding());
+        hash<auto> h = schema.fromJson("test.Text", json);
+        assertEq(binary(utf8), binary(h.text));
+
+        # the same JSON in ISO-8859-1
+        string latin1 = convert_encoding(json, "ISO-8859-1");
+        assertNeq(binary(json), binary(latin1));
+        h = schema.fromJson("test.Text", latin1);
+        assertEq(binary(utf8), binary(h.text));
+    }
+
+    testToJson() {
+        ProtobufSchema schema(Proto);
+        string json = schema.toJson("test.Text", {"text": utf8});
+        assertEq("UTF-8", json.encoding());
+        assertEq(binary(convert_encoding("{\"text\":\"" + utf8 + "\"}", "UTF-8")), binary(json));
+        # the JSON parses back to the same string
+        hash<auto> h = schema.fromJson("test.Text", json);
+        assertEq(binary(utf8), binary(h.text));
+    }
+
+    #! runs the test cases in a child process whose default encoding is ISO-8859-1
+    testChild() {
+        string qore = TestInterpreter::qore_interpreter();
+        list<string> opts = TestInterpreter::interpreter_options(get_script_path());
+        string cmd = sprintf("%s=1 %s %s --charset=ISO-8859-1 %s 2>&1", ChildVar, qore,
+            (map sprintf("'%s'", replace($1, "'", "'\\''")), opts).join(" "), get_script_path());
+        int rc;
+        string output = backquote(cmd, \rc);
+        assertEq(0, rc, output);
+    }
+}

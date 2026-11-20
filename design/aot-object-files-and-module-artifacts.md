@@ -845,7 +845,7 @@ so artifacts carry no separate PC→location map, and stripping debug info
 the line of each instruction with no column.
 
 Format version 21 dropped the per-function location table from the function
-records of the metadata (a v9–v20 record's table is skipped when read), and qcc
+records of the metadata, and qcc
 no longer writes the PC→location maps that earlier versions carried in a `QPCM`
 EOF trailer and in a `qore_aot_pcloc` (Mach-O `__QORE,__pcloc`) object section.
 
@@ -996,9 +996,11 @@ emitted object is read back; the IR interpreter qualifies only because the
 compiler's outlining pass no longer calls into it.
 
 Both halves of the binary format belong in the fingerprint, not just the
-writer. The load-time check rejects a `.qo` whose version is *newer* than the
-reader's and accepts an older one, so a reader change against an
-un-invalidated cache is silent misinterpretation rather than a load error.
+writer. The reader checks that a `.qo` is within its supported version
+range. Batch AO sets the minimum to v51, so artifacts from AN (v50) and
+earlier require recompilation; a qcc executable checks the version of the
+program image that it embeds when it starts, before it reads anything else. A reader change within the supported range
+still needs to invalidate cached artifacts when it changes their interpretation.
 
 `qcc` owns the reusable build-sidecar contract for `.qo` and aggregate outputs.
 Build systems should prefer qcc options over external scanners when the needed

@@ -28,6 +28,62 @@
 #include "bson_conversion.h"
 #include "QC_ObjectId.h"
 
+/* BSON strings and the names of the driver are UTF-8 text, which libbson does not check when it reads a document, and
+   documents from a server can have strings that are not valid UTF-8 (written by other drivers or older servers); the
+   text is checked where it enters the program (qore#6604)
+*/
+QoreStringNode* mongo_utf8_string(const char* p, size_t len, const char* where, const char* what,
+        ExceptionSink* xsink) {
+    if (q_check_text_encoding(QCS_UTF8, p, len, where, what, xsink)) {
+        return nullptr;
+    }
+    return new QoreStringNode(p, len, QCS_UTF8);
+}
+
+QoreListNode* mongo_utf8_string_list(char** names, const char* where, const char* what, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> list(new QoreListNode(stringTypeInfo), xsink);
+    for (size_t i = 0; names[i]; ++i) {
+        QoreStringNode* name = mongo_utf8_string(names[i], strlen(names[i]), where, what, xsink);
+        if (!name) {
+            return nullptr;
+        }
+        if (list->push(name, xsink)) {
+            return nullptr;
+        }
+    }
+    return list.release();
+}
+
+int mongo_set_utf8_key(QoreHashNode* h, const char* key, size_t len, QoreValue value, ExceptionSink* xsink) {
+    // a hash key is in the default encoding: a UTF-8 key is converted to it, as parse_json() converts its keys
+    // (a BSON key has no NUL character: it is a NUL-terminated string)
+    if (QCS_DEFAULT == QCS_UTF8) {
+        return h->setKeyValue(key, value, xsink);
+    }
+    return h->setKeyValue(QoreString(key, len, QCS_UTF8), value, xsink);
+}
+
+int mongo_utf8_arg(const QoreString& str, TempEncodingHelper& utf8, const char* where, const char* what,
+        ExceptionSink* xsink) {
+    if (q_check_text_encoding(str.getEncoding(), str.c_str(), str.size(), where, what, xsink)) {
+        return -1;
+    }
+    return utf8.set(&str, QCS_UTF8, xsink) ? 0 : -1;
+}
+
+MongoUtf8Key::MongoUtf8Key(const char* key, ExceptionSink* xsink) : key(key) {
+    // a hash key is in the default encoding, and a BSON key is UTF-8 text
+    if (QCS_DEFAULT != QCS_UTF8) {
+        QoreString str(key, QCS_DEFAULT);
+        converted.reset(str.convertEncoding(QCS_UTF8, xsink));
+        this->key = converted ? converted->c_str() : nullptr;
+    }
+}
+
+static QoreStringNode* bson_string(const char* p, size_t len, const char* what, ExceptionSink* xsink) {
+    return mongo_utf8_string(p, len, "MongoDB", what, xsink);
+}
+
 QoreValue bson_value_to_qore(const bson_value_t* value, ExceptionSink* xsink) {
     // conversion recurses with the nesting of the document, which only the size of the document bounds
     if (q_check_stack(xsink)) {
@@ -41,7 +97,7 @@ QoreValue bson_value_to_qore(const bson_value_t* value, ExceptionSink* xsink) {
             return value->value.v_double;
 
         case BSON_TYPE_UTF8:
-            return new QoreStringNode(value->value.v_utf8.str, value->value.v_utf8.len, QCS_UTF8);
+            return bson_string(value->value.v_utf8.str, value->value.v_utf8.len, "BSON string", xsink);
 
         case BSON_TYPE_DOCUMENT: {
             bson_t doc;
@@ -96,16 +152,30 @@ QoreValue bson_value_to_qore(const bson_value_t* value, ExceptionSink* xsink) {
         case BSON_TYPE_REGEX: {
             // Return as hash with pattern and options
             ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
-            h->setKeyValue("$regex", new QoreStringNode(value->value.v_regex.regex), xsink);
-            h->setKeyValue("$options", new QoreStringNode(value->value.v_regex.options), xsink);
+            QoreStringNode* regex = bson_string(value->value.v_regex.regex, strlen(value->value.v_regex.regex),
+                "BSON regular expression", xsink);
+            if (!regex) {
+                return QoreValue();
+            }
+            h->setKeyValue("$regex", regex, xsink);
+            QoreStringNode* options = bson_string(value->value.v_regex.options,
+                strlen(value->value.v_regex.options), "BSON regular expression options", xsink);
+            if (!options) {
+                return QoreValue();
+            }
+            h->setKeyValue("$options", options, xsink);
             return h.release();
         }
 
         case BSON_TYPE_DBPOINTER: {
             // Deprecated type - return as hash
             ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
-            h->setKeyValue("$ref", new QoreStringNode(value->value.v_dbpointer.collection,
-                value->value.v_dbpointer.collection_len), xsink);
+            QoreStringNode* ref = bson_string(value->value.v_dbpointer.collection,
+                value->value.v_dbpointer.collection_len, "BSON DBPointer collection", xsink);
+            if (!ref) {
+                return QoreValue();
+            }
+            h->setKeyValue("$ref", ref, xsink);
             char oid_str[25];
             bson_oid_to_string(&value->value.v_dbpointer.oid, oid_str);
             h->setKeyValue("$id", new QoreStringNode(oid_str), xsink);
@@ -113,20 +183,28 @@ QoreValue bson_value_to_qore(const bson_value_t* value, ExceptionSink* xsink) {
         }
 
         case BSON_TYPE_CODE:
-            return new QoreStringNode(value->value.v_code.code, value->value.v_code.code_len, QCS_UTF8);
+            return bson_string(value->value.v_code.code, value->value.v_code.code_len, "BSON code", xsink);
 
         case BSON_TYPE_SYMBOL:
-            return new QoreStringNode(value->value.v_symbol.symbol, value->value.v_symbol.len, QCS_UTF8);
+            return bson_string(value->value.v_symbol.symbol, value->value.v_symbol.len, "BSON symbol", xsink);
 
         case BSON_TYPE_CODEWSCOPE: {
             // Return as hash with code and scope
             ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
-            h->setKeyValue("$code", new QoreStringNode(value->value.v_codewscope.code,
-                value->value.v_codewscope.code_len, QCS_UTF8), xsink);
+            QoreStringNode* code = bson_string(value->value.v_codewscope.code, value->value.v_codewscope.code_len,
+                "BSON code", xsink);
+            if (!code) {
+                return QoreValue();
+            }
+            h->setKeyValue("$code", code, xsink);
             bson_t scope;
             bson_init_static(&scope, value->value.v_codewscope.scope_data,
                 value->value.v_codewscope.scope_len);
-            h->setKeyValue("$scope", bson_to_qore_hash(&scope, xsink), xsink);
+            QoreHashNode* scope_hash = bson_to_qore_hash(&scope, xsink);
+            if (!scope_hash) {
+                return QoreValue();
+            }
+            h->setKeyValue("$scope", scope_hash, xsink);
             return h.release();
         }
 
@@ -179,14 +257,19 @@ QoreHashNode* bson_to_qore_hash(const bson_t* doc, ExceptionSink* xsink) {
 
     while (bson_iter_next(&iter)) {
         const char* key = bson_iter_key(&iter);
+        size_t key_len = bson_iter_key_len(&iter);
+        // a key is UTF-8 text, as a string is
+        if (q_check_text_encoding(QCS_UTF8, key, key_len, "MongoDB", "BSON key", xsink)) {
+            return nullptr;
+        }
         const bson_value_t* value = bson_iter_value(&iter);
 
-        QoreValue qv = bson_value_to_qore(value, xsink);
+        // the holder releases a value returned with an exception
+        ValueHolder qv(bson_value_to_qore(value, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
-        hash->setKeyValue(key, qv, xsink);
-        if (*xsink) {
+        if (mongo_set_utf8_key(*hash, key, key_len, qv.release(), xsink) || *xsink) {
             return nullptr;
         }
     }
@@ -235,7 +318,11 @@ int qore_value_to_bson_append(bson_t* doc, const char* key, const QoreValue& v_i
         case NT_NUMBER: {
             const QoreNumberNode* num = value.get<const QoreNumberNode>();
             QoreString str;
-            num->toString(str);
+            // the exact decimal value of the number if it has one of at most the 34 digits of a decimal128 value,
+            // otherwise its display string (issue #6837)
+            if (num->getDecimalString(str, 34, -1, xsink)) {
+                return -1;
+            }
             bson_decimal128_t dec;
             if (!bson_decimal128_from_string(str.c_str(), &dec)) {
                 xsink->raiseException("MONGODB-BSON-ERROR", "failed to convert number to decimal128");
@@ -374,10 +461,14 @@ bson_t* qore_hash_to_bson(const QoreHashNode* hash, ExceptionSink* xsink) {
 
     ConstHashIterator hi(hash);
     while (hi.next()) {
-        const char* key = hi.getKey();
+        MongoUtf8Key key(hi.getKey(), xsink);
+        if (!key) {
+            bson_destroy(doc);
+            return nullptr;
+        }
         QoreValue value = hi.get();
 
-        if (qore_value_to_bson_append(doc, key, value, xsink)) {
+        if (qore_value_to_bson_append(doc, key.c_str(), value, xsink)) {
             bson_destroy(doc);
             return nullptr;
         }

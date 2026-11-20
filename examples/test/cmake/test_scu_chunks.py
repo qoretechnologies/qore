@@ -53,6 +53,13 @@ WRAPPER = """// wrapper
 COSTS = "# c\n9000 parser.cpp\n9000 scanner.cpp\n5000 A.cpp\n4000 B.cpp\n3000 C.cpp\n2000 D.cpp\n1000 E.cpp\n10 F.cpp\n"
 
 
+def flat(text):
+    """the text with each run of whitespace (line breaks and the indentation of continuation lines included) collapsed
+    to one space: CMake word-wraps the text of a message, and where it breaks a line depends on the lengths of the
+    words, such as the path of a temporary file at the start of the message"""
+    return re.sub(r"\s+", " ", text)
+
+
 def includes(text):
     return re.findall(r'^#include "([^"]+)"', text, re.M)
 
@@ -113,7 +120,7 @@ class SmallWrapperTest(unittest.TestCase):
         got = [i for t in chunks.values() for i in includes(t)]
         self.assertEqual(sorted(got), sorted(i for i in includes(WRAPPER) if "TermIOS" not in i))
         self.assertEqual(len(got), len(set(got)))
-        self.assertIn("ISO=/b/QC_TermIOS.cpp;/s/lib/QoreTermIOS.cpp", p.stdout)
+        self.assertIn("ISO=/b/QC_TermIOS.cpp;/s/lib/QoreTermIOS.cpp", flat(p.stdout))
 
     def test_groups_undef_and_order(self):
         _, chunks = self.split().run(2)
@@ -192,21 +199,21 @@ class SmallWrapperTest(unittest.TestCase):
                 ('#ifdef X\n#ifdef Y\n#include "/s/lib/A.cpp"\n#endif\n#endif', "nested conditional")):
             p, chunks = self.split().run(2, "bad", raw)
             self.assertNotEqual(p.returncode, 0, raw)
-            self.assertIn(message, p.stdout, raw)
+            self.assertIn(flat(message), flat(p.stdout), raw)
             self.assertEqual(chunks, {}, raw)
 
     def test_rejects_bad_chunk_count(self):
         for n in (0, 257):
             p, chunks = self.split().run(n, "badn")
             self.assertNotEqual(p.returncode, 0, n)
-            self.assertIn("chunk count must be between 1 and 256", p.stdout)
+            self.assertIn("chunk count must be between 1 and 256", flat(p.stdout))
             self.assertEqual(chunks, {})
 
     def test_malformed_cost_line_warns(self):
         p, chunks = self.split(costs=COSTS + "12\tF.cpp\nnot a cost line\n").run(2)
         self.assertEqual(p.returncode, 0, p.stdout)
-        self.assertIn("ignoring malformed line '12\tF.cpp'", p.stdout)
-        self.assertIn("ignoring malformed line 'not a cost line'", p.stdout)
+        self.assertIn(flat("ignoring malformed line '12\tF.cpp'"), flat(p.stdout))
+        self.assertIn("ignoring malformed line 'not a cost line'", flat(p.stdout))
         self.assertEqual(len(chunks), 2)
 
 
@@ -287,7 +294,7 @@ class OptionValidationTest(unittest.TestCase):
                 p = subprocess.run(["cmake", "-S", str(ROOT), "-B", tmp, "-DSINGLE_COMPILATION_UNIT_CHUNKS=" + value],
                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
                 self.assertNotEqual(p.returncode, 0)
-                self.assertIn("SINGLE_COMPILATION_UNIT_CHUNKS must be a positive integer", p.stdout)
+                self.assertIn("SINGLE_COMPILATION_UNIT_CHUNKS must be a positive integer", flat(p.stdout))
 
 
 def load_tool():

@@ -1,0 +1,48 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+#! fixture of inherits-namespace-lookup.qtest (issue #6710): a module whose namespace declares a class and a hashdecl
+#! of the same names as classes in the root namespace, and inherits them by their unqualified names
+
+%modern
+
+module InheritsNamespaceLookup {
+    version = "1.0";
+    desc = "issue #6710 fixture";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public class B {
+    string m() {
+        return "::B";
+    }
+}
+
+public hashdecl P {
+    string from = "::P";
+}
+
+public namespace InheritsNamespaceLookup {
+    public class B {
+        string m() {
+            return "InheritsNamespaceLookup::B";
+        }
+    }
+
+    public hashdecl P {
+        string from = "InheritsNamespaceLookup::P";
+    }
+
+    public class X inherits B {
+    }
+
+    public hashdecl H inherits P {
+        int z = 1;
+    }
+
+    public string sub check() {
+        hash<H> h();
+        return sprintf("%s %s %s", (new X()).m(), h.from, (new B()).m());
+    }
+}

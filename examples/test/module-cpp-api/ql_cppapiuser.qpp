@@ -306,6 +306,215 @@ public:
         delete this;
     }
 };
+
+// the owners of the external data whose callbacks fail on request (issue #6786)
+constexpr const char* ExtDataExOwner = "cppapiuser-ex";
+constexpr const char* ExtDataLegacyOwner = "cppapiuser-legacy";
+
+// the options and counters of the external data whose callbacks fail on request
+struct ExtDataFailState {
+    std::mutex m;
+    // copy(): the 0-based index of the first copy() call that fails, -1 for none
+    int64 copy_fail_from = -1;
+    // copy(): only the call with the index copy_fail_from fails
+    bool copy_fail_once = false;
+    // copy(): a failing copy() returns a copy together with the exception
+    bool copy_with_exception = false;
+    // copy(): returns nullptr (the child does not inherit the data)
+    bool copy_null = false;
+    // init() fails
+    bool init_fail = false;
+    // the release of a copy fails
+    bool deref_fail = false;
+
+    // the number of copy() calls
+    int64 copy_calls = 0;
+    // the number of copies made
+    int64 made = 0;
+    // the number of copies released
+    int64 released = 0;
+    // the number of copies released whose init() had not been called
+    int64 released_uninit = 0;
+    // the number of init() calls
+    int64 inits = 0;
+
+    void set(const QoreHashNode* opts) {
+        std::lock_guard<std::mutex> lg(m);
+        copy_fail_from = -1;
+        copy_fail_once = copy_with_exception = copy_null = init_fail = deref_fail = false;
+        copy_calls = made = released = released_uninit = inits = 0;
+        if (!opts) {
+            return;
+        }
+        bool found;
+        int64 v = opts->getKeyAsBigInt("copy_fail_from", found);
+        if (found) {
+            copy_fail_from = v;
+        }
+        copy_fail_once = opts->getKeyAsBool("copy_fail_once", found);
+        copy_with_exception = opts->getKeyAsBool("copy_with_exception", found);
+        copy_null = opts->getKeyAsBool("copy_null", found);
+        init_fail = opts->getKeyAsBool("init_fail", found);
+        deref_fail = opts->getKeyAsBool("deref_fail", found);
+    }
+
+    QoreHashNode* counters() {
+        std::lock_guard<std::mutex> lg(m);
+        QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+        h->setKeyValue("copy_calls", copy_calls, nullptr);
+        h->setKeyValue("made", made, nullptr);
+        h->setKeyValue("released", released, nullptr);
+        h->setKeyValue("released_uninit", released_uninit, nullptr);
+        h->setKeyValue("inits", inits, nullptr);
+        h->setKeyValue("live", made - released, nullptr);
+        return h;
+    }
+
+    // returns true if the copy() call fails
+    bool copyCall(bool& with_exception, bool& null) {
+        std::lock_guard<std::mutex> lg(m);
+        int64 i = copy_calls++;
+        with_exception = copy_with_exception;
+        null = copy_null;
+        return copy_fail_from >= 0 && (copy_fail_once ? i == copy_fail_from : i >= copy_fail_from);
+    }
+
+    void madeCopy() {
+        std::lock_guard<std::mutex> lg(m);
+        ++made;
+    }
+
+    bool initCall() {
+        std::lock_guard<std::mutex> lg(m);
+        ++inits;
+        return init_fail;
+    }
+
+    bool releaseCall(bool init_done) {
+        std::lock_guard<std::mutex> lg(m);
+        ++released;
+        if (!init_done) {
+            ++released_uninit;
+        }
+        return deref_fail;
+    }
+};
+ExtDataFailState ext_data_ex_state;
+ExtDataFailState ext_data_legacy_state;
+
+// external data whose callbacks report their errors in the sink (AbstractQoreProgramExternalDataEx)
+class FailingExtDataEx : public AbstractQoreProgramExternalDataEx {
+public:
+    // the data set in a Program, which is not counted
+    FailingExtDataEx() : original(true) {
+    }
+
+    AbstractQoreProgramExternalData* copy(QoreProgram* pgm, ExceptionSink* xsink) const override {
+        bool with_exception, null;
+        bool fail = ext_data_ex_state.copyCall(with_exception, null);
+        if (fail) {
+            xsink->raiseException("EXT-DATA-COPY-ERROR", "the copy of the external data failed");
+            if (!with_exception) {
+                return nullptr;
+            }
+        } else if (null) {
+            return nullptr;
+        }
+        ext_data_ex_state.madeCopy();
+        return new FailingExtDataEx(false);
+    }
+
+    void init(ExceptionSink* xsink) override {
+        init_done = true;
+        if (ext_data_ex_state.initCall()) {
+            xsink->raiseException("EXT-DATA-INIT-ERROR", "the initialization of the external data failed");
+        }
+    }
+
+    void doDeref(ExceptionSink* xsink) override {
+        if (!original && ext_data_ex_state.releaseCall(init_done)) {
+            xsink->raiseException("EXT-DATA-DEREF-ERROR", "the release of the external data failed");
+        }
+        delete this;
+    }
+
+private:
+    bool original;
+    bool init_done = false;
+
+    FailingExtDataEx(bool original) : original(original) {
+    }
+};
+
+// external data with the legacy callbacks only, which throw C++ exceptions on request
+class FailingExtDataLegacy : public AbstractQoreProgramExternalData {
+public:
+    // the data set in a Program, which is not counted
+    FailingExtDataLegacy() : original(true) {
+    }
+
+    AbstractQoreProgramExternalData* copy(QoreProgram* pgm) const override {
+        bool with_exception, null;
+        bool fail = ext_data_legacy_state.copyCall(with_exception, null);
+        if (fail) {
+            ExceptionSink xsink;
+            xsink.raiseException("EXT-DATA-LEGACY-COPY-ERROR", "the legacy copy of the external data failed");
+            throw QoreXSinkException(xsink);
+        }
+        if (null) {
+            return nullptr;
+        }
+        ext_data_legacy_state.madeCopy();
+        return new FailingExtDataLegacy(false);
+    }
+
+    void init() override {
+        init_done = true;
+        if (ext_data_legacy_state.initCall()) {
+            ExceptionSink xsink;
+            xsink.raiseException("EXT-DATA-LEGACY-INIT-ERROR", "the legacy initialization of the external data "
+                "failed");
+            throw QoreXSinkException(xsink);
+        }
+    }
+
+    void doDeref() override {
+        bool fail = !original && ext_data_legacy_state.releaseCall(init_done);
+        delete this;
+        if (fail) {
+            ExceptionSink xsink;
+            xsink.raiseException("EXT-DATA-LEGACY-DEREF-ERROR", "the legacy release of the external data failed");
+            throw QoreXSinkException(xsink);
+        }
+    }
+
+private:
+    bool original;
+    bool init_done = false;
+
+    FailingExtDataLegacy(bool original) : original(original) {
+    }
+};
+
+// sets the external data of an owner in the current Program
+int ext_data_fail_set(const char* owner, AbstractQoreProgramExternalData* data, ExtDataFailState& state,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    QoreProgram* pgm = getProgram();
+    if (pgm->getExternalData(owner)) {
+        // the data was not set
+        ExceptionSink del_xsink;
+        if (AbstractQoreProgramExternalDataEx* ex = dynamic_cast<AbstractQoreProgramExternalDataEx*>(data)) {
+            ex->doDeref(&del_xsink);
+        } else {
+            data->doDeref();
+        }
+        xsink->raiseException("EXT-DATA-ERROR", "the external data of '%s' is already set", owner);
+        return -1;
+    }
+    state.set(opts);
+    pgm->setExternalData(owner, data);
+    return 0;
+}
 }
 
 /** @defgroup cppapiuser_functions cppapiuser Test Module Functions
@@ -430,6 +639,26 @@ int cpp_api_counter_live_count() [flags=RET_VALUE_ONLY] {
 */
 list<string> cpp_api_module_cmds() [flags=RET_VALUE_ONLY] {
     return cppapiuser_get_module_cmds();
+}
+
+//! returns the number of times the C++ destructor of the class of the \c "pending-error" and \c "pending-const" module commands has run, in any Program
+/** The commands create objects of a builtin class of the Program that the command runs in (its source Program), as
+    module-python creates the objects of the Python classes of the Program: \c "pending-error" raises
+    \c CPPAPIUSER-PENDING-ERROR with such an object as its argument, and \c "pending-const <name>" adds a constant
+    with such an object to the namespace \c CppApiPendingProbe of the Program (qore#6752); neither is recorded by
+    cpp_api_module_cmds()
+
+    @return the number of times the destructor has run so far in the process
+*/
+int cpp_api_pending_probe_destroyed() [flags=RET_VALUE_ONLY] {
+    return cppapiuser_pending_probe_destroyed();
+}
+
+//! returns the number of objects of the classes that the \c "owned-constant" module command creates whose C++ destructor has run
+/** @return the number of objects destroyed so far in the process (#6791)
+*/
+int cpp_api_owned_probe_destroyed() [flags=RET_VALUE_ONLY] {
+    return cppapiuser_get_owned_probe_destroyed();
 }
 
 //! returns whether the Program of the calling code has a sandbox manager
@@ -842,6 +1071,48 @@ hash<auto> cpp_api_binary_data(binary b) {
     rv->setKeyValue("null", b->getPtr() ? false : true, xsink);
     rv->setKeyValue("size", static_cast<int64>(b->size()), xsink);
     return rv.release();
+}
+
+//! decodes a string with the C++ API's base64 decoding methods that return a string (issue #6621)
+/** @param str the encoded string
+    @param url @ref True for the base64url methods (\c parseBase64UrlToString()), @ref False for the base64 ones
+    (\c parseBase64ToString())
+    @param node @ref True for the QoreStringNode methods, @ref False for the QoreString ones
+    @param encoding the encoding argument of the method; if not present, the overload without an encoding is called
+
+    @return a hash with \c str: the decoded string, and \c encoding: its encoding
+
+    @throw BASE64-PARSE-ERROR the string is not valid in the encoding
+*/
+hash<auto> cpp_api_string_parse_base64(string str, bool url, bool node, *string encoding) {
+    const QoreEncoding* enc = encoding ? QEM.findCreate(encoding) : nullptr;
+    SimpleRefHolder<QoreStringNode> rv;
+    if (node) {
+        if (url) {
+            rv = enc ? str->parseBase64UrlToString(enc, xsink) : str->parseBase64UrlToString(xsink);
+        } else {
+            rv = enc ? str->parseBase64ToString(enc, xsink) : str->parseBase64ToString(xsink);
+        }
+    } else {
+        const QoreString* s = str;
+        std::unique_ptr<QoreString> r;
+        if (url) {
+            r.reset(enc ? s->parseBase64UrlToString(enc, xsink) : s->parseBase64UrlToString(xsink));
+        } else {
+            r.reset(enc ? s->parseBase64ToString(enc, xsink) : s->parseBase64ToString(xsink));
+        }
+        if (r) {
+            rv = new QoreStringNode(*r);
+        }
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    assert(rv);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("encoding", new QoreStringNode(rv->getEncoding()->getCode()), xsink);
+    h->setKeyValue("str", rv.release(), xsink);
+    return h.release();
 }
 
 //! writes data of the given size, which is never touched, with OutputStream::write() of the stream (see above)
@@ -1610,6 +1881,94 @@ bool cpp_api_ext_data_read_while_locked() [dom=PROCESS] {
 }
 
 
+//! sets external data derived from AbstractQoreProgramExternalDataEx in the current Program (issue #6786)
+/** Its callbacks report their errors in the ExceptionSink; the counters are reset.
+
+    @param opts options:
+    - \c copy_fail_from: the 0-based index of the first copy() call that raises \c EXT-DATA-COPY-ERROR
+    - \c copy_fail_once: only the copy() call with the index \c copy_fail_from fails
+    - \c copy_with_exception: a failing copy() returns a copy together with the exception
+    - \c copy_null: copy() returns nullptr (the child does not inherit the data)
+    - \c init_fail: init() raises \c EXT-DATA-INIT-ERROR
+    - \c deref_fail: the release of a copy raises \c EXT-DATA-DEREF-ERROR
+
+    @throw EXT-DATA-ERROR the data is already set
+*/
+nothing cpp_api_ext_data_ex_set(*hash<auto> opts) [dom=PROCESS] {
+    ext_data_fail_set(ExtDataExOwner, new FailingExtDataEx, ext_data_ex_state, opts, xsink);
+}
+
+//! removes the external data set by cpp_api_ext_data_ex_set() from the current Program
+/** @return True if the data was set
+*/
+bool cpp_api_ext_data_ex_remove() [dom=PROCESS] {
+    AbstractQoreProgramExternalData* data = getProgram()->removeExternalData(ExtDataExOwner);
+    if (!data) {
+        return false;
+    }
+    static_cast<FailingExtDataEx*>(data)->doDeref(xsink);
+    return true;
+}
+
+//! returns the counters of the copies of the data set by cpp_api_ext_data_ex_set()
+/** @return a hash with the keys \c copy_calls, \c made, \c released, \c released_uninit (copies released whose
+    init() had not been called), \c inits and \c live (copies made and not released)
+*/
+hash<auto> cpp_api_ext_data_ex_counters() [flags=RET_VALUE_ONLY] {
+    return ext_data_ex_state.counters();
+}
+
+//! sets external data derived from AbstractQoreProgramExternalData alone in the current Program (issue #6786)
+/** Its legacy callbacks throw a QoreXSinkException on request; the counters are reset.
+
+    @param opts options as for cpp_api_ext_data_ex_set(); a failing copy() throws \c EXT-DATA-LEGACY-COPY-ERROR,
+    init() \c EXT-DATA-LEGACY-INIT-ERROR, and the release of a copy \c EXT-DATA-LEGACY-DEREF-ERROR (after
+    deleting it); \c copy_with_exception is ignored
+
+    @throw EXT-DATA-ERROR the data is already set
+*/
+nothing cpp_api_ext_data_legacy_set(*hash<auto> opts) [dom=PROCESS] {
+    ext_data_fail_set(ExtDataLegacyOwner, new FailingExtDataLegacy, ext_data_legacy_state, opts, xsink);
+}
+
+//! removes the external data set by cpp_api_ext_data_legacy_set() from the current Program
+/** @return True if the data was set
+*/
+bool cpp_api_ext_data_legacy_remove() [dom=PROCESS] {
+    AbstractQoreProgramExternalData* data = getProgram()->removeExternalData(ExtDataLegacyOwner);
+    if (!data) {
+        return false;
+    }
+    data->doDeref();
+    return true;
+}
+
+//! returns the counters of the copies of the data set by cpp_api_ext_data_legacy_set()
+/** @return a hash as cpp_api_ext_data_ex_counters()
+*/
+hash<auto> cpp_api_ext_data_legacy_counters() [flags=RET_VALUE_ONLY] {
+    return ext_data_legacy_state.counters();
+}
+
+//! calls the legacy copy() of the data set by cpp_api_ext_data_ex_set() for the current Program, and releases it
+/** Checks the final adapter of AbstractQoreProgramExternalDataEx, which reports an exception as unhandled
+
+    @return True if a copy was returned
+*/
+bool cpp_api_ext_data_ex_legacy_copy() [dom=PROCESS] {
+    QoreProgram* pgm = getProgram();
+    AbstractQoreProgramExternalData* data = pgm->getExternalData(ExtDataExOwner);
+    if (!data) {
+        return false;
+    }
+    AbstractQoreProgramExternalData* copy = data->copy(pgm);
+    if (!copy) {
+        return false;
+    }
+    copy->doDeref();
+    return true;
+}
+
 //! returns \c "*string": a variant of an overload whose variants all accept no value
 /** Used to check that an argument with no value selects the same variant at parse time and at run time; see
     nothing-variants/nothing-variants.qtest
@@ -2218,6 +2577,26 @@ nothing sb_capture_applied_check_read(int handle, string path) {
         smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
     }
     return QoreValue();
+}
+
+//! Calls code while a capture is applied, as a native bridge runs a handler for the code whose sandbox it captured
+/** The capture is applied with QoreSandboxCaptureHelper; the code runs as the submitter's operation, governed by the
+    captured sandbox (qorus#867: a capability scope set there is refused)
+
+    @param handle the handle of the capture
+    @param c the code to call
+
+    @return the value that \a c returns
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+auto sb_capture_applied_call(int handle, code c) [dom=THREAD_CONTROL] {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return QoreValue();
+    }
+    QoreSandboxCaptureHelper sch(*capture);
+    return c->execValue(nullptr, xsink);
 }
 
 //! Checks read access to a path with one capture applied inside another, as a native bridge does

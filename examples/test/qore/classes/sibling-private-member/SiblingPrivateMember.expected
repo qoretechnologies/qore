@@ -1,0 +1,13 @@
+other base class: read: PRIVATE-MEMBER: 'pm' is a private member of class 'X5'
+other base class: write: PRIVATE-MEMBER: 'pm' is a private member of class 'X5'
+other base class: dynamic read: PRIVATE-MEMBER: 'pm' is a private member of class 'X5'
+other base class: keys: ["pub"]
+other base class: hash + object: {pub: "A::pub"}
+other base class: first key: "pub"
+other base class: public member: "A::pub"
+declaring class: "A::pm"
+inheriting class: "A::pm"
+subclass: "A::pm"
+declaring class on a subclass: "A::pm"
+typed: other base class: PARSE-EXCEPTION: illegal access to private member 'pm' of class 'X5'
+typed: subclass: parsed: "A::pm"

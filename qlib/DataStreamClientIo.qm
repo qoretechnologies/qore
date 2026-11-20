@@ -1413,8 +1413,10 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
             }
         }
         if (parsed.typeCode() == NT_HASH && parsed.err && parsed.desc) {
-            throw parsed.err, sprintf("server-side error: %s: %s",
-                get_ex_pos(parsed), parsed.desc), parsed.arg;
+            # the server gives the location of the exception only with debugging enabled (qore#6780)
+            throw parsed.err, parsed.file
+                ? sprintf("server-side error: %s: %s", get_ex_pos(parsed), parsed.desc)
+                : sprintf("server-side error: %s", parsed.desc), parsed.arg;
         }
         throw "CONNECT-HTTP-ERROR",
             sprintf("HTTP status code %d received for Connect request: message: %y",
@@ -1546,8 +1548,10 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
             }
         }
         if (parsed.typeCode() == NT_HASH && parsed.err && parsed.desc) {
-            throw parsed.err, sprintf("server-side error: %s: %s",
-                get_ex_pos(parsed), parsed.desc), parsed.arg;
+            # the server gives the location of the exception only with debugging enabled (qore#6780)
+            throw parsed.err, parsed.file
+                ? sprintf("server-side error: %s: %s", get_ex_pos(parsed), parsed.desc)
+                : sprintf("server-side error: %s", parsed.desc), parsed.arg;
         }
         throw "DATASTREAM-CLIENT-RECEIVE-ERROR",
             sprintf("HTTP status code %d received: message: %y",

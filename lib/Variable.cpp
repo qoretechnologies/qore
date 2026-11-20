@@ -65,6 +65,8 @@
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreHashKeyHelper.h"
+#include "qore/intern/QoreBufferNodePrivate.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 typedef std::set<int64, std::greater<int64>> ind_set_t;
 
@@ -1870,7 +1872,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             return -1;
         }
         QoreBufferNode* b = getValue().get<QoreBufferNode>();
-        if (!b->isUniqueForMutation()) {
+        if (!qore_buffer_node_private(b).isUniqueForMutation()) {
             ensureUnique();
             b = getValue().get<QoreBufferNode>();
         }
@@ -2254,7 +2256,8 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove, c
 
     const qore_class_private* ctx = class_ctx;
     if (ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), ctx)) {
-        ctx = nullptr;
+        // a class on the private:internal path to the member uses it (issue #6800)
+        ctx = qore_class_private::runtimeGetMemberStorageContext(*o->getClass(), mem, ctx);
     }
     int rc = qore_object_private::getLValue(*o, mem, *this, ctx, for_remove, vl.xsink);
     if (!rc && !ctx) {
@@ -2742,7 +2745,7 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
 }
 
 void LValueHelper::setAndLock(QoreVarRWLock& rwl) {
-    rwl.wrlock();
+    qore_var_rwlock_ops(rwl).wrlock();
     vl.set(&rwl);
 }
 
@@ -2967,7 +2970,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                             "(index must evaluate to a non-negative integer)", (int64)original_idx);
                         return -1;
                     }
-                    if (!b->isUniqueForMutation()) {
+                    if (!qore_buffer_node_private(b).isUniqueForMutation()) {
                         ensureUnique();
                         b = getValue().get<QoreBufferNode>();
                     }
@@ -3444,6 +3447,20 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
         rv.ref();
     }
     return rv;
+}
+
+bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val, ExceptionSink* xsink) {
+    if (cur.getType() != NT_REFERENCE) {
+        return false;
+    }
+    // the reference is held for the assignment, which can replace the container that holds it
+    ValueHolder ref(cur.refSelf(), xsink);
+    // an assignment: a member behind a write gate is not read first, as the AST interpreter assigns it
+    LValueHelper lvh(*ref->get<const ReferenceNode>(), xsink, false, true);
+    if (lvh) {
+        lvh.assign(val.refSelf(), "<lvalue>");
+    }
+    return true;
 }
 
 bool qore_is_indirect_ref_value(const QoreValue& val) {
@@ -5252,6 +5269,18 @@ void LocalVarValue::TypeSubstitutionCache::set(const QoreTypeInfo* typeInfo, con
 
     this->resolvedTypeInfo = resolvedTypeInfo;
     this->resolvedRefTypeInfo = resolvedRefTypeInfo;
+}
+
+int LocalVar::checkThreadLocalDataOwner(ExceptionSink* xsink) const {
+    const ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    QoreProgram* pgm = getProgram();
+    // a variable can be created only in the thread-local data of the current Program
+    if (tlpd && tlpd->pgm == pgm) {
+        return 0;
+    }
+    xsink->raiseException("PROGRAM-THREAD-LOCAL-ERROR", "local variable '%s' is not available in the thread-local "
+        "data of Program " QLLD, name.c_str(), pgm ? static_cast<int64>(pgm->getProgramId()) : -1LL);
+    return -1;
 }
 
 //! Only generic storage needs to retain a runtime-selected declaration; ordinary storage has no extra state.

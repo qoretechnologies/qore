@@ -153,6 +153,24 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::http_get_client_exception_info() "http_get_client_exception_info()", the information of
+      an exception without its location or call stack, for the error responses of a server with debugging off
+      (issue #6780)
+    - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
+      reads a chunked request body as bytes and decodes it once, after any decompression, as a body with a
+      \c Content-Length is (with the server's default text encoding as the assumed encoding), and raises
+      \c HTTP-BODY-ENCODING-ERROR, which the server answers with 400, for a body that is text and not valid in its
+      encoding; binary data is never refused; added
+      @ref HttpServer::AbstractHttpRequestHandler::decodeRequestText() "AbstractHttpRequestHandler::decodeRequestText()"
+      and @ref HttpServer::HttpListenerInterface::getDefaultTextEncoding() "HttpListenerInterface::getDefaultTextEncoding()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+    - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
+      does not merge the trailer fields of a chunked request body into the request's header fields; they are given
+      apart, and the body is decoded with the request's own header fields
+      (<a href="https://github.com/qoretechnologies/qore/issues/6753">issue 6753</a>)
+    - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
+      decodes a decompressed body with the encoding of the request, as an uncompressed body is, not with the socket's
+      encoding (<a href="https://github.com/qoretechnologies/qore/issues/6618">issue 6618</a>)
     - @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "AbstractHttpRequestHandler::handleRequest()" is
       declared to return <tt>union<hash<auto>, data></tt> and
       @ref HttpServer::AbstractStreamRequest::getResponseHeaderMessageImpl() "AbstractStreamRequest::getResponseHeaderMessageImpl()"
@@ -1080,6 +1098,75 @@ public *int sub http_parse_content_length(auto value) {
     return int(v);
 }
 
+#! Returns the information of an exception that may be given to a client when debugging is off
+/** The information of an exception tells where it was raised in the server's code; an error response for a client
+    has it only when debugging is enabled (qore#6780).  This returns the type, error code and description of the
+    exception, its argument for a user exception (a system exception's argument is set by the library and can have
+    internal information, and is not given), and the same information of a chained exception (\c next), of an
+    exception given as the argument, and of an exception wrapped in the argument as its \c ex key (as data providers
+    wrap the exception that they rethrow); not its location (\c file, \c line, \c endline, \c source, \c offset,
+    \c lang) or its call stack.
+
+    An argument or its \c ex key is taken as the information of an exception if it is a hash with \c err and a
+    \c callstack list (as every exception has, also one without a description), or with \c err, \c desc, \c file
+    and \c line; any other argument is given as it is.  Exceptions in
+    other places of the argument (in other keys, deeper, or in lists) are not looked for: an argument that has them
+    is given as it is.
+
+    @param ex the exception
+
+    @return the exception's information without its location or call stack
+
+    @since %HttpServerUtil 1.6
+*/
+public hash<ExceptionInfo> sub http_get_client_exception_info(hash<auto> ex) {
+    # a hash without a type, from which reading any key gives no exception (reading a key that the hashdecl of a
+    # hash does not declare raises one)
+    ex = {} + ex;
+    hash<ExceptionInfo> rv = <ExceptionInfo>{
+        "err": ex.err,
+    };
+    # an exception thrown without a description has no "desc" key
+    if (exists ex.desc) {
+        rv.desc = ex.desc;
+    }
+    if (ex.type.typeCode() == NT_STRING) {
+        rv.type = ex.type;
+    }
+    if (ex.type == "User" && exists ex.arg) {
+        auto arg = ex.arg;
+        # the keys are tested with hasKey(), which a hash of a hashdecl answers for any key: reading a key that its
+        # hashdecl does not declare raises an exception
+        if (http_is_exception_info(arg)) {
+            # an exception given as the argument
+            arg = http_get_client_exception_info(arg);
+        } else if (arg.typeCode() == NT_HASH && arg.hasKey("ex") && http_is_exception_info(arg.ex)) {
+            # an exception wrapped in the argument; the argument is copied to a hash without a type, which takes the
+            # exception's information whatever the type of its "ex" member
+            hash<auto> h = {} + arg;
+            h.ex = http_get_client_exception_info(arg.ex);
+            arg = h;
+        }
+        rv.arg = arg;
+    }
+    if (ex.next.typeCode() == NT_HASH) {
+        rv.next = http_get_client_exception_info(ex.next);
+    }
+    return rv;
+}
+
+#! Returns True if the value is the information of an exception, with its location or its call stack
+/** A hash with \c err and a \c callstack list, or with \c err, \c desc, \c file and \c line; the keys are tested
+    with hasKey(), which a hash of a hashdecl answers for any key
+
+    @since %HttpServerUtil 1.6
+*/
+bool sub http_is_exception_info(auto v) {
+    return v.typeCode() == NT_HASH && v.hasKey("err")
+        && ((v.hasKey("callstack") && v.callstack.typeCode() == NT_LIST)
+            || (v.hasKey("desc") && v.hasKey("file") && v.hasKey("line")));
+}
+
 #! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)
 /** @param cx the call context hash
     @param hdr the header hash
@@ -1856,6 +1943,19 @@ public class HttpListenerInterface inherits AbstractLogger {
     */
     int getMaxDecodedBodySize() {
         return DefaultMaxDecodedBodySize;
+    }
+
+    #! Returns the encoding assumed for request text without an encoding declaration
+    /** @return the encoding assumed for request text whose encoding is not declared or defined by its type; this
+        implementation returns \c "ISO-8859-1", the default of
+        @ref HttpServer::HttpServer::getDefaultTextEncoding() "HttpServer::getDefaultTextEncoding()"
+
+        @see @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
+
+        @since HttpServerUtil 1.6
+    */
+    string getDefaultTextEncoding() {
+        return "ISO-8859-1";
     }
 
     #! Returns a hash of extra headers to be added to all responses from this listener
@@ -3070,6 +3170,14 @@ private logChunk(bool send, int size) {
         - \c "hdr": the trailer fields sent after the body, or @ref nothing if there were no trailers
         - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as,
           for example, socket character encoding)
+
+        @note The chunks of an HTTP/1.1 chunked body without a \c Content-Encoding are given as received, as strings
+        in the socket's encoding that are not checked: a chunk can end inside a character, so a chunk is not
+        necessarily valid text by itself.  A stream handler that processes text checks it once the body or each
+        complete character is assembled (for example with
+        @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()"); a body read whole with
+        @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
+        is checked by the server
     */
     private nothing recvImpl(hash<auto> v) {
     }
@@ -4200,6 +4308,55 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         }
     }
 
+    #! Returns a request body received as binary data as text, refusing a body that is not valid in its encoding
+    /** Text is decoded by the rules shared by all HTTP clients and servers (see
+        @ref Qore::decode_http_body() "decode_http_body()") with \a assumed_encoding as the assumed encoding: the
+        string has the bytes of the body without any byte order mark.
+
+        A body that @ref Qore::decode_http_body() "decode_http_body()" does not take as text (ex:
+        \c application/octet-stream or \c image/png, also with a \c charset parameter) is binary data, which has no
+        encoding, and is never refused: it is returned with its bytes unchanged as a string in \a assumed_encoding
+        if they are valid in it, or else in ISO-8859-1, in which every byte is a character.
+
+        Text from outside the server is checked where it enters it, before any handler processes it: a body that is
+        text and not valid in its encoding raises \c HTTP-BODY-ENCODING-ERROR, which the
+        @ref HttpServer::HttpServer "HttpServer" answers with HTTP 400 (Bad Request).  The error has a name of its
+        own so that the server answers only this error with 400, and not an \c INVALID-ENCODING error that a handler
+        raises for text of its own.
+
+        @param hdr the request headers; the \c Content-Type is taken from \c "_qore_orig_content_type" if present,
+        else from \c "content-type"
+        @param body the request body, after any content coding has been decoded
+        @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+
+        @return the request body as a string
+
+        @throw HTTP-BODY-ENCODING-ERROR the body is text that is not valid in its encoding; the server answers this
+        error with HTTP 400 (Bad Request)
+
+        @since HttpServerUtil 1.6
+    */
+    static string decodeRequestText(hash<auto> hdr, binary body, string assumed_encoding) {
+        auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
+        data rv;
+        try {
+            rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed_encoding, "raise");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "INVALID-ENCODING") {
+                throw "HTTP-BODY-ENCODING-ERROR", sprintf("the request body of %d bytes has an invalid encoding: %s",
+                    body.size(), ex.desc);
+            }
+            rethrow;
+        }
+        if (rv.typeCode() != NT_STRING) {
+            # binary data has no encoding: it is never refused, and is given in ISO-8859-1 when its bytes are not
+            # valid in the assumed encoding
+            string str = body.toString(assumed_encoding);
+            return str.isEncodingValid() ? str : body.toString("ISO-8859-1");
+        }
+        return rv;
+    }
+
     #! Returns the maximum size in bytes of a decompressed request body for this handler
     /** @param listener the listener that received the request; if not given, the listener's limit is taken to be
         @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize"
@@ -4252,40 +4409,71 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     }
 
     #! optionally retrieves and post-processes any message body
-    /** @param s the socket of the request
+    /** A chunked request body is read as binary data and decoded once, after any decompression: text is decoded by
+        the rules shared by all HTTP clients and servers, as a body with a \c Content-Length is (see
+        decodeRequestText(); the assumed encoding is the listener's
+        @ref HttpServer::HttpListenerInterface::getDefaultTextEncoding() "HttpListenerInterface::getDefaultTextEncoding()",
+        which is the server's default text encoding, or the socket's encoding if no listener is given), and a body
+        that is text and not valid in its encoding is refused with \c HTTP-BODY-ENCODING-ERROR before the handler
+        processes it; binary data is never refused.  A compressed body is decoded in the same way when
+        @ref decompress_to_string is set.
+
+        @param s the socket of the request
         @param hdr the request headers
         @param body the request body, if already read
         @param decode if the body should be decompressed according to its content encoding
         @param listener the listener that received the request, which gives the maximum size of a decompressed body
         unless the handler sets one; see getMaxDecodedBodySize()
-        @param trailers set to the trailer fields sent after a chunked request body, if any
+        @param trailers set to the trailer fields sent after a chunked request body, if any; they are not merged into
+        \a hdr, and the body is decoded with the request's own header fields
 
         @return the request body
 
         @throw HTTP-BODY-TOO-LARGE the decompressed body exceeds the maximum size
+        @throw HTTP-BODY-ENCODING-ERROR the body is text that is not valid in its encoding (a binary body is never
+        refused); the server answers this error with HTTP 400 (Bad Request)
 
-        @since HttpServerUtil 1.6 added the \a listener and \a trailers parameters
+        @since HttpServerUtil 1.6 added the \a listener and \a trailers parameters; a chunked body and a decompressed
+        body that are not valid text in their encoding are refused
     */
     *data getMessageBody(Socket s, hash<auto> hdr, *data body, bool decode = True,
             *HttpListenerInterface listener, *reference<*hash<auto>> trailers) {
+        # set if the chunked body read here is to be decoded as text, as readHTTPChunkedBody() returned it
+        bool chunked_text;
         if (!body && hdr."transfer-encoding" == "chunked") {
-            hash<auto> chunked = hdr."content-encoding"
-                ? s.readHTTPChunkedBodyBinary(timeout_ms)
-                : s.readHTTPChunkedBody(timeout_ms);
+            # the body is read as bytes and decoded once below: a chunk can end inside a character, and the text is
+            # checked where it enters the server (qore#6604)
+            hash<auto> chunked = s.readHTTPChunkedBodyBinary(timeout_ms);
             body = remove chunked.body;
-            # the other keys are the trailers
+            chunked_text = !hdr."content-encoding";
+            # the other keys are the trailer fields: they are given to the caller apart and are not merged into the
+            # request's header fields, so that they neither replace nor add a header field (RFC 9110 section 6.5,
+            # RFC 9112 section 7.1.2); the body is decoded with the request's own header fields (qore#6753)
             if (chunked) {
                 trailers = chunked;
             }
-            hdr += chunked;
         }
 
         if (decode && body && hdr."content-encoding" && decompress) {
-            body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body,
-                decompress_to_string ? s.getEncoding() : NOTHING, getMaxDecodedBodySize(listener));
+            # the decompressed octets are text in the charset of the request, decoded as an uncompressed body is,
+            # with the socket's encoding as the assumed one (qore#6618)
+            body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
+                getMaxDecodedBodySize(listener));
+            if (decompress_to_string) {
+                body = AbstractHttpRequestHandler::decodeRequestText(hdr, body, getAssumedTextEncoding(s, listener));
+            }
+        } else if (chunked_text && body.typeCode() == NT_BINARY) {
+            body = AbstractHttpRequestHandler::decodeRequestText(hdr, body, getAssumedTextEncoding(s, listener));
         }
 
         return body;
+    }
+
+    #! Returns the encoding assumed for request text without an encoding declaration, as the server assumes it
+    /** private:internal, so that it cannot clash with a method of a subclass
+    */
+    private:internal static string getAssumedTextEncoding(Socket s, *HttpListenerInterface listener) {
+        return listener ? listener.getDefaultTextEncoding() : s.getEncoding();
     }
 
     #! helper method for handling log messages

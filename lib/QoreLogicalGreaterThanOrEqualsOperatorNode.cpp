@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include <qore/intern/QorePluginRegistry.h>
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreLogicalGreaterThanOrEqualsOperatorNode::op_str(">= operator expression");
 
@@ -51,7 +52,7 @@ static int try_plugin_binary_parse_ge(QoreParseContext& parse_context, const Qor
         const QoreTypeInfo* rti, const QoreParseAnalysis& left_analysis,
         const QoreParseAnalysis& right_analysis, const QoreTypeInfo*& typeInfo) {
     QorePluginResolvedOperationInfo plugin_op;
-    ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+    ExceptionSink* parse_xsink = parse_context.pgm ? qore_program_ops(parse_context.pgm).getParseExceptionSink() : nullptr;
     int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, rti, "ge",
         QorePluginHelperAbi::BinaryValue, plugin_op, parse_xsink);
     if (plugin_rc) {

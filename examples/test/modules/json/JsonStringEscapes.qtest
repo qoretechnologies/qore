@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires qore >= 2.0
+%requires json
+%requires QUnit
+
+%exec-class JsonStringEscapesTest
+
+#! Escape sequences that parse_json() keeps as they are, and escape sequences at the end of the text (qore#6728)
+public class JsonStringEscapesTest inherits QUnit::Test {
+    constructor() : Test("JsonStringEscapesTest", "1.0") {
+        addTestCase("a \\u without four hexadecimal digits", \uWithoutDigits());
+        addTestCase("an escape sequence at the end of the text", \escapeAtEnd());
+        addTestCase("other escape sequences", \otherEscapes());
+        set_return_value(main());
+    }
+
+    uWithoutDigits() {
+        # the text after the \u is parsed whole: a character other than ASCII, the closing quote, other text
+        string s = parse_json("\"\\ué\"");
+        assertEq("\\ué", s);
+        assertTrue(s.isEncodingValid());
+        assertEq("\\u", parse_json("\"\\u\""));
+        assertEq(("\\u", 1), parse_json("[\"\\u\", 1]"));
+        assertEq("\\uZZ", parse_json("\"\\uZZ\""));
+        assertEq("\\u12", parse_json("\"\\u12\""));
+        assertEq("\\u12x4", parse_json("\"\\u12x4\""));
+        assertEq({"a\\u€": "\\u😀"}, parse_json("{\"a\\u€\": \"\\u😀\"}"));
+        # a \u with four hexadecimal digits is a character, as before
+        assertEq("é", parse_json("\"\\u00e9\""));
+    }
+
+    escapeAtEnd() {
+        # the string is not terminated: premature end of input
+        assertThrows("JSON-PARSE-ERROR", "premature end of input", \parse_json(), ("\"\\",));
+        assertThrows("JSON-PARSE-ERROR", "premature end of input", \parse_json(), ("\"\\u",));
+        assertThrows("JSON-PARSE-ERROR", "premature end of input", \parse_json(), ("\"\\u00",));
+        assertThrows("JSON-PARSE-ERROR", "premature end of input", \parse_json(), ("[\"a\\",));
+        assertThrows("JSON-PARSE-ERROR", "premature end of input", \parse_json(), ("{\"a\": \"\\u",));
+    }
+
+    otherEscapes() {
+        assertEq("\"/\\\n\t", parse_json("\"\\\"\\/\\\\\\n\\t\""));
+        # an unknown escape sequence is kept as it is, as before
+        assertEq("\\xé", parse_json("\"\\xé\""));
+        assertEq("\\é", parse_json("\"\\é\""));
+    }
+}

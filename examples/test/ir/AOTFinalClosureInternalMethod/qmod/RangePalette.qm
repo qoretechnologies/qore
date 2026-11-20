@@ -1,0 +1,12 @@
+%modern
+# Copyright 2026 Qore Technologies, s.r.o.
+module RangePalette {
+    version = "1.0";
+    desc = "class declaring a method called by another module's closure";
+    author = "Qore"; license = "MIT";
+}
+public namespace RangePalette {
+    public class Palette {
+        string warning(string s) { return "warning:" + s; }
+    }
+}

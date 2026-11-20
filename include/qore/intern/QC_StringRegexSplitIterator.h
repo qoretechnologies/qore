@@ -33,6 +33,7 @@
 #define _QORE_QC_STRINGREGEXSPLITITERATOR_H
 
 #include <qore/QoreIteratorBase.h>
+#include <qore/ReferenceHolder.h>
 #include <qore/intern/QoreRegex.h>
 
 DLLEXPORT extern QoreClass* QC_STRINGREGEXSPLITITERATOR;
@@ -40,13 +41,13 @@ DLLEXPORT extern qore_classid_t CID_STRINGREGEXSPLITITERATOR;
 
 //! Lazy iterator over a QoreStringNode split by a PCRE2 regex.
 /** Per-call pcre2_match() from the current offset; getValue() returns a
-    zero-copy view over the UTF-8 subject.  Iteration matches eager
+    piece in the original subject's encoding.  Iteration matches eager
     split-by-regex semantics: trailing-empty-piece for a terminal match,
     whole string when the pattern never matches.
 
     Primary wins over the eager ListIterator wrapper:
       - early termination (select / foldl short-circuiting)
-      - O(1) memory: pieces are views, none are materialised up front
+      - pieces are materialised on demand
       - streaming over very large inputs
 
     Eager mode still wins on pure throughput when every piece is consumed
@@ -58,9 +59,7 @@ class StringRegexSplitIterator : public QoreIteratorBase {
 public:
     //! Takes refs on both the source string and the regex.
     /** The source string is converted to UTF-8 if necessary; the converted
-        copy is held for the iterator's lifetime and all yielded views are
-        carved out of it (matches the encoding convention of
-        @ref QoreRegex::extractWithPattern).
+        copy is retained for matching. Results use the original source encoding.
     */
     DLLLOCAL StringRegexSplitIterator(const QoreStringNode* src, const QoreRegex* re, bool with_separator,
             ExceptionSink* xsink);
@@ -73,7 +72,7 @@ public:
     //! Advances to the next piece; returns true if a piece is available, false at end.
     DLLLOCAL bool next(ExceptionSink* xsink);
 
-    //! Returns the current piece as a zero-copy view onto the (UTF-8) subject.
+    //! Returns the current piece in the subject's encoding.
     DLLLOCAL QoreValue getValue(ExceptionSink* xsink);
 
     //! True if next() has yielded a piece and a further piece may or may not follow.
@@ -94,6 +93,7 @@ private:
     // May be a fresh copy if the caller passed a non-UTF-8 string, or the
     // caller's object itself if it was already UTF-8.
     QoreStringNode* subject;
+    SimpleRefHolder<QoreStringNode> original;  // Keeps original bytes for a whole non-UTF-8 piece.
 
     // The regex; ref'd on construction, deref'd in dtor.
     QoreRegex* regex;
@@ -104,7 +104,8 @@ private:
     bool with_separator;
 
     // Byte offset in subject for the next pcre2_match() call.
-    size_t offset = 0;
+    size_t search_offset = 0;
+    size_t offset = 0;  // Start of the next piece, even when an empty match advances the search.
 
     // Byte range of the current piece (set by next(), consumed by getValue()).
     size_t piece_off = 0;

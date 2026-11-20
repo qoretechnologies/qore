@@ -250,6 +250,9 @@ module SalesforceRestDataProvider {
     @section salesforcerestdataprovider_relnotes Release Notes
 
     @subsection salesforcerestdataprovider_v2_1 SalesforceRestDataProvider v2.1
+    - \c SalesforceRestDataProvider::registerChild() cannot be called by sandboxed code: its registry is
+      process-wide (\c SANDBOX-REGISTRATION-ERROR; see @ref sandbox_process_wide_registries)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>)
     - a failed or rate-limited request is not retried while
       @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed", for example while
       example data is requested (see @ref dataprovider_retries)

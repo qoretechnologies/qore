@@ -174,7 +174,7 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
             # Discovery method paths are relative to basePath, which is empty for APIs such as Gmail.
             # Compose an origin-absolute target before dispatch so the client's API root is not added again.
             "pathstr": RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": path},
-                info_map{api}.basePath),
+                GoogleDataProviderBase::getSchemaInfo(api).basePath),
         };
     }
 

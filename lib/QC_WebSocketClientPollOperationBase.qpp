@@ -39,6 +39,7 @@
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/PollStateCloseHook.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/ql_websocket.h"
 
 /** @cond INTERNAL */
 
@@ -206,7 +207,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
     // after a protocol error of the server, the connection ends once the close frame is written: the server's close
     // frame cannot be read any more (RFC 6455 section 7.1.7, issue #5878)
     if (protocol_failed && ws_state == WsState::CLOSING && !send_op && send_queue->empty()) {
-        endClosed(WSCC_ProtocolError, protocol_reason.c_str(), xsink);
+        endClosed(protocol_code, protocol_reason.c_str(), xsink);
         return nullptr;
     }
 
@@ -438,7 +439,8 @@ QoreValue WebSocketClientPollOperationPriv::getOutput() const {
     std::string reason;
     getCloseInfo(code, reason);
     h->setKeyValue("close_code", static_cast<int64>(code), &xsink);
-    h->setKeyValue("close_reason", new QoreStringNode(reason), &xsink);
+    // the close reason is UTF-8: that of a close frame received, or of one that the client sent (see sendClose())
+    h->setKeyValue("close_reason", new QoreStringNode(reason, QCS_UTF8), &xsink);
     // read under the lock that the writer holds (not with getErrorInfo(): the hold point of its debug builds is
     // for the reads of other threads)
     QoreHashNode* err;
@@ -471,6 +473,17 @@ void WebSocketClientPollOperationPriv::feedDecoder(const void* data, size_t len)
     if (len) {
         decoder.appendData(p, len);
     }
+}
+
+bool WebSocketClientPollOperationPriv::checkText(const void* data, size_t len, uint8_t rsv, ExceptionSink* xsink) {
+    // a compressed message (RSV1 set, permessage-deflate) is checked once it is decompressed
+    if ((rsv & 4) || q_ws_utf8_valid(data, len)) {
+        return true;
+    }
+    // a text message that is not valid UTF-8 fails the connection with 1007 before the application sees it (RFC
+    // 6455 section 8.1, qore#6604)
+    rejectMessage(WSCC_InvalidPayload, "Invalid UTF-8 in a text message", xsink);
+    return false;
 }
 
 void WebSocketClientPollOperationPriv::rejectMessage(uint16_t code, const char* reason, ExceptionSink* xsink) {
@@ -563,6 +576,13 @@ void WebSocketClientPollOperationPriv::processDecodedFrames(ExceptionSink* xsink
 }
 
 void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, ExceptionSink* xsink) {
+    // an RSV bit on a control frame, or RSV1 on a continuation frame, fails the connection whatever extensions are
+    // negotiated (RFC 6455 section 5.2, RFC 7692 section 6.1; qore#6781)
+    if (q_ws_rsv_position_error(frame.opcode, frame.rsv)) {
+        queueSendClose(WSCC_ProtocolError, "Invalid RSV bits", xsink);
+        return;
+    }
+
     // Control frames (PING, PONG, CLOSE) are never fragmented per RFC 6455
     if (frame.opcode >= WSOP_CLOSE) {
         switch (frame.opcode) {
@@ -593,17 +613,23 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
             }
 
             case WSOP_CLOSE: {
-                // Parse close code and reason from payload
-                // a close frame without a status code has the close code 1005 (RFC 6455 section 7.1.5)
-                uint16_t code = WSCC_NoStatusRcvd;
+                // the close code and reason, checked (qore#6755, qore#6604)
+                uint16_t code;
                 std::string reason;
-                if (frame.payload && frame.payload->size() >= 2) {
-                    const uint8_t* data = static_cast<const uint8_t*>(frame.payload->getPtr());
-                    code = (static_cast<uint16_t>(data[0]) << 8) | data[1];
-                    if (frame.payload->size() > 2) {
-                        reason.assign(reinterpret_cast<const char*>(data + 2),
-                            frame.payload->size() - 2);
-                    }
+                const char* error = nullptr;
+                uint16_t fail = q_ws_parse_close_payload(frame.payload ? frame.payload->getPtr() : nullptr,
+                    frame.payload ? frame.payload->size() : 0, code, reason, error);
+                if (fail) {
+                    // a close frame that is not valid fails the connection (RFC 6455 section 7.1.7): it is answered
+                    // with a close frame with the error's code, unless the client sent its close frame already, and
+                    // the connection ends with that code once it is written; nothing that follows is read
+                    decoder.clear();
+                    skip_bytes = UINT64_MAX;
+                    protocol_failed = true;
+                    protocol_code = fail;
+                    protocol_reason = error;
+                    rejectMessage(fail, error, xsink);
+                    break;
                 }
 
                 // the close code and reason are the server's (RFC 6455 sections 7.1.5 and 7.1.6); when the server
@@ -690,6 +716,10 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
             uint8_t msg_rsv;
             SimpleRefHolder<BinaryNode> msg_payload(reassembler.getCompleteMessage(msg_opcode, msg_rsv));
             if (msg_payload) {
+                if (msg_opcode == WSOP_TEXT && !checkText(msg_payload->getPtr(), msg_payload->size(), msg_rsv,
+                        xsink)) {
+                    return;
+                }
                 if (msg_opcode == WSOP_TEXT) {
                     QoreStringNode* text = new QoreStringNode(
                         reinterpret_cast<const char*>(msg_payload->getPtr()),
@@ -701,6 +731,10 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
             }
         } else {
             // Non-fragmented frame
+            if (frame.opcode == WSOP_TEXT && frame.payload && !checkText(frame.payload->getPtr(),
+                    frame.payload->size(), frame.rsv, xsink)) {
+                return;
+            }
             if (frame.opcode == WSOP_TEXT) {
                 QoreStringNode* text = nullptr;
                 if (frame.payload && frame.payload->size() > 0) {
@@ -743,7 +777,8 @@ void WebSocketClientPollOperationPriv::pushRecvCloseFrame(uint16_t code, const c
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("type", new QoreStringNode("close"), xsink);
     h->setKeyValue("code", static_cast<int64>(code), xsink);
-    h->setKeyValue("reason", new QoreStringNode(reason ? reason : ""), xsink);
+    // the reason of a close frame is UTF-8 (RFC 6455 section 5.5.1)
+    h->setKeyValue("reason", new QoreStringNode(reason ? reason : "", QCS_UTF8), xsink);
     recv_queue->push(xsink, h.release());
     ++frames_pushed_in_cycle;
 }
@@ -810,7 +845,8 @@ void WebSocketClientPollOperationPriv::requestClose(uint16_t code, const char* r
     // queued before it and starts the close handshake there; see applyCloseRequest()
     ReferenceHolder<QoreHashNode> request(new QoreHashNode(autoTypeInfo), xsink);
     request->setKeyValue("close_code", static_cast<int64>(code), xsink);
-    request->setKeyValue("close_reason", new QoreStringNode(reason ? reason : ""), xsink);
+    // the reason was converted to UTF-8 by the caller
+    request->setKeyValue("close_reason", new QoreStringNode(reason ? reason : "", QCS_UTF8), xsink);
     if (*xsink) {
         return;
     }
@@ -1095,7 +1131,7 @@ void WebSocketClientPollOperationPriv::endConnectionLost(const char* reason, Exc
     // after a protocol error of the server, the connection is reported closed with it, also when the server closes
     // the connection before the client's close frame is answered (issue #5878)
     if (protocol_failed) {
-        endClosed(WSCC_ProtocolError, protocol_reason.c_str(), xsink);
+        endClosed(protocol_code, protocol_reason.c_str(), xsink);
     } else {
         endClosed(1006, reason, xsink);
     }
@@ -1109,7 +1145,7 @@ void WebSocketClientPollOperationPriv::endClosed(uint16_t code, const char* reas
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("type", new QoreStringNode("closed"), xsink);
     h->setKeyValue("code", static_cast<int64>(code), xsink);
-    h->setKeyValue("reason", new QoreStringNode(reason), xsink);
+    h->setKeyValue("reason", new QoreStringNode(reason, QCS_UTF8), xsink);
     recv_queue->push(xsink, h.release());
     ++frames_pushed_in_cycle;
 }
@@ -1122,6 +1158,7 @@ void WebSocketClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     skip_bytes = 0;
     fragment_bytes = 0;
     protocol_failed = false;
+    protocol_code = WSCC_ProtocolError;
     protocol_reason.clear();
 
     if (recv_queue) {
@@ -1474,10 +1511,18 @@ if (poll_op.getCloseCode() == 1006) {
 
     @param code the close code (default 1000 = normal closure); 1005 and 1006 are never sent in a CLOSE frame (RFC
     6455 section 7.4.1): with one of them, the frame has no status code and no reason
-    @param reason the close reason string (default empty)
+    @param reason the close reason string (default empty); sent in UTF-8, the encoding of a close reason (RFC 6455
+    section 5.5.1): a reason in another encoding is converted
+
+    @throw ENCODING-CONVERSION-ERROR the reason cannot be converted to UTF-8
 */
 nothing WebSocketClientPollOperationBase::sendClose(int code = 1000, string reason = "") [flags=NAMED_ARGS] {
-    priv->requestClose(static_cast<uint16_t>(code), reason->c_str(), xsink);
+    // the reason of a close frame is UTF-8 (RFC 6455 section 5.5.1; qore#6604)
+    TempEncodingHelper utf8_reason(reason, QCS_UTF8, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    priv->requestClose(static_cast<uint16_t>(code), utf8_reason->c_str(), xsink);
 }
 
 //! Gets the next received frame (non-blocking)
@@ -1491,7 +1536,15 @@ nothing WebSocketClientPollOperationBase::sendClose(int code = 1000, string reas
     - \c rsv2: bool RSV2 bit (for extension processing)
     - \c rsv3: bool RSV3 bit (for extension processing)
     - \c code: int close code (only for close frames)
-    - \c reason: string close reason (only for close frames)
+    - \c reason: string close reason, UTF-8 (only for close frames)
+
+    A text message that is not valid UTF-8 (RFC 6455 section 8.1; a message with the RSV1 bit, compressed with
+    permessage-deflate, is not checked, as its payload is compressed) is not given in a frame: the operation closes
+    the connection with 1007 (invalid payload data); a close frame whose reason is not valid UTF-8 closes it with
+    1007, and one with a one-byte payload or a close code that a close frame may not have (RFC 6455 section 7.4:
+    1005, 1006, 1015, the reserved 1004, below 1000, 1016 - 2999 and above 4999) with 1002 (protocol error): the
+    operation answers it with its own close frame and ends with that code once it is written
+    (see @ref getCloseCode())
 
     @return frame info hash or @ref nothing
 */
@@ -1570,7 +1623,7 @@ int WebSocketClientPollOperationBase::getCloseCode() [flags=RET_VALUE_ONLY] {
     @return the close reason string
 */
 string WebSocketClientPollOperationBase::getCloseReason() [flags=RET_VALUE_ONLY] {
-    return new QoreStringNode(priv->getCloseReason());
+    return new QoreStringNode(priv->getCloseReason(), QCS_UTF8);
 }
 
 //! Sets whether extensions are active

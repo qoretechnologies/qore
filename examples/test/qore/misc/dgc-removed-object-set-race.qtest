@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcRemovedObjectSetRaceTest
+
+#! a node of the cycle
+class DgcRemovedNode {
+    public {
+        *DgcRemovedNode a;
+        *DgcRemovedNode b;
+        *DgcRemovedNode c;
+        static Counter live();
+    }
+
+    constructor() {
+        live.inc();
+    }
+
+    destructor() {
+        live.dec();
+    }
+
+    removeB() {
+        remove b;
+    }
+
+    removeC() {
+        remove c;
+    }
+}
+
+#! holds the cycle's first object from outside the cycle, with no real reference to it
+class DgcRemovedHolder {
+    public {
+        *DgcRemovedNode a;
+    }
+}
+
+#! An object that a write removes from an object in a recursive set is checked against the set of that object; another
+#! thread can recompute that set and free it meanwhile (#6792)
+/** After a write removes an object from an object in a recursive set, and the object written to has been scanned,
+    qore_removed_object_needs_scan() decides whether the removed object needs a scan of its own: not if it is in the
+    valid set of the object written to.  It loaded the sets of both objects with no lock, compared the pointers, and
+    then read the set (RSet::active(), RSet::isStale()); a thread that recomputed the set between the load and the
+    reads freed it, and the check read freed memory.  The set is now read under the rsection of the object written to,
+    which keeps the set alive.
+
+    The check is held after it compared the sets (dbg_hold_removed_object_scan()); another thread then removes the
+    other path, which breaks the cycle: the set is invalidated and freed, and the check continues.
+    The use of freed memory shows in valgrind and TSan; the test also checks the objects and that they are collected.
+
+    The hooks are only in debug builds.
+*/
+class DgcRemovedObjectSetRaceTest inherits QUnit::Test {
+    public {
+        const HoldTimeout = 30s;
+    }
+
+    constructor() : QUnit::Test("dgc-removed-object-set-race", "1.0") {
+        addTestCase("the set of a removed object's former holder is recomputed during the check", \recomputeTest());
+        set_return_value(main());
+    }
+
+    recomputeTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks are only in debug builds");
+        }
+        # no other node exists: the count reaches zero when the objects of this case have been collected
+        assertEq(0, DgcRemovedNode::live.getCount());
+        {
+            # the first object is referenced from C++ and by the holder's member only: it has no real reference, so the
+            # scan of a write to it is made at once (that of an object with a real reference is deferred to its release)
+            DgcRemovedHolder h();
+            int ext;
+            {
+                DgcRemovedNode a();
+                {
+                    DgcRemovedNode b();
+                    # a cycle with two paths from a to b: removing one of them leaves b in a's set
+                    a.b = b;
+                    a.c = b;
+                    b.a = a;
+                }
+                h.a = a;
+                ext = call_function("dbg_object_external_ref", a);
+            }
+            on_exit call_function("dbg_object_external_deref", ext);
+
+            Counter held(1);
+            Counter release(1);
+            call_function("dbg_hold_removed_object_scan", held, release);
+            on_exit {
+                # never leave the removing thread held
+                if (release.getCount()) {
+                    release.dec();
+                }
+            }
+
+            Counter removed(1);
+            background sub () {
+                on_exit removed.dec();
+                # removes one path to b, which a still references through c: b needs the check
+                h.a.removeB();
+            }();
+            assertEq(0, held.waitForZero(HoldTimeout), "the check of the removed object was held");
+
+            Counter broken(1);
+            background sub () {
+                on_exit broken.dec();
+                # removes the other path to b: the cycle is broken, and its set is invalidated and freed
+                h.a.removeC();
+            }();
+            assertEq(0, broken.waitForZero(HoldTimeout), "the cycle was broken while the check was held");
+
+            release.dec();
+            assertEq(0, removed.waitForZero(HoldTimeout), "the removal finished");
+            assertNothing(h.a.b);
+            assertNothing(h.a.c);
+        }
+        # the objects are collected when the last references from outside are released; the closures of the
+        # background threads hold the holder until those threads have ended, after they signalled the Counters
+        assertEq(0, DgcRemovedNode::live.waitForZero(HoldTimeout), "the objects were collected");
+    }
+}

@@ -1,0 +1,279 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires FileLocationHandler
+%requires DbDataProvider
+%requires SqlUtil
+%requires RestSchemaActions
+%requires Hl7v2Util
+%requires YamlTagHandler
+%requires ProviderIndexUtil
+
+%exec-class SharedRegistrySandboxTest
+
+#! the process-wide registries of the standard modules refuse changes from sandboxed code (qore#6747)
+/** The registries of schemes, location handlers, lookups, resolvers, serializers, codecs, schemas, types and YAML tag
+    handlers, and the caches that the modules keep for all of their callers, are used by every caller of a module.
+    Code that a sandbox governs (a tenant) cannot register, replace or remove their entries, so that one tenant cannot
+    change what a module does for another; each case makes the change from a sandboxed Program and checks that it is
+    refused and that the registry is unchanged for other code.  Before the change, every one of them was made.
+*/
+class SharedRegistrySandboxTest inherits QUnit::Test {
+    public {
+        #! the tenant's code: each function makes one change and returns "ok" or the code of the exception raised
+        const TenantSource = "%modern
+%requires DataProvider
+%requires ConnectionProvider
+%requires FileLocationHandler
+%requires DbDataProvider
+%requires SqlUtil
+%requires RestSchemaActions
+%requires Hl7v2Util
+%requires YamlTagHandler
+%requires ProviderIndexUtil
+
+class TenantTagHandler inherits AbstractYamlTagHandler {
+    string getTagPrefix() { return \"!tenant\"; }
+    auto parseScalar(string tag, string value) { return \"tenant\"; }
+    bool canEmit(auto value) { return False; }
+    hash<YamlTagEmitInfo> getEmitInfo(auto value) { throw \"X\"; }
+}
+
+string sub call(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub registerScheme() {
+    return call(sub () { ConnectionSchemeCache::registerScheme(\"tenant-scheme\",
+        ConnectionSchemeCache::getSchemeEx(\"file\")); });
+}
+string sub registerPendingScheme() {
+    return call(sub () { ConnectionSchemeCache::registerPendingScheme(\"tenant-pending\", sub () {}); });
+}
+string sub deregisterScheme(string scheme) {
+    return call(sub () { ConnectionSchemeCache::deregisterScheme(scheme); });
+}
+string sub loadScheme() {
+    return call(sub () {
+        hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getSchemeEx(\"file\");
+        if (!ConnectionSchemeCache::getSchemeImpl(\"tenant-loaded\", True, *hash<ConnectionSchemeInfo> sub (string s) {
+                return info; })) {
+            throw \"NOT-LOADED\";
+        }
+    });
+}
+string sub getScheme(string scheme) {
+    return call(sub () { ConnectionSchemeCache::getSchemeEx(scheme); });
+}
+string sub registerHandler() {
+    return call(sub () { FileLocationHandler::registerHandler(\"tenant-loc\", FileLocationHandler::getHandler(\"data\")); });
+}
+string sub setConnectionFilter() {
+    return call(sub () { FileLocationHandler::setConnectionFilter(bool sub (string a, bool b) { return False; }); });
+}
+string sub setDatasourceLookup() {
+    return call(sub () { DbDataProviderBase::setDatasourceLookup(sub (string n) { throw \"TENANT-LOOKUP\"; }); });
+}
+string sub setTableLookup() {
+    return call(sub () { DbDataProviderBase::setTableLookup(sub (auto ds, string n) { throw \"TENANT-LOOKUP\"; }); });
+}
+string sub registerTableResolver() {
+    return call(sub () { sqlutil_register_table_resolver(sub (AbstractDatasource ds, string n) { throw \"TENANT\"; }); });
+}
+string sub registerDsDeserializer() {
+    return call(sub () { sqlutil_register_ds_deserializer(sub (string t, string c) { throw \"TENANT\"; }); });
+}
+string sub registerDsSerializer() {
+    return call(sub () { sqlutil_register_ds_serializer(sub (string t, string c) { throw \"TENANT\"; }); });
+}
+string sub tableCacheGet() {
+    return call(sub () { TableCache::get(\"host-desc\", \"host_table\"); });
+}
+string sub tableCacheClear() {
+    return call(sub () { TableCache::clear(); });
+}
+string sub registerCodec(string name) {
+    return call(sub () {
+        hash<RestSchemaWireCodecInfo> codec = RestSchemaActionCodecs::getCodecEx(name);
+        codec.name = \"tenant-codec\";
+        RestSchemaActionCodecs::registerCodec(codec);
+    });
+}
+string sub deregisterCodec(string name) {
+    return call(sub () { RestSchemaActionCodecs::deregisterCodec(name); });
+}
+string sub registerType() {
+    return call(sub () { DataProviderTypeCache cache = DataProvider::getTypeCache(); cache.registerType(\"tenant/type\", new HashDataType()); });
+}
+string sub removeType(string path) {
+    return call(sub () { DataProviderTypeCache cache = DataProvider::getTypeCache(); cache.removeType(path); });
+}
+string sub ownTypeCache() {
+    return call(sub () {
+        DataProviderTypeCache cache();
+        cache.registerType(\"tenant/own\", new HashDataType());
+        if (!cache.lookupTypeFromPath(\"tenant/own\")) {
+            throw \"NOT-REGISTERED\";
+        }
+    });
+}
+string sub registerSchema() {
+    return call(sub () { Hl7v2SchemaRegistry::registerSchema(new Hl7v2Schema({\"version\": \"tenant-hl7\"})); });
+}
+string sub loadSchemaFile(string path) {
+    return call(sub () { Hl7v2SchemaRegistry::loadFile(path); });
+}
+string sub registerYamlTag() {
+    return call(sub () { register_yaml_tag_handler(new TenantTagHandler()); });
+}
+string sub registerYamlTagDirect() {
+    return call(sub () { globalTagRegistry().register(new TenantTagHandler()); });
+}
+string sub setGlobalLogger() {
+    return call(sub () { ProviderIndexUtil::setGlobalLogger(); });
+}
+";
+    }
+
+    private {
+        TmpDir tmp("qore-shared-registry-sandbox-");
+        #! a directory that the tenant cannot read
+        string denied_dir;
+        Program tenant;
+        #! a codec registered by the modules
+        string codec;
+    }
+
+    constructor() : QUnit::Test("shared registry sandbox", "1.0", \ARGV) {
+        denied_dir = tmp.path + "/denied";
+        mkdir(denied_dir);
+        tenant = getTenant();
+        codec = RestSchemaActionCodecs::getCodecNames()[0];
+
+        addTestCase("connection schemes", \schemeTest());
+        addTestCase("a pending scheme of trusted code is initialized for a sandboxed reader", \pendingSchemeTest());
+        addTestCase("file location handlers", \fileLocationTest());
+        addTestCase("DbDataProvider lookups", \dbLookupTest());
+        addTestCase("SqlUtil configuration and table cache", \sqlUtilTest());
+        addTestCase("REST schema codecs", \codecTest());
+        addTestCase("data provider type cache", \typeCacheTest());
+        addTestCase("HL7 v2 schemas", \hl7Test());
+        addTestCase("YAML tag handlers", \yamlTest());
+        addTestCase("provider index logger", \loggerTest());
+        set_return_value(main());
+    }
+
+    schemeTest() {
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("registerScheme"));
+        assertFalse(inlist("tenant-scheme", ConnectionSchemeCache::listSchemes()));
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("registerPendingScheme"));
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("deregisterScheme", "file"));
+        assertTrue(inlist("file", ConnectionSchemeCache::listSchemes()));
+        # a loader of the tenant gives the scheme to the tenant only
+        assertEq("ok", tenant.callFunction("loadScheme"));
+        assertFalse(inlist("tenant-loaded", ConnectionSchemeCache::listSchemes()));
+        assertEq("SCHEME-ERROR", getTenant().callFunction("getScheme", "tenant-loaded"));
+    }
+
+    pendingSchemeTest() {
+        hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getSchemeEx("file");
+        ConnectionSchemeCache::registerPendingScheme("host-pending-6747", sub () {
+            ConnectionSchemeCache::registerScheme("host-pending-6747", info);
+        });
+        assertEq("ok", tenant.callFunction("getScheme", "host-pending-6747"));
+        assertTrue(inlist("host-pending-6747", ConnectionSchemeCache::listSchemes()));
+    }
+
+    fileLocationTest() {
+        assertEq("FILE-LOCATION-REGISTRATION-DENIED", tenant.callFunction("registerHandler"));
+        assertFalse(inlist("tenant-loc", FileLocationHandler::getSupportedSchemes()));
+        assertEq("FILE-LOCATION-REGISTRATION-DENIED", tenant.callFunction("setConnectionFilter"));
+        assertEq(NOTHING, FileLocationHandler::getConnectionFilter());
+    }
+
+    dbLookupTest() {
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("setDatasourceLookup"));
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("setTableLookup"));
+        # other code is not given the tenant's lookup
+        try {
+            DbDataProviderBase::getDatasource("tenant-ds");
+        } catch (hash<ExceptionInfo> ex) {
+            assertNeq("TENANT-LOOKUP", ex.err);
+        }
+    }
+
+    sqlUtilTest() {
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("registerTableResolver"));
+        assertEq(NOTHING, sqlutil_get_table_resolver());
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("registerDsDeserializer"));
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("registerDsSerializer"));
+        assertEq("PERMISSION-DENIED", tenant.callFunction("tableCacheGet"));
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("tableCacheClear"));
+    }
+
+    codecTest() {
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("registerCodec", codec));
+        assertFalse(inlist("tenant-codec", RestSchemaActionCodecs::getCodecNames()));
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("deregisterCodec", codec));
+        assertTrue(exists RestSchemaActionCodecs::getCodec(codec));
+    }
+
+    typeCacheTest() {
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("registerType"));
+        assertEq(NOTHING, DataProvider::getType("tenant/type"));
+        DataProvider::registerType("host/type-6747", new HashDataType());
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("removeType", "host/type-6747"));
+        assertTrue(exists DataProvider::getType("host/type-6747"));
+        # a cache of the tenant's own is the tenant's
+        assertEq("ok", tenant.callFunction("ownTypeCache"));
+    }
+
+    hl7Test() {
+        assertEq("DATA-PROVIDER-REGISTRATION-DENIED", tenant.callFunction("registerSchema"));
+        assertEq(NOTHING, Hl7v2SchemaRegistry::getRegisteredSchema("tenant-hl7"));
+        # a schema that other code loaded from a file that the tenant cannot read is not given to the tenant
+        string path = denied_dir + "/schema.qv";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("(version=2.5)");
+        f.close();
+        Hl7v2SchemaRegistry::loadFile(path);
+        assertNeq("ok", tenant.callFunction("loadSchemaFile", path));
+    }
+
+    yamlTest() {
+        assertEq("YAML-TAG-REGISTRATION-DENIED", tenant.callFunction("registerYamlTag"));
+        assertEq("YAML-TAG-REGISTRATION-DENIED", tenant.callFunction("registerYamlTagDirect"));
+        assertFalse(globalTagRegistry().isRegistered("!tenant"));
+    }
+
+    loggerTest() {
+        assertEq("PROVIDER-INDEX-REGISTRATION-DENIED", tenant.callFunction("setGlobalLogger"));
+    }
+
+    #! Returns a tenant: a Program with a sandbox that denies the files in the denied directory
+    private Program getTenant() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.addFilesystemDeniedPath(denied_dir);
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+}

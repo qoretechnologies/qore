@@ -38,6 +38,7 @@
 #include "qore/intern/UnicodeByteOrder.h"
 #include "qore/intern/InputStreamLineIterator.h"
 #include "qore/intern/qore_encoding_private.h"
+#include "qore/intern/StringReaderHelper.h"
 
 #include <cctype>
 #include <cerrno>
@@ -876,9 +877,9 @@ const RE_DupNames = PCRE2_DUPNAMES;
 hashdecl Qore::RegexMatchInfo {
     //! Full match text (\c $0)
     string match;
-    //! Byte offset of the match start in the target string
+    //! Byte offset of the match start in the UTF-8 representation of the subject
     int offset;
-    //! Byte length of the match
+    //! Byte length of the match in the UTF-8 representation of the subject
     int length;
     //! Captured groups (\c $1, \c $2, ...); @ref nothing if no capturing groups
     *list<*string> groups;
@@ -1086,11 +1087,11 @@ int len = length(str);
     @endcode
 
     @note
-    - this operation has <i>O(n)</i> complexity if called on a string with a multi-byte @ref character_encoding "character encoding", otherwise it is <i>O(1)</i>; a UTF-8 string remembers the length of the ASCII text at its start, so for a UTF-8 string that only holds ASCII text it is <i>O(1)</i> after the first call, and for any other UTF-8 string it is linear in the number of bytes after the ASCII text at its start
+    - counting takes linear time when the encoding requires validation; a UTF-8 string caches its ASCII prefix,
+      so repeated counts of all-ASCII UTF-8 text take constant time
     - equivalent to <string>::length()
-    - in a string that is not valid in its encoding, each byte that does not start a complete character counts as one
-      character, so the count is not less than the number of characters of its text (since %Qore 3.0; before, the
-      count stopped at the first such byte)
+
+    @throw INVALID-ENCODING the string is not valid in its declared encoding
 
     @see
     - strlen()
@@ -1105,8 +1106,8 @@ int len = length(str);
     strict \c string and \c binary variants have no such conversion and are flagged; see
     @ref qore_code_flags_portability.
  */
-int length(softstring str) [flags=CONSTANT,NAMED_ARGS] {
-   return str->length();
+int length(softstring str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return qore_string_private::characterCount(*str, xsink);
 }
 
 //! Returns the number of bytes in the binary object passed as an argument
@@ -1819,15 +1820,36 @@ nothing get_encoding() [flags=RUNTIME_NOOP] {
 
     @return a string corresponding to the string argument converted to the encoding given
 
+    When the string is already in the encoding given, it is not converted: it is returned unchanged if it is valid in
+    the encoding, and \c INVALID-ENCODING is raised otherwise (a conversion to another encoding raises
+    \c ENCODING-CONVERSION-ERROR for text that is not valid).  The text is checked as the text readers check it (see
+    @ref encoding_errors) in US-ASCII, in the multi-byte encodings such as UTF-8 or Shift_JIS, in the Unicode
+    encodings such as UTF-16LE, and in the stateful encodings such as UTF-7; in a single-byte encoding, every byte is
+    a character
+
     @par Example:
     @code{.py}
 string enc = convert_encoding(str, "iso-8859-1");
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different @ref character_encoding "character encodings" and an error occurs during encoding conversion
+    @throw INVALID-ENCODING the string is in the encoding given and is not valid in it; the message gives the byte
+    offset of the first invalid byte sequence
+
+    @since %Qore 3.0 a string already in the encoding given is checked
  */
 string convert_encoding(string str, string encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-   return str->convertEncoding(QEM.findCreate(encoding), xsink);
+   const QoreEncoding* enc = QEM.findCreate(encoding);
+   if (enc == str->getEncoding()) {
+      // the string is not converted, but it must be valid in its encoding as converted text is
+      qore_offset_t off = q_string_invalid_offset(*str);
+      if (off >= 0) {
+         q_raise_invalid_read_text(xsink, nullptr, "convert_encoding", "string", enc, off);
+         return QoreValue();
+      }
+      return str->refSelf();
+   }
+   return str->convertEncoding(enc, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -2644,6 +2666,9 @@ string column = trunc_str(str, 80, dsp.getOSEncoding());
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if an explicit @ref character_encoding "character encoding" was given and an error occurs during encoding conversion
+    @throw INVALID-ENCODING the part of the string within the length is not valid in its multi-byte @ref character_encoding "character encoding"
+
+    @since %Qore 3.0 a string with an invalid character within the length raises \c INVALID-ENCODING instead of being truncated before it
  */
 string trunc_str(softstring str, softint length, *string encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    const QoreEncoding* enc = encoding ? QEM.findCreate(encoding) : str->getEncoding();
@@ -2654,9 +2679,15 @@ string trunc_str(softstring str, softint length, *string encoding) [flags=RET_VA
    if (!tmp)
       return QoreValue();
 
-   if (tmp->strlen() < (size_t)length) {
+   // the whole string is within the length
+   bool whole = tmp->strlen() <= static_cast<size_t>(length);
+   if (whole) {
       length = tmp->strlen();
-      return new QoreStringNode(tmp.giveBuffer(), length, length + 1, enc);
+      // the text of a stateful encoding and of a single-byte encoding is returned as it is; it is copied by its
+      // length, as it can have NUL bytes (qore#6604)
+      if (!enc->isMultiByte() || qore_encoding_private::isStateful(enc)) {
+         return new QoreStringNode(tmp->c_str(), length, enc);
+      }
    }
 
    if (qore_encoding_private::isStateful(enc)) {
@@ -2703,13 +2734,22 @@ string trunc_str(softstring str, softint length, *string encoding) [flags=RET_VA
    const char* p = tmp->c_str();
    int64 sl = 0;
    int64 i = 0;
-   while (true) {
+   while (sl < length) {
       if (i && !(i % 100) && qore_check_cancel(xsink, "truncating string")) {
          return QoreValue();
       }
       qore_offset_t size = enc->getCharLen(p, length - sl);
-      if (size <= 0 || ((sl + size) > length))
+      // a negative size is a character that the length cuts, which is left out, unless the whole string is within
+      // the length: then it is a character cut off by the end of the string, which is invalid
+      if (!size || (size < 0 && whole)) {
+         // an invalid character within the length (qore#6604), as for the other string functions (qore#6595)
+         xsink->raiseException("INVALID-ENCODING", "trunc_str(): the string is not valid %s: invalid byte sequence "
+            "at byte offset " QLLD, enc->getCode(), sl);
+         return QoreValue();
+      }
+      if (size < 0 || ((sl + size) > length)) {
          break;
+      }
       sl += size;
       p += size;
       ++i;

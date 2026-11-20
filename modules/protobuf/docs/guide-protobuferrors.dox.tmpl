@@ -11,6 +11,8 @@
     |\c PROTOBUF-ENCODE-ERROR|Protobuf serialization failed
     |\c PROTOBUF-DECODE-ERROR|Protobuf binary parsing failed, or a string map key in a message decoded or parsed from JSON contains a NUL character, which a hash key cannot hold
     |\c PROTOBUF-JSON-ERROR|JSON conversion or parsing failed
+    |\c INVALID-ENCODING|A string field or a string map key of a \c proto2 message decoded from binary data is not valid UTF-8 (a \c proto3 message with one fails to parse: \c PROTOBUF-DECODE-ERROR), or the JSON text given to \c ProtobufSchema::fromJson() is not valid text in its encoding; the description names the method (ex: \c "ProtobufSchema::decode()")
+    |\c PROTOBUF-DEPTH-ERROR|A message to convert to or from a hash has message fields nested more than 100 levels below the top-level message (see @ref protobufnesting)
     |\c PROTOBUF-SYMBOL-NOT-FOUND|Symbol not found in schema (descriptor serialization), or the symbol contains a NUL character
     |\c PROTOBUF-FILE-NOT-FOUND|Proto file not found in schema (descriptor serialization), or the file name contains a NUL character
 */

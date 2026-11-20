@@ -33,10 +33,10 @@
 #define _QORE_STREAMREADER_H
 
 #include <cstdint>
-#include <deque>
 
 #include "qore/qore_bitopts.h"
 #include "qore/InputStream.h"
+#include "qore/intern/QoreMarkerBoundary.h"
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/qore_encoding_private.h"
 #include "qore/intern/qore_string_private.h"
@@ -50,8 +50,9 @@ DLLLOCAL extern QoreClass* QC_STREAMREADER;
 //! Private data for the Qore::StreamReader class.
 class StreamReader : public AbstractPrivateData {
 public:
-    DLLLOCAL StreamReader(ExceptionSink* xsink, InputStream* is, const QoreEncoding* encoding = QCS_DEFAULT) :
-            in(is, xsink), enc(encoding) {
+    DLLLOCAL StreamReader(ExceptionSink* xsink, InputStream* is, const QoreEncoding* encoding = QCS_DEFAULT,
+            qore_encoding_errors_t encoding_errors = qore_encoding_errors_t::RAISE) :
+            in(is, xsink), enc(encoding), encoding_errors(encoding_errors) {
     }
 
     virtual DLLLOCAL ~StreamReader() {
@@ -59,6 +60,11 @@ public:
 
     DLLLOCAL const QoreEncoding* getEncoding() const {
         return enc;
+    }
+
+    //! returns the number of bytes consumed by the reads of the reader, less the bytes given back to it
+    DLLLOCAL uint64_t getConsumed() const {
+        return consumed;
     }
 
     //! Returns the end-of-line marker that ended the last line read, in UTF-8
@@ -77,12 +83,24 @@ public:
         return *in;
     }
 
+    //! returns what text read that is not valid in the encoding gives (the encoding_errors option)
+    DLLLOCAL qore_encoding_errors_t getEncodingErrors() const {
+        return encoding_errors;
+    }
+
+    //! sets what text read that is not valid in the encoding gives (the encoding_errors option)
+    DLLLOCAL void setEncodingErrors(qore_encoding_errors_t mode) {
+        encoding_errors = mode;
+    }
+
     DLLLOCAL void setEncoding(const QoreEncoding* n_enc) {
         enc = n_enc;
         // text in the new encoding starts in the initial shift state
         decoder.reset();
         // text in the new encoding is checked at the next read of text
         byte_order_checked = false;
+        // and it can start with a byte order mark
+        text_started = false;
         std::string().swap(sample);
     }
 
@@ -135,13 +153,23 @@ public:
         }
         // characters of text in a stateful encoding are read in the shift state left by the text read before them
         if (useDecoder(size > 0)) {
-            return decoder.readChars(enc, size, getReadFunc(), xsink);
+            return decoder.readChars(enc, size, getReadFunc(), encoding_errors,
+                {getName(), "readString", "text read", 0}, xsink);
         }
-        QoreStringNode* str = q_read_string(xsink, size, enc, getReadFunc());
+        TextStartHelper tsh(*this);
+        const QoreEncoding* text_enc = enc;
+        // the bytes read after the characters returned are given back to the reader for the next read
+        std::string leftover;
+        QoreStringNode* str = q_read_string(xsink, size, enc, getReadFunc(), encoding_errors, getName(),
+            "readString", &text_enc, !text_started, &leftover);
+        if (!leftover.empty()) {
+            unreadData(leftover.data(), leftover.size());
+        }
         // the byte order of a byte order mark read in a generic encoding (ex: "UTF-16") applies to the rest of the
-        // stream, as in readLineEol(); the string has the encoding of the byte order found
-        if (str && str->getEncoding() != enc) {
-            enc = str->getEncoding();
+        // stream, as in readLineEol(), also if the string is tagged ISO-8859-1 because it is not valid in it, or if
+        // an exception was raised for it
+        if (text_enc != enc) {
+            enc = text_enc;
         }
         return checkByteOrderAfter(str, xsink);
     }
@@ -152,23 +180,34 @@ public:
         ASCII-compatible, then \c "\n" is assumed
         @param trim whether to trim the EOL symbols
         @param xsink exception sink
+        @param cls the name of the class for an \c INVALID-ENCODING exception; the name of the reader if nullptr
+        @param meth the name of the method for an \c INVALID-ENCODING exception
+        @param line the line number for an \c INVALID-ENCODING exception, or 0
 
         @return Qore string read from the stream
     */
-    DLLLOCAL QoreStringNode* readLine(const QoreStringNode* eol, bool trim, ExceptionSink* xsink) {
+    DLLLOCAL QoreStringNode* readLine(const QoreStringNode* eol, bool trim, ExceptionSink* xsink,
+            const char* cls = nullptr, const char* meth = "readLine", int64 line = 0) {
         if (checkByteOrderBefore(xsink)) {
             return nullptr;
         }
+        TextStartHelper tsh(*this);
+        line_ctx = {cls ? cls : getName(), meth, "line read", line};
+        // text read with the decoder is checked by it
+        bool decoded = useDecoder(false);
         if (!eol && !enc->isAsciiCompat()) {
             // "\r\n", "\n" and "\r" end a line, in the code units of the encoding
             if (!qore_encoding_private::isStateful(enc)) {
-                return checkByteOrderAfter(readLineWideIntern(trim, xsink), xsink);
+                return checkText(checkByteOrderAfter(readLineWideIntern(trim, xsink), xsink), decoded, cls, meth,
+                    "line read", line, xsink);
             }
             QoreString nl("\n");
-            return checkByteOrderAfter(readLineEolIntern(&nl, trim, xsink), xsink);
+            return checkText(checkByteOrderAfter(readLineEolIntern(&nl, trim, xsink), xsink), decoded, cls, meth,
+                "line read", line, xsink);
         }
 
-        return checkByteOrderAfter(eol ? readLineEolIntern(eol, trim, xsink) : readLineIntern(trim, xsink), xsink);
+        return checkText(checkByteOrderAfter(eol ? readLineEolIntern(eol, trim, xsink) : readLineIntern(trim, xsink),
+            xsink), decoded, cls, meth, "line read", line, xsink);
     }
 
     //! Reads one line ending with the given end-of-line marker
@@ -176,30 +215,109 @@ public:
         if (checkByteOrderBefore(xsink)) {
             return nullptr;
         }
-        return checkByteOrderAfter(readLineEolIntern(eol, trim, xsink), xsink);
+        TextStartHelper tsh(*this);
+        line_ctx = {getName(), "readLine", "line read", 0};
+        bool decoded = useDecoder(false);
+        return checkText(checkByteOrderAfter(readLineEolIntern(eol, trim, xsink), xsink), decoded, nullptr,
+            "readLine", "line read", 0, xsink);
     }
 
     DLLLOCAL QoreStringNode* readNullTerminatedString(ExceptionSink* xsink) {
         if (checkByteOrderBefore(xsink)) {
             return nullptr;
         }
-        return checkByteOrderAfter(readNullTerminatedStringIntern(xsink), xsink);
+        // a byte order mark is not resolved in a string ending with a null byte
+        TextStartHelper tsh(*this, false);
+        return checkText(checkByteOrderAfter(readNullTerminatedStringIntern(xsink), xsink), false, nullptr,
+            "readNullTerminatedString", "text read", 0, xsink);
     }
 
     DLLLOCAL QoreStringNode* readLine(bool trim, ExceptionSink* xsink) {
         if (checkByteOrderBefore(xsink)) {
             return nullptr;
         }
-        return checkByteOrderAfter(readLineIntern(trim, xsink), xsink);
+        TextStartHelper tsh(*this);
+        line_ctx = {getName(), "readLine", "line read", 0};
+        bool decoded = useDecoder(false);
+        return checkText(checkByteOrderAfter(readLineIntern(trim, xsink), xsink), decoded, nullptr, "readLine",
+            "line read", 0, xsink);
     }
 
 private:
     //! returns true if text is read with the decoder
     /** @param char_read true for a read of a number of characters, which needs the decoder in a stateful encoding;
-        other reads of text need it once the decoder has been used, as the text continues in its shift state
+        other reads of text need it once the decoder has been used, as the text continues in its shift state, and
+        when the text is checked (the encoding_errors option is not \c "keep"), as the decoder checks it
     */
     DLLLOCAL bool useDecoder(bool char_read) const {
-        return qore_encoding_private::isStateful(enc) && (char_read || decoder.active());
+        return qore_encoding_private::isStateful(enc)
+            && (char_read || decoder.active() || encoding_errors != qore_encoding_errors_t::KEEP);
+    }
+
+    //! marks the start of the text as read when it goes out of scope, if bytes were consumed in its scope
+    /** A read that consumes no bytes (ex: a read of 0 characters, or an exception raised by the stream before any
+        byte) leaves the start of the text, with any byte order mark, to the next read
+    */
+    class TextStartHelper {
+    public:
+        /** @param reader the reader
+            @param resolve_bom if true, a byte order mark at the start of the text gives the byte order of the
+            reader also when the read raises an exception after consuming it (see noteConsumed())
+        */
+        DLLLOCAL TextStartHelper(StreamReader& reader, bool resolve_bom = true) : reader(reader),
+                start(reader.consumed), start_enc(reader.enc) {
+            if (resolve_bom && !reader.text_started) {
+                reader.text_read = true;
+                reader.text_read_start = reader.consumed;
+                reader.start_bytes.clear();
+                reader.start_bom_enc = nullptr;
+            }
+        }
+
+        DLLLOCAL ~TextStartHelper() {
+            if (reader.text_read) {
+                reader.text_read = false;
+                // the byte order of a byte order mark consumed at the start of the text applies to the rest of it,
+                // also if the read did not resolve it itself because an exception was raised after it was consumed
+                if (reader.start_bom_enc && reader.enc == start_enc) {
+                    reader.enc = reader.start_bom_enc;
+                }
+                reader.start_bom_enc = nullptr;
+            }
+            if (reader.consumed != start) {
+                reader.text_started = true;
+            }
+        }
+
+    private:
+        StreamReader& reader;
+        uint64_t start;
+        const QoreEncoding* start_enc;
+    };
+
+    //! removes a byte order mark from the given text if it is at the start of the text of the stream
+    /** After the start, U+FEFF is a character (a zero width no-break space), and the byte order is known
+    */
+    DLLLOCAL QoreStringNode* removeStartBom(QoreStringNode* str) {
+        return text_started ? str : q_remove_bom(str, enc);
+    }
+
+    //! applies the encoding_errors option to text read
+    /** @param str the text read; may be nullptr
+        @param decoded true if the text was read with the decoder, which checks it
+
+        @return \a str, or nullptr if an exception was raised; \a str is then dereferenced
+    */
+    DLLLOCAL QoreStringNode* checkText(QoreStringNode* str, bool decoded, const char* cls, const char* meth,
+            const char* what, int64 line, ExceptionSink* xsink) {
+        SimpleRefHolder<QoreStringNode> holder(str);
+        if (!str || decoded) {
+            return holder.release();
+        }
+        if (q_check_read_text(*str, encoding_errors, cls ? cls : getName(), meth, what, xsink, line)) {
+            return nullptr;
+        }
+        return holder.release();
     }
 
     //! returns a function object that reads bytes from the stream
@@ -220,7 +338,8 @@ private:
             }
             eol_utf8.assign(teol->c_str(), teol->size());
         }
-        return decoder.readLine(enc, eol_utf8, trim, true, getReadFunc(), xsink, &line_terminator);
+        return decoder.readLine(enc, eol_utf8, trim, true, getReadFunc(), encoding_errors, line_ctx, xsink,
+            &line_terminator);
     }
 
     //! Sets the code units of a carriage return and a line feed in the encoding of the stream, if not set already
@@ -266,7 +385,9 @@ private:
         // a byte order mark, ex: "UTF-32") is given by a byte order mark at its start
         char start[4];
         size_t start_len = 0;
-        if (enc == QCS_UTF16) {
+        if (text_started) {
+            // a byte order mark is resolved only at the start of the text: after it, U+FEFF is a character
+        } else if (enc == QCS_UTF16) {
             if (resolveUtf16ByteOrder(start, start_len, xsink)) {
                 return nullptr;
             }
@@ -312,14 +433,14 @@ private:
                 if (got) {
                     str->concat(unit, got);
                 }
-                return str->empty() ? nullptr : q_remove_bom(str.release(), enc);
+                return str->empty() ? nullptr : removeStartBom(str.release());
             }
             if (!memcmp(unit, wide_lf.data(), w)) {
                 line_terminator = "\n";
                 if (!trim) {
                     str->concat(unit, w);
                 }
-                return q_remove_bom(str.release(), enc);
+                return removeStartBom(str.release());
             }
             if (!memcmp(unit, wide_cr.data(), w)) {
                 line_terminator = "\r";
@@ -343,7 +464,7 @@ private:
                         str->concat(next, w);
                     }
                 }
-                return q_remove_bom(str.release(), enc);
+                return removeStartBom(str.release());
             }
             str->concat(unit, w);
         }
@@ -374,6 +495,8 @@ private:
             assert(pre_len <= sizeof start);
             memcpy(start, pre, pre_len);
             start_len = pre_len;
+        } else if (text_started) {
+            // a byte order mark is resolved only at the start of the text: after it, U+FEFF is a character
         } else if (enc == QCS_UTF16) {
             if (resolveUtf16ByteOrder(start, start_len, xsink)) {
                 return nullptr;
@@ -398,44 +521,14 @@ private:
         SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
 
         const size_t eolsize = eolstr->size();
-        // the width of the smallest character; the end-of-line marker is a whole number of characters
-        const size_t width = enc->getMinCharWidth();
-        // in a variable-width encoding whose characters can contain bytes that are other characters (ex: Big5, where
-        // the second byte of U+5F0B is 0x7c, "|"), the characters of the line are followed to find their boundaries
-        const qore_encoding_private* ep = qore_encoding_private::get(*enc);
-        const mbcs_charlen_t charlen = ep->needs_boundary_check ? ep->fcharlen : nullptr;
-        // the byte offset of the start of the next character, if charlen is set
-        size_t char_start = 0;
-        // the offsets of the character boundaries in the last eolsize bytes, if charlen is set
-        std::deque<size_t> starts{0};
+        // the end-of-line marker only ends the line at a character boundary (see QoreMarkerBoundary)
+        QoreMarkerBoundary boundary(enc, eolsize);
 
         // adds a byte to the line; returns true if the line is complete
         auto add_byte = [&](char c) -> bool {
             str->concat(c);
-            // the marker only ends the line at a character boundary: in an encoding with characters of more than one
-            // byte (ex: UTF-32), the bytes of the marker can also be the end of one character and the start of the
-            // next one; memcmp() is used, as the encoding can have null bytes in characters (ex: UTF-16*)
-            size_t size = str->size();
-            if (charlen) {
-                while (char_start < size) {
-                    qore_offset_t l = charlen(str->c_str() + char_start, size - char_start);
-                    if (l < 0) {
-                        // an incomplete character
-                        break;
-                    }
-                    // an invalid byte is skipped as a character of its own
-                    char_start += l ? static_cast<size_t>(l) : 1;
-                    starts.push_back(char_start);
-                }
-                while (!starts.empty() && starts.front() + eolsize < size) {
-                    starts.pop_front();
-                }
-                return eolsize && size >= eolsize && char_start == size && !starts.empty()
-                    && starts.front() == size - eolsize
-                    && !memcmp(str->c_str() + size - eolsize, eolstr->c_str(), eolsize);
-            }
-            return eolsize && size >= eolsize && !(size % width)
-                && !memcmp(str->c_str() + size - eolsize, eolstr->c_str(), eolsize);
+            boundary.update(str->c_str(), str->size());
+            return boundary.endsWith(str->c_str(), str->size(), eolstr->c_str(), eolsize);
         };
 
         // returns the complete line
@@ -444,7 +537,7 @@ private:
             if (trim) {
                 str->terminate(str->size() - eolsize);
             }
-            return q_remove_bom(str.release(), enc);
+            return removeStartBom(str.release());
         };
 
         // bytes read to resolve the byte order that are not a byte order mark belong to the line
@@ -466,7 +559,7 @@ private:
             if (*xsink)
                 return 0;
             if (!rc)
-                return str->empty() ? 0 : q_remove_bom(str.release(), enc);
+                return str->empty() ? 0 : removeStartBom(str.release());
 
             if (add_byte(c)) {
                 return finish_line();
@@ -708,17 +801,56 @@ protected:
     //! Encoding of the source input stream.
     const QoreEncoding* enc;
 
+    //! what text read that is not valid in the encoding gives (the encoding_errors option; qore#6604)
+    qore_encoding_errors_t encoding_errors;
+
     //! The start of the text returned while its byte order is not known yet (unbuffered reader)
     std::string sample;
 
     //! true once the byte order of text in the current encoding has been checked
     bool byte_order_checked = false;
 
+    //! true once text has been read in the current encoding: a byte order mark is only resolved at its start
+    bool text_started = false;
+
+    //! the number of bytes consumed by the reads of the reader, less the bytes given back to it
+    uint64_t consumed = 0;
+
+    //! true during a read of text at the start of the text, whose first bytes are kept in start_bytes
+    bool text_read = false;
+
+    //! the value of consumed at the start of the read of text at the start of the text
+    uint64_t text_read_start = 0;
+
+    //! the first bytes consumed by the read of text at the start of the text (at most 4)
+    std::string start_bytes;
+
+    //! the encoding of the byte order given by a byte order mark in start_bytes, or nullptr
+    const QoreEncoding* start_bom_enc = nullptr;
+
+    //! records bytes consumed by a read; called by readData() with the bytes copied
+    /** The first bytes of the text are kept, so that a byte order mark consumed at the start of the text gives the
+        byte order of the reader also if the read raises an exception after it (ex: an error of the stream after
+        the bytes were read), when the read does not resolve it itself; see TextStartHelper
+    */
+    DLLLOCAL void noteConsumed(const char* p, size_t n) {
+        if (n && text_read && start_bytes.size() < 4 && consumed - text_read_start == start_bytes.size()) {
+            start_bytes.append(p, QORE_MIN(n, 4 - start_bytes.size()));
+            if (!start_bom_enc) {
+                start_bom_enc = q_get_bom_byte_order(enc, start_bytes.data(), start_bytes.size());
+            }
+        }
+        consumed += n;
+    }
+
     //! keeps the shift state of text in a stateful encoding between reads of characters
     QoreStatefulTextDecoder decoder;
 
     //! the end-of-line marker that ended the last line read in UTF-8; empty if it ended at the end of the stream
     std::string line_terminator;
+
+    //! where the current line is read, for the exception raised by the decoder for text that is not valid
+    QoreStatefulTextDecoder::ReadContext line_ctx = {"StreamReader", "readLine", "line read", 0};
 
     //! the encoding of wide_cr and wide_lf
     const QoreEncoding* wide_enc = nullptr;
@@ -925,13 +1057,17 @@ private:
             memcpy(destPtr, pending.data(), read);
             pending.erase(0, read);
             if (read == limit) {
+                noteConsumed(destPtr, read);
                 return read;
             }
         }
         while (true) {
             int64 rc = in->read(destPtr + read, limit - read, xsink);
-            if (*xsink)
+            if (*xsink) {
+                // the bytes copied before the error are consumed
+                noteConsumed(destPtr, read);
                 return -1;
+            }
             //printd(5, "StreamReader::readData() dest: %p limit: " QLLD " read: " QLLD " rc: " QLLD " char: %d\n",
             //    dest, limit, read, rc, destPtr[0]);
             if (!rc) {
@@ -939,6 +1075,7 @@ private:
                     xsink->raiseException("END-OF-STREAM-ERROR", "there is not enough data available in the stream; "
                         QLLD " byte%s requested, but only " QLLD " could be read", (int64)limit,
                         limit == 1 ? " was" : "s were", (int64)read);
+                    noteConsumed(destPtr, read);
                     return -1;
                 }
                 break;
@@ -947,6 +1084,7 @@ private:
             if (read == limit)
                 break;
         }
+        noteConsumed(destPtr, read);
         return read;
     }
 
@@ -960,6 +1098,12 @@ private:
             return static_cast<unsigned char>(pending[0]);
         }
         return in->peek(xsink);
+    }
+
+    //! Gives bytes read back to the reader, so that they are the start of the next read
+    DLLLOCAL virtual void unreadData(const char* data, size_t len) {
+        pending.insert(0, data, len);
+        consumed -= len;
     }
 
     //! Copies the next bytes of the stream to a buffer without reading them

@@ -48,6 +48,7 @@
 #include "qore/intern/qore_thread_intern.h"
 // the debug-build counters of the synchronous releases (qore_dbg_sync_release_taken/refused)
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -144,7 +145,8 @@ public:
         // not freed: the controller of the parent cannot be stopped or destroyed in the child
         aio_singleton = nullptr;
         aio_singleton_obj = nullptr;
-        aio_singleton_lock.reinitAfterFork();
+        // held by this thread since prepare(): released (issue #6817)
+        aio_singleton_lock.unlock();
     }
 };
 
@@ -2901,7 +2903,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                         ValueHolder rv(async_item.spop_obj->evalMethod("continuePoll", nullptr, &work_xsink),
                             &work_xsink);
                         if (work_xsink) {
-                            QoreException* ex_obj = work_xsink.getException();
+                            QoreException* ex_obj = qore_exception_sink_ops(work_xsink).getException();
                             if (ex_obj) {
                                 ex_hash = ex_obj->makeExceptionObject();
                             }
@@ -2925,7 +2927,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                                     for (size_t i = 0; i < sl->size(); ++i) {
                                         if (!(i % 100) && qore_check_cancel(&work_xsink,
                                                 "async stream data dispatch")) {
-                                            QoreException* ex_obj = work_xsink.getException();
+                                            QoreException* ex_obj = qore_exception_sink_ops(work_xsink).getException();
                                             if (ex_obj) {
                                                 ex_hash = ex_obj->makeExceptionObject();
                                             }
@@ -2959,7 +2961,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                                 &state_xsink), &state_xsink);
                             if (state_xsink) {
                                 if (!ex_hash) {
-                                    QoreException* ex_obj = state_xsink.getException();
+                                    QoreException* ex_obj = qore_exception_sink_ops(state_xsink).getException();
                                     if (ex_obj) {
                                         ex_hash = ex_obj->makeExceptionObject();
                                     }
@@ -2983,7 +2985,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     if (new_poll_info && !ex_hash) {
                         ExceptionSink check_xsink;
                         if (qore_extra_poll_entries_check(new_poll_info, &check_xsink)) {
-                            QoreException* ex_obj = check_xsink.getException();
+                            QoreException* ex_obj = qore_exception_sink_ops(check_xsink).getException();
                             if (ex_obj) {
                                 ex_hash = ex_obj->makeExceptionObject();
                             }
@@ -7233,7 +7235,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     (unsigned long long)op.op_id, new_info ? "poll_info" : "null",
                     op.spop_base->goalReached());
                 if (poll_xsink) {
-                    QoreException* ex_obj = poll_xsink.getException();
+                    QoreException* ex_obj = qore_exception_sink_ops(poll_xsink).getException();
                     if (ex_obj) {
                         result.ex_hash = ex_obj->makeExceptionObject();
                     }
@@ -7248,7 +7250,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // an extra pollable object that the I/O thread cannot read ends the operation, as it does after a
                     // step on a callback worker; the check runs no Qore code, and the poll info, which can hold the
                     // last reference to the object, is released off the I/O thread
-                    QoreException* ex_obj = poll_xsink.getException();
+                    QoreException* ex_obj = qore_exception_sink_ops(poll_xsink).getException();
                     if (ex_obj) {
                         result.ex_hash = ex_obj->makeExceptionObject();
                     }

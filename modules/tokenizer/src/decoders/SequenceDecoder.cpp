@@ -34,7 +34,10 @@ StripDecoder::StripDecoder(const QoreHashNode* config, ExceptionSink* xsink)
         : start(0), stop(0) {
     assert(config);
 
-    std::string content_str = safeGetStringKey(config, "content");
+    std::string content_str = configStringKey(config, "content", xsink);
+    if (*xsink) {
+        return;
+    }
     if (!content_str.empty()) {
         content = content_str;
     }
@@ -96,12 +99,18 @@ std::string StripDecoder::decode(const std::vector<std::string>& tokens) const {
 ReplaceDecoder::ReplaceDecoder(const QoreHashNode* config, ExceptionSink* xsink) {
     assert(config);
 
-    std::string pattern_str = safeGetStringKey(config, "pattern");
+    std::string pattern_str = configStringKey(config, "pattern", xsink);
+    if (*xsink) {
+        return;
+    }
     if (!pattern_str.empty()) {
         pattern = pattern_str;
     }
 
-    std::string content_val = safeGetStringKey(config, "content");
+    std::string content_val = configStringKey(config, "content", xsink);
+    if (*xsink) {
+        return;
+    }
     if (!content_val.empty()) {
         content = content_val;
     }

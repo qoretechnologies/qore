@@ -33,6 +33,8 @@
 #include <qore/intern/qore_encoding_private.h>
 #include <qore/intern/qore_string_private.h>
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreUtf8.h"
+#include "qore/intern/QoreUtf16.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -75,7 +77,10 @@ static unsigned UTF16BE_getUnicode(const char* p);
 
 static unsigned UTF32BE_getUnicode(const char* p);
 
+struct dbcs_bytes;
+template <const dbcs_bytes* B>
 static qore_offset_t DBCS_get_char_len(const char* p, size_t len);
+extern const dbcs_bytes gbk_bytes;
 template <mbcs_charlen_t CharLen>
 static size_t mb_getLength(const char* p, const char* end, bool& invalid);
 template <mbcs_charlen_t CharLen>
@@ -369,6 +374,12 @@ QoreEncodingManager::QoreEncodingManager() {
         false);
     addAlias(QCS_UTF16LE, "UTF16LE");
 
+    // every Unicode character can be represented in the built-in Unicode encodings, as in the Unicode forms created
+    // on the fly (qore#6604)
+    for (const QoreEncoding* enc : {QCS_UTF8, QCS_UTF16, QCS_UTF16BE, QCS_UTF16LE}) {
+        qore_encoding_private::get(*const_cast<QoreEncoding*>(enc))->unicode_complete = true;
+    }
+
     QCS_ISO_8859_1 = addUnlocked(ISO88591_STR, "latin-1, Western European character set");
     addAlias(QCS_ISO_8859_1, "ISO88591");
     addAlias(QCS_ISO_8859_1, "ISO-8859-1");
@@ -525,10 +536,11 @@ QoreEncodingManager::QoreEncodingManager() {
     addAlias(QCS_WINDOWS_874, "CP874");
 
     {
-        // Windows 936 (GBK) has double-byte characters whose second byte can be an ASCII character
+        // Windows 936 (GBK) has double-byte characters whose second byte can be an ASCII character, and the euro sign
+        // 0x80
         QoreEncoding* qcs = new QoreEncoding("WINDOWS-936", "Windows 936: Simplified Chinese", 1, 2,
-            mb_getLength<DBCS_get_char_len>, mb_getByteLen<DBCS_get_char_len>, mb_getCharPos<DBCS_get_char_len>,
-            DBCS_get_char_len);
+            mb_getLength<DBCS_get_char_len<&gbk_bytes>>, mb_getByteLen<DBCS_get_char_len<&gbk_bytes>>,
+            mb_getCharPos<DBCS_get_char_len<&gbk_bytes>>, DBCS_get_char_len<&gbk_bytes>);
         qore_encoding_private::get(*qcs)->needs_boundary_check = true;
         emap[qcs->getCode()] = qcs;
         QCS_WINDOWS_936 = qcs;
@@ -704,6 +716,16 @@ void QoreEncodingManager::addAlias(const QoreEncoding* qcs, const char* alias) {
     mutex.unlock();
 }
 
+// the private implementation of the registration of encodings, with access to the tables of QoreEncodingManager
+class qore_encoding_manager_private {
+public:
+    //! finds or creates an encoding as findCreate() does for trusted code: any name that is not known is registered
+    DLLLOCAL static const QoreEncoding* findCreateTrusted(const char* name);
+
+    //! returns the encoding whose name or alias has the given key (its letters and digits in upper case), if any
+    DLLLOCAL static const QoreEncoding* findByNameKey(const char* key);
+};
+
 // returns the canonical name of an encoding that Qore does not know, defined after the table of character set labels
 static std::string qore_canonical_charset_name(const char* name);
 
@@ -721,9 +743,98 @@ const QoreEncoding* QoreEncodingManager::findUnlocked(const char* name) {
     return 0;
 }
 
+// the name of the encoding that untrusted code gets for a name that it may not register (qore#6826)
+static constexpr const char* QORE_UNREGISTERED_ENCODING = "X-QORE-UNREGISTERED";
+
+// returns true if untrusted code may register an encoding of the given name that Qore does not know: a plain name of
+// an encoding that iconv converts both ways; iconv also accepts names with any conversion suffix ("//...", or a
+// trailing "/") and with leading whitespace, so that such names, and names with control characters or beyond a
+// length that no encoding name has, would let it register names without bound (qore#6826)
+static bool qore_untrusted_may_register_encoding(const char* name) {
+    size_t len = strlen(name);
+    if (!len || len > 64) {
+        return false;
+    }
+    for (const char* p = name; *p; ++p) {
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (c <= 0x20 || c >= 0x7f || c == '/' || c == '\\') {
+            return false;
+        }
+    }
+    iconv_t to = iconv_open(name, "UTF-8");
+    if (to == reinterpret_cast<iconv_t>(-1)) {
+        return false;
+    }
+    iconv_close(to);
+    iconv_t from = iconv_open("UTF-8", name);
+    if (from == reinterpret_cast<iconv_t>(-1)) {
+        return false;
+    }
+    iconv_close(from);
+    return true;
+}
+
+// returns the letters and digits of an encoding name in upper case: iconv ignores punctuation in names (glibc some
+// of it, musl all of it), so that the names that it accepts for an encoding are unbounded but their keys are not
+static std::string qore_encoding_name_key(const char* name) {
+    std::string key;
+    for (const char* p = name; *p; ++p) {
+        char c = *p;
+        if (c >= 'a' && c <= 'z') {
+            key += static_cast<char>(c - 'a' + 'A');
+        } else if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+            key += c;
+        }
+    }
+    return key;
+}
+
+const QoreEncoding* qore_encoding_manager_private::findByNameKey(const char* key) {
+    AutoLocker al(QoreEncodingManager::mutex);
+    for (const auto& i : QoreEncodingManager::emap) {
+        if (qore_encoding_name_key(i.first) == key) {
+            return i.second;
+        }
+    }
+    for (const auto& i : QoreEncodingManager::amap) {
+        if (qore_encoding_name_key(i.first) == key) {
+            return i.second;
+        }
+    }
+    return nullptr;
+}
+
 const QoreEncoding* QoreEncodingManager::findCreate(const char* name) {
-    AutoLocker al(mutex);
-    const QoreEncoding* rv = findUnlocked(name);
+    {
+        AutoLocker al(mutex);
+        if (const QoreEncoding* rv = findUnlocked(name)) {
+            return rv;
+        }
+    }
+    // a name that is not known: code that is not trusted registers only a bounded set of names, as data that is not
+    // trusted does (qore_find_untrusted_encoding()), and the encodings that iconv converts by their plain names
+    if (qore_caller_is_untrusted()) {
+        if (const QoreEncoding* rv = qore_find_untrusted_encoding(name)) {
+            return rv;
+        }
+        // another spelling of a known name, which iconv accepts in unbounded spellings, gives its encoding; this
+        // registers nothing
+        std::string key = qore_encoding_name_key(name);
+        if (!key.empty()) {
+            if (const QoreEncoding* rv = qore_encoding_manager_private::findByNameKey(key.c_str())) {
+                return rv;
+            }
+        }
+        if (key.empty() || !qore_untrusted_may_register_encoding(name)) {
+            return qore_encoding_manager_private::findCreateTrusted(QORE_UNREGISTERED_ENCODING);
+        }
+    }
+    return qore_encoding_manager_private::findCreateTrusted(name);
+}
+
+const QoreEncoding* qore_encoding_manager_private::findCreateTrusted(const char* name) {
+    AutoLocker al(QoreEncodingManager::mutex);
+    const QoreEncoding* rv = QoreEncodingManager::findUnlocked(name);
     if (rv) {
         return rv;
     }
@@ -733,7 +844,7 @@ const QoreEncoding* QoreEncodingManager::findCreate(const char* name) {
     std::string code = qore_canonical_charset_name(name);
     std::unique_ptr<QoreEncoding> qcs(new QoreEncoding(code.c_str()));
     qore_encoding_private::get(*qcs)->probe();
-    emap[qcs->getCode()] = qcs.get();
+    QoreEncodingManager::emap[qcs->getCode()] = qcs.get();
     return qcs.release();
 }
 
@@ -822,7 +933,7 @@ const QoreEncoding* qore_find_untrusted_encoding(const char* name, size_t len) {
     for (const auto& label : qore_untrusted_charset_labels) {
         if (!strcasecmp(name, label.label)) {
             const QoreEncoding* enc = QoreEncodingManager::find(label.name);
-            return enc ? enc : QEM.findCreate(label.name);
+            return enc ? enc : qore_encoding_manager_private::findCreateTrusted(label.name);
         }
     }
     return QoreEncodingManager::find(name);
@@ -855,80 +966,22 @@ const QoreEncoding* QoreEncodingManager::findCreate(const QoreString* str) {
     return findCreate(str->c_str());
 }
 
+// the UTF-8 encoding's character function: the one definition of a valid UTF-8 character (qore#6604)
 qore_offset_t q_UTF8_get_char_len(const char* p, size_t len) {
-    // see if a multi-byte char is starting
-    if ((*p & 0xc0) == 0xc0) {
-        //printd(5, "MULTIBYTE *p = %hhx\n", *p);
-        // check for a 3-byte sequence
-        if ((*p) & 0x20) {
-            // check for a 4-byte sequence
-            if ((*p) & 0x10) {
-                if (len >= 4) {
-                    if ((*(p+1)) & 0x80 && (*(p+2)) & 0x80 && (*(p+3)) & 0x80)
-                        return 4;
-                    // encoding error - invalid UTF-8 character
-                    return 0;
-                }
-                return -4;
-            } else { // should be 3-byte sequence
-                if (len >= 3) {
-                    if ((*(p+1)) & 0x80 && (*(p+2)) & 0x80)
-                        return 3;
-                    // encoding error - invalid UTF-8 character
-                    return 0;
-                }
-                return -3;
-            }
-        } else { // should be a 2-byte sequence - check next char for high bit
-            if (len >= 2) {
-                if ((*(p+1)) & 0x80)
-                   return 2;
-                // encoding error - invalid UTF-8 character
-                return 0;
-            }
-            return -2;
-        }
-    }
-    return 1;
+    return q_utf8_char_len(p, len);
 }
 
 static size_t UTF8_getLength(const char* p, const char* end, bool& invalid) {
-    constexpr size_t ascii_high_bit_mask = (~static_cast<size_t>(0) / 0xff) * 0x80;
-    size_t i = 0;
-    while (p < end) {
-        unsigned char c = static_cast<unsigned char>(*p);
-        if (c < 0x80) {
-            ++p;
-            ++i;
-            while (static_cast<size_t>(end - p) >= sizeof(size_t)) {
-                size_t word;
-                memcpy(&word, p, sizeof(word));
-                if (word & ascii_high_bit_mask) {
-                    break;
-                }
-                p += sizeof(size_t);
-                i += sizeof(size_t);
-            }
-            continue;
-        }
-
-        qore_offset_t l = q_UTF8_get_char_len(p, end - p);
-        if (l <= 0) {
-            invalid = true;
-            return i;
-        }
-        p += l;
-        ++i;
-    }
-
-    invalid = false;
-    return i;
+    size_t partial_count;
+    size_t count = q_utf8_count_chars(p, end, &partial_count);
+    invalid = count == Q_UTF8_INVALID_COUNT;
+    return invalid ? partial_count : count;
 }
 
 static size_t UTF8_getByteLen(const char* p, const char* end, size_t l, bool& invalid) {
     size_t b = 0;
     while ((p < end) && l) {
-        qore_offset_t bl = q_UTF8_get_char_len(p, end - p);
+        qore_offset_t bl = q_utf8_char_len(p, end - p);
         if (bl <= 0) {
             invalid = true;
             return b;
@@ -944,7 +997,7 @@ static size_t UTF8_getByteLen(const char* p, const char* end, size_t l, bool& in
 static size_t UTF8_getCharPos(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF8_get_char_len(p, end - p);
+        qore_offset_t l = q_utf8_char_len(p, end - p);
         if (l <= 0) {
             invalid = true;
             return i;
@@ -981,14 +1034,9 @@ static unsigned UTF8_getUnicode(const char* p) {
     return p[0];
 }
 
+// the UTF-16LE encoding's character function: the one definition of a valid UTF-16 character (qore#6604)
 qore_offset_t q_UTF16LE_get_char_len(const char* p, size_t len) {
-    assert(len);
-    if (len == 1)
-        return -2;
-
-    unsigned char c = (unsigned char)p[1];
-    size_t l = c >= 0xd8 && c < 0xdc ? 4 : 2;
-    return len >= l ? l : -l;
+    return q_utf16_char_len<false>(p, len);
 }
 
 static unsigned UTF16LE_getUnicode(const char* p) {
@@ -1005,7 +1053,7 @@ static unsigned UTF16LE_getUnicode(const char* p) {
 static size_t UTF16LE_getLength(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16LE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<false>(p, end - p);
         //printd(5, "UTF16_getLength() p: %p end: %p len: %p l: %zd\n", p, end, end - p, l);
         if (l <= 0) {
             invalid = true;
@@ -1022,7 +1070,7 @@ static size_t UTF16LE_getLength(const char* p, const char* end, bool& invalid) {
 static size_t UTF16LE_getByteLen(const char* p, const char* end, size_t l, bool& invalid) {
     size_t b = 0;
     while ((p < end) && l) {
-        qore_offset_t bl = q_UTF16LE_get_char_len(p, end - p);
+        qore_offset_t bl = q_utf16_char_len<false>(p, end - p);
         if (bl <= 0) {
             invalid = true;
             return b;
@@ -1038,7 +1086,7 @@ static size_t UTF16LE_getByteLen(const char* p, const char* end, size_t l, bool&
 static size_t UTF16LE_getCharPos(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16LE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<false>(p, end - p);
         if (l <= 0) {
             invalid = true;
             return i;
@@ -1051,12 +1099,10 @@ static size_t UTF16LE_getCharPos(const char* p, const char* end, bool& invalid) 
     return i;
 }
 
+// the character function of UTF-16BE and of the generic UTF-16 encoding, which is big-endian: the one definition of
+// a valid UTF-16 character (qore#6604)
 qore_offset_t q_UTF16BE_get_char_len(const char* p, size_t len) {
-    assert(len);
-
-    unsigned char c = (unsigned char)*p;
-    size_t l = c >= 0xd8 && c < 0xdc ? 4 : 2;
-    return len >= l ? l : -l;
+    return q_utf16_char_len<true>(p, len);
 }
 
 static unsigned UTF16BE_getUnicode(const char* p) {
@@ -1073,7 +1119,7 @@ static unsigned UTF16BE_getUnicode(const char* p) {
 static size_t UTF16BE_getLength(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16BE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<true>(p, end - p);
         //printd(5, "UTF16_getLength() p: %p end: %p len: %p l: %zd\n", p, end, end - p, l);
         if (l <= 0) {
             invalid = true;
@@ -1090,7 +1136,7 @@ static size_t UTF16BE_getLength(const char* p, const char* end, bool& invalid) {
 static size_t UTF16BE_getByteLen(const char* p, const char* end, size_t l, bool& invalid) {
     size_t b = 0;
     while ((p < end) && l) {
-        qore_offset_t bl = q_UTF16BE_get_char_len(p, end - p);
+        qore_offset_t bl = q_utf16_char_len<true>(p, end - p);
         if (bl <= 0) {
             invalid = true;
             return b;
@@ -1106,7 +1152,7 @@ static size_t UTF16BE_getByteLen(const char* p, const char* end, size_t l, bool&
 static size_t UTF16BE_getCharPos(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16BE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<true>(p, end - p);
         if (l <= 0) {
             invalid = true;
             return i;
@@ -1223,47 +1269,135 @@ static size_t mb_getCharPos(const char* p, const char* end, bool& invalid) {
 // variable-width multi-byte encodings that are compatible with ASCII (or Shift_JIS, which is not); the length of a
 // character is given by its first byte (in GB18030, by its first two bytes)
 
-// EUC encodings (EUC-JP, EUC-KR, EUC-CN / GB2312): two bytes 0xa1 - 0xfe, 0x8e and one byte (JIS X 0201 kana in
-// EUC-JP), or 0x8f and two bytes (JIS X 0212 in EUC-JP)
+// EUC encodings (EUC-JP, EUC-KR, EUC-CN / GB2312): ASCII, and code set 1 in two bytes 0xa1 - 0xfe; a byte that is
+// not a character of the encoding is invalid (issue #6665):
+// - SS2 and SS3 (the code sets 2 and 3 of EUC-JP): 0x8e and one byte 0xa1 - 0xdf (JIS X 0201 kana), and 0x8f and two
+//   bytes 0xa1 - 0xfe (JIS X 0212); an EUC encoding without them has no character starting with 0x8e or 0x8f
+// - C1: the C1 control characters 0x80 - 0x9f (other than SS2 and SS3 when they are used) are characters of the EUC
+//   encodings that the standards of EUC-JP (JIS X 0208:1997 Annex 1) and EUC-KR (KS X 2901) define with them; the
+//   others (EUC-CN, and the EUC encodings that Qore finds by probing) have no character 0x80 - 0xa0
+template <bool C1, bool SS>
 static qore_offset_t EUC_get_char_len(const char* p, size_t len) {
     assert(len);
     const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
     if (u[0] < 0x80) {
         return 1;
     }
-    size_t l;
-    if (u[0] == 0x8e) {
-        l = 2;
-    } else if (u[0] == 0x8f) {
-        l = 3;
-    } else if (u[0] >= 0xa1 && u[0] <= 0xfe) {
-        l = 2;
-    } else {
-        return 0;
+    if (u[0] >= 0xa1 && u[0] <= 0xfe) {
+        if (len < 2) {
+            return -2;
+        }
+        return (u[1] >= 0xa1 && u[1] <= 0xfe) ? 2 : 0;
     }
-    if (len < l) {
-        return -static_cast<qore_offset_t>(l);
+    if (SS && u[0] == 0x8e) {
+        if (len < 2) {
+            return -2;
+        }
+        return (u[1] >= 0xa1 && u[1] <= 0xdf) ? 2 : 0;
     }
-    for (size_t i = 1; i < l; ++i) {
-        if (u[i] < 0xa1 || u[i] > 0xfe) {
+    if (SS && u[0] == 0x8f) {
+        // the following bytes that are there are checked first: a sequence is incomplete only if they can be part of
+        // a character
+        if (len >= 2 && (u[1] < 0xa1 || u[1] > 0xfe)) {
             return 0;
         }
+        if (len < 3) {
+            return -3;
+        }
+        return (u[2] >= 0xa1 && u[2] <= 0xfe) ? 3 : 0;
     }
-    return l;
+    return (C1 && u[0] <= 0x9f) ? 1 : 0;
 }
 
-// double-byte encodings with a first byte 0x81 - 0xfe and a second byte 0x40 - 0xfe (GBK / CP936, Big5 / CP950,
-// UHC / CP949); 0x80 and 0xff are single bytes (ex: the euro sign 0x80 in CP936)
+// the bytes of a double-byte encoding (issue #6665): for each byte, lead is 1 for a character of its own, 0 for a byte
+// that is not a character or the first byte of one, and 2 + n for the first byte of a character whose second byte
+// has bit n set in its entry of trail; the character functions of the double-byte encodings below are these tables
+struct dbcs_bytes {
+    unsigned char lead[256];
+    unsigned char trail[256];
+};
+
+// a range of bytes
+struct byte_range {
+    unsigned first;
+    unsigned last;
+};
+
+// returns the tables of a double-byte encoding whose first bytes in lead_ranges have second bytes in trail_ranges,
+// and whose first bytes in lead_ranges2 (if any) have second bytes in trail_ranges2; 0x00 - 0x7f, and 0x80 if
+// euro, are characters of their own
+template <size_t L, size_t T, size_t L2 = 0, size_t T2 = 0>
+constexpr dbcs_bytes make_dbcs_bytes(bool euro, const byte_range (&lead_ranges)[L], const byte_range (&trail_ranges)[T],
+        const byte_range* lead_ranges2 = nullptr, const byte_range* trail_ranges2 = nullptr) {
+    dbcs_bytes b{};
+    for (unsigned i = 0; i < 0x80; ++i) {
+        b.lead[i] = 1;
+    }
+    if (euro) {
+        b.lead[0x80] = 1;
+    }
+    for (const byte_range& r : lead_ranges) {
+        for (unsigned i = r.first; i <= r.last; ++i) {
+            b.lead[i] = 2;
+        }
+    }
+    for (const byte_range& r : trail_ranges) {
+        for (unsigned i = r.first; i <= r.last; ++i) {
+            b.trail[i] |= 1;
+        }
+    }
+    for (size_t j = 0; j < L2; ++j) {
+        for (unsigned i = lead_ranges2[j].first; i <= lead_ranges2[j].last; ++i) {
+            b.lead[i] = 3;
+        }
+    }
+    for (size_t j = 0; j < T2; ++j) {
+        for (unsigned i = trail_ranges2[j].first; i <= trail_ranges2[j].last; ++i) {
+            b.trail[i] |= 2;
+        }
+    }
+    return b;
+}
+
+constexpr byte_range dbcs_leads[] = {{0x81, 0xfe}};
+// the second bytes of GBK / CP936 and of the double-byte encodings that Qore finds by probing
+constexpr byte_range gbk_trails[] = {{0x40, 0x7e}, {0x80, 0xfe}};
+// the second bytes of Big5 and its forms
+constexpr byte_range big5_trails[] = {{0x40, 0x7e}, {0xa1, 0xfe}};
+constexpr byte_range big5_leads[] = {{0xa1, 0xf9}};
+constexpr byte_range big5hkscs_leads[] = {{0x87, 0xfe}};
+// the second bytes of UHC (CP949)
+constexpr byte_range uhc_trails[] = {{0x41, 0x5a}, {0x61, 0x7a}, {0x81, 0xfe}};
+// Johab (KS X 1001 Annex 3, CP1361): Hangul, and the other characters
+constexpr byte_range johab_hangul_leads[] = {{0x84, 0xd3}};
+constexpr byte_range johab_hangul_trails[] = {{0x41, 0x7e}, {0x81, 0xfe}};
+constexpr byte_range johab_other_leads[] = {{0xd8, 0xde}, {0xe0, 0xf9}};
+constexpr byte_range johab_other_trails[] = {{0x31, 0x7e}, {0x91, 0xfe}};
+
+// a double-byte encoding that Qore finds by probing: 0xff is not a character, and nor is 0x80
+constexpr dbcs_bytes dbcs_probed_bytes = make_dbcs_bytes(false, dbcs_leads, gbk_trails);
+// GBK / CP936, and a probed double-byte encoding with the euro sign 0x80 as a character of its own
+constexpr dbcs_bytes gbk_bytes = make_dbcs_bytes(true, dbcs_leads, gbk_trails);
+constexpr dbcs_bytes big5_bytes = make_dbcs_bytes(false, big5_leads, big5_trails);
+constexpr dbcs_bytes cp950_bytes = make_dbcs_bytes(false, dbcs_leads, big5_trails);
+constexpr dbcs_bytes big5hkscs_bytes = make_dbcs_bytes(false, big5hkscs_leads, big5_trails);
+constexpr dbcs_bytes uhc_bytes = make_dbcs_bytes(false, dbcs_leads, uhc_trails);
+constexpr dbcs_bytes johab_bytes = make_dbcs_bytes<1, 2, 2, 2>(false, johab_hangul_leads, johab_hangul_trails,
+    johab_other_leads, johab_other_trails);
+
+// the character function of a double-byte encoding with the given tables
+template <const dbcs_bytes* B>
 static qore_offset_t DBCS_get_char_len(const char* p, size_t len) {
     assert(len);
     const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
-    if (u[0] < 0x81 || u[0] == 0xff) {
-        return 1;
+    unsigned c = B->lead[u[0]];
+    if (c < 2) {
+        return c;
     }
     if (len < 2) {
         return -2;
     }
-    return (u[1] < 0x40 || u[1] == 0x7f || u[1] == 0xff) ? 0 : 2;
+    return (B->trail[u[1]] & (1u << (c - 2))) ? 2 : 0;
 }
 
 // GB18030: as GBK, and four bytes when the second byte is a digit: 0x81 - 0xfe, 0x30 - 0x39, 0x81 - 0xfe, 0x30 - 0x39
@@ -1280,21 +1414,33 @@ static qore_offset_t GB18030_get_char_len(const char* p, size_t len) {
         return -2;
     }
     if (u[1] >= 0x30 && u[1] <= 0x39) {
+        // the following bytes that are there are checked first: a sequence is incomplete only if they can be part of
+        // a character
+        if (len >= 3 && (u[2] < 0x81 || u[2] == 0xff)) {
+            return 0;
+        }
         if (len < 4) {
             return -4;
         }
-        return (u[2] < 0x81 || u[2] == 0xff || u[3] < 0x30 || u[3] > 0x39) ? 0 : 4;
+        return (u[3] < 0x30 || u[3] > 0x39) ? 0 : 4;
     }
     return (u[1] < 0x40 || u[1] == 0x7f || u[1] == 0xff) ? 0 : 2;
 }
 
-// Shift_JIS and its variants (CP932): two bytes with a first byte 0x81 - 0x9f or 0xe0 - 0xfc and a second byte
-// 0x40 - 0xfc; any other byte is a single-byte character (ex: JIS X 0201 kana 0xa1 - 0xdf)
+// JIS X 0201 Roman/control bytes and half-width kana use one byte. JIS X 0208 Appendix 1
+// uses the lead ranges 81-9f and e0-ef. Windows-31J and other extended forms go through fc.
+// The bytes 0x80, 0xa0, and those after the last lead byte are not characters of any form (they are undefined in
+// Microsoft's code page 932 as well), so they are invalid (issue #6665).
+template <bool Extended>
 static qore_offset_t SJIS_get_char_len(const char* p, size_t len) {
     assert(len);
     const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
-    if (!((u[0] >= 0x81 && u[0] <= 0x9f) || (u[0] >= 0xe0 && u[0] <= 0xfc))) {
+    if (u[0] <= 0x7f || (u[0] >= 0xa1 && u[0] <= 0xdf)) {
         return 1;
+    }
+    constexpr unsigned last_lead = Extended ? 0xfc : 0xef;
+    if (!((u[0] >= 0x81 && u[0] <= 0x9f) || (u[0] >= 0xe0 && u[0] <= last_lead))) {
+        return 0;
     }
     if (len < 2) {
         return -2;
@@ -1422,6 +1568,32 @@ private:
     ProbeConverter& operator=(const ProbeConverter&) = delete;
 };
 
+// returns true if iconv converts text in an encoding with the characters of the given Unicode form from the given
+// name to UTF-8 although the text has a code unit sequence that is not a character of the form: a value above
+// U+10FFFF or a surrogate in UTF-32 (glibc's "UCS-4" converts values up to 0x7fffffff), an unpaired surrogate in
+// UTF-16, or a surrogate in UCS-2; also if the conversion cannot be opened, so that the text is validated then
+static bool iconv_accepts_invalid_form(const char* source, UnicodeForm form, bool utf32, bool non_bmp) {
+    static const std::vector<unsigned> utf32_samples[] = {{0x110000}, {0xd800}, {0xdc00}};
+    static const std::vector<unsigned> utf16_samples[] = {{0xdc00, 0x41}, {0xd800, 0x41}};
+    static const std::vector<unsigned> ucs2_samples[] = {{0xd800}, {0xdc00}};
+    const std::vector<unsigned>* samples = utf32 ? utf32_samples : (non_bmp ? utf16_samples : ucs2_samples);
+    size_t num = utf32 ? 3 : 2;
+    for (size_t i = 0; i < num; ++i) {
+        // the byte order mark gives the byte order to an encoding that takes it from the text
+        std::string in = encode_unicode(form, 0xfeff) + encode_unicode(form, 0x61);
+        for (unsigned unit : samples[i]) {
+            in += encode_unicode(form, unit);
+        }
+        in += encode_unicode(form, 0x62);
+        ProbeConverter dec("UTF-8", source);
+        std::string out;
+        if (!dec.valid() || dec.convert(in, out)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // a character converted to the encoding being probed
 struct probe_char {
     // the Unicode code point
@@ -1465,16 +1637,50 @@ struct multibyte_family {
 // in the order they are checked: an encoding is decoded as the first family that gives the length of every sample
 // character; the families with fewer multi-byte first bytes come first
 const multibyte_family multibyte_families[] = {
-    QORE_MULTIBYTE_FAMILY("EUC", EUC_get_char_len, 3, false),
-    QORE_MULTIBYTE_FAMILY("DBCS", DBCS_get_char_len, 2, false),
+    QORE_MULTIBYTE_FAMILY("EUC", (EUC_get_char_len<false, false>), 2, false),
+    // with the code sets 2 and 3 of EUC-JP
+    QORE_MULTIBYTE_FAMILY("EUC-SS", (EUC_get_char_len<false, true>), 3, false),
+    QORE_MULTIBYTE_FAMILY("DBCS", DBCS_get_char_len<&dbcs_probed_bytes>, 2, false),
+    // with the euro sign 0x80 (CP936)
+    QORE_MULTIBYTE_FAMILY("DBCS-Euro", DBCS_get_char_len<&gbk_bytes>, 2, false),
     QORE_MULTIBYTE_FAMILY("GB18030", GB18030_get_char_len, 4, false),
     // Shift_JIS is not ASCII-compatible: its bytes 0x5c and 0x7e are the yen sign and overline of JIS X 0201, and
     // iconv implementations and variants (ex: CP932) map them differently, so it is handled the same way on every
     // platform; that the second bytes of its double-byte characters can be ASCII characters is handled by the
     // character boundary checks of all of these families
-    QORE_MULTIBYTE_FAMILY("SJIS", SJIS_get_char_len, 2, true),
+    QORE_MULTIBYTE_FAMILY("SJIS", SJIS_get_char_len<true>, 2, true),
+};
+
+// the encodings whose definitions Qore knows get the characters of their definitions, once probing has found that
+// they are multi-byte encodings of the same structure (issue #6665)
+const struct {
+    const char* name;
+    multibyte_family family;
+} named_multibyte_families[] = {
+    {"EUC-JP", QORE_MULTIBYTE_FAMILY("EUC-JP", (EUC_get_char_len<true, true>), 3, false)},
+    {"EUC-KR", QORE_MULTIBYTE_FAMILY("EUC-KR", (EUC_get_char_len<true, false>), 2, false)},
+    {"GBK", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<&gbk_bytes>, 2, false)},
+    {"CP936", QORE_MULTIBYTE_FAMILY("GBK", DBCS_get_char_len<&gbk_bytes>, 2, false)},
+    {"Big5", QORE_MULTIBYTE_FAMILY("Big5", DBCS_get_char_len<&big5_bytes>, 2, false)},
+    {"CP950", QORE_MULTIBYTE_FAMILY("CP950", DBCS_get_char_len<&cp950_bytes>, 2, false)},
+    {"Big5-HKSCS", QORE_MULTIBYTE_FAMILY("Big5-HKSCS", DBCS_get_char_len<&big5hkscs_bytes>, 2, false)},
+    {"BIG5HKSCS", QORE_MULTIBYTE_FAMILY("Big5-HKSCS", DBCS_get_char_len<&big5hkscs_bytes>, 2, false)},
+    {"CP949", QORE_MULTIBYTE_FAMILY("UHC", DBCS_get_char_len<&uhc_bytes>, 2, false)},
+    {"UHC", QORE_MULTIBYTE_FAMILY("UHC", DBCS_get_char_len<&uhc_bytes>, 2, false)},
+    {"JOHAB", QORE_MULTIBYTE_FAMILY("JOHAB", DBCS_get_char_len<&johab_bytes>, 2, false)},
+    {"CP1361", QORE_MULTIBYTE_FAMILY("JOHAB", DBCS_get_char_len<&johab_bytes>, 2, false)},
 };
 #undef QORE_MULTIBYTE_FAMILY
+
+// returns the family of the encoding of the given name, if Qore knows its definition
+const multibyte_family* get_named_multibyte_family(const std::string& code) {
+    for (const auto& i : named_multibyte_families) {
+        if (!strcasecmp(code.c_str(), i.name)) {
+            return &i.family;
+        }
+    }
+    return nullptr;
+}
 
 // sample characters for the multi-byte encodings: Japanese (kanji, hiragana, katakana, half-width katakana, JIS X 0212
 // in EUC-JP), Chinese (GB2312, GBK, Big5, and a character outside the Basic Multilingual Plane, four bytes in
@@ -1637,7 +1843,9 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
       encoding form, is checked with Japanese, Chinese, and Korean sample characters; if it has multi-byte characters
       and one of the families in multibyte_families gives the length of every sample character (EUC, double-byte
       encodings such as GBK, Big5, or CP949, GB18030, Shift_JIS), it gets the character functions of the family, and
-      searches only match at character boundaries, as the second byte of a character can be an ASCII character.
+      searches only match at character boundaries, as the second byte of a character can be an ASCII character; an
+      encoding whose definition Qore knows (EUC-JP, EUC-KR, GBK, Big5 and its forms, UHC, Johab) then gets the bytes
+      of its definition (see named_multibyte_families).
       Such an encoding stays ASCII-compatible, except for the Shift_JIS family (see multibyte_families).  Code points
       are decoded with iconv (QoreEncoding::getUnicode()).
     - Character width of encodings that are not ASCII-compatible: each character of a sample is converted alone and
@@ -1653,14 +1861,40 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
       not as found above; text in an encoding that is not ASCII-compatible is converted to UTF-8 by every function
       that parses or splits it.
 
+    A name with iconv conversion flags after "//" (ex: "UTF-16LE//") that iconv does not know is probed and converted
+    without the flags if iconv knows that name (musl rejects every name with flags, and GNU libiconv, as on macOS with
+    MacPorts, a name whose flags are empty), so that the encoding has the same
+    properties on every platform; see qore_encoding_private::iconvCodeWithoutFlags().
+
     If iconv does not know the encoding, the properties are not changed: no text can be converted to or from the
     encoding, so its strings are handled as single-byte, ASCII-compatible text, as before, rather than raising an
     error when the encoding is named (ex: in a string tagged with an encoding only for information).
 */
 void qore_encoding_private::probe() {
-    ProbeConverter to(code.c_str(), "UTF-8");
-    ProbeConverter from("UTF-8", code.c_str());
+    // a name with conversion flags that iconv does not accept is given to iconv without them (musl; GNU libiconv for
+    // empty flags)
+    iconv_code = iconvCodeWithoutFlags(code, [](const std::string& name) -> bool {
+        ProbeConverter to(name.c_str(), "UTF-8");
+        ProbeConverter from("UTF-8", name.c_str());
+        return to.valid() && from.valid();
+    });
+    // Select the named Shift_JIS forms directly. A probe of the platform converter can accept malformed
+    // pairs or identify the extended Windows repertoire as Shift_JIS.
+    const bool windows_sjis = code == "CP932" || code == "Windows-31J";
+    if (windows_sjis || code == "Shift_JIS" || code == "SHIFT-JIS" || code == "SHIFTJIS" || code == "SJIS"
+            || code == "MS_KANJI" || code == "CSSHIFTJIS") {
+        setCharFunctions(windows_sjis ? form_functions::get<SJIS_get_char_len<true>, nullptr>(1, 2)
+            : form_functions::get<SJIS_get_char_len<false>, nullptr>(1, 2));
+        needs_boundary_check = true;
+        ascii_compat = false;
+        return;
+    }
+    ProbeConverter to(getIconvCode(), "UTF-8");
+    bool no_encoder = !to.valid() && errno == EINVAL;
+    ProbeConverter from("UTF-8", getIconvCode());
     if (!to.valid() || !from.valid()) {
+        // Resource errors do not make an encoding an opaque tag.
+        opaque_single_byte = no_encoder && !from.valid() && errno == EINVAL;
         return;
     }
 
@@ -1711,8 +1945,8 @@ void qore_encoding_private::probe() {
 bool qore_encoding_private::probeAsciiIdentical() const {
     bool identical = false;
     if (ascii_compat && !stateful) {
-        ProbeConverter to(code.c_str(), "UTF-8");
-        ProbeConverter from("UTF-8", code.c_str());
+        ProbeConverter to(getIconvCode(), "UTF-8");
+        ProbeConverter from("UTF-8", getIconvCode());
         if (to.valid() && from.valid()) {
             identical = true;
             std::string in, out, back;
@@ -1769,6 +2003,10 @@ void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
         const multibyte_family* f = get_multibyte_family(convert);
         if (!f) {
             return false;
+        }
+        // an encoding whose definition Qore knows gets the characters of its definition
+        if (const multibyte_family* named = get_named_multibyte_family(code)) {
+            f = named;
         }
         fcharlen = f->charlen;
         flength = f->length;
@@ -1862,7 +2100,7 @@ void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
         // each sample character is decoded on its own after the byte order mark, as ProbeConverter converts short
         // texts only, and with a new conversion each time: glibc keeps the byte order of the first byte order mark
         // that a conversion reads, even after it is reset
-        const std::string& enc_code = code;
+        const std::string enc_code = getIconvCode();
         auto decodes_with_bom = [&enc_code, &units, &units_utf8](UnicodeForm f) -> bool {
             for (size_t i = 0; i < units.size(); ++i) {
                 ProbeConverter dec("UTF-8", enc_code.c_str());
@@ -1941,6 +2179,9 @@ void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
             setCharFunctions(be ? form_functions::get<UCS2_get_char_len<UCS2BE_getUnicode>, UCS2BE_getUnicode>(2, 2)
                 : form_functions::get<UCS2_get_char_len<UCS2LE_getUnicode>, UCS2LE_getUnicode>(2, 2));
         }
+        // text that the character functions reject must not be converted: where iconv accepts it, text is
+        // validated with the character functions before it is converted (see IconvHelper)
+        iconv_accepts_invalid = iconv_accepts_invalid_form(getIconvSourceCode(), form, utf32, non_bmp);
         return;
     }
     set_multibyte();

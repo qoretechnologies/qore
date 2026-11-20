@@ -678,12 +678,15 @@ sse.setEventQueue();
         }
 %endif
 
-        if (opts.hasKey("start_thread")) {
+        if (exists opts.start_thread) {
             if (!opts.start_thread.callp()) {
                 raiseError("option hash to ServerSentEventClient::constructor() has an invalid 'start_thread' key "
                     "with type %y; must be a callable value", opts.start_thread.fullType());
             }
             start_thread = remove opts.start_thread;
+        } else if (*code cap = get_thread_capability("start_thread")) {
+            # the capability of the code that the host runs (qorus#867)
+            start_thread = cap;
         }
 %ifdef PO_NO_THREAD_CONTROL
         else {

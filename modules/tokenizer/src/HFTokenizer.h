@@ -43,11 +43,12 @@ public:
     /** @param text the input text
         @param text_pair optional second text for sentence-pair tasks
         @param add_special_tokens whether to add special tokens (default true)
+        @param where the Qore method, for an INVALID-ENCODING exception
         @param xsink exception sink
         @return hash with input_ids, token_type_ids, attention_mask, tokens
     */
     QoreHashNode* encode(const QoreStringNode* text, const QoreStringNode* text_pair,
-        bool add_special_tokens, ExceptionSink* xsink);
+        bool add_special_tokens, const char* where, ExceptionSink* xsink);
 
     //! Decodes token IDs back to text
     /** @param ids list of token IDs
@@ -65,7 +66,7 @@ public:
     QoreStringNode* idToToken(int id, ExceptionSink* xsink) const;
 
     //! Converts a token string to its ID
-    int tokenToId(const QoreStringNode* token) const;
+    int tokenToId(const QoreStringNode* token, ExceptionSink* xsink) const;
 
     //! Returns the full vocabulary as a token→id hash (includes added tokens)
     QoreHashNode* getVocab(ExceptionSink* xsink) const;
@@ -74,12 +75,13 @@ public:
     /** @param text the input text
         @param options hash with: text_pair, max_length, truncation, padding,
         add_special_tokens
+        @param where the Qore method, for an INVALID-ENCODING exception
         @param xsink exception sink
         @return hash with input_ids, token_type_ids, attention_mask, tokens,
         offset_mapping, special_tokens_mask
     */
     QoreHashNode* encodeAdvanced(const QoreStringNode* text,
-        const QoreHashNode* options, ExceptionSink* xsink);
+        const QoreHashNode* options, const char* where, ExceptionSink* xsink);
 
     //! Batch encoding with truncation and padding
     QoreListNode* encodeBatch(const QoreListNode* texts,
@@ -262,16 +264,26 @@ private:
     };
 
     //! Internal: encodeAdvanced without locking (caller must hold shared_lock)
+    /** @param where the Qore method, for an INVALID-ENCODING exception
+        @param index the index of the text in a batch for the exception, or -1
+    */
     QoreHashNode* encodeAdvancedIntern(const QoreStringNode* text,
-        const QoreHashNode* options, ExceptionSink* xsink);
+        const QoreHashNode* options, const char* where, int64 index, ExceptionSink* xsink);
 
     //! Internal: encode a single text or text pair for model-input buffers
+    /** @param where the Qore method, for an INVALID-ENCODING exception
+        @param index the index of the text in a batch for the exception, or -1
+    */
     int encodeForModelIntern(const QoreStringNode* text, const QoreHashNode* options,
-        const QoreStringNode* text_pair_override, ModelInputEncoding& out, ExceptionSink* xsink) const;
+        const QoreStringNode* text_pair_override, const char* where, int64 index, ModelInputEncoding& out,
+        ExceptionSink* xsink) const;
 
     //! Internal: build a dense model-input batch from texts and optional text pairs
+    /** @param where the Qore method, for an INVALID-ENCODING exception
+        @param batch true if the texts are a batch of the caller (their indexes are given in an exception)
+    */
     QoreHashNode* encodeBatchForModelIntern(const QoreListNode* texts, const QoreListNode* text_pairs,
-        const QoreHashNode* options, ExceptionSink* xsink) const;
+        const QoreHashNode* options, const char* where, bool batch, ExceptionSink* xsink) const;
 
     //! Internal: encode pre-tokenized words (skip normalize + pre-tokenize)
     InternalEncoding encodePreTokenizedWords(
@@ -288,7 +300,18 @@ private:
     InternalEncoding encodeSegment(const std::string& text) const;
 
     //! Internal: encode text with added token splitting
+    /** @throw PreTokenizerError the text cannot be pre-tokenized
+    */
     InternalEncoding encodeText(const std::string& text) const;
+
+    //! Internal: encode text with added token splitting, raising a Qore exception for an error
+    /** @param text the text in UTF-8
+        @param rv the encoding of the text
+        @param xsink for an error that a pre-tokenizer raises (ex: a regular expression match error)
+
+        @return 0 for OK, -1 if a Qore exception was raised
+    */
+    int encodeText(const std::string& text, InternalEncoding& rv, ExceptionSink* xsink) const;
 };
 
 } // namespace QoreTokenizer
