@@ -6580,8 +6580,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         code<nothing(...)> handleRequest;
         Sequence ss;
 
-        *hash<HttpListenerOptionInfo> opts;
-
         #*SSLCertificate cert;
         #*SSLPrivateKey key;
         bool ssl = False;
@@ -6659,6 +6657,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     private:internal {
+        #! the listener's options, with its TLS certificate and private key: not readable by subclasses
+        *hash<HttpListenerOptionInfo> opts;
+
         #! the test hook that stop() calls once it has marked the listener as stopping (see dbgSetStoppingHook())
         static *code<nothing(HttpListener)> dbg_stopping_hook;
     }
@@ -7352,21 +7353,27 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         background stop();
     }
 
+%ifdef QoreDebug
     #! @cond nodoc
     #! Sets the test hook that stop() calls once it has marked the listener as stopping; a debug build of the library only
-    /** @param hook the hook, called with the listener in the thread of the stop, or @ref nothing to remove it
+    /** For tests: the hook is process-wide (it is called for the listeners of every server in the process), so only
+        trusted code with process control can set it, and the method exists only in a debug build of the library
 
-        @throw HTTPLISTENER-DEBUG-ERROR the library is not a debug build
-        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it: the hook is process-wide
+        @param hook the hook, called with the listener in the thread of the stop, or @ref nothing to remove it
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
-    static dbgSetStoppingHook(*code<nothing(HttpListener)> hook) {
+    static dbgSetStoppingHook(*code<nothing(HttpListener)> hook) [dom=PROCESS_CONTROL] {
         SandboxManager::checkProcessWideRegistration("set the stopping hook of HTTP listeners");
-        if (!Option::HAVE_LIBRARY_DEBUGGING) {
-            throw "HTTPLISTENER-DEBUG-ERROR", "the test hooks of HttpListener need a debug build of the library";
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot set the stopping hook of HTTP listeners from a context with restricted "
+                "process control";
         }
         dbg_stopping_hook = hook;
     }
     #! @endcond
+%endif
 
     stop(*bool silent) {
         # A stop that runs in a thread that runs a request of this listener does not wait for that request, which
