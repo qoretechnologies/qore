@@ -19,6 +19,16 @@ public class Http2ClientDuplex inherits QUnit::Test {
         addTestCase("a WebSocket receives its welcome during a stalled upload", sub () { exercise(True); });
         addTestCase("server dispatches a completed request during a stalled response", sub () { serverRead(False); });
         addTestCase("server dispatches request headers during a stalled response", sub () { serverRead(True); });
+        addTestCase("discarding a stalled TLS write closes its connection", sub () {
+            Socket client();
+            Socket peer = connectPeer(client);
+            on_exit {
+                peer.close();
+                client.close();
+            }
+            discardStalledWrite(client);
+            assertFalse(client.isOpen(), "the abandoned TLS write cannot be finished by a later send");
+        });
         addTestCase("TLS retries, idle reads, and aborted ciphertext", sub () {
             if (!exists_function("dbg_run_tls_duplex_tests")) {
                 testSkip("the per-connection transport BIO gate requires a Debug build with OpenSSL BIO callbacks");
@@ -51,6 +61,19 @@ public class Http2ClientDuplex inherits QUnit::Test {
         peer.setNoDelay(True);
         client.setNoDelay(True);
         return peer;
+    }
+
+    private discardStalledWrite(Socket client) {
+        AbstractPollOperation send = client.startPollSend(binary(strmul("x", 12 * 1024 * 1024)));
+        for (int i = 0; i < 64; ++i) {
+            *hash<SocketPollInfo> wait = send.continuePoll();
+            assertTrue(exists wait, "the undrained payload exceeds the TCP send buffer");
+            assertTrue((wait.events & SOCK_POLLOUT) != 0);
+            if (!Socket::poll((wait,), 0).size()) {
+                return;
+            }
+        }
+        fail("the socket never reached transport backpressure");
     }
 
     private exercise(bool websocket) {

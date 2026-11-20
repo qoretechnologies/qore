@@ -11945,23 +11945,11 @@ int SSLSocketHelper::drainStaged(ExceptionSink* xsink) {
     return 0;
 }
 
-int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, void* buf, size_t size,
-        SslAction action, size_t& real_io, size_t* awaiting_drain) {
-    assert(xsink);
-    assert(size);
-    assert(!real_io);
-#ifdef DEBUG
-    // test hook: lets a test close the socket from another thread just before the call uses the connection
-    if (qs.dbg_before_ssl_io_set.load(std::memory_order_acquire)) {
-        if (std::function<void()> hook = qs.dbgTakeBeforeSslIo()) {
-            hook();
-        }
-    }
-#endif
+// Distinct from completion (0), socket readiness masks, and negative socket errors.
+static constexpr int TLS_IO_READY = INT_MAX;
 
-#ifdef DEBUG
-    bool dbg_forced_error_ssl = false;
-#endif
+__attribute__((noinline)) int SSLSocketHelper::resumePendingIo(ExceptionSink* xsink, const char* mname,
+        SslAction action, size_t& real_io, size_t* awaiting_drain) {
     // SSL_get_error(3): retry an unfinished write before another TLS operation. A speculative
     // read that simply wants input must leave an idle client free to send its next request.
     if (retry_events && action != retry_action) {
@@ -12001,6 +11989,35 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
     if (retry_events) {
         retry_events = 0;
     }
+    return TLS_IO_READY;
+}
+
+int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, void* buf, size_t size,
+        SslAction action, size_t& real_io, size_t* awaiting_drain) {
+    assert(xsink);
+    assert(size);
+    assert(!real_io);
+#ifdef DEBUG
+    // test hook: lets a test close the socket from another thread just before the call uses the connection
+    if (qs.dbg_before_ssl_io_set.load(std::memory_order_acquire)) {
+        if (std::function<void()> hook = qs.dbgTakeBeforeSslIo()) {
+            hook();
+        }
+    }
+#endif
+
+#ifdef DEBUG
+    bool dbg_forced_error_ssl = false;
+#endif
+    if (retry_events || (awaiting_drain && (*awaiting_drain || staged || outer))) {
+        int rc = resumePendingIo(xsink, mname, action, real_io, awaiting_drain);
+        if (rc != TLS_IO_READY) {
+            return rc;
+        }
+    }
+    // Any previous write was drained above. Only a WANT_WRITE in this call can
+    // stage new ciphertext before the write succeeds.
+    SSLSocketHelper* staging_wire = nullptr;
     int rc;
     while (true) {
         ERR_clear_error();
@@ -12061,15 +12078,12 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
 #endif
             // SSL_write_ex success (including a partial write) identifies accepted plaintext.
             // With a staging BIO the application write completes only once its ciphertext drains.
-            if (awaiting_drain && (staged || outer)) {
-                auto* wire = wireTls();
-                if (wire->staged) {
-                    rc = wire->drainStaged(xsink);
-                    if (rc) {
-                        *awaiting_drain = real_io;
-                        real_io = 0;
-                        break;
-                    }
+            if (staging_wire) {
+                rc = staging_wire->drainStaged(xsink);
+                if (rc) {
+                    *awaiting_drain = real_io;
+                    real_io = 0;
+                    break;
                 }
             }
             rc = next_events;
@@ -12102,6 +12116,8 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                     if (!wire->startStaging(xsink)) {
                         return -1;
                     }
+                    assert(awaiting_drain);
+                    staging_wire = wire;
                     // No intervening TLS operation. Retry with exactly the original arguments;
                     // the remainder of the existing ciphertext record can now enter the bounded BIO.
                     continue;
@@ -16036,7 +16052,15 @@ const char* SocketConnectPollOperation::getStateImpl() const {
 void SocketSendPollOperation::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
         if (set_non_block) {
-            sock->clearNonBlock(NB_SEND);
+            // Dropping the last reference abandons an unfinished operation just like abort().
+            // A later TLS call cannot resume it after this owner's buffer is released.
+            AutoLocker al(sock->priv->m);
+            if (poll_state && qore_socket_private::get(*sock->priv->socket)->ssl.load(std::memory_order_relaxed)
+                    && abortNeedsClose()) {
+                abortLocked(xsink);
+            } else {
+                sock->priv->clearNonBlock(NB_SEND);
+            }
         }
         poll_state.reset();
         sock->deref(xsink);
@@ -16068,7 +16092,15 @@ const char* SocketSendPollOperation::getStateImpl() const {
 void SocketRecvPollOperationBase::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
         if (set_non_block) {
-            sock->clearNonBlock(NB_RECV);
+            // Dropping the last reference abandons an unfinished operation just like abort().
+            // A later TLS call cannot resume it after this owner's buffer is released.
+            AutoLocker al(sock->priv->m);
+            if (poll_state && qore_socket_private::get(*sock->priv->socket)->ssl.load(std::memory_order_relaxed)
+                    && abortNeedsClose()) {
+                abortLocked(xsink);
+            } else {
+                sock->priv->clearNonBlock(NB_RECV);
+            }
         }
         poll_state.reset();
         sock->deref(xsink);

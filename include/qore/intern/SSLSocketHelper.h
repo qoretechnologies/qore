@@ -287,6 +287,8 @@ private:
     DLLLOCAL SSLSocketHelper* wireTls();
     DLLLOCAL bool startStaging(ExceptionSink* xsink);
     DLLLOCAL int drainStaged(ExceptionSink* xsink);
+    DLLLOCAL int resumePendingIo(ExceptionSink* xsink, const char* mname, SslAction action, size_t& real_io,
+        size_t* awaiting_drain);
     DLLLOCAL void stopStaging();
 
     //! True once a write failed because the peer closed or reset the connection and the socket was kept open
