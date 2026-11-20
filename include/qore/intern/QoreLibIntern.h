@@ -1813,15 +1813,15 @@ DLLLOCAL QoreHashNode* statvfs_to_hash(const struct statvfs& statvfs);
 //DLLLOCAL bool needsEval(AbstractQoreNode* n);
 
 //! gets the string value of the given key, if any, in the default encoding; raises \a err if the value is not a string
-//! or contains a NUL
+//! or contains a NUL, and \c ENCODING-CONVERSION-ERROR if the default encoding cannot represent it
 /** The value is converted to the default encoding, in which datasources keep their connection values (see
     q_ds_value_to_default())
 
     @param secret if true, the value is a secret (ex: a password) and is not shown in the exception raised for a NUL
     character
 
-    @return true if the key has a string value with no NUL character, false if not, in which case an exception may
-    have been raised
+    @return true if the key has a string value with no NUL character that could be converted, false if not, in which
+    case an exception may have been raised
 */
 DLLLOCAL bool check_hash_key(const QoreHashNode* h, const char* key, const char* err, std::string& value,
         ExceptionSink* xsink, bool secret = false);

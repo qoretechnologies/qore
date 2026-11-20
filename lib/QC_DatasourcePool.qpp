@@ -287,7 +287,7 @@ DatasourcePool::constructor(string driver, *string username, *string password, *
       || (username && q_ds_value_to_default(username_str, username, "user name", xsink))
       || (password && q_ds_value_to_default(password_str, password, "password", xsink))
       || (database && q_ds_value_to_default(database_str, database, "database name", xsink))
-      || (encoding && q_ds_value_to_default(encoding_str, encoding, "encoding", xsink))
+      || (encoding && q_ds_value_to_default(encoding_str, encoding, "database encoding name", xsink))
       || (host && q_ds_value_to_default(host_str, host, "hostname", xsink))) {
       return;
    }
@@ -412,9 +412,9 @@ Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "d
     @throw DATASOURCEPOOL-UNSUPPORTED-DATABASE DBI driver cannot be loaded
     @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing or invalid \c "driver" key, other key name not assigned to a string; \c "port" value is \<= 0; invalid \c "min" or \c "max" keys, or a string value contains a NUL character (since %Qore 3.0); the value of the \c "pass" key is not shown in the exception
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
-    @throw ENCODING-CONVERSION-ERROR a string argument cannot be converted to the @ref default_encoding "default
-    encoding", in which a datasource keeps its connection values; it is not shown in the exception (since %Qore
-    3.0)
+    @throw ENCODING-CONVERSION-ERROR a string value of the hash cannot be converted to the @ref default_encoding
+    "default encoding", in which a datasource keeps its connection values; it is not shown in the exception (since
+    %Qore 3.0)
  */
 DatasourcePool::constructor(hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
    dsp_constructor_hash(options, self, queue.release(), argument, xsink);

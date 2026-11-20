@@ -24,7 +24,7 @@
 public class Main inherits QUnit::Test {
     public {
         #! the number of checks that the child makes
-        const Checks = 265;
+        const Checks = 343;
     }
 
     constructor() : Test("DatasourceValueEncoding", "1.0") {
@@ -37,7 +37,7 @@ public class Main inherits QUnit::Test {
         string script = get_script_dir() + DirSep + "child.q";
         hash<string, string> commands;
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
-            commands{mode} = sprintf("'%s' --exec-mode=%s '%s'", qore, mode, script);
+            commands{mode} = sprintf("'%s' --enable-debug --exec-mode=%s '%s'", qore, mode, script);
         }
         *string qcc = TestInterpreter::qcc_compiler();
         string dir = make_tmp_dir();

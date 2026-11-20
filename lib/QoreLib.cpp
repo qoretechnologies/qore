@@ -2505,12 +2505,19 @@ int q_ds_value_to_default(TempEncodingHelper& value, const QoreString* str, cons
         ExceptionSink* xsink) {
     assert(str);
     assert(xsink);
-    // the exception of the conversion is replaced with one that says which value cannot be converted, without
-    // showing it
     ExceptionSink conv_xsink;
     if (value.set(str, QCS_DEFAULT, &conv_xsink)) {
         return 0;
     }
+    // an exception that is not a conversion error (ex: the cancellation of the thread) is raised as it is
+    // (a string value can be held without a QoreStringNode)
+    QoreStringDataHelper err(conv_xsink.getExceptionErr());
+    if (!err || strcmp(err.c_str(), "ENCODING-CONVERSION-ERROR")) {
+        xsink->assimilate(conv_xsink);
+        return -1;
+    }
+    // a conversion error is replaced with one that says which value cannot be converted without showing it or the
+    // offset of the character that cannot be converted
     conv_xsink.clear();
     xsink->raiseException("ENCODING-CONVERSION-ERROR", "the %s cannot be converted from \"%s\" to the default "
         "encoding \"%s\", in which datasource values are kept", what, str->getEncoding()->getCode(),

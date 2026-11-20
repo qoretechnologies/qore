@@ -785,7 +785,7 @@ Datasource::constructor(string driver, *string username, *string password, *stri
         || (username && q_ds_value_to_default(username_str, username, "user name", xsink))
         || (password && q_ds_value_to_default(password_str, password, "password", xsink))
         || (database && q_ds_value_to_default(database_str, database, "database name", xsink))
-        || (encoding && q_ds_value_to_default(encoding_str, encoding, "encoding", xsink))
+        || (encoding && q_ds_value_to_default(encoding_str, encoding, "database encoding name", xsink))
         || (host && q_ds_value_to_default(host_str, host, "hostname", xsink))) {
         return;
     }
@@ -937,9 +937,9 @@ Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "d
     @throw DATASOURCE-CONSTRUCTOR-ERROR missing or invalid \c "driver" key, other key name not assigned to a string;
     port value is \<= 0, or a string value contains a NUL character (since %Qore 3.0); the value of the \c "pass" key is not shown in the exception
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
-    @throw ENCODING-CONVERSION-ERROR a string argument cannot be converted to the @ref default_encoding "default
-    encoding", in which a datasource keeps its connection values; it is not shown in the exception (since %Qore
-    3.0)
+    @throw ENCODING-CONVERSION-ERROR a string value of the hash cannot be converted to the @ref default_encoding
+    "default encoding", in which a datasource keeps its connection values; it is not shown in the exception (since
+    %Qore 3.0)
 */
 Datasource::constructor(hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
     ds_constructor_hash(options, self, queue.release(), argument, xsink);
@@ -1824,7 +1824,7 @@ db.setDBCharset(encoding);
 nothing Datasource::setDBCharset(string encoding) [flags=NAMED_ARGS] {
     // the value is kept in the default encoding
     TempEncodingHelper encoding_str;
-    if (q_ds_value_to_default(encoding_str, encoding, "encoding", xsink)) {
+    if (q_ds_value_to_default(encoding_str, encoding, "database encoding name", xsink)) {
         return QoreValue();
     }
     const QoreString* encoding_v = *encoding_str;
@@ -1854,7 +1854,7 @@ db.setDBEncoding(encoding);
 nothing Datasource::setDBEncoding(string encoding) [flags=NAMED_ARGS] {
     // the value is kept in the default encoding
     TempEncodingHelper encoding_str;
-    if (q_ds_value_to_default(encoding_str, encoding, "encoding", xsink)) {
+    if (q_ds_value_to_default(encoding_str, encoding, "database encoding name", xsink)) {
         return QoreValue();
     }
     const QoreString* encoding_v = *encoding_str;

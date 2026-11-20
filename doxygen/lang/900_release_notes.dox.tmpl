@@ -2544,15 +2544,10 @@
     - a parent class or hashdecl given without a namespace path in a namespace is resolved in the namespace of the
       inheriting class or hashdecl (see @ref parent_class_name_resolution and @ref hashdecl_inheritance_rules), where
       one of the same name in another namespace could be inherited instead (issue #6710)
-    - a @ref Qore::SQL::Datasource "Datasource" and a @ref Qore::SQL::DatasourcePool "DatasourcePool" keep their
-      connection values (user name, password, database name, database encoding name, hostname) in the
-      @ref default_encoding "default encoding", which their getters return them in and DBI drivers read them in: the
-      constructors, the setters, the hash and datasource string forms, deserialization and
-      @ref Qore::SQL::parse_datasource() "parse_datasource()" convert a value in another encoding, where they kept its
-      bytes, so that a value built from a UTF-8 string literal in a process with another default encoding reached the
-      driver double-encoded (ex: the JDBC URL of module-jni's \c jdbc driver); a value that the default encoding
-      cannot represent raises \c ENCODING-CONVERSION-ERROR without showing the value, and an option name is converted
-      too
+    - a @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool "DatasourcePool" converts its
+      connection values, datasource strings and option names to the @ref default_encoding "default encoding", which
+      drivers read them in, where a UTF-8 value reached the driver double-encoded; a value that the default encoding
+      cannot represent raises \c ENCODING-CONVERSION-ERROR
     - a parse error message naming a built-in complex type such as \c hash<auto> or \c list<auto> no longer aborts a
       debug build in a process whose @ref default_encoding "default encoding" is not UTF-8; type names are added to a
       message in its encoding (issue #6814)

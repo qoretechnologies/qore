@@ -33,6 +33,11 @@ string sub fass() {
     return binary_to_string(Utf8Bytes, "UTF-8");
 }
 
+#! "fäß" as an ISO-8859-1 string, which needs no conversion
+string sub latin1() {
+    return binary_to_string(Latin1Bytes, "ISO-8859-1");
+}
+
 #! U+1F600 as a UTF-8 string
 string sub emoji() {
     return binary_to_string(EmojiBytes, "UTF-8");
@@ -109,6 +114,50 @@ sub datasource_cases() {
         check_values("Datasource constructor arguments", ds);
     }
     {
+        # values already in the default encoding are kept as they are
+        string l = latin1();
+        Datasource ds("dbitest", l, l, l, l, l);
+        check_values("Datasource constructor arguments in the default encoding", ds);
+        ds = new Datasource({"type": "dbitest"});
+        ds.setUserName(l);
+        ds.setPassword(l);
+        ds.setDBName(l);
+        ds.setDBEncoding(l);
+        ds.setHostName(l);
+        check_values("Datasource setters in the default encoding", ds);
+    }
+    {
+        # a datasource string in an encoding that is not ASCII-compatible: its separators are found after the
+        # conversion
+        Datasource ds(convert_encoding(ds_string(), "UTF-16LE"));
+        check_values("Datasource UTF-16 datasource string", ds);
+        ds = new Datasource(convert_encoding(ds_string(), "UTF-16LE"), NOTHING, NOTHING, NOTHING);
+        check_values("Datasource UTF-16 driver argument as a datasource string", ds);
+        hash<auto> h = parse_datasource(convert_encoding(ds_string(), "UTF-16LE"));
+        check_value("parse_datasource() UTF-16 user name", h.user);
+    }
+    {
+        # a NUL character in a value is found after the conversion, and a password is not shown
+        string pw = binary_to_string(<66c3a4007a>, "UTF-8");
+        try {
+            Datasource ds("dbitest", "u", pw, "db");
+            ok("Datasource password with NUL", False, "no exception was raised");
+        } catch (hash<ExceptionInfo> ex) {
+            ok("Datasource password with NUL", ex.err == "DATASOURCE-CONSTRUCTOR-ERROR" && u(ex.desc) == "password "
+                "contains a NUL character; datasource values cannot contain NUL characters",
+                sprintf("%s: %s", ex.err, u(ex.desc)));
+        }
+        try {
+            Datasource ds({"type": "dbitest"});
+            ds.setDBName(pw);
+            ok("Datasource database name with NUL", False, "no exception was raised");
+        } catch (hash<ExceptionInfo> ex) {
+            ok("Datasource database name with NUL", ex.err == "DATASOURCE-ERROR"
+                && u(ex.desc) =~ /^database name .* contains a NUL character at byte offset 2/,
+                sprintf("%s: %s", ex.err, u(ex.desc)));
+        }
+    }
+    {
         Datasource ds(ds_string());
         check_values("Datasource datasource string", ds);
     }
@@ -164,7 +213,7 @@ sub datasource_cases() {
         sub () { Datasource ds("dbitest", "u", e); });
     check_unrepresentable("Datasource constructor database name", "database name",
         sub () { Datasource ds("dbitest", "u", "p", e); });
-    check_unrepresentable("Datasource constructor encoding", "encoding",
+    check_unrepresentable("Datasource constructor encoding", "database encoding name",
         sub () { Datasource ds("dbitest", "u", "p", "db", e); });
     check_unrepresentable("Datasource constructor hostname", "hostname",
         sub () { Datasource ds("dbitest", "u", "p", "db", NOTHING, e); });
@@ -174,13 +223,25 @@ sub datasource_cases() {
         sub () { Datasource ds(u("dbitest:u/") + e + "@db"); });
     check_unrepresentable("Datasource hash", "'pass' value",
         sub () { Datasource ds({"type": "dbitest", "pass": e, "db": "db"}); });
+    check_unrepresentable("Datasource hash driver", "'type' value",
+        sub () { Datasource ds({"type": e, "db": "db"}); });
+    {
+        Datasource ds({"type": "dbitest"});
+        hash<SerializationInfo> data = ds.serializeToData();
+        data._index."0"._class_data."Qore::SQL::Datasource".conf = {"type": "dbitest", "user": e, "db": "db"};
+        check_unrepresentable("Datasource deserialized from a hash", "'user' value",
+            auto sub () { return Serializable::deserialize(data); });
+        data._index."0"._class_data."Qore::SQL::Datasource".conf = u("dbitest:u/") + e + "@db";
+        check_unrepresentable("Datasource deserialized from a string", "datasource string",
+            auto sub () { return Serializable::deserialize(data); });
+    }
     {
         Datasource ds({"type": "dbitest"});
         check_unrepresentable("Datasource setUserName()", "user name", sub () { ds.setUserName(e); });
         check_unrepresentable("Datasource setPassword()", "password", sub () { ds.setPassword(e); });
         check_unrepresentable("Datasource setDBName()", "database name", sub () { ds.setDBName(e); });
-        check_unrepresentable("Datasource setDBEncoding()", "encoding", sub () { ds.setDBEncoding(e); });
-        check_unrepresentable("Datasource setDBCharset()", "encoding", sub () { ds.setDBCharset(e); });
+        check_unrepresentable("Datasource setDBEncoding()", "database encoding name", sub () { ds.setDBEncoding(e); });
+        check_unrepresentable("Datasource setDBCharset()", "database encoding name", sub () { ds.setDBCharset(e); });
         check_unrepresentable("Datasource setHostName()", "hostname", sub () { ds.setHostName(e); });
         check_unrepresentable("Datasource getOption()", "option name", sub () { ds.getOption(e); });
         check_unrepresentable("Datasource setOption()", "option name", sub () { ds.setOption(e, 1); });
@@ -238,7 +299,7 @@ sub pool_cases() {
         sub () { DatasourcePool pool("dbitest", "u", e, "db", NOTHING, NOTHING, 1, 2); });
     check_unrepresentable("DatasourcePool constructor database name", "database name",
         sub () { DatasourcePool pool("dbitest", "u", "p", e, NOTHING, NOTHING, 1, 2); });
-    check_unrepresentable("DatasourcePool constructor encoding", "encoding",
+    check_unrepresentable("DatasourcePool constructor encoding", "database encoding name",
         sub () { DatasourcePool pool("dbitest", "u", "p", "db", e, NOTHING, 1, 2); });
     check_unrepresentable("DatasourcePool constructor hostname", "hostname",
         sub () { DatasourcePool pool("dbitest", "u", "p", "db", NOTHING, e, 1, 2); });
@@ -246,6 +307,20 @@ sub pool_cases() {
         sub () { DatasourcePool pool(u("dbitest:u/") + e + "@db"); });
     check_unrepresentable("DatasourcePool hash", "'user' value",
         sub () { DatasourcePool pool({"type": "dbitest", "user": e, "db": "db"}); });
+    check_unrepresentable("DatasourcePool hash password", "'pass' value",
+        sub () { DatasourcePool pool({"type": "dbitest", "pass": e, "db": "db"}); });
+    check_unrepresentable("DatasourcePool driver argument as a datasource string", "driver or datasource string",
+        sub () { DatasourcePool pool(u("dbitest:u/") + e + "@db", NOTHING, NOTHING, NOTHING, NOTHING, NOTHING); });
+    {
+        DatasourcePool pool("dbitest", "u", "p", "db", NOTHING, NOTHING, 1, 2);
+        hash<SerializationInfo> data = pool.serializeToData();
+        data._index."0"._class_data."Qore::SQL::DatasourcePool".conf = {"type": "dbitest", "pass": e, "db": "db"};
+        check_unrepresentable("DatasourcePool deserialized from a hash", "'pass' value",
+            auto sub () { return Serializable::deserialize(data); });
+        data._index."0"._class_data."Qore::SQL::DatasourcePool".conf = u("dbitest:u/") + e + "@db";
+        check_unrepresentable("DatasourcePool deserialized from a string", "datasource string",
+            auto sub () { return Serializable::deserialize(data); });
+    }
 }
 
 sub parse_cases() {
