@@ -1,0 +1,284 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndexUtil
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%exec-class DataProviderProcessingBillingTest
+
+#! The processing locality and billing-model metadata of apps and actions (issue #6736)
+/** Optional, provider-owned metadata registered with an app or action and returned unchanged; an action's value of
+    a field overrides its app's; enumerated values are validated at registration
+*/
+class DataProviderProcessingBillingTest inherits QUnit::Test {
+    constructor() : Test("DataProvider processing and billing metadata", "1.0", \ARGV) {
+        addTestCase("registration and round trip", \roundTrip());
+        addTestCase("an action overrides its app field by field", \override());
+        addTestCase("invalid values are refused at registration", \refused());
+        addTestCase("the allowed values", \allowedValues());
+        addTestCase("the first provider modules that declare it", \providerModules());
+        addTestCase("the provider index keeps it", \indexRoundTrip());
+        set_return_value(main());
+    }
+
+    #! the metadata is returned unchanged in the app and action info
+    roundTrip() {
+        hash<DataProviderProcessingInfo> processing = <DataProviderProcessingInfo>{
+            "locality": "external",
+            "external_recipient": "example.com",
+        };
+        hash<DataProviderBillingInfo> billing = <DataProviderBillingInfo>{
+            "model": "metered",
+            "unit": "page",
+            "source": "https://example.com/pricing",
+            "effective_date": 2026-11-20,
+        };
+        string app = getAppName("rt");
+        registerApp(app, processing, billing);
+        registerAction(app, "a1");
+        hash<DataProviderAppInfo> ai = DataProviderActionCatalog::getAppEx(app);
+        assertEq(processing, ai.processing, "app processing");
+        assertEq(billing, ai.billing, "app billing");
+        hash<DataProviderActionInfo> act = DataProviderActionCatalog::getAppActionEx(app, "a1");
+        assertEq(NOTHING, act.processing, "an action without its own processing has none in its info");
+        assertEq(NOTHING, act.billing, "an action without its own billing has none in its info");
+        # the effective values are the app's
+        assertEq(processing, DataProviderActionCatalog::getActionProcessing(app, "a1"));
+        assertEq(billing, DataProviderActionCatalog::getActionBilling(app, "a1"));
+
+        # an app and action without any: unknown
+        string app2 = getAppName("none");
+        registerApp(app2);
+        registerAction(app2, "a1");
+        assertEq(NOTHING, DataProviderActionCatalog::getAppEx(app2).processing);
+        assertEq(NOTHING, DataProviderActionCatalog::getActionProcessing(app2, "a1"));
+        assertEq(NOTHING, DataProviderActionCatalog::getActionBilling(app2, "a1"));
+    }
+
+    #! an action's value of a field overrides its app's; the other fields are the app's
+    override() {
+        string app = getAppName("ov");
+        registerApp(app, <DataProviderProcessingInfo>{"locality": "external", "external_recipient": "vendor-a.com"},
+            <DataProviderBillingInfo>{"model": "subscription", "source": "https://vendor-a.com/terms"});
+        registerAction(app, "local-action", <DataProviderProcessingInfo>{"locality": "local"},
+            <DataProviderBillingInfo>{"model": "metered", "unit": "request"});
+        hash<DataProviderActionInfo> act = DataProviderActionCatalog::getAppActionEx(app, "local-action");
+        assertEq(<DataProviderProcessingInfo>{"locality": "local"}, act.processing, "the action's own, unchanged");
+        assertEq(<DataProviderBillingInfo>{"model": "metered", "unit": "request"}, act.billing);
+        # the effective values: the action's fields over the app's
+        # a local action has no recipient, though its app names one
+        assertEq(<DataProviderProcessingInfo>{"locality": "local"},
+            DataProviderActionCatalog::getActionProcessing(app, "local-action"));
+        assertEq(<DataProviderProcessingInfo>{"locality": "external", "external_recipient": "vendor-b.com"},
+            DataProviderActionCatalog::mergeProcessing(<DataProviderProcessingInfo>{"external_recipient": "vendor-a.com"},
+                <DataProviderProcessingInfo>{"locality": "external", "external_recipient": "vendor-b.com"}));
+        assertEq(<DataProviderBillingInfo>{"model": "metered", "unit": "request",
+            "source": "https://vendor-a.com/terms"},
+            DataProviderActionCatalog::getActionBilling(app, "local-action"));
+
+        # the merge functions themselves
+        assertEq(NOTHING, DataProviderActionCatalog::mergeProcessing(NOTHING, NOTHING));
+        assertEq(<DataProviderBillingInfo>{"unit": "mb"}, DataProviderActionCatalog::mergeBilling(NOTHING,
+            <DataProviderBillingInfo>{"unit": "mb"}));
+        assertEq(<DataProviderBillingInfo>{"model": "contract", "effective_date": 2026-01-01},
+            DataProviderActionCatalog::mergeBilling(<DataProviderBillingInfo>{"model": "contract"},
+                <DataProviderBillingInfo>{"effective_date": 2026-01-01}));
+
+        # unknown app or action
+        assertThrows("APP-ERROR", \DataProviderActionCatalog::getActionProcessing(), (getAppName("missing"), "x"));
+        assertThrows("ACTION-ERROR", \DataProviderActionCatalog::getActionBilling(), (app, "missing"));
+    }
+
+    #! a value that is not allowed is refused, for an app and for an action; nothing is registered
+    refused() {
+        hash<string, list<auto>> app_cases = {
+            "locality": (<DataProviderProcessingInfo>{"locality": "elsewhere"}, NOTHING, "processing.locality"),
+            "recipient": (<DataProviderProcessingInfo>{"locality": "local", "external_recipient": "x.com"}, NOTHING,
+                "external_recipient"),
+            "model": (NOTHING, <DataProviderBillingInfo>{"model": "free"}, "billing.model"),
+            "unit": (NOTHING, <DataProviderBillingInfo>{"unit": "bytes"}, "billing.unit"),
+        };
+        foreach hash<auto> c in (app_cases.pairIterator()) {
+            string app = getAppName("bad" + c.key);
+            assertThrows("APP-ERROR", c.value[2], \registerApp(), (app, c.value[0], c.value[1]), "app " + c.key);
+            assertEq(NOTHING, DataProviderActionCatalog::getApp(app), "app " + c.key + " is not registered");
+        }
+        string app = getAppName("badact");
+        registerApp(app);
+        foreach hash<auto> c in (app_cases.pairIterator()) {
+            string action = "act-" + c.key;
+            assertThrows("ACTION-ERROR", c.value[2], \registerAction(), (app, action, c.value[0], c.value[1]),
+                "action " + c.key);
+            assertEq(NOTHING, DataProviderActionCatalog::getAppAction(app, action), "action " + c.key
+                + " is not registered");
+        }
+        # an external recipient without a locality, and every allowed value, are accepted
+        string ok = getAppName("ok");
+        registerApp(ok, <DataProviderProcessingInfo>{"external_recipient": "x.com"});
+        foreach hash<AllowedValueInfo> l in (DataProviderProcessingLocalityValues) {
+            registerAction(ok, "l-" + l.value, <DataProviderProcessingInfo>{"locality": l.value});
+        }
+        foreach hash<AllowedValueInfo> m in (DataProviderBillingModelValues) {
+            registerAction(ok, "m-" + m.value, NOTHING, <DataProviderBillingInfo>{"model": m.value});
+        }
+        foreach hash<AllowedValueInfo> u in (DataProviderBillingUnitValues) {
+            registerAction(ok, "u-" + u.value, NOTHING, <DataProviderBillingInfo>{"unit": u.value});
+        }
+        foreach hash<AllowedValueInfo> u in (DataProviderBillingUnitValues) {
+            assertEq(u.value, DataProviderActionCatalog::getAppActionEx(ok, "u-" + u.value).billing.unit,
+                "unit " + u.value + " is accepted");
+        }
+    }
+
+    #! the enumerations are lists of AllowedValueInfo with a value and a display name each
+    allowedValues() {
+        foreach list<hash<AllowedValueInfo>> l in ((DataProviderProcessingLocalityValues,
+                DataProviderBillingModelValues, DataProviderBillingUnitValues)) {
+            foreach hash<AllowedValueInfo> v in (l) {
+                assertEq(Type::String, v.value.type());
+                assertTrue(v.display_name.val(), sprintf("%y has a display name", v.value));
+                assertTrue(v.desc.val(), sprintf("%y has a description", v.value));
+            }
+            assertEq(l.size(), (map {$1.value: True}, l).size(), "the values are unique");
+        }
+        assertEq(("local", "external"), map $1.value, DataProviderProcessingLocalityValues);
+        assertEq(("included", "metered", "subscription", "contract", "unknown"),
+            map $1.value, DataProviderBillingModelValues);
+    }
+
+    #! ConvertAPI and PDF.co declare that they send data to the vendor, and how they are billed
+    providerModules() {
+        hash<string, hash<auto>> expected = {
+            "ConvertApiDataProvider": {
+                "app": "ConvertApi",
+                "recipient": "convertapi.com",
+                "unit": "conversion",
+            },
+            "PdfCoDataProvider": {
+                "app": "PdfCo",
+                "recipient": "pdf.co",
+                "unit": "credit",
+            },
+        };
+        foreach hash<auto> m in (expected.pairIterator()) {
+            load_module(m.key);
+            string app = m.value.app;
+            hash<DataProviderAppInfo> ai = DataProviderActionCatalog::getAppEx(app);
+            assertEq(<DataProviderProcessingInfo>{"locality": "external", "external_recipient": m.value.recipient},
+                ai.processing, m.key);
+            assertEq("metered", ai.billing.model, m.key);
+            assertEq(m.value.unit, ai.billing.unit, m.key);
+            assertRegex("^https://", ai.billing.source, m.key);
+            assertEq(Type::Date, ai.billing.effective_date.type(), m.key);
+        }
+    }
+
+    #! the metadata of apps and actions survives the provider index files, typed
+    indexRoundTrip() {
+%ifdef NoMsgPack
+        testSkip("no msgpack module");
+%endif
+        TmpDir tmp("dp-proc-bill-index-");
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        ProviderIndexUtil::setEnvironmentVariable(tmp.path);
+        on_exit {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+            ProviderIndexUtil::setBuildMode(True);
+            ProviderIndexUtil::setBuildMode(False);
+        }
+        string app = getAppName("idx");
+        hash<DataProviderProcessingInfo> app_processing = <DataProviderProcessingInfo>{"locality": "external",
+            "external_recipient": "x.com"};
+        hash<DataProviderBillingInfo> action_billing = <DataProviderBillingInfo>{"model": "metered", "unit": "page",
+            "effective_date": 2026-11-20};
+        hash<auto> actions = {app: {
+            "with": {"app": app, "action": "with", "path": "/", "desc": "with", "action_code": DPAT_API,
+                "processing": <DataProviderProcessingInfo>{"locality": "local"}, "billing": action_billing},
+            "without": {"app": app, "action": "without", "path": "/", "desc": "without", "action_code": DPAT_API},
+        }};
+        ProviderIndexUtil::writeDataProviderIndexByApp({
+            "factorymap": {},
+            "appmap": {app: {"DpProcBillTest": True}},
+            "schememap": {},
+            "appinfomap": {app: {"name": app, "processing": app_processing}},
+        }, keys actions, *hash<auto> sub (string a) { return actions{a}; }, 0s, {});
+        # read back from the files
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+        *hash<auto> ai = ProviderIndexUtil::tryGetAppInfo(app);
+        assertEq("hash<DataProviderAppInfo>", ai.fullType(), "the app info is typed");
+        assertEq(app_processing, ai.processing);
+        assertEq("hash<DataProviderProcessingInfo>", ai.processing.fullType());
+        assertEq(("with", "without"), sort(map $1.action, ProviderIndexUtil::tryGetActionSummariesForApp(app)),
+            "no action is dropped from the summaries");
+        assertEq(("with", "without"), sort(map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(app)),
+            "no action is dropped from the metadata");
+        *hash<auto> act = ProviderIndexUtil::tryGetActionMetadata(app, "with");
+        assertEq(action_billing, act.billing);
+        assertEq("hash<DataProviderBillingInfo>", act.billing.fullType());
+        assertEq(<DataProviderProcessingInfo>{"locality": "local"},
+            ProviderIndexUtil::tryGetActionSummary(app, "with").processing);
+    }
+
+    private string getAppName(string tag) {
+        return sprintf("DpProcBill-%s-%s", tag, get_random_string(8));
+    }
+
+    private registerApp(string app, *hash<DataProviderProcessingInfo> processing,
+            *hash<DataProviderBillingInfo> billing) {
+        hash<DataProviderAppInfo> info = <DataProviderAppInfo>{
+            "name": app,
+            "display_name": app,
+            "short_desc": "processing and billing test",
+            "desc": "processing and billing test",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": "image/svg+xml",
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        };
+        if (processing) {
+            info.processing = processing;
+        }
+        if (billing) {
+            info.billing = billing;
+        }
+        DataProviderActionCatalog::registerApp(info);
+    }
+
+    private registerAction(string app, string action, *hash<DataProviderProcessingInfo> processing,
+            *hash<DataProviderBillingInfo> billing) {
+        hash<DataProviderActionInfo> info = <DataProviderActionInfo>{
+            "app": app,
+            "path": "/",
+            "action": action,
+            "display_name": action,
+            "short_desc": action,
+            "desc": action,
+            "action_code": DPAT_API,
+        };
+        if (processing) {
+            info.processing = processing;
+        }
+        if (billing) {
+            info.billing = billing;
+        }
+        DataProviderActionCatalog::registerAction(info);
+    }
+}

@@ -24,6 +24,174 @@
 
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
+#! Where an app or action processes customer data (issue #6736)
+/** Every field is optional; a missing field means unknown.  An action's value of a field overrides its app's (see
+    @ref DataProviderActionCatalog::getActionProcessing()).
+
+    @since %DataProvider 3.12
+*/
+public hashdecl DataProviderProcessingInfo {
+    #! Whether customer data leaves to an external vendor; one of @ref DataProviderProcessingLocalityValues
+    *string locality;
+
+    #! The identity of the vendor that receives the data when \c locality is \c "external" (for example its domain)
+    *string external_recipient;
+}
+
+#! How the use of an app or action is billed (issue #6736)
+/** Every field is optional; a missing field means unknown.  An action's value of a field overrides its app's (see
+    @ref DataProviderActionCatalog::getActionBilling()).  Rate amounts are deliberately not part of the metadata:
+    public prices change without notice, and \c source points to the vendor's terms instead.
+
+    @since %DataProvider 3.12
+*/
+public hashdecl DataProviderBillingInfo {
+    #! The billing model; one of @ref DataProviderBillingModelValues
+    *string model;
+
+    #! The unit that is billed; one of @ref DataProviderBillingUnitValues
+    *string unit;
+
+    #! A URL or document reference for the terms
+    *string source;
+
+    #! The date from which the information is known to apply
+    *date effective_date;
+}
+
+#! The allowed values of @ref DataProviderProcessingInfo::locality
+/** @since %DataProvider 3.12
+*/
+public const DataProviderProcessingLocalityValues = (
+    <AllowedValueInfo>{
+        "value": "local",
+        "display_name": "Local",
+        "short_desc": "Customer data is processed locally and is not sent to an external vendor",
+        "desc": "Customer data is processed locally and is not sent to an external vendor",
+    },
+    <AllowedValueInfo>{
+        "value": "external",
+        "display_name": "External",
+        "short_desc": "Customer data is sent to an external vendor for processing",
+        "desc": "Customer data is sent to an external vendor for processing; `external_recipient` identifies the "
+            "vendor",
+    },
+);
+
+#! The allowed values of @ref DataProviderBillingInfo::model
+/** @since %DataProvider 3.12
+*/
+public const DataProviderBillingModelValues = (
+    <AllowedValueInfo>{
+        "value": "included",
+        "display_name": "Included",
+        "short_desc": "Use is not billed separately",
+        "desc": "Use is not billed separately from the product or connection",
+    },
+    <AllowedValueInfo>{
+        "value": "metered",
+        "display_name": "Metered",
+        "short_desc": "Use is billed per unit",
+        "desc": "Use is billed per unit (see `unit`)",
+    },
+    <AllowedValueInfo>{
+        "value": "subscription",
+        "display_name": "Subscription",
+        "short_desc": "Use is covered by a subscription",
+        "desc": "Use is covered by a subscription with the vendor",
+    },
+    <AllowedValueInfo>{
+        "value": "contract",
+        "display_name": "Contract",
+        "short_desc": "Use is billed according to a contract",
+        "desc": "Use is billed according to an individual contract with the vendor",
+    },
+    <AllowedValueInfo>{
+        "value": "unknown",
+        "display_name": "Unknown",
+        "short_desc": "The billing model is not known",
+        "desc": "The billing model is explicitly not known",
+    },
+);
+
+#! The allowed values of @ref DataProviderBillingInfo::unit
+/** @since %DataProvider 3.12
+*/
+public const DataProviderBillingUnitValues = (
+    <AllowedValueInfo>{
+        "value": "request",
+        "display_name": "Request",
+        "short_desc": "Each request (API call) is billed",
+        "desc": "Each request (API call) is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "page",
+        "display_name": "Page",
+        "short_desc": "Each page processed is billed",
+        "desc": "Each page processed is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "document",
+        "display_name": "Document",
+        "short_desc": "Each document processed is billed",
+        "desc": "Each document processed is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "conversion",
+        "display_name": "Conversion",
+        "short_desc": "Each conversion is billed",
+        "desc": "Each conversion is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "record",
+        "display_name": "Record",
+        "short_desc": "Each record processed is billed",
+        "desc": "Each record processed is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "character",
+        "display_name": "Character",
+        "short_desc": "Each character processed is billed",
+        "desc": "Each character processed is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "token",
+        "display_name": "Token",
+        "short_desc": "Each token processed is billed",
+        "desc": "Each token processed is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "mb",
+        "display_name": "Megabyte",
+        "short_desc": "Each megabyte of data is billed",
+        "desc": "Each megabyte of data is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "gb",
+        "display_name": "Gigabyte",
+        "short_desc": "Each gigabyte of data is billed",
+        "desc": "Each gigabyte of data is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "second",
+        "display_name": "Second",
+        "short_desc": "Each second of processing is billed",
+        "desc": "Each second of processing is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "minute",
+        "display_name": "Minute",
+        "short_desc": "Each minute of processing is billed",
+        "desc": "Each minute of processing is billed",
+    },
+    <AllowedValueInfo>{
+        "value": "credit",
+        "display_name": "Credit",
+        "short_desc": "Use is billed in vendor credits",
+        "desc": "Use is billed in vendor credits",
+    },
+);
+
 #! Application information hash
 /** Note that action paths are relative from the data provider created from the connection and optionally the subtype
 
@@ -149,6 +317,16 @@ public hashdecl DataProviderAppInfo {
 
     #! User-defined info about the app
     *hash<auto> info;
+
+    #! Where the app processes customer data, if known; an action's value of a field overrides it
+    /** @since %DataProvider 3.12
+    */
+    *hash<DataProviderProcessingInfo> processing;
+
+    #! How the use of the app is billed, if known; an action's value of a field overrides it
+    /** @since %DataProvider 3.12
+    */
+    *hash<DataProviderBillingInfo> billing;
 
     #! Per-app connection options override
     /** When set, these options are used instead of @c ConnectionSchemeInfo.options for connection
@@ -641,6 +819,20 @@ public hashdecl DataProviderActionBaseInfo {
     /** @since %DataProvider 3.3
     */
     int processor_capabilities = 0;
+
+    #! Where the action processes customer data, if known; a field given overrides the app's
+    /** @see @ref DataProviderActionCatalog::getActionProcessing()
+
+        @since %DataProvider 3.12
+    */
+    *hash<DataProviderProcessingInfo> processing;
+
+    #! How the use of the action is billed, if known; a field given overrides the app's
+    /** @see @ref DataProviderActionCatalog::getActionBilling()
+
+        @since %DataProvider 3.12
+    */
+    *hash<DataProviderBillingInfo> billing;
 }
 
 #! DataProvider action definition
@@ -3076,6 +3268,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         if (DataProviderActionCatalog::checkName(app.name)) {
             throw "APP-ERROR", sprintf("Application name %y is illegal; only A-Za-z0-9_- are accepted", app.name);
         }
+        DataProviderActionCatalog::checkProcessingAndBilling("APP-ERROR", sprintf("application %y", app.name),
+            app.processing, app.billing);
         *string module_path = DataProviderActionCatalog::registrationModulePath();
 
         bool should_auto_register_generic_call = False;
@@ -3743,6 +3937,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         if (DataProviderActionCatalog::checkName(action.action)) {
             throw "APP-ERROR", sprintf("Action name %y is illegal; only A-Za-z0-9_- are accepted", action.action);
         }
+        DataProviderActionCatalog::checkProcessingAndBilling("ACTION-ERROR", sprintf("action %s/%s", action.app,
+            action.action), action.processing, action.billing);
         action.path = DataProviderActionCatalog::normalizePath(action.path);
 
         # check that all path variables are defined
@@ -4110,6 +4306,119 @@ foreach string app in (DataProviderActionCatalog::getAppNamesNoInit()) {
                 # otherwise the failure is recorded with the app's initialization state, and the app stays pending
             }
         }
+    }
+
+    #! Returns the effective processing information of an action: each field of the action's, or else of its app's
+    /** @param app the application name
+        @param action the action name
+
+        @return the effective processing information, or @ref nothing if neither the action nor its app gives any
+
+        @throw APP-ERROR unknown app
+        @throw ACTION-ERROR unknown action
+
+        @since %DataProvider 3.12
+    */
+    static *hash<DataProviderProcessingInfo> getActionProcessing(string app, string action) {
+        hash<DataProviderAppInfo> app_info = DataProviderActionCatalog::getAppEx(app);
+        hash<DataProviderActionInfo> action_info = DataProviderActionCatalog::getAppActionEx(app, action);
+        return DataProviderActionCatalog::mergeProcessing(app_info.processing, action_info.processing);
+    }
+
+    #! Returns the effective billing information of an action: each field of the action's, or else of its app's
+    /** @param app the application name
+        @param action the action name
+
+        @return the effective billing information, or @ref nothing if neither the action nor its app gives any
+
+        @throw APP-ERROR unknown app
+        @throw ACTION-ERROR unknown action
+
+        @since %DataProvider 3.12
+    */
+    static *hash<DataProviderBillingInfo> getActionBilling(string app, string action) {
+        hash<DataProviderAppInfo> app_info = DataProviderActionCatalog::getAppEx(app);
+        hash<DataProviderActionInfo> action_info = DataProviderActionCatalog::getAppActionEx(app, action);
+        return DataProviderActionCatalog::mergeBilling(app_info.billing, action_info.billing);
+    }
+
+    #! Returns the processing information of an action over that of its app, field by field
+    /** An app's \c external_recipient is not inherited by an action whose effective \c locality is \c "local"
+
+        @param app the app's processing information
+        @param action the action's processing information
+
+        @return the merged information, or @ref nothing if neither gives any field
+
+        @since %DataProvider 3.12
+    */
+    static *hash<DataProviderProcessingInfo> mergeProcessing(*hash<DataProviderProcessingInfo> app,
+            *hash<DataProviderProcessingInfo> action) {
+        hash<DataProviderProcessingInfo> rv();
+        foreach string key in (("locality", "external_recipient")) {
+            auto v = action{key} ?? app{key};
+            if (exists v) {
+                rv{key} = v;
+            }
+        }
+        # an action that processes the data locally has no recipient, also when its app names one
+        if (rv.locality == "local") {
+            remove rv.external_recipient;
+        }
+        return (rv.locality || rv.external_recipient) ? rv : NOTHING;
+    }
+
+    #! Returns the billing information of an action over that of its app, field by field
+    /** @param app the app's billing information
+        @param action the action's billing information
+
+        @return the merged information, or @ref nothing if neither gives any field
+
+        @since %DataProvider 3.12
+    */
+    static *hash<DataProviderBillingInfo> mergeBilling(*hash<DataProviderBillingInfo> app,
+            *hash<DataProviderBillingInfo> action) {
+        hash<DataProviderBillingInfo> rv();
+        foreach string key in (("model", "unit", "source", "effective_date")) {
+            auto v = action{key} ?? app{key};
+            if (exists v) {
+                rv{key} = v;
+            }
+        }
+        return (rv.model || rv.unit || rv.source || rv.effective_date) ? rv : NOTHING;
+    }
+
+    #! Checks the processing and billing information of an app or action against the allowed values
+    private static checkProcessingAndBilling(string err, string what, *hash<DataProviderProcessingInfo> processing,
+            *hash<DataProviderBillingInfo> billing) {
+        if (exists processing.locality) {
+            DataProviderActionCatalog::checkAllowedValue(err, what, "processing.locality", processing.locality,
+                DataProviderProcessingLocalityValues);
+            if (processing.locality == "local" && processing.external_recipient) {
+                throw err, sprintf("%s: processing.external_recipient %y is given for local processing", what,
+                    processing.external_recipient);
+            }
+        }
+        if (exists billing.model) {
+            DataProviderActionCatalog::checkAllowedValue(err, what, "billing.model", billing.model,
+                DataProviderBillingModelValues);
+        }
+        if (exists billing.unit) {
+            DataProviderActionCatalog::checkAllowedValue(err, what, "billing.unit", billing.unit,
+                DataProviderBillingUnitValues);
+        }
+    }
+
+    #! Throws an exception if a value is not one of the allowed values
+    private static checkAllowedValue(string err, string what, string field, string value,
+            list<hash<AllowedValueInfo>> allowed) {
+        foreach hash<AllowedValueInfo> av in (allowed) {
+            if (av.value == value) {
+                return;
+            }
+        }
+        throw err, sprintf("%s: %s %y is not an allowed value; expecting one of: %y", what, field, value,
+            map $1.value, allowed);
     }
 
     #! Returns the application definition for the given application name
