@@ -60,7 +60,8 @@
     QoreModuleCommandContext (a module command handler judges the code that issues a command), and has no
     ModuleManager::registerAOTStaticModule(): a statically linked AOT module registers with the register function that
     qcc emits for it, with its metadata record; modules built with the 2.2 headers are refused; additive in 2.3
-    (no layout change for modules built with the earlier 2.3 headers): AbstractQoreProgramExternalDataEx (#6786) and
+    (no layout change for modules built with the earlier 2.3 headers): AbstractQoreProgramExternalDataEx (#6786)
+    with its feature macro _QORE_HAS_PROGRAM_EXTERNAL_DATA_EX (#6786), and
     qore_check_process_wide_registration() with its feature macro QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION (#6743),
     QoreNumberNode::getDecimalString() (#6837), qore_get_caller_program_id() and qore_get_caller_program() with
     their feature macro QORE_HAVE_CALLER_PROGRAM (#6852), and QoreHttpClientObject::setHttpFieldsAtTopLevel() and
