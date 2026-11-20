@@ -67,14 +67,6 @@ class StringLengthInvalidEncodingTest inherits QUnit::Test {
     }
 
     statefulEncoding() {
-        try {
-            @discard(convert_encoding("a", "ISO-2022-JP"));
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "ENCODING-CONVERSION-ERROR") {
-                rethrow;
-            }
-            testSkip("ISO-2022-JP is unavailable");
-        }
         string s = binary_to_string(<1b244224>, "ISO-2022-JP");
         assertThrows("INVALID-ENCODING", \length(), (s,));
         assertEq(3, length(convert_encoding("日本!", "ISO-2022-JP")));

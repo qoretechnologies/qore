@@ -12,6 +12,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../EncodingCapability.qm
 
 %exec-class ReaderEncodingErrorsTest
 
@@ -83,7 +84,10 @@ class ReaderEncodingErrorsTest inherits QUnit::Test {
         addTestCase("InputStreamLineIterator", \lineIterator());
         addTestCase("DataLineIterator", \dataLineIterator());
         addTestCase("other encodings", \otherEncodings());
+        addTestCase("GBK", \gbk());
         addTestCase("stateful encodings", \statefulEncodings());
+        addTestCase("stateful encodings: a byte that is not a character", \statefulInvalidBytes());
+        addTestCase("UTF-7", \utf7());
         addTestCase("byte order marks after the start", \laterByteOrderMarks());
         addTestCase("exactly the characters requested", \exactCharacters());
         addTestCase("line numbers after an error", \lineNumbersAfterError());
@@ -348,17 +352,6 @@ class ReaderEncodingErrorsTest inherits QUnit::Test {
         binary sj = binary(convert_encoding("日本ソ\n表", "SHIFT_JIS"));
         StreamReader sr = reader(sj, "SHIFT_JIS");
         assertEq(("日本ソ", "表"), (map convert_encoding($1, "UTF-8"), (sr.readLine(), sr.readLine())));
-        # GBK
-        *binary gbk;
-        try {
-            gbk = binary(convert_encoding("中文", "GBK"));
-        } catch (hash<ExceptionInfo> ex) {
-        }
-        if (gbk) {
-            # a lead byte cut off by the end of the stream
-            sr = reader(gbk + <81>, "GBK");
-            assertThrows("INVALID-ENCODING", "byte offset 4$", \sr.readString());
-        }
         # US-ASCII
         assertThrows("INVALID-ENCODING", "not valid US-ASCII: invalid byte sequence at byte offset 1$",
             sub () { reader(<61e9>, "US-ASCII").readLine(); });
@@ -373,12 +366,7 @@ class ReaderEncodingErrorsTest inherits QUnit::Test {
     #! a byte order mark is only resolved at the start of the text: after it, U+FEFF is a character
     laterByteOrderMarks() {
         foreach string enc in ("UTF-16LE", "UTF-16BE", "UTF-32LE", "UTF-32BE", "UCS-2LE", "UCS-2BE") {
-            binary b;
-            try {
-                b = binary(convert_encoding("x\n\ufeffy\n", enc));
-            } catch (hash<ExceptionInfo> ex) {
-                continue;
-            }
+            binary b = binary(convert_encoding("x\n\ufeffy\n", enc));
             foreach bool buffered in (False, True) {
                 StreamReader sr = reader(b, enc, NOTHING, buffered);
                 assertEq(("x", "\ufeffy"), (map convert_encoding($1, "UTF-8"), (sr.readLine(), sr.readLine())),
@@ -447,12 +435,8 @@ class ReaderEncodingErrorsTest inherits QUnit::Test {
             assertEq("UTF-16LE", s.encoding());
             assertEq("A", convert_encoding(s, "UTF-8"));
             assertEq("B", convert_encoding(sr.readString(-1), "UTF-8"));
-            *binary u32;
-            try {
-                u32 = binary(convert_encoding("A", "UTF-32LE"));
-            } catch (hash<ExceptionInfo> ex) {
-            }
-            if (u32) {
+            binary u32 = binary(convert_encoding("A", "UTF-32LE"));
+            {
                 sr = reader(<fffe0000> + u32, "UTF-32", NOTHING, buffered);
                 assertEq(NOTHING, sr.readString(0));
                 assertEq("A", convert_encoding(sr.readString(-1), "UTF-8"));
@@ -488,12 +472,7 @@ class ReaderEncodingErrorsTest inherits QUnit::Test {
     #! a very large number of characters reads the data there is, with no allocation for the number
     largeCharacterCount() {
         foreach string enc in ("UTF-8", "UTF-16LE", "UTF-32LE", "ISO-8859-1") {
-            binary b;
-            try {
-                b = binary(convert_encoding("AB", enc));
-            } catch (hash<ExceptionInfo> ex) {
-                continue;
-            }
+            binary b = binary(convert_encoding("AB", enc));
             foreach int n in (4611686018427387904, 2305843009213693952, 9223372036854775807, 1152921504606846976) {
                 foreach bool buffered in (False, True) {
                     StreamReader sr = reader(b, enc, NOTHING, buffered);
@@ -558,12 +537,8 @@ class ReaderEncodingErrorsTest inherits QUnit::Test {
             assertEq(<fe41>, binary(s), label + " one byte");
 
             # UTF-32, whose byte order mark has four bytes
-            *binary u32;
-            try {
-                u32 = binary(convert_encoding("A", "UTF-32LE"));
-            } catch (hash<ExceptionInfo> ex) {
-            }
-            if (u32) {
+            binary u32 = binary(convert_encoding("A", "UTF-32LE"));
+            {
                 is = new ThrowAfterInputStream(<fffe0000> + u32 + <fffe0000> + binary(convert_encoding("B",
                     "UTF-32LE")), 8);
                 sr = bs ? new BufferedStreamReader(is, "UTF-32", bs) : new StreamReader(is, "UTF-32");
@@ -616,23 +591,36 @@ class ReaderEncodingErrorsTest inherits QUnit::Test {
         }
     }
 
+    #! GBK, given by its bytes: the iconv of some platforms (musl's) can decode it but not encode it
+    gbk() {
+        # "中文"
+        binary gbk = <d6d0cec4>;
+        *string reason = encoding_cannot_decode("GBK", gbk, "中文") ?? encoding_characters_unknown("GBK", "中");
+        if (reason) {
+            testSkip(reason);
+        }
+        # a lead byte cut off by the end of the stream
+        StreamReader sr = reader(gbk + <81>, "GBK");
+        assertThrows("INVALID-ENCODING", "byte offset 4$", \sr.readString());
+    }
+
+    #! ISO-2022-JP, which every platform has
     statefulEncodings() {
         string enc = "ISO-2022-JP";
-        try {
-            string unused = convert_encoding("日本", enc);
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(enc + " is not supported here");
-        }
         binary good = binary(convert_encoding("ab 日本\nx\n", enc));
         StreamReader sr = reader(good, enc);
         assertEq(("ab 日本", "x"), (map convert_encoding($1, "UTF-8"), (sr.readLine(), sr.readLine())));
         assertEq("ab 日本\nx\n", convert_encoding(reader(good, enc).readString(), "UTF-8"));
-        # a byte that is not a character in ISO-2022-JP, if the platform's iconv rejects it
+    }
+
+    #! a byte that is not a character in ISO-2022-JP, if the platform's iconv rejects it
+    statefulInvalidBytes() {
+        string enc = "ISO-2022-JP";
+        StreamReader sr;
         binary bad = binary(convert_encoding("ab 日本", enc)) + <ff0a>;
-        try {
-            string unused = convert_encoding(binary_to_string(bad, enc), "UTF-8");
-            testSkip("the platform's iconv accepts the byte");
-        } catch (hash<ExceptionInfo> ex) {
+        *string reason = encoding_decodes_invalid(enc, bad);
+        if (reason) {
+            testSkip(reason);
         }
         assertThrows("INVALID-ENCODING", "invalid byte sequence", sub () { reader(bad, enc).readLine(); });
         assertThrows("INVALID-ENCODING", "invalid byte sequence", sub () { reader(bad, enc).readString(); });
@@ -685,16 +673,17 @@ class ReaderEncodingErrorsTest inherits QUnit::Test {
             assertThrows("INVALID-ENCODING", "byte offset 3$", \sr.readLine());
             assertEq("A", convert_encoding(sr.readLine(), "UTF-8"));
         }
+    }
 
-        # UTF-7
+    #! UTF-7, which the iconv of some platforms (musl's) does not have
+    utf7() {
         string u7 = "UTF-7";
-        try {
-            string unused = convert_encoding("a", u7);
-        } catch (hash<ExceptionInfo> ex) {
-            return;
+        *string reason = encoding_cannot_convert(u7, "a");
+        if (reason) {
+            testSkip(reason);
         }
         binary b7 = <2b41412d0a2bff0a410a>;
-        sr = reader(b7, u7, "latin1");
+        StreamReader sr = reader(b7, u7, "latin1");
         list<string> l = (sr.readLine(), sr.readLine(), sr.readLine());
         assertEq(<2bff>, binary(l[1]));
         assertEq("ISO-8859-1", l[1].encoding());
