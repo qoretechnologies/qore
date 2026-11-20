@@ -108,7 +108,70 @@ QoreHashNode* ProtobufHelper::messageToHash(const Message& msg, const char* wher
         }
     }
 
+    // the extension fields that are set in the message, which are not fields of its descriptor; they are given with
+    // their full names in square brackets, as in protobuf's JSON and text formats
+    if (desc->extension_range_count()) {
+        std::vector<const FieldDescriptor*> fields;
+        ref->ListFields(msg, &fields);
+        for (const FieldDescriptor* field : fields) {
+            if (!field->is_extension()) {
+                continue;
+            }
+            ValueHolder val(xsink);
+            if (field->is_repeated()) {
+                val = repeatedFieldToList(msg, field, ref, where, xsink);
+            } else {
+                val = fieldToQore(msg, field, ref, where, xsink);
+            }
+            if (*xsink || hash->setKeyValue(extensionKey(field), val.release(), xsink)) {
+                return nullptr;
+            }
+        }
+    }
+
     return hash.release();
+}
+
+const FieldDescriptor* ProtobufHelper::findSetExtension(const Message& msg) {
+    const Reflection* ref = msg.GetReflection();
+    std::vector<const FieldDescriptor*> fields;
+    ref->ListFields(msg, &fields);
+    for (const FieldDescriptor* field : fields) {
+        if (field->is_extension()) {
+            return field;
+        }
+        if (field->cpp_type() != FieldDescriptor::CPPTYPE_MESSAGE) {
+            continue;
+        }
+        // the nesting of the message was bounded when it was made from a hash
+        if (field->is_repeated()) {
+            for (int i = 0, e = ref->FieldSize(msg, field); i < e; ++i) {
+                if (const FieldDescriptor* rv = findSetExtension(ref->GetRepeatedMessage(msg, field, i))) {
+                    return rv;
+                }
+            }
+        } else if (const FieldDescriptor* rv = findSetExtension(ref->GetMessage(msg, field))) {
+            return rv;
+        }
+    }
+    return nullptr;
+}
+
+std::string ProtobufHelper::extensionKey(const FieldDescriptor* field) {
+    return std::string("[") + std::string(field->full_name()) + "]";
+}
+
+const FieldDescriptor* ProtobufHelper::findExtension(const Descriptor* desc, const char* key) {
+    if (!desc->extension_range_count()) {
+        return nullptr;
+    }
+    // "[full.name]", or the full name alone
+    std::string name(key);
+    if (name.size() > 2 && name.front() == '[' && name.back() == ']') {
+        name = name.substr(1, name.size() - 2);
+    }
+    const FieldDescriptor* field = desc->file()->pool()->FindExtensionByName(name);
+    return field && field->containing_type() == desc ? field : nullptr;
 }
 
 bool ProtobufHelper::hashToMessage(const QoreHashNode* hash, Message* msg, ExceptionSink* xsink) {
@@ -132,6 +195,11 @@ bool ProtobufHelper::hashToMessage(const QoreHashNode* hash, Message* msg, Excep
         if (!field) {
             // Try camelCase -> snake_case conversion
             field = desc->FindFieldByCamelcaseName(key);
+        }
+
+        if (!field) {
+            // an extension field of the message type
+            field = findExtension(desc, key);
         }
 
         if (!field) {
