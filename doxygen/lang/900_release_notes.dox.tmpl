@@ -1606,6 +1606,11 @@
     @ref Qore::Thread::ThreadPool::detachCurrentThread() "ThreadPool::detachCurrentThread()", so that it no longer
     counts against the pool's limit; the HTTP server does so for the thread of a persistent HTTP/1.x connection.
 
+    @par Binary Modules Report the Errors of Their Program Data
+    The %Program data of a binary module derived from the new C++ class \c AbstractQoreProgramExternalDataEx reports
+    the errors of its copy, initialization and release as %Qore exceptions, which fail the creation of a child
+    @ref Qore::Program "Program" or are raised by its deletion (see @ref qore_modules; issue #6786).
+
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
       @ref Qore::ParseOptions, which holds all 128 option bits; the constants of options beyond bit 63 are \c 0
@@ -3796,6 +3801,10 @@
     - the C++ API's \c QoreProgramContextHelper switches the thread-local data of the Program with the current
       Program; it never creates the data or runs the Program's thread initialization code
       (<a href="https://github.com/qoretechnologies/qore/issues/6537">issue 6537</a>)
+    - a child @ref Qore::Program "Program" to which a binary module cannot copy its data is not created: the
+      constructor and @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" raise the
+      module's exception, where the C++ exception of the module escaped from the creation of a registered %Program
+      (<a href="https://github.com/qoretechnologies/qore/issues/6786">issue 6786</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

@@ -1677,6 +1677,9 @@ Program pgm();
     @ref Qore::Program "Program" and @ref sandbox_program_capability)
 
     @throw PROGRAM-OPTION-ERROR invalid parse options used
+
+    @note since %Qore 3.0, if a binary module cannot copy its data in the current %Program to the new %Program, the
+    constructor raises the exception of the module, and no %Program is created
  */
 Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
         [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
@@ -1706,9 +1709,13 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
     // tests hold the creation here to change the parent's options after the check
     qore_dbg_child_program_create_hold();
 #endif
-    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr);
-    //pgm->registerQoreObject(self, xsink);
-    assert(!xsink->isEvent());
+    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr, xsink);
+    if (*xsink) {
+        // a module could not copy its external data to the child, which must not run without it: the exception of
+        // the module is raised, and the Program is deleted unused (issue #6786)
+        qore_program_private::deleteFailedChild(pgm, xsink);
+        return;
+    }
     program_set_independent_creator(*pgm, independent, restricted, restrictions);
     // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
     // the QoreProgram constructor decides it (see qore_caller_is_sandboxed())
@@ -1739,6 +1746,9 @@ Program pgm(opts);
 
     @throw PROGRAM-OPTION-ERROR invalid parse options used
 
+    @note if a binary module cannot copy its data in the current %Program to the new %Program, the constructor
+    raises the exception of the module, and no %Program is created
+
     @since %Qore 3.0
  */
 Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool independent)
@@ -1761,8 +1771,13 @@ Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool ind
     // tests hold the creation here to change the parent's options after the check
     qore_dbg_child_program_create_hold();
 #endif
-    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr);
-    assert(!xsink->isEvent());
+    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr, xsink);
+    if (*xsink) {
+        // a module could not copy its external data to the child, which must not run without it: the exception of
+        // the module is raised, and the Program is deleted unused (issue #6786)
+        qore_program_private::deleteFailedChild(pgm, xsink);
+        return;
+    }
     program_set_independent_creator(*pgm, independent, restricted, restrictions);
     // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
     // the QoreProgram constructor decides it (see qore_caller_is_sandboxed())

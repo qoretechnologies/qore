@@ -16750,7 +16750,10 @@ extern "C" DLLEXPORT void qore_aot_script_begin_batch(QoreProgram* tpgm) {
         AbstractQoreProgramExternalData* removed =
             tpgm->removeExternalData(kAotScriptBatchKey);
         if (removed) {
-            removed->doDeref();
+            // the C function has no sink: an exception is reported as unhandled (issue #6786)
+            ExceptionSink xsink;
+            qore_ext_data_deref(removed, &xsink);
+            xsink.handleExceptions();
         }
     }
     tpgm->setExternalData(kAotScriptBatchKey, new AotScriptBatchState(tpgm));

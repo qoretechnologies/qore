@@ -86,6 +86,16 @@ class RSetHelper;
 // (declared in QoreIR.h; issue #6473)
 DLLLOCAL void qore_ir_suspend_inline_states(const void* dpgm_addr);
 
+// the calls of the callbacks of AbstractQoreProgramExternalData: an AbstractQoreProgramExternalDataEx gets the sink,
+// and a C++ exception that a legacy callback lets escape is converted into it (issue #6786)
+//! returns the copy of the external data for a child Program; a copy made with an exception is released
+DLLLOCAL AbstractQoreProgramExternalData* qore_ext_data_copy(const AbstractQoreProgramExternalData* data,
+        QoreProgram* pgm, ExceptionSink* xsink);
+//! calls init() on a copy made by qore_ext_data_copy()
+DLLLOCAL void qore_ext_data_init(AbstractQoreProgramExternalData* data, ExceptionSink* xsink);
+//! releases external data
+DLLLOCAL void qore_ext_data_deref(AbstractQoreProgramExternalData* data, ExceptionSink* xsink);
+
 typedef vector_map_t<int, unsigned> ptid_map_t;
 //typedef std::map<int, unsigned> ptid_map_t;
 
@@ -2011,7 +2021,12 @@ protected:
         Qore code, which needs a Program that can be attached to.  setParent() runs from
         qore_program_private_base's constructor, where no member of the derived class exists yet.
     */
-    DLLLOCAL void copyExternalData();
+    /** @param xsink for the errors of the modules' callbacks; if nullptr, they are reported as unhandled exceptions
+
+        @return 0 for OK, -1 if a copy or an init() failed: then the copies made are released, the Program has none of
+        the parent's data, and its creator must delete it (issue #6786)
+    */
+    DLLLOCAL int copyExternalData(ExceptionSink* xsink);
 
     // for independent programs (not inherited from another QoreProgram object)
     DLLLOCAL void newProgram();
@@ -2261,9 +2276,16 @@ public:
     //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
 
     DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
-            QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr);
+            QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr,
+            ExceptionSink* xsink = nullptr);
 
     DLLLOCAL ~qore_program_private();
+
+    //! deletes a child Program whose creation failed, as its external data could not be copied (issue #6786)
+    /** The Program has none of the parent's data and has never been used: no object holds it and no code runs in it;
+        the exceptions of its deletion are added to \a xsink after the one of the failure
+    */
+    DLLLOCAL static void deleteFailedChild(QoreProgram* pgm, ExceptionSink* xsink);
 
     DLLLOCAL void registerProgram();
 
