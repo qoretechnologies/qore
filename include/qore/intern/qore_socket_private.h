@@ -143,6 +143,11 @@ class QoreFuture;
 
 DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const char* type = "target");
 DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
+
+#ifndef _Q_WINDOWS
+//! Raises \a err and returns -1 if a UNIX socket path does not fit a socket address with its terminator (issue #6910)
+DLLLOCAL int qore_socket_check_unix_path(const char* path, const char* err, ExceptionSink* xsink);
+#endif
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
@@ -166,6 +171,18 @@ DLLLOCAL int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool ht
     resolves the manager on the thread that creates it and keeps it for its checks.
 */
 DLLLOCAL QoreSandboxManager* qore_socket_ref_policy_sandbox_manager();
+#ifdef DEBUG
+//! Makes the policy lookup of the thread find no policy while it exists (dbg_socket_drop_network_policy(), #6913)
+class QoreSocketDbgDropPolicyHelper {
+public:
+    DLLLOCAL QoreSocketDbgDropPolicyHelper();
+    DLLLOCAL ~QoreSocketDbgDropPolicyHelper();
+    QoreSocketDbgDropPolicyHelper(const QoreSocketDbgDropPolicyHelper&) = delete;
+    QoreSocketDbgDropPolicyHelper& operator=(const QoreSocketDbgDropPolicyHelper&) = delete;
+private:
+    bool old;
+};
+#endif
 //! Opens the socket in the given family and type if necessary and binds it to the given numeric address
 /** Runs no resolution and waits for nothing, so it can be called on an async I/O thread, by the operation that
     drives the socket (with the lock of its socket object held, if it has one).  The bind is checked against the
@@ -3929,6 +3946,11 @@ public:
         return -1;
 #else
         close();
+
+        // a path that does not fit the socket address is refused before it is copied (issue #6910)
+        if (qore_socket_check_unix_path(name, "SOCKET-BIND-ERROR", xsink)) {
+            return -1;
+        }
 
         // try to open socket if necessary
         if (openUNIX(socktype, protocol)) {

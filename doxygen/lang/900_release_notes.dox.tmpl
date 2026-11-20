@@ -2546,6 +2546,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a UNIX socket path that does not fit a socket address raises an error on connect and bind; it was shortened to
+      fit, so that another socket file could be used than the one named
+      (<a href="https://github.com/qoretechnologies/qore/issues/6910">issue 6910</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0

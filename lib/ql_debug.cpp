@@ -18831,8 +18831,60 @@ static void dbg_fsio_hook(int fd) {
     }
 }
 
-//! Debug-only: runs the code with a second holder of the file description of the descriptor, and reports the flags
+//! Calls \a call while the network policy lookup of the thread finds no policy (issue #6913)
+/** A sandboxed Program is always governed by a network policy; this simulates a lookup that resolves none, which
+    must deny the socket operations of a sandboxed Program instead of allowing them
+*/
+static QoreValue f_dbg_socket_drop_network_policy(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* call = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    QoreSocketDbgDropPolicyHelper drop;
+    return call->invoke(nullptr, xsink);
+}
+
+//! Starts a UDP send to a numeric IPv4 address with the C++ API (QoreSocket::startSendTo()) in the context of a Program
+/** The call is made in the context of \a pgm, as a call by its code is, so that the policy of its sandbox applies
+
+    @return @ref True if the send was started, @ref False if it was refused (an exception is raised) (issue #6913)
+*/
+static QoreValue f_dbg_socket_start_send_to(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    const QoreStringNode* ip = get_param_value(params, 1).get<const QoreStringNode>();
+    int port = static_cast<int>(HARD_QORE_VALUE_INT(params, 2));
+    ProgramThreadCountContextHelper pch(xsink, *pgm, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    struct sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    if (inet_pton(AF_INET, ip->c_str(), &addr.sin_addr) != 1) {
+        return xsink->raiseException("DBG-SOCKET-ERROR", "invalid IPv4 address '%s'", ip->c_str());
+    }
+    // an open UDP socket: bound to an address assigned by the system
+    QoreSocket sock;
+    if (sock.bindINET("0.0.0.0", "0", true, AF_INET, SOCK_DGRAM, 0, xsink)) {
+        return QoreValue();
+    }
+    BinaryNode* bin = new BinaryNode;
+    bin->append("x", 1);
+    std::unique_ptr<AbstractPollState> ps(sock.startSendTo(xsink, bin,
+        reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr)));
+    if (!ps) {
+        // not taken over by a state
+        bin->deref();
+        return false;
+    }
+    return true;
+}
+
 //! that the holder sees at each read or write of the description that a file stream makes without waiting
+//! Debug-only: runs the code with a second holder of the file description of the descriptor, and reports the flags
 /** The second holder is a duplicate of the descriptor (the same file description, as an inherited standard input
     would be).  DEBUG builds only.
 
@@ -28838,6 +28890,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_signal_reassign_release", f_dbg_signal_reassign_release, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "sig", stringTypeInfo, QORE_PARAM_NO_ARG,
         "name");
+    qns.addBuiltinVariant("dbg_socket_drop_network_policy", f_dbg_socket_drop_network_policy, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, autoTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_socket_start_send_to", f_dbg_socket_start_send_to, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 3, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo, QORE_PARAM_NO_ARG, "ip",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "port");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_parse_with_cxx_exception", f_dbg_parse_with_cxx_exception, QCF_NO_FLAGS,
