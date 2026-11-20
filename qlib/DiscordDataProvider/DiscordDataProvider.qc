@@ -84,9 +84,13 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
         };
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, code> dynamic_children = {};
+    }
 
+    private {
         const ChildMap = {
             "guilds": Class::forName("DiscordDataProvider::DiscordGuildsDataProvider"),
             "guilds-by-name": Class::forName("DiscordDataProvider::DiscordGuildsByNameDataProvider"),

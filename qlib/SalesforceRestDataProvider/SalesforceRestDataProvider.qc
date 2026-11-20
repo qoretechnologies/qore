@@ -38,9 +38,13 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
         };
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, code> dynamic_children = {};
+    }
 
+    private {
         const ChildMap = {
             "tables": Class::forName("SalesforceRestDataProvider::SalesforceRestTablesDataProvider"),
         };

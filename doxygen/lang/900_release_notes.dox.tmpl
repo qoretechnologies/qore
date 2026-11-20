@@ -1551,6 +1551,12 @@
     an operation against a captured policy on any thread; see
     @ref interruptible_io_sandbox_threads "Carrying the Caller's Sandbox onto Another Thread".
 
+    @par Process-Wide Factory Registries Refuse Sandboxed Code
+    The factory, child data provider and SSH provider registries of the standard modules and the module blacklist
+    and options refuse changes by sandboxed code, and the SSH registry does not give it its providers; see
+    @ref sandbox_process_wide_registries
+    (<a href="https://github.com/qoretechnologies/qore/issues/6744">issue 6744</a>).
+
     @par Sandboxing I/O That Qore Does Not See
     Java code called through the \c jni module checks its own I/O with \c org.qore.jni.QoreSandbox; data provider
     apps declare I/O that the sandbox does not see with the new \c external_io and \c sandbox_aware fields, and

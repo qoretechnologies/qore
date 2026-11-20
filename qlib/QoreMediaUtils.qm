@@ -586,7 +586,8 @@ public class MediaProviderRegistry {
         };
     }
 
-    private {
+    private:internal {
+        # private:internal: the registry is process-wide, so that only this class changes it (qore#6744)
         static hash<string, AbstractImageGeneratorFactory> image_cache = {};
         static hash<string, AbstractVideoGeneratorFactory> video_cache = {};
     }
@@ -597,8 +598,12 @@ public class MediaProviderRegistry {
 
     #! Registers an image-generator factory
     /** @throw MEDIA-CONFIG-ERROR a factory for the same mode is already registered
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerImageGeneratorFactory(AbstractImageGeneratorFactory factory) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the media provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         string mode = factory.getMode();
@@ -612,8 +617,12 @@ public class MediaProviderRegistry {
 
     #! Registers a video-generator factory
     /** @throw MEDIA-CONFIG-ERROR a factory for the same mode is already registered
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerVideoGeneratorFactory(AbstractVideoGeneratorFactory factory) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the media provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         string mode = factory.getMode();
@@ -626,14 +635,24 @@ public class MediaProviderRegistry {
     }
 
     #! Removes an image-generator factory (intended for tests)
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static deregisterImageGeneratorFactory(string mode) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the media provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         remove image_cache{mode};
     }
 
     #! Removes a video-generator factory (intended for tests)
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static deregisterVideoGeneratorFactory(string mode) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the media provider factory registry");
         registry_lock.lock();
         on_exit registry_lock.unlock();
         remove video_cache{mode};

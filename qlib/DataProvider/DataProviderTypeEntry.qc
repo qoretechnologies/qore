@@ -62,6 +62,12 @@ public hashdecl DataProviderTypeEntryInfo {
 }
 
 #! the DataProviderTypeEntry class
+/** The entries of the process-wide type cache (DataProvider::getTypeRoot()) are shared by the code of every
+    %Program: code that is sandboxed or acts for sandboxed code cannot add, change, lock or remove them, nor create
+    an entry with getCreateChild(), and gets \c DATA-PROVIDER-REGISTRATION-DENIED (see
+    @ref sandbox_process_wide_registries); trusted code and the initialization of library code are not affected.  An
+    entry that a %Program creates itself is not shared, and code can change it freely.
+*/
 public class DataProviderTypeEntry inherits Qore::Serializable {
     private {
         #! The path to this entry
@@ -103,6 +109,33 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
     private:internal {
         #! Sequence for epheremal IDs for types
         static Sequence seq(1);
+
+        #! True if the entry is in the process-wide type cache, whose entries sandboxed code cannot change (qore#6744)
+        transient bool shared = False;
+    }
+
+    #! Marks the entry as an entry of the process-wide type cache, whose entries sandboxed code cannot change
+    /** The children that the entry creates later are marked too.  An entry cannot be unmarked.
+
+        @since DataProvider 3.0
+    */
+    markShared() {
+        shared = True;
+    }
+
+    #! Refuses a change of an entry of the process-wide type cache to sandboxed code (qore#6744)
+    private:internal checkChange(*bool removal) {
+        if (shared) {
+            DataProviderSandboxState::checkSharedRegistration("data provider type cache", "data provider type", path,
+                removal);
+        }
+    }
+
+    #! Returns a new child entry, marked shared if this entry is
+    private:internal DataProviderTypeEntry newChild(string child) {
+        DataProviderTypeEntry rv(path, child);
+        rv.shared = shared;
+        return rv;
     }
 
     #! Creates the entry as a root node
@@ -204,6 +237,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         @note Locking is a one-way operation
     */
     bool lock() {
+        checkChange();
         if (!type) {
             throw "TYPE-LOCK-ERROR", sprintf("type entry %y cannot be locked, because it does not have a type", path);
         }
@@ -219,10 +253,11 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         @throw CHILD-ERROR a child with the same name already exists
     */
     addChild(string child) {
+        checkChange();
         if (children{child}) {
             throw "CHILD-ERROR", sprintf("%y already contains a child named %y", path, child);
         }
-        children{child} = new DataProviderTypeEntry(path, child);
+        children{child} = newChild(child);
     }
 
     #! Sets the type for the entry
@@ -234,6 +269,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         @throw TYPE-ERROR a type has already been set for this entry
     */
     bool setType(AbstractDataProviderType type, bool locked = False) {
+        checkChange();
         if (self.type) {
             if (self.type != type) {
                 throw "TYPE-ERROR", sprintf("%y already contains a type named %y; cannot set type %y", path,
@@ -260,6 +296,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         @throw TYPE-LOCK-ERROR type entry cannot be replaced, because it is locked
     */
     *AbstractDataProviderType setOrReplaceType(AbstractDataProviderType type, *int id, *hash<auto> info) {
+        checkChange();
         if (locked && type != self.type) {
             throw "TYPE-LOCK-ERROR", sprintf("type entry %y cannot be replaced, because it is locked", path);
         }
@@ -415,6 +452,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         @throw TYPE-LOCK-ERROR the given child cannot be removed because it is locked
     */
     DataProviderTypeEntry removeChild(string child) {
+        checkChange(True);
         if (children{child}.locked) {
             throw "TYPE-LOCK-ERROR", sprintf("%s/%s is locked and cannot be removed", path, child);
         }
@@ -426,6 +464,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
 
     #! Locks all types
     lockAll() {
+        checkChange();
         if (type && !locked) {
             locked = True;
         }
@@ -434,6 +473,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
 
     #! Clears the type hierarchy of all non-locked types
     bool clear() {
+        checkChange(True);
         if (!locked && type) {
             remove type;
         }
@@ -452,17 +492,22 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
         if (*DataProviderTypeEntry rv = children{child}) {
             return rv;
         }
-        return children{child} = new DataProviderTypeEntry(path, child);
+        checkChange();
+        return children{child} = newChild(child);
     }
 
     #! Sets the start of the sequence for epheremal IDs
     /** @param n the new sequence start number, if the number is negative, negative IDs will be assigned
 
         @throw TYPE-ID-ERROR Cannot set the ID start after IDs have already been assigned
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            sequence, which is process-wide (see @ref sandbox_process_wide_registries)
 
         @since DataProvider 3.0
     */
     static setEpheremalIdStart(int n) {
+        # the sequence is process-wide (qore#6744)
+        SandboxManager::checkProcessWideRegistration("change the data provider type ID sequence");
         int c = seq.getCurrent();
         if (c != 1) {
             throw "TYPE-ID-ERROR", sprintf("Cannot set sequence start; %d IDs have already been assigned", c);

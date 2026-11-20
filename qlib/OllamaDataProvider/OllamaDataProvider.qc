@@ -34,9 +34,13 @@ public class OllamaDataProvider inherits OllamaDataProviderCommon {
         };
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
+    }
 
+    private {
         const DefaultChildMap = {
             "chat-completion":
                 Class::forName("OllamaDataProvider::OllamaChatCompletionDataProvider"),
@@ -57,7 +61,13 @@ public class OllamaDataProvider inherits OllamaDataProviderCommon {
         return ProviderInfo.name;
     }
 
+    #! Registers a child data provider
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static registerChild(string pathname, Reflection::Class cls) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("register a child data provider");
         if (childMap{pathname}) {
             throw "OLLAMA-CHILD-ERROR", sprintf("child %y already registered", pathname);
         }

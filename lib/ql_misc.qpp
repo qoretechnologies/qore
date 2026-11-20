@@ -4314,6 +4314,8 @@ auto get_module_option(string module, string option) [flags=CONSTANT,NAMED_ARGS;
 
 //! set the given module option
 /** @par Example:
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+        which is process-wide (see @ref sandbox_process_wide_registries)
     @code
 set_module_option(mod, opt, val);
     @endcode
@@ -4327,6 +4329,10 @@ set_module_option(mod, opt, val);
     @since %Qore 0.9
  */
 nothing set_module_option(string module, string option, auto value) [dom=PROCESS;flags=NAMED_ARGS] {
+    // module options are process-wide: code that a sandbox governs cannot change them (qore#6744)
+    if (qore_check_process_wide_registration("change the module options", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper mod_str(module, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();

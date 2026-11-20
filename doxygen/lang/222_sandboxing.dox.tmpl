@@ -468,12 +468,22 @@ authenticate();
       @ref Qore::AsyncIoController::setLogger() "AsyncIoController::setLogger()" and
       @ref Qore::AsyncIoController::setTimerCallback() "AsyncIoController::setTimerCallback()"
     - the callbacks of the line editor of the \c linenoise module
+    - the module blacklist: @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" and
+      @ref Qore::qore_add_module_to_blacklist_ex() "qore_add_module_to_blacklist_ex()"
+    - module options: @ref Qore::set_module_option() "set_module_option()"
 
     The registries, lookups, resolvers, serializers, codecs, schemas and type caches of the standard modules apply
     the same rule with exceptions of their own, which each API documents (see @ref sandbox_module_state); the other
     callback registries of the standard modules raise \c SANDBOX-REGISTRATION-ERROR, for example the child provider
     generators that some data provider modules keep, the logger of the process-wide \c AsyncSocketIo controller and
-    the catalog change listeners of \c DataProvider (\c DATA-PROVIDER-LISTENER-ERROR).  A module that keeps a
+    the catalog change listeners of \c DataProvider (\c DATA-PROVIDER-LISTENER-ERROR).  The factory registries
+    apply the rule as well: the LLM, RAG, media and speech provider factories (\c QoreLlmTypes, \c QoreRagTypes,
+    \c QoreMediaUtils and \c QoreSpeechUtils), the child data providers that data provider modules register, and
+    the client identity providers, server host key providers and host key stores of the \c sshutil module's
+    \c SshUtilRegistry, which also refuses to give its providers to sandboxed code, as they can hold credentials;
+    the entries of the process-wide type cache of \c DataProvider refuse changes with
+    \c DATA-PROVIDER-REGISTRATION-DENIED.  The storage of these registries is \c private:internal, so a subclass
+    cannot change it either.  A module that keeps a
     registry of its own calls
     @ref Qore::SandboxManager::checkProcessWideRegistration() "SandboxManager::checkProcessWideRegistration()" before
     it changes it (\c qore_check_process_wide_registration() in the C++ API,

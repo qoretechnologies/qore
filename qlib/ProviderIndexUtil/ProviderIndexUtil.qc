@@ -2009,7 +2009,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         # an index that code that a sandbox governs could not read is not kept for the process: its sandbox may have
         # refused it the files, as when the module has no capability to read them for it (see
         # initIndexFileReader()); the next reader reads the index again
-        if (!build && index_read_error && SandboxManager::isSandboxed()) {
+        if (!build && index_read_error && !SandboxManager::isProcessWideRegistrationAllowed()) {
             initializing = False;
             remove initializing_tid;
             init_cond.broadcast();
@@ -2707,7 +2707,8 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
     */
     private:internal static checkChange(string what) {
-        if (SandboxManager::isSandboxed()) {
+        # also code that a sandbox governs through a policy barrier (qore#6744)
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
             throw "PROVIDER-INDEX-REGISTRATION-DENIED", sprintf("sandboxed code cannot %s the process-wide data "
                 "provider index", what);
         }
