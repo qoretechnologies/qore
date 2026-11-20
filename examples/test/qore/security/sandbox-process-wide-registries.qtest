@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - a signal handler of trusted code delivered to the process after sandboxed code is refused
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxProcessWideRegistriesTest
+
+#! Process-wide callback registries of the builtin API refuse changes by sandboxed code (issue #6743)
+/** A process-wide registry is shared by the code of every Program, and what it holds runs or is used later for every
+    caller: a change by code that is sandboxed or acts for sandboxed code raises \c SANDBOX-REGISTRATION-ERROR, also
+    through a policy barrier; trusted code is not affected, and what it registered stays in place for every tenant
+*/
+class SandboxProcessWideRegistriesTest inherits QUnit::Test {
+    public {
+        #! the calls that sandboxed code makes; each must raise SANDBOX-REGISTRATION-ERROR
+        const Calls = {
+            "set_signal_handler": "set_signal_handler(SIGUSR2, sub (int sig) {});",
+            "remove_signal_handler": "remove_signal_handler(SIGUSR2);",
+            "set_timer_callback": "AsyncIoController::setTimerCallback(sub (hash<auto> h) {});",
+            "clear_timer_callback": "AsyncIoController::setTimerCallback();",
+            "set_controller_logger": "AsyncIoController::setLogger(new TL());",
+            "clear_controller_logger": "AsyncIoController::setLogger();",
+            "set_async_io_logger": "set_async_io_logger(new TL());",
+            "clear_async_io_logger": "set_async_io_logger();",
+            "set_app_registry": "set_app_registry(\"qore-test-6743\", \"tenant\");",
+            "remove_app_registry": "set_app_registry(\"qore-test-6743\");",
+            "check_registration": "SandboxManager::checkProcessWideRegistration(\"register a test callback\");",
+            "register_exit_hook": "register_exit_hook(sub () {});",
+        };
+
+        #! the calls whose API raises an exception of its own
+        const CallErrors = {
+            "register_exit_hook": "EXIT-HOOK-ERROR",
+        };
+
+        #! a logger class of the tenants
+        const LoggerSource = "class TL inherits LoggerInterfaceBase {
+    logArgs(int level, string message, *softlist<auto> format_args) {}
+    bool isEnabledFor(int level) { return True; }
+}
+";
+
+        #! the application registry key of the test
+        const Key = "qore-test-6743";
+    }
+
+    constructor() : Test("process-wide callback registries refuse sandboxed code", "1.0", \ARGV) {
+        addTestCase("sandboxed code cannot change a process-wide registry", \sandboxedTest());
+        addTestCase("what trusted code registered stays in place for every tenant", \trustedStateTest());
+        addTestCase("trusted code serving sandboxed code under a policy barrier cannot either", \barrierTest());
+        addTestCase("a Program that sandboxed code creates is refused when trusted code calls it",
+            \childProgramTest());
+        addTestCase("trusted code is not refused", \trustedTest());
+        set_return_value(main());
+    }
+
+    sandboxedTest() {
+        # the calls that were not refused, with what they raised instead
+        hash<string, string> not_refused = {};
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            try {
+                Program tenant = SandboxProcessWideRegistriesTest::tenant("tenant-" + i.key, i.key, i.value);
+                tenant.callFunction("t_" + i.key);
+                not_refused{i.key} = "no exception";
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != (CallErrors{i.key} ?? "SANDBOX-REGISTRATION-ERROR")) {
+                    not_refused{i.key} = sprintf("%s: %s", ex.err, ex.desc);
+                }
+            }
+        }
+        assertEq({}, not_refused);
+    }
+
+    trustedStateTest() {
+        set_app_registry(Key, "host");
+        on_exit set_app_registry(Key);
+        Program tenant_a = SandboxProcessWideRegistriesTest::tenant("tenant-a", "set_app_registry",
+            Calls.set_app_registry);
+        Program tenant_b = SandboxProcessWideRegistriesTest::tenant("tenant-b", "read",
+            sprintf("return get_app_registry(%y);", Key));
+        assertThrows("SANDBOX-REGISTRATION-ERROR", \tenant_a.callFunction(), "t_set_app_registry");
+        # the other tenant and the host still see the host's value
+        assertEq("host", tenant_b.callFunction("t_read"));
+        assertEq("host", get_app_registry(Key));
+
+        if (HAVE_SIGNAL_HANDLING) {
+            Counter c(1);
+            set_signal_handler(SIGUSR2, sub (int sig) { c.dec(); });
+            on_exit remove_signal_handler(SIGUSR2);
+            Program tenant_c = SandboxProcessWideRegistriesTest::tenant("tenant-c", "remove_signal_handler",
+                Calls.remove_signal_handler);
+            assertThrows("SANDBOX-REGISTRATION-ERROR", \tenant_c.callFunction(), "t_remove_signal_handler");
+            # the host's handler still runs
+            system(sprintf("kill -USR2 %d", getpid()));
+            assertEq(0, c.waitForZero(10s));
+        }
+    }
+
+    barrierTest() {
+        set_app_registry(Key, "host");
+        on_exit set_app_registry(Key);
+        # trusted infrastructure that changes the registry for its callers, under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(sub () { set_app_registry(Key, "tenant"); });
+        Program tenant = SandboxProcessWideRegistriesTest::tenant("tenant", "run", "return c();", "code c");
+        assertThrows("SANDBOX-REGISTRATION-ERROR", \tenant.callFunction(), ("t_run", cap));
+        assertEq("host", get_app_registry(Key));
+
+        # an exit hook that the tenant gives to such infrastructure
+        code exit_cap = SandboxManager::createSystemPolicyCall(int sub (code hook) { return register_exit_hook(hook); });
+        Program tenant_hook = SandboxProcessWideRegistriesTest::tenant("tenant-hook", "run_hook",
+            "return c(sub () {});", "code c");
+        assertThrows("EXIT-HOOK-ERROR", \tenant_hook.callFunction(), ("t_run_hook", exit_cap));
+    }
+
+    childProgramTest() {
+        set_app_registry(Key, "host");
+        on_exit set_app_registry(Key);
+        # a Program that sandboxed code creates has no sandbox manager of its own; trusted code calls it later
+        Program tenant = SandboxProcessWideRegistriesTest::tenant("tenant", "child", "Program p(PO_NEW_STYLE); "
+            "p.parse(\"sub set() { set_app_registry('qore-test-6743', 'tenant'); } "
+            "bool sub allowed() { return SandboxManager::isProcessWideRegistrationAllowed(); }\", \"child\"); "
+            "return p;");
+        Program child = tenant.callFunction("t_child");
+        assertFalse(child.callFunction("allowed"));
+        assertThrows("SANDBOX-REGISTRATION-ERROR", \child.callFunction(), "set");
+        assertEq("host", get_app_registry(Key));
+    }
+
+    trustedTest() {
+        # a trusted Program: no sandbox
+        Program trusted(PO_NEW_STYLE);
+        trusted.parse("auto sub check() { SandboxManager::checkProcessWideRegistration(\"register a test "
+            "callback\"); return SandboxManager::isProcessWideRegistrationAllowed(); }", "trusted");
+        assertTrue(trusted.callFunction("check"));
+        Program tenant = SandboxProcessWideRegistriesTest::tenant("tenant", "allowed",
+            "return SandboxManager::isProcessWideRegistrationAllowed();");
+        assertFalse(tenant.callFunction("t_allowed"));
+        set_app_registry(Key, "host");
+        assertEq("host", get_app_registry(Key));
+        set_app_registry(Key);
+        assertNothing(get_app_registry(Key));
+    }
+
+    #! Returns a sandboxed Program with one function
+    private static Program tenant(string name, string func, string body, *string args) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(sprintf("auto sub t_%s(%s) { %s }\n", func, args ?? "", body) + LoggerSource, name);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}

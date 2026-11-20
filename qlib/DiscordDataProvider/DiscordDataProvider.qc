@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DiscordDataProvider module definition
 
-/** DiscordDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** DiscordDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -120,8 +120,13 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
     #! Registers a child data provider
     /** @param name the child's name
         @param generator code to generate the child; prototype: sub (string name, AbstractConnection conn) {}
+
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot register a child
+        generator: the registry is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerChild(string name, code generator) {
+        # the generator runs for every caller that browses the provider, with its connection
+        SandboxManager::checkProcessWideRegistration("register a child data provider generator");
         dynamic_children{name} = generator;
     }
 

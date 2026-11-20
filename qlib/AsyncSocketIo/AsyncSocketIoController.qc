@@ -81,20 +81,33 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     /** @param autostop if @ref True "True", the I/O thread will automatically stop when all
         operations complete (after a grace period); if @ref False "False", the I/O thread runs
         until explicitly shut down
-        @param logger an optional logger for diagnostic output
+        @param logger an optional logger for diagnostic output; it is also set as the logger of the process-wide
+        async I/O controller, except for code that is sandboxed or acts for sandboxed code (see
+        @ref sandbox_process_wide_registries)
     */
     constructor(bool autostop, *LoggerInterface logger) : LoggerWrapper(logger) {
         Qore::AsyncIoController::setAutostop(auto_stop: autostop);
         if (logger) {
-            Qore::AsyncIoController::setLogger(logger: logger);
+            setControllerLogger(logger);
         }
     }
 
     #! Creates the object with autostop disabled by default
-    /** @param logger an optional logger for diagnostic output
+    /** @param logger an optional logger for diagnostic output; it is also set as the logger of the process-wide
+        async I/O controller, except for code that is sandboxed or acts for sandboxed code (see
+        @ref sandbox_process_wide_registries)
     */
     constructor(*LoggerInterface logger) : LoggerWrapper(logger) {
         if (logger) {
+            setControllerLogger(logger);
+        }
+    }
+
+    #! Sets the logger of the process-wide controller, unless the caller is sandboxed or acts for sandboxed code
+    /** The object keeps the logger for its own messages in any case
+    */
+    private:internal setControllerLogger(LoggerInterface logger) {
+        if (SandboxManager::isProcessWideRegistrationAllowed()) {
             Qore::AsyncIoController::setLogger(logger: logger);
         }
     }
@@ -355,8 +368,14 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     #! Sets the logger for the controller
     /** @param logger the logger to use for diagnostic output, or @ref nothing to disable logging
+
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set or clear the
+        logger, which is also the logger of the process-wide async I/O controller (see
+        @ref sandbox_process_wide_registries)
     */
     setLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
+        # checked before the logger is changed: the logger of the global controller is process-wide
+        SandboxManager::checkProcessWideRegistration("set the logger of the async I/O controller");
         LoggerWrapper::setLogger(logger);
         Qore::AsyncIoController::setLogger(logger: logger);
     }

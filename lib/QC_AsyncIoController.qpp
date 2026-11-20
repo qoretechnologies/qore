@@ -664,8 +664,11 @@ static hash<auto> AsyncIoController::getInfo() {
 /** @param logger a @ref Qore::LoggerInterfaceBase "LoggerInterfaceBase" object for logging,
     or @ref nothing "NOTHING" to disable per-controller logging
 
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set or clear the
+    logger, which is process-wide (see @ref sandbox_process_wide_registries)
+
     @note an \c HttpServer sets its logger here while it runs and gives back the logger it replaced when it stops,
-    unless the logger has been replaced since
+    unless the logger has been replaced since; a server that sandboxed code creates does not
 
     @note an exception raised by the code of a timer (@ref addTimer(), @ref addTimerDelay()), by the timer callback
     (@ref setTimerCallback()) or by a callback of an operation that the controller runs (a completion, frame or stream
@@ -679,6 +682,10 @@ static hash<auto> AsyncIoController::getInfo() {
     @since %Qore 3.0
 */
 static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=NAMED_ARGS] {
+    // the controller is process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("set the logger of the global async I/O controller", xsink)) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -945,6 +952,9 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CON
     @param callback a callback that accepts a @ref TimerEventInfo hash argument, or
         @ref nothing to disable timer event delivery for non-callable \c user_data
 
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set or clear the timer
+    callback, which is process-wide (see @ref sandbox_process_wide_registries)
+
     @note an exception that the callback raises is logged at the error level by the controller's logger
     (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
     without a logger, it is reported as an unhandled exception on the standard error output
@@ -952,6 +962,10 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CON
     @since %Qore 3.0
 */
 static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,PROCESS,THREAD_CONTROL;flags=NAMED_ARGS] {
+    // the controller is process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("set the timer callback of the global async I/O controller", xsink)) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {

@@ -279,7 +279,6 @@ class qlib/JsonFileDataProvider/JsonFileWriteDataProviderFactory.qc JsonFileWrit
 class qlib/KatanaDataProvider/KatanaDataProviderFactory.qc KatanaDataProviderFactory::cls
 class qlib/KeapDataProvider/KeapDataProviderFactory.qc KeapDataProviderFactory::cls
 class qlib/KitDataProvider/KitDataProviderFactory.qc KitDataProviderFactory::cls
-scalar qlib/KlaviyoDataProvider/KlaviyoCodecs.qc KlaviyoCodecs::registered
 class qlib/KlaviyoDataProvider/KlaviyoDataProviderFactory.qc KlaviyoDataProviderFactory::cls
 module-data qlib/KlaviyoDataProvider/KlaviyoSchema.qc KlaviyoSchema::action_set
 module-data qlib/KlaviyoDataProvider/KlaviyoSchema.qc KlaviyoSchema::schema

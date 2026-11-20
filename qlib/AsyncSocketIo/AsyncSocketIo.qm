@@ -87,6 +87,9 @@ module AsyncSocketIo {
     @section asyncsocketiorelnotes Release Notes
 
     @subsection asyncsocketio_3_0 AsyncSocketIo 3.0
+    - \c AsyncSocketIoController::setLogger() sets the logger of the process-wide controller, so sandboxed code
+      cannot call it (\c SANDBOX-REGISTRATION-ERROR; see @ref sandbox_process_wide_registries)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>)
     - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" runs its operations in the native
       @ref Qore::AsyncIoController "AsyncIoController" with the operating system's event loop (epoll on Linux, kqueue
       on macOS and BSD), with I/O threads, callback worker threads and timers
