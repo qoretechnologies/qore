@@ -9829,6 +9829,96 @@ static bool qore_llvm_inst_is_call(const QoreIRInstruction* inst) {
     }
 }
 
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::spillCallTarget(const QoreIRInstruction* check, llvm::Function* llvm_func) {
+    ++call_target_check_count;
+    // a call through self has no target operand; a closure that the function created and calls directly has no load
+    if (check->operands.empty()) {
+        return;
+    }
+    uint32_t id = check->operands[0].id;
+    if (immediate_closure_creates.count(id) || !nanboxed_values.count(id)) {
+        return;
+    }
+    auto i = values.find(id);
+    if (i == values.end() || !i->second || i->second->getType() != i64_type) {
+        return;
+    }
+    llvm::IRBuilder<> entry_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+    llvm::AllocaInst* slot = entry_builder.CreateAlloca(i64_type, nullptr, "call.target.slot");
+    // volatile: the optimizer would otherwise replace the value read from the slot by the value stored in it
+    llvm::StoreInst* store = builder->CreateStore(i->second, slot, true);
+    call_target_spills[id] = {call_target_check_count, slot, store};
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::reloadCallTarget(const QoreIRInstruction* inst, const QoreIRInstruction* next) {
+    auto drop = [](const CallTargetSpill& spill) {
+        spill.store->eraseFromParent();
+        spill.slot->eraseFromParent();
+    };
+    for (size_t i = 0, e = inst->operands.size(); i < e; ++i) {
+        uint32_t id = inst->operands[i].id;
+        auto it = call_target_spills.find(id);
+        if (it == call_target_spills.end()) {
+            continue;
+        }
+        CallTargetSpill spill = it->second;
+        call_target_spills.erase(it);
+        // the call that uses the target: the call that follows the check after its arguments, or the call itself
+        const QoreIRInstruction* call = nullptr;
+        if (!i && !call_target_reload_call
+                && call_target_check_count - spill.check_count >= CallTargetReloadNesting) {
+            if (inst->opcode == QoreIROpcode::CheckCallTarget) {
+                if (static_cast<const QoreIRExprInstruction*>(inst)->check_after_args) {
+                    call = qore_ir_call_of_target_check(inst, next);
+                }
+            } else if (qore_llvm_inst_is_call(inst)) {
+                call = inst;
+            }
+            // the target is used once by the instruction
+            for (size_t j = 1; call && j < e; ++j) {
+                if (inst->operands[j].id == id) {
+                    call = nullptr;
+                }
+            }
+        }
+        if (!call) {
+            // any other use: the target stays in its register
+            drop(spill);
+            continue;
+        }
+        llvm::LoadInst* reload = builder->CreateLoad(i64_type, spill.slot, true, "call.target.reload");
+        auto vi = values.find(id);
+        assert(vi != values.end());
+        call_target_reload_id = id;
+        call_target_reload_orig = vi->second;
+        call_target_reload_call = call;
+        vi->second = reload;
+    }
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::endCallTargetReload(const QoreIRInstruction* inst) {
+    if (inst != call_target_reload_call) {
+        return;
+    }
+    // the instructions after the call use the value as it was computed
+    values[call_target_reload_id] = call_target_reload_orig;
+    call_target_reload_id = 0;
+    call_target_reload_orig = nullptr;
+    call_target_reload_call = nullptr;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::dropCallTargetSpills() {
+    for (auto& [id, spill] : call_target_spills) {
+        spill.store->eraseFromParent();
+        spill.slot->eraseFromParent();
+    }
+    call_target_spills.clear();
+}
+
 void QoreIRToLLVM::emitCallSiteSet(const QoreIRInstruction* inst, llvm::Module& module) {
     if (!call_site_cache_ptr) {
         return;
@@ -15922,6 +16012,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_hash_string_extraction_instruction = nullptr;
     current_self_bits = nullptr;
     valid_object_tests.clear();
+    call_target_check_count = 0;
+    call_target_spills.clear();
+    call_target_reload_id = 0;
+    call_target_reload_orig = nullptr;
+    call_target_reload_call = nullptr;
     aot_hash_string_extraction_reuses = 0;
     aot_hash_string_extraction_overlap_reuses = 0;
     aot_hash_string_extraction_cross_block_reuses = 0;
@@ -17879,6 +17974,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (!inst) {
                 continue;
             }
+            // the call target stored at its check before the arguments of its call, at its next use (issue #6872)
+            if (!call_target_spills.empty()) {
+                reloadCallTarget(inst, inst_index + 1 < block->instructions.size()
+                    ? block->instructions[inst_index + 1].get() : nullptr);
+            }
+            if (inst->opcode == QoreIROpcode::CheckCallTarget
+                    && !static_cast<const QoreIRExprInstruction*>(inst)->check_after_args) {
+                spillCallTarget(inst, llvm_func);
+            }
             // a check of a call's target that is not fused into its call (native code generation does not fuse
             // them) takes the arguments of the call that follows it for the check after them (issue #5824)
             if (inst->opcode == QoreIROpcode::CheckCallTarget
@@ -18083,6 +18187,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 }
                 return false;
             }
+            endCallTargetReload(inst);
             if (call_site) {
                 llvm::BasicBlock* cur = builder->GetInsertBlock();
                 llvm::Instruction* term = qoreGetTerminator(cur);
@@ -18208,6 +18313,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
     }
+
+    // the call targets stored at checks whose calls were not lowered (issue #6872)
+    dropCallTargetSpills();
 
     // only the debug IR of AOT code has the paths of a debugger's flow requests (QoreIRFunction::hasDebugFlowPaths()),
     // for the IR interpreter that runs it under a debugger, so their blocks get no native code, in AOT code and in the
