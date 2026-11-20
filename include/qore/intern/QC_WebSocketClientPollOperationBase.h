@@ -355,8 +355,11 @@ private:
     uint64_t skip_bytes = 0;
 
     //! set when the peer sent a frame that is a protocol error: once the close frame is written, the connection ends
-    //! with 1002 without waiting for the peer's close, which cannot be read any more (issue #5878)
+    //! with 1002 without waiting for the peer's close, which cannot be read any more (issue #5878); also when the
+    //! peer's close frame is not valid, with 1002 or 1007 (qore#6755)
     bool protocol_failed = false;
+    //! the close code of the protocol error
+    uint16_t protocol_code = WSCC_ProtocolError;
     //! the reason of the protocol error
     std::string protocol_reason;
 
@@ -364,6 +367,10 @@ private:
     /** Data frames are discarded from then on, whether or not the close frame could be queued (issue #5878)
     */
     DLLLOCAL void rejectMessage(uint16_t code, const char* reason, ExceptionSink* xsink);
+
+    //! Checks a received text message: returns true if it is valid UTF-8 or compressed, otherwise rejects it with
+    //! 1007 (qore#6604)
+    DLLLOCAL bool checkText(const void* data, size_t len, uint8_t rsv, ExceptionSink* xsink);
 
     //! Ends the operation for a lost connection: with 1006, or with the protocol error that the client closed for
     DLLLOCAL void endConnectionLost(const char* reason, ExceptionSink* xsink);

@@ -1,0 +1,462 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The error responses that a request handler's exception gives a client: with debugging off, the error and its
+    description only, without the location of the exception in the server's code (qore#6780)
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestHandler
+%requires DataStreamUtil
+%requires DataStreamRequestHandler
+%requires YamlRpcHandler
+%requires json
+%requires yaml
+
+%exec-class HttpServerErrorBodyLocationTest
+
+#! the file name of this test, which the location of an exception raised here names
+const ThisFile = "HttpServerErrorBodyLocation.qtest";
+
+#! the argument of an exception, a hash with a type
+hashdecl TestArgInfo {
+    string key = "value";
+}
+
+#! a hash with a type that has the keys of an exception with a location, but not the other ones of ExceptionInfo
+hashdecl TestErrorInfo {
+    string err = "SHAPE-ERROR";
+    string desc = "an error of another shape";
+    string file = "x.q";
+    int line = 10;
+}
+
+#! an argument with a type whose "ex" member holds an exception
+hashdecl TestWrapInfo {
+    string key = "value";
+    hash<ExceptionInfo> ex;
+}
+
+#! Raises the exception that the request's path names
+class ThrowHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        switch (hdr.path) {
+            case "plain/user": throw "TEST-ERROR", "the description", {"internal": "value"};
+            case "plain/encoding": throw "HTTP-BODY-ENCODING-ERROR", "the body is not valid";
+            case "plain/large": throw "HTTP-BODY-TOO-LARGE", "the body is too large";
+        }
+        return makeResponse(200, "ok");
+    }
+}
+
+#! Raises a user exception with an argument, a system exception, and a chained exception
+class ThrowRestClass inherits AbstractRestClass {
+    private {
+        string n;
+    }
+
+    constructor(string n) {
+        self.n = n;
+    }
+
+    string name() {
+        return n;
+    }
+
+    hash<HttpHandlerResponseInfo> getUser(hash<auto> cx, *hash<auto> ah) {
+        throw "REST-ERROR", "the description", {"internal": "value"};
+    }
+
+    hash<HttpHandlerResponseInfo> getSystem(hash<auto> cx, *hash<auto> ah) {
+        # a system exception: its argument, if any, is set by the library
+        int i = 0;
+        return RestHandler::makeResponse(200, 1 / i);
+    }
+
+    hash<HttpHandlerResponseInfo> getWrapped(hash<auto> cx, *hash<auto> ah) {
+        try {
+            throw "INNER-ERROR", "the inner error";
+        } catch (hash<ExceptionInfo> ex) {
+            # as AbstractDataProvider::getWrappedExceptionArg() does
+            throw "WRAP-ERROR", "the wrapping error", {"key": "value", "ex": ex};
+        }
+    }
+
+    hash<HttpHandlerResponseInfo> getExarg(hash<auto> cx, *hash<auto> ah) {
+        try {
+            throw "INNER-ERROR", "the inner error";
+        } catch (hash<ExceptionInfo> ex) {
+            # the exception given as the argument
+            throw "EXARG-ERROR", "the outer error", ex;
+        }
+    }
+
+    hash<HttpHandlerResponseInfo> getTyped(hash<auto> cx, *hash<auto> ah) {
+        throw "TYPED-ERROR", "the description", <TestArgInfo>{};
+    }
+
+    hash<HttpHandlerResponseInfo> getShape(hash<auto> cx, *hash<auto> ah) {
+        # a hash of a hashdecl that has an exception's keys with a location
+        throw "SHAPE-ERROR", "the description", <TestErrorInfo>{};
+    }
+
+    hash<HttpHandlerResponseInfo> getTypedWrap(hash<auto> cx, *hash<auto> ah) {
+        try {
+            throw "INNER-ERROR", "the inner error";
+        } catch (hash<ExceptionInfo> ex) {
+            throw "WRAP-ERROR", "the wrapping error", <TestWrapInfo>{"ex": ex};
+        }
+    }
+
+    hash<HttpHandlerResponseInfo> getNodesc(hash<auto> cx, *hash<auto> ah) {
+        try {
+            # an exception without a description has no "desc" key
+            throw "INNER-ERROR";
+        } catch (hash<ExceptionInfo> ex) {
+            throw "NODESC-ERROR", "the outer error", {"arg": ex, "wrapped": {"ex": ex}}.(ah.where ?? "arg");
+        }
+    }
+
+    hash<HttpHandlerResponseInfo> getData(hash<auto> cx, *hash<auto> ah) {
+        # an argument with "err", "file" and "line" but no "desc" is data of the application, not an exception
+        throw "DATA-ERROR", "the description", {"err": "PARSE", "file": "input.csv", "line": 3};
+    }
+
+    hash<HttpHandlerResponseInfo> getChained(hash<auto> cx, *hash<auto> ah) {
+        # an exception raised in an on_exit block while another one is raised is chained to it
+        on_exit throw "INNER-ERROR", "the inner error";
+        throw "OUTER-ERROR", "the outer error";
+    }
+}
+
+class OverrideRestHandler inherits RestHandler {
+    private hash<HttpHandlerResponseInfo> returnRestException(hash<ExceptionInfo> ex) {
+        return <HttpHandlerResponseInfo>{
+            "code": 418,
+            "body": sprintf("override: %s: %s: location: %y", ex.err, ex.desc, exists ex.file),
+        };
+    }
+}
+
+#! A DataStream handler whose callback raised the exception given
+class ErrorDataStreamHandler inherits AbstractDataStreamRequestHandler {
+    constructor(hash<auto> cx, hash<ExceptionInfo> ex) : AbstractDataStreamRequestHandler(cx) {
+        self.ex = ex;
+    }
+
+    private auto sendDataImpl() {
+    }
+
+    private nothing recvDataImpl(auto data) {
+    }
+}
+
+#! the YAML-RPC methods
+const YamlRpcMethods = (
+    {
+        "name": "^error$",
+        "text": "error",
+        "function": sub () {
+            try {
+                throw "INNER-ERROR", "the inner error";
+            } catch (hash<ExceptionInfo> ex) {
+                throw "YAMLRPC-ERROR", "the description", {"key": "value", "ex": ex};
+            }
+        },
+        "help": "raises an exception",
+    },
+);
+
+class HttpServerErrorBodyLocationTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int port;
+    }
+
+    constructor() : Test("HttpServerErrorBodyLocation", "1.0") {
+        addTestCase("handler exceptions", \handlerTest());
+        addTestCase("RestHandler exceptions", \restTest());
+        addTestCase("RestHandler::returnRestException() override", \restOverrideTest());
+        addTestCase("DataStreamRequestHandler exceptions", \dataStreamTest());
+        addTestCase("YamlRpcHandler exceptions", \yamlRpcTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setHandler("plain", "^plain/", NOTHING, new ThrowHandler());
+        RestHandler rest();
+        rest.addClass(new ThrowRestClass("throw"));
+        server.setHandler("rest", "^throw", NOTHING, rest);
+        OverrideRestHandler over();
+        over.addClass(new ThrowRestClass("othrow"));
+        server.setHandler("over", "^othrow", NOTHING, over);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    private hash<auto> get(string path) {
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", port), "error_passthru": True});
+        on_exit hc.disconnect();
+        hash<auto> info;
+        hash<auto> response = hc.send(NOTHING, "GET", path, {"Accept": "application/json"}, False, \info);
+        return response;
+    }
+
+    handlerTest() {
+        foreach bool debug in ((False, True)) {
+            server.setDebug(debug);
+            foreach list<auto> l in (("plain/user", 500, "TEST-ERROR: the description"),
+                    ("plain/encoding", 400, "HTTP-BODY-ENCODING-ERROR: the body is not valid"),
+                    ("plain/large", 413, "HTTP-BODY-TOO-LARGE: the body is too large")) {
+                string label = sprintf("%s debug: %y", l[0], debug);
+                hash<auto> response = get(l[0]);
+                assertEq(l[1], response.status_code, label);
+                string body = response.body ?? "";
+                if (!debug) {
+                    # only the error and its description
+                    assertEq(l[2], body, label);
+                } else {
+                    # the whole exception, with its location
+                    assertRegex(l[2], body, label);
+                    assertRegex(ThisFile, body, label);
+                }
+            }
+        }
+        server.setDebug(False);
+    }
+
+    restTest() {
+        foreach bool debug in ((False, True)) {
+            server.setDebug(debug);
+            string label = sprintf("debug: %y", debug);
+
+            hash<auto> response = get("throw?action=user");
+            assertEq(409, response.status_code, label);
+            hash<auto> ex = parse_json(response.body);
+            assertEq("REST-ERROR", ex.err, label);
+            assertEq("the description", ex.desc, label);
+            assertEq({"internal": "value"}, ex.arg, label + ": the argument of a user exception is given");
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc", "arg")), sort(ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.file, label);
+                assertGt(0, ex.line, label);
+                assertGt(0, ex.callstack.size(), label);
+            }
+
+            response = get("throw?action=system");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("DIVISION-BY-ZERO", ex.err, label);
+            assertEq("System", ex.type, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc")), sort(ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.file, label);
+            }
+
+            # an exception wrapped in the argument, as data providers wrap the exception they rethrow
+            response = get("throw?action=wrapped");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("WRAP-ERROR", ex.err, label);
+            assertEq("value", ex.arg.key, label);
+            assertEq("INNER-ERROR", ex.arg.ex.err, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc")), sort(ex.arg.ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.arg.ex.file, label);
+                assertGt(0, ex.arg.ex.callstack.size(), label);
+            }
+
+            # an exception given as the argument
+            response = get("throw?action=exarg");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("EXARG-ERROR", ex.err, label);
+            assertEq("INNER-ERROR", ex.arg.err, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc")), sort(ex.arg.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.arg.file, label);
+            }
+
+            # an argument whose hash has a type that has no "ex" member
+            response = get("throw?action=typed");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("TYPED-ERROR", ex.err, label);
+            assertEq({"key": "value"}, ex.arg, label);
+
+            # a hash of another hashdecl with the keys of an exception and a location
+            response = get("throw?action=shape");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("SHAPE-ERROR", ex.arg.err, label);
+            if (!debug) {
+                assertEq(sort(("err", "desc")), sort(ex.arg.keys()), label);
+            } else {
+                assertEq("x.q", ex.arg.file, label);
+            }
+
+            # an argument with a type whose "ex" member holds an exception
+            response = get("throw?action=typedWrap");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("value", ex.arg.key, label);
+            assertEq("INNER-ERROR", ex.arg.ex.err, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc")), sort(ex.arg.ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.arg.ex.file, label);
+            }
+
+            # an inner exception without a description, given as the argument and wrapped in it as "ex"
+            foreach string place in (("arg", "wrapped")) {
+                response = get("throw?action=nodesc&where=" + place);
+                assertEq(409, response.status_code, label + " " + place);
+                ex = parse_json(response.body);
+                hash<auto> inner = place == "arg" ? ex.arg : ex.arg.ex;
+                assertEq("INNER-ERROR", inner.err, label + " " + place);
+                if (!debug) {
+                    assertEq(sort(("type", "err")), sort(inner.keys()), label + " " + place);
+                } else {
+                    assertRegex(ThisFile, inner.file, label + " " + place);
+                }
+            }
+
+            # data of the application is given as it is
+            response = get("throw?action=data");
+            assertEq(409, response.status_code, label);
+            assertEq({"err": "PARSE", "file": "input.csv", "line": 3}, parse_json(response.body).arg, label);
+
+            response = get("throw?action=chained");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("OUTER-ERROR", ex.err, label);
+            assertEq("INNER-ERROR", ex.next.err, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc", "next")), sort(ex.keys()), label);
+                assertEq(sort(("type", "err", "desc")), sort(ex.next.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.next.file, label);
+            }
+        }
+        server.setDebug(False);
+    }
+
+    restOverrideTest() {
+        # a subclass's returnRestException() makes the response; it gets the exception without its location unless
+        # debugging is enabled
+        foreach bool debug in ((False, True)) {
+            server.setDebug(debug);
+            hash<auto> response = get("othrow?action=user");
+            assertEq(418, response.status_code);
+            assertEq(sprintf("override: REST-ERROR: the description: location: %y", debug), parse_json(response.body),
+                sprintf("debug: %y", debug));
+        }
+        server.setDebug(False);
+    }
+
+    #! the 409 body of a DataStream v1 request
+    dataStreamTest() {
+        hash<ExceptionInfo> ex;
+        try {
+            throw "INNER-ERROR", "the inner error";
+        } catch (hash<ExceptionInfo> ex1) {
+            try {
+                throw "DS-ERROR", "the description", {"key": "value", "ex": ex1};
+            } catch (hash<ExceptionInfo> ex2) {
+                ex = ex2;
+            }
+        }
+        foreach bool debug in ((False, True)) {
+            string label = sprintf("debug: %y", debug);
+            ErrorDataStreamHandler handler({
+                "socketobject": new Socket(),
+                "hdr": {
+                    DataStreamAccept.lwr(): DataStreamMimeTypeYaml,
+                    "content-type": DataStreamMimeTypeYaml,
+                },
+                "debug": debug,
+            }, ex);
+            hash<auto> response = handler.getErrorResponse();
+            assertEq(409, response.code, label);
+            hash<auto> body = parse_yaml(response.body);
+            assertEq("DS-ERROR", body.err, label);
+            assertEq("the description", body.desc, label);
+            assertEq("value", body.arg.key, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc", "arg")), sort(body.keys()), label);
+                assertEq(sort(("type", "err", "desc")), sort(body.arg.ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, body.file, label);
+                assertRegex(ThisFile, body.arg.ex.file, label);
+            }
+        }
+    }
+
+    #! the error of a YAML-RPC call and the 500 body for a request body that cannot be parsed
+    yamlRpcTest() {
+        foreach bool debug in ((False, True)) {
+            string label = sprintf("debug: %y", debug);
+            YamlRpcHandler handler(new PermissiveAuthenticator(), YamlRpcMethods, NOTHING, debug);
+            hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
+            hash<auto> hdr = {"method": "POST", "path": "/YAML"};
+            hash<auto> response = handler.handleRequest(cx, hdr, make_yaml({"method": "error", "params": ()}));
+            assertEq(200, response.code, label);
+            hash<auto> error = parse_yaml(response.body).error;
+            assertEq(104, error.code, label);
+            assertEq("value", error.error.key, label);
+            assertEq("INNER-ERROR", error.error.ex.err, label);
+            if (!debug) {
+                assertEq("YAMLRPC-ERROR: the description", error.message, label);
+                assertEq(sort(("type", "err", "desc")), sort(error.error.ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, error.message, label);
+                assertRegex(ThisFile, error.error.ex.file, label);
+            }
+            # its log message has the location also with debugging off
+            assertRegex(ThisFile, response.errlog, label);
+
+            response = handler.handleRequest(cx, hdr, "method: [");
+            assertEq(500, response.code, label);
+            if (!debug) {
+                assertFalse(response.body =~ /\.q[mc]?:[0-9]/, label + ": no location");
+            } else {
+                assertRegex("YamlRpcHandler\\.qm:[0-9]", response.body, label);
+            }
+        }
+    }
+}

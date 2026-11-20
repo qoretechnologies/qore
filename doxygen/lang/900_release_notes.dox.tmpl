@@ -163,20 +163,25 @@
     @par HttpServer Refuses a Request Head That Is Not Valid Text
     The @ref httpserverintro "HttpServer" module answers with \c 400, before any handler sees it, a request whose path,
     query, method or HTTP version is not valid UTF-8 text, whose HTTP/1.x header names have a byte above 0x7f, or whose
-    body is not valid in its encoding; a header value that is not valid UTF-8 is given in ISO-8859-1 (RFC 9110 obs-text),
-    also by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" (issue #6554).
+    body, also chunked or compressed, is not valid in its encoding (@ref httpserver_invalid_text); a header value that
+    is not valid UTF-8 is given in ISO-8859-1, also by @ref Qore::Socket::readHTTPHeader() (issues #6554, #6604).
 
     @par HTTP Clients Check a Response Body's Encoding
     A response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other
     text, as a page's declared charset is often wrong, and fails with \c INVALID-ENCODING when it is JSON, YAML, XML or
-    another structured type, with @ref Qore::HTTPClient "HTTPClient", also for an error status, which raised
-    \c HTTP-CLIENT-RECEIVE-ERROR; a response header value that is not valid UTF-8 is given in ISO-8859-1, as RFC 9110
-    obs-text (issue #6554).
+    another structured type, with @ref Qore::HTTPClient "HTTPClient" (also for an error status, which raised
+    \c HTTP-CLIENT-RECEIVE-ERROR) and RestClient; a response header value that is not valid UTF-8 is given in
+    ISO-8859-1, as RFC 9110 obs-text (issues #6554, #6604).
 
-    @par WebSocket Servers Close a Connection That Sends Text That Is Not UTF-8
-    A WebSocket text message that is not valid UTF-8 closes the connection with code 1007 (RFC 6455 section 8.1)
-    before the connection's code sees it, in @ref websockethandlerintro "WebSocketHandler" over HTTP/1.1, HTTP/2 and
-    HTTP/3 (issue #6554).
+    @par WebSocket Connections Are Closed for Text That Is Not UTF-8
+    A WebSocket text message or close reason that is not valid UTF-8 closes the connection with code 1007 (RFC 6455
+    section 8.1) before the application sees it, in @ref websockethandlerintro "WebSocketHandler" and
+    @ref websocketclientintro "WebSocketClient" over HTTP/1.1, HTTP/2 and HTTP/3 (issues #6554, #6604).
+
+    @par Error Responses Give No Exception Location Unless Debugging Is Enabled
+    The error responses for an exception of @ref httpserverintro "HttpServer", @ref resthandlerintro "RestHandler"
+    (its \c 409 body), \c DataStreamRequestHandler and \c YamlRpcHandler no longer give the location of the exception
+    in the server's code or its call stack unless debugging is enabled (@ref restexceptions; issue #6780).
 
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
@@ -1281,8 +1286,9 @@
     @parblock
     - new @ref Qore::get_http_body_encoding() "get_http_body_encoding()" and
       @ref Qore::decode_http_body() "decode_http_body()" apply the rules that all HTTP clients and servers use to
-      find the encoding of a text body, including RFC 9110 parsing of the \c charset parameter
-      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      find the encoding of a text body, including RFC 9110 parsing of the \c charset parameter, and to decide what
+      text that is not valid in its encoding gives (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue
+      5469</a>, issue #6604)
     - new @ref Qore::get_http_content_type_info() "get_http_content_type_info()" and
       @ref Qore::get_http_accept_charset() "get_http_accept_charset()" return the character set, the media type and
       the response encoding that an HTTP server reports for a request, the same for every HTTP version
@@ -1868,6 +1874,8 @@
       - see @ref http1_7 for all changes
 
     - @ref httpserverutilintro "HttpServerUtil" module
+      - the trailer fields of a chunked request body are not merged into the request's header fields
+        (<a href="https://github.com/qoretechnologies/qore/issues/6753">issue 6753</a>)
       - see @ref httputil1_6 for all changes
 
     - @ref huerestclientintro "HueRestClient" module
@@ -2919,6 +2927,8 @@
     - @ref WebSocketUtil::ws_read_message() "ws_read_message()" read a 64-bit WebSocket frame length with its most
       significant bit set as a negative length, and then read the socket until the peer closed it, buffering without
       limit; such a frame is now an error (issue #5878)
+    - @ref WebSocketUtil::ws_read_message() "ws_read_message()" accepted a close frame with a one-byte payload or a
+      close code that a close frame may not have (ex: 1005, 1006, 999); it is now an error (issue #6755)
     - the parse result types of the @ref plus_operator "+", @ref minus_operator "-", @ref multiplication_operator "*"
       and @ref division_operator "/" operators did not allow every value the operator gives at runtime (ex: \c float
       for <tt>number * float</tt>), so a typed container built from the result raised \c RUNTIME-TYPE-ERROR, and the
