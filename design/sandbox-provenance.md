@@ -194,7 +194,7 @@ Each build floor carries a `QoreSandboxIsolation`: the sandboxes of its caller (
 own code entered), the sandboxes of the Program that created it, and the isolation of the outer build. An entry must
 pass every level, so a nested build never widens what runs: a level allows a sandbox if it has no domain, is one of the
 level's caller's sandboxes or of its domain, or is a sandbox of the level's creator; a level whose caller has no domain
-allows everything. The build's own code is checked against the outer levels only. A continuation captures the
+allows everything. The build's own code is allowed by the level of its build (its creator's sandboxes) and checked against every other level. A continuation captures the
 isolation of the innermost floor (`QoreSandboxContext::isolation`), also when no sandbox governs the capturing code (a
 thread that a build starts: `QoreInheritedSandbox::capture()`; a pool task; an async I/O operation:
 `capture_async_io_sandbox_context()`); a context that only keeps an isolation is applied as a floor, not as the thread's

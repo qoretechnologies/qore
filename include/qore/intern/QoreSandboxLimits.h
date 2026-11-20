@@ -495,13 +495,12 @@ private:
     DLLLOCAL void refuseIsolation(int tid, const void* owner, const std::string& domain,
             const std::string* caller_domain);
 
-    //! Refuses the entry of \a owner and returns true if the isolation of the innermost build refuses \a sm; the
-    //! build's own code (\a build_own) is checked against the outer builds only
-    DLLLOCAL bool checkIsolation(int tid, QoreSandboxManager* sm, const void* owner, bool build_own);
+    //! Refuses the entry of \a owner and returns true if the isolation of the innermost build refuses \a sm
+    DLLLOCAL bool checkIsolation(int tid, QoreSandboxManager* sm, const void* owner);
 
 public:
     //! Returns the isolation domain that the innermost build refuses for \a sm, or nullptr if it may run there
-    DLLLOCAL const std::string* isolationRefuses(const QoreSandboxManager* sm, bool build_own = false) const;
+    DLLLOCAL const std::string* isolationRefuses(const QoreSandboxManager* sm) const;
 
 private:
     //! the limits of the lost call (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_CPU_TIME, @ref QSB_LIMIT_STACK)

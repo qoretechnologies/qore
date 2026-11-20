@@ -790,36 +790,13 @@ void QoreSandboxBudgetStack::setIsolation(QoreSandboxManager* callers, QoreSandb
     charge_floors.back().iso = iso;
 }
 
-const std::string* QoreSandboxBudgetStack::isolationRefuses(const QoreSandboxManager* sm, bool build_own) const {
+const std::string* QoreSandboxBudgetStack::isolationRefuses(const QoreSandboxManager* sm) const {
     const QoreSandboxIsolation* iso = charge_floors.empty() ? nullptr : charge_floors.back().iso;
     if (!iso) {
         return nullptr;
     }
-    // the build's own code is checked against the outer builds only; in a continuation that runs inline inside
-    // another build, that build's isolation holds in full
-    const QoreSandboxIsolation* also = nullptr;
-    if (build_own) {
-        if (iso->getJoined()) {
-            also = iso->getJoined();
-            iso = iso->getOuter() ? iso->getOuter()->getOuter() : nullptr;
-        } else {
-            iso = iso->getOuter();
-        }
-    }
-    if (also) {
-        if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
-            for (const QoreSandboxManager* member : *members) {
-                if (const std::string* domain = also->refuses(member)) {
-                    return domain;
-                }
-            }
-        } else if (const std::string* domain = also->refuses(sm)) {
-            return domain;
-        }
-    }
-    if (!iso) {
-        return nullptr;
-    }
+    // every level is checked, also for the build's own code: the level of a build allows the sandboxes of the Program
+    // that created it, and the outer and joined levels hold as well
     if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
         for (const QoreSandboxManager* member : *members) {
             if (const std::string* domain = iso->refuses(member)) {
@@ -831,8 +808,8 @@ const std::string* QoreSandboxBudgetStack::isolationRefuses(const QoreSandboxMan
     return iso->refuses(sm);
 }
 
-bool QoreSandboxBudgetStack::checkIsolation(int tid, QoreSandboxManager* sm, const void* owner, bool build_own) {
-    if (const std::string* domain = isolationRefuses(sm, build_own)) {
+bool QoreSandboxBudgetStack::checkIsolation(int tid, QoreSandboxManager* sm, const void* owner) {
+    if (const std::string* domain = isolationRefuses(sm)) {
         refuseIsolation(tid, owner, *domain, charge_floors.back().iso->callerDomain());
         return true;
     }
@@ -849,7 +826,7 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
         // inside a call whose limit cannot be enforced, nothing more is recorded until it is left, but the isolation
         // of the build still holds (qore#6536)
         if (lost_owner) {
-            checkIsolation(tid, sm, owner, false);
+            checkIsolation(tid, sm, owner);
             return;
         }
         enterInBuild(tid, sm, owner);
@@ -927,7 +904,7 @@ void QoreSandboxBudgetStack::enterBuildOwn(int tid, QoreSandboxManager* sm, cons
     }
     assert(!charge_floors.empty());
     if (lost_owner) {
-        checkIsolation(tid, sm, owner, true);
+        checkIsolation(tid, sm, owner);
         return;
     }
     enterInBuild(tid, sm, owner, true);
@@ -969,8 +946,8 @@ void QoreSandboxBudgetStack::enterInBuild(int tid, QoreSandboxManager* sm, const
     }
 
     // the code of another tenant never runs in a build that a tenant entered, nor in its continuations or nested
-    // builds; the build's own code is checked against the outer builds (qore#6536)
-    if (floor.iso && checkIsolation(tid, sm, owner, build_own)) {
+    // builds; the build's own code is allowed by the level of its build, and checked against the others (qore#6536)
+    if (floor.iso && checkIsolation(tid, sm, owner)) {
         return;
     }
 
@@ -1205,11 +1182,11 @@ void QoreSandboxBudgetStack::attach(int tid, const QoreSandboxBudgetList& budget
             }
             // an isolation that cannot be recorded: no code runs in the continuation (the stack is closed); inside a
             // call whose limits cannot be enforced, which is already lost, it is refused instead
-            if (lost_owner) {
+            if (lost_owner || iso || current) {
+                // an isolation that cannot be recorded refuses the continuation's code (the names are not copied)
                 refuseIsolation(tid, owner, std::string(), nullptr);
             } else {
-                lose(tid, owner, (iso || current) ? (QSB_LIMIT_MEMORY | QSB_LIMIT_STACK) : QSB_LIMIT_MEMORY, 0, 0,
-                    0, 0);
+                lose(tid, owner, QSB_LIMIT_MEMORY, 0, 0, 0, 0);
             }
             return;
         }

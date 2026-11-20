@@ -6773,10 +6773,6 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     if (capture_budgets && td) {
         td->sandbox_budgets.capture(budgets);
         in_build = td->sandbox_budgets.inBuild();
-        isolation = td->sandbox_budgets.currentIsolation();
-        if (isolation) {
-            isolation->ref();
-        }
     }
     // a continuation of work that the module cleanup runs is part of the cleanup (see qore_close_module_programs())
     module_cleanup_delegate = capture_budgets && qore_module_cleanup_delegation();
@@ -6818,6 +6814,13 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     policy_manager = policy.release();
     provenance_manager = provenance.release();
     provenance_policy_manager = provenance_policy.release();
+    // referenced last, after everything that can throw (the destructor does not run then)
+    if (capture_budgets && td) {
+        isolation = td->sandbox_budgets.currentIsolation();
+        if (isolation) {
+            isolation->ref();
+        }
+    }
 }
 
 QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate)

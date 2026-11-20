@@ -47,6 +47,16 @@ hash<auto> sub mk_counter() {
         \"get\": int sub () { return n; },
     };
 }
+# runs the code through the capability from a child Program that this tenant creates (governed by a composite of
+# this tenant's sandboxes)
+auto sub child_call(code cap, code c, softlist<auto> args) {
+    Qore::SandboxManager m();
+    m.setUncontrolledApiPolicy(True);
+    Program child(PO_MODERN);
+    child.setSandboxManager(m);
+    child.parse(\"auto sub run(code cap, code c, softlist<auto> args) { return cap(c, args); }\", \"child\");
+    return child.callFunction(\"run\", cap, c, args);
+}
 *string sub caller_domain() {
     return Qore::SandboxManager::getCallerIsolationDomain();
 }
@@ -146,6 +156,12 @@ auto sub build_on_pool(ThreadPool tp, code c, softlist<auto> args) {
     return h.result;
 }
 
+#! trusted code that a build runs: creates an eval Program from a Program that the caller gives it
+string sub build_eval(Program p) {
+    ProgramControl pc = p.getProgram();
+    return pc.createEvalProgram(PO_NEW_STYLE).className();
+}
+
 #! trusted code that a build runs: calls a function of a Program that the caller gives it
 auto sub build_call_pgm(Program p, string f, softlist<auto> args) {
     return p.callFunctionArgs(f, args);
@@ -173,6 +189,7 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         code BuildNested;
         code BuildCallPgm;
         code BuildCallLoop;
+        code BuildEval;
         code BuildStartPool;
         code BuildOnPool;
         code BuildParse;
@@ -207,6 +224,7 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         BuildNested = SandboxManager::createTrustedBuildCall(\build_nested());
         BuildCallPgm = SandboxManager::createTrustedBuildCall(\build_call_pgm());
         BuildCallLoop = SandboxManager::createTrustedBuildCall(\build_call_loop());
+        BuildEval = SandboxManager::createTrustedBuildCall(\build_eval());
         BuildStartPool = SandboxManager::createTrustedBuildCall(\build_start_pool());
         BuildOnPool = SandboxManager::createTrustedBuildCall(\build_on_pool());
         BuildParse = SandboxManager::createTrustedBuildCall(\build_parse());
@@ -283,6 +301,11 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         if (frames >= 0) {
             assertEq(frames, budgetFrames());
         }
+        # an eval Program of the other tenant's Program
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildEval, (b,)));
+        # a child Program of the tenant (a composite of its sandboxes) calls the build
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("child_call", BuildCallArgs, b_ref, 10));
+        assertEq(10, a.callFunction("child_call", BuildCallArgs, a.getCallReference("make"), 10).size());
         # and the tenant can still call its own code through the build
         assertEq(10, a.callFunction("call", BuildCallArgs, (a.getCallReference("make"), 10)).size());
     }
