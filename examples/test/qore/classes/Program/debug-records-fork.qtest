@@ -361,6 +361,8 @@ int sub add(int a, int b) {
         # marks the data of every thread in the Program
         dp.addProgram(pc);
         assertEq(1, dp.getAllPrograms().size());
+        # the thread's entry has no data: it was cleared, and no debugger can attach the thread
+        assertFalse(dp.attachThread(pc, tid), "a thread whose data was deleted is not attached");
         dp.removeProgram(pc);
 
         hash<auto> r = call_function("dbg_fork_while_program_record_held", NOTHING, int sub () {

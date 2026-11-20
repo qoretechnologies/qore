@@ -7007,6 +7007,10 @@ public:
         AutoLocker al(tlock);
         for (auto& i : pgm_data_map) {
             if (i.first->gettid() == tid) {
+                // an entry without data was cleared (see clearProgramThreadData())
+                if (!i.second) {
+                    return false;
+                }
                 i.second->dbgClearDontAttach();
                 return true;
             }
