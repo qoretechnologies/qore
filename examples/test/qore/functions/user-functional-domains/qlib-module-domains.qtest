@@ -49,6 +49,13 @@ class QlibModuleDomainsTest inherits QUnit::Test {
             ("module": "ProviderIndexUtil", "code": "ProviderIndexUtil::ProviderIndexUtil::setEnvironmentVariable(\"/x\");"),
             ("module": "ProviderIndex", "code": "ProviderIndex::ProviderIndex::createDataProviderIndex();"),
             ("module": "DataProvider", "code": "DataProvider::DataProvider::registerKnownTypes();"),
+            ("module": "DataProvider",
+             "code": "sub f(code c) { DataProvider::AbstractDataProvider::registerChild(\"test\", c); }"),
+            ("module": "OpenAiDataProvider",
+             "code": "sub f(Reflection::Class c) { OpenAiDataProvider::OpenAiDataProvider::registerChild(\"test\", c); }"),
+            ("module": "DataProvider", "code": "sub f(DataProvider::DataProviderCatalogChangeListener l) { "
+                "DataProvider::DataProviderActionCatalog::addCatalogChangeListener(l); }"),
+            ("module": "DataProvider", "code": "DataProvider::DataProviderActionCatalog::removeCatalogChangeListener(0);"),
             ("module": "AsyncSocketIo",
              "code": "sub f(AsyncSocketIo::AsyncSocketIoController c) { c.setMaxCallbackWorkers(1); }"),
             ("module": "DbDataProvider",

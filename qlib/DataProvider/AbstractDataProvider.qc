@@ -8182,7 +8182,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @since DataProvider 3.0
     */
-    static registerChild(string name, code generator) {
+    static registerChild(string name, code generator) [dom=PROCESS_CONTROL] {
         throw "UNSUPPORTED-ERROR", "This data provider does not support dynamically adding child providers";
     }
 
