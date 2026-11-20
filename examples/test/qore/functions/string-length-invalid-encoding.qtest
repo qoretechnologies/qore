@@ -75,7 +75,9 @@ class StringLengthInvalidEncodingTest inherits QUnit::Test {
     validText() {
         # Roman/control bytes (including NUL), kana, and two-byte characters with low and high trail bytes.
         assertEq(7, length(binary_to_string(<007f41a1df814082a0>, "SHIFT_JIS")));
-        assertEq(2, length(binary_to_string(<80fa40>, "CP932")));
+        assertEq(2, length(binary_to_string(<a1fa40>, "CP932")));
+        # 0x80 is not a character of CP932 (issue #6665)
+        assertThrows("INVALID-ENCODING", \length(), (binary_to_string(<80fa40>, "CP932"),));
         assertEq(0, "".length());
         assertEq(3, length("abc"));
         assertEq(4, elements "aébü");

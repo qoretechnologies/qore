@@ -288,17 +288,26 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
         Datasource ds = datasource();
         string name = "psd_foreign";
         on_exit cleanup(ds, (name,));
+        # an extension is an object of the whole database, which a test does not create or drop: concurrent runs
+        # share it; postgres_fdw is installed by the database setup (examples/test/docker_test/postgres_lib.sh)
+        # (issue #6716)
+        if (!ds.selectRow("select 1 as x from pg_catalog.pg_extension where extname = 'postgres_fdw'")) {
+            ds.rollback();
+            testSkip("the postgres_fdw extension is not installed in the database");
+        }
+        # a foreign server is an object of the whole database too: the run's own, dropped with its schema if the
+        # run ends before it drops it
+        string server = PgsqlRunSchema::getAuxName("fdw");
         try {
-            ds.execRaw("create extension if not exists postgres_fdw");
-            ds.execRaw("create server if not exists psd_fdw_server foreign data wrapper postgres_fdw");
+            ds.execRaw(sprintf("create server %s foreign data wrapper postgres_fdw", server));
             ds.commit();
         } catch (hash<ExceptionInfo> ex) {
             ds.rollback();
-            testSkip("postgres_fdw is not available: " + ex.desc);
+            testSkip("cannot create a postgres_fdw server: " + ex.desc);
         }
         on_exit {
             ds.rollback();
-            ds.execRaw("drop server if exists psd_fdw_server cascade");
+            ds.execRaw(sprintf("drop server if exists %s cascade", server));
             ds.commit();
         }
         # a partitioned table with a unique index cannot have a foreign partition
@@ -306,7 +315,7 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
         ds.execRaw(sprintf("create table %s_p0 partition of %s for values from ('2020-01-01') to ('2020-01-02')",
             name, name));
         ds.execRaw(sprintf("create foreign table %s_f partition of %s for values from ('2021-01-01') to "
-            "('2021-01-02') server psd_fdw_server", name, name));
+            "('2021-01-02') server %s", name, name, server));
         ds.commit();
 
         Table t(ds, name);

@@ -1,0 +1,147 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode
+
+%modern
+%no-child-restrictions
+
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class TypeNameEncodingTest
+
+#! The names of types are given in the encoding of a parse error message whatever the default encoding (qore#6814)
+/** The names of the types that are made when the library is initialized (ex: \c hash<auto>, \c list<auto>) are in
+    UTF-8, and a message is made in the default encoding of the process; a debug build aborted on an assertion when
+    the name of such a type was added to a message in a process started with \c --charset=ISO-8859-1.
+*/
+class TypeNameEncodingTest inherits QUnit::Test {
+    public {
+        #! the declarations that the scripts can use
+        const Decls = "hashdecl MyHashDecl { int a = 1; }\n"
+            "class C {}\n"
+            "class Box<T> { public { T v; } }\n"
+            "enum E { A = 1 }\n";
+
+        #! the return type of a function returning a date: how the parse error names it
+        const ReturnTypes = {
+            "hash<auto>": "hash<auto>",
+            "*hash<auto>": "hash<string, auto> or no value (NOTHING)",
+            "list<auto>": "list<auto>",
+            "*list<auto>": "*list<auto>",
+            "hash<string, int>": "hash<string, int>",
+            "*hash<string, int>": "hash<string, int> or no value (NOTHING)",
+            "list<hash<auto>>": "list<hash<auto>>",
+            "*list<int>": "*list<int>",
+            "softlist<string>": "softlist<string>",
+            "*softlist<string>": "*softlist<string>",
+            "hash<MyHashDecl>": "hash<MyHashDecl>",
+            "*hash<MyHashDecl>": "hash<MyHashDecl> or no value (NOTHING)",
+            "hash<UrlInfo>": "hash<UrlInfo>",
+            "object<C>": "object<C>",
+            "*object<C>": "an object of class 'C' or no value (NOTHING)",
+            "object<Mutex>": "object<Mutex>",
+            "object<Box<int>>": "object<Box<int>>",
+            "code": "type 'code'",
+            "*code": "type '*code'",
+            "code<int(int)>": "code<int(int)>",
+            "*code<int(int)>": "*code<int(int)>",
+            "union<int, string>": "union<int, string>",
+            "*union<int, string>": "*union<int, string>",
+            "E": "enum<E>",
+            "*E": "enum<E> or no value (NOTHING)",
+        };
+
+        #! the type of a value returned by a function without a return type
+        const ReturnedTypes = {
+            "hash<auto>": "{}",
+            "list<hash<auto>>": "()",
+            "softlist<string>": "()",
+            "object<Box<int>>": "new Box<int>()",
+        };
+
+        #! script name: the code of the script after Decls, the description of its parse error
+        const Scripts = {
+            "assigned hash<auto>": (
+                "hash<auto> h = {};\nint i = h;\n",
+                "lvalue for assignment operator '=' expects type 'int', but right-hand side is hash<auto>",
+            ),
+            "assigned softlist<auto>": (
+                "softlist<auto> l = ();\nint i = l;\n",
+                "lvalue for assignment operator '=' expects type 'int', but right-hand side is softlist<auto>",
+            ),
+            "assigned *softlist<auto>": (
+                "*softlist<auto> l = ();\nint i = l;\n",
+                "lvalue for assignment operator '=' expects type 'int', but right-hand side is *softlist<auto>",
+            ),
+            "assigned to hash<auto>": (
+                "int i;\nhash<auto> h = i;\n",
+                "lvalue for assignment operator '=' expects hash<auto>, but right-hand side is type 'int'",
+            ),
+            "reference<int>": (
+                "sub g(reference<int> r) {}\nstring s;\ng(\\s);\n",
+                "argument 'r' to 'g(reference<int> r)' expects reference<int>, but call supplies reference<string>",
+            ),
+            "*reference<hash<auto>>": (
+                "sub g(*reference<hash<auto>> r) {}\nstring s;\ng(\\s);\n",
+                "argument 'r' to 'g(*reference<hash<auto>> r)' expects *reference<hash<auto>>, but call supplies "
+                    "reference<string>",
+            ),
+        };
+
+        #! the encodings that the scripts are run in
+        const Encodings = ("UTF-8", "ISO-8859-1");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("TypeNameEncodingTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("type names in parse errors", \testTypeNames());
+        set_return_value(main());
+    }
+
+    testTypeNames() {
+        hash<string, list<string>> scripts = Scripts;
+        foreach hash<auto> i in (ReturnTypes.pairIterator()) {
+            scripts{"return type " + i.key} = (
+                i.key + " sub g() { return 2026-01-01; }\ng();\n",
+                "return value for this block expects " + i.value + ", but value given to the return statement is "
+                    "type 'date<absolute>'",
+            );
+        }
+        foreach hash<auto> i in (ReturnedTypes.pairIterator()) {
+            scripts{"returned " + i.key} = (
+                sprintf("sub f() { %s v = %s; return v; }\nf();\n", i.key, i.value),
+                "return value for this block expects type 'nothing', but value given to the return statement is "
+                    + i.key,
+            );
+        }
+
+        TmpDir tmp("qore-type-name-encoding-");
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        int n = 0;
+        foreach hash<auto> i in (scripts.pairIterator()) {
+            string file = sprintf("%s%sscript-%d.q", tmp.path, DirSep, ++n);
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%modern\n" + Decls + i.value[0]);
+            f.close();
+            foreach string enc in (Encodings) {
+                string label = sprintf("%s: %s", i.key, enc);
+                int rc;
+                string out = backquote(sprintf("%s %s --charset=%s %s 2>&1", env, qore_bin, enc, file), \rc);
+                # a parse error ends the script with status 2; the assertion failure aborted it (134)
+                assertEq(2, rc, label + ": " + out);
+                *string desc = (out =~ x/PARSE-TYPE-ERROR: ([^\n]*)/)[0];
+                assertEq(i.value[1], desc, label + ": " + out);
+            }
+        }
+    }
+}

@@ -135,8 +135,11 @@ DLLEXPORT void qore_fork_prepare_thread_lock(void* lock);
 */
 DLLEXPORT void qore_fork_parent_thread_lock(void* lock);
 
-//! a child handler for a QoreThreadLock: initializes the lock passed as @p lock again, unlocked
-/** @since %Qore 3.0
+//! a child handler for a QoreThreadLock: leaves the lock passed as @p lock unlocked
+/** A lock that qore_fork_prepare_thread_lock() acquired before this fork() is released (so that ThreadSanitizer sees
+    the release); any other lock is initialized again
+
+    @since %Qore 3.0
 */
 DLLEXPORT void qore_fork_child_thread_lock(void* lock);
 

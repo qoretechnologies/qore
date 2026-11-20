@@ -1,0 +1,217 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - the explicit calls are checked in the test's own process (background calls in children)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%disable-warning non-existent-method-call
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../.."
+%requires QUnit
+%requires ExecModeHarness
+%requires FsUtil
+%requires TestInterpreter
+
+%exec-class ExplicitSpecialMethodCallsTest
+
+#! the destructors that ran
+class SpecialLog {
+    public {
+        static list<string> calls = ();
+    }
+}
+
+#! a base class that declares the constructor, destructor and copy methods, whose own code calls them by name
+class B {
+    constructor() {}
+
+    destructor() {
+        SpecialLog::calls += "B::destructor";
+    }
+
+    copy() {}
+
+    callDestructor() {
+        self.destructor();
+    }
+
+    callConstructor() {
+        self.constructor();
+    }
+
+    callByName() {
+        call_object_method(self, "destructor");
+    }
+
+    callByNameArgs() {
+        call_object_method_args(self, "destructor");
+    }
+
+    callThroughClosure() {
+        code c = sub () { self.destructor(); };
+        c();
+    }
+
+    code refOf(string name) {
+        return self.getCallReference(name);
+    }
+}
+
+#! a subclass that declares none of them: a call by name finds those of B (qore#6783)
+class C inherits B {
+    derivedCallDestructor() {
+        self.destructor();
+    }
+}
+
+#! a subclass that declares its own destructor
+class D inherits B {
+    destructor() {
+        SpecialLog::calls += "D::destructor";
+    }
+}
+
+#! user code cannot call a constructor() or destructor() method, nor make a call reference to it or to a copy() method
+/** A call of the method by name, which finds the method of the class of the object or of a parent class, is refused
+    with \c ILLEGAL-EXPLICIT-METHOD-CALL, also when only a parent class declares the method; before the change, the
+    check compared the method with the constructor and destructor of the object's class only, so the method of a
+    parent class was dispatched as a normal method, which crashed.  A call reference to such a method by name (or to
+    the copy() method) is refused with \c ILLEGAL-CALL-REFERENCE (qore#6783).  The destructor runs once, when the
+    object is deleted.
+*/
+class ExplicitSpecialMethodCallsTest inherits QUnit::Test {
+    public {
+        const BackgroundScript = "%modern
+%disable-warning non-existent-method-call
+class B {
+    destructor() { printf(\"B::destructor\\n\"); }
+    m() { background self.destructor(); }
+}
+class C inherits B {}
+{ C c(); c.m(); }
+";
+    }
+
+    constructor() : QUnit::Test("explicit special method calls", "1.0", \ARGV) {
+        addTestCase("the destructor of a parent class", \parentDestructorTest());
+        addTestCase("the object's own destructor", \ownDestructorTest());
+        addTestCase("the constructor of a parent class", \parentConstructorTest());
+        addTestCase("call references", \callReferenceTest());
+        addTestCase("sandboxed code", \sandboxTest());
+        addTestCase("qualified calls and references are refused when parsed", \parseTest());
+        addTestCase("background calls", \backgroundTest());
+        set_return_value(main());
+    }
+
+    parentDestructorTest() {
+        checkDestructorCalls("C", ("B::destructor",));
+        SpecialLog::calls = ();
+        {
+            C c();
+            assertThrows("ILLEGAL-EXPLICIT-METHOD-CALL", \c.derivedCallDestructor());
+            assertEq((), SpecialLog::calls);
+        }
+        assertEq(("B::destructor",), SpecialLog::calls);
+    }
+
+    ownDestructorTest() {
+        checkDestructorCalls("D", ("D::destructor", "B::destructor"));
+    }
+
+    parentConstructorTest() {
+        C c();
+        assertThrows("ILLEGAL-EXPLICIT-METHOD-CALL", \c.callConstructor());
+        D d();
+        assertThrows("ILLEGAL-EXPLICIT-METHOD-CALL", \d.callConstructor());
+    }
+
+    callReferenceTest() {
+        foreach string cls in (("C", "D")) {
+            object o = create_object(cls);
+            foreach string name in (("destructor", "constructor", "copy")) {
+                assertThrows("ILLEGAL-CALL-REFERENCE", \o.getCallReference(), name, cls + " " + name);
+                assertThrows("ILLEGAL-CALL-REFERENCE", \o.refOf(), name, cls + " " + name + " from the class");
+            }
+            # a reference to a method of an object whose class is known only at run time
+            code make_ref = code sub (object obj) { return \obj.destructor(); };
+            assertThrows("ILLEGAL-CALL-REFERENCE", make_ref, o, cls + " reference expression");
+        }
+    }
+
+    sandboxTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%modern
+string sub call(object o) {
+    try { o.destructor(); return \"called\"; } catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+string sub by_name(object o) {
+    try { call_object_method(o, \"destructor\"); return \"called\"; } catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+string sub ref(object o) {
+    try { o.getCallReference(\"destructor\"); return \"returned\"; } catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+", "tenant");
+        p.setSandboxManager(new SandboxManager());
+        SpecialLog::calls = ();
+        {
+            C c();
+            assertEq("ILLEGAL-EXPLICIT-METHOD-CALL", p.callFunction("call", c));
+            assertEq("ILLEGAL-EXPLICIT-METHOD-CALL", p.callFunction("by_name", c));
+            assertEq("ILLEGAL-CALL-REFERENCE", p.callFunction("ref", c));
+            assertEq((), SpecialLog::calls);
+        }
+        assertEq(("B::destructor",), SpecialLog::calls);
+    }
+
+    parseTest() {
+        foreach hash<auto> h in ({
+                "code": "class X { destructor() {} } class Y inherits X { m() { X::destructor(); } }",
+                "err": "PARSE-EXCEPTION",
+            }, {
+                "code": "class X { destructor() {} m() { code c = \\self.destructor(); } }",
+                "err": "PARSE-ERROR",
+            }) {
+            Program p(PO_NEW_STYLE);
+            assertThrows(h.err, \p.parse(), (h.code, "parse"), h.code);
+        }
+    }
+
+    backgroundTest() {
+        TmpDir tmp("qore-explicit-special-");
+        string script = tmp.path + "/background-destructor.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(BackgroundScript);
+        f.close();
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                TestInterpreter::qore_interpreter(), mode, script), True);
+            assertEq(0, r.rc, mode + ": " + r.out);
+            # the call is refused in the background thread; the destructor runs once, when the object is deleted
+            assertRegex("ILLEGAL-EXPLICIT-METHOD-CALL: explicit calls to ::destructor\\(\\) methods are not allowed",
+                r.out, mode);
+            assertEq(1, (map 1, r.stdout.split("\n"), $1 == "B::destructor").size(), mode + ": " + r.out);
+        }
+    }
+
+    private checkDestructorCalls(string cls, list<string> expected) {
+        SpecialLog::calls = ();
+        {
+            object o = create_object(cls);
+            assertThrows("ILLEGAL-EXPLICIT-METHOD-CALL", \o.callDestructor(), NOTHING, cls + " self");
+            assertThrows("ILLEGAL-EXPLICIT-METHOD-CALL", \o.callByName(), NOTHING, cls + " by name");
+            assertThrows("ILLEGAL-EXPLICIT-METHOD-CALL", \o.callByNameArgs(), NOTHING, cls + " by name with args");
+            assertThrows("ILLEGAL-EXPLICIT-METHOD-CALL", \o.callThroughClosure(), NOTHING, cls + " closure");
+            code external = sub () { o.destructor(); };
+            assertThrows("ILLEGAL-EXPLICIT-METHOD-CALL", external, NOTHING, cls + " external");
+            assertThrows("ILLEGAL-EXPLICIT-METHOD-CALL", \call_object_method(), (o, "destructor"),
+                cls + " external by name");
+            # the destructor has not run
+            assertEq((), SpecialLog::calls, cls);
+        }
+        # it runs once, when the object is deleted
+        assertEq(expected, SpecialLog::calls, cls);
+    }
+}

@@ -1997,6 +1997,7 @@ struct qore_httpclient_priv {
             // events reported for the client's requests identify the socket the client now owns
             event_sink->setId(active->getObjectIDForEvents());
             std::swap(active->assume_http_encoding, old->assume_http_encoding);
+            std::swap(active->assume_http_encoding_resolved, old->assume_http_encoding_resolved);
             active->enc.store(old->enc.load());
 
             proxy_connected = false;
@@ -3080,7 +3081,7 @@ struct qore_httpclient_priv {
 
     //! Returns the encoding assumed for text response bodies whose encoding is not determined otherwise
     DLLLOCAL const QoreEncoding* getAssumedHttpEncoding() const {
-        return QEM.findCreate(msock->socket->priv->getAssumedEncoding());
+        return QEM.findCreate(msock->socket->priv->getAssumedEncodingResolved());
     }
 
     //! Returns the Content-Type used to decode a response body

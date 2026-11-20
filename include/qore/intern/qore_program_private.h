@@ -40,6 +40,7 @@ extern QoreHashNode* ENV;
 #include <deque>
 #include <memory>
 #include <new>
+#include <string_view>
 
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreCompletionAnalysis.h"
@@ -63,6 +64,9 @@ extern QoreHashNode* ENV;
 // Forward declaration to avoid circular includes
 class QoreSandboxManager;
 
+// Update the process-wide fast path for prelinked AOT calls when a Program gains or loses its debugger.
+DLLLOCAL void qore_aot_debug_program_change(bool attached);
+
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
@@ -85,6 +89,16 @@ class RSetHelper;
 // suspends the inlined calls of the IR interpreter whose callees belong to a Program that a debugger attaches to
 // (declared in QoreIR.h; issue #6473)
 DLLLOCAL void qore_ir_suspend_inline_states(const void* dpgm_addr);
+
+// the calls of the callbacks of AbstractQoreProgramExternalData: an AbstractQoreProgramExternalDataEx gets the sink,
+// and a C++ exception that a legacy callback lets escape is converted into it (issue #6786)
+//! returns the copy of the external data for a child Program; a copy made with an exception is released
+DLLLOCAL AbstractQoreProgramExternalData* qore_ext_data_copy(const AbstractQoreProgramExternalData* data,
+        QoreProgram* pgm, ExceptionSink* xsink);
+//! calls init() on a copy made by qore_ext_data_copy()
+DLLLOCAL void qore_ext_data_init(AbstractQoreProgramExternalData* data, ExceptionSink* xsink);
+//! releases external data
+DLLLOCAL void qore_ext_data_deref(AbstractQoreProgramExternalData* data, ExceptionSink* xsink);
 
 typedef vector_map_t<int, unsigned> ptid_map_t;
 //typedef std::map<int, unsigned> ptid_map_t;
@@ -791,6 +805,9 @@ public:
         * warnSink = nullptr,
         * pendingParseSink = nullptr;
     RootQoreNamespace* RootNS = nullptr;
+    //! the objects of the Program's own classes that its cleared constants held, deleted while only the thread that
+    //! deletes the Program can run code in it (see deleteOwnedConstantObjects(); #6791)
+    std::vector<QoreObject*> owned_constant_objects;
     QoreNamespace* QoreNS = nullptr;
 
     // when true, parse errors and warnings are also captured as structured diagnostics (machine-readable
@@ -2011,7 +2028,12 @@ protected:
         Qore code, which needs a Program that can be attached to.  setParent() runs from
         qore_program_private_base's constructor, where no member of the derived class exists yet.
     */
-    DLLLOCAL void copyExternalData();
+    /** @param xsink for the errors of the modules' callbacks; if nullptr, they are reported as unhandled exceptions
+
+        @return 0 for OK, -1 if a copy or an init() failed: then the copies made are released, the Program has none of
+        the parent's data, and its creator must delete it (issue #6786)
+    */
+    DLLLOCAL int copyExternalData(ExceptionSink* xsink);
 
     // for independent programs (not inherited from another QoreProgram object)
     DLLLOCAL void newProgram();
@@ -2261,9 +2283,16 @@ public:
     //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
 
     DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
-            QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr);
+            QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr,
+            ExceptionSink* xsink = nullptr);
 
     DLLLOCAL ~qore_program_private();
+
+    //! deletes a child Program whose creation failed, as its external data could not be copied (issue #6786)
+    /** The Program has none of the parent's data and has never been used: no object holds it and no code runs in it;
+        the exceptions of its deletion are added to \a xsink after the one of the failure
+    */
+    DLLLOCAL static void deleteFailedChild(QoreProgram* pgm, ExceptionSink* xsink);
 
     DLLLOCAL void registerProgram();
 
@@ -2473,6 +2502,26 @@ public:
 
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink);
 
+    //! Discards the parse state of a Program that is deleted: its pending code is rolled back (qore#6795)
+    /** A Program with code pending (Program::parsePending() without a commit or a rollback), or whose parse was rolled
+        back without PO_ALLOW_REPARSE, refuses every thread to enter it (parsing_in_progress, see incThreadCount()).
+        The code that runs when it is deleted (its exit hooks, the destructors of its saved objects and of the values
+        of its variables) enters it, so the parse is rolled back and the state cleared before that code runs.
+
+        Nothing is done if the Program is not in the parse state or if a thread holds its parse lock (a parse goes
+        on); with \a idle_only, also if a thread is counted in the Program: the rollback deletes code that such a
+        thread could still run, so it is made once the threads of the Program have ended
+    */
+    //! collects, with a reference, the objects of the Program's own classes that the values of its cleared constants
+    //! hold, if anything else holds them: they are deleted by deleteOwnedConstantObjects() (#6791)
+    DLLLOCAL void collectOwnedConstantObjects(const QoreListNode& l);
+
+    //! deletes the objects collected by collectOwnedConstantObjects(): their destructors must run while the Program
+    //! can run code, and only the thread that deletes it can (#6791)
+    DLLLOCAL void deleteOwnedConstantObjects(ExceptionSink* xsink);
+
+    DLLLOCAL void discardPendingParse(ExceptionSink* xsink, bool idle_only);
+
     // called when the program's ref count = 0 (but the dc count may not go to 0 yet)
     DLLLOCAL void clear(ExceptionSink* xsink);
 
@@ -2626,6 +2675,81 @@ public:
         return 0;
     }
     */
+
+    //! Returns true if code parsed in the Program refuses the given thread runtime entry; plock must be held
+    /** As ProgramThreadCountContextHelper::set() refuses it: the thread that holds the parse lock enters the Program
+        without its thread count and is not refused (see incThreadCount() for the others) (qore#6752)
+    */
+    DLLLOCAL bool parseRefusesEntryIntern(int tid) const {
+        return !parsingLocked(tid) && (refusesRuntimeEntry() || refusedByCommit(tid));
+    }
+
+    //! Returns true if code parsed in the Program refuses the given thread runtime entry (qore#6752)
+    DLLLOCAL bool parseRefusesEntry(int tid) const {
+        AutoLocker al(plock);
+        return parseRefusesEntryIntern(tid);
+    }
+
+    //! Enters the Program for native code that runs none of the Program's code, without its context if it refuses runtime entry to the thread because code is parsed in it (qore#6752)
+    /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).  The decision and the entry are
+        made under one lock, so a parse that starts meanwhile cannot refuse the entry.
+
+        @param tid the current thread's TID
+        @param with_context set to true if incThreadCount() would let the thread enter the Program, so that it can
+        switch to its context, false if it entered the Program without its context (see enterWithoutContext()); also
+        false for the thread that holds the parse lock while code is parsed, which incThreadCount() refuses as well
+        @param xsink for the exception if the Program has been deleted
+
+        @return 0 if the thread entered the Program, -1 if not (the Program's teardown has marked it)
+    */
+    DLLLOCAL int enterForNativeCode(int tid, bool& with_context, ExceptionSink* xsink) {
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid)) {
+            if (xsink) {
+                xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
+                    "therefore cannot be accessed at runtime");
+            }
+            return -1;
+        }
+        // the condition of incThreadCount()
+        with_context = !refusesRuntimeEntry() && !refusedByCommit(tid);
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
+        return 0;
+    }
+
+    //! Enters the Program without its context if code parsed in it refuses the thread runtime entry (qore#6752)
+    /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).
+
+        @param tid the current thread's TID
+
+        @return true if the thread entered the Program without its context; false if it did not enter it: the Program
+        does not refuse it runtime entry because of a parse (the entry that follows enters it), or its teardown has
+        marked it (the entry that follows raises the exception)
+    */
+    DLLLOCAL bool enterWithoutContextIfParseRefused(int tid) {
+        // a Program that no code is parsed or committed in, the usual case, is decided without the lock; a parse that
+        // another thread starts after this read can still refuse the normal entry that follows, as it could before
+        // (qore#6752 covers the objects created while the Program is parsed, not a parse that races with the entry)
+        if (!parsing_in_progress.load() && !commit_entry_restricted.load()) {
+            return false;
+        }
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid) || !parseRefusesEntryIntern(tid)) {
+            return false;
+        }
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
+        return true;
+    }
 
     //! Enters the Program without switching to it or running its code: its teardown waits until the thread leaves it
     /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).  Used where the Program's data
@@ -3402,7 +3526,7 @@ public:
     };
 
     // call must push the current program on the stack and pop it afterwards
-    DLLLOCAL int internParsePending(ExceptionSink* xsink, const char* code, const char* label,
+    DLLLOCAL int internParsePending(ExceptionSink* xsink, std::string_view code, const char* label,
             const char* orig_src = nullptr, int offset = 0, bool standard_parse = true) {
         // the scoped options of the parse end with it in any case
         ParseOverlayScope pos(*this);
@@ -3423,7 +3547,7 @@ public:
         //printd(5, "qore_program_private::internParsePending() code: %p %d bytes label: '%s' src: '%s' offset: %d\n",
         //    code, strlen(code), label, orig_src ? orig_src : "(null)", offset);
 
-        assert(code && code[0]);
+        assert(!code.empty());
 
         // save this file name for storage in the parse tree and deletion
         // when the QoreProgram object is deleted
@@ -3447,21 +3571,30 @@ public:
         //printd(5, "qore_program_private::internParsePending() parsing tag: %s (%p): '%s'\n", label, label, code);
 
         yyscan_t lexer;
-        QoreParseState state;
+        QoreParseState state(*xsink);
         yylex_init_extra(&state, &lexer);
 
         // the rules of the parse directives end with a newline, which a directive on the last line of the code
         // without one would not match: such code gets one at its end; other code is not changed, so that an error
         // at its end keeps its location (issue #2740)
-        size_t code_len = strlen(code);
-        const char* last_nl = strrchr(code, '\n');
-        const char* last_line = last_nl ? last_nl + 1 : code;
-        if (*last_line == '%') {
-            std::string terminated(code, code_len);
+        bool final_directive = false;
+        if (code.size() > INT_MAX - 3) {
+            parse_error(*getLocation(1, 1), "source is too large for the scanner");
+            state.stop = true;
+        } else if (int line = qore_invalid_source_utf8_line(code.data(), code.size(), *xsink, &final_directive)) {
+            if (line > 0) {
+                parse_error(*getLocation(line, line), "invalid UTF-8 in source");
+            }
+            state.stop = true;
+        }
+        if (state.stop) {
+            yy_scan_bytes("", 0, lexer);
+        } else if (final_directive) {
+            std::string terminated(code);
             terminated += '\n';
-            yy_scan_bytes(terminated.c_str(), terminated.size(), lexer);
+            yy_scan_bytes(terminated.data(), terminated.size(), lexer);
         } else {
-            yy_scan_string(code, lexer);
+            yy_scan_bytes(code.data(), code.size(), lexer);
         }
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
@@ -3681,8 +3814,11 @@ public:
     */
     DLLLOCAL int beginParse(ExceptionSink* xsink, ParseStartGuard& guard, bool nested = false);
 
-    DLLLOCAL int parsePending(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
+    DLLLOCAL int parsePending(std::string_view code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
             const char* orig_src = nullptr, int offset = 0) {
+        if (code.empty()) {
+            return 0;
+        }
         //printd(5, "qore_program_private::parsePending() wm=0x%x UV=0x%x on: %d\n", wm, QP_WARN_UNREFERENCED_VARIABLE, wm & QP_WARN_UNREFERENCED_VARIABLE);
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
@@ -3831,7 +3967,7 @@ public:
         ungetc(c, fp);
 
         yyscan_t lexer;
-        QoreParseState state;
+        QoreParseState state(*xsink);
         // the number of exceptions not shown, reported when the parse lock has been released
         int skipped = 0;
 
@@ -3921,8 +4057,8 @@ public:
         if (!str->strlen())
             return;
 
-        // ensure code string has correct character set encoding
-        TempEncodingHelper tstr(str, QCS_DEFAULT, xsink);
+        // Decode tagged source to the encoding of the scanner.
+        TempEncodingHelper tstr(str, QCS_UTF8, xsink);
         if (*xsink)
             return;
 
@@ -3935,14 +4071,17 @@ public:
         if (source && !source->empty() && !src.set(source, QCS_DEFAULT, xsink))
             return;
 
-        parse(tstr->c_str(), tlstr->c_str(), xsink, wS, wm, source ? src->c_str() : nullptr, offset);
+        parse(std::string_view(tstr->c_str(), tstr->size()), tlstr->c_str(), xsink, wS, wm,
+            source ? src->c_str() : nullptr, offset);
     }
 
-    DLLLOCAL void parse(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
+    DLLLOCAL void parse(std::string_view code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
             const char* orig_src = nullptr, int offset = 0) {
         //printd(5, "qore_program_private::parse(%s) pgm: %p po: %lld\n", label, pgm, pwo.parse_options);
 
-        assert(code && code[0]);
+        if (code.empty()) {
+            return;
+        }
         assert(xsink);
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
@@ -4090,8 +4229,8 @@ public:
             return nullptr;
         }
 
-        // ensure code string has correct character set encoding
-        TempEncodingHelper tstr(str, QCS_DEFAULT, xsink);
+        // Decode tagged source to the encoding of the scanner.
+        TempEncodingHelper tstr(str, QCS_UTF8, xsink);
         if (*xsink)
             return nullptr;
 
@@ -4104,14 +4243,15 @@ public:
         if (source && !source->empty() && !src.set(source, QCS_DEFAULT, xsink))
             return nullptr;
 
-        return parseExpression(tstr->c_str(), tlstr->c_str(), xsink, wS, wm, source ? src->c_str() : nullptr, offset);
+        return parseExpression(std::string_view(tstr->c_str(), tstr->size()), tlstr->c_str(), xsink, wS, wm,
+            source ? src->c_str() : nullptr, offset);
     }
 
-    DLLLOCAL q_exp_t parseExpression(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS,
+    DLLLOCAL q_exp_t parseExpression(std::string_view code, const char* label, ExceptionSink* xsink, ExceptionSink* wS,
             int wm, const char* orig_src = nullptr, int offset = 0) {
         //printd(5, "qore_program_private::parseExpression(%s) pgm: %p po: %lld\n", label, pgm, pwo.parse_options);
 
-        assert(code && code[0]);
+        assert(!code.empty());
         assert(xsink);
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
@@ -4159,13 +4299,15 @@ public:
             qore_program_private& pp;
         } epoh(*this);
 
-        QoreStringMaker exp_code("return (%s);", code);
+        std::string exp_code("return (");
+        exp_code.append(code);
+        exp_code += ");";
 
         NonStandardParseFlagHelper nspfh(*this);
         startParsing(xsink, wS, wm);
 
         // parse text given; the Program had no code pending, so the parse state ends with the expression's parse
-        if (!internParsePending(xsink, exp_code.c_str(), label, orig_src, offset, false)) {
+        if (!internParsePending(xsink, exp_code, label, orig_src, offset, false)) {
             internParseCommit(false);   // finalize parsing, back out or commit all changes
         } else {
             // the Program had no code pending: what its namespaces have pending was added by the failed expression,
@@ -4282,8 +4424,8 @@ public:
         assert(!str->empty());
         assert(xsink);
 
-        // ensure code string has correct character set encoding
-        TempEncodingHelper tstr(str, QCS_DEFAULT, xsink);
+        // Decode tagged source to the encoding of the scanner.
+        TempEncodingHelper tstr(str, QCS_UTF8, xsink);
         if (*xsink)
             return;
 
@@ -4296,7 +4438,8 @@ public:
         if (source && !source->empty() && !src.set(source, QCS_DEFAULT, xsink))
             return;
 
-        parsePending(tstr->c_str(), tlstr->c_str(), xsink, wS, wm, source ? src->c_str() : nullptr, offset);
+        parsePending(std::string_view(tstr->c_str(), tstr->size()), tlstr->c_str(), xsink, wS, wm,
+            source ? src->c_str() : nullptr, offset);
     }
 
     // called during run time (not during parsing)
@@ -6636,6 +6779,9 @@ public:
 
         if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
             return;
+        if (!dpgm.load(std::memory_order_relaxed)) {
+            qore_aot_debug_program_change(true);
+        }
         dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
         // the IR interpreter no longer inlines the calls of this Program's methods (issue #6473)
         qore_ir_suspend_inline_states(&dpgm);
@@ -6660,7 +6806,9 @@ public:
         assert(n_dpgm==dpgm.load(std::memory_order_relaxed));
         if (!n_dpgm)
             return;
-        dpgm.store(nullptr, std::memory_order_release);
+        if (dpgm.exchange(nullptr, std::memory_order_release)) {
+            qore_aot_debug_program_change(false);
+        }
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {

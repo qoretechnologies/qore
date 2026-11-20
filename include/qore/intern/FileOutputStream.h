@@ -143,7 +143,8 @@ public:
       // the wait ends at once when the thread is cancelled or its Program is interrupted, as in
       // OutputStream::writeWithTimeout()
       struct pollfd pfd = {fd, POLLOUT, 0};
-      int rv = qore_cancellable_poll(&pfd, 1, timeout_ms > INT_MAX ? INT_MAX : static_cast<int>(timeout_ms), xsink,
+      int rv = qore_quiescent_cancellable_poll(&pfd, 1,
+          timeout_ms > INT_MAX ? INT_MAX : static_cast<int>(timeout_ms), xsink,
          "stream write");
       if (rv == QORE_POLL_CANCELLED) {
          return -1;

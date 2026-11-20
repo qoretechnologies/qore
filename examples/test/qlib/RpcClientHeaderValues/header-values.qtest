@@ -48,6 +48,10 @@ class RpcClientHeaderValuesTest inherits QUnit::Test {
             "mcp-bad-null": "RUNTIME-TYPE-ERROR",
         };
 
+        #! the request checks of the worker, which it marks on stderr
+        const Calls = ("jsonrpc-connection-call", "jsonrpc-options-call", "yamlrpc-connection-call",
+            "yamlrpc-options-call", "mcp-connection-call", "mcp-options-call");
+
         #! the client modules
         const Modules = ("McpClient", "JsonRpcClientIo", "YamlRpcClientIo");
 
@@ -72,6 +76,7 @@ class RpcClientHeaderValuesTest inherits QUnit::Test {
         }
 
         addTestCase("each execution mode", \testExecModes());
+        addTestCase("no native compilation in a timed request", \testTimedRequests());
         addTestCase("compiled program and modules", \testCompiled());
 
         set_return_value(main());
@@ -82,6 +87,39 @@ class RpcClientHeaderValuesTest inherits QUnit::Test {
             string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
                 libqore_dir, qore_bin, mode, getWorker()));
             checkWorkerOutput(mode, out, NOTHING);
+        }
+    }
+
+    #! qore#6731: no code is compiled to native code while a request check runs
+    /** With JIT and tiered execution, the harness compiles each function synchronously before its first call (see
+        ExecModeHarness), on the thread that calls it, so that the first request of a client included the compilation
+        of the code of its whole path, in the client and in the server: seconds on an idle machine with the modules
+        loaded from source, and more than the clients' default timeout of 45 seconds under the load of parallel tests,
+        which the check reported as \c HTTPCLIENT-TIMEOUT.  The worker makes each request once with no time limit
+        before the checks (warm_up() in the worker); the trace of native compilation (\c QORE_JIT_TIMING), which is
+        written on stderr in order with the worker's <tt>[timed-begin <name>]</tt> and <tt>[timed-end <name>]</tt>
+        lines, must have no compilation between them.
+    */
+    testTimedRequests() {
+        foreach string mode in (("jit", "tiered")) {
+            TmpFile err("qore-rpc-header-values-", ".err");
+            int rc;
+            backquote(sprintf("(export %s; LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s) 2>%s",
+                ExecModeHarness::TraceEnv, libqore_dir, qore_bin, mode, getWorker(), err.path), \rc);
+            assertEq(0, rc, mode + ": exit status");
+            hash<string, list<string>> compiled = {};
+            *string check;
+            foreach string line in ((ReadOnlyFile::readTextFile(err.path) ?? "").split("\n")) {
+                if (*list<*string> m = (line =~ x/^\[timed-begin (.*)\]$/)) {
+                    check = m[0];
+                    compiled{check} = ();
+                } else if (line =~ /^\[timed-end /) {
+                    remove check;
+                } else if (check && ExecModeHarness::is_native_compilation(line)) {
+                    push compiled{check}, line;
+                }
+            }
+            assertEq((map {$1: ()}, Calls), compiled, mode + ": native compilation in the request checks");
         }
     }
 
@@ -115,6 +153,10 @@ class RpcClientHeaderValuesTest inherits QUnit::Test {
     private checkWorkerOutput(string label, string out, *string module_ext) {
         hash<string, string> results = {};
         foreach string line in (out.split("\n")) {
+            # the lines that mark the request checks on stderr (see testTimedRequests())
+            if (line =~ /^\[timed-(begin|end) .*\]$/) {
+                continue;
+            }
             *list<*string> parts = (line =~ x/^([-a-zA-Z]+)=(.*)$/);
             if (!parts) {
                 if (line.val()) {

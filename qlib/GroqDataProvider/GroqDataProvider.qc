@@ -37,10 +37,13 @@ public class GroqDataProvider inherits GroqDataProviderCommon {
         };
     }
 
-    private {
-        #! Dynamic child data providers
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
+    }
 
+    private {
         #! Default child data providers
         const DefaultChildMap = {
             "chat-completion":
@@ -71,8 +74,12 @@ public class GroqDataProvider inherits GroqDataProviderCommon {
     /** @param pathname unique child identifier
         @param cls provider class accepting a REST client
         @throw GROQ-CHILD-ERROR a built-in or additional child already uses the identifier
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerChild(string pathname, Reflection::Class cls) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("register a child data provider");
         AutoLock al(child_lock);
         if (childMap{pathname} || GroqActions::Operations{pathname}) {
             throw "GROQ-CHILD-ERROR", sprintf("child %y already registered", pathname);

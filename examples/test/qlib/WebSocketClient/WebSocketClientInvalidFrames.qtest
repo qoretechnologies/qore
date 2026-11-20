@@ -1,0 +1,348 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections over HTTP/1.1 and HTTP/2 over TLS and the permessage-deflate extension
+
+/*  WebSocketClientInvalidFrames.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The WebSocket client checks the frames of the server, over HTTP/1.1 and HTTP/2:
+    - a text message that is not valid UTF-8 (RFC 6455 section 8.1), also once it is decompressed with
+      permessage-deflate, closes the connection with 1007 before the client's callback sees it, as does a close frame
+      whose reason is not valid UTF-8 (qore#6604)
+    - a close frame with a one-byte payload or a close code that a close frame may not have (RFC 6455 section 7.4)
+      closes it with 1002 (qore#6755); a valid close code is answered with the same code
+
+    The server sends the frames with WebSocketConnection::send() with an opcode, which sends what it is given.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketClientInvalidFramesTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! the close codes that a close frame may not have (RFC 6455 section 7.4, the IANA registry)
+const InvalidCloseCodes = (0, 999, 1004, 1005, 1006, 1015, 1016, 2999, 5000);
+
+#! valid close codes, which the client answers with the same code
+const ValidCloseCodes = (1000, 1001, 1012, 3000, 4999);
+
+#! Sends the frame that the client asks for
+class BadFrameConnection inherits WebSocketConnection {
+    private {
+        BadFrameHandler h;
+    }
+
+    constructor(BadFrameHandler handler) : WebSocketConnection(handler) {
+        h = handler;
+    }
+
+    gotMessage(string msg) {
+        switch (msg) {
+            case "ok":
+                send("ok");
+                break;
+            case "text":
+                send(<61ff62>, WSOP_Text, True);
+                break;
+            case "text-long":
+                # over the compression threshold of permessage-deflate (1 KiB) and compressible, so it is sent
+                # compressed
+                send(binary(strmul("a", 2000)) + <ff>, WSOP_Text, True);
+                break;
+            case "text-long-hello":
+                # a valid message right after the compressed one that is not valid UTF-8
+                send(binary(strmul("a", 2000)) + <ff>, WSOP_Text, True);
+                send("hello");
+                break;
+            case "reason":
+                send(WSCC_NormalClosure.encodeMsb(2) + <61ff62>, WSOP_Close, True);
+                break;
+            case "one-byte":
+                send(<03>, WSOP_Close, True);
+                break;
+            # an RSV bit on a control frame (issue #6781)
+            case "rsv-ping":
+                sendEncoded(ws_encode_message("ping", WSOP_Ping, NOTHING, True, WS_RSV1));
+                break;
+            # RSV1 on a continuation frame of a compressed message (RFC 7692 section 6.1; issue #6781)
+            case "rsv-continuation": {
+                binary payload = deflate_raw("fragmented café");
+                sendEncoded(ws_encode_message(payload.substr(0, 4), WSOP_Text, NOTHING, False, WS_RSV1));
+                sendEncoded(ws_encode_message(payload.substr(4), WSOP_Continuation, NOTHING, True, WS_RSV1));
+                break;
+            }
+            # a fragmented compressed message, RSV1 on its first frame only
+            case "fragmented": {
+                binary payload = deflate_raw("fragmented café");
+                sendEncoded(ws_encode_message(payload.substr(0, 4), WSOP_Text, NOTHING, False, WS_RSV1));
+                sendEncoded(ws_encode_message(payload.substr(4), WSOP_Continuation, NOTHING, True));
+                break;
+            }
+            default:
+                # "code:<n>": a close frame with the code
+                send(msg.substr(5).toInt().encodeMsb(2), WSOP_Close, True);
+                break;
+        }
+    }
+
+    connectionClosed() {
+        h.closed.push(getCloseCode());
+    }
+}
+
+class BadFrameHandler inherits WebSocketHandler {
+    public {
+        # the close code of each connection, as connectionClosed() gets it: the code of the client's close frame
+        Queue closed();
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts + {"close_timeout": HangGuard}) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new BadFrameConnection(self);
+    }
+
+    logError(string fmt) {
+    }
+}
+
+class WebSocketClientInvalidFramesTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        BadFrameHandler plain;
+        BadFrameHandler deflate;
+        int port;
+        int tls_port;
+    }
+
+    constructor() : Test("WebSocket client: frames from the server that are not valid", "1.0") {
+        foreach string ver in (("1.1", "2.0")) {
+            addTestCase(sprintf("HTTP/%s: text message that is not valid UTF-8", ver), \testText(), ver);
+            addTestCase(sprintf("HTTP/%s: compressed text message that is not valid UTF-8", ver),
+                \testCompressedText(), ver);
+            addTestCase(sprintf("HTTP/%s: no message after a compressed text message that is not valid UTF-8", ver),
+                \testCompressedTextThenMessage(), ver);
+            addTestCase(sprintf("HTTP/%s: close reason that is not valid UTF-8", ver), \testCloseReason(), ver);
+            addTestCase(sprintf("HTTP/%s: close frame with a one-byte payload", ver), \testCloseOneByte(), ver);
+            addTestCase(sprintf("HTTP/%s: RSV bits on a control frame", ver), \testRsvControl(), ver);
+            addTestCase(sprintf("HTTP/%s: RSV1 on a continuation frame", ver), \testRsvContinuation(), ver);
+            addTestCase(sprintf("HTTP/%s: invalid close codes", ver), \testInvalidCloseCodes(), ver);
+            addTestCase(sprintf("HTTP/%s: valid close codes", ver), \testValidCloseCodes(), ver);
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        plain = new BadFrameHandler();
+        deflate = new BadFrameHandler({"extensions": ("permessage-deflate",)});
+        server.setHandler("plain", "/plain", NOTHING, plain);
+        server.setHandler("deflate", "/deflate", NOTHING, deflate);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    setUp() {
+        plain.closed.clear();
+        deflate.closed.clear();
+    }
+
+    #! Connects a client; its messages and its close code (as a hash) are pushed to \a events
+    /** The data messages that the raw callback gets are pushed to \a raw when given
+    */
+    private WebSocketClient getClient(string ver, string path, Queue events, *bool deflate, *Queue raw) {
+        hash<auto> opts = {
+            "url": ver == "1.1"
+                ? sprintf("ws://localhost:%d%s", port, path)
+                : sprintf("wss://localhost:%d%s", tls_port, path),
+            "http_version": ver,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        };
+        if (deflate) {
+            opts.extensions = (new PerMessageDeflateExtension(),);
+        }
+        if (raw) {
+            opts.raw_callback = int sub (hash<WsMsgInfo> msg) {
+                if (msg.op == WSOP_Text || msg.op == WSOP_Binary) {
+                    raw.push(msg);
+                }
+                return WSC_Process;
+            };
+        }
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (exists msg) {
+                events.push(msg);
+            } else {
+                events.push({"closed": wsc.getCloseCode(), "reason": wsc.getCloseReason()});
+            }
+        }, opts);
+        wsc.connect();
+        if (ver == "2.0" && !wsc.isHttp2()) {
+            wsc.disconnect();
+            testSkip("HTTP/2 was not negotiated");
+        }
+        # the connection works
+        wsc.send("ok");
+        assertEq("ok", events.get(HangGuard));
+        if (raw) {
+            assertEq("ok", raw.get(HangGuard).msg);
+        }
+        return wsc;
+    }
+
+    #! Asserts that the client closes the connection with the code given, without giving a message to the callback
+    /** @param events the client's events
+        @param handler the server's handler, which gets the code of the client's close frame
+        @param code the close code
+    */
+    private assertClosed(Queue events, BadFrameHandler handler, int code, string what) {
+        auto e = events.get(HangGuard);
+        assertEq(Type::Hash, e.type(), what + ": the callback gets no message");
+        assertEq(code, e.closed, sprintf("%s: the client reports the close code %d", what, code));
+        assertEq(code, handler.closed.get(HangGuard), sprintf("%s: the client closes with %d", what, code));
+    }
+
+    testText(string ver) {
+        Queue events();
+        Queue raw();
+        WebSocketClient wsc = getClient(ver, "/plain", events, False, raw);
+        on_exit wsc.disconnect();
+        wsc.send("text");
+        assertClosed(events, plain, WSCC_InvalidData, "text");
+        assertEq(0, raw.size(), "the raw callback does not get a text message that is not valid UTF-8");
+    }
+
+    testCompressedText(string ver) {
+        Queue events();
+        Queue raw();
+        WebSocketClient wsc = getClient(ver, "/deflate", events, True, raw);
+        on_exit wsc.disconnect();
+        wsc.send("text-long");
+        assertClosed(events, deflate, WSCC_InvalidData, "compressed text");
+        # the message was compressed: the raw callback gets it with its compressed payload, which is checked once it
+        # is decompressed
+        hash<WsMsgInfo> msg = raw.get(HangGuard);
+        assertTrue(msg.rsv1, "the message is compressed");
+        assertLt(2001, binary(msg.msg).size(), "the raw callback gets the compressed payload");
+    }
+
+    #! the client gives no message to the callback once it failed the connection (RFC 6455 section 7.1.7)
+    testCompressedTextThenMessage(string ver) {
+        Queue events();
+        WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+        on_exit wsc.disconnect();
+        wsc.send("text-long-hello");
+        assertClosed(events, deflate, WSCC_InvalidData, "compressed text, then a message");
+        assertEq(0, events.size(), "the message after the failure is not given to the callback");
+    }
+
+    testCloseReason(string ver) {
+        Queue events();
+        WebSocketClient wsc = getClient(ver, "/plain", events);
+        on_exit wsc.disconnect();
+        wsc.send("reason");
+        assertClosed(events, plain, WSCC_InvalidData, "close reason");
+    }
+
+    testCloseOneByte(string ver) {
+        Queue events();
+        WebSocketClient wsc = getClient(ver, "/plain", events);
+        on_exit wsc.disconnect();
+        wsc.send("one-byte");
+        assertClosed(events, plain, WSCC_ProtocolError, "one-byte close payload");
+    }
+
+    testRsvControl(string ver) {
+        # without an extension, and with permessage-deflate negotiated, which does not set RSV1 on a control frame
+        # (RFC 7692 section 6.1)
+        foreach hash<auto> i in ({"path": "/plain", "handler": plain, "deflate": False},
+                {"path": "/deflate", "handler": deflate, "deflate": True}) {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, i.path, events, i.deflate);
+            on_exit wsc.disconnect();
+            wsc.send("rsv-ping");
+            assertClosed(events, i.handler, WSCC_ProtocolError, "RSV bits on a ping frame on " + i.path);
+        }
+    }
+
+    testRsvContinuation(string ver) {
+        # a fragmented compressed message with RSV1 on its first frame only is taken
+        {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+            on_exit wsc.disconnect();
+            wsc.send("fragmented");
+            assertEq("fragmented café", events.get(HangGuard), "a fragmented compressed message is taken");
+        }
+        # the client disconnected: its end is taken, so that the next connection's is checked
+        assertEq(WSCC_GoingAway, deflate.closed.get(HangGuard), "the client disconnected (going away)");
+        Queue events();
+        WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+        on_exit wsc.disconnect();
+        wsc.send("rsv-continuation");
+        assertClosed(events, deflate, WSCC_ProtocolError, "RSV1 on a continuation frame");
+    }
+
+    testInvalidCloseCodes(string ver) {
+        foreach int code in (InvalidCloseCodes) {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, "/plain", events);
+            on_exit wsc.disconnect();
+            wsc.send("code:" + code);
+            assertClosed(events, plain, WSCC_ProtocolError, sprintf("close code %d", code));
+        }
+    }
+
+    testValidCloseCodes(string ver) {
+        foreach int code in (ValidCloseCodes) {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, "/plain", events);
+            on_exit wsc.disconnect();
+            wsc.send("code:" + code);
+            assertClosed(events, plain, code, sprintf("close code %d", code));
+        }
+    }
+}

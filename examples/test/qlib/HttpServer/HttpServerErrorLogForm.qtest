@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# An error that the server logs gives the whole exception with its call stack when debugging is enabled and its
+# location, error and description when it is not, with the text of the message around it (qore#6793, qore#6809).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires Util
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerErrorLogFormTest
+
+#! a logger appender that keeps the messages that it is given
+class ErrorLogCapture inherits LoggerAppenderWithLayout {
+    private {
+        Mutex lck();
+        list<string> messages = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            AutoLock al(lck);
+            messages += params;
+        }
+    }
+
+    #! returns the messages logged so far that contain the given text
+    list<string> find(string text) {
+        AutoLock al(lck);
+        return select messages, $1.find(text) >= 0;
+    }
+}
+
+#! a server whose context data cannot be cleared
+class ClearFailServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    clearContextInfo() {
+        throw "CLEAR-ERROR", "clear failed";
+    }
+}
+
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "ok", "hdr": {"Content-Type": MimeTypeText}};
+    }
+}
+
+#! a handler whose preprocessing fails
+class PreprocessFailHandler inherits OkHandler {
+    *hash<HttpResponseInfo> preprocessRequest(HttpListenerInterface listener, reference<hash<auto>> hdr,
+            reference<hash<auto>> cx) {
+        throw "PREPROCESS-ERROR", "preprocessing failed";
+    }
+}
+
+#! a handler whose authentication fails
+class AuthFailHandler inherits OkHandler {
+    *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx) {
+        throw "AUTH-ERROR", "authentication failed";
+    }
+}
+
+#! a handler that makes its connection persistent, and whose check of the end of the persistent session fails for a
+#! request with the \c X-Fail header
+class PersistentFailHandler inherits OkHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (!isPersistent()) {
+            setPersistent(True);
+        }
+        return OkHandler::handleRequest(cx, hdr, body);
+    }
+
+    bool isPersistentSessionEndRequest(hash<auto> hdr) {
+        if (hdr."x-fail") {
+            throw "QUEUED-ERROR", "session end check failed";
+        }
+        return False;
+    }
+}
+
+class HttpServerErrorLogFormTest inherits QUnit::Test {
+    constructor() : Test("HttpServerErrorLogFormTest", "1.0", \ARGV) {
+        addTestCase("a message body that cannot be logged", \testMsgBody());
+        addTestCase("context data that cannot be cleared", \testClearContext());
+        addTestCase("a handler whose preprocessing fails", \testPreprocess());
+        addTestCase("a handler whose authentication fails", \testAuthenticate());
+        addTestCase("a queued persistent handler that fails", \testQueuedPersistent());
+        set_return_value(main());
+    }
+
+    testMsgBody() {
+        foreach bool debug in ((False, True)) {
+            ErrorLogCapture capture();
+            HttpServer server = getServer(debug, capture);
+            on_exit delete server;
+            # the masking of the body for the log fails as text that is not valid would
+            server.setMaskCode(string sub (string msg) {
+                if (msg =~ /MASK-FAIL/) {
+                    throw "INVALID-ENCODING", "mask failed";
+                }
+                return msg;
+            });
+            int port = listen(server, "ok", new OkHandler());
+            assertEq(200, request(port, "POST", "MASK-FAIL"), "the request is answered");
+            server.stop();
+            list<string> msgs = capture.find("mask failed");
+            assertEq(2, msgs.size(), sprintf("debug %y: the message body error is logged: %y", debug, msgs));
+            # the error with the source of the request
+            list<string> errs = select msgs, $1 =~ /: received from /;
+            assertEq(1, errs.size(), sprintf("debug %y: the error is logged once: %y", debug, msgs));
+            checkForm(debug, errs[0], "INVALID-ENCODING", "mask failed", "message body");
+            # the log line of the body, which gives the error in place of the body
+            assertEq(1, (select msgs, $1 =~ /error logging msg body: INVALID-ENCODING: mask failed/).size(),
+                "the body's log line gives the error");
+        }
+    }
+
+    testClearContext() {
+        foreach bool debug in ((False, True)) {
+            ErrorLogCapture capture();
+            HttpServer server = getServer(debug, capture, True);
+            on_exit delete server;
+            int port = listen(server, "ok", new OkHandler());
+            assertEq(200, request(port), "the request is answered");
+            server.stop();
+            list<string> msgs = capture.find("CLEAR-ERROR");
+            assertEq(1, msgs.size(), sprintf("debug %y: the error is logged once: %y", debug, msgs));
+            assertRegex(": error clearing request context data: ", msgs[0], "the message keeps its text");
+            assertRegex(": received from ", msgs[0], "the message gives the source of the request");
+            checkForm(debug, msgs[0], "CLEAR-ERROR", "clear failed", "context data");
+        }
+    }
+
+    testPreprocess() {
+        foreach bool debug in ((False, True)) {
+            ErrorLogCapture capture();
+            HttpServer server = getServer(debug, capture);
+            on_exit delete server;
+            int port = listen(server, "pre-fail", new PreprocessFailHandler());
+            assertEq(501, request(port), "the request is answered with 501");
+            server.stop();
+            list<string> msgs = capture.find("PREPROCESS-ERROR");
+            assertEq(1, msgs.size(), sprintf("debug %y: the error is logged once: %y", debug, msgs));
+            assertRegex(": Handler \"pre-fail\" preprocessing error from ", msgs[0]);
+            checkForm(debug, msgs[0], "PREPROCESS-ERROR", "preprocessing failed", "preprocessing");
+            assertEq(1, (msgs[0] =~ x/(pre-fail)/g).size(), "the handler name is given once");
+        }
+    }
+
+    testAuthenticate() {
+        foreach bool debug in ((False, True)) {
+            ErrorLogCapture capture();
+            HttpServer server = getServer(debug, capture);
+            on_exit delete server;
+            int port = listen(server, "auth-fail", new AuthFailHandler());
+            assertEq(501, request(port), "the request is answered with 501");
+            server.stop();
+            list<string> msgs = capture.find("AUTH-ERROR");
+            assertEq(1, msgs.size(), sprintf("debug %y: the error is logged once: %y", debug, msgs));
+            assertRegex(": Handler \"auth-fail\" authentication error from ", msgs[0]);
+            checkForm(debug, msgs[0], "AUTH-ERROR", "authentication failed", "authentication");
+            assertEq(1, (msgs[0] =~ x/(auth-fail)/g).size(), "the handler name is given once");
+        }
+    }
+
+    testQueuedPersistent() {
+        foreach bool debug in ((False, True)) {
+            ErrorLogCapture capture();
+            HttpServer server = getServer(debug, capture);
+            on_exit delete server;
+            int port = listen(server, "persistent", new PersistentFailHandler());
+            {
+                Socket s();
+                s.connect("127.0.0.1:" + port, 10s);
+                on_exit s.close();
+                # the first request makes the connection persistent, and the second is queued to its session
+                s.send("GET /x HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+                hash<auto> hdr = s.readHTTPHeader(10s);
+                assertEq(200, hdr.status_code, "the first request is answered");
+                assertEq("ok", s.recv(int(hdr."content-length"), 10s));
+                s.send("GET /x HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Fail: 1\r\nConnection: close\r\n\r\n");
+                # the session ends with the error: the connection is closed (with or without a response)
+                try {
+                    while (s.recv(0, 10s)) {
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # the server closed the connection
+                }
+            }
+            server.stop();
+            list<string> msgs = capture.find("QUEUED-ERROR");
+            assertEq(1, msgs.size(), sprintf("debug %y: the error is logged once: %y", debug, msgs));
+            assertRegex("queued persistent handler error: ", msgs[0]);
+            checkForm(debug, msgs[0], "QUEUED-ERROR", "session end check failed", "queued persistent handler");
+        }
+    }
+
+    #! checks that a logged error has the form for the debug flag
+    private checkForm(bool debug, string msg, string err, string desc, string what) {
+        string label = sprintf("%s, debug %y", what, debug);
+        # the location, error and description in both forms
+        assertRegex(sprintf(":[0-9]+ \\(Qore\\): %s: %s", err, desc), msg, label + ": location, error and description");
+        if (debug) {
+            # get_exception_string(): the type of the exception and the call stack
+            assertRegex(sprintf("User exception: .*: %s: %s", err, desc), msg, label + ": the whole exception");
+            assertRegex("\n  .*\\(\\) called at ", msg, label + ": the call stack");
+        } else {
+            assertFalse(msg =~ /exception: /, label + ": not the whole exception");
+            assertFalse(msg =~ /called at /, label + ": no call stack");
+        }
+    }
+
+    #! returns a server whose logger logs at the INFO level to the given appender
+    /** @param clear_fail True for a server whose context data cannot be cleared
+    */
+    private HttpServer getServer(bool debug, ErrorLogCapture capture, *bool clear_fail) {
+        Logger logger("error-log-form-test", LoggerLevel::getLevelInfo());
+        logger.addAppender(capture);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{"logger": logger, "debug": debug};
+        return clear_fail ? new ClearFailServer(opts) : new HttpServer(opts);
+    }
+
+    #! adds a handler as the default handler of the server and a listener; returns its port
+    private int listen(HttpServer server, string name, AbstractHttpRequestHandler handler) {
+        server.setHandler(name, "", NOTHING, handler);
+        server.setDefaultHandler(name, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        return port;
+    }
+
+    #! sends a request and returns the status code of the response, once the response has been read whole
+    private int request(int port, string method = "GET", *string body) {
+        Socket s();
+        s.connect("127.0.0.1:" + port, 10s);
+        on_exit s.close();
+        string req = sprintf("%s /x HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n", method);
+        if (body) {
+            req += sprintf("Content-Type: text/plain;charset=utf-8\r\nContent-Length: %d\r\n", body.size());
+        }
+        s.send(req + "\r\n" + body);
+        hash<auto> hdr = s.readHTTPHeader(10s);
+        if (hdr."content-length") {
+            s.recv(int(hdr."content-length"), 10s);
+        }
+        return hdr.status_code;
+    }
+}

@@ -522,8 +522,9 @@ QoreHashNode* qore_object_private::getCreateInternalData(const qore_class_privat
     return id;
 }
 
-int qore_object_private::checkMemberAccess(const char* mem, const qore_class_private* class_ctx,
-        const qore_class_private*& member_class_ctx) const {
+// inline in its callers, all in this file, which are the paths of a member access (issue #6760)
+QORE_INTERN_ALWAYS_INLINE int qore_object_private::checkMemberAccess(const char* mem,
+        const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx) const {
     assert(!member_class_ctx);
 
     const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
@@ -532,7 +533,8 @@ int qore_object_private::checkMemberAccess(const char* mem, const qore_class_pri
         return theclass->hasPublicMembersInHierarchy() ? QOA_PUB_ERROR : QOA_OK;
     }
     member_class_ctx = info->getClassContext(class_ctx);
-    return ((info->access > Public) && !class_ctx) ? QOA_PRIV_ERROR : QOA_OK;
+    // the member's access in the class context, also through a class inherited with private:internal (issue #6640)
+    return theclass_priv->runtimeCheckMemberAccess(info, class_ctx) ? QOA_OK : QOA_PRIV_ERROR;
 }
 
 // returns true if a lock error has occurred and the transaction should be aborted or restarted; the rsection lock is
@@ -1014,7 +1016,27 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
 
     // return all member data if called inside the class
     if (class_ctx) {
-        QoreHashNode* h = data->copy();
+        const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+        QoreHashNode* h;
+        // a class context other than the object's class sees only the members that it can use: not the private members
+        // of another class that it does not inherit (issue #6760), nor those that the object's class inherits through a
+        // class inherited with private:internal outside its line (issue #6640)
+        if (class_ctx == theclass_priv) {
+            h = data->copy();
+        } else {
+            // the members that the class context can use on the object: not those that the object's class inherits
+            // through a class inherited with private:internal outside its line (issue #6640)
+            h = new QoreHashNode(autoTypeInfo);
+            ConstHashIterator hi(data);
+            while (hi.next()) {
+                const QoreMemberInfo* info = theclass_priv->runtimeGetMemberInfo(hi.getKey(), class_ctx);
+                if (info && !theclass_priv->runtimeCheckMemberAccess(info, class_ctx)) {
+                    continue;
+                }
+                // not possible for an exception to happen here
+                qore_hash_private::get(*h)->setKeyValueIntern(hi.getKey(), hi.getReferenced());
+            }
+        }
         const QoreHashNode* odata = getInternalData(class_ctx);
         if (odata)
             h->merge(odata, xsink);
@@ -1034,6 +1056,27 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
     }
 
     return h;
+}
+
+#ifdef DEBUG
+std::atomic<qore_dbg_removed_object_scan_hook_t> qore_dbg_removed_object_scan_hook{nullptr};
+#endif
+
+bool qore_removed_object_needs_scan(RObject* o, RObject* root) {
+    RSet* rs = o->rset.load(std::memory_order_acquire);
+    if (!rs || o->refs() <= 1) {
+        return false;
+    }
+    if (!root || rs != root->rset.load(std::memory_order_acquire)) {
+        return true;
+    }
+#ifdef DEBUG
+    // a test holds the thread here, after it compared the sets and before it reads the set (#6792)
+    if (qore_dbg_removed_object_scan_hook_t hook = qore_dbg_removed_object_scan_hook.load()) {
+        hook();
+    }
+#endif
+    return !root->hasInValidSet(*o);
 }
 
 //! scans the objects in a recursive set that a removed value holds, directly or in its lists and hashes (#6335)
@@ -1108,8 +1151,10 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
-        class_ctx = nullptr;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, key, class_ctx);
+    }
     const qore_class_private* member_class_ctx = nullptr;
     if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti)) {
         return QoreValue();
@@ -1183,8 +1228,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     }
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx))
-        class_ctx = nullptr;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, key, class_ctx);
+    }
     const QoreTypeInfo* mti = nullptr;
 
     const qore_class_private* member_class_ctx = nullptr;
@@ -1374,10 +1421,27 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHash
 
     qore_hash_private* hp = qore_hash_private::get(*hash);
     if (class_ctx) {
-        if constexpr (Lexical) {
-            hp->merge(*qore_hash_private::get(*data), sdh, xsink, policy);
+        // all the members only in the object's class: another class context gets the members that it can use (issue
+        // #6760)
+        if (class_ctx == qore_class_private::get(*theclass)) {
+            if constexpr (Lexical) {
+                hp->merge(*qore_hash_private::get(*data), sdh, xsink, policy);
+            } else {
+                hp->merge(*qore_hash_private::get(*data), sdh, xsink);
+            }
         } else {
-            hp->merge(*qore_hash_private::get(*data), sdh, xsink);
+            const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
+            ConstHashIterator hi(data);
+            while (hi.next()) {
+                if (!theclass_priv->runtimeCanUseMember(hi.getKey(), class_ctx)) {
+                    continue;
+                }
+                if constexpr (Lexical) {
+                    hp->setKeyValue(hi.getKey(), hi.getReferenced(), sdh, xsink, policy);
+                } else {
+                    hp->setKeyValue(hi.getKey(), hi.getReferenced(), sdh, xsink);
+                }
+            }
         }
         const QoreHashNode* odata = getInternalData(class_ctx);
         if (odata) {
@@ -1488,8 +1552,9 @@ int qore_object_private::getLValueResolvedPrehashed(const char* key,
     }
     const qore_class_private* member_class_ctx =
         info.getClassContext(class_ctx);
+    // the type of the declaration whose storage the access uses (issue #6670)
     const QoreTypeInfo* mti = qore_substitute_type_params_if_needed(
-        info.getTypeInfo(),
+        info.getStorageTypeInfo(key, member_class_ctx),
         instantiated_type ? instantiated_type : theclass->getTypeInfo());
 
     qore_object_lock_handoff_helper qolhh(this, lvh.vl);
@@ -1530,7 +1595,7 @@ int qore_object_private::tryAssignScalarMemberResolvedPrehashed(
         return 0;
     }
     const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(
-        info.getTypeInfo(),
+        info.getStorageTypeInfo(key, member_class_ctx),
         instantiated_type ? instantiated_type : theclass->getTypeInfo());
     if (QoreTypeInfo::parseReturns(member_type, expected_type) != QTI_IDENT) {
         return 0;
@@ -2456,7 +2521,8 @@ QoreValue QoreObject::evalMember(const char* mem, ExceptionSink* xsink) {
     // get the current class context
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx)) {
-        class_ctx = nullptr;
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*priv->theclass, mem, class_ctx);
     }
     const qore_class_private* member_class_ctx = nullptr;
     int rc = priv->checkMemberAccess(mem, class_ctx, member_class_ctx);
@@ -2625,8 +2691,10 @@ QoreValue QoreObject::getMemberValueNoMethod(const char* key, const QoreClass* c
     const qore_class_private* member_class_ctx = nullptr;
     if (cls) {
         class_ctx = qore_class_private::get(*cls);
-        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx))
-            class_ctx = nullptr;
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx)) {
+            // a class on the private:internal path to the member uses it (issue #6800)
+            class_ctx = qore_class_private::runtimeGetMemberStorageContext(*priv->theclass, key, class_ctx);
+        }
 
         member_class_ctx = nullptr;
         // check for illegal access
@@ -2692,8 +2760,10 @@ void QoreObject::deleteMemberValue(const QoreString* key, ExceptionSink* xsink) 
 void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
     // get the current class context
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx))
-        class_ctx = nullptr;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx)) {
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*priv->theclass, key, class_ctx);
+    }
 
     const qore_class_private* member_class_ctx = nullptr;
     // check for external access to private members
@@ -2812,8 +2882,10 @@ bool QoreObject::hasMember(const char* mem, ExceptionSink* xsink) const {
 
     // get the current class context
     const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx))
-        class_ctx = nullptr;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*priv->theclass, class_ctx)) {
+        // a class on the private:internal path to the member uses it (issue #6800)
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*priv->theclass, mem, class_ctx);
+    }
 
     const qore_class_private* member_class_ctx = nullptr;
     // check for illegal access

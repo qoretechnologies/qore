@@ -41,9 +41,6 @@ public namespace XeroDataProvider {
 */
 public class XeroCodecs {
     private:internal {
-        #! True once the codecs have been registered (in the module's initialization; see register())
-        static bool registered;
-
         #! Serializes registration
         static Mutex register_lock();
     }
@@ -74,11 +71,13 @@ public class XeroCodecs {
     */
     static register() {
         AutoLock al(register_lock);
-        if (registered) {
-            return;
+        # registered in the module's initialization; a later call registers only a codec that trusted code removed
+        # since, as the registry is process-wide and refuses sandboxed callers
+        foreach hash<RestSchemaWireCodecInfo> codec in (Codecs.iterator()) {
+            if (!RestSchemaActionCodecs::getCodec(codec.name)) {
+                RestSchemaActionCodecs::registerCodec(codec);
+            }
         }
-        map RestSchemaActionCodecs::registerCodec($1), Codecs.iterator();
-        registered = True;
     }
 }
 }

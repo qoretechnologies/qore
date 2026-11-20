@@ -47,6 +47,7 @@ class RuntimeConfig;
 #include <new>
 
 #include "qore/intern/QoreSandboxLimits.h"
+#include "qore/intern/QoreTypeOwner.h"
 #include "qore/QoreSandboxManager.h"
 
 #ifndef QORE_THREAD_STACK_SIZE
@@ -487,6 +488,10 @@ DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const Abstrac
         const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 
+//! Enters a compiled body in the caller's statement, with the callee's options and the usual stack check.
+DLLLOCAL void enter_compiled_body_options(ExceptionSink* xsink, QoreParseOptions po,
+        const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
 //! saves the thread's current statement, location and runtime parse options and sets only its runtime parse options
 /** As swap_runtime_statement_location() with the thread's current statement and location, which it keeps, in one
     lookup of the thread's data and without a stack check; restored with update_runtime_statement_location()
@@ -557,6 +562,17 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
     code it runs also in a thread that sandboxed code started.
 */
 DLLLOCAL bool qore_scope_creator_is_sandboxed();
+
+//! Returns why the calling code may not run ThreadCapabilityScope::call(), or nullptr if it may (qore#6737)
+/** The call is bound to the frame of the code that makes it, so only that code is judged: it must be Qore code that
+    calls the builtin directly (not a call reference to the builtin, which runs it for the reference's caller, nor
+    another builtin, such as call_static_method()), and neither its Program nor the Program running on the thread
+    may be sandboxed (by a manager or by its flag).  Sandboxed callers further up the stack do not count, unlike for
+    a scope object (qore_scope_creator_is_sandboxed()), whose set stays in effect after the call that creates it.
+
+    @param call_name the call name of the builtin's own frame
+*/
+DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
 
 #ifdef DEBUG
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
@@ -2185,6 +2201,10 @@ public:
             this->parse_options);
     }
 
+    DLLLOCAL QoreProgramLocationHelper(ExceptionSink* xsink, QoreParseOptions po) : has_po(true) {
+        enter_compiled_body_options(xsink, po, statement, loc, parse_options);
+    }
+
     DLLLOCAL QoreProgramLocationHelper(const QoreProgramLocation* loc) : has_po(false) {
         swap_runtime_location(loc, statement, this->loc);
     }
@@ -2387,6 +2407,10 @@ DLLLOCAL cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist);
 DLLLOCAL void thread_push_frame_boundary();
 DLLLOCAL void thread_pop_frame_boundary();
 
+//! Add a declaration whose value lives in a native frame to the result of get_local_vars().
+DLLLOCAL void qore_add_unavailable_local(QoreHashNode& h, const LocalVar& lv, ExceptionSink* xsink);
+//! Report a write that native code could not see from the runtime stack.
+DLLLOCAL void qore_raise_native_local_set_error(const char* name, ExceptionSink* xsink);
 DLLLOCAL QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink);
 //! Returns the number of local variables on the current thread's runtime stack of the current Program, for tests
 DLLLOCAL int64 thread_get_local_var_count(ExceptionSink* xsink);
@@ -2786,6 +2810,94 @@ struct QoreTypeRetirementThread {
 */
 DLLLOCAL uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads);
 
+//! Publishes the current epoch of type retirement in a thread's slot (see qore_type_retire_epoch; issue #6419)
+/** The epoch is read again after it is published: a scan that read the slot before the store is ordered before the
+    second load in the total order of sequentially consistent operations, so that load reads the epoch of the
+    retirement that the scan was made for (or a later one) and synchronizes with its orphaning stores; the thread then
+    reads only tombstones where that retirement orphaned a pointer.  The slot holds the higher epoch afterwards.
+*/
+static inline void qore_publish_type_epoch(std::atomic<uint64_t>& slot) {
+    uint64_t e = qore_type_retire_epoch.load(std::memory_order_seq_cst);
+    slot.store(e, std::memory_order_seq_cst);
+    uint64_t e2 = qore_type_retire_epoch.load(std::memory_order_seq_cst);
+    if (e2 != e) {
+        slot.store(e2, std::memory_order_seq_cst);
+    }
+}
+
+//! Publishes the thread's epoch of type retirement while it reads types outside Qore code (issue #6419)
+/** For library code that reads derived types without a Program context (the orphaning of retired derived types, for
+    example); nothing is done in a thread that runs Qore code or has no thread data
+*/
+class QoreTypeEpochEntryHelper {
+public:
+    DLLLOCAL QoreTypeEpochEntryHelper();
+    DLLLOCAL ~QoreTypeEpochEntryHelper();
+
+private:
+    std::atomic<uint64_t>* slot = nullptr;
+};
+
+//! Makes the thread quiescent while it waits in a builtin's blocking wait made for the program (issue #6419)
+/** The thread's epoch is cleared before the wait and published again after it, unless the thread runs a frame that
+    holds a type read through a derived type (QoreTypeUnsafeFrameHelper); afterwards, the retired declarations that are
+    pending are freed if they can be.  Only for waits that no type check spans: see "Quiescent waits" in
+    design/derived-type-retirement.md for the list and the review of each.
+*/
+class QoreTypeQuiescentWaitHelper {
+public:
+    DLLLOCAL QoreTypeQuiescentWaitHelper();
+    DLLLOCAL ~QoreTypeQuiescentWaitHelper();
+
+    DLLLOCAL QoreTypeQuiescentWaitHelper(const QoreTypeQuiescentWaitHelper&) = delete;
+    DLLLOCAL QoreTypeQuiescentWaitHelper& operator=(const QoreTypeQuiescentWaitHelper&) = delete;
+
+private:
+    std::atomic<uint64_t>* slot = nullptr;
+};
+
+//! Marks a frame that holds a type read through a derived type across the code that it runs (issue #6419)
+/** The waits of the thread are not quiescent while it lives (see QoreTypeQuiescentWaitHelper)
+*/
+class QoreTypeUnsafeFrameHelper {
+public:
+    DLLLOCAL QoreTypeUnsafeFrameHelper();
+    DLLLOCAL ~QoreTypeUnsafeFrameHelper();
+
+    DLLLOCAL QoreTypeUnsafeFrameHelper(const QoreTypeUnsafeFrameHelper&) = delete;
+    DLLLOCAL QoreTypeUnsafeFrameHelper& operator=(const QoreTypeUnsafeFrameHelper&) = delete;
+
+private:
+    void* td;
+};
+
+//! Enters (\a delta 1) or leaves (\a delta -1) a frame that holds a type read through a derived type; see
+//! QoreTypeUnsafeFrameHelper
+DLLLOCAL void qore_type_unsafe_frame_add(int delta);
+//! Returns the number of such frames that the current thread runs (debug checks and tests)
+DLLLOCAL unsigned qore_type_unsafe_frames();
+
+#ifdef DEBUG
+//! Returns true if the current thread has thread data and publishes no epoch of type retirement (issue #6419)
+DLLLOCAL bool qore_thread_has_no_type_epoch();
+
+//! Waits until the thread \a tid has entered \a count builtin waits (QoreTypeQuiescentWaitHelper) or the timeout
+//! has passed; returns true in the first case (debug builds, for the tests of issue #6419)
+DLLLOCAL bool qore_type_dbg_wait_entered(int tid, int64 count, int64 timeout_ms);
+
+//! Returns the number of builtin waits (QoreTypeQuiescentWaitHelper) that the thread \a tid has entered, or -1 if
+//! there is no such thread (debug builds, for the tests of issue #6419)
+DLLLOCAL int64 qore_type_dbg_wait_entries(int tid);
+#endif
+
+//! qore_cancellable_poll() as a quiescent wait (see QoreTypeQuiescentWaitHelper), for the waits of builtins made for
+//! the program: file, stream and backquote I/O (issue #6419)
+static inline int qore_quiescent_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms,
+        ExceptionSink* xsink, const char* operation) {
+    QoreTypeQuiescentWaitHelper qwh;
+    return qore_cancellable_poll(fds, nfds, timeout_ms, xsink, operation);
+}
+
 //! A thread's entry into a Program, counted with its thread count, which is left with
 //! qore_program_private::decThreadCount(*pgm, tid, xsink)
 struct QoreReferenceProgramEntry {
@@ -3031,7 +3143,14 @@ public:
 
 class ProgramRuntimeParseAccessHelper {
 public:
-    DLLLOCAL ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm);
+    //! Enters the Program and switches to its context, unless it is the current Program
+    /** @param xsink for the exception if the Program cannot be entered; also used to leave it
+        @param pgm the Program
+        @param read_only true if the thread only reads the committed data of the Program and runs none of its code (a
+        method lookup): a Program that refuses runtime entry to the thread because code is parsed in it is then entered
+        without switching to its context, so that its teardown waits for the thread (qore#6752)
+    */
+    DLLLOCAL ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm, bool read_only = false);
     DLLLOCAL ~ProgramRuntimeParseAccessHelper();
 
 protected:
@@ -3040,7 +3159,57 @@ protected:
     ThreadLocalProgramData* old_tlpd;
     //! receives the exceptions of clearing a Program deleted while this context ran its code
     ExceptionSink* xsink;
+    //! the Program that the thread entered, which it leaves in the destructor, or nullptr
+    QoreProgram* count_pgm = nullptr;
+    //! true if the thread switched to the Program's context
     bool restore;
+};
+
+//! Enters the Program of the class of a native destructor without its context if the Program refuses runtime entry
+/** A destructor implemented in C++ (a builtin or external destructor) runs none of the Qore code of the Program of its
+    class; it only releases the object's private data, as the core does without entering the Program for a builtin
+    class without a destructor, and for any class whose destructor fails.  While code is parsed in that Program
+    (Program::parsePending() before Program::parseCommit(), or after Program::parseRollback() without
+    \c PO_ALLOW_REPARSE), it refuses runtime entry, which made the destruction of the objects that module code created
+    in it meanwhile raise \c PROGRAM-ERROR (module-python: the argument of a module command's exception, the constants
+    of an import; qore#6752).  Such a destructor then runs in the caller's Program instead, as the destructor of a
+    builtin class without a source Program does; the thread enters the class's Program without its context
+    (qore_program_private::enterWithoutContextIfParseRefused()), so that the Program's teardown waits until the
+    destructor has returned.  The thread that deletes the Program needs no entry, as for a reference
+    (qore_reference_program_needs_entry()).
+
+    A destructor implemented in Qore code is not affected: it enters the Program, which refuses it as before.
+*/
+class QoreNativeDestructorProgramEntry {
+public:
+    //! Creates the object without entering any Program; only the Program is initialized, as one is created for
+    //! every destructor call
+    DLLLOCAL QoreNativeDestructorProgramEntry() {
+    }
+
+    DLLLOCAL ~QoreNativeDestructorProgramEntry() {
+        if (pgm) {
+            leave();
+        }
+    }
+
+    //! Returns true if the native destructor must run without the context of \a p, the Program of its class
+    /** If so, the thread has entered \a p without its context, unless it is deleting it, until the destructor of this
+        object
+    */
+    DLLLOCAL bool runWithoutContext(QoreProgram* p, ExceptionSink* xsink);
+
+    DLLLOCAL QoreNativeDestructorProgramEntry(const QoreNativeDestructorProgramEntry&) = delete;
+    DLLLOCAL QoreNativeDestructorProgramEntry& operator=(const QoreNativeDestructorProgramEntry&) = delete;
+
+private:
+    //! the Program that the thread entered, or nullptr; the other members are set when it is set
+    QoreProgram* pgm = nullptr;
+    //! receives the exceptions of leaving the Program
+    ExceptionSink* xsink;
+    int tid;
+
+    DLLLOCAL void leave();
 };
 
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp

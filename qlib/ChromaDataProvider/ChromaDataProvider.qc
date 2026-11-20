@@ -34,9 +34,13 @@ public class ChromaDataProvider inherits ChromaDataProviderCommon {
         };
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
+    }
 
+    private {
         const DefaultChildMap = {
             "query":
                 Class::forName("ChromaDataProvider::ChromaQueryDataProvider"),

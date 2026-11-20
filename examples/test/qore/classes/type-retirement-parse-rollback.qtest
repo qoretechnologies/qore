@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class TypeRetirementParseRollbackTest
+
+#! The declarations that a failed parse removes are destroyed together
+/** A parse that fails removes the hashdecls, classes and enums that it added, which name each other's types without
+    references; derived types that the parse made (list<hash<A>>, ...) name them, and they are retired and repointed
+    to tombstones, which are made from what the declarations name.  They are made before any declaration of the parse
+    is freed, as for a deleted Program (issue #6419): in a namespace that the parse added and in one that existed
+    before.  Pairs that name each other in both directions make sure that one is freed before the other names it,
+    whatever the order of the lists; reading a freed declaration shows under valgrind or as a crash.
+*/
+class TypeRetirementParseRollbackTest inherits QUnit::Test {
+    public {
+        const Opts = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
+        const Pairs = 12;
+        const Rounds = 20;
+    }
+
+    constructor() : Test("TypeRetirementParseRollbackTest", "1.0") {
+        addTestCase("added namespace", \addedNamespace());
+        addTestCase("existing namespace", \existingNamespace());
+        addTestCase("allow reparse", \allowReparse());
+        set_return_value(main());
+    }
+
+    #! the declarations of n pairs of hashdecls that name each other's types, a class and an enum, and derived types
+    #! that name them all
+    static string decls(string prefix) {
+        string src;
+        for (int i = 0; i < Pairs; ++i) {
+            src += sprintf("hashdecl %sA%d { hash<%sB%d> b; int x = 1; }\n", prefix, i, prefix, i);
+            src += sprintf("hashdecl %sB%d { int y = 2; }\n", prefix, i);
+            src += sprintf("hashdecl %sC%d { int z = 3; }\n", prefix, i);
+            src += sprintf("hashdecl %sD%d { hash<%sC%d> c; }\n", prefix, i, prefix, i);
+            src += sprintf("class %sK%d { public { hash<%sA%d> a; list<hash<%sD%d>> d; } }\n", prefix, i, prefix, i,
+                prefix, i);
+            src += sprintf("enum %sE%d { V%d = 1, }\n", prefix, i, i);
+            src += sprintf("list<hash<%sA%d>> sub %sf%d(list<hash<%sB%d>> b, list<hash<%sD%d>> d, list<%sK%d> k, "
+                "list<%sE%d> e) { return (); }\n", prefix, i, prefix, i, prefix, i, prefix, i, prefix, i, prefix, i);
+        }
+        return src;
+    }
+
+    #! a parse that fails after the declarations are added: the commit's initialization calls a missing function
+    static string failing(string src) {
+        return src + "int sub fail() { return no_such_function_6419(); }\n";
+    }
+
+    #! derived types of declarations that the parse added to a new namespace
+    addedNamespace() {
+        for (int r = 0; r < Rounds; ++r) {
+            Program p(Opts);
+            string src = sprintf("namespace R%d {\n%s}\n", r, decls("N"));
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (failing(src), "rollback"));
+            # the Program is usable afterwards and accepts the same declarations
+            p.parse(src + sprintf("int sub ok() { return R%d::Nf0((), (), (), ()).size(); }\n", r), "reparse");
+            assertEq(0, p.callFunction("ok"));
+        }
+    }
+
+    #! derived types of declarations that the parse added to the root namespace, which exists before any parse
+    existingNamespace() {
+        for (int r = 0; r < Rounds; ++r) {
+            Program p(Opts);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (failing(decls("T")), "rollback"));
+            p.parse(decls("T") + "int sub ok() { return Tf0((), (), (), ()).size(); }\n", "reparse");
+            assertEq(0, p.callFunction("ok"));
+        }
+    }
+
+    #! the same with PO_ALLOW_REPARSE, whose rollback keeps what earlier parses committed
+    allowReparse() {
+        for (int r = 0; r < Rounds; ++r) {
+            Program p(Opts | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE);
+            code parse = sub (string src, string label) {
+                p.parsePending(src, label);
+                p.parseCommit();
+            };
+            parse(sprintf("namespace R%d { int sub base() { return 1; } }\n", r), "base");
+            # the namespace exists: the declarations are pending in it
+            string src = sprintf("namespace R%d {\n%s}\n", r, decls("P"));
+            assertThrows("PARSE-EXCEPTION", parse, (failing(src), "rollback"));
+            parse(src + sprintf("int sub ok() { return R%d::Pf0((), (), (), ()).size(); }\n", r), "reparse");
+            assertEq(0, p.callFunction("ok"));
+            assertEq(1, p.callFunction(sprintf("R%d::base", r)));
+        }
+    }
+}

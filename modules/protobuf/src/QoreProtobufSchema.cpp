@@ -525,6 +525,16 @@ QoreStringNode* QoreProtobufSchema::toJson(const char* type, const QoreHashNode*
         return nullptr;
     }
 
+#ifndef QORE_PROTOBUF_V22_PLUS
+    // the JSON support of protobuf before v22 leaves extension fields out of the output without an error
+    if (const google::protobuf::FieldDescriptor* ext = ProtobufHelper::findSetExtension(*msg)) {
+        xsink->raiseException("PROTOBUF-JSON-ERROR", "extension field '%s' cannot be converted to JSON: the "
+            "protobuf library that the module was built with (before v22) does not support extension fields in JSON",
+            ProtobufHelper::extensionKey(ext).c_str());
+        return nullptr;
+    }
+#endif
+
     std::string json;
     google::protobuf::util::JsonPrintOptions opts;
     opts.add_whitespace = false;

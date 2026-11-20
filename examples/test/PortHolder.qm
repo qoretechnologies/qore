@@ -131,6 +131,34 @@ public namespace PortHolder {
         \c /proc/net/tcp and \c /proc/net/tcp6 give them; as \c lsof gives them on macOS); @ref nothing if no
         socket listens on the port or the system's sockets cannot be read
     */
+    #! returns the states (the hexadecimal state codes of /proc/net/tcp, ex: \c "06" for TIME_WAIT) of the TCP
+    #! sockets whose local port is \a port, or no value where the system's sockets cannot be read (only Linux)
+    public *list<string> sub tcp_local_states(int port) {
+        if (PlatformOS != "Linux") {
+            return;
+        }
+        list<string> rv();
+        try {
+            foreach string file in (("/proc/net/tcp", "/proc/net/tcp6")) {
+                if (!is_readable(file)) {
+                    continue;
+                }
+                # "sl local_address rem_address st ..."
+                foreach string line in (ReadOnlyFile::readTextFile(file).split("\n")) {
+                    *list<auto> f =
+                        (line =~ x/^\s*[0-9]+:\s+[0-9A-F]+:([0-9A-F]{4})\s+[0-9A-F]+:[0-9A-F]{4}\s+([0-9A-F]{2})\s/);
+                    if (f && f[0].toInt(16) == port) {
+                        rv += f[1];
+                    }
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the system's sockets cannot be read
+            return;
+        }
+        return rv;
+    }
+
     public *list<string> sub tcp_listeners(int port) {
         list<string> rv();
         try {

@@ -34,7 +34,9 @@ public class TavilyDataProvider inherits TavilyDataProviderCommon {
         };
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = {
             "search":
                 Class::forName("TavilyDataProvider::TavilySearchDataProvider"),
@@ -53,6 +55,9 @@ public class TavilyDataProvider inherits TavilyDataProviderCommon {
             "logs":
                 Class::forName("TavilyDataProvider::TavilyLogsDataProvider"),
         };
+    }
+
+    private {
     }
 
     constructor(RestClientIo::RestClientIo rest) : TavilyDataProviderCommon(rest) {}

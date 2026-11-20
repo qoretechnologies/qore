@@ -1,0 +1,281 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ColumnarResultDecimalNumberTest
+
+#! decimal128 values read as numbers print as the decimal value stored (qore#6824)
+/** A decimal128 element is read as the number parsed from its decimal string; the number's precision must hold the
+    digits of the value with enough guard digits that its string form is the stored decimal value, which can then be
+    written back to a decimal128 column of the same precision and scale exactly.  Values of 22 to 31 digits, such as
+    the decimal(38,10) value -567890123456789.0123456789, printed with binary conversion noise.
+
+    The display rounding of numbers removes a run of more than 16 0 or 9 digits in the fraction, so the values here
+    have no such run.
+*/
+class ColumnarResultDecimalNumberTest inherits QUnit::Test {
+    public {
+        #! decimal128 columns: precision, scale and the decimal strings of the values (NOTHING is a null value)
+        const DecimalCases = (
+            {"precision": 38, "scale": 0, "values": (
+                "99999999999999999999999999999999999999", "-99999999999999999999999999999999999999",
+                "12345678901234567890123456789012345678", "-1234567890123456789012", "10000000000000000000000000000000000000",
+                "0", "1", "-1", NOTHING,
+            )},
+            {"precision": 38, "scale": 10, "values": (
+                "-567890123456789.0123456789", "1234567890123456789012345678.0123456789",
+                "-9999999999999999999999999999.9999999999", "9999999999999.9999999999", "-123456789012345.0000000001",
+                "100000000000.0000000009", "999999999999.9", "0.0000000001", "-0.0000000001", "567890123456.789",
+                "0", NOTHING,
+            )},
+            {"precision": 38, "scale": 37, "values": (
+                "9.8765432109876543210987654321098765432", "-0.0000000000000000000000000000000000001",
+                "-9.9999999999999999123456789012345678901", "1.0000000000000000999999999999999912345",
+                "0.0000000000000000000000000000000000009", "1.9999999999999999000000000000000012345",
+                "-5.0000000000000001", "1.2345678901234567890123", "0", NOTHING,
+            )},
+            {"precision": 38, "scale": 38, "values": (
+                "0.12345678901234567890123456789012345678", "-0.00000000000000000000000000000000000001",
+                "0.9999999999999999", "-0.10000000000000000999999999999999912", "0.5", "0", NOTHING,
+            )},
+            {"precision": 28, "scale": 6, "values": (
+                "1234567890123456789012.123456", "-9999999999999999999999.999999", "-0.000001",
+                "1234567890123456.000001", "0", NOTHING,
+            )},
+            {"precision": 18, "scale": 4, "values": (
+                "12345678901234.5678", "-99999999999999.9999", "0.0001", "0", NOTHING,
+            )},
+            {"precision": 10, "scale": 2, "values": ("99999999.99", "-12345678.9", "0.01", "0", NOTHING)},
+            {"precision": 5, "scale": 5, "values": ("0.12345", "-0.99999", "0.00001", "0", NOTHING)},
+            {"precision": 2, "scale": 1, "values": ("9.9", "-0.1", "0", NOTHING)},
+        );
+
+        #! precision and scale combinations for the random values
+        const RandomTypes = (
+            (38, 0), (38, 10), (38, 20), (38, 37), (38, 38), (28, 6), (30, 15), (24, 3), (20, 0), (18, 4), (10, 2),
+        );
+    }
+
+    private {
+        #! the state of the random digit generator
+        int seed = 6824;
+    }
+
+    constructor() : QUnit::Test("ColumnarResultDecimalNumber", "1.0", \ARGV) {
+        addTestCase("readers", \readers());
+        addTestCase("buffer readers", \bufferReaders());
+        addTestCase("aggregates", \aggregates());
+        addTestCase("write back", \writeBack());
+        addTestCase("random values", \randomValues());
+        addTestCase("number from a decimal string", \numberFromString());
+        set_return_value(main());
+    }
+
+    private readers() {
+        # the values have no run of more than 16 0 or 9 digits in the fraction, which the display rounding removes
+        foreach hash<auto> c in (DecimalCases) {
+            foreach *string v in (c.values) {
+                assertFalse(exists v && hasRun(v), v);
+            }
+        }
+        foreach hash<auto> c in (DecimalCases) {
+            string label = sprintf("decimal(%d,%d)", c.precision, c.scale);
+            ColumnarResult result = makeResult(c.values, c.precision, c.scale);
+            assertDecimals(c.values, result.getColumn("n").toList(), label + " getColumn().toList()");
+            assertDecimals(c.values, (map $1.n, result.toRows()), label + " toRows()");
+            assertDecimals(c.values, result.toColumnHash().n.toList(), label + " toColumnHash()");
+            assertDecimals(c.values, result.toMaterializedColumnHash().n.toList(),
+                label + " toMaterializedColumnHash()");
+            assertDecimals(c.values, result.slice(0, c.values.size()).getColumn("n").toList(), label + " slice()");
+        }
+    }
+
+    private bufferReaders() {
+        foreach hash<auto> c in (DecimalCases) {
+            string label = sprintf("decimal(%d,%d)", c.precision, c.scale);
+            buffer<*decimal128> b = makeResult(c.values, c.precision, c.scale).getColumn("n");
+            assertDecimals(c.values, b.toList(), label + " toList()");
+            assertDecimals(c.values, (map b[$1], xrange(b.size())), label + " element access");
+            list<auto> l = ();
+            foreach auto v in (b) {
+                l += v;
+            }
+            assertDecimals(c.values, l, label + " iteration");
+            assertDecimals(c.values, b[0..].toList(), label + " range");
+            assertDecimals(c.values, b.view(0, b.size()).toList(), label + " view()");
+            assertDecimals(c.values, b.clone().toList(), label + " clone()");
+        }
+    }
+
+    private aggregates() {
+        foreach hash<auto> c in (DecimalCases) {
+            string label = sprintf("decimal(%d,%d)", c.precision, c.scale);
+            foreach *string v in (c.values) {
+                if (!exists v) {
+                    continue;
+                }
+                buffer<*decimal128> b = makeResult((v, NOTHING), c.precision, c.scale).getColumn("n");
+                assertEq(v, string(b.sum()), label + " sum() " + v);
+                assertEq(v, string(b.min()), label + " min() " + v);
+                assertEq(v, string(b.max()), label + " max() " + v);
+                assertEq(v, string(b.mean()), label + " mean() " + v);
+            }
+        }
+    }
+
+    private writeBack() {
+        foreach hash<auto> c in (DecimalCases) {
+            string label = sprintf("decimal(%d,%d)", c.precision, c.scale);
+            checkWriteBack(c.values, c.precision, c.scale, label);
+        }
+    }
+
+    private randomValues() {
+        foreach list<int> t in (RandomTypes) {
+            int precision = t[0];
+            int scale = t[1];
+            string label = sprintf("decimal(%d,%d) random", precision, scale);
+            list<auto> values = ();
+            while (values.size() < 200) {
+                *string v = randomDecimal(precision, scale);
+                if (exists v) {
+                    values += v;
+                }
+            }
+            values += NOTHING;
+            ColumnarResult result = makeResult(values, precision, scale);
+            assertDecimals(values, result.getColumn("n").toList(), label + " toList()");
+            assertDecimals(values, (map $1.n, result.toRows()), label + " toRows()");
+            checkWriteBack(values, precision, scale, label);
+        }
+    }
+
+    private numberFromString() {
+        # the example from the issue: number literals and numbers from strings print as the decimal value too
+        assertEq("-567890123456789.0123456789", string(-567890123456789.0123456789n));
+        assertEq("567890123456789.0123456789", string(567890123456789.0123456789n));
+        assertEq("-567890123456789.0123456789", string(number("-567890123456789.0123456789")));
+        # a number read from a decimal128 column equals the number literal of the same value
+        ColumnarResult result = makeResult(("-567890123456789.0123456789", "567890123456789.0123456789"), 38, 10);
+        assertTrue(-567890123456789.0123456789n == result.getColumn("n")[0]);
+        assertTrue(567890123456789.0123456789n == result.getColumn("n")[1]);
+        for (int digits = 1; digits <= 40; ++digits) {
+            for (int i = 0; i < 50; ++i) {
+                *string v = randomDecimal(digits, randomInt(digits + 1));
+                if (!exists v) {
+                    continue;
+                }
+                assertEq(v, string(number(v)), sprintf("%d digits: %s", digits, v));
+                if (v =~ /\./) {
+                    assertEq(v, string(number(v + "0000")), sprintf("%d digits: %s0000", digits, v));
+                }
+            }
+        }
+    }
+
+    #! checks that the numbers read from a column write back to a column of the same type exactly
+    private checkWriteBack(list<auto> values, int precision, int scale, string label) {
+        ColumnarResult result = makeResult(values, precision, scale);
+        list<auto> numbers = result.getColumn("n").toList();
+        ColumnarResult copy = ColumnarResult::fromColumnHash({"n": numbers},
+            {"n": {"native_type": "numeric", "precision": precision, "scale": scale, "nullable": True}});
+        assertSameStorage(values, result.getColumn("n"), copy.getColumn("n"), label + " write back storage");
+        assertDecimals(values, copy.getColumn("n").toList(), label + " write back");
+        # a number of the string form of each value writes back exactly too
+        list<auto> parsed = map exists $1 ? number(string($1)) : NOTHING, numbers;
+        copy = ColumnarResult::fromColumnHash({"n": parsed},
+            {"n": {"native_type": "numeric", "precision": precision, "scale": scale, "nullable": True}});
+        assertSameStorage(values, result.getColumn("n"), copy.getColumn("n"), label + " write back from string form");
+    }
+
+    #! asserts that two decimal buffers hold the same values, compared element by element as decimal128 values
+    private assertSameStorage(list<auto> values, buffer<*decimal128> expected, buffer<*decimal128> actual,
+            string label) {
+        assertEq(expected.size(), actual.size(), label + " size");
+        list<auto> eq = (expected == actual).toList();
+        foreach auto v in (values) {
+            assertEq(exists v ? True : NOTHING, eq[$#], sprintf("%s [%d] %s", label, $#, v ?? "NULL"));
+        }
+    }
+
+    #! asserts that each value is a number that prints as the given decimal string, or a null value
+    private assertDecimals(list<auto> expected, list<auto> actual, string label) {
+        assertEq(expected.size(), actual.size(), label + " size");
+        foreach auto v in (actual) {
+            *string e = expected[$#];
+            if (!exists e) {
+                assertEq(NOTHING, v, sprintf("%s [%d]", label, $#));
+                continue;
+            }
+            assertEq(NT_NUMBER, v.typeCode(), sprintf("%s [%d] type", label, $#));
+            assertEq(e, string(v), sprintf("%s [%d]", label, $#));
+            assertEq(e, v.toStringRoundTrip(), sprintf("%s [%d] round trip", label, $#));
+        }
+    }
+
+    #! returns a result with a nullable decimal column "n" made from the decimal strings given
+    /** each value is written as the number of its string with 40 more zero digits in its fraction, whose string form
+        is the value with any precision rule for numbers from strings
+    */
+    private static ColumnarResult makeResult(list<auto> values, int precision, int scale) {
+        list<auto> numbers = map exists $1 ? number($1 + ($1 =~ /\./ ? "" : ".") + strmul("0", 40)) : NOTHING,
+            values;
+        return ColumnarResult::fromColumnHash({"n": numbers},
+            {"n": {"native_type": "numeric", "precision": precision, "scale": scale, "nullable": True}});
+    }
+
+    #! returns True if the fraction of a decimal string has a run of more than 16 0 or 9 digits after its first
+    #! significant digit, which the display rounding of numbers removes
+    private static bool hasRun(string v) {
+        *string frac = (v =~ x/^-?([0-9]+)\.([0-9]+)$/)[1];
+        if (!exists frac) {
+            return False;
+        }
+        # the zeros before the first significant digit of a value less than 1 place that digit
+        if (v =~ /^-?0\./) {
+            frac =~ s/^0+//;
+        }
+        return frac =~ /(0{17}|9{17})/;
+    }
+
+    #! returns a random int from 0 to max - 1 (a linear congruential generator, so that the values are the same in
+    #! every run)
+    private int randomInt(int max) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        return (seed >> 8) % max;
+    }
+
+    #! returns the canonical string of a random decimal value of a type, or NOTHING if it has a run of more than 16 0
+    #! or 9 digits in its fraction
+    private *string randomDecimal(int precision, int scale) {
+        int digits = 1 + randomInt(precision);
+        string str;
+        for (int i = 0; i < digits; ++i) {
+            # runs of 0 and 9 digits are more likely than the other digits
+            int r = randomInt(14);
+            str += string(r < 10 ? r : (r < 12 ? 0 : 9));
+        }
+        if (digits < scale) {
+            str = strmul("0", scale - digits) + str;
+        }
+        string int_part = scale ? str.substr(0, str.size() - scale) : str;
+        string frac = scale ? str.substr(str.size() - scale) : "";
+        int_part =~ s/^0+//;
+        if (int_part == "") {
+            int_part = "0";
+        }
+        frac =~ s/0+$//;
+        string rv = frac.val() ? int_part + "." + frac : int_part;
+        if (hasRun(rv)) {
+            return;
+        }
+        if (rv != "0" && randomInt(2)) {
+            rv = "-" + rv;
+        }
+        return rv;
+    }
+}
