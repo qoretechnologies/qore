@@ -751,6 +751,20 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         assertTrue(ctrl.waitDrain(30s), "the drain ends when the delayed response has been sent");
     }
 
+    #! Returns the next event of the client of delayedPreparationResponseTest(), which must be of the kind given
+    /** The client pushes its events in order and ends after an error, so the next event is the one expected or the
+        error that took its place; an error fails the test with the client's exception.
+    */
+    private hash<auto> nextClientEvent(Queue client_events, string kind, HttpAsyncSocketIoController ctrl) {
+        hash<auto> event = client_events.get(HangGuard);
+        if (event.kind == "error") {
+            fail(sprintf("the client failed before its %s event: %s: %s; controller stats: %y", kind,
+                event.error.err, event.error.desc, ctrl.getStats()));
+        }
+        assertEq(kind, event.kind, "the client's next event");
+        return event;
+    }
+
     #! Sends a request on the connection and returns the response with the time until it arrived
     /** The time is measured on the monotonic clock: on the system clock, a step of the clock while the response is
         delayed changes it, so that a response delayed by 200 ms can be measured as arriving after 94 ms (qore#6534)
@@ -781,6 +795,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         on_exit server.close();
         ctrl.addListener(server, target);
 
+        # the client's events, in the order that it pushes them: two "response" events, "pending_sent" and
+        # "released"; an "error" event, which ends the client, takes the place of the event that it could not make
         Queue client_events();
         Counter client_done(1);
         background sub () {
@@ -790,31 +806,29 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
                 on_exit client.close();
                 client.connect("127.0.0.1:" + port, HangGuard);
                 foreach string path in (("/delayed", "/delayed-again")) {
-                    client_events.push(sendDelayedRequest(client, path));
+                    client_events.push({"kind": "response"} + sendDelayedRequest(client, path));
                 }
                 client.send("GET /pending-at-stop HTTP/1.1\r\nHost: localhost\r\n\r\n");
-                client_events.push({"pending_sent": True});
+                client_events.push({"kind": "pending_sent"});
                 # the stop of the controller ends the wait for the delayed response: it closes the connection without
                 # sending the response; the wait is bounded only against a regression
                 *string response;
                 try {
                     response = client.recv(0, HangGuard);
                 } catch (hash<ExceptionInfo> ex) {
-                    client_events.push({"released": ex.err});
+                    client_events.push({"kind": "released", "released": ex.err});
                     return;
                 }
-                client_events.push({"released": response.val() ? "a response" : "the connection closed"});
+                client_events.push({"kind": "released",
+                    "released": response.val() ? "a response" : "the connection closed"});
             } catch (hash<ExceptionInfo> ex) {
-                client_events.push({"error": ex{"err", "desc",}});
+                client_events.push({"kind": "error", "error": ex{"err", "desc",}});
             }
         }();
 
         for (int i = 0; i < 2; ++i) {
-            hash<auto> event = client_events.get(HangGuard);
+            hash<auto> event = nextClientEvent(client_events, "response", ctrl);
             target.prepared.get(HangGuard);
-            assertFalse(exists event.error,
-                sprintf("delayed client request succeeds: %y; controller stats: %y",
-                    event.error, ctrl.getStats()));
             assertTrue(event.response =~ /503 Service Unavailable/,
                 i ? "delayed response preserves HTTP/1.1 keep-alive"
                     : "pre-dispatch response is sent normally after its delay");
@@ -826,9 +840,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
             "a preparation response does not enter the handler pool");
 
         # A long pending delay must be canceled promptly during controller shutdown.
-        hash<auto> pending = client_events.get(HangGuard);
-        assertTrue(pending.pending_sent,
-            "the client submits a long-delay request before shutdown");
+        # the client submits a long-delay request before shutdown
+        nextClientEvent(client_events, "pending_sent", ctrl);
         target.prepared.get(HangGuard);
         usleep(20ms);
         assertEq(3, target.preparation_count,
@@ -845,9 +858,9 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         assertEq(0, ctrl.getStats().delayed_responses,
             "shutdown removes every pending delayed response");
         assertEq(0, client_done.waitForZero(HangGuard), "the client ended");
-        string released = client_events.get(HangGuard).released;
-        assertTrue(released != "a response" && released != "SOCKET-TIMEOUT",
-            sprintf("shutdown releases the client waiting for the delayed response (%s)", released));
+        *string released = nextClientEvent(client_events, "released", ctrl).released;
+        assertTrue(exists released && released != "a response" && released != "SOCKET-TIMEOUT",
+            sprintf("shutdown releases the client waiting for the delayed response (%y)", released));
         assertEq(3, target.preparation_count,
             "every test request reached preparation exactly once");
     }
