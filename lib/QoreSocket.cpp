@@ -15853,8 +15853,10 @@ bool qore_socket_poll_op_scan_members(AbstractPrivateData* priv_data, RObject& o
 static SocketPollOperationMembers* qore_poll_op_cast_members(const SocketPollOperationBase* op) {
     struct CastEntry {
         const std::type_info* type = nullptr;
-        //! the offset of the base, or -1 if the type has none (the base is never at offset -1)
-        ptrdiff_t offset = -1;
+        //! the offset of the base from the SocketPollOperationBase subobject (which can be negative)
+        ptrdiff_t offset = 0;
+        //! true if the type has the base
+        bool has_base = false;
     };
     static thread_local CastEntry cache[8];
     static thread_local unsigned next = 0;
@@ -15862,7 +15864,7 @@ static SocketPollOperationMembers* qore_poll_op_cast_members(const SocketPollOpe
     const char* base = reinterpret_cast<const char*>(op);
     for (const CastEntry& e : cache) {
         if (e.type == type) {
-            return e.offset < 0 ? nullptr
+            return !e.has_base ? nullptr
                 : const_cast<SocketPollOperationMembers*>(
                     reinterpret_cast<const SocketPollOperationMembers*>(base + e.offset));
         }
@@ -15870,7 +15872,8 @@ static SocketPollOperationMembers* qore_poll_op_cast_members(const SocketPollOpe
     const SocketPollOperationMembers* m = dynamic_cast<const SocketPollOperationMembers*>(op);
     CastEntry& e = cache[next++ % (sizeof cache / sizeof *cache)];
     e.type = type;
-    e.offset = m ? reinterpret_cast<const char*>(m) - base : -1;
+    e.has_base = m;
+    e.offset = m ? reinterpret_cast<const char*>(m) - base : 0;
     return const_cast<SocketPollOperationMembers*>(m);
 }
 
