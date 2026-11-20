@@ -1184,13 +1184,15 @@ static qore_offset_t EUC_get_char_len(const char* p, size_t len) {
     } else {
         return 0;
     }
-    if (len < l) {
-        return -static_cast<qore_offset_t>(l);
-    }
-    for (size_t i = 1; i < l; ++i) {
+    // the following bytes that are there are checked first: a sequence is incomplete only if they can be part of a
+    // character
+    for (size_t i = 1; i < l && i < len; ++i) {
         if (u[i] < 0xa1 || u[i] > 0xfe) {
             return 0;
         }
+    }
+    if (len < l) {
+        return -static_cast<qore_offset_t>(l);
     }
     return l;
 }
@@ -1223,10 +1225,15 @@ static qore_offset_t GB18030_get_char_len(const char* p, size_t len) {
         return -2;
     }
     if (u[1] >= 0x30 && u[1] <= 0x39) {
+        // the following bytes that are there are checked first: a sequence is incomplete only if they can be part of
+        // a character
+        if (len >= 3 && (u[2] < 0x81 || u[2] == 0xff)) {
+            return 0;
+        }
         if (len < 4) {
             return -4;
         }
-        return (u[2] < 0x81 || u[2] == 0xff || u[3] < 0x30 || u[3] > 0x39) ? 0 : 4;
+        return (u[3] < 0x30 || u[3] > 0x39) ? 0 : 4;
     }
     return (u[1] < 0x40 || u[1] == 0x7f || u[1] == 0xff) ? 0 : 2;
 }

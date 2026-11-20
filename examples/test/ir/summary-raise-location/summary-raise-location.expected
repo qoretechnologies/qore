@@ -1,0 +1,6 @@
+one statement: DIVISION-BY-ZERO 12-13
+two statements, first: DIVISION-BY-ZERO 18-18
+two statements, second: DIVISION-BY-ZERO 19-19
+two statements, none: 2
+hash key: 5
+float division: DIVISION-BY-ZERO 29-29

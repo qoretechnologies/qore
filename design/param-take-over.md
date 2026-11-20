@@ -212,7 +212,11 @@ The AST interpreter gives a parameter these arguments with no other reference, s
   temporaries, or the list that the stages of a lazy pipeline gave it (`FunctionalSourceCapture::intermediate`), and
   its value, which `lowerWithSourceRelease()` gives a reference of its own (RefSelf), is a temporary that the IR
   interpreter's call gives (`def_by_call`), as native code gives its cleanup slot; the accumulator Phi that is its own
-  incoming value on the loop's back edge does not keep the Phi after the loop from taking it over;
+  incoming value on the loop's back edge does not keep the Phi after the loop from taking it over; an accumulator
+  Phi that another Phi also uses (the value of a conditional fold expression, `foldl ($1 ?? $2), l`, and the
+  accumulator of a fold over a fused pipeline, `foldl $1, (select l, c)`) holds a reference of its own, which is
+  released once the fold's value has its own (`FunctionalSourceCapture::accumulator`, issue #6442), also for a source
+  that is not released;
 - the value of a fold or of such a conditional expression is released once a list or hash literal holds it, as a
   temporary is (`qore_ir_expr_gives_owned_value()`);
 - a value read through a reference by a local with a reference flag (an untyped or `auto` parameter given `\v`) is

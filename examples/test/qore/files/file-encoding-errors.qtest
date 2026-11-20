@@ -14,6 +14,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../EncodingCapability.qm
 
 %exec-class FileEncodingErrorsTest
 
@@ -36,6 +37,7 @@ class FileEncodingErrorsTest inherits QUnit::Test {
         addTestCase("FileLineIterator in UTF-16", \fileLineIteratorUtf16());
         addTestCase("other encodings", \otherEncodings());
         addTestCase("stateful encodings", \statefulEncodings());
+        addTestCase("stateful encodings: a byte that is not a character", \statefulInvalidBytes());
         addTestCase("FileLineIterator byte order marks and line numbers", \fileLineIteratorBomAndLines());
         addTestCase("a very large number of characters and US-ASCII", \largeCountAndAscii());
         set_return_value(main());
@@ -528,12 +530,7 @@ class FileEncodingErrorsTest inherits QUnit::Test {
     largeCountAndAscii() {
         # a very large number of characters reads the data there is, with no allocation for the number
         foreach string enc in ("UTF-8", "UTF-16LE", "UTF-32LE", "ISO-8859-1") {
-            binary b;
-            try {
-                b = binary(convert_encoding("AB", enc));
-            } catch (hash<ExceptionInfo> ex) {
-                continue;
-            }
+            binary b = binary(convert_encoding("AB", enc));
             string p = file(b);
             foreach int n in (4611686018427387904, 2305843009213693952, 9223372036854775807, 1152921504606846976) {
                 ReadOnlyFile f(p, enc);
@@ -554,12 +551,7 @@ class FileEncodingErrorsTest inherits QUnit::Test {
     fileLineIteratorBomAndLines() {
         # a byte order mark is only resolved at the start of the file: after it, U+FEFF is a character
         foreach string enc in ("UTF-16LE", "UTF-16BE", "UTF-16", "UTF-32LE", "UCS-2BE") {
-            binary b;
-            try {
-                b = binary(convert_encoding("x\n\ufeffy\n", enc));
-            } catch (hash<ExceptionInfo> ex) {
-                continue;
-            }
+            binary b = binary(convert_encoding("x\n\ufeffy\n", enc));
             assertEq(("x", "\ufeffy"), (map $1, new FileLineIterator(file(b), enc)), enc);
         }
         assertEq(("x", "\ufffeAB"), (map $1, new FileLineIterator(file(<0078000afffe00410042000a>), "UTF-16")));
@@ -588,22 +580,21 @@ class FileEncodingErrorsTest inherits QUnit::Test {
         assertEq(("a", 1), (i.getValue(), i.index()));
     }
 
+    #! ISO-2022-JP, which every platform has
     statefulEncodings() {
         string enc = "ISO-2022-JP";
-        try {
-            string unused = convert_encoding("日本", enc);
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(enc + " is not supported here");
-        }
         binary good = binary(convert_encoding("ab 日本\nx\n", enc));
         assertEq("ab 日本\n", convert_encoding(new ReadOnlyFile(file(good), enc).readLine(), "UTF-8"));
         assertEq("ab 日本\nx\n", convert_encoding(ReadOnlyFile::readTextFile(file(good), enc), "UTF-8"));
-        # a byte that is not a character in ISO-2022-JP, if the platform's iconv rejects it
+    }
+
+    #! a byte that is not a character in ISO-2022-JP, if the platform's iconv rejects it
+    statefulInvalidBytes() {
+        string enc = "ISO-2022-JP";
         binary bad = binary(convert_encoding("ab 日本", enc)) + <ff0a>;
-        try {
-            string unused = convert_encoding(binary_to_string(bad, enc), "UTF-8");
-            testSkip("the platform's iconv accepts the byte");
-        } catch (hash<ExceptionInfo> ex) {
+        *string reason = encoding_decodes_invalid(enc, bad);
+        if (reason) {
+            testSkip(reason);
         }
         string path = file(bad);
         assertThrows("INVALID-ENCODING", "invalid byte sequence", sub () { new ReadOnlyFile(path, enc).readLine(); });

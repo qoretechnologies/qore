@@ -2128,10 +2128,19 @@ QORE_INTERN_ALWAYS_INLINE QoreValue ScopedObjectCallNode::evalCommon(LexicalSema
             return QoreValue();
         }
         const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
+        const AbstractQoreFunctionVariant* ctor_variant = variant;
+        if (!aot_constructor_signature.empty()) {
+            ctor_variant = qore_aot_find_constructor_variant(qc, aot_constructor_signature.c_str());
+            if (!ctor_variant) {
+                xsink->raiseException("AOT-CONSTRUCTOR-ERROR", "cannot resolve '%s::constructor%s'",
+                    qc->getName(), aot_constructor_signature.c_str());
+                return QoreValue();
+            }
+        }
         // the location of this call is the location of the call stack frame of the constructor; set after the class
         // is resolved, so that no code runs between the call site and the frame that takes it
         QoreRcCallSiteHelper call_site(rc, loc);
-        return qore_class_private::execConstructorWithPolicy<Lexical>(policy, *qc, rc, variant, args, xsink, oti);
+        return qore_class_private::execConstructorWithPolicy<Lexical>(policy, *qc, rc, ctor_variant, args, xsink, oti);
     }
     const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
     // the location of this call is the location of the call stack frame of the constructor

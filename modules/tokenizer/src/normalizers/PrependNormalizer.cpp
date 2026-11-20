@@ -22,7 +22,10 @@ PrependNormalizer::PrependNormalizer(const QoreHashNode* config, ExceptionSink* 
         return;
     }
 
-    std::string prepend_str = safeGetStringKey(config, "prepend");
+    std::string prepend_str = configStringKey(config, "prepend", xsink);
+    if (*xsink) {
+        return;
+    }
     if (prepend_str.empty()) {
         xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
             "PrependNormalizer config missing 'prepend' field");

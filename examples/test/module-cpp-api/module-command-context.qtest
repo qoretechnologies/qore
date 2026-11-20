@@ -135,6 +135,10 @@ string sub load(string target) {
         # of the load error of a compiled module whose replayed command is refused
         string err = (ex.err == \"CMDCTX-DENIED\" || (ex.err == \"MODULE-LOAD-ERROR\"
             && ex.desc =~ /cannot path: the command was issued by sandboxed code/)) ? \"CMDCTX-DENIED\" : ex.err;
+        # the native code of a compiled module that the sandboxed loader chose outside the module path (issue #6776)
+        if (ex.err == \"LOAD-MODULE-ERROR\" && ex.desc =~ /can load native code only from the module path/) {
+            err = \"NATIVE-CODE-REFUSED\";
+        }
         return err + \" | \" + history();
     }
 }
@@ -167,6 +171,17 @@ try {
             + "library, path:   ok | none\n"
             + "chosen, record:  ok | po=none sandboxed=1\n"
             + "chosen, path:    CMDCTX-DENIED | none\n"
+            + "to another Program: RUNTIME-COMMAND-ERROR | none\n";
+
+        #! the output of LoadSandboxedScript from the compiled modules
+        /** the sandboxed loader cannot load the native code of a compiled module that it chose outside the module path
+            (issue #6776; see the trust model of native code in the sandboxing documentation), so the commands of the
+            modules that it chose are not replayed
+        */
+        const LoadSandboxedCompiledExpected = "library, record: ok | po=none sandboxed=0\n"
+            + "library, path:   ok | none\n"
+            + "chosen, record:  NATIVE-CODE-REFUSED | none\n"
+            + "chosen, path:    NATIVE-CODE-REFUSED | none\n"
             + "to another Program: RUNTIME-COMMAND-ERROR | none\n";
     }
 
@@ -290,8 +305,9 @@ try {
     /** The commands of a compiled module are replayed into the module's Program as it is loaded, while the sandboxed
         loader is still running: a replayed command is the module's own directive, not a command that the loader issues
         to another Program, so the compiled module loads as its source does, by name (library code, judged by the
-        sandbox) and by a path that the loader chose (judged by the loader's restrictions).  Sandboxed code still
-        cannot issue a command to another Program at run time.
+        sandbox); the native code of a compiled module that the loader chose by path is refused (issue #6776), while
+        its source is judged by the loader's restrictions.  Sandboxed code still cannot issue a command to another
+        Program at run time.
     */
     testSandboxedLoaderReplay() {
         skipWithoutModules();
@@ -318,7 +334,8 @@ try {
                 "%s %s %s", replace(env(), "QORE_MODULE_DIR=", "QORE_MODULE_DIR=" + run[1]), qore_bin, script, run[2],
                 run[3]), True);
             assertEq(0, r.rc, sprintf("%s: exit status: %s", label, r.out));
-            assertEq(LoadSandboxedExpected, r.stdout, sprintf("%s: output", label));
+            assertEq(label == "compiled" ? LoadSandboxedCompiledExpected : LoadSandboxedExpected, r.stdout,
+                sprintf("%s: output", label));
         }
     }
 

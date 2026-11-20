@@ -66,15 +66,16 @@ static std::string extractPattern(const QoreHashNode* config, ExceptionSink* xsi
         // {"Regex": "pattern_string"} or {"String": "literal"}
         QoreValue rv = ph->getKeyValue("Regex");
         if (!rv.isNullOrNothing()) {
-            return safeGetStdString(rv);
+            return configString(rv, "Split pattern 'Regex'", xsink);
         }
         rv = ph->getKeyValue("String");
         if (!rv.isNullOrNothing()) {
-            return escapeLiteral(safeGetStdString(rv));
+            std::string str = configString(rv, "Split pattern 'String'", xsink);
+            return *xsink ? std::string() : escapeLiteral(str);
         }
     }
     // Plain string
-    return safeGetStdString(pv);
+    return configString(pv, "configuration value 'pattern'", xsink);
 }
 
 SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* xsink) {
@@ -116,7 +117,10 @@ SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* 
     }
 
     QoreValue bv = config->getKeyValue("behavior");
-    std::string bs = bv.isNullOrNothing() ? "" : safeGetStdString(bv);
+    std::string bs = bv.isNullOrNothing() ? "" : configString(bv, "configuration value 'behavior'", xsink);
+    if (*xsink) {
+        return;
+    }
     behavior = bs.empty() ? "Removed" : std::move(bs);
 }
 
@@ -164,8 +168,12 @@ std::vector<PreToken> SplitPreTokenizer::pretokenize(const std::string& text) co
             break;
         }
         if (rc < 0) {
-            // an error (ex: text that is not valid UTF-8, or a match limit) is raised; the text is never cut
-            // silently at the error
+            // any other error (a match or depth limit, no memory for the JIT stack, or text that is not valid UTF-8)
+            // is raised; the text is never cut silently at the error (qore#6617).  All text is checked and
+            // converted to UTF-8 where it enters the tokenizer (qoreUtf8StdString(), qore#6604), so valid input
+            // does not get here with a UTF-8 error: the pre-tokenizers before this one split only at character
+            // boundaries, the offset is advanced by whole characters, and the normalizers give UTF-8, except a
+            // Replace normalizer whose std::regex pattern matches part of a character, as std::regex matches bytes
             PCRE2_UCHAR buf[256];
             pcre2_get_error_message(rc, buf, sizeof(buf));
             char desc[512];

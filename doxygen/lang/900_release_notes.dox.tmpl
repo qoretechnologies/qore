@@ -101,6 +101,28 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
+    Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
+    get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
+    (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
+
+    @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
+    The static members in which public classes of the standard modules keep state shared by all of their callers
+    (caches of objects and connections, the host's callbacks and loggers) are \c private:internal, so no subclass can
+    read them (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6748">issue
+    6748</a>).
+
+    @par Sandboxed Code Cannot Change the Process-Wide Registries of Standard Modules
+    The registries of schemes, location handlers, lookups, resolvers, serializers, codecs, schemas, types and YAML tag
+    handlers of the standard modules refuse registrations, replacements and removals from sandboxed code, also when it
+    has the \c PROCESS_CONTROL domain (see @ref sandbox_module_state;
+    <a href="https://github.com/qoretechnologies/qore/issues/6747">issue 6747</a>).
+    @par Code That Is Not Trusted Loads Native Code Only From the Module Path
+    A binary module (also a module compiled with \c qcc) from outside the process-wide module path is not loaded for
+    sandboxed or restricted code that may not use uncontrolled APIs; a compiled module whose source is next to it is
+    loaded as source (see @ref sandbox_native_code; <a href="https://github.com/qoretechnologies/qore/issues/6776">issue
+    6776</a>).
+
     @par An Encoding That Is Not Predefined Has One Canonical Name
     The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
     \c "Shift_JIS") or the name in upper case (ex: \c "CP1047"), not the spelling with which the program first used
@@ -234,6 +256,11 @@
     @ref Qore::StreamReader::readString() "StreamReader::readString()" and
     @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()" raise \c INVALID-ENCODING for an invalid character,
     where they raised \c STREAM-ENCODING-ERROR and \c FILE-GETCHAR-ERROR (see @ref encoding_errors; issue #6604).
+
+    @par Encoding Conversion Streams Raise INVALID-ENCODING for Invalid Input
+    The encoding conversion streams raise \c INVALID-ENCODING for input not valid in the source encoding, where they
+    raised \c ENCODING-CONVERSION-ERROR or passed it through, and @ref Qore::convert_encoding() "convert_encoding()"
+    checks a string already in the target encoding (see @ref encoding_conversion_streams; issue #6730).
 
     @par trunc_str() Raises INVALID-ENCODING for a String Not Valid in Its Encoding Within the Length
     @ref Qore::trunc_str() "trunc_str()" raises \c INVALID-ENCODING for an invalid character within the length, also
@@ -1106,7 +1133,7 @@
     @par An encoding_errors Option for Text Readers
     The file and stream readers and the line iterators take an \c encoding_errors option (\c "raise", \c "latin1"
     or \c "keep") that sets what text read that is not valid in its encoding gives (see @ref encoding_errors;
-    issue #6604).
+    issue #6604), as do the encoding conversion streams for their input (issue #6730).
 
     @par Testing Whether a String Is Valid in Its Encoding
     @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests whether a string is valid in its
@@ -1487,6 +1514,12 @@
     \c Datasource::getConnectChoosers() and judges a connection by it, not by the code that opens it (a behaviour
     change for such drivers); see @ref sandbox_datasource_connect_choosers
     (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>).
+
+    @par Checking a Network Destination Without Connecting
+    @ref Qore::SandboxManager::checkNetworkConnect() "SandboxManager::checkNetworkConnect()" raises what a TCP
+    connection made by the calling code would raise under its sandbox's network policy, without connecting, so that
+    shared code serves data cached from a destination only to callers that could reach it; see
+    @ref sandbox_net_cached_data (<a href="https://github.com/qoretechnologies/qore/issues/6745">issue 6745</a>).
 
     @par Asking Whether a Sandbox Restricts Anything
     @ref Qore::SandboxManager::restricts() "SandboxManager::restricts()", \c networkRestricts(), \c filesystemRestricts()
@@ -2446,6 +2479,9 @@
       with a \c sequence_map, \c function_map or \c procedure_map entry whose target exists, which renamed the source
       onto it
       (<a href="https://github.com/qoretechnologies/qore/issues/6729">issue 6729</a>); see @ref sqlutilv3_11_0
+    - @ref Qore::ReadOnlyFile::readLine() "ReadOnlyFile::readLine()" with an end of line marker ends a line only where
+      the marker starts at a character boundary, where a marker byte inside a character of a double-byte encoding
+      such as \c Shift_JIS ended the line in the character (issue #6648)
     - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" of @ref sqlutilintro "SqlUtil"
       with a description of another table name, which raised \c LOCK-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>); see @ref sqlutilv3_11_0

@@ -39,7 +39,10 @@ std::unique_ptr<AbstractPreTokenizer> AbstractPreTokenizer::fromConfig(const Qor
         return nullptr;
     }
 
-    std::string type = safeGetStdString(type_val);
+    std::string type = configString(type_val, "configuration value 'type'", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     if (type.empty()) {
         xsink->raiseException("PRETOKENIZER-CONFIG-ERROR",
             "pre_tokenizer config 'type' is not a string");

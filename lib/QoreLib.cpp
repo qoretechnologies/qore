@@ -4660,12 +4660,35 @@ qore_offset_t q_text_invalid_offset(const char* p, size_t len, const QoreEncodin
 
 void q_raise_invalid_read_text(ExceptionSink* xsink, const char* cls, const char* meth, const char* what,
         const QoreEncoding* enc, size_t offset, int64 line) {
-    QoreStringNode* desc = new QoreStringNodeMaker("%s::%s(): the %s is not valid %s: invalid byte sequence at byte "
-        "offset " QLLD, cls, meth, what, enc->getCode(), (int64)offset);
+    QoreStringNode* desc = new QoreStringNodeMaker("%s%s%s(): the %s is not valid %s: invalid byte sequence at byte "
+        "offset " QLLD, cls ? cls : "", cls ? "::" : "", meth, what, enc->getCode(), (int64)offset);
     if (line > 0) {
         desc->sprintf(" (line " QLLD ")", line);
     }
     xsink->raiseException("INVALID-ENCODING", desc);
+}
+
+qore_offset_t q_get_invalid_text_offset(const QoreEncoding* enc, const char* p, size_t len) {
+    // in an encoding without a byte order (the generic UTF-16, or a Unicode encoding created on the fly such as
+    // UTF-32), a byte order mark gives the byte order of the text, as when it is converted; the offset is in the text
+    const QoreEncoding* bo = q_get_bom_byte_order(enc, p, len);
+    if (bo) {
+        size_t bom = bo->getMinCharWidth();
+        qore_offset_t offset = q_text_invalid_offset(p + bom, len - bom, bo);
+        return offset < 0 ? -1 : offset + static_cast<qore_offset_t>(bom);
+    }
+    return q_text_invalid_offset(p, len, enc);
+}
+
+int q_check_text_encoding(const QoreEncoding* enc, const char* p, size_t len, const char* where, const char* what,
+        ExceptionSink* xsink) {
+    qore_offset_t offset = q_get_invalid_text_offset(enc, p, len);
+    if (offset < 0) {
+        return 0;
+    }
+    xsink->raiseException("INVALID-ENCODING", new QoreStringNodeMaker("%s: the %s is not valid %s: invalid byte "
+        "sequence at byte offset " QLLD, where, what, enc->getCode(), (int64)offset));
+    return -1;
 }
 
 const QoreEncoding* q_get_bom_byte_order(const QoreEncoding* enc, const char* p, size_t len) {
@@ -4692,14 +4715,13 @@ const QoreEncoding* q_get_bom_byte_order(const QoreEncoding* enc, const char* p,
     return bom_enc != enc ? bom_enc : nullptr;
 }
 
-int q_check_read_text(QoreString& str, qore_encoding_errors_t mode, const char* cls, const char* meth,
-        const char* what, ExceptionSink* xsink, int64 line, bool allow_cut_end) {
-    if (mode == qore_encoding_errors_t::KEEP || str.empty()) {
-        return 0;
+qore_offset_t q_string_invalid_offset(const QoreString& str, bool allow_cut_end) {
+    if (str.empty()) {
+        return -1;
     }
     const QoreEncoding* enc = str.getEncoding();
     if (!q_encoding_checks_text(enc)) {
-        return 0;
+        return -1;
     }
     size_t ascii = 0;
     if (enc->isAsciiCompat() && !qore_encoding_private::isStateful(enc)) {
@@ -4708,10 +4730,18 @@ int q_check_read_text(QoreString& str, qore_encoding_errors_t mode, const char* 
         const qore_string_private* p = qore_string_private::get(str);
         ascii = p->getAsciiPrefix(p->effective_buf(), str.size());
         if (ascii >= str.size()) {
-            return 0;
+            return -1;
         }
     }
-    qore_offset_t off = q_text_invalid_offset(str.c_str(), str.size(), enc, allow_cut_end, ascii);
+    return q_text_invalid_offset(str.c_str(), str.size(), enc, allow_cut_end, ascii);
+}
+
+int q_check_read_text(QoreString& str, qore_encoding_errors_t mode, const char* cls, const char* meth,
+        const char* what, ExceptionSink* xsink, int64 line, bool allow_cut_end) {
+    if (mode == qore_encoding_errors_t::KEEP) {
+        return 0;
+    }
+    qore_offset_t off = q_string_invalid_offset(str, allow_cut_end);
     if (off < 0) {
         return 0;
     }
@@ -4719,7 +4749,7 @@ int q_check_read_text(QoreString& str, qore_encoding_errors_t mode, const char* 
         str.setEncoding(QCS_ISO_8859_1);
         return 0;
     }
-    q_raise_invalid_read_text(xsink, cls, meth, what, enc, off, line);
+    q_raise_invalid_read_text(xsink, cls, meth, what, str.getEncoding(), off, line);
     return -1;
 }
 

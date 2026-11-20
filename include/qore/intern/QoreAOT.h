@@ -305,6 +305,17 @@ DLLLOCAL const name_vec_t* qore_aot_read_callref_arg_names(const QoreAOTBinaryRe
 */
 DLLLOCAL std::string qore_aot_named_call_arg_prefix(const FunctionCallBase* call, bool with_map = true);
 
+//! The AOT variant key name(type1,type2,...), using serializable parameter type paths.
+std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
+
+//! Encodes an inline constructor's class and, for named arguments, the binding and selected constructor signature.
+DLLLOCAL std::string qore_aot_inline_constructor_ref(const FunctionCallBase* call, std::string class_ref,
+        const char* deferred_signature = nullptr);
+
+//! Finds the exact constructor selected by a named call when the class's variants are available.
+DLLLOCAL const AbstractQoreFunctionVariant* qore_aot_find_constructor_variant(const QoreClass* qc,
+        const char* signature);
+
 //! sets the binding of the arguments of a named call read with qore_aot_parse_named_call_arg_prefix() on the call
 /** a function call resolved at run time by parameter name is replaced with a RuntimeNamedFunctionCallNode
 
@@ -1078,6 +1089,34 @@ DLLLOCAL ParseObjectMethodReferenceNode* qore_aot_make_object_method_ref(QorePro
     @param is_static true for a static method, false for a normal one
 */
 DLLLOCAL const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* name, bool is_static);
+
+//! Encodes the method of a static method call reference for AOT metadata
+/** The method's name, followed by a newline and the class reference of the class that declares the method when that
+    is not the class that the reference names (@a scope_qc), so that the method that the compiler resolved is loaded:
+    a lookup of the name in the named class finds the first parent class that has a method of the name, which can be
+    another one than the compiler resolved with the access of the code that makes the reference (qore#6679)
+
+    @param method the method of the reference
+    @param scope_qc the class that the reference names
+*/
+DLLLOCAL std::string qore_aot_encode_static_method_ref_target(const QoreMethod* method, const QoreClass* scope_qc);
+
+//! Resolves the method of a static method call reference encoded by qore_aot_encode_static_method_ref_target()
+/** @param pgm the Program the image is loaded into
+    @param scope_qc the class that the reference names
+    @param target the encoded method
+    @param have_class set to true if @a target names the class that declares the method, in which case the method is
+    found only in that class, which must be @a scope_qc or one of its parent classes, and nullptr is returned if it is
+    not found there; set to false if it does not, in which case nullptr is returned and the caller looks the name up
+    as for a reference written before the class was recorded
+
+    @return the method, or nullptr
+*/
+DLLLOCAL const QoreMethod* qore_aot_resolve_static_method_ref_target(QoreProgram* pgm, const QoreClass* scope_qc,
+        const char* target, bool& have_class);
+
+//! Returns the method name of a static method call reference encoded by qore_aot_encode_static_method_ref_target()
+DLLLOCAL std::string qore_aot_static_method_ref_target_name(const char* target);
 
 //! Clears namespace/global/static data for all registered AOT user modules.
 /** AOT user modules are loaded as binary modules, so they are skipped by

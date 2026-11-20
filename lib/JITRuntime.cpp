@@ -5042,9 +5042,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(QoreAOTC
     }
 
     ClassAccess access = Public;
-    const QoreMethod* method = qc->findStaticMethod(method_name, access);
-    if (!method) {
-        method = qc->findMethod(method_name, access);
+    // a reference that the compiler resolved records the class that declares its method, which is called whatever
+    // other parent class has a method of the name (qore#6679); a deferred reference has the name only
+    bool have_class;
+    const QoreMethod* method = qore_aot_resolve_static_method_ref_target(pgm, qc, method_name, have_class);
+    std::string name_buf;
+    if (have_class) {
+        name_buf = qore_aot_static_method_ref_target_name(method_name);
+        method_name = name_buf.c_str();
+        if (method) {
+            // the access of the method from the named class: its own, or private if it is inherited through a
+            // private parent class
+            bool priv = false;
+            if (method->getClass() != qc) {
+                qc->getClass(*method->getClass(), priv);
+            }
+            access = priv ? Private : method->getAccess();
+        }
+    } else {
+        method = qc->findStaticMethod(method_name, access);
+        if (!method) {
+            method = qc->findMethod(method_name, access);
+        }
     }
     if (!method) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
@@ -5203,13 +5222,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
         // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference();
         // by the method's own name, also when the name has the class references of the "\x01" and "\x02" forms below
         const char* pseudo_name = method_name;
+        // the name without the class that declares a static method (qore#6679)
+        std::string static_name;
         if (method_name[0] == '\x01') {
             const char* end = strchr(method_name + 1, '\x01');
             if (!end) {
                 xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "invalid AOT object method reference");
                 return toBits(QoreValue());
             }
-            pseudo_name = end + 1;
+            static_name = qore_aot_static_method_ref_target_name(end + 1);
+            pseudo_name = static_name.c_str();
         } else if (method_name[0] == '\x02') {
             const QoreClass* declared_class;
             const QoreMethod* parse_method;
@@ -5237,8 +5259,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
             pgm = getProgram();
         }
         const QoreClass* qc = pgm ? qore_aot_resolve_class_ref(pgm, class_ref.c_str()) : nullptr;
-        ClassAccess access = Public;
-        const QoreMethod* method = qc ? qc->findStaticMethod(mname, access) : nullptr;
+        // the method that the compiler resolved, given with the class that declares it if that is not the declared
+        // class (qore_aot_encode_static_method_ref_target(), qore#6679)
+        bool have_class = false;
+        const QoreMethod* method = qc ? qore_aot_resolve_static_method_ref_target(pgm, qc, mname, have_class) : nullptr;
+        std::string name_buf;
+        if (have_class) {
+            name_buf = qore_aot_static_method_ref_target_name(mname);
+            mname = name_buf.c_str();
+        } else if (qc) {
+            ClassAccess access = Public;
+            method = qc->findStaticMethod(mname, access);
+        }
         if (!method) {
             xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "cannot resolve reference to static method "
                 "%s::%s()", qc ? qc->getName() : class_ref.c_str(), mname);

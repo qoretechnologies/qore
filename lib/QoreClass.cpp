@@ -9182,6 +9182,22 @@ bool qore_class_private::runtimeCheckPrivateClassAccess(const qore_class_private
     return qc->getClassIntern(*this, access, true) || (scl && scl->getClass(*qc, access, true));
 }
 
+bool qore_class_private::runtimeCheckMethodVariantAccess(const QoreMethod& m, const AbstractQoreFunctionVariant* v,
+        const qore_class_private* class_ctx) {
+    assert(v);
+    ClassAccess va = METHV_const(v)->getAccess();
+    if (va == Public) {
+        return true;
+    }
+    // the class context of the call is checked again against the method's class, as CodeEvaluationHelper does it:
+    // a context related only to the class of the object (another of its parent classes) has no access
+    if (!class_ctx || !runtimeCheckPrivateClassAccess(*m.getClass(), class_ctx)) {
+        return false;
+    }
+    // a private:internal variant only from the class that declares it (see IList::getFunction())
+    return va != Internal || METHV_const(v)->getClassPriv()->equal(*class_ctx);
+}
+
 qore_type_result_e qore_class_private::parseCheckCompatibleClass(const qore_class_private& oc, bool& may_not_match) const {
     qore_type_result_e rv = parseCheckCompatibleClassIntern(oc, may_not_match);
     if (rv != QTI_NOT_EQUAL)

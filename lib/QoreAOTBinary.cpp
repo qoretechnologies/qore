@@ -13386,7 +13386,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         if (qc) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
             std::string class_ref = qore_aot_encode_class_ref(qc);
-            writer.writeStringRef(class_ref.c_str());
+            writer.writeStringRef(qore_aot_inline_constructor_ref(vrn, std::move(class_ref)).c_str());
             if ((writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                 writeTypePathRef(writer, vrn->getTypeInfo());
             }
@@ -13448,7 +13448,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         }
         if (vrn->isDynamicObjectConstruct()) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
-            writer.writeStringRef(vrn->getDynamicClassName().c_str());
+            writer.writeStringRef(qore_aot_inline_constructor_ref(vrn, vrn->getDynamicClassName()).c_str());
             if ((writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                 writeTypePathRef(writer, vrn->getTypeInfo());
             }
@@ -13596,7 +13596,8 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
             std::string class_ref = socn->oc
                 ? qore_aot_encode_class_ref(socn->oc)
                 : socn->getDynamicClassName();
-            writer.writeStringRef(class_ref.c_str());
+            writer.writeStringRef(qore_aot_inline_constructor_ref(socn, std::move(class_ref),
+                    socn->aot_constructor_signature.c_str()).c_str());
             if ((writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                 writeTypePathRef(writer, socn->getObjectTypeInfo());
             }
@@ -13610,7 +13611,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
         const QoreClass* qc = no->getClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
-        writer.writeStringRef(class_ref.c_str());
+        writer.writeStringRef(qore_aot_inline_constructor_ref(no, std::move(class_ref)).c_str());
         if ((writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
             writeTypePathRef(writer, no->getObjectTypeInfo());
         }
@@ -14585,11 +14586,11 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
         const QoreMethod* method = scr->getMethod();
         // the class that the reference names, whose specialization of a generic class binds the method's type
-        // parameters (qore#6285)
+        // parameters (qore#6285), and the method with the class that declares it (qore#6679)
         const QoreClass* qc = scr->getScopeClass();
         std::string class_path = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_path.c_str());
-        writer.writeStringRef(method ? method->getName() : "");
+        writer.writeStringRef(qore_aot_encode_static_method_ref_target(method, qc).c_str());
         return true;
     }
     if (auto* dscr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {

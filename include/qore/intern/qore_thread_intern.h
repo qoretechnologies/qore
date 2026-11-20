@@ -1728,6 +1728,13 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
 */
 DLLLOCAL bool qore_caller_is_sandboxed();
 
+//! returns true if the calling code may have the process load native code that it chose (a binary module from outside
+//! the module path)
+/** Native code is trusted code: no sandbox governs it.  Trusted code may load it, and code that is not trusted only if
+    it may use uncontrolled APIs: neither its options nor any sandbox that governs it forbid them (qore#6776)
+*/
+DLLLOCAL bool qore_caller_may_load_native_code();
+
 //! returns the domains of \a domain that the code calling a module's user variant that declares them is restricted from
 /** As qore_caller_restricts_domain(), but the initialization of library module code is not a call by the code that
     loads the module; only the restricting functional domains are returned, not the positive options (qore#6337)

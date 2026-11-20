@@ -67,6 +67,8 @@ public:
         if (!collection) {
             return nullptr;
         }
+        // the name given to MongoDatabase::getCollection() or createCollection(), which was checked and converted to
+        // UTF-8
         return new QoreStringNode(mongoc_collection_get_name(collection), QCS_UTF8);
     }
 
