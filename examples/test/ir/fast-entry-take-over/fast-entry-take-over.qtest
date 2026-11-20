@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of qcc executables
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class FastEntryTakeOverTest
+
+#! the fast entry that takes the temporary arguments of a call over (issue #6105)
+/** A call of qcc code that gives a temporary argument to a function or a static method whose parameter takes it over
+    (the parameter is written) calls a copy of the callee's fast entry that takes the caller's reference over, so
+    that the write of the parameter destroys the object, as in the AST interpreter, in and outside try blocks.  The
+    program (fast-entry-take-over.q) logs the destructions of temporaries given to such callees: a write, a write
+    followed by an exception, an exception before the write, two parameters with one temporary or two, a value kept
+    by the callee, recursion, a binding that raises an exception, the static methods of a final class (which have fast
+    entries) and of another class, a method and a loop.  Every mode
+    and the qcc executables at -O0 and -O3 must print the AST interpreter's output, and the qcc code must call the
+    entry that takes the arguments over.
+*/
+class FastEntryTakeOverTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir();
+        string src = dir + "/fast-entry-take-over.q";
+        string libdir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("FastEntryTakeOverTest", "1.0", \ARGV) {
+        libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libdir, libdir, libdir);
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("qcc code calls the entry that takes the arguments over", \testOwnedEntry());
+        set_return_value(main());
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/fast-entry-take-over.expected");
+    }
+
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s", qore_bin, mode, src));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    private string qcc() {
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        return qcc_bin;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"));
+    }
+
+    testModes() {
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected(), run(mode), mode);
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = qcc();
+        TmpDir tmp("qore-fast-entry-take-over-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/fast-entry-take-over-O%s", tmp.path, opt);
+            int rc;
+            string out = backquote(sprintf("%s %s -O%s -o %s %s 2>&1", env, qcc_bin, opt, exe, src), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc cannot compile the program: " + out);
+            }
+            # -b must be the first argument of a compiled program
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b", env, exe));
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(expected(), r.stdout, "-O" + opt);
+        }
+    }
+
+    testOwnedEntry() {
+        string qcc_bin = qcc();
+        TmpDir tmp("qore-fast-entry-take-over-ir-");
+        string exe = tmp.path + "/fast-entry-take-over";
+        string ir_path = tmp.path + "/ir.ll";
+        int rc;
+        string out = backquote(sprintf("%s QORE_DUMP_IR_BEFORE_OPT=1 %s -O0 -o %s %s 2>%s", env, qcc_bin, exe, src,
+            ir_path), \rc);
+        if (rc || !is_file(exe)) {
+            testSkip("qcc cannot compile the program: " + out);
+        }
+        string ir = ReadOnlyFile::readTextFile(ir_path);
+        # the entries of w() and F::s() that take their single argument over are defined and called
+        list<string> defined = (ir =~ x/^define [^@]*@"?([^"(]*\.own\.1)"?\(/gm) ?? ();
+        assertTrue((select defined, $1 =~ /^w_list_auto_/).size() > 0, sprintf("w(): %y", defined));
+        assertTrue((select defined, $1 =~ /^F___static_s_list_auto_/).size() > 0, sprintf("F::s(): %y", defined));
+        list<string> calls = select ir.split("\n"), $1 =~ /\bcall /;
+        foreach string name in (defined) {
+            assertTrue((select calls, $1.find("@" + name + "(") >= 0 || $1.find("@\"" + name + "\"(") >= 0).size() > 0,
+                name + " is called");
+        }
+        # w2() takes over the temporary of its written first parameter, and not that of its second, which it only
+        # reads and borrows (the call releases it when it returns), w2b() that of its written second parameter
+        assertRegex("(?m)^define [^@]*@\"?w2_list_auto__list_auto_[^ (\"]*\\.own\\.10\"?\\(", ir, "w2()");
+        assertRegex("(?m)^define [^@]*@\"?w2b_list_auto__list_auto_[^ (\"]*\\.own\\.01\"?\\(", ir, "w2b()");
+    }
+}

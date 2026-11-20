@@ -137,10 +137,43 @@ every binding, with no change to the inline, direct-parameter and fast-entry cal
 - a native call that gives the callee a temporary argument (`QoreIRToLLVM::callGivesArgs()`, the test of
   `buildArgCleanupArray()`) does not call the fast entry of a callee with `param_take_over`
   (`qore_ir_fast_entry_refuses_given_args()` in the fast-entry gates): it is made by the consume path, which binds
-  from the runtime stack.  No second fast entry is compiled.
+  from the runtime stack, unless it can call the entry that takes its arguments over (below).
 
 The helpers are compiled in `lib/JITRuntimeTakeOver.cpp`, outside the single compilation unit.  A range slice and an
 `extract` give a new sequence, which a call consumes as a call's result (`qore_ir_is_sequence_temp()`).
+
+## The fast entry that takes its arguments over (issue #6105)
+
+In AOT code, a call that gives temporaries to a function or a static method whose parameter takes its argument over
+calls a copy of the callee's fast entry that takes the caller's references over instead of the consume path
+(`QoreIRToLLVM::callCanTakeOverToFastEntry()`): the call must give only the cleanup slots of temporaries (no slot of a
+read through a reference, whose value is known at run time only), at least one of them to a parameter whose fast entry
+takes a reference of its own, and the callee's fast entry must be defined in the module (not of another module or a
+sibling artifact).
+
+- The prologue of every fast entry marks the reference that it takes to a boxed argument (`qore_rt_incref` with the
+  metadata `QORE_FAST_ENTRY_ARG_REF_MD`); which parameters take one is the rule of the prologue
+  (`qore_aot_fast_entry_param_takes_ref()`: a boxed parameter that is not borrowed, `param_noescape`, or that strips
+  the complex type of its argument).
+- The call declares `<fast entry>.own.<mask>` (`ownedFastEntry()`), the mask having a `1` for each argument whose
+  reference it hands over (a temporary given to a parameter that takes a reference); before it is optimized, the
+  module defines each such declaration as a copy of the fast entry without the marked references of those arguments
+  (`QoreIRToLLVM::materializeOwnedFastEntries()`, called by `emitObjectFile()`), and fails the compilation if one is
+  missing.  Only the entries that calls use are copied.
+- The call clears the slots that it hands over right before the call (`emitAotBatchFastEntryOrFallback()`): the
+  parameter then holds the only reference, a write releases it, and the entry releases it when it returns, also when
+  it raises an exception; the caller's landing pad finds the slots empty and releases only the slots that it did not
+  hand over, which a call that gives a slot to a borrowed parameter releases when the call returns, as before.
+- Nothing is handed over before the checks of the fast path pass (the callee's context, the checks of arguments for
+  NOTHING and of date kinds); a call whose checks fail is made by the consume path, which binds the parameters from
+  the runtime stack and can raise an exception while it binds them, before anything is taken over.
+- The calls that give nothing, and the calls of callees whose parameters take nothing over, call the fast entry as
+  before.  The JIT does not use the copies: its fast entries can be defined in an earlier batch module, which a copy
+  cannot be made from.
+
+A static method has a fast entry only in a final class or if it is a final method (since 6a26053517, the methods of
+a class that is not final have no fast entry unless context independent), so the calls of the static methods of other
+classes are made by the consume path, as before.
 
 ## Measurements (2026-11-15)
 

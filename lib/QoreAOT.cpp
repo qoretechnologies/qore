@@ -24614,6 +24614,13 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         return false;
     }
 
+    // the fast entries that take their arguments over, which the calls declared (issue #6105): defined before the
+    // functions are sorted and optimized
+    if (!QoreIRToLLVM::materializeOwnedFastEntries(module, error)) {
+        delete tm;
+        return false;
+    }
+
     // LLVM emits functions in module-list order. That list can inherit
     // unordered namespace traversal order even though symbol names and
     // contents are stable, producing byte-different objects and unnecessary
