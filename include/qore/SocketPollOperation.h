@@ -109,21 +109,21 @@ class SocketPollOperationMembers {
 public:
     DLLLOCAL SocketPollOperationMembers() = default;
 
-    DLLLOCAL ~SocketPollOperationMembers();
+    DLLEXPORT ~SocketPollOperationMembers();
 
     //! sets the value of \c "sock" or \c "goal"; the reference of the value is consumed
-    DLLLOCAL void setPollMember(const char* key, QoreValue val, ExceptionSink* xsink);
+    DLLEXPORT void setPollMember(const char* key, QoreValue val, ExceptionSink* xsink);
 
     //! returns a referenced value of \c "sock" or \c "goal", or no value if none is set
-    DLLLOCAL QoreValue getReferencedPollMember(const char* key) const;
+    DLLEXPORT QoreValue getReferencedPollMember(const char* key) const;
 
     //! releases the values; called when the object of the operation is deleted
-    DLLLOCAL void releasePollMembers(ExceptionSink* xsink);
+    DLLEXPORT void releasePollMembers(ExceptionSink* xsink);
 
     //! reports the socket of the operation to the scan for recursive references of its object if it holds it strongly
     /** a member was scanned with the object; see design/dgc.md Pattern B and qore_socket_poll_op_scan_members()
     */
-    DLLLOCAL bool scanPollMembers(class RObject& obj, class RSetHelper& rsh);
+    DLLEXPORT bool scanPollMembers(class RObject& obj, class RSetHelper& rsh);
 
     //! the object of the operation, if it is registered for the scan of its private data (a strong socket reference)
     /** a value that is given up is marked on it (RObject::edgesRemoved()), as for the other containers of
