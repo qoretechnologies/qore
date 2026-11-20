@@ -518,9 +518,10 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
     #! the other names of the multi-byte encodings that Qore defines, and an encoding of a probed family (qore#6796,
     #! #6665)
     multiByteValidTest() {
-        # an encoding of a multi-byte family whose definition Qore knows, by any name that iconv implementations know
-        # for it, also with conversion flags, has the character functions of its definition, which check the input of
-        # its conversions on every platform (qore#6796): the encoding, its bytes, the number of characters that they
+        # an encoding of a multi-byte family whose definition Qore knows, by the names that iconv implementations know
+        # for it, also with conversion flags, has the character functions of its definition where the platform's iconv
+        # converts to and from it (an encoding that iconv only decodes is not probed: musl's GB2312), and they check the
+        # input of its conversions (qore#6796): the encoding, its bytes, the number of characters that they
         # are, or -1 if they are no characters of the encoding, which its conversions refuse, and True if every iconv
         # that has the encoding converts them (isEncodingValid() is a conversion to UTF-8, so it is checked only then)
         list<list<auto>> defined = (
@@ -582,10 +583,11 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         }
     }
 
-    #! returns True if the platform's iconv converts from the encoding
+    #! returns True if the platform's iconv converts to and from the encoding
     static bool converts(string enc) {
         try {
-            return convert_encoding(binary_to_string(<41>, enc), "UTF-8") == "A";
+            return convert_encoding(binary_to_string(<41>, enc), "UTF-8") == "A"
+                && binary(convert_encoding("A", enc)) == <41>;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "ENCODING-CONVERSION-ERROR" && ex.desc =~ /cannot convert from/) {
                 return False;
