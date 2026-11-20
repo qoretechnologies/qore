@@ -133,6 +133,12 @@
     @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" change it
     (<a href="https://github.com/qoretechnologies/qore/issues/6867">issue 6867</a>).
 
+    @par A Member of a System Class Cannot Be Combined With a User Member of the Same Name
+    A class hierarchy that combines a member of a user class with a member of a system class of the same name is
+    refused whatever the order of the parent classes (it was refused in only one order), and the parse error names the
+    class being parsed (see @ref class_member_combination;
+    <a href="https://github.com/qoretechnologies/qore/issues/6772">issue 6772</a>).
+
     @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
     get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes

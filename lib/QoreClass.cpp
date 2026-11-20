@@ -6532,18 +6532,21 @@ QoreValue qore_class_private::parseFindConstantValueIntern(const char* cname, co
 }
 
 int qore_class_private::parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& b_mi,
-        const QoreMemberInfo& l_mi) const {
-    // if both classes are system classes, then ignore
-    if (sys && l_mi.getClass()->sys) {
+        const QoreMemberInfo& l_mi, const char* cname) const {
+    // if both classes are system classes, then ignore; this function runs on the class of l_mi, so the other
+    // declaration's class is b_mi's (qore#6772)
+    if (sys && b_mi.getClass()->sys) {
         return 0;
     }
     if (l_mi.access != b_mi.access || l_mi.parseHasTypeInfo() || b_mi.parseHasTypeInfo()) {
         // raise an exception only if parse exceptions are enabled
         if (qore_program_ops(getProgram()).getParseExceptionSink()) {
-            qore_program_private::makeParseException(getProgram(), *l_mi.loc, "PARSE-ERROR",
+            // the declaration of a system class has no location of its own (qore#6772)
+            const QoreProgramLocation* loc = l_mi.loc ? l_mi.loc : b_mi.loc;
+            qore_program_private::makeParseException(getProgram(), loc ? *loc : loc_builtin, "PARSE-ERROR",
                 new QoreStringNodeMaker("class '%s' cannot be combined with class '%s' in the same hierarchy because "
                     "member '%s' is accessible from class '%s' from more than one declaration in the hierarchy",
-                    l_mi.getClass()->name.c_str(), b_mi.getClass()->name.c_str(), mname, name.c_str()));
+                    l_mi.getClass()->name.c_str(), b_mi.getClass()->name.c_str(), mname, cname));
         }
         return -1;
     }
@@ -6629,7 +6632,7 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                 i.second->exp.getTypeName(), privpub(access), privpub(mi->access));
 
             if (!mi->getClass()->equal(*i.second->getClass())
-                    && mi->getClass()->parseCheckClassHierarchyMembers(i.first, *(i.second), *mi)) {
+                    && mi->getClass()->parseCheckClassHierarchyMembers(i.first, *(i.second), *mi, name.c_str())) {
                 // the declarations cannot be combined: the hierarchy is a parse error
                 continue;
             }

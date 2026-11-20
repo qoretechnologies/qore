@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SystemMemberCombinationTest
+
+#! A member of a user class and a member of a system class of the same name are refused in both orders (#6772)
+/** A class hierarchy that combines a member of a user class with a member of a system class of the same name is
+    refused, whatever the order of the parent classes, for a public and for a private member, and the error names the
+    class being parsed; a member of another name, and the members of the same name of two system classes, are
+    combined.  SystemMemberCombination.q gives the same output in every execution mode and compiled with qcc.
+*/
+class SystemMemberCombinationTest inherits QUnit::Test {
+    public {
+        #! the error of a refused case, the text of the existing parse error (qore#6772 names the class being parsed, X,
+        #! in it): the declaration imported first, of the parent class listed first, is named first
+        const RefusedError = "PARSE-ERROR: class '%s' cannot be combined with class '%s' in the same hierarchy because "
+            + "member '%s' is accessible from class 'X' from more than one declaration in the hierarchy";
+
+        #! the output of SystemMemberCombination.q, from the rule (qore#6772): a member of a system class and a member
+        #! of the same name of a user class are refused in both orders of the parent classes, for a public and for a
+        #! private member; a member of another name and the members of two system classes are combined
+        const Expected = {
+            "public order 1": sprintf(RefusedError, "FtpClient", "U", "path"),
+            "public order 2": sprintf(RefusedError, "U", "FtpClient", "path"),
+            "public int order 1": sprintf(RefusedError, "FtpClient", "A", "path"),
+            "public int order 2": sprintf(RefusedError, "A", "FtpClient", "path"),
+            "private order 1": sprintf(RefusedError, "PollPipeline", "U", "goal"),
+            "private order 2": sprintf(RefusedError, "U", "PollPipeline", "goal"),
+            "other member": "ok",
+            "two system classes": "ok",
+        };
+
+        #! the cases that are refused
+        const Refused = (
+            "public order 1", "public order 2", "public int order 1", "public int order 2",
+            "private order 1", "private order 2",
+        );
+
+        #! the cases that are accepted
+        const Accepted = ("other member", "two system classes");
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("SystemMemberCombinationTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/SystemMemberCombination.q";
+        addTestCase("the cases", \casesTest());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": both orders are refused", \modeTest(), (mode,));
+        }
+        addTestCase("jit with synchronous compiles: both orders are refused", \syncJitTest());
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: both orders are refused", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    #! the expected output refuses both orders, naming the class being parsed, and accepts the others
+    casesTest() {
+        hash<auto> expected = Expected;
+        foreach string c in (Refused) {
+            assertTrue(expected{c} =~ /^PARSE-ERROR: /, c + " is refused");
+            assertTrue(expected{c} =~ /accessible from class 'X' /, c + ": the error names the class being parsed");
+        }
+        foreach string c in (Accepted) {
+            assertEq("ok", expected{c}, c + " is accepted");
+        }
+    }
+
+    modeTest(string mode) {
+        checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script)));
+    }
+
+    #! JIT with its default thresholds and synchronous compiles
+    syncJitTest() {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf(
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=jit %s", libqore_dir, libqore_dir, qore_bin,
+            script), NOTHING, "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_TIMING=1");
+        checkOutput("jit with synchronous compiles", r.out);
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-system-member-combination-");
+        string exe = tmp.path + DirSep + "system-member-combination";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput(sprintf("qcc -O%d", opt), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)));
+    }
+
+    #! Checks the output of a run against the expected output, line by line
+    private checkOutput(string mode, string output) {
+        hash<auto> expected = Expected;
+        hash<string, string> actual = parseOutput(output);
+        assertEq(keys expected, keys actual, mode + ": the cases of the output");
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, actual{i.key}, sprintf("%s: %s", mode, i.key));
+        }
+    }
+
+    #! Returns the lines of an output by their case label
+    private static hash<string, string> parseOutput(string output) {
+        hash<string, string> rv();
+        foreach string line in (output.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            int i = line.find(": ");
+            rv{i > 0 ? line.substr(0, i) : line} = i > 0 ? line.substr(i + 2) : "";
+        }
+        return rv;
+    }
+}
