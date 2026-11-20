@@ -425,7 +425,7 @@ public class TabularProfiler {
         /** The pattern is read as the UTF-8 text of the source, which the default encoding of the process need not
             be (issue #6666)
         */
-        static Regex totals_label_regex(TabularProfiler::sourceText(TotalsRegex), RE_Caseless | RE_Unicode);
+        static Regex totals_label_regex(TotalsRegex, RE_Caseless | RE_Unicode);
 
         #! @ref TotalsFormulaRegex compiled once
         static Regex totals_formula_regex(TotalsFormulaRegex, RE_Caseless);
@@ -453,14 +453,13 @@ public class TabularProfiler {
             ISO-8859-1): the markers are looked up by their UTF-8 bytes, so that the module loads and matches them in
             any process encoding (issue #6663)
         */
-        const EmptyMarkerSet = map {TabularProfiler::getEmptyMarkerKey(TabularProfiler::sourceText($1)): True},
-            EmptyMarkers;
+        const EmptyMarkerSet = map {TabularProfiler::getEmptyMarkerKey($1): True}, EmptyMarkers;
 
         #! The length in characters of the longest of the @ref EmptyMarkers
-        const MaxEmptyMarkerLength = max(map TabularProfiler::sourceText($1).length(), EmptyMarkers);
+        const MaxEmptyMarkerLength = max(map $1.length(), EmptyMarkers);
 
         #! The ellipsis that ends a truncated redacted value, as UTF-8 text
-        const Ellipsis = TabularProfiler::sourceText("…");
+        const Ellipsis = "…";
 
         #! Header labels that name periods
         const PeriodHeaderRegex = "^\\s*(W(K|eek)?\\s*\\d{1,2}|KW\\s*\\d{1,2}|Q[1-4]|\\d{4}[-/]\\d{1,2}|\\d{1,2}[-/]\\d{4}"
@@ -477,17 +476,6 @@ public class TabularProfiler {
     #! Returns the key of a text in @ref EmptyMarkerSet: the hex digits of its UTF-8 bytes (issue #6663)
     private static string getEmptyMarkerKey(string text) {
         return binary(text.encoding() == "UTF-8" ? text : convert_encoding(text, "UTF-8")).toHex();
-    }
-
-    #! Returns a string whose bytes are UTF-8 as UTF-8 text
-    /** A string literal of the module's source and a substring that a regular expression extracts from text hold
-        UTF-8 bytes, but a process whose default encoding is not UTF-8 tags them with its own encoding, and converting
-        them from that encoding would garble every character that is not ASCII (issue #6666).  This works around
-        issues #6815 (regular expression captures) and #6816 (non-ASCII literals); a string that is tagged with
-        UTF-8, as it would be once they are fixed, is returned unchanged.
-    */
-    private static string sourceText(string text) {
-        return text.encoding() == "UTF-8" ? text : binary_to_string(binary(text), "UTF-8");
     }
 
     #! Returns the text of a cell as UTF-8 text
@@ -886,10 +874,10 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         # a currency before the number
         *list<*string> pre = (s =~ x/^(\p{Sc}|[A-Z]{3})( *)(.*)$/u);
         if (pre && (pre[0] !~ /^[A-Z]{3}$/ || CurrencyCodeSet{pre[0]})) {
-            rv.currency = sourceText(pre[0]);
+            rv.currency = convert_encoding(pre[0], "UTF-8");
             rv.currency_position = "before";
             rv.currency_space = pre[1].val();
-            s = sourceText(pre[2]);
+            s = convert_encoding(pre[2], "UTF-8");
             if (!sign && s =~ /^[-+\x{2212}]/u) {
                 sign = s[0];
                 s = trim(s.substr(1));
@@ -903,10 +891,10 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
         if (!rv.currency) {
             *list<*string> post = (s =~ x/^(.*?)( *)(\p{Sc}|[A-Z]{3})$/u);
             if (post && (post[2] !~ /^[A-Z]{3}$/ || CurrencyCodeSet{post[2]})) {
-                rv.currency = sourceText(post[2]);
+                rv.currency = convert_encoding(post[2], "UTF-8");
                 rv.currency_position = "after";
                 rv.currency_space = post[1].val();
-                s = sourceText(post[0]);
+                s = convert_encoding(post[0], "UTF-8");
             }
         }
         if (!rv) {
@@ -1173,14 +1161,14 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
     #! The yes/no pairs a column of text is recognized by: each true value and its false value, in lower case
     /** As UTF-8 text, which the default encoding of the process need not be (issue #6666)
     */
-    const BoolPairs = map (TabularProfiler::sourceText($1[0]), TabularProfiler::sourceText($1[1])), (
+    const BoolPairs = (
         ("true", "false"), ("yes", "no"), ("y", "n"), ("t", "f"), ("on", "off"), ("ja", "nein"),
         ("oui", "non"), ("si", "no"), ("sí", "no"), ("ano", "ne"), ("áno", "nie"), ("tak", "nie"),
         ("wahr", "falsch"), ("✓", "✗"), ("✔", "✘"), ("☑", "☐"),
     );
 
     #! The values that mark a yes in a column whose other cells are empty, as UTF-8 text
-    const BoolMarks = map TabularProfiler::sourceText($1), ("x", "✓", "✔", "☑");
+    const BoolMarks = ("x", "✓", "✔", "☑");
 
     #! Recognizes a yes/no column from its distinct values
     /** @param spellings the distinct non-empty values in lower case, each with its spellings and their counts, keyed

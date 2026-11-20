@@ -88,7 +88,7 @@ static int scanner_validate_utf8(QoreParseState::FileInput& input, const char* b
     }
     unsigned iterations = 0;
     while (pos < size) {
-        if (!(++iterations % 100) && qore_check_cancel(&xsink, "validating source encoding")) {
+        if (!(++iterations % 100) && qore_check_thread_cancel(xsink, "validating source encoding")) {
             return -1;
         }
         unsigned char first = buf[pos];

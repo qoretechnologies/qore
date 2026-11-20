@@ -9,7 +9,7 @@
 
 %requires DataProvider
 
-#! the text of a literal of this file as UTF-8: the file is UTF-8, but a process tags a literal with its own encoding
+#! Supplies the same UTF-8 test values before and after the change to source literal encoding (#6816)
 string sub t(string literal) {
     return binary_to_string(binary(literal), "UTF-8");
 }
@@ -105,7 +105,8 @@ show("iso_currency", TabularProfiler::profile(<TabularWorkbookGrid>{
     "format": "csv",
     "sheets": (<TabularSheetGrid>{
         "name": "c",
-        "rows": (("P",), (convert_encoding(t("£5"), "ISO-8859-1"),), (convert_encoding(t("£7.50"), "ISO-8859-1"),)),
+        "rows": (("P", "S"), (convert_encoding(t("£5"), "ISO-8859-1"), convert_encoding(t("5£"), "ISO-8859-1")),
+            (convert_encoding(t("£7.50"), "ISO-8859-1"), convert_encoding(t("7.50£"), "ISO-8859-1"))),
     },),
 }));
 printf("default %s\n", get_default_encoding());

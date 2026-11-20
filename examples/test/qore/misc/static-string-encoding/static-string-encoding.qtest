@@ -26,18 +26,22 @@ class StaticStringEncodingTest inherits QUnit::Test {
     private {
         #! the script that each child runs
         const Script = "%modern
-string sub check(auto v) {
-    return sprintf(\"%y\", Serializable::deserialize(Serializable::serialize(v)));
+# Exercise formatted output in the process charset even when the source literals are UTF-8.
+string sub fmt(string format) {
+    return convert_encoding(format, get_default_encoding());
 }
-printf(\"serialize: %s\\n\", check(42));
-printf(\"serialize: %s\\n\", check({\"a\": (1, \"x\", True, NULL, 1.5)}));
-printf(\"serialize: %s\\n\", check(binary_to_string(<e9>, \"ISO-8859-1\")));
+string sub check(auto v) {
+    return sprintf(fmt(\"%y\"), Serializable::deserialize(Serializable::serialize(v)));
+}
+printf(fmt(\"serialize: %s\\n\"), check(42));
+printf(fmt(\"serialize: %s\\n\"), check({\"a\": (1, \"x\", True, NULL, 1.5)}));
+printf(fmt(\"serialize: %s\\n\"), check(binary_to_string(<e9>, \"ISO-8859-1\")));
 binary b = Serializable::serialize(1);
-printf(\"header: %s\\n\", (map sprintf(\"%02x\", get_byte(b, $1)), xrange(7)).join(\"\"));
-printf(\"values: %y %n %y %n %y %y\\n\", True, False, NULL, NOTHING, {}, ());
-printf(\"list: %N\\n\", (True, NULL, NOTHING, {}, ()));
-printf(\"hash: %y\\n\", {\"a\": (True, NULL, NOTHING, {}, ())});
-printf(\"default: %s\\n\", get_default_encoding());
+printf(fmt(\"header: %s\\n\"), (map sprintf(fmt(\"%02x\"), get_byte(b, $1)), xrange(7)).join(\"\"));
+printf(fmt(\"values: %y %n %y %n %y %y\\n\"), True, False, NULL, NOTHING, {}, ());
+printf(fmt(\"list: %N\\n\"), (True, NULL, NOTHING, {}, ()));
+printf(fmt(\"hash: %y\\n\"), {\"a\": (True, NULL, NOTHING, {}, ())});
+printf(fmt(\"default: %s\\n\"), get_default_encoding());
 ";
 
         #! the lines that each child prints, without its default encoding
