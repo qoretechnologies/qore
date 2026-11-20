@@ -1469,10 +1469,12 @@ done
 # program that the test started showed only as a timeout.  The tools are tried in the order of QORE_TEST_STACK_TOOLS
 # (default: gdb, then eu-stack, on Linux; sample, then lldb, on macOS), the next one when one is not installed or
 # fails; gdb, eu-stack, lldb and sample are run with the options that print every thread's stack, any other command as
-# "<command> <pid>".  A capture can change what the process does next: a debugger's attach stops it and resumes it,
-# which ends some of its blocking system calls with EINTR (lldb: read(); gdb and eu-stack on Linux: epoll_wait() and
-# sigtimedwait(), for example), while sample reads the threads of a suspended task, which is why it comes first on
-# macOS.
+# "<command> <pid>".  In a CI job, gdb and eu-stack run as root through the job's helper
+# (QORE_TEST_STACK_CAPTURE_HELPER; see examples/test/docker_test/ci-stack-capture.sh, which describes what it
+# accepts); if it does not read its request, the tool runs as the runner's user.  A capture can change what the process
+# does next: a debugger's attach stops it and resumes it, which ends some of its blocking system calls with EINTR
+# (lldb: read(); gdb and eu-stack on Linux: epoll_wait() and sigtimedwait(), for example), while sample reads the
+# threads of a suspended task, which is why it comes first on macOS.
 #
 # Each capture is ended with SIGKILL by the timeout command after QORE_TEST_STACK_CAPTURE_WAIT seconds (default 30),
 # and the captures together take at most QORE_TEST_STACK_CAPTURE_TOTAL seconds (default 120; the checks before each
@@ -1699,8 +1701,52 @@ process_exists() {
     fi
 }
 
+# Runs gdb or eu-stack (the first argument) on the given process with the given time limit in seconds through the CI
+# job's helper (see above), as root; prints its output, and returns the tool's exit code, 126 if the helper refused the
+# request, 137 if it did not answer in time, or 125 if it did not read the request (the tool is then run as the
+# runner's user).  The answer comes through a FIFO in the runner's own directory, which the helper opens as the
+# runner's user.
+runs_stack_helper() {
+    stack_reply="${TEST_EVENT_DIR:-${TMPDIR:-/tmp}}/stack-reply.$$"
+    rm -f "$stack_reply" "$stack_reply.out"
+    if ! mkfifo -m 600 "$stack_reply" 2>/dev/null; then
+        echo "*** the FIFO for the answer of the stack capture helper cannot be made: $stack_reply ***"
+        return 125
+    fi
+    # one line, which a FIFO takes whole; the helper holds its FIFO open, so the open blocks only if it has ended
+    if ! $TIMEOUT_CMD -s KILL 5 sh -c 'printf "%s\n" "$2" > "$1"' sh "$QORE_TEST_STACK_CAPTURE_HELPER" \
+            "$2 $3 $TEST_PROCESS_MARK $1 $stack_reply" 2>/dev/null; then
+        rm -f "$stack_reply"
+        echo "*** the stack capture helper ($QORE_TEST_STACK_CAPTURE_HELPER) does not read its requests: $1 runs" \
+            "as the runner's user ***"
+        return 125
+    fi
+    $TIMEOUT_CMD -s KILL $(($3 + 15)) cat "$stack_reply" > "$stack_reply.out" 2>/dev/null
+    rm -f "$stack_reply"
+    grep -v '^qore-stack-capture-status: ' "$stack_reply.out" 2>/dev/null
+    stack_status=`sed -n 's/^qore-stack-capture-status: \([0-9][0-9]*\)$/\1/p' "$stack_reply.out" 2>/dev/null | \
+        tail -1`
+    rm -f "$stack_reply.out"
+    if [ -z "$stack_status" ]; then
+        echo "*** the stack capture helper did not answer within $(($3 + 15))s ***"
+        return 137
+    fi
+    return $stack_status
+}
+
 # Runs the given stack tool on the given process with the given time limit in seconds (see above); its exit code
 runs_stack_tool() {
+    case "$1" in
+        gdb|eu-stack)
+            if [ -n "$QORE_TEST_STACK_CAPTURE_HELPER" ] && [ -p "$QORE_TEST_STACK_CAPTURE_HELPER" ]; then
+                runs_stack_helper "$@"
+                stack_helper_rc=$?
+                if [ $stack_helper_rc -ne 125 ]; then
+                    return $stack_helper_rc
+                fi
+            fi
+            ;;
+    esac
     case "$1" in
         gdb)
             DEBUGINFOD_URLS= $TIMEOUT_CMD -s KILL $3 gdb -nx -batch -iex "set debuginfod enabled off" -p $2 \
@@ -1724,7 +1770,9 @@ stack_attach_refused() {
     stack_refused_pid=$2
     shift 2
     if [ -r /proc/self/stat ]; then
-        grep -q "Operation not permitted" "$stack_refused_out" 2>/dev/null || return 1
+        # (or the CI job's helper's refusal for the same reason; see runs_stack_helper())
+        grep -q -e "Operation not permitted" -e "^qore-stack-capture: refused: ptrace restricted" \
+            "$stack_refused_out" 2>/dev/null || return 1
         stack_scope=`cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null`
         case "$stack_scope" in
             1)

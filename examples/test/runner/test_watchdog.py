@@ -709,7 +709,7 @@ def watchdog_functions():
     # runner has of these
     names[:0] = [name for name in ("capture_descendant_stacks", "test_stack_processes", "process_command_line",
                                    "process_exists", "runs_stack_tool", "stack_attach_refused",
-                                   "test_stack_process_check")
+                                   "test_stack_process_check", "runs_stack_helper")
                  if re.search(r"^" + name + r"\(\) \{", source, re.M)]
     if re.search(r"^exec_in_test_group\(\) \{", source, re.M):
         names[:0] = ["exec_in_test_group", "end_test_group"]

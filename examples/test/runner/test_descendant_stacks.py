@@ -27,8 +27,10 @@ import time
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_watchdog import HAVE_TIMEOUT, RunnerTree  # noqa: E402
+from test_watchdog import HAVE_TIMEOUT, ROOT, RunnerTree, end_session, start_in_session  # noqa: E402
 
+# the root helper of the CI jobs (see examples/test/docker_test/ci-stack-capture.sh)
+HELPER = ROOT / "examples/test/docker_test/ci-stack-capture.sh"
 LINUX = os.path.isdir("/proc/self")
 
 
@@ -357,9 +359,131 @@ class DescendantStacksTest(StacksCase):
         self.assertNotIn("reporting-tool was run", result.output)
 
 
-@unittest.skipUnless(HAVE_TIMEOUT and LINUX, "the scan of /proc is Linux's")
-class LinuxScanTest(StacksCase):
-    """The limit of the scan of /proc"""
+@unittest.skipUnless(HAVE_TIMEOUT and LINUX, "the scan of /proc and the CI helper are Linux's")
+class LinuxScanAndHelperTest(StacksCase):
+    """The limit of the scan of /proc, and the captures through the CI job's root helper (here run as the user of the
+    harness, which the helper then answers without gosu)"""
+
+    def start_helper(self, directory, env=None):
+        """Starts the helper in a session of its own; returns its request FIFO.  Its tools are stand-ins in a bin
+        directory of its own, which print that they ran in the helper"""
+        directory = Path(directory)
+        tools = directory / "helper-bin"
+        tools.mkdir()
+        for name in ("gdb", "eu-stack"):
+            path = tools / name
+            path.write_text('#!/bin/sh\necho "the helper ran %s $*"\n' % name)
+            path.chmod(0o755)
+        fifo = directory / "requests"
+        os.mkfifo(fifo, 0o600)
+        helper_env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ.get("PATH", os.defpath))
+        helper_env.update(env or {})
+        self.helper_log = open(directory / "helper.log", "w+")
+        self.addCleanup(self.helper_log.close)
+        helper = start_in_session(["sh", str(HELPER), "serve", subprocess.run(
+            ["id", "-un"], capture_output=True, text=True).stdout.strip(), str(fifo)], env=helper_env,
+            stdin=subprocess.DEVNULL, stdout=self.helper_log, stderr=subprocess.STDOUT)
+        self.addCleanup(end_session, helper)
+        return fifo
+
+    def ask(self, fifo, request, directory):
+        """Sends the helper a request whose reply is a FIFO in the given directory; returns the answer"""
+        reply = Path(directory) / ("reply%d" % time.monotonic_ns())
+        os.mkfifo(reply, 0o600)
+        with open(fifo, "w") as f:
+            f.write(request.replace("{reply}", str(reply)) + "\n")
+        # the helper opens the reply for writing once it answers; the read ends when it has written all of it
+        result = subprocess.run(["timeout", "30", "cat", str(reply)], capture_output=True, text=True)
+        return result.stdout
+
+    def test_a_capture_runs_through_the_helper(self):
+        with tempfile.TemporaryDirectory(prefix="qore-runner-helper-") as directory:
+            fifo = self.start_helper(directory)
+            output, pids, result, elapsed, root = self.run_test(
+                children=2, detached=True, scripts={"gdb": '#!/bin/sh\necho "the runner ran gdb $*"\n'},
+                QORE_TEST_STACK_CAPTURE_HELPER=str(fifo))
+            for pid in pids:
+                stacks = self.capture(output, pid)
+                self.assertRegex(stacks, r"the helper ran gdb -nx -batch .* -p %d -ex thread apply all bt" % pid)
+                self.assertNotIn("the runner ran", stacks)
+                self.assertNotIn("qore-stack-capture-status", stacks)
+            self.assert_before_signals(output)
+            # the answers' FIFOs are gone
+            self.assertEqual([], list(root.glob("tmp/qore-test-events.*/stack-reply*")))
+
+    def test_the_helper_refuses_any_request_but_a_test_s_process(self):
+        with tempfile.TemporaryDirectory(prefix="qore-runner-helper-") as directory:
+            fifo = self.start_helper(directory)
+            # a process of the user without a test's mark: this harness
+            me = os.getpid()
+            for request, why in (
+                    ("%d 5 1.1 gdb {reply}" % me, "process %d is not a process of the test with mark 1.1" % me),
+                    ("1 5 1.1 gdb {reply}", "process 1 is not a process of the runner's user"),
+                    ("x 5 1.1 gdb {reply}", "the process ID is not a number"),
+                    ("01 5 1.1 gdb {reply}", "the process ID is not a number"),
+                    ("1234567890 5 1.1 gdb {reply}", "the process ID is not a number"),
+                    ("%d 0 1.1 gdb {reply}" % me, "the time limit is not 1 to 300 seconds"),
+                    ("%d 301 1.1 gdb {reply}" % me, "the time limit is not 1 to 300 seconds"),
+                    ("%d 5 a.1 gdb {reply}" % me, "the mark is not a test's"),
+                    ("%d 5 1.1 sh {reply}" % me, "the tool is neither gdb nor eu-stack"),
+                    ("%d 5 1.1 /bin/sh {reply}" % me, "the tool is neither gdb nor eu-stack")):
+                with self.subTest(request=request):
+                    answer = self.ask(fifo, request, directory)
+                    self.assertEqual("qore-stack-capture: refused: %s\nqore-stack-capture-status: 126\n" % why,
+                                     answer)
+            # a request it cannot answer: logged, and the helper goes on
+            for request in ("%d 5 1.1 gdb relative/reply" % me, "%d 5 1.1 gdb /tmp/a;b" % me, "%d 5 1.1 gdb" % me):
+                with open(fifo, "w") as f:
+                    f.write(request + "\n")
+            answer = self.ask(fifo, "%d 5 1.1 sh {reply}" % me, directory)
+            self.assertIn("refused", answer)
+            self.helper_log.seek(0)
+            log = self.helper_log.read()
+            self.assertIn("a request whose reply is not an absolute path is ignored", log)
+            self.assertIn("a request whose reply has other characters is ignored", log)
+            self.assertIn("a request that is not five fields is ignored", log)
+
+    def test_a_helper_that_ptrace_restricts_is_reported_once(self):
+        # A helper without CAP_SYS_PTRACE (a pod that is not privileged) may not read the environment of the test's
+        # processes, and refuses each request with "ptrace restricted": the runner reports it once, as a refused
+        # attach, and asks for no other process.  The helper is a stand-in that answers every request so.
+        with tempfile.TemporaryDirectory(prefix="qore-runner-helper-") as directory:
+            fifo = Path(directory) / "requests"
+            os.mkfifo(fifo, 0o600)
+            requests = Path(directory) / "requests.log"
+            helper = start_in_session(["sh", "-c", """
+                exec 3<> "$1"
+                while read -r pid secs mark tool reply <&3; do
+                    echo "$pid $tool" >> "$2"
+                    printf 'qore-stack-capture: refused: ptrace restricted: the helper may not read %s\\n%s\\n' \
+                        "the environment of process $pid (it has no CAP_SYS_PTRACE)" \
+                        "qore-stack-capture-status: 126" > "$reply"
+                done""", "sh", str(fifo), str(requests)], stdin=subprocess.DEVNULL)
+            self.addCleanup(end_session, helper)
+            output, pids, result, elapsed, root = self.run_test(
+                children=2, scripts={"gdb": '#!/bin/sh\necho "the runner ran gdb $*"\n'},
+                QORE_TEST_STACK_CAPTURE_HELPER=str(fifo), QORE_TEST_STACK_TOOLS="gdb eu-stack")
+            pids.sort()
+            lines = [line for line in output.splitlines() if line.startswith("*** ptrace restricted")]
+            self.assertEqual(1, len(lines), output)
+            self.assertIn("no stacks captured (processes %d %d)" % tuple(pids), lines[0])
+            self.assertEqual(["%d gdb" % pids[0]], requests.read_text().splitlines())
+            self.assertNotIn("the runner ran gdb", output)
+            self.assert_before_signals(output)
+
+    def test_a_helper_that_does_not_read_its_requests_is_not_waited_for(self):
+        # a FIFO without a reader (a helper that has ended): the runner runs the tool itself
+        with tempfile.TemporaryDirectory(prefix="qore-runner-helper-") as directory:
+            fifo = Path(directory) / "requests"
+            os.mkfifo(fifo, 0o600)
+            output, pids, result, elapsed, root = self.run_test(
+                scripts={"gdb": '#!/bin/sh\necho "the runner ran gdb $*"\n'},
+                QORE_TEST_STACK_CAPTURE_HELPER=str(fifo))
+            stacks = self.capture(output, pids[0])
+            self.assertIn("the stack capture helper (%s) does not read its requests: gdb runs as the runner's user"
+                          % fifo, stacks)
+            self.assertIn("the runner ran gdb", stacks)
+            self.assertLess(elapsed, LIMIT + 25, output)
 
     def test_a_scan_of_proc_that_blocks_is_bounded(self):
         # A read of /proc/<pid>/environ waits while the process holds the lock of its memory map (D state); the scan
