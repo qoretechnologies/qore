@@ -1798,6 +1798,11 @@ private:
     llvm::Value* body_entry_stmt = nullptr;
     void captureBodyEntryLocation();
     void emitBodyCleanupLocation();
+    //! Before a run of handlers through the runtime: stores the location of the caller's statement of the function if
+    //! the function releases a local there (QoreIRFunction::local_unwind_locations), so that the frame of a handler
+    //! that runs as a function of its own takes it as its body's entry location, as the IR interpreter hands it to the
+    //! handler's frame (qore#6831)
+    void emitHandlerRunLocation();
     llvm::FunctionType* aotBodyFunctionType(bool takes_body_entry_location) const;
 
     //! Cached ptr-to-ptr for the thread's call site, the location of the call being made (QoreRcCallSiteHelper)

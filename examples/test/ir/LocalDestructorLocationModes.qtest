@@ -18,9 +18,10 @@
 /** When an exception leaves a block or a statement, the destructors of its locals run in the location of the
     statement that owns them, as in the AST interpreter, which restores the location of the enclosing statement when
     a statement ends: a local of a nested block at the statement of the block, a local of an \c on_error handler at
-    the statement of the caller, and an object declared in the header of an \c if, \c while, \c for or \c foreach
-    statement at that statement.  The compiled modes (IR, JIT, tiered, qcc executables) located them at the statement
-    that raised the exception.
+    the statement of the caller, a local of a handler of a nested block at the statement of that block, and an object
+    declared in the header of an \c if, \c while, \c for or \c foreach statement at that statement, also when a
+    handler runs inline at an exit of the block.  The compiled modes (IR, JIT, tiered, qcc executables) located them
+    at the statement that raised the exception or that ran the handler.
 
     The script runs each probe three times, so that tiered execution runs it on every tier, and prints the exceptions
     of each run with the location of the first frame of their call stacks; its output must be the AST interpreter's in
@@ -103,6 +104,283 @@ probe("if", \ifHeader());
 probe("while", \whileHeader());
 probe("for", \forHeader());
 probe("foreach", \foreachHeader());
+probe("exit", \exitLocals());
+probe("nested", \nestedBlockHandler());
+probe("handler-handler", \handlerInHandler());
+probe("method", \method());
+probe("loop", \loopHandler());
+probe("return", \returnHandler());
+probe("exit-exit-return", sub () { exitInExit(True); });
+probe("exit-exit-throw", sub () { exitInExit(False); });
+probe("exit-exit-nested-throw", sub () { exitInExitNested(False); });
+probe("exit-exit-normal", \exitInExitNormal());
+probe("exit-error", \errorInExit());
+probe("nested-moved-return", sub () { nestedAfterBlock(0); });
+probe("nested-moved-normal", sub () { nestedAfterBlock(1); });
+probe("nested-moved-throw", sub () { nestedAfterBlock(2); });
+probe("triple-break", sub () { tripleLoop(0); });
+probe("triple-continue", sub () { tripleLoop(1); });
+probe("triple-throw", sub () { tripleLoop(2); });
+probe("error-after-block", \errorAfterBlockDestructor());
+probe("exit-after-block-root", \exitAfterBlockDestructorRoot());
+probe("handlers-root", \handlersAfterCall());
+probe("handlers-block", \handlersAfterBlock());
+probe("handlers-nested", \handlersNestedAfterBlock());
+probe("handlers-loop", \handlersInLoop());
+
+# qore#6831: the locals of an on_exit handler, which does not raise an exception
+sub exitLocals() {
+    on_exit {
+        D x("EXIT");
+    }
+    throw "BODY", "unwind";
+}
+
+# qore#6831: a handler of a nested block releases its locals at the statement of that block
+sub nestedBlockHandler() {
+    if (True) {
+        on_error {
+            D nb("NESTED");
+        }
+        throw "BODY", "unwind";
+    }
+}
+
+# qore#6831: a handler of a block of a handler
+sub handlerInHandler() {
+    on_error {
+        D outer("OUTER");
+        if (True) {
+            on_error {
+                D hh("HH");
+            }
+            throw "HANDLER", "oops";
+        }
+    }
+    throw "BODY", "unwind";
+}
+
+# qore#6831: a handler of a method
+class C {
+    m() {
+        on_error {
+            D md("METHOD");
+        }
+        throw "BODY", "unwind";
+    }
+}
+
+sub method() {
+    C c();
+    c.m();
+}
+
+# qore#6831: a handler of a loop body
+sub loopHandler() {
+    for (int i = 0; i < 2; ++i) {
+        on_error {
+            D lh("LOOP");
+        }
+        if (i == 1) {
+            throw "BODY", "unwind";
+        }
+    }
+}
+
+# qore#6831: a handler of a nested block left by a return
+sub returnHandler() {
+    if (True) {
+        on_exit {
+            D rh("RETURN");
+            if (True) {
+                return;
+            }
+        }
+        throw "BODY", "unwind";
+    }
+}
+
+# qore#6831: a handler of the root block of an on_exit handler, which also runs inline at the return
+sub exitInExit(bool ret) {
+    on_exit {
+        on_exit {
+            D x("EXIT-EXIT");
+            int i = 1;
+        }
+        int j = 1;
+    }
+    if (ret) {
+        return;
+    }
+    throw "BODY", "unwind";
+}
+
+# qore#6831: the same in a nested block
+sub exitInExitNested(bool ret) {
+    if (True) {
+        on_exit {
+            on_exit {
+                D x("EXIT-EXIT-NESTED");
+                int i = 1;
+            }
+            int j = 1;
+        }
+        if (ret) {
+            return;
+        }
+        throw "BODY", "unwind";
+    }
+}
+
+# qore#6831: the same at the end of the function
+sub exitInExitNormal() {
+    on_exit {
+        D y("OUTER");
+        on_exit {
+            D x("EXIT-EXIT");
+            int i = 1;
+        }
+        int j = 1;
+    }
+}
+
+# qore#6831: an on_error handler of the root block of an on_exit handler, which raises an exception
+sub errorInExit() {
+    on_exit {
+        on_error {
+            D x("EXIT-ERROR");
+        }
+        throw "HANDLER", "oops";
+    }
+    throw "BODY", "unwind";
+}
+
+# qore#6831: a handler of the body of an on_exit handler whose nested block changes the location before it runs
+# as a function of its own: it is released at the statement of the caller (0: return, 1: end, 2: exception)
+sub nestedAfterBlock(int mode) {
+    on_exit {
+        on_exit {
+            D x("NESTED-MOVED");
+        }
+        if (True) {
+            D l("BLOCK");
+        }
+    }
+    if (mode == 0) {
+        return;
+    }
+    if (mode == 2) {
+        throw "BODY", "unwind";
+    }
+}
+
+# qore#6831: three levels of handlers, the outermost with a loop left by a break or a continue
+sub tripleLoop(int mode) {
+    on_exit {
+        on_exit {
+            on_exit {
+                D a("TRIPLE");
+            }
+            D b("DOUBLE");
+        }
+        D c("SINGLE");
+        for (int i = 0; i < 2; ++i) {
+            D l("LOOP-BODY");
+            if (mode == 0) {
+                break;
+            }
+            continue;
+        }
+    }
+    if (mode < 2) {
+        return;
+    }
+    throw "BODY", "unwind";
+}
+
+# qore#6831: a local of an on_error handler released after the destructor of a local of its nested block raised an
+# exception: at the statement of the caller
+sub errorAfterBlockDestructor() {
+    on_error {
+        D b("ERROR-ROOT");
+        if (True) {
+            D l("ERROR-BLOCK");
+        }
+    }
+    throw "BODY", "unwind";
+}
+
+# qore#6831: the same for an on_exit handler of a function with a local of its own
+sub exitAfterBlockDestructorRoot() {
+    D z("FUNCTION-ROOT");
+    on_exit {
+        D b("EXIT-ROOT");
+        if (True) {
+            D l("EXIT-BLOCK");
+        }
+    }
+    throw "BODY", "unwind";
+}
+
+class E {
+}
+
+int sub one() {
+    return 1;
+}
+
+# qore#6831: handlers that run one after the other: each starts at the statement of the caller, not where the
+# handler before it ended
+sub handlersAfterCall() {
+    on_exit {
+        D q("HANDLERS-ROOT");
+    }
+    on_exit {
+        one();
+    }
+    throw "BODY", "unwind";
+}
+
+# qore#6831: the same after the handler of a nested block, which the exception runs first
+sub handlersAfterBlock() {
+    on_exit {
+        D q("HANDLERS-BLOCK");
+    }
+    if (True) {
+        on_exit {
+            E s();
+        }
+        throw "BODY", "unwind";
+    }
+}
+
+# qore#6831: the same for a handler of the body of a handler
+sub handlersNestedAfterBlock() {
+    on_exit {
+        on_exit {
+            D q("HANDLERS-NESTED");
+        }
+    }
+    if (True) {
+        on_exit {
+            one();
+        }
+        throw "BODY", "unwind";
+    }
+}
+
+# qore#6831: the same in a loop body
+sub handlersInLoop() {
+    on_exit {
+        D q("HANDLERS-LOOP");
+    }
+    while (True) {
+        on_exit {
+            one();
+        }
+        throw "BODY", "unwind";
+    }
+}
 ';
 
         #! the AST interpreter's results that the issues give (the lines of the script above)
@@ -115,6 +393,39 @@ probe("foreach", \foreachHeader());
             "while 0: BODY:54-55 WHILE:34-36",
             "for 0: BODY:54-55 FOR:40-42",
             "foreach 0: BODY:54-55 FOREACH:46-48",
+            # the caller's statement for the locals of a handler of the function's root block, also of a method, and
+            # the statement of the block that declares the handler for those of a handler of a nested block, also of a
+            # handler's block, of a loop body and with a return in the handler
+            "exit 0: BODY:54-55 EXIT:54-55",
+            "nested 0: BODY:54-55 NESTED:109-114",
+            "handler-handler 0: BODY:54-55 HANDLER:54-55 HH:121-126 OUTER:54-55",
+            "method 0: BODY:143-143 METHOD:143-143",
+            "loop 0: BODY:54-55 LOOP:148-155",
+            "return 0: BODY:54-55 RETURN:160-168",
+            # a handler of the root block of an on_exit handler, which also runs inline at an exit of the function:
+            # its locals are released at the caller's statement (the statement of the closure that calls the
+            # function), or at the statement of the nested block that declares the on_exit handler
+            "exit-exit-return 0: EXIT-EXIT:81-81",
+            "exit-exit-throw 0: BODY:82-82 EXIT-EXIT:82-82",
+            "exit-exit-nested-throw 0: BODY:83-83 EXIT-EXIT-NESTED:188-200",
+            "exit-exit-normal 0: EXIT-EXIT:54-55 OUTER:54-55",
+            "exit-error 0: BODY:54-55 HANDLER:54-55 EXIT-ERROR:54-55",
+            # a handler that runs as a function of its own after code that changed the location: the caller's
+            # statement, at every level of handlers
+            "nested-moved-return 0: BLOCK:233-235 NESTED-MOVED:86-86",
+            "nested-moved-normal 0: BLOCK:233-235 NESTED-MOVED:87-87",
+            "nested-moved-throw 0: BODY:88-88 BLOCK:233-235 NESTED-MOVED:88-88",
+            "triple-break 0: LOOP-BODY:255-261 TRIPLE:89-89 DOUBLE:89-89 SINGLE:89-89",
+            "triple-continue 0: LOOP-BODY:255-261 TRIPLE:90-90 DOUBLE:90-90 SINGLE:90-90",
+            "triple-throw 0: BODY:91-91 LOOP-BODY:255-261 TRIPLE:91-91 DOUBLE:91-91 SINGLE:91-91",
+            # a handler's local after the destructor of a local of its nested block raised an exception
+            "error-after-block 0: BODY:54-55 ERROR-BLOCK:274-276 ERROR-ROOT:54-55",
+            "exit-after-block-root 0: BODY:54-55 EXIT-BLOCK:286-288 EXIT-ROOT:54-55 FUNCTION-ROOT:54-55",
+            # handlers that run one after the other start at the caller's statement
+            "handlers-root 0: BODY:54-55 HANDLERS-ROOT:54-55",
+            "handlers-block 0: BODY:54-55 HANDLERS-BLOCK:54-55",
+            "handlers-nested 0: BODY:54-55 HANDLERS-NESTED:54-55",
+            "handlers-loop 0: BODY:54-55 HANDLERS-LOOP:54-55",
         );
     }
 

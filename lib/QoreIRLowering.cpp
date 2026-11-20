@@ -2088,6 +2088,29 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     if (auto* block = dynamic_cast<const StatementBlock*>(stmt)) {
         return lowerStatementBlock(block, error);
     }
+    // the objects declared in the header of a compound statement are released while the statement is active, as the
+    // locals of its blocks are released while it is the enclosing statement: an exception that leaves the statement
+    // releases them at its location, as in the AST interpreter (qore#6832)
+    {
+        const LVList* header_lvars = nullptr;
+        if (auto* s = dynamic_cast<const IfStatement*>(stmt)) {
+            header_lvars = s->getLVList();
+        } else if (auto* s = dynamic_cast<const WhileStatement*>(stmt)) {
+            // also a do-while statement
+            header_lvars = s->getLVList();
+        } else if (auto* s = dynamic_cast<const ForStatement*>(stmt)) {
+            header_lvars = s->getLVList();
+        } else if (auto* s = dynamic_cast<const ForEachStatement*>(stmt)) {
+            header_lvars = s->getLVList();
+        }
+        if (header_lvars && stmt->loc && stmt->loc->start_line > 0) {
+            for (LocalVar* var : header_lvars->lv) {
+                if (qore_ir_type_may_hold_object(var->getTypeInfo())) {
+                    builder.getFunction()->local_unwind_locations.emplace(var, stmt->loc);
+                }
+            }
+        }
+    }
     if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
         QoreValue expr = expr_stmt->getExpression();
         if (expr) {
@@ -3732,6 +3755,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 // other options (qore#6293)
                 top_level_code_parse_options ? stmt : nullptr
             });
+            // the handler's own locals are released where the block that declares it releases its locals (qore#6831)
+            if (!block_unwind_locs.empty()) {
+                block_handlers.back().owner_unwind_mapped = block_unwind_locs.back().first;
+                block_handlers.back().owner_unwind_loc = block_unwind_locs.back().second;
+            }
         }
 
         return true;
@@ -4963,8 +4991,41 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     const LVList* lvars = root_top_level ? nullptr : block->getLVList();
     // The locals of an inner block are destroyed while its enclosing statement is active. The caller's
     // statement is active at the end of the function body, including when the only exit is an exception.
+    // A handler lowered as a function of its own is lowered with a lowering of its own, whose root block is the
+    // handler's: its locals are released at the statement that the handler's frame was entered in, the caller's,
+    // and the locals of its inner blocks at their enclosing statements, as in the AST interpreter (qore#6831)
     const QoreProgramLocation* enclosing_stmt = root_statement_block ? nullptr : builder.getStatementLocation();
-    if (lvars && !handler_body && (root_statement_block || (enclosing_stmt && enclosing_stmt->start_line > 0))) {
+    bool map_unwind_locals = root_statement_block || (enclosing_stmt && enclosing_stmt->start_line > 0);
+    // the root block of a handler: its locals are released where the block that declares the handler releases its
+    // own (InlineHandler::owner_unwind_loc)
+    // a handler body: the root block of a handler lowered as a function of its own, or the body of a handler lowered
+    // inline at an exit, whose locals are released where those of the root block are (qore#6831)
+    bool handler_unwind_body = false;
+    if (root_statement_block && handler_root_unwind_set) {
+        enclosing_stmt = handler_root_unwind_loc;
+        map_unwind_locals = handler_root_unwind_mapped;
+        handler_unwind_body = true;
+    } else if (inline_handler_unwind_block == block) {
+        enclosing_stmt = inline_handler_unwind_loc;
+        map_unwind_locals = inline_handler_unwind_mapped;
+        handler_unwind_body = true;
+    }
+    inline_handler_unwind_block = nullptr;
+    block_unwind_locs.emplace_back(map_unwind_locals, enclosing_stmt);
+    // the body of a handler releases its locals where the block that declares the handler releases its own, at every
+    // exit, as the AST interpreter does: the releases have the location of the statement that encloses that block, as
+    // those of a nested block have the location of its enclosing statement, or no location for a handler of the
+    // function's root block, whose locals are released at the caller's statement (QORE_IR_BODY_LOCAL_CLEANUP), also
+    // when the body is lowered inline at an exit in another statement
+    const bool force_release_loc = handler_unwind_body && map_unwind_locals;
+    const QoreProgramLocation* handler_release_loc = force_release_loc ? enclosing_stmt : nullptr;
+    struct BlockUnwindLocGuard {
+        std::vector<std::pair<bool, const QoreProgramLocation*>>& locs;
+        ~BlockUnwindLocGuard() {
+            locs.pop_back();
+        }
+    } block_unwind_loc_guard{block_unwind_locs};
+    if (lvars && map_unwind_locals) {
         for (LocalVar* var : lvars->lv) {
             if (qore_ir_type_may_hold_object(var->getTypeInfo())) {
                 builder.getFunction()->local_unwind_locations.emplace(var, enclosing_stmt);
@@ -4981,7 +5042,15 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         lvars_entry.type = BlockCleanupEntry::Lvars;
         lvars_entry.lvars = lvars;
         lvars_entry.loc = block->loc;
-        pushBlockCleanup(lvars_entry);
+        {
+            // the release of a handler body that a return, break or continue makes has the location of its other
+            // releases (handler_release_loc)
+            std::optional<QoreIRStatementLocationHelper> release_loc_helper;
+            if (force_release_loc) {
+                release_loc_helper.emplace(builder, handler_release_loc);
+            }
+            pushBlockCleanup(lvars_entry);
+        }
 
         // Emit InstantiateLocal for each closure-use variable at block entry.
         // This ensures the variable is on the cvstack before any code in the
@@ -5406,6 +5475,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // When terminated, the break/continue/return handler has already emitted these
     // via emitBlockCleanups
     if (lvars && !terminated) {
+        std::optional<QoreIRStatementLocationHelper> release_loc_helper;
+        if (force_release_loc) {
+            release_loc_helper.emplace(builder, handler_release_loc);
+        }
         for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
             auto* ui = builder.createUninstantiateLocal(lvars->lv[i], block->loc);
             // Set is_block_exit only when NOT inside a loop body.
@@ -5448,6 +5521,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             builder.setBlock(lvar_exception_cleanup_continue_block);
         }
         if (lvars) {
+            std::optional<QoreIRStatementLocationHelper> release_loc_helper;
+            if (force_release_loc) {
+                release_loc_helper.emplace(builder, handler_release_loc);
+            }
             for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
                 auto* ui = builder.createUninstantiateLocal(lvars->lv[i], block->loc);
                 ui->is_block_exit = true;
@@ -6504,6 +6581,17 @@ struct QoreIRLowering::HandlerIRCache {
     std::unordered_map<const StatementBlock*, Body> handlers;
 };
 
+//! Adds the release locations of a handler's locals to the function that the handler runs for (qore#6831)
+/** The handler's own locals and the locals of its blocks have slots in the frame of the function, which releases them
+    when an exception leaves it (QoreIRFunction::local_unwind_locations): a location that the function already has
+    for a local is kept
+*/
+static void qore_ir_merge_handler_unwind_locations(QoreIRFunction& parent, const QoreIRFunction& handler) {
+    for (const auto& [var, loc] : handler.local_unwind_locations) {
+        parent.local_unwind_locations.emplace(var, loc);
+    }
+}
+
 int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& handlers,
         QoreIRFunction* parent_func, std::string& error) {
     // Compile a specific set of handlers (for a block level) without accumulation
@@ -6561,6 +6649,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         for (auto& entry : body.entries) {
             if (entry.matches(*parent_func, self_local, handler.code)) {
                 handler.obe_inst->handler_ir = entry.func;
+                qore_ir_merge_handler_unwind_locations(*parent_func, *entry.func);
                 break;
             }
         }
@@ -6608,6 +6697,10 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         handler_lowering.bg_helper_count = bg_helper_count;
         // the body of the handler is the root block of its IR function, which has the handler's block event (#5870)
         handler_lowering.handler_body = true;
+        // the handler's own locals are released where the block that declares it releases its own (qore#6831)
+        handler_lowering.handler_root_unwind_set = true;
+        handler_lowering.handler_root_unwind_mapped = handler.owner_unwind_mapped;
+        handler_lowering.handler_root_unwind_loc = handler.owner_unwind_loc;
         // the handler runs in the frame of the function: its calls through self are made on the same object
         // (issue #5823)
         handler_lowering.self_local = self_local;
@@ -6677,6 +6770,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
 
         // Attach compiled handler IR to instruction
         handler.obe_inst->handler_ir = std::move(handler_func);
+        qore_ir_merge_handler_unwind_locations(*parent_func, *handler.obe_inst->handler_ir);
         compiled_count++;
 
         // a function with background helpers is not shared: the names of their parameters are unique in the function
@@ -6778,6 +6872,10 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         handler_lowering.bg_helper_count = bg_helper_count;
         // the body of the handler is the root block of its IR function, which has the handler's block event (#5870)
         handler_lowering.handler_body = true;
+        // the handler's own locals are released where the block that declares it releases its own (qore#6831)
+        handler_lowering.handler_root_unwind_set = true;
+        handler_lowering.handler_root_unwind_mapped = handler.owner_unwind_mapped;
+        handler_lowering.handler_root_unwind_loc = handler.owner_unwind_loc;
         // the handler runs in the frame of the function: its calls through self are made on the same object
         // (issue #5823)
         handler_lowering.self_local = self_local;
@@ -6836,6 +6934,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
 
         // Attach compiled handler IR to instruction
         handler.obe_inst->handler_ir = std::move(handler_func);
+        qore_ir_merge_handler_unwind_locations(*parent_func, *handler.obe_inst->handler_ir);
         compiled_count++;
     }
 
@@ -7053,6 +7152,16 @@ bool QoreIRLowering::lowerHandedOverReturn(size_t start_depth, QoreIRValue resul
     return true;
 }
 
+namespace {
+//! clears the mark of a handler body lowered inline (QoreIRLowering::inline_handler_unwind_block) on every way out
+struct ClearInlineHandlerUnwindMark {
+    const StatementBlock*& block;
+    ~ClearInlineHandlerUnwindMark() {
+        block = nullptr;
+    }
+};
+}
+
 bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t keep_handlers, std::string& error,
         size_t barrier_depth, uint32_t scope_id, const QoreProgramLocation* scope_loc, bool set_exception_target,
         QoreIRBasicBlock* handler_exception_target, bool last_run) {
@@ -7189,6 +7298,12 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
                 handler.code_po_statement->loc);
         }
         inline_handler_block = handler.code;
+        // its locals are released where the handler's are when it runs as a function of its own (qore#6831); the
+        // mark is consumed by the lowering of the block, and cleared if the lowering ends before it
+        inline_handler_unwind_block = handler.code;
+        inline_handler_unwind_mapped = handler.owner_unwind_mapped;
+        inline_handler_unwind_loc = handler.owner_unwind_loc;
+        ClearInlineHandlerUnwindMark clear_unwind_mark{inline_handler_unwind_block};
         ++inline_handler_body_depth;
         ok = lowerStatementBlock(handler.code, error);
         --inline_handler_body_depth;
@@ -7199,6 +7314,12 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
                 handler.code_po_statement->loc);
         }
         inline_handler_block = handler.code;
+        // its locals are released where the handler's are when it runs as a function of its own (qore#6831); the
+        // mark is consumed by the lowering of the block, and cleared if the lowering ends before it
+        inline_handler_unwind_block = handler.code;
+        inline_handler_unwind_mapped = handler.owner_unwind_mapped;
+        inline_handler_unwind_loc = handler.owner_unwind_loc;
+        ClearInlineHandlerUnwindMark clear_unwind_mark{inline_handler_unwind_block};
         ++inline_handler_body_depth;
         ok = lowerStatementBlock(handler.code, error);
         --inline_handler_body_depth;
