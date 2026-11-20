@@ -587,10 +587,21 @@ static bool AsyncIoController::running() {
 }
 
 //! Returns the number of cached operations on the global singleton
-/** @return the number of active operations in the cache
+/** @return the number of active operations in the cache, which counts the operations of every caller in the process
+
+    @throw PERMISSION-DENIED code that is sandboxed or acts for sandboxed code cannot call this method, which counts
+    the operations of every caller in the process (see @ref sandbox_process_wide_registries)
+
     @since %Qore 3.0
 */
 static int AsyncIoController::getCacheSize() {
+    // the operations of every caller of the process-wide controller: not disclosed to sandboxed code (issue #6836)
+    if (qore_caller_is_sandboxed()) {
+        xsink->raiseException("PERMISSION-DENIED", "code that is sandboxed or acts for sandboxed code cannot read the "
+            "number of operations of the global async I/O controller, which counts the operations of every caller in "
+            "the process");
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -627,6 +638,10 @@ static nothing AsyncIoController::setAutostop(bool auto_stop = True) [flags=NAME
 
 //! Returns the autostop flag from the global singleton
 /** @return @ref True "True" if autostop is enabled
+
+    @note any code can read the flag, also code that is sandboxed or acts for sandboxed code: it is a setting that only
+    trusted code can change (see @ref setAutostop()) and holds no data of any caller
+
     @since %Qore 3.0
 */
 static bool AsyncIoController::getAutostop() {
@@ -706,7 +721,9 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=
 }
 
 //! Returns the logger of the global singleton
-/** @return the logger set with @ref setLogger(), or @ref nothing "NOTHING" if none is set
+/** @return the logger set with @ref setLogger(), or @ref nothing "NOTHING" if none is set or if the caller is code
+    that is sandboxed or acts for sandboxed code, which does not get the logger of the process (see
+    @ref sandbox_process_wide_registries)
 
     @par Example:
     @code{.py}
@@ -718,6 +735,10 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=
     @since %Qore 3.0
 */
 static *LoggerInterfaceBase AsyncIoController::getLogger() {
+    // the logger is process-wide and configured by the host: not handed to sandboxed code (issue #6836)
+    if (qore_caller_is_sandboxed()) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {

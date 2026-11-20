@@ -979,11 +979,16 @@ nothing set_async_io_logger(*LoggerInterfaceBase logger) [dom=PROCESS;flags=NAME
 *object logger = get_async_io_logger();
     @endcode
 
-    @return the logger object or @ref nothing "NOTHING"
+    @return the logger object, or @ref nothing "NOTHING" if none is set or if the caller is code that is sandboxed or
+    acts for sandboxed code, which does not get the logger of the process (see @ref sandbox_process_wide_registries)
 
     @since %Qore 3.0
 */
 *object get_async_io_logger() [flags=CONSTANT;dom=PROCESS] {
+    // the logger is process-wide and configured by the host: not handed to sandboxed code (issue #6836)
+    if (qore_caller_is_sandboxed()) {
+        return QoreValue();
+    }
     return qore_get_async_io_logger_object();  // already referenced
 }
 ///@}

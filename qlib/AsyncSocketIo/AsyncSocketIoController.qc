@@ -53,9 +53,9 @@ public enum IoCommand : string {
     The process should use a single global controller instance, obtained via
     @ref getGlobalAsyncIoController(). This avoids cross-controller deadlocks that
     can occur when object destructors fire on one controller's I/O thread and cancel
-    operations on a different controller. The global controller is created on first use;
-    when trusted code creates it, it sets \c autostop=True, while sandboxed code leaves the
-    process's setting as it is.
+    operations on a different controller. The global controller is created on first use by
+    trusted code, with \c autostop=True; sandboxed code gets a wrapper of its own (see
+    @ref getGlobalAsyncIoController()).
 
     All higher-level components (\c HttpServerAsyncIo::HttpAsyncSocketIoController,
     \c HttpClientIo::HttpClientConnectionManager) use the global controller by
@@ -130,6 +130,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     /** Useful for testing and verifying that operations have been properly cleaned up.
 
         @return the number of active poll operations in the controller's cache
+
+        @throw PERMISSION-DENIED code that is sandboxed or acts for sandboxed code cannot call this method, which
+        counts the operations of every caller of the process-wide controller (see
+        @ref sandbox_process_wide_registries)
     */
     int getCacheSize() {
         return Qore::AsyncIoController::getCacheSize();
@@ -149,6 +153,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Returns the autostop flag
     /** @return @ref True "True" if the I/O thread will automatically stop when all operations
         complete
+
+        @note any code can read the flag, also code that is sandboxed or acts for sandboxed code: it is a setting of
+        the process-wide controller that only trusted code can change
     */
     bool getAutostop() {
         return Qore::AsyncIoController::getAutostop();
@@ -547,11 +554,23 @@ int timer_id = controller.addTimerDelay(1s, sub () { checkConnection(); });
     own controller instances. This single-controller architecture eliminates
     cross-controller deadlocks.
 
-    @return the process-wide AsyncSocketIoController singleton
+    The logger of the wrapper (see @ref AsyncSocketIoController::setLogger()) is set by trusted code and is also the
+    logger of the process-wide controller: code that is sandboxed or acts for sandboxed code gets a new wrapper of the
+    same controller with each call instead, which has no logger (see @ref sandbox_process_wide_registries), so that
+    it cannot log through the process's logger or test which logger it is, and a logger that it gives its wrapper is
+    not used by any other caller.  Creating that wrapper leaves the autostop setting of the controller as it is.
+
+    @return the process-wide AsyncSocketIoController singleton, or for code that is sandboxed or acts for sandboxed
+    code, a new wrapper without a logger
 
     @see AsyncSocketIoController
 */
 public synchronized AsyncSocketIoController sub getGlobalAsyncIoController() {
+    # the logger of the global wrapper is process-wide: not reachable by sandboxed code, which gets a wrapper of its
+    # own, as a shared one could be given a logger through a subclass or reflection (issue #6836)
+    if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+        return new AsyncSocketIoController();
+    }
     return globalController ?? (globalController = new AsyncSocketIoController(True));
 }
 

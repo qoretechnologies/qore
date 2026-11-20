@@ -4631,9 +4631,8 @@ ws.setEventQueue();
     private wakeAsyncIo() {
         try {
             if (async_wake_socket) {
-                AsyncSocketIo::AsyncSocketIoController controller =
-                    AsyncSocketIo::getGlobalAsyncIoController();
-                controller.wakeSocket(async_wake_socket);
+                # the static API: no controller wrapper per message (issue #6836)
+                Qore::AsyncIoController::wakeSocket(io_object: async_wake_socket);
             }
         } catch (hash<ExceptionInfo> ex) {
             logDebug("async I/O wake error: %s: %s", ex.err, ex.desc);
@@ -4715,9 +4714,8 @@ ws.setEventQueue();
         code<nothing(WscConnection)> deliver = \deliverPendingMessages();
         Counter cnt = delivery_thread_counter;
         try {
-            AsyncSocketIo::AsyncSocketIoController controller =
-                AsyncSocketIo::getGlobalAsyncIoController();
-            controller.submitTask(wrapAsyncCallback(sub () {
+            # the static API: no controller wrapper per delivery (issue #6836)
+            Qore::AsyncIoController::submitTask(task: wrapAsyncCallback(sub () {
                 WebSocketClientWithSerialization::deliverInBackground(deliver, cnt, c);
             }));
         } catch (hash<ExceptionInfo> ex) {
@@ -9155,9 +9153,8 @@ public class WebSocketClientHcioPollOp {
         }
 
         int generation = heartbeat_generation;
-        AsyncSocketIo::AsyncSocketIoController controller =
-            AsyncSocketIo::getGlobalAsyncIoController();
-        heartbeat_timer_id = controller.addTimerDelay(milliseconds(next_delay_ms),
+        # the static API: no controller wrapper per frame (issue #6836)
+        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(next_delay_ms),
             sub () { self.handleHeartbeatTimer(generation); });
     }
 
@@ -9165,9 +9162,8 @@ public class WebSocketClientHcioPollOp {
         ++heartbeat_generation;
         if (heartbeat_timer_id) {
             try {
-                AsyncSocketIo::AsyncSocketIoController controller =
-                    AsyncSocketIo::getGlobalAsyncIoController();
-                controller.cancelTimer(heartbeat_timer_id);
+                # the static API: no controller wrapper per frame (issue #6836)
+                Qore::AsyncIoController::cancelTimer(timer_id: heartbeat_timer_id);
             } catch (hash<ExceptionInfo> ex) {
             }
             remove heartbeat_timer_id;

@@ -16,7 +16,8 @@
 /** A process-wide registry is shared by the code of every Program, and what it holds runs or is used later for every
     caller: a change by code that is sandboxed or acts for sandboxed code raises \c SANDBOX-REGISTRATION-ERROR, also
     through a policy barrier; trusted code is not affected, and what it registered stays in place for every tenant.
-    The same applies to the settings of the process-wide async I/O controller (issue #6836)
+    The same applies to the settings of the process-wide async I/O controller (issue #6836), whose loggers and number
+    of operations are not disclosed to sandboxed code either
 */
 class SandboxProcessWideRegistriesTest inherits QUnit::Test {
     public {
@@ -55,6 +56,20 @@ class SandboxProcessWideRegistriesTest inherits QUnit::Test {
 
         #! the application registry key of the test
         const Key = "qore-test-6743";
+
+        #! the code that reads the state of the async I/O controller, as readState() does (issue #6836)
+        const ReadStateSource = "string cache_size;
+    try {
+        cache_size = AsyncIoController::getCacheSize().typeCode() == NT_INT ? \"int\" : \"other\";
+    } catch (hash<ExceptionInfo> ex) {
+        cache_size = ex.err;
+    }
+    return {
+        \"controller_logger\": exists AsyncIoController::getLogger(),
+        \"async_io_logger\": exists get_async_io_logger(),
+        \"autostop\": AsyncIoController::getAutostop(),
+        \"cache_size\": cache_size,
+    };";
     }
 
     constructor() : Test("process-wide callback registries refuse sandboxed code", "1.0", \ARGV) {
@@ -62,6 +77,8 @@ class SandboxProcessWideRegistriesTest inherits QUnit::Test {
         addTestCase("what trusted code registered stays in place for every tenant", \trustedStateTest());
         addTestCase("the settings of the async I/O controller that trusted code made stay in effect",
             \controllerSettingsTest());
+        addTestCase("the loggers and the operations of the async I/O controller are not disclosed",
+            \controllerStateTest());
         addTestCase("trusted code serving sandboxed code under a policy barrier cannot either", \barrierTest());
         addTestCase("a Program that sandboxed code creates is refused when trusted code calls it",
             \childProgramTest());
@@ -186,6 +203,87 @@ class SandboxProcessWideRegistriesTest inherits QUnit::Test {
         AsyncIoController::setMaxCallbackWorkers();
     }
 
+    controllerStateTest() {
+        # the loggers of the host, restored when the test ends
+        *LoggerInterfaceBase controller_logger = AsyncIoController::getLogger();
+        on_exit AsyncIoController::setLogger(controller_logger);
+        *object async_io_logger = get_async_io_logger();
+        on_exit set_async_io_logger(async_io_logger);
+        HostLogger host_controller_logger();
+        HostLogger host_async_io_logger();
+        AsyncIoController::setLogger(host_controller_logger);
+        set_async_io_logger(host_async_io_logger);
+        bool autostop = AsyncIoController::getAutostop();
+
+        # what trusted code reads
+        hash<auto> trusted = {
+            "controller_logger": True,
+            "async_io_logger": True,
+            "autostop": autostop,
+            "cache_size": "int",
+        };
+        # what code that is sandboxed or acts for sandboxed code reads: the setting, but neither the host's loggers
+        # nor the number of the operations of every caller
+        hash<auto> sandboxed = {
+            "controller_logger": False,
+            "async_io_logger": False,
+            "autostop": autostop,
+            "cache_size": "PERMISSION-DENIED",
+        };
+
+        hash<auto> results = {};
+        # two tenants with sandboxes of their own
+        foreach string name in ("tenant-a", "tenant-b") {
+            Program tenant = SandboxProcessWideRegistriesTest::tenant(name, "read", ReadStateSource);
+            results{name} = tenant.callFunction("t_read");
+        }
+        # a background thread of a tenant
+        Program tenant_bg = SandboxProcessWideRegistriesTest::tenant("tenant-bg", "bg",
+            "code read = hash<auto> sub () { " + ReadStateSource + " }; Queue q(); background q.push(read()); "
+            "return q.get();");
+        results."background" = tenant_bg.callFunction("t_bg");
+        # trusted code serving a tenant under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(hash<auto> sub () {
+            return SandboxProcessWideRegistriesTest::readState();
+        });
+        Program tenant_c = SandboxProcessWideRegistriesTest::tenant("tenant-c", "run", "return c();", "code c");
+        results.barrier = tenant_c.callFunction("t_run", cap);
+        # a Program that a tenant creates, called later by trusted code
+        Program tenant_d = SandboxProcessWideRegistriesTest::tenant("tenant-d", "child", "Program p(PO_NEW_STYLE); "
+            "p.parse(\"hash<auto> sub read() { \" + s + \" }\", \"child\"); return p;", "string s");
+        Program child = tenant_d.callFunction("t_child", ReadStateSource);
+        results.child = child.callFunction("read");
+        # trusted code and a trusted Program
+        results.host = SandboxProcessWideRegistriesTest::readState();
+        Program trusted_pgm(PO_NEW_STYLE);
+        trusted_pgm.parse("hash<auto> sub read() { " + ReadStateSource + " }", "trusted");
+        results."trusted Program" = trusted_pgm.callFunction("read");
+
+        hash<auto> expected = {};
+        map expected{$1} = sandboxed, ("tenant-a", "tenant-b", "background", "barrier", "child");
+        map expected{$1} = trusted, ("host", "trusted Program");
+        assertEq(expected, results);
+        # the host still has its loggers
+        assertEq(host_controller_logger, AsyncIoController::getLogger());
+        assertEq(host_async_io_logger, get_async_io_logger());
+    }
+
+    #! Reads the state of the async I/O controller as \c ReadStateSource does
+    static hash<auto> readState() {
+        string cache_size;
+        try {
+            cache_size = AsyncIoController::getCacheSize().typeCode() == NT_INT ? "int" : "other";
+        } catch (hash<ExceptionInfo> ex) {
+            cache_size = ex.err;
+        }
+        return {
+            "controller_logger": exists AsyncIoController::getLogger(),
+            "async_io_logger": exists get_async_io_logger(),
+            "autostop": AsyncIoController::getAutostop(),
+            "cache_size": cache_size,
+        };
+    }
+
     barrierTest() {
         set_app_registry(Key, "host");
         on_exit set_app_registry(Key);
@@ -237,5 +335,15 @@ class SandboxProcessWideRegistriesTest inherits QUnit::Test {
         p.parse(sprintf("auto sub t_%s(%s) { %s }\n", func, args ?? "", body) + LoggerSource, name);
         p.setSandboxManager(new SandboxManager());
         return p;
+    }
+}
+
+#! a logger of the host
+class HostLogger inherits LoggerInterfaceBase {
+    logArgs(int level, string message, *softlist<auto> format_args) {
+    }
+
+    bool isEnabledFor(int level) {
+        return True;
     }
 }

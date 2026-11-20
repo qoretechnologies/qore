@@ -520,6 +520,13 @@ authenticate();
     @ref Qore::SandboxManager::isProcessWideRegistrationAllowed() "SandboxManager::isProcessWideRegistrationAllowed()"
     returns @ref False, and the object then uses the process's setting.
 
+    Code that is sandboxed or acts for sandboxed code (as decided for registrations) does not get the loggers that
+    the host configured either: @ref Qore::AsyncIoController::getLogger() "AsyncIoController::getLogger()" and
+    @ref Qore::get_async_io_logger() "get_async_io_logger()" return @ref nothing "NOTHING" for it, as if no logger
+    were set, and @ref Qore::AsyncIoController::getCacheSize() "AsyncIoController::getCacheSize()" refuses it
+    (\c PERMISSION-DENIED), as it counts the operations of every caller; the autostop setting, which only trusted code can
+    change, can be read with @ref Qore::AsyncIoController::getAutostop() "AsyncIoController::getAutostop()".
+
     @since %Qore 3.0
 
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller

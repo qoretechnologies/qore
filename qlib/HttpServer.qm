@@ -6285,8 +6285,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 }
                 done.dec();
             });
-        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-        ctrl.submit(<SocketPollOperationInfo>{
+        # the static API: no controller wrapper per request (issue #6836); sock, spop and owner are always set, as
+        # AsyncSocketIoController::submit() requires
+        Qore::AsyncIoController::submit(operation_info: <SocketPollOperationInfo>{
             "sock": s,
             "spop": wrapped_op,
             "to": 30s,
