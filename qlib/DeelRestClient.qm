@@ -31,7 +31,7 @@
 %modern
 
 %requires(reexport) Mime >= 1.3
-%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClient >= 2.8
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
@@ -496,24 +496,6 @@ public class DeelRestConnection inherits RestClient::RestConnection {
     private setChildCapabilities() {
         children_can_support_records = True;
         children_can_support_apis = True;
-    }
-
-    #! Returns the OAuth2 grant type this connection authenticates with, if any
-    /** A connection with an API token does not use OAuth2, although the OAuth2 options have default values
-    */
-    private *string getOAuth2GrantType() {
-        if (!opts.apikey.val()) {
-            return RestConnection::getOAuth2GrantType();
-        }
-    }
-
-    #! Checks if the connection can communicate
-    /** A connection with an API token does not need the OAuth2 options that the defaulted grant type requires
-    */
-    private checkCanConnect() {
-        if (!opts.apikey.val()) {
-            RestConnection::checkCanConnect();
-        }
     }
 
     #! Sets the update options code for the connection

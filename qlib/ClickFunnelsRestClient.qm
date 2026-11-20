@@ -29,7 +29,7 @@
 %modern
 
 %requires(reexport) Mime >= 1.3
-%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClient >= 2.8
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
@@ -475,24 +475,6 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
             }
         }
         return new_opts;
-    }
-
-    #! Returns the OAuth2 grant type this connection authenticates with, if any
-    /** A connection with an API token does not use OAuth2, although the OAuth2 options have default values
-    */
-    private *string getOAuth2GrantType() {
-        if (!opts.apikey.val()) {
-            return RestConnection::getOAuth2GrantType();
-        }
-    }
-
-    #! Checks if the connection can communicate
-    /** A connection with an API token does not need the OAuth2 options that the defaulted grant type requires
-    */
-    private checkCanConnect() {
-        if (!opts.apikey.val()) {
-            RestConnection::checkCanConnect();
-        }
     }
 
     #! returns @ref True as this connection returns a data provider with the @ref getDataProvider()
