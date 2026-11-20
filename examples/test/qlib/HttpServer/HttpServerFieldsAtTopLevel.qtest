@@ -236,6 +236,11 @@ public class HttpServerFieldsAtTopLevelTest inherits QUnit::Test {
         }
         assertEq("M", http_get_field(top, "method"), "a field named Method is under headers");
         assertEq("M", http_get_field(only, "method"), "a field named Method is under headers");
+        # a hash with a "headers" key gives its fields from there only, as http_get_fields() does: a value at the top
+        # level is not a field of the message
+        hash<auto> mixed = {"method": "GET", "headers": {"accept": "a/b"}, "x-top": "1"};
+        assertEq(NOTHING, http_get_field(mixed, "x-top"), "the top level is not read when there is a headers key");
+        assertEq({"accept": "a/b"}, http_get_fields(mixed), "the same fields as http_get_field() gives");
         assertEq({"accept": "a/b", "method": "M"}, http_get_fields(only), "the fields");
         assertEq({"accept": "a/b"}, http_get_fields(flat), "the fields of a hash built by user code");
         assertEq({}, http_get_fields(NOTHING), "no message");
