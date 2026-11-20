@@ -148,6 +148,10 @@ int Breakpoint::getPolicy() {
  *  @param program the program to assign to the breakpoint
  */
 nothing Breakpoint::assignProgram(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(*program, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    bkpt->assignProgram(*program, xsink);
 }
 

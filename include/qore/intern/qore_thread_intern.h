@@ -776,6 +776,12 @@ DLLLOCAL const std::string* qore_sandbox_build_caller_domain();
 //! sandboxes of \a pgm, else returns 0 (qore#6536)
 DLLLOCAL int qore_sandbox_check_program_isolation(QoreProgram* pgm, ExceptionSink* xsink, const char* operation);
 
+//! Takes the Program container \a pgm of a module from its object \a obj, which is deleted, after the isolation check
+/** @return the container, which the caller owns, or nullptr with an exception in \a xsink (the object is not deleted
+    if the isolation refuses \a pgm; qore#6536)
+*/
+DLLLOCAL QoreProgram* qore_take_module_container(const QoreObject* obj, QoreProgram* pgm, ExceptionSink* xsink);
+
 //! Returns true if the thread entered the code of another tenant in a trusted build: a fast path that would run code
 //! inline declines, so that the regular call path raises the error (qore#6536)
 DLLLOCAL inline bool qore_sandbox_isolation_refused() {

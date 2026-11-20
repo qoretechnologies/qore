@@ -10,8 +10,11 @@
 %modern
 %no-child-restrictions
 %allow-debugger
+# the host injects modules into Programs in the Program method tests
+%allow-injection
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires Mime
 %exec-class SandboxIsolationDomainTest
 
 #! the code of a tenant
@@ -134,6 +137,177 @@ nothing sub build_parse_pending(Program p, string src) {
     p.parsePending(src, "build-parse-pending");
 }
 
+#! trusted code that a build runs: performs an operation on a Program (or its ProgramControl) that the caller gives it
+nothing sub build_program_op(code op, object target) {
+    op(target);
+}
+
+#! a function, a global variable, a class and a hashdecl of the test that the import operations name
+int sub op_import_target() {
+    return 1;
+}
+our int op_global;
+class OpImportClass {
+}
+hashdecl OpImportHash {
+    int a;
+}
+
+#! every instance method of Program (except getProgramId(), which only identifies it) that the test performs on a
+#! Program of another tenant in a trusted build (qore#6536)
+const ProgramOps = {
+    "parse": sub (Program p) { p.parse("int sub z1() { return 1; }", "op"); },
+    "parsePending": sub (Program p) { p.parsePending("int sub z2() { return 1; }", "op"); },
+    "parseCommit": sub (Program p) { p.parseCommit(); },
+    "parseCommit(int)": sub (Program p) { p.parseCommit(0); },
+    "setParseDiagnosticsCollected": sub (Program p) { p.setParseDiagnosticsCollected(True); },
+    "parseDiagnosticsCollected": sub (Program p) { p.parseDiagnosticsCollected(); },
+    "getParseDiagnostics": sub (Program p) { p.getParseDiagnostics(); },
+    "parseRollback": sub (Program p) { p.parseRollback(); },
+    "callFunction": sub (Program p) { p.callFunction("f"); },
+    "callFunctionArgs": sub (Program p) { p.callFunctionArgs("f", ()); },
+    "callStaticMethod": sub (Program p) { p.callStaticMethod("C", "m"); },
+    "callStaticMethodArgs": sub (Program p) { p.callStaticMethodArgs("C", "m", ()); },
+    "existsFunction": sub (Program p) { p.existsFunction("f"); },
+    "run": sub (Program p) { p.run(); },
+    "skipPendingStatements": sub (Program p) { p.skipPendingStatements(); },
+    "importFunction": sub (Program p) { p.importFunction("op_import_target"); },
+    "importFunction(as)": sub (Program p) { p.importFunction("op_import_target", "op_imported", False); },
+    "importGlobalVariable": sub (Program p) { p.importGlobalVariable("op_global"); },
+    "importGlobalVariable(as)": sub (Program p) { p.importGlobalVariable("op_global", "op_global_2"); },
+    "importClass": sub (Program p) { p.importClass("OpImportClass"); },
+    "importHashDecl": sub (Program p) { p.importHashDecl("OpImportHash"); },
+    "getUserFunctionList": sub (Program p) { p.getUserFunctionList(); },
+    "getParseOptions": sub (Program p) { p.getParseOptions(); },
+    "getFullParseOptions": sub (Program p) { p.getFullParseOptions(); },
+    "getParseOptionStringList": sub (Program p) { p.getParseOptionStringList(); },
+    "setParseOptions": sub (Program p) { p.setParseOptions(0); },
+    "setParseOptions(ParseOptions)": sub (Program p) { p.setParseOptions(new ParseOptions()); },
+    "applySourceDefaults": sub (Program p) { p.applySourceDefaults("/nonexistent/op"); },
+    "disableParseOptions": sub (Program p) { p.disableParseOptions(0); },
+    "disableParseOptions(ParseOptions)": sub (Program p) { p.disableParseOptions(new ParseOptions()); },
+    "replaceParseOptions": sub (Program p) { p.replaceParseOptions(PO_MODERN); },
+    "setScriptPath": sub (Program p) { p.setScriptPath(); },
+    "getScriptDir": sub (Program p) { p.getScriptDir(); },
+    "getScriptName": sub (Program p) { p.getScriptName(); },
+    "getScriptPath": sub (Program p) { p.getScriptPath(); },
+    "lockOptions": sub (Program p) { p.lockOptions(); },
+    "getGlobalVariable": sub (Program p) { p.getGlobalVariable("x"); },
+    "setTimeZoneRegion": sub (Program p) { p.setTimeZoneRegion("UTC"); },
+    "setTimeZoneUTCOffset": sub (Program p) { p.setTimeZoneUTCOffset(0); },
+    "setTimeZone": sub (Program p) { p.setTimeZone(TimeZone::get()); },
+    "getTimeZone": sub (Program p) { p.getTimeZone(); },
+    "setSandboxManager": sub (Program p) { p.setSandboxManager(new SandboxManager()); },
+    "getSandboxManager": sub (Program p) { p.getSandboxManager(); },
+    "setExecMode": sub (Program p) { p.setExecMode(p.getExecMode()); },
+    "getExecMode": sub (Program p) { p.getExecMode(); },
+    "define": sub (Program p) { p.define("OP_DEFINE", 1); },
+    "undefine": sub (Program p) { p.undefine("OP_DEFINE"); },
+    "isDefined": sub (Program p) { p.isDefined("OP_DEFINE"); },
+    "getDefine": sub (Program p) { p.getDefine("OP_DEFINE"); },
+    "getAllDefines": sub (Program p) { p.getAllDefines(); },
+    "loadModule": sub (Program p) { p.loadModule("Mime"); },
+    "loadModuleWarn": sub (Program p) { p.loadModuleWarn("Mime"); },
+    "loadUserModuleWithProgram": sub (Program p) { p.loadUserModuleWithProgram("Mime", new Program(PO_NEW_STYLE)); },
+    "loadUserModuleWithProgramWarn": sub (Program p) {
+        p.loadUserModuleWithProgramWarn("Mime", new Program(PO_NEW_STYLE));
+    },
+    "loadApplyToUserModule": sub (Program p) { p.loadApplyToUserModule("Mime"); },
+    "loadApplyToUserModuleWarn": sub (Program p) { p.loadApplyToUserModuleWarn("Mime"); },
+    "loadApplyToPrivateUserModule": sub (Program p) { p.loadApplyToPrivateUserModule("Mime"); },
+    "loadApplyToPrivateUserModuleWarn": sub (Program p) { p.loadApplyToPrivateUserModuleWarn("Mime"); },
+    "importSystemClasses": sub (Program p) { p.importSystemClasses(); },
+    "importSystemHashDecls": sub (Program p) { p.importSystemHashDecls(); },
+    "importSystemConstants": sub (Program p) { p.importSystemConstants(); },
+    "importSystemFunctions": sub (Program p) { p.importSystemFunctions(); },
+    "importSystemApi": sub (Program p) { p.importSystemApi(); },
+    "setThreadInit": sub (Program p) { p.setThreadInit(); },
+    "setThreadEntryHandler": sub (Program p) { p.setThreadEntryHandler(); },
+    "subscribeThreadEvents": sub (Program p) { p.subscribeThreadEvents(new Queue()); },
+    "unsubscribeThreadEvents": sub (Program p) { p.unsubscribeThreadEvents(-1); },
+    "getGlobalVars": sub (Program p) { p.getGlobalVars(); },
+    "setGlobalVarValue": sub (Program p) { p.setGlobalVarValue("x", 2); },
+    "findFunctionVariants": sub (Program p) { p.findFunctionVariants("f"); },
+    "getThreadList": sub (Program p) { p.getThreadList(); },
+    "getThreadCount": sub (Program p) { p.getThreadCount(); },
+    "waitForThreads": sub (Program p) { p.waitForThreads(); },
+    "waitForThread": sub (Program p) { p.waitForThread(-1); },
+    "cancelThread": sub (Program p) { p.cancelThread(-1); },
+    "cancelThreads": sub (Program p) { p.cancelThreads(); },
+    "getProgram": sub (Program p) { p.getProgram(); },
+    "issueModuleCmd": sub (Program p) { p.issueModuleCmd("Mime", "op"); },
+    "getCallReference": sub (Program p) { p.getCallReference("f"); },
+    "getExpression": sub (Program p) { p.getExpression("1", "op"); },
+    "getFeatureList": sub (Program p) { p.getFeatureList(); },
+    "getCapabilityMask": sub (Program p) { p.getCapabilityMask(); },
+    "getJitOptimizationLevel": sub (Program p) { p.getJitOptimizationLevel(); },
+    "setJitOptimizationLevel": sub (Program p) { p.setJitOptimizationLevel(0); },
+    "saveObject": sub (Program p) { p.saveObject(new Mutex()); },
+    "clearObject": sub (Program p) { p.clearObject(new Mutex()); },
+    "checkObjectCache": sub (Program p) { p.checkObjectCache(new Mutex()); },
+    "clearObjectCache": sub (Program p) { p.clearObjectCache(); },
+    "clearObjectCache(date)": sub (Program p) { p.clearObjectCache(now()); },
+    "objectCacheSize": sub (Program p) { p.objectCacheSize(); },
+};
+
+#! a debugger that the test uses only to add Programs to and to break them
+class OpDebugProgram inherits DebugProgram {
+    onAttach(ProgramControl pgm, reference rs, reference rts) {}
+    onDetach(ProgramControl pgm, reference rs, reference rts) {}
+    onStep(ProgramControl pgm, int bsid, *int sid, *int bid, reference flow, reference rs, reference rts) {}
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {}
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+#! the debugger methods that act on a ProgramControl that they are given (qore#6536)
+const DebuggerOps = {
+    "DebugProgram::addProgram": sub (ProgramControl pc) { (new OpDebugProgram()).addProgram(pc); },
+    "DebugProgram::removeProgram": sub (ProgramControl pc) { (new OpDebugProgram()).removeProgram(pc); },
+    "DebugProgram::attachThread": sub (ProgramControl pc) { (new OpDebugProgram()).attachThread(pc, gettid()); },
+    "DebugProgram::breakProgramThread": sub (ProgramControl pc) {
+        (new OpDebugProgram()).breakProgramThread(pc, gettid());
+    },
+    "DebugProgram::setProgramTerminating": sub (ProgramControl pc) {
+        (new OpDebugProgram()).setProgramTerminating(pc);
+    },
+    "DebugProgram::breakProgram": sub (ProgramControl pc) { (new OpDebugProgram()).breakProgram(pc); },
+    "Breakpoint::assignProgram": sub (ProgramControl pc) { (new Breakpoint()).assignProgram(pc); },
+};
+
+#! every instance method of ProgramControl (except getProgramId()) that the test performs (qore#6536)
+const ControlOps = {
+    "createEvalProgram": sub (ProgramControl pc) { pc.createEvalProgram(); },
+    "getParseOptions": sub (ProgramControl pc) { pc.getParseOptions(); },
+    "getScriptDir": sub (ProgramControl pc) { pc.getScriptDir(); },
+    "getScriptName": sub (ProgramControl pc) { pc.getScriptName(); },
+    "getScriptPath": sub (ProgramControl pc) { pc.getScriptPath(); },
+    "getTimeZone": sub (ProgramControl pc) { pc.getTimeZone(); },
+    "isDefined": sub (ProgramControl pc) { pc.isDefined("OP_DEFINE"); },
+    "getDefine": sub (ProgramControl pc) { pc.getDefine("OP_DEFINE"); },
+    "getAllDefines": sub (ProgramControl pc) { pc.getAllDefines(); },
+    "getThreadList": sub (ProgramControl pc) { pc.getThreadList(); },
+    "cancelThread": sub (ProgramControl pc) { pc.cancelThread(-1); },
+    "existsFunction": sub (ProgramControl pc) { pc.existsFunction("f"); },
+    "getGlobalVariable": sub (ProgramControl pc) { pc.getGlobalVariable("x"); },
+    "getGlobalVars": sub (ProgramControl pc) { pc.getGlobalVars(); },
+    "setGlobalVarValue": sub (ProgramControl pc) { pc.setGlobalVarValue("x", 2); },
+    "assignBreakpoint": sub (ProgramControl pc) { pc.assignBreakpoint(new Breakpoint()); },
+    "deleteAllBreakpoints": sub (ProgramControl pc) { pc.deleteAllBreakpoints(); },
+    "getBreakpoints": sub (ProgramControl pc) { pc.getBreakpoints(); },
+    "getTopLevelLocalVars": sub (ProgramControl pc) { pc.getTopLevelLocalVars(); },
+    "getStatementIdInfo": sub (ProgramControl pc) { pc.getStatementIdInfo(0); },
+    "getStatementIds": sub (ProgramControl pc) { pc.getStatementIds(); },
+    "findStatementId": sub (ProgramControl pc) { pc.findStatementId("op", 1); },
+    "findStatementIds": sub (ProgramControl pc) { pc.findStatementIds("op", 1); },
+    "getStepInTargets": sub (ProgramControl pc) { pc.getStepInTargets(0); },
+    "findFunctionStatementId": sub (ProgramControl pc) { pc.findFunctionStatementId("f"); },
+    "findFunctionVariants": sub (ProgramControl pc) { pc.findFunctionVariants("f"); },
+    "getSourceLabels": sub (ProgramControl pc) { pc.getSourceLabels(); },
+    "getSourceFileNames": sub (ProgramControl pc) { pc.getSourceFileNames(); },
+};
+
 #! trusted code that a build runs: sets a global variable of a Program that the caller gives it
 nothing sub build_set_global(Program p, string name, auto value) {
     p.setGlobalVarValue(name, value);
@@ -246,6 +420,7 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         code BuildParsePending;
         code BuildLoadModule;
         code BuildSetGlobal;
+        code BuildProgramOp;
 
         #! tenant A's interface, its second interface (same domain), tenant B's interface
         Program a;
@@ -263,6 +438,7 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         addTestCase("sandboxes without a domain refuse nothing", \noDomain());
         addTestCase("the code of another tenant has no effect: direct calls, nested and lost calls, parsing",
             \noEffect());
+        addTestCase("a build cannot use another tenant's Program: neither its code nor its state", \programOps());
         addTestCase("a worker started in a tenant's build runs other work under its submitter's isolation",
             \sharedWorker());
         set_return_value(main());
@@ -285,17 +461,110 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         BuildParsePending = SandboxManager::createTrustedBuildCall(\build_parse_pending());
         BuildLoadModule = SandboxManager::createTrustedBuildCall(\build_load_module());
         BuildSetGlobal = SandboxManager::createTrustedBuildCall(\build_set_global());
+        BuildProgramOp = SandboxManager::createTrustedBuildCall(\build_program_op());
 
         a = tenant("a", "tenant-a");
         a2 = tenant("a", "tenant-a2");
         b = tenant("b", "tenant-b");
     }
 
-    #! creates a Program governed by a sandbox of the given domain, with no code
-    private Program tenantProgram(string domain) {
+    programOps() {
+        # every method of Program and of ProgramControl is refused on a Program of another tenant, before it reads or
+        # changes anything; the tenant's own Program is not refused
+        foreach hash<auto> i in (ProgramOps.pairIterator()) {
+            Program b_target = opTarget("b");
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (i.value, b_target)), "Program::" + i.key);
+            assertNotIsolationError(i.value, opTarget("a"), "Program::" + i.key);
+        }
+        foreach hash<auto> i in (ControlOps.pairIterator()) {
+            # the ProgramControl of a Program that is kept (the control does not keep its Program)
+            Program b_pgm = opTarget("b");
+            Program a_pgm = opTarget("a");
+            # createEvalProgram() names its own operation
+            assertThrows("SANDBOX-ISOLATION-ERROR", i.key == "createEvalProgram" ? "createEvalProgram" : "accessing a Program",
+                \a.callFunction(), ("call", BuildProgramOp, (i.value, b_pgm.getProgram())), "ProgramControl::" + i.key);
+            assertNotIsolationError(i.value, a_pgm.getProgram(), "ProgramControl::" + i.key);
+        }
+        foreach hash<auto> i in (DebuggerOps.pairIterator()) {
+            Program b_pgm = opTarget("b");
+            Program a_pgm = opTarget("a");
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (i.value, b_pgm.getProgram())), i.key);
+            assertNotIsolationError(i.value, a_pgm.getProgram(), i.key);
+        }
+        # another tenant's Program is not taken as the container of a module (which deletes its object): it is checked
+        # first, and its object is unchanged
+        hash<string, code> container_ops = {
+            "Program::loadUserModuleWithProgram": sub (Program c) {
+                opTarget("a").loadUserModuleWithProgram("Mime", c);
+            },
+            "Program::loadUserModuleWithProgramWarn": sub (Program c) {
+                opTarget("a").loadUserModuleWithProgramWarn("Mime", c);
+            },
+            "load_user_module_with_program()": sub (Program c) { load_user_module_with_program("Mime", c); },
+        };
+        foreach hash<auto> i in (container_ops.pairIterator()) {
+            Program b_container = opTarget("b");
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (i.value, b_container)), i.key);
+            assertEq(1, b_container.getGlobalVariable("x"), i.key);
+            assertNotIsolationError(i.value, opTarget("a"), i.key);
+        }
+        # the state of the other tenant's Program is unchanged
+        Program b_target = opTarget("b");
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildProgramOp,
+            (ProgramOps.setGlobalVarValue, b_target)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildProgramOp,
+            (ControlOps.setGlobalVarValue, b_target.getProgram())));
+        assertEq(1, b_target.getGlobalVariable("x"));
+        # Programs that are not another tenant's are not refused: the host's (a library's Program), one of a sandbox
+        # without a domain, the tenant's own
+        Program lib(PO_NEW_STYLE);
+        lib.parse("our int x; int sub f() { return 3; }", "library");
+        lib.setGlobalVarValue("x", 4);
+        Program none = tenantProgram();
+        none.parse("our int x;", "no-domain");
+        none.setGlobalVarValue("x", 5);
+        code read = int sub (Program p) { return p.getGlobalVariable("x"); };
+        assertEq(4, a.callFunction("call", BuildCallArgs, (read, (lib,))));
+        assertEq(5, a.callFunction("call", BuildCallArgs, (read, (none,))));
+        assertEq(1, a.callFunction("call", BuildCallArgs, (read, (opTarget("a"),))));
+        assertEq(3, a.callFunction("call", BuildCallArgs, (int sub (Program p) { return p.callFunction("f"); },
+            (lib,))));
+        # the code, constants and statics of a module that the host loaded (its Program has no sandbox) are read and
+        # run in the build
+        assertEq("text/plain|text/html", a.callFunction("call", BuildCallArgs, (string sub () {
+            return Mime::MimeTypeText + "|" + Mime::get_mime_type_from_ext("x.html"); }, ())));
+        # the Program's ID only identifies it
+        assertEq(b_target.getProgramId(), a.callFunction("call", BuildCallArgs, (int sub (Program p) {
+            return p.getProgramId(); }, (b_target,))));
+    }
+
+    #! the operation in a build that tenant A called on its own Program: any error but an isolation error
+    private assertNotIsolationError(code op, object target, string label) {
+        try {
+            a.callFunction("call", BuildProgramOp, (op, target));
+        } catch (hash<ExceptionInfo> ex) {
+            assertNeq("SANDBOX-ISOLATION-ERROR", ex.err, label + ": " + ex.desc);
+        }
+    }
+
+    #! a Program of the given domain with a global variable \c x (1) and a function \c f()
+    private Program opTarget(string domain) {
+        Program p = tenantProgram(domain);
+        p.parse("our int x; int sub f() { return 1; }", "op-target");
+        p.setGlobalVarValue("x", 1);
+        return p;
+    }
+
+    #! creates a Program governed by a sandbox of the given domain (none: a sandbox without a domain), with no code
+    private Program tenantProgram(*string domain) {
         SandboxManager m();
         m.setUncontrolledApiPolicy(True);
-        m.setIsolationDomain(domain);
+        if (domain) {
+            m.setIsolationDomain(domain);
+        }
         Program p(PO_MODERN);
         p.setSandboxManager(m);
         return p;

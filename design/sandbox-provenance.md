@@ -188,7 +188,11 @@ enterSandboxBudgets()`), the provenance of an object or callback (`QoreSandboxPr
 (`attach()`); it is made also for a call whose limits cannot be enforced (`lost_owner`), whose later entries are not
 recorded. Parsing or committing code in a Program switches into it without entering its sandboxes, so
 `ProgramRuntimeParseContextHelper` and `ProgramRuntimeParseCommitContextHelper` check its sandboxes against the
-isolation (`qore_sandbox_check_program_isolation()`).
+isolation (`qore_sandbox_check_program_isolation()`). The state of a Program is used without entering it, so every
+instance method of `Program` and `ProgramControl` (`lib/QC_Program.qpp`, `lib/QC_ProgramControl.qpp`) makes the same
+check first ("accessing a Program"), except `getProgramId()`; a Program whose own and creator sandboxes have no other
+domain (the host's, a trusted module's, one of a sandbox without a domain) passes it. Isolation covers a tenant's
+data as well as its code; the objects that tenants share on purpose are a separate rule (#6843).
 
 Each build floor carries a `QoreSandboxIsolation`: the sandboxes of its caller (none for a build that the outer
 build's own code entered), the sandboxes of the Program that created it, and the isolation of the outer build. An

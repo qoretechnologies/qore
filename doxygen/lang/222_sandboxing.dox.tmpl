@@ -446,9 +446,16 @@ authenticate();
     - the build's own code (the sandboxes of the %Program that created the capability);
     - code that no sandbox governs (the host's code), and the code of sandboxes without a domain.
 
-    Such a build also cannot parse or commit code in a %Program of another domain, load a module into it, change its
-    global variables, call it or create an evaluation %Program from it (\c SANDBOX-ISOLATION-ERROR); reading its global
-    variables or taking call references to its functions is not refused, but calling them is.
+    Such a build cannot use a %Program of another domain either, neither its code nor its state: every method of
+    @ref Qore::Program "Program" and @ref Qore::ProgramControl "ProgramControl" called on it raises
+    \c SANDBOX-ISOLATION-ERROR before it reads or changes anything (parsing, loading modules, reading or setting global
+    variables, taking call references, introspection), except \c getProgramId(), which only identifies it.  So do
+    the methods of @ref Qore::DebugProgram "DebugProgram" and @ref Qore::Breakpoint "Breakpoint" given its
+    @ref Qore::ProgramControl "ProgramControl", and @ref Qore::load_user_module_with_program()
+    "load_user_module_with_program()" and @ref Qore::Program::loadUserModuleWithProgram()
+    "Program::loadUserModuleWithProgram()" given it as the container of a module.  Deleting its object is not
+    refused.  The %Program of a module from a trusted module directory, a %Program of the host and one of a sandbox
+    without a domain are not another domain's.
 
     A build that trusted code calls may run the code of any domain: the host can orchestrate across tenants.  A host
     that sets no domains is not affected.
@@ -1546,7 +1553,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
     |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
-    |\c SANDBOX-ISOLATION-ERROR|SandboxManager|Code of another @ref sandbox_isolation_domains "isolation domain" was to run in a trusted build that sandboxed code called
+    |\c SANDBOX-ISOLATION-ERROR|SandboxManager|Code of another @ref sandbox_isolation_domains "isolation domain" was to run in a trusted build that sandboxed code called, or its %Program was used there
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality
 

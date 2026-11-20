@@ -1027,6 +1027,12 @@
     "PO_NO_FILESYSTEM" cannot call them; index lookups are unchanged (issue #6500).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Isolation Domains (Tenants)
+    A host assigns its sandboxes to tenants with
+    @ref Qore::SandboxManager::setIsolationDomain() "SandboxManager::setIsolationDomain()", and a trusted build that one
+    tenant's code calls never runs another tenant's code or uses its %Program (see @ref sandbox_isolation_domains;
+    <a href="https://github.com/qoretechnologies/qore/issues/6536">issue 6536</a>).
+
     @par Testing Whether a String Is Valid in Its Encoding
     @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests whether a string is valid in its
     encoding (strict UTF-8 as RFC 3629 defines it), without raising an exception (issue #6554).

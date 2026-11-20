@@ -6509,6 +6509,29 @@ int qore_sandbox_check_program_isolation(QoreProgram* pgm, ExceptionSink* xsink,
     return 0;
 }
 
+QoreProgram* qore_take_module_container(const QoreObject* obj, QoreProgram* pgm, ExceptionSink* xsink) {
+    assert(obj && pgm);
+    // another tenant's Program is not used as the container of a module in a trusted build that a tenant called;
+    // checked before the container is taken from its object, which deletes the object (qore#6536)
+    if (qore_sandbox_check_program_isolation(pgm, xsink, "accessing a Program")) {
+        return nullptr;
+    }
+    QoreObject* o = const_cast<QoreObject*>(obj);
+    // the reference that the object held is the caller's now; held here until the object is deleted, so that it is
+    // released if the deletion throws
+    ReferenceHolder<QoreProgram> rv(reinterpret_cast<QoreProgram*>(o->getAndClearPrivateData(CID_PROGRAM, xsink)),
+        xsink);
+    if (!rv) {
+        if (!*xsink) {
+            xsink->raiseException("OBJECT-ALREADY-DELETED", "the Program object given as the container of a module "
+                "has already been deleted");
+        }
+        return nullptr;
+    }
+    o->doDelete(xsink);
+    return rv.release();
+}
+
 const std::string* qore_sandbox_build_caller_domain() {
     ThreadData* td = thread_data.get();
     const QoreSandboxIsolation* iso = td ? td->sandbox_budgets.currentIsolation() : nullptr;
