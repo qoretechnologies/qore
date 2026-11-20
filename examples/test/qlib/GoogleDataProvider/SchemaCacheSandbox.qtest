@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires GoogleDataProvider
+
+%exec-class SchemaCacheSandboxTest
+
+#! The process-wide Discovery caches of GoogleDataProviderBase (#6838)
+/** The caches are shared by every caller of the module, which builds its requests (with its own connection and
+    credentials) from the cached document of an API: a subclass cannot reach them, and a subclass that has a document
+    of its own publishes it with registerSchemaInfo(), which keeps the first document of an API and refuses sandboxed
+    code.  Before the change, a sandboxed subclass could replace the document of an API that other callers use.
+*/
+class SchemaCacheSandboxTest inherits QUnit::Test {
+    public {
+        #! a synthetic Discovery document
+        const Doc = {
+            "schemas": {},
+            "resources": {"users": {"resources": {"messages": {"methods": {
+                "get": {"httpMethod": "GET", "path": "users/{userId}/messages/{id}",
+                    "parameters": {
+                        "userId": {"type": "string", "location": "path", "required": True},
+                        "id": {"type": "string", "location": "path", "required": True},
+                    }},
+            }}}}},
+        };
+    }
+
+    constructor() : QUnit::Test("SchemaCacheSandbox", "1.0", \ARGV) {
+        addTestCase("a subclass cannot reach the caches", \storageTest());
+        addTestCase("sandboxed code cannot publish a document", \sandboxedTest());
+        addTestCase("a trusted subclass publishes a synthetic API, and the first document is kept", \trustedTest());
+        set_return_value(main());
+    }
+
+    storageTest() {
+        foreach string member in (("info_map", "api_map", "request_map", "input_schema_map", "output_schema_map")) {
+            Program p(PO_NEW_STYLE);
+            try {
+                p.parse("%modern\n%requires GoogleDataProvider\n"
+                    "class T inherits GoogleDataProvider::GoogleDataProviderBase { "
+                    "static set() { " + member + "{\"t6838-storage\"} = NOTHING; } }", "subclass");
+                assertTrue(False, member + ": a subclass reached the cache");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("PARSE-EXCEPTION", ex.err, sprintf("%s: %s", member, ex.desc));
+            }
+        }
+    }
+
+    sandboxedTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%modern
+%requires GoogleDataProvider
+class T inherits GoogleDataProvider::GoogleDataProviderBase {
+    static string publish(hash<auto> doc) {
+        try {
+            registerSchemaInfo(\"t6838-sandboxed\", doc);
+            return \"published\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+string sub publish(hash<auto> doc) {
+    return T::publish(doc);
+}
+", "tenant");
+        p.setSandboxManager(new SandboxManager());
+        assertEq("SANDBOX-REGISTRATION-ERROR", p.callFunction("publish", Doc));
+        # nothing was published: the first document that trusted code publishes is its own
+        hash<auto> own = Doc + {"basePath": "trusted"};
+        assertEq("trusted", TestPublisher::publish("t6838-sandboxed", own).basePath);
+    }
+
+    trustedTest() {
+        hash<auto> first = Doc + {"basePath": "first"};
+        assertEq("first", TestPublisher::publish("t6838-trusted", first).basePath);
+        # a second document for the API does not replace the first
+        assertEq("first", TestPublisher::publish("t6838-trusted", Doc + {"basePath": "second"}).basePath);
+        assertEq("first", GoogleDataProvider::GoogleDataProviderBase::getSchemaInfo("t6838-trusted").basePath);
+        # the provider uses the published document
+        assertEq({"get": True}, GoogleDataProvider::GoogleDataProviderBase::getMethodsForResource("t6838-trusted",
+            ("users", "messages")));
+    }
+}
+
+#! trusted code that publishes a document through the subclass API
+class TestPublisher inherits GoogleDataProvider::GoogleDataProviderBase {
+    static hash<auto> publish(string api, hash<auto> doc) {
+        return registerSchemaInfo(api, doc);
+    }
+}
