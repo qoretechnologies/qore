@@ -214,8 +214,8 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
     }
 
     #! the input of a conversion from a multi-byte encoding is checked by Qore, not only by the platform's iconv, which
-    #! can decode an invalid sequence (musl 1.2.5's decodes the Shift_JIS bytes 81 20 as U+301C, Apple's the lead bytes
-    #! f0 - f9 of the user-defined area of CP932, which are no characters of Shift_JIS) (qore#6796)
+    #! can decode an invalid sequence (musl's before 1.2.6 decodes the Shift_JIS bytes 81 20 as U+301C, Apple's the lead
+    #! bytes f0 - f9 of the user-defined area of CP932, which are no characters of Shift_JIS) (qore#6796)
     sjisIconvTest() {
         foreach binary data in (<41812042>, <41f04042>, <41f9fc42>) {
             string s = binary_to_string(data, "Shift_JIS");
@@ -540,8 +540,8 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
             # glibc's iconv decodes the byte 0x80 of Big5 (also CN-BIG5) as U+0080
             ("CN-BIG5", <418042>, -1), ("GB18030", <41812042>, -1), ("GB13000", <41814042>, 3),
             ("MSCP949", <41814142>, 3),
-            # the Shift_JIS forms, also with conversion flags: musl 1.2.5's iconv decodes 81 20 as U+301C, Apple's the
-            # user-defined area f0 - f9 of CP932
+            # the Shift_JIS forms, also with conversion flags: musl's iconv before 1.2.6 decodes 81 20 as U+301C,
+            # Apple's the user-defined area f0 - f9 of CP932
             ("SJIS//IGNORE", <41812042>, -1), ("Shift_JIS//TRANSLIT", <41f04042>, -1), ("MS932", <41f04042>, 3),
             ("SJIS-WIN", <41f04042>, 3),
         );

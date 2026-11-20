@@ -17,7 +17,8 @@
     and 0xe0 - 0xef; 0xf0 - 0xf9 is the user-defined area of CP932, which accepts them).  The other difference, a
     sequence that the character functions accept and iconv refuses (an unassigned code point of the encoding), is
     allowed: its conversion fails with ENCODING-CONVERSION-ERROR, as for an undefined byte of a single-byte encoding.
-    musl's iconv (1.2.5) decodes some invalid sequences (ex: Shift_JIS 81 20), which is why the input is validated.
+    musl's iconv (before 1.2.6) decodes some invalid sequences (ex: Shift_JIS 81 20), which is why the input is
+    validated.
 */
 
 %modern
