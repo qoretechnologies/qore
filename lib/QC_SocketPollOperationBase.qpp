@@ -76,9 +76,6 @@ SocketPollOperationBase::constructor() {
 /**
 */
 SocketPollOperationBase::destructor() {
-    // the socket and the goal that the operation keeps with it are released with the object, as its members are
-    // (qore#6839)
-    qore_poll_op_release_members(poll, xsink);
     poll->deref(xsink);
 }
 

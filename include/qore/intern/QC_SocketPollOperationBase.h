@@ -75,7 +75,16 @@ DLLLOCAL QoreValue qore_poll_op_get_referenced_member(const QoreObject* op_obj, 
         ExceptionSink* xsink);
 
 //! Releases the \c "sock" and \c "goal" that an operation keeps with it, when its object is deleted (qore#6839)
-DLLLOCAL int qore_poll_op_release_members(SocketPollOperationBase* op, ExceptionSink* xsink);
+/** called by the destructor of SocketPollOperation, the class of the objects of these operations (the destructor of
+    the virtual base class SocketPollOperationBase is not run for them)
+*/
+DLLLOCAL int qore_poll_op_release_members(QoreObject* self, SocketPollOperationBase* op, ExceptionSink* xsink);
+
+//! Reports the socket that the operation of an object keeps with it to the scan for recursive references (qore#6839)
+/** see design/dgc.md Pattern B
+*/
+DLLLOCAL bool qore_socket_poll_op_scan_members(AbstractPrivateData* priv_data, class RObject& obj,
+        class RSetHelper& rsh);
 
 //! Called by the destructor of the Qore object of a poll operation without a C++ poll operation (one implemented in
 //! %Qore): a submitted operation is canceled (qore#6531)

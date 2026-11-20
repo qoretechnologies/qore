@@ -94,9 +94,11 @@ public:
         return new QoreStringNode(getStateImpl());
     }
 
-    //! Returns the referenced socket QoreObject from the "sock" member
-    /** The member can hold an ordinary, a weak or an opaque reference to the object; the operations of the
-        synchronous Socket calls hold a weak one, which costs no scan for recursive references
+    //! Returns the referenced socket QoreObject of the operation
+    /** An operation of qore/SocketPollOperation.h keeps the socket with the operation (SocketPollOperationMembers),
+        the others in the private:internal member \c "sock" of SocketPollOperationBase (qore#6839); either can hold an
+        ordinary, a weak or an opaque reference to the object; the operations of the synchronous Socket calls hold a
+        weak one, which costs no scan for recursive references
     */
     DLLEXPORT QoreObject* getReferencedSocketObject(ExceptionSink* xsink) const;
 

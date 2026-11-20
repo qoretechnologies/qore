@@ -631,6 +631,11 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
                 &xsink)) {
             return true;
         }
+        // qore#6839: a SocketPollOperation keeps a strong reference to its socket with the operation, where a member
+        // held it before
+        if (qore_socket_poll_op_scan_members(getScanPrivateData(CID_SOCKETPOLLOPERATION), *this, rsh)) {
+            return true;
+        }
         {
             // issue #5590: a Program's thread initialization code and thread entry and exit handlers
             ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(getScanPrivateData(CID_PROGRAM)), &xsink);

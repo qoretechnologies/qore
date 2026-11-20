@@ -98,8 +98,10 @@ struct qore_socket_private;
 /** The operations of the classes in this header (the operations of the synchronous Socket calls and of the
     SocketPollOperation objects) keep the socket and the goal of their object here instead of as private:internal
     members of the object, so that creating the object of an operation allocates no member storage.  The values are
-    released when the object is deleted, as its members were.  %Qore code gets the goal with getGoal(), and the
-    library gets the socket with SocketPollOperationBase::getReferencedSocketObject().
+    released when the object is deleted (SocketPollOperation::destructor()), as its members were, and a strong
+    reference to the socket is reported to the scan for recursive references of the object, as a member was.  %Qore
+    code gets the goal with getGoal(), and the library gets the socket with
+    SocketPollOperationBase::getReferencedSocketObject().
 
     @since %Qore 3.0
 */
@@ -117,6 +119,14 @@ public:
 
     //! releases the values; called when the object of the operation is deleted
     DLLLOCAL void releasePollMembers(ExceptionSink* xsink);
+
+    //! reports the socket of the operation to the scan for recursive references of its object if it holds it strongly
+    /** a member was scanned with the object; see design/dgc.md Pattern B and qore_socket_poll_op_scan_members()
+    */
+    DLLLOCAL bool scanPollMembers(class RObject& obj, class RSetHelper& rsh);
+
+    //! true if the object of the operation is registered for the scan of its private data (a strong socket reference)
+    bool poll_scan_registered = false;
 
 private:
     //! the lock of the values: the async I/O controller reads the socket while the object can be deleted

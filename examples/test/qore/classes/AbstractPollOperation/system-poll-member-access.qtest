@@ -23,6 +23,8 @@ class SystemPollMemberAccessTest inherits QUnit::Test {
         addTestCase("the members are not shown with the object", \formatTest());
         addTestCase("a member of the name written from outside", \outsideWriteTest());
         addTestCase("SocketPollOperation keeps its socket and goal with the operation", \socketPollOperationTest());
+        addTestCase("the socket of a SocketPollOperation is released with the object", \socketReleaseTest());
+        addTestCase("a cycle through the socket of a SocketPollOperation is collected", \socketCycleTest());
         set_return_value(main());
     }
 
@@ -146,6 +148,42 @@ list<auto> sub t() {
         SocketPollOperation op2(sock, "connect", {"url": "localhost:1"});
         assertNothing(p.callFunction("t", op2));
         assertEq("connect", p.callFunction("g", op2));
+    }
+
+    #! the socket that a SocketPollOperation keeps is released when the object is deleted, as a member was: the
+    #! exception of the socket's destructor is raised by the deletion
+    socketReleaseTest() {
+        assertEq("MYSOCK-DTOR", run("class MySock inherits Socket {
+    destructor() { throw \"MYSOCK-DTOR\", \"x\"; }
+}
+*string sub t() {
+    MySock s();
+    SocketPollOperation op(s, \"connect\", {\"url\": \"localhost:1\"});
+    remove s;
+    try {
+        delete op;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}"));
+    }
+
+    #! a strong reference to the socket that a SocketPollOperation keeps is seen by the scan for recursive
+    #! references, as a member was: a cycle through it is collected
+    socketCycleTest() {
+        assertTrue(run("our bool destroyed;
+class MySock inherits Socket {
+    public { auto op; }
+    destructor() { destroyed = True; }
+}
+sub cycle() {
+    MySock s();
+    s.op = new SocketPollOperation(s, \"connect\", {\"url\": \"localhost:1\"});
+}
+bool sub t() {
+    cycle();
+    return destroyed ?? False;
+}"));
     }
 
     formatTest() {

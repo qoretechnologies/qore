@@ -15815,6 +15815,26 @@ void SocketPollOperationMembers::releasePollMembers(ExceptionSink* xsink) {
     g.discard(xsink);
 }
 
+bool SocketPollOperationMembers::scanPollMembers(RObject& obj, RSetHelper& rsh) {
+    // the lock is only tried, as for a Queue (see design/dgc.md, "A container that a scan finds locked")
+    if (poll_member_lock.trylock()) {
+        rsh.containerContended(obj);
+        return false;
+    }
+    AutoLocker al(poll_member_lock, true);
+    return poll_sock.getType() == NT_OBJECT && obj.scanCheck(rsh, poll_sock.getInternalNode());
+}
+
+bool qore_socket_poll_op_scan_members(AbstractPrivateData* priv_data, RObject& obj, RSetHelper& rsh) {
+    // the reference can be the last one if the object is deleted meanwhile: its release is not made in the scan
+    QorePollOpOffThreadRef<SocketPollOperationBase> op(reinterpret_cast<SocketPollOperationBase*>(priv_data));
+    if (!*op) {
+        return false;
+    }
+    SocketPollOperationMembers* m = dynamic_cast<SocketPollOperationMembers*>(*op);
+    return m && m->scanPollMembers(obj, rsh);
+}
+
 QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xsink) const {
     assert(self);
     // an operation of qore/SocketPollOperation.h keeps the socket with the operation, the others in the
@@ -15851,12 +15871,19 @@ int qore_poll_op_set_member(QoreObject* op_obj, const char* key, QoreValue val, 
     ReferenceHolder<AbstractPrivateData> pd(xsink);
     SocketPollOperationMembers* m = qore_poll_op_members(op_obj, pd, xsink);
     if (*xsink) {
-        // the object was deleted; the value is consumed
+        // an exception was raised (ex: the object was deleted); the value is consumed
         val.discard(xsink);
         return -1;
     }
     if (m) {
+        // a strong reference to the socket is reported to the scan for recursive references of the object, as a
+        // member is (design/dgc.md Pattern B; the registration is released in SocketPollOperation::destructor())
+        bool scan = key[0] == 's' && val.getType() == NT_OBJECT && !m->poll_scan_registered;
         m->setPollMember(key, val, xsink);
+        if (scan) {
+            m->poll_scan_registered = true;
+            qore_object_private::get(*op_obj)->incScanPrivateData();
+        }
         return *xsink ? -1 : 0;
     }
     return op_obj->setInternalMemberValue(key, QC_SOCKETPOLLOPERATIONBASE, val, xsink);
@@ -15874,8 +15901,12 @@ QoreValue qore_poll_op_get_referenced_member(const QoreObject* op_obj, const cha
     return op_obj->getReferencedMemberNoMethod(key, QC_SOCKETPOLLOPERATIONBASE, xsink);
 }
 
-int qore_poll_op_release_members(SocketPollOperationBase* op, ExceptionSink* xsink) {
+int qore_poll_op_release_members(QoreObject* self, SocketPollOperationBase* op, ExceptionSink* xsink) {
     if (SocketPollOperationMembers* m = dynamic_cast<SocketPollOperationMembers*>(op)) {
+        if (m->poll_scan_registered) {
+            m->poll_scan_registered = false;
+            qore_object_private::get(*self)->decScanPrivateData();
+        }
         m->releasePollMembers(xsink);
     }
     return *xsink ? -1 : 0;
