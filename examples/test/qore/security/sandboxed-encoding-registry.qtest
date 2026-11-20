@@ -120,9 +120,9 @@ string sub conv(string name) {
         list<string> l = sandboxed.callFunction("many", "x-qore-test-many-" + tag + "-", 1000);
         assertEq(1000, l.size());
         assertEq((Unregistered,), keys (map {$1: True}, l), "every name gives the shared encoding");
-        # an HTTP client's assumed encoding is resolved by the code that sets it
-        assertEq(Unregistered, sandboxed.callFunction("assumed", "x-qore-test-http-" + tag));
-        assertEq("UTF-8", sandboxed.callFunction("assumed", "utf-8"));
+        # an HTTP client's assumed encoding keeps the spelling it was set with (it is resolved by the code that sets it)
+        assertEq("x-qore-test-http-" + tag, sandboxed.callFunction("assumed", "x-qore-test-http-" + tag));
+        assertEq("utf-8", sandboxed.callFunction("assumed", "utf-8"));
         # the shared encoding cannot be converted
         assertEq("ENCODING-CONVERSION-ERROR", sandboxed.callFunction("conv", "x-qore-test-conv-" + tag));
         # the names were not registered for trusted code either: it registers them now under their own names
