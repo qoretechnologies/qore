@@ -315,7 +315,9 @@ public class PgsqlRunSchema {
 
     #! Returns the name of another schema of the run: the run's schema with a suffix
     /** A schema with this name is dropped with the run's schema by teardown(), or by the setup of a later run
-        when the run is gone; the test creates it
+        when the run is gone; the test creates it.  A foreign server or foreign data wrapper, which is an object of
+        the whole database and not of a schema, takes a name of the run with it too, and is dropped with the run's
+        schema in the same way, so that concurrent runs do not share it (issue #6716)
 
         @param tag the suffix: its letters and digits, in lower case, at most 8 of them
 
@@ -400,11 +402,35 @@ public class PgsqlRunSchema {
         }
     }
 
-    #! Drops a schema with everything in it
+    #! Drops a schema with everything in it, and the foreign servers named after it
     /** Its partitioned tables are dropped first, each partition in a transaction of its own: a schema with many
-        partitions dropped in one transaction exceeds the server's lock table ("out of shared memory").
+        partitions dropped in one transaction exceeds the server's lock table ("out of shared memory").  The foreign
+        servers and foreign data wrappers whose names are the schema's with a suffix (getAuxName()) are dropped with
+        what uses them, before the schema; one that cannot be dropped is reported, and the schema is dropped.
     */
     static dropSchema(Datasource ds, string schema) {
+        # the run's foreign servers and foreign data wrappers, which are objects of the whole database; one that
+        # cannot be dropped (as of another role) does not keep the schema (issue #6716)
+        foreach hash<auto> obj in ((
+                {"type": "server", "sql": "select pg_catalog.quote_ident(srvname) as name "
+                    "from pg_catalog.pg_foreign_server where pg_catalog.starts_with(srvname, %v)"},
+                {"type": "foreign data wrapper", "sql": "select pg_catalog.quote_ident(fdwname) as name "
+                    "from pg_catalog.pg_foreign_data_wrapper where pg_catalog.starts_with(fdwname, %v)"},
+            )) {
+            *list<string> names = ds.select(obj.sql, schema + "_").name;
+            ds.commit();
+            foreach string name in (names) {
+                try {
+                    ds.exec(sprintf("set local lock_timeout = '%s'", PgsqlRunSchema::DropLockTimeout));
+                    ds.exec(sprintf("drop %s if exists %s cascade", obj.type, name));
+                    ds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    ds.rollback();
+                    printf("PgsqlRunSchema: cannot drop %s %s: %s: %s\n", obj.type, name, ex.err, ex.desc);
+                }
+            }
+        }
+
         # the partitions of every partitioned table in the schema, the deepest first
         *hash<auto> parts = ds.select("select pg_catalog.quote_ident(pn.nspname) || '.' || "
             "pg_catalog.quote_ident(pc.relname) as sql_name, pc.relkind = 'f' as is_foreign "

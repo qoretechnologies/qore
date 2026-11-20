@@ -33,6 +33,8 @@
 
 #define _QORE_QORELISTITERATOR_H
 
+#include "qore/intern/QoreTypeDeclPin.h"
+
 extern QoreClass* QC_LISTITERATOR;
 
 DLLLOCAL QoreObject* qore_new_list_iterator_object(QoreProgram* pgm, const QoreListNode* l);
@@ -51,9 +53,11 @@ public:
         if (!QoreTypeInfo::hasType(myElementTypeInfo)) {
             myElementTypeInfo = autoTypeInfo;
         }
+        element_type_pin.set(myElementTypeInfo);
     }
 
     DLLLOCAL QoreListIterator(const QoreListIterator& old) : ConstListIterator(old.l->listRefSelf(), old.pos), myElementTypeInfo(old.myElementTypeInfo) {
+        element_type_pin.set(myElementTypeInfo);
     }
 
     using AbstractPrivateData::deref;
@@ -83,6 +87,8 @@ public:
 
 protected:
     const QoreTypeInfo* myElementTypeInfo;
+    //! keeps the declarations that the element type names (issue #6419; see QoreTypeDeclPin)
+    QoreTypeDeclPin element_type_pin;
 
     DLLLOCAL virtual ~QoreListIterator() {
     }

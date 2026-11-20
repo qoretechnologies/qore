@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class CallRefPrivateAccessTest
+
+#! a parent class with methods that are not public
+class P {
+    private string priv() { return "P::priv"; }
+    private:internal string internal() { return "P::internal"; }
+    private static string privStatic() { return "P::privStatic"; }
+
+    #! the class's own code may take references to all of them
+    code ownRef(string name) { return self.getCallReference(name); }
+}
+
+#! a subclass that does not override them
+class C inherits P {
+    #! code of the class hierarchy
+    code hierRef(string name) { return self.getCallReference(name); }
+    #! the pseudo-method has the class context of its caller (get_call_reference() has none)
+    code hierScopedRef(string name) { return self.getCallReference(name); }
+}
+
+#! a class that inherits P privately, with a public method
+class Q inherits private P {
+    string pub() { return "Q::pub"; }
+    code hierRef(string name) { return self.getCallReference(name); }
+}
+
+#! a class with private methods of its own, which no parent class declares
+class O {
+    private string p() { return "O::p"; }
+    private static string ps() { return "O::ps"; }
+
+    #! the class's own code may take references to them
+    code ownRef(string name) { return self.getCallReference(name); }
+}
+
+#! a parent class with a private method and a private static method, and two subclasses of it (qore#6806)
+class A6 {
+    private string m() { return "A6::m"; }
+    private static string ps() { return "A6::ps"; }
+}
+
+class D6 inherits A6 {
+}
+
+#! a sibling of D6: its code may access A6, but not D6
+class E6 inherits A6 {
+    static string direct(D6 d) {
+        try {
+            return d.m();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    static code refOf(object o, string name) {
+        return o.getCallReference(name);
+    }
+
+    static code closureRefOf(object o, string name) {
+        code c = code sub () { return o.getCallReference(name); };
+        return c();
+    }
+
+    code ownRef(string name) {
+        return self.getCallReference(name);
+    }
+}
+
+#! a class outside the hierarchy
+class X {
+    static code refOf(object o, string name) { return o.getCallReference(name); }
+    static code staticRefOf(string name) { return get_call_reference(name); }
+}
+
+#! a call reference by name gives only what a method call of the name from the same context can call (qore#6782)
+/** Obtaining a call reference by name for a method (<object>::getCallReference(), get_call_reference(),
+    Program::getCallReference(), which share the lookup) applies the access rules of a method call from the same context: a private method of
+    a parent class is not returned to code outside the class hierarchy, a private:internal one is returned only to the
+    code of its own class, and a method of a privately inherited class only to the code of the hierarchy.  Before the
+    change, the lookup checked the class of the object against the class searched, not the caller, and returned a
+    parent class's private method to any caller.
+*/
+class CallRefPrivateAccessTest inherits QUnit::Test {
+    constructor() : QUnit::Test("call reference private access", "1.0", \ARGV) {
+        addTestCase("a parent's private method from outside", \outsideTest());
+        addTestCase("from the code of a class outside the hierarchy", \otherClassTest());
+        addTestCase("through a closure", \closureTest());
+        addTestCase("private:internal", \internalTest());
+        addTestCase("a private static method", \staticTest());
+        addTestCase("a method of a privately inherited class", \privateInheritanceTest());
+        addTestCase("the code of the hierarchy", \hierarchyTest());
+        addTestCase("sandboxed code", \sandboxTest());
+        addTestCase("the object's own private method", \ownPrivateTest());
+        addTestCase("a class-scoped name through an object of another subclass", \siblingScopedTest());
+        set_return_value(main());
+    }
+
+    outsideTest() {
+        C c();
+        assertThrows("CALL-REFERENCE-ERROR", \c.getCallReference(), "priv");
+        assertThrows("CALL-REFERENCE-ERROR", \get_call_reference(), "P::privStatic");
+    }
+
+    otherClassTest() {
+        assertThrows("CALL-REFERENCE-ERROR", \X::refOf(), (new C(), "priv"));
+    }
+
+    closureTest() {
+        C c();
+        code get = code sub (string name) { return c.getCallReference(name); };
+        assertThrows("CALL-REFERENCE-ERROR", get, "priv");
+    }
+
+    internalTest() {
+        C c();
+        # the subclass's code cannot reach P's private:internal method
+        assertThrows("CALL-REFERENCE-ERROR", \c.hierRef(), "internal");
+        # P's own code can
+        assertEq("P::internal", c.ownRef("internal")());
+    }
+
+    staticTest() {
+        assertThrows("CALL-REFERENCE-ERROR", \X::staticRefOf(), "P::privStatic");
+        assertEq("P::privStatic", (new C()).hierScopedRef("P::privStatic")());
+    }
+
+    privateInheritanceTest() {
+        Q q();
+        assertThrows("CALL-REFERENCE-ERROR", \q.getCallReference(), "P::priv");
+        assertThrows("CALL-REFERENCE-ERROR", \q.getCallReference(), "P::ownRef");
+        assertEq("Q::pub", q.getCallReference("pub")());
+        # the hierarchy's code may
+        assertEq("P::priv", q.hierRef("P::priv")());
+    }
+
+    hierarchyTest() {
+        C c();
+        assertEq("P::priv", c.hierRef("priv")());
+        assertEq("P::priv", c.ownRef("priv")());
+    }
+
+    siblingScopedTest() {
+        D6 d();
+        # a method call from E6's code on a D6 object cannot call A6's private method
+        assertEq("METHOD-IS-PRIVATE", E6::direct(d));
+        # nor can a call reference by name, scoped or not, directly or through a closure
+        assertThrows("CALL-REFERENCE-ERROR", \E6::refOf(), (d, "A6::m"));
+        assertThrows("CALL-REFERENCE-ERROR", \E6::refOf(), (d, "m"));
+        assertThrows("CALL-REFERENCE-ERROR", \E6::closureRefOf(), (d, "A6::m"));
+        # a static method does not depend on the object: E6's code may call A6's private static method
+        assertEq("A6::ps", E6::refOf(d, "A6::ps")());
+        # E6's code may take the reference through an object of its own class
+        E6 e();
+        assertEq("A6::m", e.ownRef("A6::m")());
+        assertEq("A6::m", E6::refOf(e, "A6::m")());
+    }
+
+    ownPrivateTest() {
+        O o();
+        # from outside, from a class outside the hierarchy and through a closure
+        assertThrows("CALL-REFERENCE-ERROR", \o.getCallReference(), "p");
+        assertThrows("CALL-REFERENCE-ERROR", \X::refOf(), (o, "p"));
+        code get = code sub (string name) { return o.getCallReference(name); };
+        assertThrows("CALL-REFERENCE-ERROR", get, "p");
+        # the static private method, by its unscoped name through the object and by its scoped name
+        assertThrows("CALL-REFERENCE-ERROR", \o.getCallReference(), "ps");
+        assertThrows("CALL-REFERENCE-ERROR", \X::staticRefOf(), "O::ps");
+        assertThrows("CALL-REFERENCE-ERROR", \get_call_reference(), "O::ps");
+        # sandboxed code
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%modern\nstring sub ref(object o, string n) { try { o.getCallReference(n); return \"returned\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }", "tenant");
+        p.setSandboxManager(new SandboxManager());
+        assertEq("CALL-REFERENCE-ERROR", p.callFunction("ref", o, "p"));
+        assertEq("CALL-REFERENCE-ERROR", p.callFunction("ref", o, "ps"));
+        # the class's own code may
+        assertEq("O::p", o.ownRef("p")());
+        assertEq("O::ps", o.ownRef("ps")());
+    }
+
+    sandboxTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%modern\nstring sub ref(object o) { try { o.getCallReference(\"priv\"); return \"returned\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }", "tenant");
+        p.setSandboxManager(new SandboxManager());
+        assertEq("CALL-REFERENCE-ERROR", p.callFunction("ref", new C()));
+    }
+}

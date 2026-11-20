@@ -334,6 +334,27 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_thread_capabilities Thread Capability Scopes
+
+    A host makes its implementations of thread capabilities (such as \c start_thread) available to the module code
+    that it runs for an interface with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"; module code
+    uses them through a guard (@ref Qore::get_thread_capability() "get_thread_capability()"), which runs only
+    code that no sandbox governs.  Sandboxed code can neither set nor see the capabilities.
+
+    - <b>A scope object</b> (<tt>ThreadCapabilityScope scope(caps);</tt>) keeps its set in effect until it is
+      destroyed, also for the code that runs after the call that created it: it cannot be created while any code that
+      a sandbox governs is on the thread's stack, including callers of the code that creates it.
+    - <b>A call-bound scope</b> (@ref Qore::Thread::ThreadCapabilityScope::call() "ThreadCapabilityScope::call()")
+      sets the capabilities only while the given call runs, and restores the outer set however it ends, so it cannot
+      outlive the frame of the code that made it.  Only that code is judged: Qore code that calls it directly, whose
+      %Program and the %Program running on the thread are not sandboxed (by a manager, or as a %Program that sandboxed
+      code created), and that may control threads.  Sandboxed callers further up the stack do not count, so a host
+      whose interfaces all have a sandbox manager can set the capabilities of the interface that it calls for another
+      one.  A call reference to the method is refused, as it would run the method for the code that holds the
+      reference, as is a call through another builtin (for example
+      @ref Qore::call_static_method() "call_static_method()").  The code run in the call, which can be sandboxed, keeps
+      its own restrictions: sandboxed code still cannot see the capabilities or set a scope.
+
     @subsection sandbox_datasource_options Datasource Options Are Judged by the Code That Sets Them
 
     A DBI driver applies the options of a datasource when it opens a connection, which can happen long after the
@@ -446,6 +467,67 @@ authenticate();
     modules register their entries in their initialization, which no sandbox governs (see @ref sandbox_module_init).
     A check of the sources of the standard modules (\c examples/test/runner/test_shared_registry_checks.py) fails for
     a registry mutator that makes no such check.
+
+    @subsection sandbox_process_wide_registries Process-Wide Registries
+
+    A registry of callbacks, hooks, handlers or listeners that the library or a module keeps for the whole process is
+    shared by the code of every %Program: a module from the module path is loaded once per process, and what such a
+    registry holds runs or is used later for every caller, with the data of that caller.  Such registries therefore
+    refuse registrations, replacements and removals by code that is sandboxed or acts for sandboxed code (the code of
+    a sandboxed %Program or of a %Program that sandboxed code created, code that such a %Program calls, and code that a
+    sandbox governs, also through a policy barrier or a system-policy capability) with
+    \c SANDBOX-REGISTRATION-ERROR.  Trusted code is not affected, nor is the initialization of library code (see
+    @ref sandbox_module_init), whatever code loads the module first, so what the host and the library register stays
+    in place for every caller.
+
+    The builtin registries that apply the rule:
+    - signal handlers: @ref Qore::set_signal_handler() "set_signal_handler()" and
+      @ref Qore::remove_signal_handler() "remove_signal_handler()"
+    - the application registry: @ref Qore::set_app_registry() "set_app_registry()"
+    - exit hooks: @ref Qore::register_exit_hook() "register_exit_hook()", which raises \c EXIT-HOOK-ERROR
+    - the async I/O loggers and callbacks: @ref Qore::set_async_io_logger() "set_async_io_logger()",
+      @ref Qore::AsyncIoController::setLogger() "AsyncIoController::setLogger()" and
+      @ref Qore::AsyncIoController::setTimerCallback() "AsyncIoController::setTimerCallback()"
+    - the settings of the process-wide async I/O controller, which apply to the operations of every caller:
+      @ref Qore::AsyncIoController::setAutostop() "AsyncIoController::setAutostop()",
+      @ref Qore::AsyncIoController::setMaxCallbackWorkers() "AsyncIoController::setMaxCallbackWorkers()" and
+      @ref Qore::AsyncIoController::setMaxIoThreads() "AsyncIoController::setMaxIoThreads()"
+    - the callbacks of the line editor of the \c linenoise module
+    - the module blacklist: @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" and
+      @ref Qore::qore_add_module_to_blacklist_ex() "qore_add_module_to_blacklist_ex()"
+    - module options: @ref Qore::set_module_option() "set_module_option()"
+
+    The registries, lookups, resolvers, serializers, codecs, schemas and type caches of the standard modules apply
+    the same rule with exceptions of their own, which each API documents (see @ref sandbox_module_state); the other
+    callback registries of the standard modules raise \c SANDBOX-REGISTRATION-ERROR, for example the child provider
+    generators that some data provider modules keep, the logger and the settings of the process-wide
+    \c AsyncSocketIo controller and the catalog change listeners of \c DataProvider (\c DATA-PROVIDER-LISTENER-ERROR).
+    The factory registries
+    apply the rule as well: the LLM, RAG, media and speech provider factories (\c QoreLlmTypes, \c QoreRagTypes,
+    \c QoreMediaUtils and \c QoreSpeechUtils), the child data providers that data provider modules register, and
+    the client identity providers, server host key providers and host key stores of the \c sshutil module's
+    \c SshUtilRegistry, which also refuses to give its providers to sandboxed code, as they can hold credentials;
+    the entries of the process-wide type cache of \c DataProvider refuse changes with
+    \c DATA-PROVIDER-REGISTRATION-DENIED.  The storage of these registries is \c private:internal, so a subclass
+    cannot change it either.  A module that keeps a
+    registry of its own calls
+    @ref Qore::SandboxManager::checkProcessWideRegistration() "SandboxManager::checkProcessWideRegistration()" before
+    it changes it (\c qore_check_process_wide_registration() in the C++ API,
+    \c QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION); where the registration is only a side effect of an operation that
+    the caller may perform, such as an \c HttpServer setting its logger on the process-wide async I/O controller or
+    an \c AsyncSocketIoController created with an autostop flag setting it on that controller, it leaves the
+    registration out when
+    @ref Qore::SandboxManager::isProcessWideRegistrationAllowed() "SandboxManager::isProcessWideRegistrationAllowed()"
+    returns @ref False, and the object then uses the process's setting.
+
+    Code that is sandboxed or acts for sandboxed code (as decided for registrations) does not get the loggers that
+    the host configured either: @ref Qore::AsyncIoController::getLogger() "AsyncIoController::getLogger()" and
+    @ref Qore::get_async_io_logger() "get_async_io_logger()" return @ref nothing "NOTHING" for it, as if no logger
+    were set, and @ref Qore::AsyncIoController::getCacheSize() "AsyncIoController::getCacheSize()" refuses it
+    (\c PERMISSION-DENIED), as it counts the operations of every caller; the autostop setting, which only trusted code can
+    change, can be read with @ref Qore::AsyncIoController::getAutostop() "AsyncIoController::getAutostop()".
+
+    @since %Qore 3.0
 
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
 
@@ -1571,6 +1653,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
     |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
+    |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality
 

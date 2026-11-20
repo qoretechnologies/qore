@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class TypeRetirementUnsafeFramesTest
+
+#! A user class of the test Program, a type argument
+class Foo {
+}
+
+#! A class that is not generic
+class Plain {
+    int frames() {
+        return call_function("dbg_type_unsafe_frames");
+    }
+
+    int selfFrames() {
+        return frames();
+    }
+}
+
+#! A generic class: its methods run with its receiver, Box<Foo> or Box<int>
+class Box<T> {
+    int frames() {
+        return call_function("dbg_type_unsafe_frames");
+    }
+
+    int selfFrames() {
+        return frames();
+    }
+
+    static int staticFrames() {
+        return call_function("dbg_type_unsafe_frames");
+    }
+}
+
+#! A generic function: a call of it infers its type argument from its argument
+int sub generic_frames<T>(T v) {
+    return call_function("dbg_type_unsafe_frames");
+}
+
+#! A function that is not generic
+int sub plain_frames(auto v) {
+    return call_function("dbg_type_unsafe_frames");
+}
+
+#! The frames that hold types read through derived types (issue #6419)
+/** A call with a parameterized receiver whose type arguments name user declarations (Box<Foo>), or with inferred type
+    arguments that do, holds types read through derived types: its frame makes the waits of its thread not quiescent
+    (design/derived-type-retirement.md, stage 1c).  Ordinary calls (a class that is not generic, a generic class with
+    builtin type arguments, a function that is not generic) mark no frame, and the frames are unmarked when the calls
+    return.
+*/
+class TypeRetirementUnsafeFramesTest inherits QUnit::Test {
+    constructor() : Test("TypeRetirementUnsafeFramesTest", "1.0") {
+        addTestCase("unsafe frames", \unsafeFrames());
+        set_return_value(main());
+    }
+
+    unsafeFrames() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug functions require a debug build");
+        }
+        assertEq(0, call_function("dbg_type_unsafe_frames"), "no frame is marked at the start");
+
+        Plain p();
+        assertEq(0, p.frames(), "a method of a class that is not generic");
+        assertEq(0, p.selfFrames(), "a call of a method on self of a class that is not generic");
+
+        Box<Foo> bf();
+        assertEq(1, bf.frames(), "a method with a receiver whose type argument is a user class");
+        assertEq(2, bf.selfFrames(), "a call of a method on self with such a receiver, in such a call");
+        auto bfa = bf;
+        assertEq(1, bfa.frames(), "the same through an untyped variable");
+
+        Box<int> bi();
+        assertEq(0, bi.frames(), "a method with a receiver whose type argument is a builtin type");
+        assertEq(0, bi.selfFrames(), "a call of a method on self with such a receiver");
+
+        assertEq(1, generic_frames(new Foo()), "a generic function with an inferred user class");
+        assertEq(0, generic_frames(1), "a generic function with an inferred builtin type");
+        assertEq(0, plain_frames(new Foo()), "a function that is not generic");
+
+        assertEq(0, call_function("dbg_type_unsafe_frames"), "every frame is unmarked when its call returns");
+    }
+}

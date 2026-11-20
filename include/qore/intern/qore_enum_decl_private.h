@@ -91,6 +91,7 @@ class qore_enum_decl_private {
     template <class> friend class QoreTypeOwnerOf;
     friend class qore_enum_member_iterator_private;
     friend class QoreEnumDecl;
+    friend class QoreTombstoneBuilder;
     friend class QoreEnumMember;
 
 public:
@@ -137,6 +138,10 @@ public:
     }
 
     DLLLOCAL void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
+    }
+
+    //! An enum has no cache of declarations (see QoreTypeOwner::getTypeOwnerCachedDecls())
+    DLLLOCAL void getTypeOwnerCachedDecls(std::vector<QoreTypeOwner*>& owners) const {
     }
 
     DLLLOCAL void refTypeOwner() {

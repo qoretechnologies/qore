@@ -395,7 +395,12 @@ Content-Length: 16
     that they can be recognized and handled appropriately by clients.
 
     %Qore exceptions are returned with a 409 \c "Conflict" HTTP return code with the message body as an
-    @ref Qore::ExceptionInfo "ExceptionInfo" hash.
+    @ref Qore::ExceptionInfo "ExceptionInfo" hash.  When the server's debugging is off (see
+    @ref HttpServer::HttpServer::setDebug() "HttpServer::setDebug()"), the hash has the exception's \c type,
+    \c err and \c desc, the \c arg of a user exception, and the same keys of a chained exception (\c next), but
+    not the location of the exception in the server's code (\c file, \c line, \c endline, \c source, \c offset,
+    \c lang) or its call stack, which only the log message of the exception has (see
+    @ref HttpServer::http_get_client_exception_info() "http_get_client_exception_info()").
 
     @section resthandler_raw_response Raw Responses
     Set \c "raw_response" in the response hash to bypass serialization and schema validation and return the body
@@ -422,6 +427,8 @@ Content-Length: 16
 /** @page resthandler_relnotes RestHandler Release Notes
 
     @section rh_1_6_8 RestHandler v1.6.8
+    - the exception that a REST method raises is given to the client without its location in the server's code or
+      its call stack unless debugging is enabled (see @ref restexceptions; issue #6780)
     - fixed logging sensitive data: request arguments dispatched to subclasses were logged without masking, and the
       response body was logged at the trace level with its serialized form; arguments and response bodies are masked
       at any depth with
@@ -447,7 +454,8 @@ Content-Length: 16
       \c INVALID-URI-PATH with status 400 for such a name
     - a chunked HTTP/1.1 request body sent to a REST method without a stream handler is deserialized and validated
       as other request bodies are, and a hash body is reflected in the method arguments; before, the method received
-      the raw body
+      the raw body; such a body that is not valid text in its encoding is answered with status 400 (Bad Request)
+      (issue #6604)
     - REST methods receive the trailer fields sent after a chunked request body in \c cx.trailers
     - the resource name \c "0" is routed as a nonempty path segment in HTTP and internal dispatch
     - REST resource names preserve percent-encoded separators such as slashes and question marks;
@@ -1758,7 +1766,24 @@ public namespace RestHandler {
                     : get_exception_string(ex);
 
                 logError("RestHandler: %s", maskData(desc));
-                rv = returnRestException(ex);
+                # a chunked request body read when the method is called that is not valid text in its encoding or
+                # that is too large once decompressed is an error of the client, answered as the server answers it
+                # for a body read before dispatching (qore#6604)
+                switch (ex.err) {
+                    case "HTTP-BODY-ENCODING-ERROR":
+                        rv = cast<hash<HttpHandlerResponseInfo>>(AbstractHttpRequestHandler::makeResponse(400,
+                            sprintf("%s: %s", ex.err, ex.desc), errorResponseHeaders(cx)));
+                        break;
+                    case "HTTP-BODY-TOO-LARGE":
+                        rv = cast<hash<HttpHandlerResponseInfo>>(AbstractHttpRequestHandler::makeResponse(413,
+                            sprintf("%s: %s", ex.err, ex.desc), errorResponseHeaders(cx)));
+                        break;
+                    default:
+                        # the location of the exception in the server's code and its call stack are given to the
+                        # client only with debugging enabled (qore#6780)
+                        rv = returnRestException(cx.debug ? ex : http_get_client_exception_info(ex));
+                        break;
+                }
             }
 
             if (!rv.reply_sent) {
@@ -1904,6 +1929,11 @@ public namespace RestHandler {
         #! method that determines how exceptions handling REST requests are returned
         /** by default a <tt>409 Conflict</tt> response is returned with the serialized exception information in the
             message body
+
+            @param ex the exception; when the server's debugging is off (see
+            @ref HttpServer::HttpServer::setDebug() "HttpServer::setDebug()"), without its location in the server's
+            code or its call stack (see @ref HttpServer::http_get_client_exception_info()
+            "http_get_client_exception_info()"); the log message of the exception has them
         */
         private hash<HttpHandlerResponseInfo> returnRestException(hash<ExceptionInfo> ex) {
             # if there is an exception, by default return a 409 Conflict error to the client with the exception information

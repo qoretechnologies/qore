@@ -29,6 +29,7 @@
     information.
 */
 
+#include "qore/intern/BarewordNode.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreIR.h"
 
@@ -3415,6 +3416,35 @@ std::string qore_aot_get_function_call_signature_ref(const FunctionCallNode* cal
     // the explicit type arguments of the call (f<T>()), which serialized IR also carries (qore#5865)
     qore_aot_append_call_type_args(rv, call->getExplicitTypeParamInstantiation());
     return rv;
+}
+
+std::string qore_aot_dot_method_ref(const char* name, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, bool pseudo) {
+    std::string ref(name ? name : "");
+    // A variant used only to check arguments (e.g. a named call through *Class) does not bind a dynamic call.
+    if (method && variant) {
+        if (const AbstractFunctionSignature* sig = variant->getSignature()) {
+            ref += "\n";
+            ref += qore_aot_encode_class_ref(variant->getClass(), pseudo);
+            ref += "\n";
+            ref += sig->getSignatureText();
+        }
+    }
+    return ref;
+}
+
+uint8_t qore_aot_dot_target_flags(const QoreMethod* method, bool pseudo, bool name_dispatch) {
+    const uint8_t family = !method ? 0
+        : (method->isStatic() ? QORE_AOT_DOT_EVAL_TARGET_STATIC : QORE_AOT_DOT_EVAL_TARGET_INSTANCE);
+    return family | (pseudo ? QORE_AOT_DOT_EVAL_TARGET_PSEUDO : 0)
+        | (name_dispatch ? QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH : 0);
+}
+
+void qore_aot_write_dot_target_family(QoreAOTBinaryWriter& writer, const QoreMethod* method, bool pseudo) {
+    writer.writeU8(qore_aot_dot_target_flags(method, pseudo, false));
+    if (method) {
+        writer.writeStringRef(qore_aot_encode_class_ref(method->getClass(), pseudo).c_str());
+    }
 }
 
 const char* qore_aot_find_call_type_args(const char* ref) {
@@ -12698,6 +12728,10 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, 
     builder.setBlock(entry);
 
     QoreProgram* pgm = const_cast<UserClosureVariant*>(variant)->pgm;
+    if (pgm && !(static_cast<const UserVariantBase*>(variant)->getParseOptions(pgm->getParseOptions())
+            & PO_ALLOW_DEBUGGER)) {
+        ir->aot_private_root_scope = sb->getLVList();
+    }
     // the IR of a closure runs in the IR interpreter once a debugger is attached, so in a Program that can be debugged
     // it has the debugger's events of its statements, as the debug IR of a function (#5816); without a debugger, the
     // closure runs its native code
@@ -14674,23 +14708,15 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
             // so that the node read back is the node parsed: the messages of a call on an object that has been
             // deleted name the variant (issue #5823), and the explicit type arguments of the call (obj.method<T>()),
             // which come last (qore#5865)
-            std::string method_ref = mc->getName() ? mc->getName() : "";
-            if (const AbstractQoreFunctionVariant* variant = mc->getVariant()) {
-                if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(variant)
-                        ->getSignature()) {
-                    method_ref += "\n";
-                    method_ref += qore_aot_encode_class_ref(variant->getClass(), mc->isPseudo());
-                    method_ref += "\n";
-                    method_ref += sig->getSignatureText();
-                }
-            }
+            std::string method_ref = qore_aot_dot_method_ref(mc->getName(), mc->getMethod(), mc->getVariant(),
+                mc->isPseudo());
             qore_aot_append_call_type_args(method_ref, mc->getExplicitTypeParamInstantiation());
             // the arguments are written in source order (the order of their evaluation): a named call keeps the
             // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
             // name) first (read by read_expr_dot_eval_target())
             method_ref.insert(0, qore_aot_named_call_arg_prefix(mc));
             writer.writeStringRef(method_ref.c_str());
-            writer.writeU8(mc->isPseudo() ? 1 : 0);
+            qore_aot_write_dot_target_family(writer, mc->getMethod(), mc->isPseudo());
             // Target expression (left-hand side of the dot)
             if (!classifyAndWriteExpr(writer, de->getExpression(),
                     parent_locals, parent_globals, const_reverse_map)) {
@@ -15134,7 +15160,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         for (auto& bl : func.slot_ids.body_locals) {
             writer.writeStringRef(bl.name.c_str());
             writer.writeStringRef(bl.type_path.c_str());
-            writer.writeU8((bl.is_closure ? 0x01 : 0) | (bl.read_only ? 0x02 : 0));
+            writer.writeU8((bl.is_closure ? 0x01 : 0) | (bl.read_only ? 0x02 : 0)
+                | (bl.native_only ? QORE_AOT_BODY_LOCAL_NATIVE_ONLY : 0));
             writer.writeU32(bl.slot_id);
         }
         traceEntryOffset("after body-locals");
@@ -15969,6 +15996,11 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
     }
     // the runtime location: the statement's (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646)
     qore_aot_write_stmt_loc(writer, stmt_locs, inst->stmt_loc);
+    // the temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742)
+    if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_TEMP_SCOPES_VERSION) {
+        qore_aot_write_varu32(writer, inst->temp_scope_id);
+        qore_aot_write_varu32(writer, inst->unwind_inner_temp_scope_id);
+    }
 
     return true;
 }
@@ -16156,7 +16188,14 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         func.local_var_slots.begin(), func.local_var_slots.end());
     std::sort(sorted_slots.begin(), sorted_slots.end(),
         [](const auto& a, const auto& b) { return a.second < b.second; });
+    std::vector<std::pair<uint32_t, const QoreProgramLocation*>> unwind_locations;
     for (auto& [lv, slot_id] : sorted_slots) {
+        if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
+            auto location = func.local_unwind_locations.find(lv);
+            if (location != func.local_unwind_locations.end()) {
+                unwind_locations.emplace_back(slot_id, location->second);
+            }
+        }
         writer.writeStringRef(lv->getName());
         std::string type_path = getLocalTypePathString(lv);
         writer.writeStringRef(type_path.c_str());
@@ -16269,8 +16308,11 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
                 mark.loc = inst_ptr->loc;
                 // both marks are code of the pair's statement
                 mark.stmt_loc = inst_ptr->stmt_loc;
+                // the outer temp scope, then the inner one (qore#6742)
+                mark.temp_scope_id = inst_ptr->temp_scope_id;
                 QoreIRInstruction inner_mark(QoreIROpcode::PushTempMark);
                 inner_mark.stmt_loc = inst_ptr->stmt_loc;
+                inner_mark.temp_scope_id = inst_ptr->unwind_inner_temp_scope_id;
                 if (!serializeIRInstruction(writer, &mark, block_idx, writeExpr, stmt_locs)
                         || !serializeIRInstruction(writer, &inner_mark, block_idx, writeExpr, stmt_locs)) {
                     return false;
@@ -16315,6 +16357,16 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_CATCH_TABLES_VERSION) {
         if (!qore_aot_write_ir_catch_tables(writer, func)) {
             return false;
+        }
+    }
+
+    if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
+        // Entries follow the local slot table's order and share the statement-location table of the blocks.
+        // Their count cannot exceed the slot count checked above.
+        writer.writeU16(static_cast<uint16_t>(unwind_locations.size()));
+        for (const auto& [slot, loc] : unwind_locations) {
+            writer.writeU32(slot);
+            qore_aot_write_stmt_loc(writer, stmt_locs, loc);
         }
     }
 
@@ -20179,6 +20231,16 @@ static bool skipAOTVariantSignature(const QoreAOTBinaryReader& reader,
     return true;
 }
 
+//! Keeps the source spelling of a deferred expression default until its AST is restored.
+/** During registration the method can already be identified by its signature. A scalar placeholder would cache
+    that scalar in the signature text and prevent a reference to the original overload from resolving.
+    BarewordNode contributes its text verbatim, just as for a default still being parsed. The fixup owns its
+    replacement and runs before calls can evaluate the default.
+*/
+static QoreValue aotDeferredExpressionDefault() {
+    return QoreValue(new BarewordNode(&loc_builtin, strdup("<exp>")));
+}
+
 //! Helper: read a variant signature and set up the UserSignature from AOT metadata
 static bool readAndSetupVariantSignature(
         const QoreAOTBinaryReader& reader,
@@ -20410,7 +20472,7 @@ static bool readAndSetupVariantSignature(
                 // Use a non-NOTHING placeholder so hasDefaultArg(j) reports true and
                 // min_param_types counts this param as optional; the fixup pass replaces
                 // it with the deserialized tree before any call can execute.
-                param_defaults[j] = QoreValue(true);
+                param_defaults[j] = aotDeferredExpressionDefault();
             }
         } else if (has_default == 2) {
             // Expression default: no-arg function call (e.g., getcwd()).
@@ -20446,7 +20508,7 @@ static bool readAndSetupVariantSignature(
                 // Non-NOTHING placeholder so hasDefaultArg(j) reports true and
                 // min_param_types counts this param as optional; the fixup pass
                 // replaces it with the resolved call before any call can execute.
-                param_defaults[j] = QoreValue(true);
+                param_defaults[j] = aotDeferredExpressionDefault();
             } else {
                 // Never substitute a placeholder value here: the parameter's declared
                 // type is unrelated to the placeholder, so a silent substitution
@@ -20556,7 +20618,7 @@ static bool readAndSetupVariantSignature(
                     // optional. The fixup pass after commitDeserializedClasses
                     // replaces this with the resolved StaticMethodCallNode
                     // before any call can execute.
-                    param_defaults[j] = QoreValue(true);
+                    param_defaults[j] = aotDeferredExpressionDefault();
                 } else {
                     error = "cannot resolve default static method '";
                     error += qoreAOTDescribeClassRef(class_path);

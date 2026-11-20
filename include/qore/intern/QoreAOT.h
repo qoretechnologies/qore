@@ -161,6 +161,9 @@ const FunctionEntry* qore_aot_resolve_deferred_source_function_entry(QoreProgram
 */
 std::string qore_aot_get_function_identity_name(const FunctionEntry* fe);
 
+//! Encodes a resolved function name and any explicit type arguments for qore_aot_resolve_function_ref().
+std::string qore_aot_encode_function_ref(std::string name, const QoreTypeParamInstantiation* inst);
+
 //! Returns the name that identifies the function of a function call reference in an AOT image
 /** The function's name, or "::name" if the parser resolved the reference to the function of that name in the root
     namespace (see qore_aot_get_function_identity_name())
@@ -289,6 +292,25 @@ struct QoreAOTNamedCallArgs {
 class FunctionCallBase;
 class QoreAOTBinaryWriter;
 class QoreAOTBinaryReader;
+
+//! Common identity of inline and slot DOT_EVAL_TARGET records. The declaration can be bound before overload selection.
+struct QoreAOTDotTarget {
+    std::string name;
+    std::string type_args;
+    QoreAOTNamedCallArgs named;
+    const QoreClass* receiver = nullptr;
+    const QoreMethod* method = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    uint8_t flags = 0;
+};
+
+DLLLOCAL std::string qore_aot_dot_method_ref(const char* name, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, bool pseudo);
+DLLLOCAL uint8_t qore_aot_dot_target_flags(const QoreMethod* method, bool pseudo, bool name_dispatch);
+DLLLOCAL void qore_aot_write_dot_target_family(QoreAOTBinaryWriter& writer, const QoreMethod* method, bool pseudo);
+bool qore_aot_read_dot_target(const QoreAOTBinaryReader& reader, const uint8_t*& ptr, const uint8_t* end,
+    QoreProgram* pgm, bool slot, QoreAOTDotTarget& target, std::string& error);
+
 
 //! writes the names of the arguments of a named call reference call (AOTExprKind::CALLREF_CALL_NAMED): u8 count, then
 //! a string ref per name; returns false if there are more than 255
@@ -426,8 +448,8 @@ struct QoreAOTContext {
     QoreIRLValuePathInstruction** lv_path_insts = nullptr;  //!< LValuePath instruction pointers
     int num_lv_path_insts = 0;
 
-    //! All body locals from the fresh IR (needed by evalTiered for instantiation)
-    std::vector<LocalVar*> all_body_locals;
+    //! Body locals whose stack slots the standard native entry uses, in instantiation order.
+    std::vector<LocalVar*> runtime_body_locals;
 
     //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
     bool all_body_locals_ir_only = false;
@@ -525,6 +547,20 @@ struct QoreAOTContext {
 
     void validateBuiltinTypePath(size_t slot) {
         builtin_type_path_validated[slot / 64].fetch_or(uint64_t{1} << (slot % 64), std::memory_order_relaxed);
+    }
+
+    //! The stack slots required by the standard native entry. The full table retains declaration identities
+    //! for deserialization of nested closures and handlers. A context built from source can lack ownership
+    //! information for its already-compiled entry, in which case the wrapper instantiates the full list.
+    struct NativeBodyLocals {
+        std::vector<LocalVar*> declarations;
+        uint64_t (*entry)(QoreAOTContext*, ExceptionSink*) = nullptr;
+        std::vector<LocalVar*> omitted;
+    };
+    std::unique_ptr<NativeBodyLocals> native_body_locals;
+
+    const std::vector<LocalVar*>& getDeclaredBodyLocals() const {
+        return native_body_locals ? native_body_locals->declarations : runtime_body_locals;
     }
 
     //! Destructor: deref all held expression values, then free arrays.

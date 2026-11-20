@@ -320,6 +320,11 @@ public:
         io_frame_handler = handler;
     }
 
+    //! Sets the RSV bits that the negotiated extensions define (bit 2 = RSV1, bit 1 = RSV2, bit 0 = RSV3)
+    DLLLOCAL void setExtensionRsvMask(uint8_t mask) {
+        extension_rsv_mask = mask & 0x07;
+    }
+
     //! Sets the maximum frame/message size in bytes
     DLLLOCAL void setMaxFrameSize(size_t size) {
         max_frame_size = size;
@@ -456,6 +461,15 @@ private:
     */
     DLLLOCAL void rejectMessage(uint16_t code, const char* reason, ExceptionSink* xsink);
 
+    //! Fails the connection for a frame whose data is not valid: closes it with the code given, and tells the
+    //! connection's code why with an \c "error" frame (qore#6604, qore#6755)
+    /** @param code the close code: 1002 (protocol error) or 1007 (invalid payload data)
+        @param reason the reason of the close frame
+        @param desc the description of the error for the \c "error" frame
+        @param xsink exception sink
+    */
+    DLLLOCAL void failConnection(uint16_t code, const char* reason, const char* desc, ExceptionSink* xsink);
+
     //! Ends the operation for a lost connection: with 1006, or with the protocol error that the server closed for
     /** After a protocol error of the client, the connection is reported closed with it, also when the client closes
         the connection before the server's close frame is written (issue #5878)
@@ -537,6 +551,10 @@ private:
 
     //! Optional I/O-thread frame handler — bypasses recv_queue entirely
     WsIoThreadFrameHandler* io_frame_handler = nullptr;
+
+    //! The RSV bits that the negotiated extensions define, as in WsFrame::rsv; a data frame with another RSV bit set
+    //! fails the connection with 1002 (RFC 6455 section 5.2)
+    uint8_t extension_rsv_mask = 0;
 
     //! Send timeout in milliseconds (0 = no timeout)
     int64 send_timeout_ms = 0;

@@ -1,0 +1,4 @@
+read: PARSE-EXCEPTION: illegal access to member 'v' of class 'G', which class 'C' inherits through a class inherited with private:internal
+write: PARSE-EXCEPTION: illegal access to member 'v' of class 'G', which class 'C' inherits through a class inherited with private:internal
+inheriting class: parsed: 1
+read with $.: PARSE-EXCEPTION: illegal access to member 'v' of class 'G', which class 'C' inherits through a class inherited with private:internal

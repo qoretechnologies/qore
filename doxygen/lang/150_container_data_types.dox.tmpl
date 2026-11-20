@@ -198,7 +198,8 @@ printf("%y\n", l1.fullType());
 
     \c buffer<decimal128> stores exact fixed-scale decimal values as 16-byte unscaled integers with precision and
     scale metadata.  Use Qore \c number literals such as \c 12.34n when constructing decimal buffers to avoid
-    converting through binary floating-point values.
+    converting through binary floating-point values.  A number is stored as its exact decimal value when it fits the
+    precision and scale of the buffer (see @ref number_exact_decimal).
 
     @par Examples:
     @code{.py}

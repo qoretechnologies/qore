@@ -171,7 +171,8 @@ ColumnarResult::copy() {
     |!Value|!Stored As
     |@ref integer|the integer
     |@ref float or @ref number|the value truncated toward zero (ex: \c 1.5 is stored as \c 1); a value outside \
-    the 64-bit integer range or NaN is converted as by @ref softint_type "softint", with no exception
+    the 64-bit integer range or NaN raises a \c COLUMNAR-RESULT-ERROR exception, as the column cannot hold it \
+    (whatever the width of the column's integer type)
     |numeric string|its integer value
     |@ref null or @ref nothing|a null element
 
@@ -188,7 +189,8 @@ ColumnarResult::copy() {
     checked against the column schema, and a list column is not converted; a value that does not match raises a
     \c DESERIALIZATION-ERROR exception.  A columnar result returned by a DBI driver (ex: Datasource::selectColumnar()) is not
     checked: the driver's values of such a column, such as the @ref number values of a scale-0 numeric column, are
-    stored as integers.
+    stored as integers, and a value outside the 64-bit integer range raises a \c COLUMNAR-RESULT-ERROR exception
+    instead of being stored as another value.
     @endparblock
 
     @par Example: building a projected dense block

@@ -37,10 +37,13 @@ public class DeepSeekDataProvider inherits DeepSeekDataProviderCommon {
         };
     }
 
-    private {
-        #! Dynamic child data providers
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
+    }
 
+    private {
         #! Default child data providers
         const DefaultChildMap = {
             "chat-completion":
@@ -67,7 +70,12 @@ public class DeepSeekDataProvider inherits DeepSeekDataProviderCommon {
     }
 
     #! Registers a new child data provider
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static registerChild(string pathname, Reflection::Class cls) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("register a child data provider");
         AutoWriteLock al(childLock);
         if (childMap{pathname} || DeepSeekActions::Operations{pathname}) {
             throw "DEEPSEEK-CHILD-ERROR", sprintf("child %y already registered", pathname);

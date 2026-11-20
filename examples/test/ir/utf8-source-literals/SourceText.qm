@@ -1,0 +1,13 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+module SourceText {
+    version = "1.0";
+    desc = "UTF-8 literal test";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+}
+public namespace SourceText {
+    public const Latin = binary_to_string(<e9>, "ISO-8859-1");
+    public const LongDash = '———';
+    public string sub dash() { return "—"; }
+}

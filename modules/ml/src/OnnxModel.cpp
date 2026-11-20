@@ -6330,9 +6330,10 @@ int qore_ml_onnx_register_fork_handlers(ExceptionSink* xsink) {
             auto_provider_mutex.unlock();
         },
         [](void*) {
-            // held by the forking thread since the prepare handler; a std::mutex held by a thread of the parent
-            // cannot be unlocked in the child, so it is created again in place
-            new (&auto_provider_mutex) std::mutex();
+            // held by the forking thread since the prepare handler, which is the thread of the child: released, so
+            // that the release is seen (by ThreadSanitizer, which otherwise considers it held for the rest of the
+            // child's life; qore#6817)
+            auto_provider_mutex.unlock();
         }, nullptr);
     if (!auto_provider_fork_reg) {
         xsink->outOfMemory();

@@ -1,0 +1,285 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - per-thread capability state of threads that sandboxed and trusted code start
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# ThreadCapabilityScope::call() (qore#6737): a call-bound scope that trusted code may use also while sandboxed code is
+# further up the thread's stack (a host that runs the code of one interface for another, as Qorus does for interfaces
+# that all have a SandboxManager); the set is in effect only while the call runs, and only the code that calls it is
+# judged: sandboxed code, a call reference to it, and a call through another builtin are refused
+
+%modern
+%no-child-restrictions
+
+# the module code is a real user module (ThreadCapabilityFixture.qm in this directory)
+%prepend-module-path "${SCRIPT_DIR}"
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ThreadCapabilityFixture
+
+%exec-class ThreadCapabilityScopeCallTest
+
+#! the capability starts recorded here, so that a test sees which capability started a thread
+const starts = new Queue();
+
+#! the host's start_thread capability, which records that it started a thread
+int sub host_start_thread(code<nothing()> c) {
+    starts.push("host");
+    return background c();
+}
+
+#! another start_thread capability
+int sub other_start_thread(code<nothing()> c) {
+    starts.push("other");
+    return background c();
+}
+
+#! the host's call_wrapper capability
+auto sub host_call_wrapper(code c) {
+    return call_function(c);
+}
+
+class ThreadCapabilityScopeCallTest inherits QUnit::Test {
+    private {
+        #! the sandboxed Program, as each Qorus interface has a SandboxManager
+        Program child;
+        SandboxManager sm();
+    }
+
+    #! the code of the sandboxed Program
+    const ChildSource = "%modern
+auto sub run(code c) {
+    return c();
+}
+auto sub run_args(code c, auto a, auto b, auto d) {
+    return c(a, b, d);
+}
+auto sub run_args4(code c, auto a, auto b, auto d, auto e) {
+    return c(a, b, d, e);
+}
+string sub direct() {
+    try {
+        Qore::Thread::ThreadCapabilityScope::call({}, sub () {});
+        return \"CALLED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+code sub get_caller() {
+    return string sub () {
+        try {
+            Qore::Thread::ThreadCapabilityScope::call({}, sub () {});
+            return \"CALLED\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    };
+}
+code sub get_capability() {
+    return int sub (code<nothing()> c) { return 0; };
+}
+bool sub sees() {
+    return exists get_thread_capabilities();
+}
+string sub try_scope() {
+    try {
+        Qore::Thread::ThreadCapabilityScope scope({});
+        return \"SET\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+    constructor() : QUnit::Test("ThreadCapabilityScope::call()", "1.0", \ARGV) {
+        addTestCase("the call sets and restores the set", \setAndRestore());
+        addTestCase("nested calls and scopes", \nested());
+        addTestCase("an exception restores the set", \exceptionRestore());
+        addTestCase("a sandboxed caller further up the stack", \sandboxedCaller());
+        addTestCase("threads and objects created in the call", \threads());
+        addTestCase("sandboxed code run in the call", \sandboxedInside());
+        addTestCase("refused for sandboxed code and indirect calls", \refusals());
+        addTestCase("refused capability code", \refusedCapability());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        child = new Program(PO_NEW_STYLE);
+        child.setScriptPath("/sandboxed/child.q");
+        child.setSandboxManager(sm);
+        child.parse(ChildSource, "child");
+    }
+
+    #! the set is in effect for the module code that the call runs, and restored after it; the arguments are passed
+    setAndRestore() {
+        assertEq(NOTHING, ThreadCapabilityFixture::names(), "no capabilities before");
+        list<auto> rv = ThreadCapabilityScope::call({"start_thread": \host_start_thread()},
+            list<auto> sub (int a, string b) {
+                return (a, b, ThreadCapabilityFixture::names());
+            }, 1, "two");
+        assertEq((1, "two", ("start_thread",)), rv, "the arguments, and the set the module code sees");
+        assertEq(NOTHING, ThreadCapabilityFixture::names(), "no capabilities after");
+        # no arguments and no return value
+        assertEq(NOTHING, ThreadCapabilityScope::call({}, sub () {}));
+    }
+
+    #! the call adds to the outer set, replacing the capabilities of the same name; nested calls restore their outer set
+    nested() {
+        ThreadCapabilityScope scope({"call_wrapper": \host_call_wrapper()});
+        list<auto> seen = ThreadCapabilityScope::call({"start_thread": \host_start_thread()},
+            list<auto> sub () {
+                list<auto!> l = (ThreadCapabilityFixture::names(),);
+                l += ThreadCapabilityScope::call({"start_thread": \other_start_thread()}, list<auto> sub () {
+                    Queue q();
+                    ThreadCapabilityFixture::startThread(q, 1);
+                    q.get(60s);
+                    return (ThreadCapabilityFixture::names(), starts.get(60s));
+                });
+                Queue q();
+                ThreadCapabilityFixture::startThread(q, 1);
+                q.get(60s);
+                l += starts.get(60s);
+                return l;
+            });
+        assertEq((("call_wrapper", "start_thread"), ("call_wrapper", "start_thread"), "other", "host"), seen,
+            "the inner call replaces start_thread, the outer one is restored");
+        assertEq(("call_wrapper",), ThreadCapabilityFixture::names(), "the scope object's set after the calls");
+    }
+
+    #! an exception that leaves the call restores the outer set
+    exceptionRestore() {
+        assertThrows("TEST-ERROR", "inside", sub () {
+            ThreadCapabilityScope::call({"start_thread": \host_start_thread()}, sub () {
+                assertEq(("start_thread",), ThreadCapabilityFixture::names());
+                throw "TEST-ERROR", "inside";
+            });
+        });
+        assertEq(NOTHING, ThreadCapabilityFixture::names(), "restored after the exception");
+    }
+
+    #! host code that sandboxed code calls back sets the capabilities of the module code it runs with call(); a scope
+    #! object is still refused there, as its set would stay in effect for the sandboxed caller
+    sandboxedCaller() {
+        hash<auto> rv = child.callFunction("run", hash<auto> sub () {
+            hash<auto> h.scope = ThreadCapabilityFixture::callBack(string sub () {
+                try {
+                    ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+                    return "SET";
+                } catch (hash<ExceptionInfo> ex) {
+                    return ex.err;
+                }
+            });
+            h.inside = ThreadCapabilityScope::call({"start_thread": \host_start_thread()}, *list<string> sub () {
+                return ThreadCapabilityFixture::names();
+            });
+            h.after = ThreadCapabilityFixture::names();
+            return h;
+        });
+        assertEq({"scope": "THREAD-CAPABILITY-ERROR", "inside": ("start_thread",), "after": NOTHING}, rv);
+
+        # through module code that calls the host back (a callback object of an interface)
+        rv = child.callFunction("run", hash<auto> sub () {
+            return {"inside": ThreadCapabilityFixture::callBack(*list<string> sub () {
+                return ThreadCapabilityScope::call({"start_thread": \host_start_thread()}, *list<string> sub () {
+                    return ThreadCapabilityFixture::names();
+                });
+            })};
+        });
+        assertEq({"inside": ("start_thread",)}, rv, "a host callback that module code makes");
+    }
+
+    #! a thread that a capability starts in the call is started by the call's capability; an object that takes the
+    #! capability in the call keeps it after the call; a new thread starts with an empty set
+    threads() {
+        ThreadCapabilityFixture::Holder holder;
+        list<auto> rv = ThreadCapabilityScope::call({"start_thread": \host_start_thread()}, list<auto> sub () {
+            Queue q();
+            ThreadCapabilityFixture::startThread(q, 1);
+            holder = new ThreadCapabilityFixture::Holder();
+            Queue names();
+            background names.push(ThreadCapabilityFixture::names() ?? "none");
+            return (q.get(60s), starts.get(60s), names.get(60s));
+        });
+        assertEq((1, "host", "none"), rv, "the call's capability started the thread; a new thread has no set");
+        Queue q();
+        holder.start(q, 2);
+        assertEq(2, q.get(60s));
+        assertEq("host", starts.get(60s), "the object keeps the capability after the call");
+    }
+
+    #! sandboxed code that the call runs does not see the set, cannot set a scope or call call(); the set is restored
+    #! after it
+    sandboxedInside() {
+        hash<auto> rv = ThreadCapabilityScope::call({"start_thread": \host_start_thread()}, hash<auto> sub () {
+            return {
+                "sees": child.callFunction("sees"),
+                "scope": child.callFunction("try_scope"),
+                "call": child.callFunction("direct"),
+                "module": ThreadCapabilityFixture::names(),
+            };
+        });
+        assertEq({"sees": False, "scope": "THREAD-CAPABILITY-ERROR", "call": "THREAD-CAPABILITY-ERROR",
+            "module": ("start_thread",)}, rv);
+        assertEq(NOTHING, ThreadCapabilityFixture::names());
+    }
+
+    #! only Qore code that no sandbox governs, calling call() directly, may use it
+    refusals() {
+        # sandboxed code calls it
+        assertEq("THREAD-CAPABILITY-ERROR", child.callFunction("direct"), "sandboxed code");
+        # a closure of sandboxed code that the host calls
+        code c = child.callFunction("get_caller");
+        assertEq("THREAD-CAPABILITY-ERROR", c(), "a sandboxed closure called by the host");
+        # a call reference to the method that the host gives sandboxed code: called for the sandboxed code
+        assertThrows("THREAD-CAPABILITY-ERROR", "not called directly|sandbox governs", \child.callFunction(),
+            ("run_args", \ThreadCapabilityScope::call(), {"start_thread": \host_start_thread()}, sub () {}, NOTHING));
+        # a builtin that calls it for sandboxed code
+        assertThrows("THREAD-CAPABILITY-ERROR", "not called directly", \child.callFunction(), ("run_args4",
+            \call_static_method(), "Qore::Thread::ThreadCapabilityScope", "call", {}, sub () {}));
+        # a builtin that calls it for trusted code: the call must be made by Qore code
+        assertThrows("THREAD-CAPABILITY-ERROR", "not called directly", \call_static_method(),
+            ("Qore::Thread::ThreadCapabilityScope", "call", {}, sub () {}));
+        # a Program that may not control threads, and no sandbox: through a call reference that the host gives it
+        Program nt(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        nt.parse("auto sub run(code c, hash<auto> caps) { return c(caps, sub () {}); }", "nt");
+        assertThrows("THREAD-CAPABILITY-ERROR", "may not control threads", \nt.callFunction(), ("run",
+            \ThreadCapabilityScope::call(), {"start_thread": \host_start_thread()}));
+        # and it cannot even refer to it
+        Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        assertThrows("INVALID-METHOD", "not allowed by current parse options", \p.parse(),
+            ("sub t() { Qore::Thread::ThreadCapabilityScope::call({}, sub () {}); }", "nt"));
+        assertEq(NOTHING, ThreadCapabilityFixture::names(), "no set left behind");
+    }
+
+    #! the capabilities' code must pass the checks of a scope object's
+    refusedCapability() {
+        code sandboxed_cap = child.callFunction("get_capability");
+        bool called = False;
+        assertThrows("THREAD-CAPABILITY-ERROR", "sandbox", sub () {
+            ThreadCapabilityScope::call({"start_thread": sandboxed_cap}, sub () { called = True; });
+        });
+        assertThrows("THREAD-CAPABILITY-ERROR", "not callable", sub () {
+            ThreadCapabilityScope::call({"start_thread": 1}, sub () { called = True; });
+        });
+        assertFalse(called, "the call is not made");
+        # a call reference to a builtin that trusted code creates carries its Program: judged as by the constructor
+        code builtin = \get_thread_capability();
+        string by_scope;
+        try {
+            ThreadCapabilityScope scope({"start_thread": builtin});
+            by_scope = "SET";
+        } catch (hash<ExceptionInfo> ex) {
+            by_scope = ex.err;
+        }
+        string by_call;
+        try {
+            ThreadCapabilityScope::call({"start_thread": builtin}, sub () {});
+            by_call = "SET";
+        } catch (hash<ExceptionInfo> ex) {
+            by_call = ex.err;
+        }
+        assertEq(by_scope, by_call, "a builtin call reference: the same as for a scope object");
+        assertEq(NOTHING, ThreadCapabilityFixture::names(), "no set left behind");
+    }
+}

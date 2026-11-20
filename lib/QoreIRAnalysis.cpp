@@ -6165,14 +6165,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     compile-time evaluation raises, the exception belongs to the hypothetical run and not to the
     program being compiled, so it is discarded and the original call is kept.
 
-    A third condition is independent of the callee's flags entirely: the IR literal that carries a
-    folded value has to mean the same thing on the host that reads it.  A string does not - a
-    ConstString is materialized with QCS_DEFAULT, which is derived from the environment of whatever
-    host runs the code (QoreStringNode(const std::string&) in the interpreter and
-    qore_rt_make_string_len() in generated code both default to it).  Folding a string is therefore
-    correct for the interpreter and the JIT, where the folding host is the running host, and wrong
-    for an image no matter how host-portable the callee is.  QCF_HOST_PORTABLE describes the body,
-    and cannot rescue a representation that is itself host-derived.
+    String folding remains limited to the same host. Only UTF-8 results can be represented by ConstString.
 */
 
 //! Returns the literal value defined by an IR constant instruction; the caller owns any reference.
@@ -6196,12 +6189,11 @@ static bool qore_ir_pure_fold_get_literal(const QoreIRInstruction* def, bool sam
             arg = QoreValue(cinst->constant.bool_value);
             return true;
         case QoreIROpcode::ConstString:
-            // the literal materializes with QCS_DEFAULT, so the bytes only mean the same thing to
-            // the compiling and the running host when they are the same host
+            // Keep the existing same-host restriction for folds involving string arguments.
             if (!same_host) {
                 return false;
             }
-            arg = QoreValue(new QoreStringNode(cinst->constant.string_value));
+            arg = QoreValue(new QoreStringNode(cinst->constant.string_value, QCS_UTF8));
             return true;
         // a date literal carries a timezone and there is no IR constant for a number, so neither is
         // folded here
@@ -6361,9 +6353,8 @@ static bool qore_ir_pure_fold_evaluate(const QoreIRCallDirectInstruction* call,
             // note: the value can be held in inline short string storage, which has no
             // QoreStringNode, so the data helper must be used to read the bytes
             QoreStringDataHelper str(*result);
-            // the fold is only reached on the same host, but a callee that returns a string in an
-            // encoding other than QCS_DEFAULT would still lose it in the literal
-            if (!str || str.getEncoding() != QCS_DEFAULT) {
+            // ConstString cannot carry the encoding of a non-UTF-8 result.
+            if (!str || str.getEncoding() != QCS_UTF8) {
                 return false;
             }
             // copy by length: a ConstString is emitted with an explicit byte count and may hold
@@ -8213,7 +8204,8 @@ static bool qore_ir_collect_borrowed_loop_safety(const QoreIRNaturalLoop& loop,
 
 static size_t qore_ir_mark_borrowed_list_reads(const QoreIRControlFlowGraph& cfg,
         const std::vector<QoreIRNaturalLoop>& loops,
-        const QoreIRScalarUses& uses, size_t& check_count) {
+        const QoreIRScalarUses& uses, std::unordered_set<const QoreIRInstruction*>& dead_releases,
+        size_t& check_count) {
     std::unordered_map<uint32_t, size_t> definition_blocks;
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
         if (qore_ir_analysis_cancelled(check_count, "IR borrowed list definition analysis")) {
@@ -8279,6 +8271,13 @@ static size_t qore_ir_mark_borrowed_list_reads(const QoreIRControlFlowGraph& cfg
                     continue;
                 }
                 inst.opcode = QoreIROpcode::ListGetValueNoRef;
+                for (const auto& use : use_it->second) {
+                    // Only single-operand releases are borrow-safe consumers. The interpreter retires the
+                    // borrow at its last actual use, which its analysis counts after these releases are erased.
+                    if (use.inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                        dead_releases.insert(use.inst);
+                    }
+                }
                 ++changed;
             }
         }
@@ -12881,9 +12880,10 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
         local_stats.bounded_typed_list_reads = qore_ir_specialize_bounded_typed_list_reads(
             func, cfg, loops, uses, local_stats.bounded_boxed_direct_reads, check_count);
     }
+    std::unordered_set<const QoreIRInstruction*> dead_element_releases;
     if (!q_env_is_set("QORE_DISABLE_IR_BORROWED_LIST_READS")) {
         local_stats.borrowed_list_reads = qore_ir_mark_borrowed_list_reads(
-            cfg, loops, uses, check_count);
+            cfg, loops, uses, dead_element_releases, check_count);
     }
     if (has_list_push) {
         local_stats.in_place_list_pushes = qore_ir_mark_local_list_pushes(
@@ -13070,6 +13070,23 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
             insert_at = preheader_instructions.insert(insert_at, std::move(moved_it->second));
             ++insert_at;
             ++local_stats.instructions_hoisted;
+        }
+    }
+
+    // The analyses above share a table of uses pointing into the blocks. Remove dead releases only
+    // after its last reader, and before rebuilding the exception-aware CFG for scalar CSE.
+    if (!dead_element_releases.empty()) {
+        for (const auto& block : func.blocks) {
+            auto& instructions = block->instructions;
+            for (size_t i = 1; i < instructions.size(); ++i) {
+                if (instructions[i]->release_check == QoreIRReleaseCheck::IndexedElement
+                        && dead_element_releases.count(instructions[i - 1].get())) {
+                    dead_element_releases.insert(instructions[i].get());
+                }
+            }
+            std::erase_if(instructions, [&](const auto& inst) {
+                return dead_element_releases.count(inst.get());
+            });
         }
     }
 

@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of the debug IR that a debugger runs and of its exception events
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DebuggerDismissCallSitesTest
+
+#! A debugger dismisses the exception event of a call: the code continues after the statement (issue #6626)
+/** The IR interpreter continues after the statement of a call whose exception event a debugger dismisses (#5825), at
+    the DiscardTemps that ends the statement; it took the first DiscardTemps that it found, which for a call in an
+    operator with a temp scope of its own (map, foldl, select) is that of the element, so the operator went on with
+    the next elements and the statement ran with values of an earlier execution.  It now continues at the
+    DiscardTemps that closes the statement's own temp scope, and the values that the skipped code defines are cleared.
+
+    debugger-dismiss-call-sites-worker.q attaches a debugger while a function runs (called through a call reference,
+    so that its frame runs its IR in the ir, jit and tiered modes), which dismisses the exception events of calls in
+    map, foldl and select operators, a concatenation, a hash, a map whose expression uses the implicit arguments, a map
+    with a temporary whose destructor raises an exception, and a return statement, raised in try blocks; its output
+    must be the one in debugger-dismiss-call-sites.expected (that of the AST interpreter) in every execution mode, and
+    the one in debugger-dismiss-call-sites-aot.expected in programs compiled with qcc -O0 and -O3, whose native code
+    does not dismiss these exceptions, so that their catch blocks run.
+*/
+class DebuggerDismissCallSitesTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/debugger-dismiss-call-sites-worker.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/debugger-dismiss-call-sites.expected");
+        #! the output of native code, which does not dismiss these exceptions (see the introduction)
+        string expected_aot = ReadOnlyFile::readTextFile(get_script_dir() + "/debugger-dismiss-call-sites-aot.expected");
+    }
+
+    constructor() : QUnit::Test("dismissed exception events of calls", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/debugger-dismiss-call-sites";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected_aot, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

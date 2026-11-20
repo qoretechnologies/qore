@@ -50,7 +50,7 @@ public namespace EdifactUtil {
             # the registry and the directory cache are process-wide: sandboxed code neither gets a schema that other
             # code loaded (from a directory that it may not read) nor places one that other code then gets
             # (qore#6750)
-            bool shared = !SandboxManager::isSandboxed();
+            bool shared = SandboxManager::isProcessWideRegistrationAllowed();
             if (shared && !reload && registry{release}) {
                 return registry{release};
             }

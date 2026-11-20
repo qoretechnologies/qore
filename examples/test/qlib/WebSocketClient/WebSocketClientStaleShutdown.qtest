@@ -1153,6 +1153,9 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             \discordStartThreadHeartbeatDropTest());
         addTestCase("Discord: the destructor on the heartbeat thread and a forced reconnect do not wait for each "
             "other", \discordDestructorOnHeartbeatWithReconnectTest());
+        addTestCase("Discord: the destructor on the heartbeat thread and a forced reconnect do not wait for each "
+            "other, with the heartbeat's first beat before its start returns",
+            \discordDestructorOnHeartbeatWithReconnectTest(), True);
         addTestCase("Discord: a failing closing step does not skip the heartbeat stop", \discordClosingStepsGuardedTest());
         addTestCase("library thread accounting", \libraryThreadAccountingTest());
         addTestCase("no library thread is started once the destructor runs", \noLibraryThreadOnDestroyTest());
@@ -3956,10 +3959,16 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! The heartbeat thread detects a zombie, starts the forced reconnect and releases the last reference, so the
     #! destructor runs on it and waits for the forced reconnect, which does not wait for the heartbeat thread
-    discordDestructorOnHeartbeatWithReconnectTest() {
+    /** @param beat_first the start of the heartbeat thread returns only once the thread made its first beat, as when
+        the starting thread is delayed for the heartbeat's first sleep (a random fraction of its interval; qore#6521)
+    */
+    discordDestructorOnHeartbeatWithReconnectTest(*bool beat_first) {
         GatedStarter starter();
         HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
             "start_thread": \starter.start()});
+        if (beat_first) {
+            starter.wait_before_return = d.zombie_reached;
+        }
         Queue events = d.events;
         Queue lifecycle = d.lifecycle;
         Counter release_zombie = d.release_zombie;
@@ -4819,6 +4828,8 @@ class HbDiscord inherits DiscordWebSocketClient {
         #! hold the next zombie check, which then finds a zombie
         bool hold_zombie = False;
         Counter release_zombie(1);
+        #! decremented when the zombie check held with hold_zombie is reached
+        Counter zombie_reached(1);
         #! fail cancelHelloWatchdog() once when given a connection ID (i.e. in the closing callback)
         bool fail_cancel_hello = False;
         #! report the end of each closing callback
@@ -4911,9 +4922,13 @@ class HbDiscord inherits DiscordWebSocketClient {
         }
     }
 
+    #! Reports the start before the heartbeat thread is started
+    /** the thread's first sleep is a random fraction of the interval, so its first beat, which can report events of
+        its own, can come before the start returns (qore#6521)
+    */
     private startHeartbeatThreadIntern() {
-        DiscordWebSocketClient::startHeartbeatThreadIntern();
         events.push("hb-started:" + hb.cid);
+        DiscordWebSocketClient::startHeartbeatThreadIntern();
     }
 
     private bool heartbeatZombieCheck() {
@@ -4923,6 +4938,7 @@ class HbDiscord inherits DiscordWebSocketClient {
             Queue q = events;
             Counter c = release_zombie;
             q.push("zombie-held");
+            zombie_reached.dec();
             c.waitForZero(LifecycleWsClient::HandoffTimeout);
             return True;
         }
@@ -5209,6 +5225,8 @@ class GatedStarter {
         *code pending;
         Counter started(1);
         Counter gate(1);
+        #! a thread started without the gate is returned only once this counter is zero (taken by the next start)
+        *Counter wait_before_return;
     }
 
     int start(code c) {
@@ -5220,7 +5238,12 @@ class GatedStarter {
             # takes the code only once released
             return background runPendingReported();
         }
-        return background TestThreads::run(c);
+        int tid = background TestThreads::run(c);
+        *Counter wait = remove wait_before_return;
+        if (wait) {
+            wait.waitForZero(LifecycleWsClient::HandoffTimeout);
+        }
+        return tid;
     }
 
     #! runs the deferred code once released

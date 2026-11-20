@@ -35,6 +35,8 @@
 
 DLLLOCAL void pseudo_classes_init();
 DLLLOCAL void pseudo_classes_del();
+//! Resolves a receiver or declaring pseudo-class by its serialized class path.
+DLLLOCAL const QoreClass* qore_pseudo_find_class_by_path(const char* path);
 DLLLOCAL QoreValue pseudo_classes_eval(const QoreValue n, const char* name, const QoreListNode* args, ExceptionSink* xsink);
 DLLLOCAL QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreValue n, const char* name,
     const QoreListNode* args, ExceptionSink* xsink);

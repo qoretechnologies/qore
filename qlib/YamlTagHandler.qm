@@ -170,8 +170,11 @@ if (exists handler) {
     @endcode
 */
 public class YamlTagHandlerRegistry {
-    private {
+    private:internal {
         #! Map of tag prefix to handler
+        /** Not accessible to subclasses, so that a change of the process-wide registry always goes through register()
+            and unregister()
+        */
         hash<string, AbstractYamlTagHandler> handlers;
     }
 
@@ -271,16 +274,14 @@ public class YamlTagHandlerRegistry {
 */
 class GlobalTagRegistryHolder {
     private {
-        static YamlTagHandlerRegistry instance;
+        #! the global registry, created when the module is initialized, so that it belongs to no caller
+        static YamlTagHandlerRegistry instance = new YamlTagHandlerRegistry(True);
     }
 
     #! Returns the global tag handler registry singleton
     /** @return the singleton YamlTagHandlerRegistry instance
     */
     static YamlTagHandlerRegistry get() {
-        if (!exists instance) {
-            instance = new YamlTagHandlerRegistry(True);
-        }
         return instance;
     }
 }

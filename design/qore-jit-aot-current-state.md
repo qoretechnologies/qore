@@ -635,11 +635,18 @@ constant table of the slots in the cleanup frame (see below) with a runtime-stac
 `QORE_FRAME_ENTRY_LOCAL`, and releases it last entry first. The inline form
 includes runtime-stack locals only at an exception exit; the table form, shared by every exit,
 includes them always, and a local already released at a normal exit is released again as no value.
-AOT code instantiates its body locals on the runtime stack at entry (`aot_body_locals`): their
-values are released at their places too, by slot (`qore_rt_clear_local_aot()`, or the variable that the
-helper reads from the context by the slot that the entry gives in the table form), before the runtime stack removes the variables; left
-to the runtime stack, a closure-bound local popped at its place was still held by a closure in a
-later runtime-stack local, and closure-bound locals died in the order of their closures.
+AOT images retain all body-local identities in declaration order for closures and handlers. The
+standard entry can own an unshadowed function-root local in native storage when IR analysis has
+proved it private and the function was compiled without debugger access. The image marks such a
+local with `QORE_AOT_BODY_LOCAL_NATIVE_ONLY`. The runtime wrapper omits its stack slot and native
+cleanup releases the owning value at its declaration's place in the sequence. A callback inspecting
+that frame from another Program can still see the declaration as unavailable. An image without
+the ownership flag uses the full instantiation list.
+
+For body locals that require stack slots, AOT cleanup releases each value in turn using
+`qore_rt_clear_local_aot()` or a slot lookup in the table form. A later runtime-stack local may
+hold a closure that owns an earlier local, so leaving these releases to the wrapper's final stack
+teardown could change destructor order.
 Closure-bound body locals are in the sequence too, in JIT and AOT code: one that the frame
 instantiated is popped from the closure stack at its place (`qore_rt_pop_closure_var()`, tag 3 in
 the array form, which looks it up in the current frame only), so that a closure still holding it

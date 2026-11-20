@@ -90,6 +90,7 @@ class ExecModeHarnessTest inherits QUnit::Test {
         addTestCase("the IR tier of tiered execution", \testIRTier());
         addTestCase("output and exit status", \testOutput());
         addTestCase("module loader warnings are not output", \testLoaderWarnings());
+        addTestCase("an AOT module whose Qore source has changed fails the run", \testStaleQoreSource());
         addTestCase("negative: native compilation checks", \testChecks());
         set_return_value(main());
     }
@@ -289,6 +290,64 @@ class ExecModeHarnessTest inherits QUnit::Test {
         assertEq("err\n", r.stderr);
         assertEq((fallback_parse,), r.loader_warnings);
         assertEq(0, r.rc);
+    }
+
+    testStaleQoreSource() {
+        # the warnings of the run of testLoaderWarnings() name a binary module that the AOT module was compiled against
+        # and an AOT module that cannot be loaded: they are about the environment, and the run passes
+        assertEq(NOTHING, ExecModeHarness::get_changed_qore_source(StaleWarning));
+        assertEq(NOTHING, ExecModeHarness::get_changed_qore_source(FallbackWarning));
+        assertEq("out\nerr\n", ExecModeHarness::run(sprintf("%s %s -b --exec-mode=jit %s", env, qore_bin,
+            loader_warning)));
+        string qore_source_warning = "warning: AOT module '/build/qlib-qmod/Util.qmod' for feature 'Util' is out of "
+            "date: its source '/src/qlib/Util/Util.qc' has changed since it was compiled; loading source module "
+            "'/src/qlib/Util/Util.qm' instead; rebuild the AOT module";
+        assertEq("/src/qlib/Util/Util.qc", ExecModeHarness::get_changed_qore_source(qore_source_warning));
+        assertEq("/src/qlib/Util/Util.qc", ExecModeHarness::get_changed_qore_source("BINARY-MODULE-SOURCE-FALLBACK"
+            + qore_source_warning.substr(7)));
+
+        # qore#6731: an AOT module of a build tree, compiled with its dependency file, whose source then changes; the
+        # module loader loads its source instead, and the run fails, naming the module
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        string dir = tmp.path + DirSep + "stale-module";
+        mkdir(dir);
+        string mod_source = dir + DirSep + "StaleProbe.qm";
+        string mod_text = "%new-style\nmodule StaleProbe {\n    version = \"1.0\";\n    desc = \"test\";\n"
+            "    author = \"test\";\n    url = \"https://qore.org\";\n}\n"
+            "public namespace StaleProbe {\n    public string sub f() {\n        return \"v1\";\n    }\n}\n";
+        File f();
+        f.open2(mod_source, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(mod_text);
+        f.close();
+        string qmod = dir + DirSep + "StaleProbe.qmod";
+        int rc;
+        string out = backquote(sprintf("%s %s -m --depfile=%s.d -o %s %s 2>&1", env, qcc_bin, qmod, qmod,
+            mod_source), \rc);
+        if (rc || !is_file(qmod)) {
+            testSkip("qcc cannot compile the module: " + out);
+        }
+        string script = write("stale-module.q", "%modern\n%requires StaleProbe\n"
+            "printf(\"%s\\n\", StaleProbe::f());\n");
+        string cmd = sprintf("QORE_MODULE_DIR=%s:$QORE_MODULE_DIR %s %s -b --exec-mode=jit %s", dir, env, qore_bin,
+            script);
+        # the AOT module is loaded while it is up to date
+        assertEq("v1\n", ExecModeHarness::run(cmd));
+        # the same size and another content: the module loader compares the content of the source
+        f.open2(mod_source, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(replace(mod_text, "v1", "v2"));
+        f.close();
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd, True);
+        assertEq("v2\n", r.out, "the source module was loaded");
+        assertEq(1, r.loader_warnings.size());
+        assertEq(mod_source, ExecModeHarness::get_changed_qore_source(r.loader_warnings[0]));
+        assertThrows("EXEC-MODE-HARNESS-ERROR", "StaleProbe.qmod", \ExecModeHarness::check_loader_warnings(), (r,));
+        assertThrows("EXEC-MODE-HARNESS-ERROR", "rebuild the AOT module", \ExecModeHarness::run(), (cmd,));
+        assertThrows("EXEC-MODE-HARNESS-ERROR", "StaleProbe.qmod", \ExecModeHarness::run_any(), (cmd,));
+        assertThrows("EXEC-MODE-HARNESS-ERROR", "StaleProbe.qmod", \ExecModeHarness::run_ir_tier(),
+            (replace(cmd, "--exec-mode=jit", "--exec-mode=tiered"),));
     }
 
     testOutput() {

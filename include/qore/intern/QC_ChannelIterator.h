@@ -33,6 +33,7 @@
 #define _QORE_CLASS_CHANNELITERATOR_H
 
 #include "qore/intern/QC_Channel.h"
+#include "qore/intern/QoreTypeDeclPin.h"
 
 DLLEXPORT extern qore_classid_t CID_CHANNELITERATOR;
 DLLLOCAL extern QoreClass* QC_CHANNELITERATOR;
@@ -47,6 +48,7 @@ public:
     DLLLOCAL QoreChannelIterator(QoreChannel* ch, bool own_ref = false,
             const QoreTypeInfo* element_type = autoTypeInfo)
             : channel(ch), current_value(), element_type(element_type ? element_type : autoTypeInfo), validp(false) {
+        element_type_pin.set(this->element_type);
         if (!own_ref) {
             channel->ref();
         }
@@ -128,6 +130,8 @@ private:
     QoreChannel* channel;
     QoreValue current_value;
     const QoreTypeInfo* element_type;
+    //! keeps the declarations that the element type names (issue #6419; see QoreTypeDeclPin)
+    QoreTypeDeclPin element_type_pin;
     bool validp;
 };
 

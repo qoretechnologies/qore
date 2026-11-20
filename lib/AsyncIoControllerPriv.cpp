@@ -145,7 +145,8 @@ public:
         // not freed: the controller of the parent cannot be stopped or destroyed in the child
         aio_singleton = nullptr;
         aio_singleton_obj = nullptr;
-        aio_singleton_lock.reinitAfterFork();
+        // held by this thread since prepare(): released (issue #6817)
+        aio_singleton_lock.unlock();
     }
 };
 

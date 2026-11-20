@@ -129,21 +129,14 @@ public:
     */
     static size_t expandFloatToIntForTarget(llvm::Module& module, const llvm::Triple& triple);
 
-    //! Enable AOT mode with the given slot map.
-    //! When set, process-specific opcodes emit _aot helper calls with slot indices
-    //! instead of inttoptr patterns with embedded pointers.
-    void setAOTMode(const AOTSlotMap* slots) {
+    //! Use the image's slot indices for AOT helper calls instead of process-local pointers.
+    /** Init functions have no native closure dispatch definitions (#6336). Source-debug callers must
+        also enter closures through the runtime, where an attached debugger can step into them (#6805).
+    */
+    void setAOTMode(const AOTSlotMap* slots, bool direct_closure_fast_entry) {
         aot_mode = true;
         aot_slots = slots;
-    }
-
-    //! Control immediate-closure dispatch lowering in AOT mode.
-    /** Init-function compilation does not emit native closure bodies, so its
-        lowerers must use the generic runtime helper instead of declaring a
-        dispatch symbol that will not be defined: neither the direct fast entry
-        nor the native closure call ABI (qore#6336). */
-    void setAOTDirectClosureFastEntry(bool v) {
-        aot_direct_closure_fast_entry = v;
+        aot_direct_closure_fast_entry = direct_closure_fast_entry;
     }
 
     //! Sets the name of the native function generated for the IR function, if not its own name
@@ -763,6 +756,8 @@ private:
     // product exceeds getCleanupPhiBudget() -- every other function keeps the
     // inline triples and full SSA promotion of its locals.
     CleanupFrameTable boxed_exit_cleanup_table;
+    //! Lexical locals in the exact order of the boxed cleanup entries, for exception location changes.
+    std::vector<const LocalVar*> boxed_exit_cleanup_locals;
 
     // The slots of iterator_cleanup_allocas, as a table of the cleanup frame.  Same
     // problem and same remedy as boxed_exit_cleanup_table: emitLateExitCleanup()
@@ -1709,6 +1704,9 @@ private:
             const QoreIRInstruction* inst, llvm::Value* boxed, const QoreTypeInfo* return_type);
     //! Converts a NaN-boxed return value to the fast-entry return ABI
     llvm::Value* getFastEntryReturnValue(llvm::Module& module, llvm::Value* boxed);
+
+    //! Emit the debugger fallback of a typed native AOT function with its original arguments.
+    bool emitAOTDebugFastEntry(llvm::Module& module, llvm::Function& function, const BatchCalleeInfo& callee);
     bool selfRecursiveFastEntryArgsNeedNothingGuard(
             const std::vector<uint32_t>& raw_arg_ids) const;
 
@@ -1795,6 +1793,13 @@ private:
     // Runtime location tracking: per-function cached TLS pointers
     llvm::Value* loc_cache_ptr = nullptr;   //!< Cached ptr-to-ptr for runtime_loc TLS variable
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
+    //! The caller's statement, saved only for bodies with a root local whose release can run a destructor.
+    llvm::Value* body_entry_loc = nullptr;
+    llvm::Value* body_entry_stmt = nullptr;
+    void captureBodyEntryLocation();
+    void emitBodyCleanupLocation();
+    llvm::FunctionType* aotBodyFunctionType(bool takes_body_entry_location) const;
+
     //! Cached ptr-to-ptr for the thread's call site, the location of the call being made (QoreRcCallSiteHelper)
     llvm::Value* call_site_cache_ptr = nullptr;
     //! the runtime location (QoreIRInstruction::stmt_loc) that the code of the block being lowered stored last
@@ -2019,6 +2024,8 @@ private:
         bool pop_closure = false;
         //! true if \a alloca holds the iterator of a foreach statement (released with qore_rt_iterator_cleanup())
         bool iterator = false;
+        //! Lexical local whose released value or cache this entry owns.
+        const LocalVar* local = nullptr;
     };
 
     //! The locals released at the exit of the function, in declaration order (they are released last first)
@@ -2676,7 +2683,10 @@ private:
 
     //! The instructions that push the frame of an AOT call whose callee may run inline, as a body summary
     struct AotInlineCallFrame {
-        llvm::Instruction* push = nullptr;
+        llvm::CallInst* push = nullptr;
+
+        //! A real native entry establishes its own locations and inherits its caller's statement for body cleanup.
+        void useCallerStatement(llvm::Module& module);
     };
     //! Emits the push of the frame of an AOT call whose callee may run inline, which makes the location of the
     //! callee's body the runtime location, where the inline code runs
