@@ -1981,6 +1981,11 @@ bool qore_class_private::runtimeCanUseMember(const char* mem, const qore_class_p
 
 bool qore_class_private::runtimeCheckMemberAccessContext(const QoreMemberInfo* info,
         const qore_class_private* class_ctx) const {
+    // the context of the code of a class imported into a child Program is the class it was parsed in, a copy of the
+    // declaration of this class (qore#6671)
+    if (isClassContext(class_ctx)) {
+        return true;
+    }
     if (info->access == Internal) {
         return info->local() || checkInheritedInternalMemberContext(class_ctx, info->getClass());
     }
@@ -11848,8 +11853,11 @@ const QoreMethod* QoreStaticMethodIterator::getMethod() const {
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls) :
     QoreMemberInfoBaseAccess(old, old.access),
     accessors(old.accessors),
-    // the new class owner is in the initial position
-    decl_cls(cls),
+    // the new class owner is in the initial position for a member that it declares; a member that it inherits keeps
+    // the class that declares it, as its inheritance list and its context map do, or an object of a subclass of the
+    // copy, which is a class imported into another Program, would have no storage entry for the code of the declaring
+    // class (qore#6671)
+    decl_cls(old.is_local ? cls : old.decl_cls),
     cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(old.is_local) {
