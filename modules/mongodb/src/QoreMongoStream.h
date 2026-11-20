@@ -64,6 +64,14 @@ DLLLOCAL mongoc_stream_t* qore_mongo_stream_initiator(
 */
 DLLLOCAL const char* qore_mongo_check_uri_tls_files(const mongoc_uri_t* uri, ExceptionSink* xsink);
 
+//! Returns why the URI makes the driver open connections of its own, which the sandbox cannot check, or nullptr
+/** Some authentication mechanisms make libmongoc connect to other hosts by itself, through no stream that the module
+    creates: MONGODB-AWS without credentials (the environment's credential, container and instance metadata
+    endpoints) and MONGODB-OIDC with an ENVIRONMENT (the token endpoints of the cloud environment); code that a sandbox
+    governs is refused them (qoretechnologies/qore#6911)
+*/
+DLLLOCAL const char* qore_mongo_driver_connection_reason(const mongoc_uri_t* uri);
+
 //! Configure libmongoc logging for the Qore MongoDB module
 DLLLOCAL void qore_mongo_set_log_handler();
 
@@ -73,6 +81,6 @@ DLLLOCAL void qore_mongo_set_log_handler();
 
     @param client The MongoDB client to configure
 */
-DLLLOCAL void qore_mongo_setup_interruptible_streams(mongoc_client_t* client);
+DLLLOCAL void qore_mongo_setup_interruptible_streams(mongoc_client_t* client, const QoreSandboxCapture* creation);
 
 #endif // _QORE_MODULE_MONGODB_QOREMONGOSTREAM_H
