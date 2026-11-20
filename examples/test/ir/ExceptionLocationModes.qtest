@@ -842,7 +842,7 @@ sub runBodyClosure() {
         string expected = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, path));
         assertRegex("^BODY [0-9]+-[0-9]+\nINNER [0-9]+-[0-9]+\nOUTER [0-9]+-[0-9]+\n"
             "BODY [0-9]+-[0-9]+\nOUTER [0-9]+-[0-9]+", expected, "AST destroyed the shadowed locals in order");
-        hash<string, auto> wrong;
+        hash<string, auto> wrong();
         foreach string mode in ("ir", "jit", "tiered") {
             string output = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, path));
             if (output != expected) {
