@@ -2697,6 +2697,13 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
                 need_cleanup = true;
             }
         }
+        // the objects of the Program's own classes that its constants hold, if anything else holds them, are deleted
+        // below, once only this thread can run code in the Program: the code can hold one of them past this point (a
+        // constant's value folded into it), and the release of the code comes after the Program has been closed to
+        // every thread (#6791)
+        if (*l) {
+            collectOwnedConstantObjects(**l);
+        }
     }
 
     if (leave) {
@@ -2736,6 +2743,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // leave it, as its data is destroyed below; no other thread can enter it now
         waitForAllThreadsToTerminateIntern();
         clr = true;
+    }
+
+    if (clr) {
+        // only this thread can run code in the Program now, and its code is intact (#6791)
+        deleteOwnedConstantObjects(xsink);
     }
 
     if (clr) {
@@ -2878,6 +2890,83 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 
         // clear program location
         //update_runtime_location(&loc_builtin);
+    }
+}
+
+namespace {
+//! collects the objects of the Program's own classes in a value of a cleared constant, also in its lists and hashes
+class QoreOwnedConstantObjectCollector {
+public:
+    DLLLOCAL QoreOwnedConstantObjectCollector(const QoreProgram* pgm, std::vector<QoreObject*>& objs)
+            : pgm(pgm), objs(objs) {
+    }
+
+    DLLLOCAL void visit(QoreValue v) {
+        switch (v.getType()) {
+            case NT_OBJECT: {
+                QoreObject* o = v.get<QoreObject>();
+                // an object that only the constant holds is deleted when the list is released, also while the
+                // Program can run code
+                if (o->reference_count() > 1 && o->isValid()
+                        && qore_class_private::get(*o->getClass())->ownedByProgram(pgm)
+                        && seen.insert(o).second) {
+                    o->ref();
+                    objs.push_back(o);
+                }
+                break;
+            }
+            case NT_LIST: {
+                const QoreListNode* l = v.get<const QoreListNode>();
+                if (!seen.insert(l).second) {
+                    break;
+                }
+                ConstListIterator i(l);
+                while (i.next()) {
+                    visit(i.getValue());
+                }
+                break;
+            }
+            case NT_HASH: {
+                const QoreHashNode* h = v.get<const QoreHashNode>();
+                if (!seen.insert(h).second) {
+                    break;
+                }
+                ConstHashIterator i(h);
+                while (i.next()) {
+                    visit(i.get());
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+private:
+    const QoreProgram* pgm;
+    std::vector<QoreObject*>& objs;
+    //! the containers and objects visited, which constant values can share
+    std::unordered_set<const void*> seen;
+};
+}
+
+void qore_program_private::collectOwnedConstantObjects(const QoreListNode& l) {
+    QoreOwnedConstantObjectCollector c(pgm, owned_constant_objects);
+    ConstListIterator i(&l);
+    while (i.next()) {
+        c.visit(i.getValue());
+    }
+}
+
+void qore_program_private::deleteOwnedConstantObjects(ExceptionSink* xsink) {
+    std::vector<QoreObject*> objs;
+    objs.swap(owned_constant_objects);
+    for (QoreObject* o : objs) {
+        // another holder can have released it meanwhile, or deleted it
+        if (o->isValid()) {
+            o->doDelete(xsink);
+        }
+        o->deref(xsink);
     }
 }
 
@@ -3963,6 +4052,9 @@ void qore_program_private::del(ExceptionSink* xsink) {
         ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
         qore_root_ns_private::clearConstants(*RootNS, **l);
         ns_const = true;
+        // see waitForTerminationAndClear() (#6791)
+        collectOwnedConstantObjects(**l);
+        deleteOwnedConstantObjects(xsink);
         //printd(5, "qore_program_private::del() this: %p cleared constants\n", this);
     }
 

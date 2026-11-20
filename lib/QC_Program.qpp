@@ -1805,6 +1805,9 @@ Program::copy() {
     current thread has left its code; then, when other threads have finished executing its code as well, its global
     variables are deleted and it is dereferenced
 
+    The objects of the Program's own classes that its constants hold are deleted with its data, also if other values
+    hold them (see @ref program_deletion_constant_objects)
+
     @since %Qore 3.0 a Program deleted while the current thread runs its code is kept until the thread has left it;
     the code crashed the process when it returned
  */

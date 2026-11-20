@@ -2480,6 +2480,11 @@
     - a parse error message naming a built-in complex type such as \c hash<auto> or \c list<auto> no longer aborts a
       debug build in a process whose @ref default_encoding "default encoding" is not UTF-8; type names are added to a
       message in its encoding (issue #6814)
+    - deleting a @ref Qore::Program "Program" deletes the objects of its own classes that its constants hold while
+      their destructors can run, where an object that the Program's code referred to (such as an object constant of
+      a Python module that module-python imported) skipped its destructor with a \c PROGRAM-ERROR exception (see
+      @ref program_deletion_constant_objects; <a href="https://github.com/qoretechnologies/qore/issues/6791">issue
+      6791</a>)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)
