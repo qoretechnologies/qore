@@ -892,6 +892,8 @@ QoreValue parse_json(const QoreString* str, ExceptionSink* xsink, const char* wh
 
     int line_number = 1;
     const char* buf = str->c_str() + skip;
+    // the end of the text: a NUL byte in the text is not its end (issue #6718)
+    const char* end = str->c_str() + str->size();
     const unsigned char* data = reinterpret_cast<const unsigned char*>(buf);
     if (str->size() - skip >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF) { // Skip UTF-8 BOM.
         buf += 3;
@@ -904,11 +906,13 @@ QoreValue parse_json(const QoreString* str, ExceptionSink* xsink, const char* wh
     // ignore empty values; return NOTHIN in this case
     bool empty = false;
     ValueHolder rv(get_json_value(buf, line_number, str->getEncoding(), empty, 0, smh.get(), xsink), xsink);
-    // a value that is false, such as null, 0 or false, is checked too
-    if (!*xsink && !empty && *buf) {
+    // a value that is false, such as null, 0 or false, is checked too; so is an empty value: the text up to its end
+    // is whitespace, and a NUL byte is not JSON whitespace (RFC 8259 section 2), so that the text after a NUL byte is
+    // extra text as any other (issue #6718)
+    if (!*xsink && buf < end) {
         // check for excess text after JSON data
         skip_whitespace(buf, line_number);
-        if (*buf) {
+        if (buf < end) {
             xsink->raiseException("JSON-PARSE-ERROR", "extra text after JSON data on line %d", line_number);
             return QoreValue();
         }
