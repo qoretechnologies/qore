@@ -32,6 +32,15 @@
 
 #include "QC_Logger.h"
 
+// logs a message as it is: the format "%s" with the message as its only argument (qore#3420)
+static void logger_log_preformatted(QoreLogger* l, const QoreLoggerLevel* level, const QoreStringNode* message,
+        ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> fmt(new QoreStringNode("%s"));
+    ReferenceHolder<QoreListNode> margs(new QoreListNode(autoTypeInfo), xsink);
+    margs->push(message->stringRefSelf(), xsink);
+    l->log(xsink, level, *fmt, *margs, 0);
+}
+
 static QoreHashNode* Logger_serializer(const QoreObject& self, const QoreLogger& l,
         QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
     (void)rc;
@@ -485,6 +494,63 @@ Logger::logArgs(string level, string message, *softlist<auto> margs) {
         return QoreValue();
     }
     l->log(xsink, lvl, message, margs, 0);
+}
+
+//! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+/**
+    log() and logArgs() use the message as a format for @ref Qore::vsprintf() "vsprintf()", so that a message with
+    format characters, such as one that is formatted already, would lose them; this method logs it as it is
+    (the event's message is the format \c "%s" with the message as its only argument).
+
+    @param level the logging level
+    @param message the message, which is logged as it is
+
+    @since Qore 3.0
+*/
+Logger::logPreformatted(LoggerLevel[QoreLoggerLevel] level, string message) {
+    logger_log_preformatted(l, *level, message, xsink);
+}
+
+//! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+/**
+    log() and logArgs() use the message as a format for @ref Qore::vsprintf() "vsprintf()", so that a message with
+    format characters, such as one that is formatted already, would lose them; this method logs it as it is
+    (the event's message is the format \c "%s" with the message as its only argument).
+
+    @param level the logging level
+    @param message the message, which is logged as it is
+
+    @since Qore 3.0
+*/
+Logger::logPreformatted(int level, string message) {
+    const QoreLoggerLevel* lvl = QoreLoggerLevel::getLoggerLevel(xsink, level);
+    if (*xsink) {
+        return QoreValue();
+    }
+    logger_log_preformatted(l, lvl, message, xsink);
+}
+
+//! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+/**
+    log() and logArgs() use the message as a format for @ref Qore::vsprintf() "vsprintf()", so that a message with
+    format characters, such as one that is formatted already, would lose them; this method logs it as it is
+    (the event's message is the format \c "%s" with the message as its only argument).
+
+    @param level the logging level
+    @param message the message, which is logged as it is
+
+    @since Qore 3.0
+*/
+Logger::logPreformatted(string level, string message) {
+    QoreStringNodeValueHelper lstr(level, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    const QoreLoggerLevel* lvl = QoreLoggerLevel::getLoggerLevel(xsink, *lstr);
+    if (*xsink) {
+        return QoreValue();
+    }
+    logger_log_preformatted(l, lvl, message, xsink);
 }
 
 //! Logs an already prepared logging event object.
