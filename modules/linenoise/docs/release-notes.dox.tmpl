@@ -18,6 +18,8 @@
     - the completion callback receives its input as a UTF-8 string, a change of the callback while a completion is
       running is safe, and the handling of exceptions raised by the callback is improved
     - added @ref Qore::Linenoise::rows() "rows()", which gives the height of the terminal
+    - the callbacks, key bindings and history provider are global to the process, so sandboxed code cannot set,
+      replace or remove them (\c SANDBOX-REGISTRATION-ERROR; see @ref linenoise_sandbox)
     - an external history manager can provide the history for the arrow keys and incremental search with an
       @ref Qore::Linenoise::AbstractHistoryProvider "AbstractHistoryProvider" set with
       @ref Qore::Linenoise::set_history_provider() "set_history_provider()"

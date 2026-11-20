@@ -1,0 +1,29 @@
+declaring class through self: 1
+declaring class through a reference: 1
+declaring class dynamically: 1
+declaring class writes through a reference: 2
+declaring class: keys through self: []
+declaring class: keys through a reference: []
+inheriting class through a reference: 2
+declaring class on the inheriting class: 1
+declaring class beside a sibling: 1
+subclass of the inheriting class: INVALID-MEMBER: 'v' is not a registered member of class 'C'
+subclass of the inheriting class dynamically: INVALID-MEMBER: 'v' is not a registered member of class 'C'
+subclass of the inheriting class: keys: []
+sibling base class: INVALID-MEMBER: 'v' is not a registered member of class 'Q'
+sibling base class dynamically: INVALID-MEMBER: 'v' is not a registered member of class 'Q'
+sibling base class: keys: []
+sibling base class: private member: PRIVATE-MEMBER: 'pm' is a private member of class 'Q'
+sibling base class: private member dynamically: PRIVATE-MEMBER: 'pm' is a private member of class 'Q'
+other class: INVALID-MEMBER: 'v' is not a registered member of class 'C'
+other class dynamically: INVALID-MEMBER: 'v' is not a registered member of class 'C'
+other class: keys: []
+other class: private member: PRIVATE-MEMBER: 'pm' is a private member of class 'Q'
+outside: INVALID-MEMBER: 'v' is not a registered member of class 'C'
+typed: declaring class: parsed: 1
+typed: declaring class writes: parsed: 2
+typed: inheriting class: parsed: 1
+typed: subclass of the inheriting class: PARSE-EXCEPTION: illegal access to member 'v' of class 'G', which class 'D' inherits through a class inherited with private:internal
+typed: sibling base class: PARSE-EXCEPTION: illegal access to private member 'v' of class 'Q'
+typed: sibling base class: private member: PARSE-EXCEPTION: illegal access to private member 'pm' of class 'Q'
+typed: other class: PARSE-EXCEPTION: illegal access to private member 'v' of class 'C'

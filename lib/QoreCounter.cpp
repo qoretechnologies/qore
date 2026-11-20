@@ -197,6 +197,18 @@ void qore_counter_ops::reinitAfterForkImpl(QoreCounter* b, int count) {
     b->priv->l.reinitAfterFork();
 }
 
+void qore_counter_ops::releaseAfterForkImpl(QoreCounter* b, int count) {
+    // the waiting threads do not exist in the child
+    b->priv->waiting = 0;
+    b->priv->count_waiting = 0;
+    if (count >= 0) {
+        b->priv->cnt = count;
+    }
+    qore_condition_ops(b->priv->cond).reinitAfterFork();
+    // held by this thread since lockForFork(): released, so that ThreadSanitizer sees the release (issue #6817)
+    b->priv->l.unlock();
+}
+
 void QoreCounter::destructor(ExceptionSink* xsink) {
     priv->destructor(xsink);
 }

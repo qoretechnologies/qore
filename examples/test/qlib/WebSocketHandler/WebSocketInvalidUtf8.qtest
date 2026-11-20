@@ -364,6 +364,48 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
             assertEq(WSOP_Text, h.op);
             assertEq("café", deflate.last.got.get(30s));
         }
+        # the connection ended without a close frame: its end is taken, so that the next case gets its own
+        assertEq(1006, deflate.closed.get(30s).code, "the connection ended without a close frame");
+        # a fragmented compressed message has RSV1 on its first frame only (RFC 7692 section 6.1; issue #6781)
+        {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/deflate", "permessage-deflate");
+            binary payload = deflate_raw("fragmented café");
+            s.send(ws_encode_message(payload.substr(0, 4), WSOP_Text, True, False, WS_RSV1));
+            s.send(ws_encode_message(payload.substr(4), WSOP_Continuation, True, True));
+            hash<WsMsgInfo> h = ws_read_message(s, 30s);
+            assertEq(WSOP_Text, h.op);
+            assertEq("fragmented café", deflate.last.got.get(30s), "a fragmented compressed message is taken");
+        }
+        assertEq(1006, deflate.closed.get(30s).code, "the connection ended without a close frame");
+        # RSV1 on a continuation frame fails the connection, also when permessage-deflate is negotiated
+        {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/deflate", "permessage-deflate");
+            binary payload = deflate_raw("fragmented café");
+            s.send(ws_encode_message(payload.substr(0, 4), WSOP_Text, True, False, WS_RSV1));
+            s.send(ws_encode_message(payload.substr(4), WSOP_Continuation, True, True, WS_RSV1));
+            assertClose(s, deflate, WSCC_ProtocolError, "RSV1", True);
+            assertEq(0, deflate.last.got.size(), "the message is not given to the connection");
+        }
+        # an RSV bit on a control frame fails the connection, whatever extensions are negotiated (RFC 6455 section
+        # 5.2, RFC 7692 section 6.1; issue #6781)
+        {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/deflate", "permessage-deflate");
+            s.send(ws_encode_message("ping", WSOP_Ping, True, True, WS_RSV1));
+            assertClose(s, deflate, WSCC_ProtocolError, "control frame", True);
+        }
+        {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/plain");
+            s.send(ws_encode_message("ping", WSOP_Ping, True, True, WS_RSV2));
+            assertClose(s, plain, WSCC_ProtocolError, "control frame", True);
+        }
     }
 
     #! a fragmented text message is checked once it is complete: a character may span fragments, and a control frame

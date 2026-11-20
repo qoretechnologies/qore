@@ -1,0 +1,26 @@
+%modern
+# Copyright 2026 Qore Technologies, s.r.o.
+%allow-debugger
+%enable-debug
+%requires RangeBridge
+module RangeConsumer {
+    version = "1.0"; desc = "closure inside a method calling a transitive module class";
+    author = "Qore"; license = "MIT";
+}
+# RangeBridge imports RangePalette without re-exporting it. This same-named class
+# in the consumer does not own the method called through Bridge::color.
+namespace RangePalette {
+    class Palette {
+    }
+}
+public namespace RangeConsumer {
+    public class Consumer inherits RangeBridge::Bridge {
+        private string render(string prefix, string text) { return prefix + text; }
+        code<string(RangeBridge::Bridge, string)> make() {
+            return string sub (RangeBridge::Bridge bridge, string s) {
+                return render(s, bridge.color.warning(s));
+            };
+        }
+        string run() { return make()(self, "ok"); }
+    }
+}

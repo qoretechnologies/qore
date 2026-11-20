@@ -505,7 +505,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             pfd.fd = pipefd[0];
             pfd.events = POLLIN;
             pfd.revents = 0;
-            int prc = qore_cancellable_poll(&pfd, 1, -1, xsink, "backquote read");
+            int prc = qore_quiescent_cancellable_poll(&pfd, 1, -1, xsink, "backquote read");
             if (prc == QORE_POLL_CANCELLED) {
                 // SIGKILL ends the command at once on interrupt
                 qore_kill_child_process(pid, (use_pgroup && pgroup_ok) ? -pid : pid);
@@ -607,7 +607,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             pfd.fd = pipefd[0];
             pfd.events = POLLIN;
             pfd.revents = 0;
-            int prc = qore_cancellable_poll(&pfd, 1, -1, xsink, "backquote read");
+            int prc = qore_quiescent_cancellable_poll(&pfd, 1, -1, xsink, "backquote read");
             if (prc == QORE_POLL_CANCELLED) {
                 // SIGKILL ends the command at once on interrupt
                 qore_kill_child_process(pid, (use_pgroup && pgroup_ok) ? -pid : pid);

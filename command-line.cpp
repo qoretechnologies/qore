@@ -213,7 +213,7 @@ static const char helpstr[] =
    "  -a, --show-aliases           displays the list of character sets aliases\n"
    "  -b, --disable-signals        disables signal handling\n"
    "  -B, --show-build-options     show Qore build options and quit\n"
-   "  -c, --charset=arg            sets default character set encoding\n"
+   "  -c, --charset=arg            sets default run-time encoding for strings and I/O (source is UTF-8)\n"
    "  -D, --define=arg             sets the value of a parse define\n"
    "      --diag-format=json       parse only and emit structured parse diagnostics as JSON\n"
    "      --code-frames            parse only and render parse diagnostics as code frames\n"

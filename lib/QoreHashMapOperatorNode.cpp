@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreTypeDeclPin.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
@@ -209,6 +210,9 @@ QoreValue QoreHashMapOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
     // try to find a common value type, if any
     bool vcommon = false;
     const QoreTypeInfo* valueType = nullptr;
+    // keeps the declarations that the value type names: the value that it was read from can be replaced by a
+    // later one (issue #6419)
+    QoreTypeDeclPin value_type_pin;
 
     qore_type_t arglst_type = arg_lst->getType();
     assert(arglst_type != NT_NOTHING);
@@ -250,6 +254,7 @@ QoreValue QoreHashMapOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
             //  QoreTypeInfo::getName(valueType));
             if (vtype && vtype != anyTypeInfo) {
                 valueType = vtype;
+                value_type_pin.set(valueType);
                 vcommon = true;
             }
 
@@ -291,9 +296,10 @@ QoreValue QoreHashMapOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
                     if (!li.index()) {
                         if (vtype && vtype != anyTypeInfo) {
                             valueType = vtype;
+                            value_type_pin.set(valueType);
                             vcommon = true;
                         }
-                    } else if (vcommon && !QoreTypeInfo::matchCommonType(valueType, vtype)) {
+                    } else if (vcommon && !qore_match_common_type_pinned(valueType, vtype, value_type_pin)) {
                         vcommon = false;
                     }
 
@@ -330,6 +336,9 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
     // try to find a common value type, if any
     bool vcommon = false;
     const QoreTypeInfo* valueType = nullptr;
+    // keeps the declarations that the value type names: the value that it was read from can be replaced by a
+    // later one (issue #6419)
+    QoreTypeDeclPin value_type_pin;
 
     size_t i = 0;
     // set offset in thread-local data for "$#"
@@ -372,9 +381,10 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
                 if (i == 1) {
                     if (vtype && vtype != anyTypeInfo) {
                         valueType = vtype;
+                        value_type_pin.set(valueType);
                         vcommon = true;
                     }
-                } else if (vcommon && !QoreTypeInfo::matchCommonType(valueType, vtype)) {
+                } else if (vcommon && !qore_match_common_type_pinned(valueType, vtype, value_type_pin)) {
                     vcommon = false;
                 }
 

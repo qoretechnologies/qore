@@ -210,6 +210,9 @@ class QoreString;
  */
 class QoreEncodingManager {
 private:
+   // the private implementation of the registration of encodings (qore#6826)
+   friend class qore_encoding_manager_private;
+
    DLLLOCAL static encoding_map_t emap;
    DLLLOCAL static const_encoding_map_t amap;
    DLLLOCAL static QoreThreadLock mutex;
@@ -227,6 +230,13 @@ public:
    DLLEXPORT static void addAlias(const QoreEncoding* qcs, const char* alias);
 
    //! finds an encoding if it exists (also looks up against alias names) and creates a new one if it doesn't
+   /** @since %Qore 3.0 for code that is not trusted (qore_caller_is_untrusted(): sandboxed or restricted code), a
+       name that %Qore does not know creates an encoding only if it is a label that untrusted data may select, or a
+       plain name that iconv converts both ways and whose letters and digits are not those of a known encoding (whose
+       encoding it gives: iconv ignores punctuation in names); any other name gives the shared encoding
+       @c "X-QORE-UNREGISTERED", which iconv cannot convert, so that such code cannot grow the process-wide table of
+       encodings without bound (issue #6826)
+   */
    DLLEXPORT static const QoreEncoding* findCreate(const char* name);
 
    //! finds an encoding if it exists (also looks up against alias names); returns nullptr if it does not

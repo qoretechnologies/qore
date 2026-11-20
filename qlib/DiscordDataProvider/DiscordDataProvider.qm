@@ -144,6 +144,9 @@ module DiscordDataProvider {
     @section Discorddataprovider_relnotes Release Notes
 
     @subsection Discorddataprovider_v2_1 DiscordDataProvider v2.1
+    - \c DiscordDataProvider::registerChild() cannot be called by sandboxed code: its registry is process-wide
+      (\c SANDBOX-REGISTRATION-ERROR; see @ref sandbox_process_wide_registries)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>)
     - @ref DiscordDataProvider::DiscordGatewayDataProvider "DiscordGatewayDataProvider" raises its connection and
       disconnection events (@ref WebSocketClient::EVENT_WS_CONNECTED and @ref WebSocketClient::EVENT_WS_CLOSED) to its
       observers, as declared in its provider info; created from a

@@ -14,7 +14,7 @@
 /** A declaration of a deleted Program that a derived type names is retired with the derived types built on it, and
     each retirement records the epoch of type retirement after incrementing it.  A thread publishes the epoch when it
     enters Qore code and clears it when it leaves; an item can be freed once no thread runs Qore code since an epoch
-    before it (issue #6419, design/derived-type-retirement.md; nothing is freed before library cleanup yet).  Debug
+    before it, or has passed a quiescent wait since (issue #6419, design/derived-type-retirement.md).  Debug
     builds report the bookkeeping with dbg_type_retirement_info() and the threads that items wait for with
     dbg_type_retirement_blockers().
 */
@@ -34,14 +34,17 @@ class TypeRetirementEpochsTest inherits QUnit::Test {
         }
         hash<auto> before = info();
 
-        # a thread that runs Qore code since before the retirement: it waits on a queue until it is released
+        # a thread that runs Qore code since before the retirement: it waits for a mutex that this thread holds, a
+        # wait that is not quiescent (a builtin's wait such as Queue::get() would be: issue #6419, stage 1c)
         Queue started();
-        Queue release();
+        Mutex release();
+        release.lock();
+        bool locked = True;
         Counter done();
         # the threads are released and waited for also when an assertion fails
         on_exit {
-            for (int i = 0, int n = done.getCount(); i < n; ++i) {
-                release.push(1);
+            if (locked) {
+                release.unlock();
             }
             done.waitForZero();
         }
@@ -66,25 +69,41 @@ class TypeRetirementEpochsTest inherits QUnit::Test {
         assertGt(after."min active epoch", after."newest pending epoch");
         assertEq(before."freeable declarations", after."freeable declarations", "nothing retired now is freeable");
 
-        # a thread that enters Qore code after the retirement does not hold it back
-        Queue started_after();
+        # a thread that enters Qore code after the retirement does not hold it back; it releases this thread from a
+        # wait on an empty queue only once this thread has entered a builtin wait after taking its count of waits
+        # below, so that this thread has passed a quiescent wait since the retirement (Queue::get() does not wait, and
+        # is no quiescent wait, when the queue is not empty)
+        Queue resume();
         done.inc();
-        int new_tid = background waitThread(started_after, release, done);
-        started_after.get();
+        # the arguments of a background call are evaluated in the new thread
+        int tid = gettid();
+        int entries = call_function("dbg_type_wait_entries", tid);
+        int new_tid = background waitAfterThread(tid, entries + 1, resume, release, done);
+        assertTrue(resume.get(), "this thread entered a builtin wait after the retirement");
 
         hash<auto> blockers = map {$1.tid.toString(): $1.epoch}, call_function("dbg_type_retirement_blockers");
-        assertTrue(exists blockers{gettid()}, "the main thread is a blocker: " + blockers.toString());
-        assertTrue(exists blockers{old_tid}, "the thread started before the retirement is a blocker: "
-            + blockers.toString());
-        assertFalse(exists blockers{new_tid}, "the thread started after the retirement is not a blocker: "
-            + blockers.toString());
+        assertFalse(exists blockers{gettid()}, sprintf("the main thread is no blocker: %y", blockers));
+        assertTrue(exists blockers{old_tid}, sprintf("the thread started before the retirement is a blocker: %y",
+            blockers));
+        assertFalse(exists blockers{new_tid}, sprintf("the thread started after the retirement is not a blocker: %y",
+            blockers));
         assertGt(blockers{old_tid}, after."newest pending epoch");
     }
 
-    static waitThread(Queue started, Queue release, Counter done) {
+    static waitThread(Queue started, Mutex release, Counter done) {
         on_exit done.dec();
         started.push(1);
-        release.get();
+        release.lock();
+        release.unlock();
+    }
+
+    #! releases the thread \a tid once it has entered \a count builtin waits, then waits like waitThread()
+    static waitAfterThread(int tid, int count, Queue resume, Mutex release, Counter done) {
+        on_exit done.dec();
+        # the timeout only reports a hang
+        resume.push(call_function("dbg_type_wait_entered", tid, count, 60000));
+        release.lock();
+        release.unlock();
     }
 
     static hash<auto> info() {

@@ -2116,6 +2116,19 @@ bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose pur
     return qore_thread_sandbox_allows_uncontrolled_apis(purpose == QoreSandboxManagerHelper::Policy);
 }
 
+int qore_check_process_wide_registration(const char* what, ExceptionSink* xsink) {
+    assert(what);
+    assert(xsink);
+    // fails closed: true if the governing sandbox cannot be resolved; false under a module initialization barrier
+    // for the code that loads library code
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    xsink->raiseException("SANDBOX-REGISTRATION-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
+        "%s: a process-wide registry or setting is shared by the code of every Program in the process", what);
+    return -1;
+}
+
 QoreSandboxManagerHelper::QoreSandboxManagerHelper(QoreProgram* pgm) {
     // the Program's own manager: a binary module that installs it as the manager of another Program (which then
     // governs that Program's code alone) must not install the sandbox that the Program keeps of the code that created

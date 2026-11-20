@@ -195,13 +195,18 @@ x=null@endverbatim
     type \c list<*Foo> or \c hash<string, Foo> returned by a function of the Program, an object of a generic class or
     a hash of a generic hashdecl whose type argument is one of the Program's classes, a hash or an object of a
     declaration of the Program with a member of type \c *Foo, or a class or hashdecl imported from the Program.  Such a
-    declaration is kept with its types after the Program is deleted: until library cleanup if a type derived from its
-    types was created (including a type such as \c list<Foo> used only in the Program's own code), otherwise as long
-    as a declaration that names it survives.  As no object or hash of the declaration exists then (unless one is
-    created through the @ref reflectionintro "reflection" API), its types accept no value other than \c NOTHING where
-    the type allows it, and objects of an equal class (a class of the same name and signature, from another Program);
-    assigning \c NOTHING to an element of a \c list<*Foo> works, and assigning an object of another class raises the
-    usual type error.  A class
+    declaration is kept as long as a declaration that names it survives.  A type derived from its types (including a
+    type such as \c list<Foo> used only in the Program's own code) is kept, but it no longer refers to the declaration:
+    it refers to an empty declaration that is equal to it (a class of the same name and signature, with the equal
+    declarations of its base classes; a hashdecl of the same name and members; an enum of the same name, base type and
+    members), so the declaration is freed once every thread that could still read it has left %Qore code or has waited
+    in one of the blocking calls that %Qore makes for the program (such as @ref Qore::Thread::Queue::get()
+    "Queue::get()", @ref Qore::Thread::Condition::wait() "Condition::wait()", @ref Qore::sleep() "sleep()",
+    @ref Qore::thread_join() "thread_join()" and socket and file I/O) outside a call of generic code with
+    type arguments.  A thread that runs %Qore code without such a wait only delays it.  The types accept the same
+    values as before: \c NOTHING where the type allows it, and the values of an equal declaration (from another
+    Program parsed from the same source, for example); assigning \c NOTHING to an element of a \c list<*Foo> works,
+    and assigning an object of another class raises the usual type error.  A class
     or hashdecl imported from the Program keeps its source declaration; declarations of the deleted Program that
     only each other keep (classes that name or inherit each other, after the last value that referenced them was
     released) are freed when the library is cleaned up, with the Program's data; the methods of an imported class are

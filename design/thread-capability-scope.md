@@ -59,6 +59,40 @@ svc.start();
   another thread, or after an outer scope has already left it, does not change any thread's set.
 - A thread's open scopes are released when the thread ends.
 
+### The call-bound scope (qore#6737)
+
+`ThreadCapabilityScope::call(hash<auto> capabilities, code call, ...)` runs `call` with `capabilities` added to the
+thread's set and restores the outer set when the call returns or throws (a guard object pops the scope on every path).
+A host whose interfaces all have a `SandboxManager` (Qorus: also for unrestricted code, for interrupts and limits)
+cannot create a scope object for the interface that it calls for another one, as the caller's Program is on the stack;
+the call-bound scope is allowed there, because its set cannot outlive the host's frame: it is not in effect when control
+returns to the sandboxed caller, which can therefore neither reach nor keep nor change it.
+
+Only the code that makes the call is judged (`thread_capability_call_refusal()` in `lib/thread.cpp`):
+
+- the innermost stack frame must be the method's own builtin frame (fail closed otherwise), and the frame below it Qore
+  code (`CT_USER`): a call through another builtin (`call_static_method()`, `call_function()`) is refused;
+- the Program of the method's own frame is the Program of the code that called it, also when it was called through a
+  call reference that host code created (the builtin then runs in the host's Program, but its frame records the
+  caller's): it must not be sandboxed (by a manager or by its flag); nor may the Program running on the thread;
+- the calling code must be allowed to control threads: the effective options of the Program of the method's own frame
+  (the caller's, also through a host's call reference, whose builtin runs with the reference's Program's options),
+  and `PO_NO_THREAD_CONTROL` at run time; the class's `THREAD_CONTROL` domain refuses a direct reference at parse
+  time;
+- sandboxed callers further up the stack, the call-program context, provenance and continued operations are not
+  considered: they are what a scope object is refused for, as its set would stay in effect for them.
+
+What the call bounds is the set, not what code in the call does with it: module code in the call can take a guard (or
+an object that keeps one) that stays usable after the call, as with a scope object, and a host function that sandboxed
+code can call and that uses `call()` runs that code with the capabilities; a guard still runs only code that no sandbox
+governs.  Trusted code is refused too where its call is made by a builtin (`background ThreadCapabilityScope::call(...)`,
+`Expression::eval()`).
+
+The capabilities' code passes `thread_capability_check_code()` as for the constructor.  The code that `call` runs keeps
+its own restrictions: sandboxed code in it cannot see the set or set a scope; module code in it sees the set; a thread
+started by a capability in it is the capability's, and an object that takes a capability in it keeps it after the call.
+Tests: `examples/test/qore/threads/thread-capability-scope-call.qtest` (every execution mode, sync JIT, qcc).
+
 ### The lookup and the guard
 
 `*code get_thread_capability(string name)` returns the **guard** of a capability of the current thread's set, or

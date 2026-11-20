@@ -375,6 +375,9 @@ module CdsRestDataProvider {
     - @ref CdsRestDataProvider::ODataRecordIterator "ODataRecordIterator"
 
     @subsection cdsrestdataprovider_v2_2 CdsRestDataProvider v2.2
+    - \c CdsRestDataProvider::registerChild() and \c BcRestDataProvider::registerChild() cannot be called by
+      sandboxed code: their registries are process-wide (\c SANDBOX-REGISTRATION-ERROR; see
+      @ref sandbox_process_wide_registries) (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>)
     - fixed the constructors of \c CdsRestDataProvider, \c CdsRestTablesDataProvider, \c BcRestDataProvider and
       \c BcCompaniesDataProvider to accept constructor options whose values all have the same type, such as a
       literal \c {"cdsrestclient_options": {...}}, when auto-configuration adds options from \c CDS_* environment

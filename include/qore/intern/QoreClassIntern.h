@@ -3058,6 +3058,23 @@ DLLLOCAL bool qore_module_lifetime_active();
 //! Returns a new number for qore_class_private::allocation_id (never 0)
 DLLLOCAL uint64_t qore_class_next_allocation_id();
 
+//! One lock of the class data per cache line, so that classes hashed to different locks do not share one
+struct alignas(64) QoreClassDataLock {
+    std::mutex m;
+};
+
+//! the number of the class data locks (see qore_class_private::dataLock())
+constexpr size_t QoreClassDataLockCount = 64;
+
+//! the class data locks, which the classes share by address; leaf locks registered with the fork handlers (qore#6732)
+DLLLOCAL extern QoreClassDataLock qore_class_data_locks[QoreClassDataLockCount];
+
+//! Returns the class data lock of the private data of a class at the given address
+DLLLOCAL inline std::mutex& qore_class_data_lock(const void* p) {
+    // the low bits only reflect the allocation granularity
+    return qore_class_data_locks[(reinterpret_cast<uintptr_t>(p) >> 6) % QoreClassDataLockCount].m;
+}
+
 class qore_class_private {
     template <class> friend class QoreTypeOwnerOf;
 public:
@@ -3098,9 +3115,15 @@ public:
     //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
     //! the class (issue #3286)
     bool parse_abr = false;
-    qc_ref_map_t qcrefs;            // QoreClass pointers associated with this private object (besides cls)
+    qc_ref_map_t qcrefs;            // QoreClass pointers associated with this private object (besides cls); guarded by
+                                    // dataLock()
 
-    mutable VRMutex gate;           // for synchronized static methods
+    //! the gate of the synchronized static methods of the class
+    /** Like the other locks of objects that code holds while it runs (see design/fork-handlers.md), it is not covered
+        by the fork handlers: a child created with fork() while another thread runs a synchronized static method of the
+        class cannot call one.  The short sections of the class data use dataLock() instead, which is covered.
+    */
+    mutable VRMutex gate;
 
     hm_method_t hm,                 // "normal" (non-static) method map
         shm;                        // static method map
@@ -3387,7 +3410,7 @@ public:
     mutable std::atomic<bool> multi_path{false};
 
     //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
-    /** Set with released_spgm_id, under gate.asl_lock
+    /** Set with released_spgm_id, under dataLock()
     */
     std::atomic<bool> released_sandboxed{false};
 
@@ -3401,7 +3424,7 @@ public:
     //! the copies of the class (see QoreClass::QoreClass(const QoreClass&)) that hold a reference in var_refs
     /** A copy takes one if the values are still shared (varRef()); a class list entry takes it over when the copy is
         added (QoreClassList), and another holder releases it with the copy (derefClass(), ~QoreClass()); see
-        takeWrapperVarRef().  Guarded by gate.asl_lock.
+        takeWrapperVarRef().  Guarded by dataLock().
     */
     std::set<const QoreClass*> var_ref_wrappers;
 
@@ -3550,8 +3573,17 @@ public:
     }
 
     //! Records that a copy of the class holds a reference in var_refs; see var_ref_wrappers
+    //! Returns the lock of the short sections of the class data (qcrefs, var_ref_wrappers, cls_var_ref, kvmap, spgm)
+    /** One of a fixed set of leaf locks that the classes share by address, which the fork handlers cover, so that a
+        child created with fork() while another thread holds one can still construct objects of the class (qore#6732);
+        the sections it guards take no other lock
+    */
+    DLLLOCAL std::mutex& dataLock() const {
+        return qore_class_data_lock(this);
+    }
+
     DLLLOCAL void addWrapperVarRef(const QoreClass& qc) {
-        AutoLocker al(gate.asl_lock);
+        std::lock_guard<std::mutex> al(dataLock());
         var_ref_wrappers.insert(&qc);
     }
 
@@ -3561,7 +3593,7 @@ public:
         @return true if the wrapper held a reference
     */
     DLLLOCAL bool takeWrapperVarRef(const QoreClass& qc) {
-        AutoLocker al(gate.asl_lock);
+        std::lock_guard<std::mutex> al(dataLock());
         if (&qc == cls) {
             bool rv = cls_var_ref;
             cls_var_ref = false;
@@ -3629,7 +3661,7 @@ public:
         qore_class_private* priv = qc.priv;
         priv->ref();
         if (&qc != priv->cls) {
-            AutoLocker al(priv->gate.asl_lock);
+            std::lock_guard<std::mutex> al(priv->dataLock());
             qc_ref_map_t::iterator i = priv->qcrefs.find(&qc);
             // the handle must be registered; if not, only the private data is referenced
             assert(i != priv->qcrefs.end());
@@ -3653,7 +3685,7 @@ public:
         }
         bool del = false;
         if (&qc != priv->cls) {
-            AutoLocker al(priv->gate.asl_lock);
+            std::lock_guard<std::mutex> al(priv->dataLock());
             qc_ref_map_t::iterator i = priv->qcrefs.find(&qc);
             // the handle must be registered; if not, only the private data reference is released, and the
             // wrapper is reclaimed with the private data (i.e. in deref() below)
@@ -4072,8 +4104,11 @@ public:
         // only raise a parse error for illegal access to private members if there is not memberGate function; a member
         // inherited through a class inherited with private:internal only in this class or a class that it inherits
         // (issue #6640)
-        if ((access > Public) && !parseHasMemberGate()
-                && (!parseCheckPrivateClassAccess() || !parseCheckInheritedInternalMemberAccess(omi, qc, access))) {
+        // a class on the private:internal path to the member has the storage of the member in the objects of this
+        // class and uses it on them, as at run time (issue #6800)
+        if ((access > Public) && !parseHasMemberGate() && !omi->getClassContext(parse_get_class_priv())
+                && (!parseCheckPrivateClassAccess() || !parseCheckInheritedInternalMemberAccess(omi, qc, access)
+                    || !parseCheckPrivateMemberAccess(qc, access))) {
             memberTypeInfo = nullptr;
             parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
             return -1;
@@ -4222,7 +4257,9 @@ public:
 
         @return the member found or nullptr if not found
     */
-    DLLLOCAL const QoreMemberInfo* runtimeGetMemberInfo(const char* mem, const qore_class_private* class_ctx) const {
+    //! inline in the paths of a member access whatever the size of their translation units (issue #6760)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreMemberInfo* runtimeGetMemberInfo(const char* mem,
+            const qore_class_private* class_ctx) const {
         QoreMemberInfo* info;
         if (class_ctx) {
             info = class_ctx->members.find(mem);
@@ -4260,11 +4297,26 @@ public:
         if (!class_ctx) {
             return false;
         }
-        if (info->access != Internal || info->local() || class_ctx == this) {
+        // the class itself and the class that declares a private member, inline; the other contexts out of line
+        if (class_ctx == this || (info->access == Private && class_ctx == info->getClass())) {
             return true;
         }
-        return checkInheritedInternalMemberContext(class_ctx, info->getClass());
+        return runtimeCheckMemberAccessContext(info, class_ctx);
     }
+
+    //! returns true if the member \a mem of an object of this class, which is in the object's member data, can be
+    //! used in the class context \a class_ctx (issue #6760); not inline, for the loops over the members of an object
+    DLLLOCAL QORE_INTERN_NOINLINE bool runtimeCanUseMember(const char* mem, const qore_class_private* class_ctx) const;
+
+    //! the part of runtimeCheckMemberAccess() for a class context that is neither this class nor the class that
+    //! declares a private member; not inline, as it walks the class hierarchy
+    DLLLOCAL QORE_INTERN_NOINLINE bool runtimeCheckMemberAccessContext(const QoreMemberInfo* info,
+            const qore_class_private* class_ctx) const;
+
+    //! returns true if \a class_ctx is \a decl, the class that declares a private member, or inherits it (issue
+    //! #6760); not inline, as it walks the class hierarchy
+    DLLLOCAL QORE_INTERN_NOINLINE static bool checkPrivateMemberContext(const qore_class_private* class_ctx,
+            const qore_class_private* decl);
 
     //! returns true if \a class_ctx can use a member declared in \a decl that this class inherits through a class
     //! inherited with \c private:internal: it is this class, or a class that this class inherits and that is or
@@ -4288,6 +4340,21 @@ public:
         }
         const qore_class_private* class_ctx = parse_get_class_priv();
         return class_ctx && checkInheritedInternalMemberContext(class_ctx, qc);
+    }
+
+    //! returns true if a private member declared in \a qc can be used in the parse class context (issue #6760)
+    /** A private member is reachable only from the class that declares it and its subclasses; the other access rules
+        are checked by the caller
+
+        @param qc the class that declares the member, as returned by parseFindMember()
+        @param access the access of the member in this class, as returned by parseFindMember()
+    */
+    DLLLOCAL bool parseCheckPrivateMemberAccess(const qore_class_private* qc, ClassAccess access) const {
+        if (access != Private) {
+            return true;
+        }
+        const qore_class_private* class_ctx = parse_get_class_priv();
+        return class_ctx && (class_ctx == this || class_ctx == qc || checkPrivateMemberContext(class_ctx, qc));
     }
 
     //! returns the member that a call of the name made through the code that a member holds may use (qore#6487)
@@ -4791,7 +4858,7 @@ public:
         // (see ~qore_class_private())
         kvmap_t kv;
         {
-            AutoLocker al(gate.asl_lock);
+            std::lock_guard<std::mutex> al(dataLock());
             kv.swap(kvmap);
         }
         for (auto& i : kv) {
@@ -4832,7 +4899,7 @@ public:
             bool taken;
             {
                 // see getReferencedSourceProgram()
-                AutoLocker al(gate.asl_lock);
+                std::lock_guard<std::mutex> al(dataLock());
                 released_spgm_id.store(pgm->getProgramId());
                 released_sandboxed.store(qore_program_is_sandboxed(pgm));
                 taken = spgm.compare_exchange_strong(expected, nullptr);
@@ -4849,7 +4916,7 @@ public:
             QoreProgram* p;
             {
                 // see getReferencedSourceProgram()
-                AutoLocker al(gate.asl_lock);
+                std::lock_guard<std::mutex> al(dataLock());
                 p = spgm.load();
                 if (p) {
                     released_spgm_id.store(p->getProgramId());
@@ -4869,17 +4936,18 @@ public:
     /** A builtin class, and a class of a Program without a sandbox manager (system and module code), is trusted.  The
         sandbox manager of the source Program is read when called, so a manager set after the class was parsed counts;
         once the source Program has released the class, the state it had then is used.  Decides the cancellation rule
-        for the class's destructor (see QoreDestructorCancelHelper).
+        for the class's destructor (see QoreDestructorCancelHelper).  Out of line, so that its lock (dataLock()) is not
+        inlined in the callers, such as execDestructor() (qore#6732).
     */
-    DLLLOCAL bool isSandboxedCode() const;
+    DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxedCode() const;
 
     //! Returns a reference to the source Program of the class, or nullptr if it has released the class or is deleted
-    /** spgm is cleared under gate.asl_lock in deleteClassData() before the Program can be freed, so the Program read
+    /** spgm is cleared under dataLock() in deleteClassData() before the Program can be freed, so the Program read
         here under the lock is still allocated; a reference is taken only if it still has one (a Program whose last
         reference has been released is being deleted).  The caller must release the reference with deref().
     */
     DLLLOCAL QoreProgram* getReferencedSourceProgram() const {
-        AutoLocker al(gate.asl_lock);
+        std::lock_guard<std::mutex> al(dataLock());
         QoreProgram* p = spgm.load();
         return p && p->optRef() ? p : nullptr;
     }
@@ -4916,7 +4984,7 @@ public:
         QoreProgram* p;
         {
             // see getReferencedSourceProgram()
-            AutoLocker al(gate.asl_lock);
+            std::lock_guard<std::mutex> al(dataLock());
             p = spgm.load();
             if (p && p->optRef()) {
                 referenced = true;
@@ -5331,20 +5399,29 @@ public:
     DLLLOCAL const QoreMethod* parseFindContextCallableMethod(const char* nme, const QoreMethod* m,
             const qore_class_private* class_ctx, bool is_static);
 
+    //! Returns true if the class context is this class: this class itself or another copy of its declaration
+    /** A class imported into another Program is a copy of its class with the same class ID (sameDeclaration()); the
+        code of its methods runs with the class context of the class that it was parsed in, also for an object of the
+        copy, which is the context of the copy for its private:internal parent classes and members (qore#6671)
+    */
+    DLLLOCAL bool isClassContext(const qore_class_private* class_ctx) const {
+        return class_ctx == this || (class_ctx && class_ctx->classID == classID);
+    }
+
     // returns a non-static method if it exists in class hierarchy and has been committed to the class
     // class_ctx is only set if it is present and accessible, so we only need to check for internal access here
     DLLLOCAL const QoreMethod* runtimeFindCommittedStaticMethodIntern(const char* nme, ClassAccess& access,
             const qore_class_private* class_ctx) const {
         const QoreMethod* m = findLocalCommittedStaticMethod(nme);
         if (m &&
-            (class_ctx == this || doRuntimeMethodAccess(m, access, m->getAccess(), class_ctx))) {
+            (isClassContext(class_ctx) || doRuntimeMethodAccess(m, access, m->getAccess(), class_ctx))) {
             return m;
         }
         if (!scl) {
             return nullptr;
         }
         // access already checked in subclasses, do not need to check again
-        return scl->runtimeFindCommittedStaticMethod(nme, access, class_ctx, class_ctx == this);
+        return scl->runtimeFindCommittedStaticMethod(nme, access, class_ctx, isClassContext(class_ctx));
     }
 
     // returns a non-static method if it exists in class hierarchy and has been committed to the class
@@ -5355,14 +5432,14 @@ public:
         //printd(5, "qore_class_private::runtimeFindCommittedMethodIntern(%s) '%s' class_ctx: %p '%s' FIRST m: %p\n",
         //    nme, name.c_str(), class_ctx, class_ctx ? class_ctx.name.c_str() : "n/a", m);
         if (m &&
-            (class_ctx == this || doRuntimeMethodAccess(m, access, m->getAccess(), class_ctx))) {
+            (isClassContext(class_ctx) || doRuntimeMethodAccess(m, access, m->getAccess(), class_ctx))) {
             return m;
         }
         if (!scl) {
             return nullptr;
         }
         // access already checked in subclasses, do not need to check again
-        return scl->runtimeFindCommittedMethod(nme, access, class_ctx, class_ctx == this);
+        return scl->runtimeFindCommittedMethod(nme, access, class_ctx, isClassContext(class_ctx));
     }
 
     DLLLOCAL const QoreMethod* runtimeFindCommittedStaticMethod(const char* nme, ClassAccess& access,
@@ -6003,6 +6080,22 @@ public:
     DLLLOCAL static bool runtimeCheckMethodVariantAccess(const QoreMethod& m, const AbstractQoreFunctionVariant* v,
             const qore_class_private* class_ctx);
 
+    //! returns the class context of an access of the member \a mem of an object of the class \a qc when the class
+    //! context has no private access to \a qc, as runtimeCheckPrivateClassAccess() checks (issue #6800)
+    /** The class context if it has the storage of the member in the objects of \a qc: the class that declares a member
+        and the classes between it and a class that inherits it with \c private:internal use the member on the objects
+        of the subclasses of that class, through any reference, as through \c self; otherwise nullptr
+    */
+    DLLLOCAL static const qore_class_private* runtimeGetMemberStorageContext(const QoreClass& qc, const char* mem,
+            const qore_class_private* class_ctx) {
+        return qc.priv->runtimeHasMemberStorageContext(mem, class_ctx) ? class_ctx : nullptr;
+    }
+
+    //! returns true if the member \a mem of this class has a storage of its own for the class context \a class_ctx:
+    //! \a class_ctx is on the path of a private:internal inheritance to the member (issue #6800)
+    DLLLOCAL QORE_INTERN_NOINLINE bool runtimeHasMemberStorageContext(const char* mem,
+            const qore_class_private* class_ctx) const;
+
     DLLLOCAL static qore_type_result_e parseCheckCompatibleClass(const QoreClass* qc, const QoreClass* oc) {
         if (!oc)
             return QTI_NOT_EQUAL;
@@ -6121,6 +6214,10 @@ protected:
 
     DLLLOCAL void refTypeOwner() {
         ref();
+    }
+
+    //! A class has no cache of declarations (see QoreTypeOwner::getTypeOwnerCachedDecls())
+    DLLLOCAL void getTypeOwnerCachedDecls(std::vector<QoreTypeOwner*>& owners) const {
     }
 
     DLLLOCAL void derefTypeOwner() {

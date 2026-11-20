@@ -3007,10 +3007,34 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             QoreIRValue entry_val = get_entry_inst->result;
 
             QoreValue var_expr = foreach_stmt->getVar();
-            // the loop variable is assigned through its lvalue path, with the exception target of the body
-            if (var_expr && !var_expr.isNothing()
+            // the loop variable is assigned through its lvalue path, with the exception target of the body.  The AST
+            // interpreter assigns it each element as it is, so that an element that is a weak reference makes the
+            // variable a weak reference, which does not keep the target alive while the body runs; a store in
+            // AssignmentMode::Element does the same, as for a foreach over a list (qore#6633)
+            AssignmentMode ref_element_mode = AssignmentMode::Normal;
+            const VarRefNode* ref_var_node = nullptr;
+            const QoreTypeInfo* ref_var_type = nullptr;
+            if (var_expr && !var_expr.isNothing()) {
+                ref_var_node = dynamic_cast<const VarRefNode*>(var_expr.getInternalNode());
+                ref_var_type = ref_var_node ? getVarRefTypeInfo(ref_var_node) : nullptr;
+                if (ref_var_node && qore_ir_type_may_hold_weak_reference(ref_var_type)) {
+                    ref_element_mode = AssignmentMode::Element;
+                    if (ref_var_node->getType() == VT_LOCAL && ref_var_node->ref.id) {
+                        foreach_element_locals.insert(ref_var_node->ref.id);
+                    }
+                }
+            }
+            // a simple variable is stored as the variable of a foreach over a list is, which native code reads as a
+            // variable that can hold a weak reference; any other lvalue is assigned through its lvalue path
+            if (ref_element_mode == AssignmentMode::Element && ref_var_node
+                    && ref_var_node->getType() != VT_IMMEDIATE && !QoreTypeInfo::isReference(ref_var_type)) {
+                if (!storeVarRef(ref_var_node, entry_val, error, "foreach assignment", nullptr, nullptr,
+                        ref_element_mode)) {
+                    return false;
+                }
+            } else if (var_expr && !var_expr.isNothing()
                     && !tryEmitLValuePathOp(QoreIROpcode::LValuePathAssign, var_expr, &entry_val, stmt->loc,
-                        error, AssignmentMode::Normal).isValid()) {
+                        error, ref_element_mode).isValid()) {
                 if (error.empty()) {
                     error = "unsupported foreach variable for native lowering";
                 }
@@ -4937,6 +4961,16 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
 
     // Get the block's local variables for cleanup.
     const LVList* lvars = root_top_level ? nullptr : block->getLVList();
+    // The locals of an inner block are destroyed while its enclosing statement is active. The caller's
+    // statement is active at the end of the function body, including when the only exit is an exception.
+    const QoreProgramLocation* enclosing_stmt = root_statement_block ? nullptr : builder.getStatementLocation();
+    if (lvars && !handler_body && (root_statement_block || (enclosing_stmt && enclosing_stmt->start_line > 0))) {
+        for (LocalVar* var : lvars->lv) {
+            if (qore_ir_type_may_hold_object(var->getTypeInfo())) {
+                builder.getFunction()->local_unwind_locations.emplace(var, enclosing_stmt);
+            }
+        }
+    }
 
     // Push lvars to cleanup_stack BEFORE scope entry.
     // This ensures correct reverse ordering on cleanup: scope exit fires before
@@ -9230,7 +9264,13 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             ConstHashIterator it(hash);
             while (it.next()) {
                 const char* key = it.getKey();
-                values.push_back(builder.createConstString(key ? key : "")->result);
+                if (QCS_DEFAULT == QCS_UTF8) {
+                    values.push_back(builder.createConstString(key ? key : "")->result);
+                } else {
+                    // Hash keys are stored in the process encoding.
+                    ValueHolder key_value(QoreValue::makeStringValue(key), nullptr);
+                    values.push_back(builder.createLoadConstant(nullptr, *key_value, nullptr)->result);
+                }
                 QoreValue entry = it.get();
                 QoreIRValue lowered = lowerContainerElement(entry, error);
                 if (!lowered.isValid()) {
@@ -9260,6 +9300,10 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     }
     if (expr.getType() == NT_STRING && expr.isValue()) {
         QoreStringValueHelper str(expr);
+        if (str->getEncoding() != QCS_UTF8) {
+            // ConstString carries UTF-8 bytes. A value produced in another encoding keeps its original tag.
+            return builder.createLoadConstant(nullptr, expr, nullptr)->result;
+        }
         const char* buf = str->getBuffer();
         return builder.createConstString(std::string(buf ? buf : "", str->size()))->result;
     }
@@ -17782,7 +17826,7 @@ static bool qore_ir_parse_fixed_sprintf_int(const QoreValue& format_value,
         return false;
     }
     QoreStringValueHelper format(format_value);
-    if (format->getEncoding() != QCS_DEFAULT) {
+    if (format->getEncoding() != QCS_UTF8 || QCS_DEFAULT != QCS_UTF8) {
         return false;
     }
     const char* str = format->getBuffer();

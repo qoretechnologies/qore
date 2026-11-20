@@ -20,10 +20,12 @@
 /** A container type built from the type of a reference expression (the literal {"a": \\x}) was another type than the
     declared container type of the same name (hash<string, reference<T>>), so a literal container of references was
     rejected for the declared type with a nested container value ("expects type 'list<reference<int>>', but got type
-    'list<reference<int>>'"), and the values that already had a container's value type were checked again.  Every
-    mode, qcc executables included, must print the output of the AST.
+    'list<reference<int>>'"), and the values that already had a container's value type were checked again.  The
+    assignment of an element of a list of references held in a hash (h.x[0] = 5), which assigns the referenced
+    variable, was rejected with the same error (qore#6694).  Every mode, qcc executables included, must print the
+    output of the AST.
 
-    The program is in \c reference-container-types/.
+    The programs are in \c reference-container-types/.
 */
 class ReferenceContainerTypesTest inherits QUnit::Test {
     private {
@@ -31,7 +33,7 @@ class ReferenceContainerTypesTest inherits QUnit::Test {
         string dir = get_script_dir() + "/reference-container-types";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("reference-container-types",);
+        const Programs = ("reference-container-types", "reference-element-assignment");
     }
 
     constructor() : QUnit::Test("ReferenceContainerTypesTest", "1.0", \ARGV) {

@@ -384,13 +384,18 @@ public class UnstructuredDataProvider inherits UnstructuredDataProviderCommon {
         };
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = {
             "partition-text":
                 Class::forName("UnstructuredDataProvider::UnstructuredPartitionTextDataProvider"),
             "partition-file":
                 Class::forName("UnstructuredDataProvider::UnstructuredPartitionFileDataProvider"),
         };
+    }
+
+    private {
     }
 
     constructor(UnstructuredRestClient::UnstructuredRestClientIo rest)

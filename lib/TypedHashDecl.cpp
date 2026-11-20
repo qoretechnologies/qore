@@ -202,12 +202,15 @@ public:
     HashDeclDefaultReceiverHelper(const HashDeclMemberInfo& mi) : set(mi.getDefaultReceiverTypeInfo()) {
         if (set) {
             old = runtime_set_receiver_type_info(mi.getDefaultReceiverTypeInfo());
+            // generic code: the frame holds types read through derived types (issue #6419)
+            qore_type_unsafe_frame_add(1);
         }
     }
 
     ~HashDeclDefaultReceiverHelper() {
         if (set) {
             runtime_set_receiver_type_info(old);
+            qore_type_unsafe_frame_add(-1);
         }
     }
 
@@ -444,6 +447,9 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         typed_hash_decl_private::get(*priv->thd)->deref();
         return existing;
     }
+    // its members name the declarations of its type arguments without references: they are retired, not freed,
+    // while it lives (issue #6419)
+    qore_type_owner_keep_type_args(&priv->type_owner, args);
     return priv->thd;
 }
 

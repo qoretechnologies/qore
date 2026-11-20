@@ -639,6 +639,22 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         }, 0, "ISO-8859-1", False);
         assertEq(<efbbbfc3a4>, resp.body);
         assertEq("text/plain", resp.content_type);
+        # the envelopes of a Connect or gRPC stream are binary data, also when their messages are compressed and the
+        # suffix of the media type names a text codec
+        binary msg = gzip(binary("{\"index\":0}"));
+        binary envelopes = <01> + parse_hex_string(sprintf("%08x", msg.size())) + msg;
+        foreach string ct in ("application/connect+json", "application/grpc+json", "application/grpc-web+json") {
+            resp = HttpClientStreamHandle::normalizeResponseBody({
+                "headers": {"content-type": ct},
+                "body": envelopes,
+            });
+            assertEq(envelopes, resp.body, ct);
+            assertEq(ct, resp.content_type, ct);
+            assertEq(envelopes, HttpClientStreamHandle::decodeResponseText({
+                "headers": {"content-type": ct},
+                "body": envelopes,
+            }, "ISO-8859-1", "raise").body, ct);
+        }
     }
 
     # the cases that REST clients return as decoded, without deserializing them to other values

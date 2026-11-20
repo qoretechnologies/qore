@@ -14,6 +14,13 @@
 
 %exec-class ForkLeafLocksTest
 
+#! a public class, which the child Programs of the test inherit as copies (see testClassCopyConstruction())
+public class ForkLeafLocksPub inherits Serializable {
+    public {
+        int v = 1;
+    }
+}
+
 class ForkLeafLocksTest inherits QUnit::Test {
     constructor() : QUnit::Test("fork leaf locks", "1.0", \ARGV) {
         addTestCase("fork() while another thread holds the lock of the QUIC idle-close test hook",
@@ -25,6 +32,9 @@ class ForkLeafLocksTest inherits QUnit::Test {
             \testThreadStartHold());
         addTestCase("fork() while another thread holds the lock of the thread finish debug hold",
             \testThreadFinishHold());
+        addTestCase("fork() while another thread holds the class data locks", \testClassDataLocks());
+        addTestCase("a child constructs an object with the copied handle of a class whose data lock another thread "
+            "held at fork()", \testClassCopyConstruction());
         set_return_value(main());
     }
 
@@ -52,7 +62,51 @@ class ForkLeafLocksTest inherits QUnit::Test {
         forkWhileHeld("dbg_finish_hold");
     }
 
-    private forkWhileHeld(string name) {
+    testClassDataLocks() {
+        # every construction of an object through a copied class handle takes the lock of the class's data; a child
+        # made while another thread held it waited forever for it (qore#6732): the child constructs an object of a
+        # class in a Program of its own
+        forkWhileHeld("class_data_locks", \ForkLeafLocksTest::constructInProgram());
+    }
+
+    testClassCopyConstruction() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        # a child Program inherits copies of the public classes; an object deserialized in it is constructed with the
+        # copy (QoreProgram::findClass()), as C++ callers such as module-python construct objects, which takes the
+        # class's data lock (qore#6732); the child of fork() deserializes one while another thread of the parent held
+        # the lock at fork()
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse("int sub deser(binary b) { object o = Serializable::deserialize(b); return o.v == 1 ? 0 : 1; }",
+            "fork-leaf-locks-copies");
+        ForkLeafLocksPub pub();
+        binary data = Serializable::serialize(pub);
+        hash<auto> r = call_function("dbg_fork_while_class_lock_held", pub, p, "ForkLeafLocksPub",
+            int sub () { return p.callFunction("deser", data); });
+        assertTrue(r.copy, "the child Program has a copy of the class");
+        assertFalse(r.hang, "the child deserialized an object of the class");
+        assertEq(0, r.status, "the child deserialized an object of the class");
+
+        # the child constructs the object with QoreClass::execConstructor() and the copy as the object's class, as
+        # module-python does
+        r = call_function("dbg_fork_while_class_lock_held", pub, p, "ForkLeafLocksPub");
+        assertTrue(r.copy, "the child Program has a copy of the class");
+        assertFalse(r.hang, "the child constructed an object of the class as module-python does");
+        assertEq(0, r.status, "the child constructed an object of the class as module-python does");
+    }
+
+    #! constructs an object in a new Program and returns 0 if it was constructed
+    static int constructInProgram() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse("Mutex sub f() { return new Mutex(); }", "fork-leaf-locks-child");
+        return p.callFunction("f") instanceof Mutex ? 0 : 1;
+    }
+
+    private forkWhileHeld(string name, *code child) {
         if (!Option::HAVE_FORK) {
             testSkip("fork() is not available");
         }
@@ -60,7 +114,7 @@ class ForkLeafLocksTest inherits QUnit::Test {
             testSkip("the test needs a debug build of the library");
         }
         # the child takes the lock as the fork handler does
-        hash<auto> r = call_function("dbg_fork_while_handler_held", name);
+        hash<auto> r = call_function("dbg_fork_while_handler_held", name, child);
         assertTrue(r.waited, sprintf("fork() waited for the thread holding the %y lock", name));
         assertEq(0, r.status, sprintf("the child took the %y lock", name));
     }
