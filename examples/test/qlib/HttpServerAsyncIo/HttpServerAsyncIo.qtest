@@ -175,6 +175,12 @@ class DelayedLargeResponseTarget inherits TestTarget {
 #! Target that rejects during preparation with server-enforced response pacing
 class DelayedPreparationTarget inherits TestTarget {
     public {
+        #! the delay of the response to \c /pending-at-stop, which the stop of the controller must cancel
+        /** Twice the bound of the test's waits: no stall of the host between the deferral and the stop reaches it,
+            and a stop that waited for it would leave the client's receive, bounded by the hang guard, to time out
+        */
+        const PendingAtStopDelay = HttpServerAsyncIoTest::HangGuard * 2;
+
         timeout response_delay = 200ms;
         int preparation_count = 0;
         Queue prepared();
@@ -183,8 +189,8 @@ class DelayedPreparationTarget inherits TestTarget {
     *hash<HttpRequestResultInfo> prepareHttpRequest(hash<HttpConnectionInfo> info) {
         ++preparation_count;
         prepared.push(True);
-        timeout delay = info.header_info.path == "/pending-at-stop"
-            ? 5s : response_delay;
+        timeout delay = info.hdr.path == "/pending-at-stop"
+            ? PendingAtStopDelay : response_delay;
         return <HttpRequestResultInfo>{
             "code": 503,
             "hdr": {
@@ -197,6 +203,26 @@ class DelayedPreparationTarget inherits TestTarget {
             "return_to_idle": True,
             "response_delay": delay,
         };
+    }
+}
+
+#! Controller that reports each response that it defers, after the deferral is tracked
+/** prepareHttpRequest() returns before the controller defers the response: the report is the event after which the
+    delayed response is tracked (and, at a stop, canceled)
+*/
+class DeferralReportingController inherits HttpAsyncSocketIoController {
+    public {
+        #! the delay of each deferred response, in the order in which they are deferred
+        Queue deferred();
+    }
+
+    constructor(AsyncSocketIoController io) : HttpAsyncSocketIoController(io) {
+    }
+
+    private bool deferRequestResult(string owner, timeout delay, code<nothing()> callback) {
+        bool rv = HttpAsyncSocketIoController::deferRequestResult(owner, delay, callback);
+        deferred.push(delay);
+        return rv;
     }
 }
 
@@ -286,7 +312,8 @@ class HandlerWaitController inherits HttpAsyncSocketIoController {
     so it can never be paced on the callback-dispatcher pool. */
 class DelayedStreamingTarget inherits TestTarget {
     public {
-        timeout response_delay = 1s;
+        #! twice the bound of the client's receive: a response that waited for it would make the receive time out
+        timeout response_delay = HttpServerAsyncIoTest::HangGuard * 2;
         binary body = "streamed-ok".toBinary();
         Queue handled();
     }
@@ -486,13 +513,14 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         call_function("dbg_set_realtime_offset", -3600 * 1000000);
         on_exit call_function("dbg_set_realtime_offset", 0);
 
-        # the operation is driven until the client receives the heartbeat, at most for 20 seconds
-        int deadline = clock_get_monotonic_us() + 20000000;
+        # the operation is driven until the client receives the heartbeat; the deadline only keeps a regression from
+        # hanging the test
+        int deadline = clock_get_monotonic_us() + HangGuard.durationMicroseconds();
         string received = "";
         while (received !~ /:hb/ && clock_get_monotonic_us() < deadline) {
             op.continuePoll();
             if (client.isDataAvailable(20ms)) {
-                received += client.recv(0, 1s);
+                received += client.recv(0, HangGuard);
             }
         }
         assertRegex(":hb", received, "the client receives the heartbeat after its interval");
@@ -544,48 +572,50 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         assertEq("streaming", op.getState());
 
         # Queue the terminator behind the in-flight frame, then signal end-of-stream.
-        op.queueRawString("data: [DONE]\n\n");
+        string done_frame = "data: [DONE]\n\n";
+        op.queueRawString(done_frame);
         op.close();
         assertEq("draining", op.getState());
+        int expected_size = big.size() + done_frame.size();
 
         # Drive the op exactly as the async controller does: a NOTHING return means
         # "operation complete" (the controller then disconnects), a hash means
         # "keep waiting".  Reading on the client frees socket buffer space so the
         # send can progress.
+        # While the op waits to write, the data that it could not write yet fills the connection, so the client has
+        # data to read or is about to get it: each read waits for it, bounded only against a regression, and receives
+        # at least one byte, which bounds the number of iterations.  A read with a short bound that took its timeout
+        # for the end of the data ended the test before it had read the terminator whenever the load of the host
+        # delayed the data or the I/O thread that receives it beyond that bound (qore#6890)
         string received = "";
-        int guard = 0;
+        int iterations = 0;
         while (True) {
-            try {
-                received += client.recv(0, 2s);
-            } catch (hash<ExceptionInfo> ex) {
-                # nothing available yet — fall through to poll the op again
-            }
+            assertTrue(client.isDataAvailable(HangGuard), "the client has data to read while the op sends");
+            received += client.recv(0, HangGuard);
             *hash<auto> pi = op.continuePoll();
             if (!pi) {
                 break;
             }
-            if (++guard > 100000) {
+            if (++iterations > expected_size) {
                 throw "TEST-GUARD", "SSE drain did not complete within the iteration budget";
             }
         }
 
-        # Collect whatever is still buffered after the op completed; closing the
-        # server side (as the controller's disconnect handler would) lets the
-        # client read the remainder and then see EOF.
+        # Collect the rest of the data after the op completed; the server side is closed first, as the controller's
+        # disconnect handler would close it.  The op has written everything, so the client reads until it has all of
+        # it; each read is bounded only against a regression
         try { accepted.close(); } catch (hash<ExceptionInfo> ex) {}
-        while (True) {
-            try {
-                string rest = client.recv(0, 2s);
-                if (!rest.val()) {
-                    break;
-                }
-                received += rest;
-            } catch (hash<ExceptionInfo> ex) {
+        while (received.size() < expected_size) {
+            assertTrue(client.isDataAvailable(HangGuard), "the rest of the stream arrives after the server's close");
+            string rest = client.recv(0, HangGuard);
+            if (!rest.val()) {
                 break;
             }
+            received += rest;
         }
 
-        assertTrue(received =~ /data:\s*\[DONE\]/,
+        assertEq(expected_size, received.size(), "the client receives the whole stream");
+        assertEq(done_frame, received.substr(-done_frame.size()),
             "the [DONE] terminator queued behind an in-flight frame must be delivered, "
             "not abandoned when close() is signalled mid-send");
     }
@@ -740,15 +770,15 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         assertTrue(ctrl.isDraining());
         assertFalse(ctrl.waitDrain(5s), "the drain waits for the delayed response that is being sent");
 
-        hash<auto> h = client.readHTTPHeader(30s);
+        hash<auto> h = client.readHTTPHeader(HangGuard);
         assertEq(200, h.status_code, "the delayed response is sent");
         assertEq("close", h.connection, "the response closes the connection");
         int size = 0;
         while (size < DelayedLargeResponseTarget::BodySize) {
-            size += client.recvBinary(0, 30s).size();
+            size += client.recvBinary(0, HangGuard).size();
         }
         assertEq(DelayedLargeResponseTarget::BodySize, size, "the whole response is received");
-        assertTrue(ctrl.waitDrain(30s), "the drain ends when the delayed response has been sent");
+        assertTrue(ctrl.waitDrain(HangGuard), "the drain ends when the delayed response has been sent");
     }
 
     #! Returns the next event of the client of delayedPreparationResponseTest(), which must be of the kind given
@@ -783,7 +813,7 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
     delayedPreparationResponseTest() {
         AsyncSocketIoController io_ctrl(False);
         on_exit io_ctrl.stop();
-        HttpAsyncSocketIoController ctrl(io_ctrl);
+        DeferralReportingController ctrl(io_ctrl);
         ctrl.start();
         on_exit delete ctrl;
 
@@ -829,6 +859,7 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         for (int i = 0; i < 2; ++i) {
             hash<auto> event = nextClientEvent(client_events, "response", ctrl);
             target.prepared.get(HangGuard);
+            assertEq(target.response_delay, ctrl.deferred.get(HangGuard), "the response is deferred by its delay");
             assertTrue(event.response =~ /503 Service Unavailable/,
                 i ? "delayed response preserves HTTP/1.1 keep-alive"
                     : "pre-dispatch response is sent normally after its delay");
@@ -840,10 +871,12 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
             "a preparation response does not enter the handler pool");
 
         # A long pending delay must be canceled promptly during controller shutdown.
-        # the client submits a long-delay request before shutdown
+        # the client submits a long-delay request before shutdown; the stop follows the deferral of its response,
+        # which the controller reports after it tracks the delayed response
         nextClientEvent(client_events, "pending_sent", ctrl);
         target.prepared.get(HangGuard);
-        usleep(20ms);
+        assertEq(DelayedPreparationTarget::PendingAtStopDelay.durationMilliseconds(), ctrl.deferred.get(HangGuard),
+            "the long-delay response is deferred");
         assertEq(3, target.preparation_count,
             "the long-delay request reaches preparation before shutdown");
         assertEq(1, ctrl.getStats().delayed_responses,
@@ -851,10 +884,12 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         # measured on the monotonic clock, as a step of the system clock would change the interval (qore#6534)
         int started = clock_get_monotonic_us();
         ctrl.stop();
-        int elapsed_ms = (clock_get_monotonic_us() - started) / 1000;
-        assertTrue(elapsed_ms < 2000,
-            sprintf("shutdown cancels pending delayed responses promptly (%d ms)",
-                elapsed_ms));
+        int elapsed_us = clock_get_monotonic_us() - started;
+        # the bound is the delay itself: a stop that waited for the delayed response would take that long (and the
+        # client's receive would time out first); how much sooner the stop returns depends on the load of the host
+        assertTrue(elapsed_us < DelayedPreparationTarget::PendingAtStopDelay.durationMicroseconds(),
+            sprintf("shutdown cancels pending delayed responses without waiting for their delay (%d ms)",
+                elapsed_us / 1000));
         assertEq(0, ctrl.getStats().delayed_responses,
             "shutdown removes every pending delayed response");
         assertEq(0, client_done.waitForZero(HangGuard), "the client ended");
@@ -883,11 +918,11 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         Socket client();
         on_exit client.close();
         client.connect("127.0.0.1:" + port, HangGuard);
-        # use a monotonic clock so an NTP/VM wall-clock step cannot skew the elapsed check
-        int started = clock_get_monotonic_us();
         client.send("GET /streamed HTTP/1.1\r\nHost: localhost\r\n\r\n");
         # the handler closes the connection after sending, so read until EOF (a closed
-        # socket surfaces as SOCKET-NOT-OPEN / END-OF-STREAM rather than NOTHING)
+        # socket surfaces as SOCKET-NOT-OPEN / END-OF-STREAM rather than NOTHING); the response_delay is twice the
+        # bound of each receive, so a response that waited for it fails the receive with SOCKET-TIMEOUT: the delay
+        # is ignored when the response arrives at all, however long the load of the host makes it take
         string response;
         try {
             while (True) {
@@ -903,18 +938,12 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
                 rethrow;
             }
         }
-        int elapsed_ms = (clock_get_monotonic_us() - started) / 1000;
-
         assertTrue(target.handled.get(HangGuard),
             "the blocking-body handler ran on the handler pool");
         assertTrue(response =~ /200 OK/,
             "the blocking-body response is sent");
         assertTrue(response =~ /streamed-ok/,
             "the streamed body is delivered intact");
-        # response_delay is 1s; the guard must skip it, so the response arrives well before
-        assertTrue(elapsed_ms < 500,
-            sprintf("response_delay is ignored for a blocking InputStream body (%d ms)",
-                elapsed_ms));
         assertEq(0, ctrl.getStats().delayed_responses,
             "a blocking-body response is never entered into the delayed-response table");
     }
@@ -1437,7 +1466,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
                 # connection may fail — that's fine
             }
 
-            # Small delay to let accept callbacks fire and replenish
+            # Small delay to let accept callbacks fire and replenish; it only varies the point of the accept at which
+            # the stop below comes, which must work at any point of it, so no check depends on how far the accept got
             usleep(50ms);
 
             # Stop while accepts are being replenished — this is the deadlock scenario
@@ -1478,7 +1508,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
                 try {
                     Socket c();
                     c.connect("127.0.0.1:" + listen_port, 2s);
-                    # Send a minimal HTTP request so the header read completes
+                    # Send a minimal HTTP request so the header read completes; the client closes before or after the
+                    # response arrives, and both must leave the controller running
                     c.send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n");
                     usleep(50ms);
                     c.close();
@@ -1490,8 +1521,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
 
         assertEq(0, client_cnt.waitForZero(HangGuard), "all clients ended");
 
-        # Give time for callbacks to settle
-        usleep(200ms);
+        # the listener is removed while the callbacks of the clients' connections may still be running: the removal
+        # must work at any point of them, so nothing is waited for here
 
         # The key assertion: no deadlock occurred and controller is still healthy
         assertTrue(ctrl.running(), "controller should still be running after accept replenish storm");
@@ -1550,9 +1581,7 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
             doHttpRequest(port);
         }
 
-        # Give callbacks time to settle
-        usleep(500ms);
-
+        # each handler counts its request before it sends the response that doHttpRequest() waits for
         assertEq(num_requests, target.request_count, "all requests should be handled");
 
         # Verify handlers ran on worker threads — all handler TIDs should be
@@ -1601,9 +1630,7 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
             doHttpRequest(port);
         }
 
-        # Give callbacks time to settle
-        usleep(500ms);
-
+        # each handler counts its request before it sends the response that doHttpRequest() waits for
         assertEq(num_requests, target.request_count,
             "all requests should complete with external controller");
 
@@ -1632,21 +1659,17 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         assertFalse(op.headersReady());
         assertFalse(op.wasClosed());
 
-        # Send a full HTTP request — should transition to header phase and complete
+        # Send a full HTTP request — should transition to header phase and complete; the loop below waits for it
+        # with poll()
         client.send("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
-        usleep(50ms);
 
         # Drive the poll operation to completion
         int deadline = clock_get_monotonic_us() + HangGuard.durationMicroseconds();
         while (!op.goalReached() && clock_get_monotonic_us() < deadline) {
             *hash<SocketPollInfo> poll_info = op.continuePoll();
+            # no poll info: the operation has ended; the assertions below check that it reached its goal
             if (!poll_info) {
-                if (op.goalReached()) {
-                    break;
-                }
-                # No poll info but not done — brief sleep and retry
-                usleep(10ms);
-                continue;
+                break;
             }
             Socket::poll((poll_info,), 100ms);
         }
@@ -1690,9 +1713,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         # 3. Verify that the header_deadline is set and is much shorter than idle TTL
         HttpKeepAlivePollOperation op(accepted, 60s);
 
-        # Send partial HTTP request — just enough to trigger data available
+        # Send partial HTTP request — just enough to trigger data available; the loop below waits for it with poll()
         client.send("GET / HTTP/1.1\r\n");
-        usleep(50ms);
 
         # Drive until we're in header phase
         int drive_deadline = clock_get_monotonic_us() + HangGuard.durationMicroseconds();
@@ -1801,7 +1823,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
                 client.connect("127.0.0.1:" + port, 1s);
             } catch () {}
 
-            # Brief delay so accept completes and SSL handshake op is submitted
+            # Brief delay so accept completes and SSL handshake op is submitted; the stop below must leave no
+            # connection or listener whether it comes before or during the handshake, so no check depends on it
             usleep(100ms);
 
             # Stop while SSL handshake is in progress
@@ -1929,7 +1952,9 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
                 }();
             }
 
-            # Brief delay so accepts + header reads complete and handler tasks start
+            # Brief delay so accepts + header reads complete and handler tasks start; the stop below must leave no
+            # connection or listener whether it comes before, while or after the handlers run, so no check depends on
+            # it
             usleep(100ms);
 
             # Stop while handlers are sleeping — should complete without leaking ops
@@ -1986,7 +2011,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         c.send(sprintf("POST /echo HTTP/1.0\r\nHost: localhost\r\nContent-Length: %d\r\n\r\n",
             body.size()));
         # Force the body-read operation to wait for socket readiness instead
-        # of finding the whole request body already buffered.
+        # of finding the whole request body already buffered.  When the load of the host delays the server until the
+        # body has arrived too, the body is pre-read from the buffer instead: the handler receives it in both cases.
         usleep(50ms);
         c.send(body);
         # Drain the response so the handler can finish cleanly
