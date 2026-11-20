@@ -21,6 +21,7 @@ class SystemPollMemberAccessTest inherits QUnit::Test {
         addTestCase("a member of the same name has storage of its own", \ownStorageTest());
         addTestCase("setGoal()", \setGoalTest());
         addTestCase("the members are not shown with the object", \formatTest());
+        addTestCase("a member of the name written from outside", \outsideWriteTest());
         set_return_value(main());
     }
 
@@ -81,12 +82,37 @@ string sub t() { S s(\"subclass set\"); return s.getGoal(); }"));
         # setGoal() is private: a call from outside the class is refused when it is parsed or when it is made
         *string err = parseError("string sub t() { PollPipeline p(\"x\"); p.setGoal(\"y\"); return p.getGoal(); }");
         if (!err) {
-            assertThrows("METHOD-IS-PRIVATE", \run(), "string sub t() { PollPipeline p(\"x\"); p.setGoal(\"y\"); "
+            assertThrows("METHOD-IS-PRIVATE", \run(),
+                "string sub t() { PollPipeline p(\"x\"); p.setGoal(\"y\"); "
                 "return p.getGoal(); }");
         }
         PollPipeline p("unchanged");
         assertThrows("METHOD-IS-PRIVATE", sub () { call_object_method(p, "setGoal", "outside"); });
         assertEq("unchanged", p.getGoal());
+    }
+
+    #! a member with the name of a private:internal member, written from outside the class into the object's main
+    #! data, is what an access without a class from C++ code means (debug builds do not assert for it)
+    outsideWriteTest() {
+        assertEq(("outside", "system"), run("class S inherits PollPipeline {
+    constructor() : PollPipeline(\"system\") {}
+}
+class A { private:internal { int x = 1; } }
+class B inherits A {}
+list<auto> sub t() {
+    S s();
+    auto o = s;
+    o.goal = \"outside\";
+    B b();
+    auto ob = b;
+    ob.x = 5;
+    # the C++ code of the debug functions reads every member of an object by name without a class
+    if (exists_function(\"dbg_node_info\")) {
+        call_function(\"dbg_node_info\", s);
+        call_function(\"dbg_node_info\", b);
+    }
+    return (o.goal, s.getGoal());
+}"));
     }
 
     formatTest() {

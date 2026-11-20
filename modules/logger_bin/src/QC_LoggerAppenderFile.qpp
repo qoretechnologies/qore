@@ -35,8 +35,19 @@
 //! Implements appender writing to a file
 /**
     No multi-threading protection is implemented in the class; the @ref Qore::File "File" class is reused
+
+    The file, the file name and the encoding are \c private:internal members of this class: a subclass uses
+    getFile(), getFileName() and setFileName()
+
+    @note since %Qore 3.0 the members are \c private:internal; before, they were \c private, so a subclass could read
+    and write them (qore#6839)
 */
-qclass LoggerAppenderFile [ns=Qore::Logger; arg=QoreLoggerAppenderFile* a; vparent=LoggerAppenderWithLayout; internal_members=File file,string fileName,*string encoding];
+qclass LoggerAppenderFile [
+    ns=Qore::Logger;
+    arg=QoreLoggerAppenderFile* a;
+    vparent=LoggerAppenderWithLayout;
+    internal_members=File file,string fileName,*string encoding
+];
 
 //! Destroys the appender
 /** The private data of the appender, which a Logger can still reference, keeps its filters, queue and layout
@@ -100,7 +111,7 @@ string LoggerAppenderFile::getFileName() {
 
     @param filename the name of the file
 
-    @since logger 1.1 (qore#6839: the file name is a private:internal member of this class)
+    @since %Qore 3.0 (qore#6839: the file name is a private:internal member of this class)
 */
 private LoggerAppenderFile::setFileName(string filename) {
     a->setFileName(filename, xsink);

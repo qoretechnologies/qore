@@ -8262,7 +8262,8 @@ QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const c
 
     if (!*xsink) {
         op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("resolve-addrinfo"), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("resolve-addrinfo"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -8322,7 +8323,8 @@ QoreFuture* qore_socket_resolve_addrinfo_asyncio_future(ExceptionSink* xsink, co
 
     if (!*xsink) {
         op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("resolve-addrinfo"), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("resolve-addrinfo"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -8738,7 +8740,8 @@ QoreHashNode* qore_socket_resolve_hostbyaddr_asyncio(ExceptionSink* xsink, const
 
     if (!*xsink) {
         op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("resolve-hostbyaddr"), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("resolve-hostbyaddr"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -8943,7 +8946,8 @@ QoreFuture* qore_socket_resolve_nameinfo_asyncio_future(ExceptionSink* xsink, co
 
     if (!*xsink) {
         op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, (*sock_obj)->objectRefSelf(), xsink);
-        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("resolve-nameinfo"), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("resolve-nameinfo"), xsink);
     }
     if (*xsink) {
         return nullptr;

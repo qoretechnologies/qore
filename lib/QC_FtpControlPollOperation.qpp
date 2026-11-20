@@ -1179,7 +1179,8 @@ FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_socket
     // Set sock member to listener (controller polls this fd)
     {
         // Get the Socket QoreObject from the accept_operation's sock member
-        ValueHolder sock_val(const_cast<QoreObject*>(accept_operation)->getReferencedMemberNoMethod("sock", QC_SOCKETPOLLOPERATIONBASE, xsink), xsink);
+        ValueHolder sock_val(const_cast<QoreObject*>(accept_operation)->getReferencedMemberNoMethod("sock",
+            QC_SOCKETPOLLOPERATIONBASE, xsink), xsink);
         if (!*xsink && sock_val->getType() == NT_OBJECT) {
             self->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, sock_val.release(), xsink);
         }

@@ -4244,15 +4244,19 @@ public:
     }
 
 #ifdef DEBUG
-    //! returns true if an access to the member in the class context would miss a member that only has private:internal declarations
-    /** this = the object's class; such an access goes to the object's main data, where no declaration of the member
-        is: C++ code that accesses a private:internal member of a system class by name must give the declaring class
-        (QoreObject::getReferencedMemberNoMethod(const char*, const QoreClass*, ExceptionSink*),
-        QoreObject::setMemberValue()); used by the debug assertions of the accesses without a class (qore#6839)
+    //! returns true if an access to the member in the class context would miss a system class's internal member
+    /** this = the object's class; true if every declaration of the member is private:internal, the member is
+        declared by a system class, and the class context cannot reach it: such an access goes to the object's main
+        data, so C++ code that accesses a private:internal member of a system class by name must give the declaring
+        class (QoreObject::getReferencedMemberNoMethod(const char*, const QoreClass*, ExceptionSink*),
+        QoreObject::setInternalMemberValue()); used by the debug assertions of the accesses without a class, which
+        also check that the main data does not hold the name, as a member written from outside the class can
+        (qore#6839)
     */
     DLLLOCAL bool runtimeMissesInternalOnlyMember(const char* mem, const qore_class_private* class_ctx) const {
         const QoreMemberInfo* info = members.find(mem);
-        return info && (info->access == Internal || info->access == Inaccessible) && !info->getClassContext(class_ctx);
+        return info && (info->access == Internal || info->access == Inaccessible) && info->getClass()
+            && info->getClass()->sys && !info->getClassContext(class_ctx);
     }
 #endif
 

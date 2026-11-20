@@ -114,8 +114,8 @@
 
     @par The Socket and Goal of System Poll Operations Are Not Visible to Subclasses
     The \c sock and \c goal members of the poll operations and the file members of \c LoggerAppenderFile are
-    \c private:internal, so subclasses use their accessors, \c %y no longer shows them, and binary modules that call
-    \c SocketPollOperationBase::getReferencedSocketObject() must be rebuilt (see @ref Qore::PollPipeline::setGoal();
+    \c private:internal, so subclasses use their accessors and \c %y no longer shows them (see
+    @ref Qore::SocketPollOperationBase and @ref Qore::PollPipeline::setGoal();
     <a href="https://github.com/qoretechnologies/qore/issues/6839">issue 6839</a>).
 
     @par Sandboxed Code Cannot Change the Process-Wide Registries of Standard Modules

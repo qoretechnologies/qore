@@ -326,7 +326,8 @@ int Http2ClientConnection::finalizePollOpSubmission(
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("http2_client"), xsink);
+    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+        new QoreStringNode("http2_client"), xsink);
     if (*xsink) {
         return -1;
     }

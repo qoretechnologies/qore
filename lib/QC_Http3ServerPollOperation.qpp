@@ -1083,7 +1083,11 @@ static QoreHashNode* takeAllResponseSendCallbacks(QoreObject* self, Http3ServerP
 
     @since %Qore 3.0
 */
-qclass Http3ServerPollOperation [arg=Http3ServerPollOperationPriv* priv; ns=Qore; vparent=SocketPollOperationBase<*hash<auto>>];
+qclass Http3ServerPollOperation [
+    arg=Http3ServerPollOperationPriv* priv;
+    ns=Qore;
+    vparent=SocketPollOperationBase<*hash<auto>>
+];
 
 //! Creates the HTTP/3 server poll operation
 /** @param socket the UDP socket bound and ready for QUIC connections

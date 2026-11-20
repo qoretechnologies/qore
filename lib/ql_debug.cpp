@@ -8143,7 +8143,8 @@ public:
                 ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, pgm, op), &sx);
                 op->setSelf(*op_obj);
                 op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, n_obj->objectRefSelf(), &sx);
-                op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("replacing"), &sx);
+                op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+                    new QoreStringNode("replacing"), &sx);
                 ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclSocketPollOperationInfo, &sx), &sx);
                 h->setKeyValue("sock", n_obj->objectRefSelf(), &sx);
                 h->setKeyValue("spop", op_obj->objectRefSelf(), &sx);
@@ -9427,7 +9428,8 @@ private:
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         op->setSelf(*op_obj);
         op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, obj->objectRefSelf(), &xsink);
-        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("closed-pollable"), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("closed-pollable"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
@@ -9735,7 +9737,8 @@ public:
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         op->setSelf(*op_obj);
         op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, notifier_obj->objectRefSelf(), &xsink);
-        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("stale-readiness"), &xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("stale-readiness"), &xsink);
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", notifier_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);

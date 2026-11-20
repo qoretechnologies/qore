@@ -1726,11 +1726,14 @@ void qore_object_private::setValueIntern(const qore_class_private* class_ctx, co
     bool before;
     bool after = needs_scan(val);
 
+    // the value is consumed also if the object was deleted; it is released after the lock (qore#6839)
+    ValueHolder unused_val(xsink);
     {
         QoreSafeVarRWWriteLocker sl(rml);
 
         if (status == OS_DELETED) {
             makeAccessDeletedObjectException(xsink, key, theclass->getName());
+            unused_val = val;
             return;
         }
 
@@ -2848,11 +2851,25 @@ QoreHashNode* qore_object_ops::getSliceImpl(QoreObject* b, const QoreListNode* v
     return b->priv->getSlice(value_list, xsink);
 }
 
+#ifdef DEBUG
+//! returns true if an access without a class would miss a private:internal member of a system class (qore#6839)
+/** the access goes to the object's main data; a member of the name that is there (written from outside the class,
+    as a class without a member list allows) is what the access means
+*/
+static bool qore_object_misses_internal_member(const qore_object_private* priv, const char* key) {
+    if (!qore_class_private::get(*priv->theclass)->runtimeMissesInternalOnlyMember(key, runtime_get_class())) {
+        return false;
+    }
+    QoreSafeVarRWReadLocker sl(priv->rml);
+    return priv->status != OS_DELETED && !priv->data->existsKey(key);
+}
+#endif
+
 void QoreObject::setValue(const char* key, QoreValue val, ExceptionSink* xsink) {
     // a write without a class must not miss a private:internal member that the class context cannot reach: it would
     // go to the object's main data, where nothing reads it (qore#6839)
 #ifdef DEBUG
-    assert(!qore_class_private::get(*priv->theclass)->runtimeMissesInternalOnlyMember(key, runtime_get_class()));
+    assert(!qore_object_misses_internal_member(priv, key));
 #endif
     priv->setValue(key, val, xsink);
 }
@@ -2887,7 +2904,7 @@ QoreValue QoreObject::getReferencedMemberNoMethod(const char* mem, ExceptionSink
     // a read without a class must not miss a private:internal member that the class context cannot reach: it would
     // read the object's main data and give no value (qore#6839)
 #ifdef DEBUG
-    assert(!qore_class_private::get(*priv->theclass)->runtimeMissesInternalOnlyMember(mem, runtime_get_class()));
+    assert(!qore_object_misses_internal_member(priv, mem));
 #endif
     return priv->getReferencedMemberNoMethod(mem, xsink);
 }

@@ -1531,7 +1531,8 @@ static bool socket_exec_is_data_available(QoreObject* self, QoreSocketObject* s,
 
     if (!*xsink) {
         op_obj->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, new WeakReferenceNode(self), xsink);
-        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("isDataAvailable"), xsink);
+        op_obj->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("isDataAvailable"), xsink);
     }
     if (*xsink) {
         return false;
@@ -2827,7 +2828,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
 
     if (!*xsink) {
         rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, self->objectRefSelf(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("send-and-read-header"), xsink);
+        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("send-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -2939,7 +2941,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
 
     if (!*xsink) {
         rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, self->objectRefSelf(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("send-stream-and-read-header"), xsink);
+        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("send-stream-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -3037,7 +3040,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
 
     if (!*xsink) {
         rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, self->objectRefSelf(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("send-chunked-stream-and-read-header"), xsink);
+        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("send-chunked-stream-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -3227,7 +3231,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseWithStream(i
 
     if (!*xsink) {
         rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, self->objectRefSelf(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("send-chunked-stream"), xsink);
+        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("send-chunked-stream"), xsink);
     }
     return rv.release();
 }
@@ -6900,7 +6905,8 @@ AbstractPollOperation<auto> Socket::startPollIdleAndReadHttpHeader(timeout idle_
 
     if (!*xsink) {
         rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, self->objectRefSelf(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("send-and-read-header"), xsink);
+        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("send-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -7685,7 +7691,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stre
 
     if (!*xsink) {
         rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, self->objectRefSelf(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("http2-streaming-response"), xsink);
+        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("http2-streaming-response"), xsink);
     }
     return rv.release();
 }
@@ -7868,7 +7875,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream
 
     if (!*xsink) {
         rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, self->objectRefSelf(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("http2-connect-response"), xsink);
+        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("http2-connect-response"), xsink);
     }
     return rv.release();
 }
@@ -8264,7 +8272,8 @@ AbstractPollOperation<auto> Socket::startPollHttp2ClientMultiplex() {
 
     if (!*xsink) {
         rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, self->objectRefSelf(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("http2-client-multiplex"), xsink);
+        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("http2-client-multiplex"), xsink);
     }
     return rv.release();
 }
@@ -9244,7 +9253,8 @@ AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int sessi
 
     if (!*xsink) {
         rv->setInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, self->objectRefSelf(), xsink);
-        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("quic-streaming-response"), xsink);
+        rv->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+            new QoreStringNode("quic-streaming-response"), xsink);
     }
     return rv.release();
 }

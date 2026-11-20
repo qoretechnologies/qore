@@ -285,7 +285,8 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("http3_client"), xsink);
+    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+        new QoreStringNode("http3_client"), xsink);
     if (*xsink) {
         return -1;
     }

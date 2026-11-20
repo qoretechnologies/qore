@@ -380,7 +380,8 @@ int Http1ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("http1_client"), xsink);
+    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+        new QoreStringNode("http1_client"), xsink);
     if (*xsink) {
         return -1;
     }
@@ -419,7 +420,8 @@ int Http1ClientConnection::finalizePollOpSubmission(
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE, new QoreStringNode("http1_client"), xsink);
+    poll_obj_holder->setInternalMemberValue("goal", QC_SOCKETPOLLOPERATIONBASE,
+        new QoreStringNode("http1_client"), xsink);
     if (*xsink) {
         return -1;
     }
