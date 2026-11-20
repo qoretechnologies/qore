@@ -6,6 +6,10 @@
 
     @section json_v3_0_0 json Module Version 3.0.0
 
+    - @ref Qore::Json::parse_json() "parse_json()" raises \c JSON-PARSE-ERROR for text after a NUL byte that follows
+      the JSON value, or follows whitespace only (which it took as empty text), where it ignored the rest of the
+      text: a NUL byte is not JSON whitespace
+      (<a href="https://github.com/qoretechnologies/qore/issues/6718">issue 6718</a>)
     - @ref Qore::Json::parse_json() "parse_json()" (and so @ref Qore::Json::jwt_decode() "jwt_decode()"),
       @ref Qore::Json::parse_toon() "parse_toon()" and @ref Qore::Json::JsonSaxParser "JsonSaxParser" raise
       \c INVALID-ENCODING for text that is not valid in its encoding, which was returned in strings
