@@ -101,6 +101,15 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par REPL History Files Use UTF-8
+    The @ref qorerepl_history_encoding "REPL writes its history files in UTF-8" with a byte order mark, which older
+    %Qore versions may display as a marker character at the start of the first entry (issue #6816).
+
+    @par Source Files and Standard Input Use UTF-8
+    %Qore reads @ref character_encoding "source text" as UTF-8 in every locale and reports malformed input at its
+    source line, so legacy Latin-1 files must be converted, for example with <tt>iconv -f ISO-8859-1 -t UTF-8</tt>
+    (issue #6816).
+
     @par An Encoding That Is Not Predefined Has One Canonical Name
     The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
     \c "Shift_JIS") or the name in upper case (ex: \c "CP1047"), not the spelling with which the program first used

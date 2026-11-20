@@ -26184,7 +26184,7 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 /** Extracts name, version, desc, author, url, and license from the module { ... } block.
     Falls back to deriving the module name from the filename label.
 */
-static bool parseModuleMetadata(const char* source, int source_len, const char* label,
+static bool parseModuleMetadataImpl(const char* source, int source_len, const char* label,
         QoreAOTModuleInfo& info, std::string& error) {
     std::string src(source, source_len);
 
@@ -26467,6 +26467,25 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
     }
 
     return true;
+}
+
+// Metadata is read before the Program parses the whole module. Prefer its source
+// encoding error even when malformed bytes also prevent reading the declaration.
+static bool parseModuleMetadata(const char* source, int source_len, const char* label,
+        QoreAOTModuleInfo& info, std::string& error) {
+    if (parseModuleMetadataImpl(source, source_len, label, info, error)) {
+        return true;
+    }
+    ExceptionSink xsink;
+    int line = qore_invalid_source_utf8_line(source, source_len, xsink);
+    if (line < 0) {
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        error = desc->c_str();
+        xsink.clear();
+    } else if (line > 0) {
+        error = std::string(label) + ":" + std::to_string(line) + ": invalid UTF-8 in source";
+    }
+    return false;
 }
 
 //! Map a license string to a qore_license_t enum value
@@ -28093,7 +28112,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // Use parsePending() + parseCommit() like interpreted module loading does.
         // This allows forward references in the init closure to be resolved during commit
         // after all module types/functions have been parsed.
-        qpgm->parsePending(source_text, label, &xsink, &wsink, QP_WARN_DEFAULT);
+        qore_program_private::get(**qpgm)->parsePending(std::string_view(source_text, source_len), label, &xsink, &wsink, QP_WARN_DEFAULT);
         if (!xsink.isException()) {
             qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         }
@@ -28559,7 +28578,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         // Parse main .qm file with parsePending()
-        qpgm->parsePending(main_source.c_str(), qm_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -28618,7 +28637,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     continue;
                 }
 
-                qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink, file_warn_mask);
+                qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     // the warnings of the parse, then its errors (issue #6555)
@@ -29726,7 +29745,7 @@ static bool parseStubFiles(QoreProgram* pgm,
         QoreAotWarningReportHelper wsink_report(wsink);
         {
             ParseStubDeclarationModeHelper h(pgm);
-            pgm->parsePending(src.c_str(), canon.c_str(),
+            qore_program_private::get(*pgm)->parsePending(src, canon.c_str(),
                 &xsink, &wsink, QP_WARN_DEFAULT);
         }
         if (xsink.isException()) {
@@ -30621,7 +30640,7 @@ bool QoreAOT::compileScriptFilesBatch(
                 &sibling_preload.source_labels);
             AOTParseSourceGuard parse_source_guard(&batch_target_set);
             if (!applyAOTSourceModernDefault(**qpgm, e.canon, &xsink)) {
-                qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                qore_program_private::get(**qpgm)->parsePending(e.source, e.canon.c_str(),
                     &xsink, &wsink, QP_WARN_DEFAULT);
             }
             // each source's parse options are restored when the guard goes out of scope, so they are checked here
@@ -31345,7 +31364,7 @@ bool QoreAOT::compileScriptAggregate(
                 // parse directives are a property of the source that wrote them (see AOTBatchParseOptionGuard)
                 AOTBatchParseOptionGuard parse_option_guard(*qpgm);
                 if (!applyAOTSourceModernDefault(*qpgm, e.canon, &xsink)) {
-                    qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+                    qore_program_private::get(*qpgm)->parsePending(e.source, e.canon.c_str(),
                         &xsink, &wsink, QP_WARN_DEFAULT);
                 }
                 file_po = qpgm->getParseOptions();
@@ -31887,7 +31906,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             // even if the parse reports errors (an unresolved type, a
             // missing `%include`, …).  The real compile below reports the
             // authoritative error; here we only need the file set.
-            probe_pgm->parsePending(source_text.c_str(), target_canon.c_str(),
+            qore_program_private::get(**probe_pgm)->parsePending(source_text, target_canon.c_str(),
                 &probe_xsink, &probe_wsink, QP_WARN_NONE);
             std::unordered_set<std::string> probe_files;
             qore_program_private* pp_probe = qore_program_private::get(**probe_pgm);
@@ -31966,7 +31985,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         AOTSourceSymbolGuard source_symbol_guard(source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
         AOTParseSourceGuard parse_source_guard(&parsed_decl_files_canon);
-        qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
+        qore_program_private::get(**qpgm)->parsePending(source_text, target_canon.c_str(), &xsink,
             &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
@@ -32534,7 +32553,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(),
             *qpgm, xsink, QMRL_LOCK);
 
-        qpgm->parsePending(main_source.c_str(), qm_path.c_str(), &xsink, &wsink,
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &wsink,
             QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
@@ -32604,7 +32623,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 printd(2, "AOT: warning: skipping empty file: %s\n", file_path.c_str());
                 continue;
             }
-            qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink,
+            qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &wsink,
                 file_warn_mask);
             if (xsink.isException()) {
                 mod_ctx.close();
@@ -33119,7 +33138,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
-        qpgm->parsePending(main_source.c_str(), qm_path.c_str(),
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
@@ -33170,7 +33189,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 if (file_source.empty()) {
                     continue;
                 }
-                qpgm->parsePending(file_source.c_str(), file_path.c_str(),
+                qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(),
                     &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
@@ -33699,7 +33718,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
-        qpgm->parsePending(main_source.c_str(), qm_path.c_str(),
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
@@ -33750,7 +33769,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 if (file_source.empty()) {
                     continue;
                 }
-                qpgm->parsePending(file_source.c_str(), file_path.c_str(),
+                qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(),
                     &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
@@ -37465,7 +37484,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 
     // QoreStringNode: string constant (e.g., switch case string values like "file")
     if (auto* str_node = dynamic_cast<const QoreStringNode*>(node)) {
-        // a CONST_STRING is rebuilt in the default encoding from its bytes up to a null byte
+        // a CONST_STRING is rebuilt in UTF-8 from its bytes up to a null byte
         if (qore_aot_string_needs_value(str_node->c_str(), str_node->size(), str_node->getEncoding())) {
             id.kind = AOTExprKind::CONST_VALUE;
             id.child_expr = v;

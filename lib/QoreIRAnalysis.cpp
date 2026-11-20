@@ -6165,14 +6165,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     compile-time evaluation raises, the exception belongs to the hypothetical run and not to the
     program being compiled, so it is discarded and the original call is kept.
 
-    A third condition is independent of the callee's flags entirely: the IR literal that carries a
-    folded value has to mean the same thing on the host that reads it.  A string does not - a
-    ConstString is materialized with QCS_DEFAULT, which is derived from the environment of whatever
-    host runs the code (QoreStringNode(const std::string&) in the interpreter and
-    qore_rt_make_string_len() in generated code both default to it).  Folding a string is therefore
-    correct for the interpreter and the JIT, where the folding host is the running host, and wrong
-    for an image no matter how host-portable the callee is.  QCF_HOST_PORTABLE describes the body,
-    and cannot rescue a representation that is itself host-derived.
+    String folding remains limited to the same host. Only UTF-8 results can be represented by ConstString.
 */
 
 //! Returns the literal value defined by an IR constant instruction; the caller owns any reference.
@@ -6196,12 +6189,11 @@ static bool qore_ir_pure_fold_get_literal(const QoreIRInstruction* def, bool sam
             arg = QoreValue(cinst->constant.bool_value);
             return true;
         case QoreIROpcode::ConstString:
-            // the literal materializes with QCS_DEFAULT, so the bytes only mean the same thing to
-            // the compiling and the running host when they are the same host
+            // Keep the existing same-host restriction for folds involving string arguments.
             if (!same_host) {
                 return false;
             }
-            arg = QoreValue(new QoreStringNode(cinst->constant.string_value));
+            arg = QoreValue(new QoreStringNode(cinst->constant.string_value, QCS_UTF8));
             return true;
         // a date literal carries a timezone and there is no IR constant for a number, so neither is
         // folded here
@@ -6361,9 +6353,8 @@ static bool qore_ir_pure_fold_evaluate(const QoreIRCallDirectInstruction* call,
             // note: the value can be held in inline short string storage, which has no
             // QoreStringNode, so the data helper must be used to read the bytes
             QoreStringDataHelper str(*result);
-            // the fold is only reached on the same host, but a callee that returns a string in an
-            // encoding other than QCS_DEFAULT would still lose it in the literal
-            if (!str || str.getEncoding() != QCS_DEFAULT) {
+            // ConstString cannot carry the encoding of a non-UTF-8 result.
+            if (!str || str.getEncoding() != QCS_UTF8) {
                 return false;
             }
             // copy by length: a ConstString is emitted with an explicit byte count and may hold

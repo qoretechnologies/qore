@@ -1873,7 +1873,7 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
 
         case AOTExprKind::CONST_STRING: {
             // String literal constant (e.g., "" passed as constructor arg)
-            return toBitsNB(QoreValue::makeStringValue(ref1));
+            return toBitsNB(QoreValue::makeUtf8StringValue(ref1));
         }
 
         case AOTExprKind::CONST_BINARY: {
@@ -9955,8 +9955,8 @@ extern "C" DLLEXPORT int qore_aot_run(
         }
 
         // Parse the embedded source
-        QoreString src_str(source, source_len);
-        qpgm->parse(src_str.c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
+        qore_program_private::get(**qpgm)->parse(std::string_view(source, source_len), label, &xsink, &wsink,
+            QP_WARN_DEFAULT);
 
         // Display any warnings
         if (wsink.isException()) {
@@ -12984,7 +12984,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
                 if (segments[i].empty()) {
                     continue;
                 }
-                local_pgm->parsePending(segments[i].c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
+                qore_program_private::get(*local_pgm)->parsePending(segments[i], label, &xsink, &wsink, QP_WARN_DEFAULT);
                 if (xsink.isException()) {
                     break;
                 }
@@ -12994,7 +12994,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
             }
         } else {
             // Single-file module: parse as one blob
-            local_pgm->parse(stripped_src.c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
+            qore_program_private::get(*local_pgm)->parse(stripped_src, label, &xsink, &wsink, QP_WARN_DEFAULT);
         }
 
         mod_ctx.close();

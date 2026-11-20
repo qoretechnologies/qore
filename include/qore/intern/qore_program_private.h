@@ -40,6 +40,7 @@ extern QoreHashNode* ENV;
 #include <deque>
 #include <memory>
 #include <new>
+#include <string_view>
 
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreCompletionAnalysis.h"
@@ -3402,7 +3403,7 @@ public:
     };
 
     // call must push the current program on the stack and pop it afterwards
-    DLLLOCAL int internParsePending(ExceptionSink* xsink, const char* code, const char* label,
+    DLLLOCAL int internParsePending(ExceptionSink* xsink, std::string_view code, const char* label,
             const char* orig_src = nullptr, int offset = 0, bool standard_parse = true) {
         // the scoped options of the parse end with it in any case
         ParseOverlayScope pos(*this);
@@ -3423,7 +3424,7 @@ public:
         //printd(5, "qore_program_private::internParsePending() code: %p %d bytes label: '%s' src: '%s' offset: %d\n",
         //    code, strlen(code), label, orig_src ? orig_src : "(null)", offset);
 
-        assert(code && code[0]);
+        assert(!code.empty());
 
         // save this file name for storage in the parse tree and deletion
         // when the QoreProgram object is deleted
@@ -3447,21 +3448,30 @@ public:
         //printd(5, "qore_program_private::internParsePending() parsing tag: %s (%p): '%s'\n", label, label, code);
 
         yyscan_t lexer;
-        QoreParseState state;
+        QoreParseState state(*xsink);
         yylex_init_extra(&state, &lexer);
 
         // the rules of the parse directives end with a newline, which a directive on the last line of the code
         // without one would not match: such code gets one at its end; other code is not changed, so that an error
         // at its end keeps its location (issue #2740)
-        size_t code_len = strlen(code);
-        const char* last_nl = strrchr(code, '\n');
-        const char* last_line = last_nl ? last_nl + 1 : code;
-        if (*last_line == '%') {
-            std::string terminated(code, code_len);
+        bool final_directive = false;
+        if (code.size() > INT_MAX - 3) {
+            parse_error(*getLocation(1, 1), "source is too large for the scanner");
+            state.stop = true;
+        } else if (int line = qore_invalid_source_utf8_line(code.data(), code.size(), *xsink, &final_directive)) {
+            if (line > 0) {
+                parse_error(*getLocation(line, line), "invalid UTF-8 in source");
+            }
+            state.stop = true;
+        }
+        if (state.stop) {
+            yy_scan_bytes("", 0, lexer);
+        } else if (final_directive) {
+            std::string terminated(code);
             terminated += '\n';
-            yy_scan_bytes(terminated.c_str(), terminated.size(), lexer);
+            yy_scan_bytes(terminated.data(), terminated.size(), lexer);
         } else {
-            yy_scan_string(code, lexer);
+            yy_scan_bytes(code.data(), code.size(), lexer);
         }
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
@@ -3681,8 +3691,11 @@ public:
     */
     DLLLOCAL int beginParse(ExceptionSink* xsink, ParseStartGuard& guard, bool nested = false);
 
-    DLLLOCAL int parsePending(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
+    DLLLOCAL int parsePending(std::string_view code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
             const char* orig_src = nullptr, int offset = 0) {
+        if (code.empty()) {
+            return 0;
+        }
         //printd(5, "qore_program_private::parsePending() wm=0x%x UV=0x%x on: %d\n", wm, QP_WARN_UNREFERENCED_VARIABLE, wm & QP_WARN_UNREFERENCED_VARIABLE);
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
@@ -3831,7 +3844,7 @@ public:
         ungetc(c, fp);
 
         yyscan_t lexer;
-        QoreParseState state;
+        QoreParseState state(*xsink);
         // the number of exceptions not shown, reported when the parse lock has been released
         int skipped = 0;
 
@@ -3921,8 +3934,8 @@ public:
         if (!str->strlen())
             return;
 
-        // ensure code string has correct character set encoding
-        TempEncodingHelper tstr(str, QCS_DEFAULT, xsink);
+        // Decode tagged source to the encoding of the scanner.
+        TempEncodingHelper tstr(str, QCS_UTF8, xsink);
         if (*xsink)
             return;
 
@@ -3935,14 +3948,17 @@ public:
         if (source && !source->empty() && !src.set(source, QCS_DEFAULT, xsink))
             return;
 
-        parse(tstr->c_str(), tlstr->c_str(), xsink, wS, wm, source ? src->c_str() : nullptr, offset);
+        parse(std::string_view(tstr->c_str(), tstr->size()), tlstr->c_str(), xsink, wS, wm,
+            source ? src->c_str() : nullptr, offset);
     }
 
-    DLLLOCAL void parse(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
+    DLLLOCAL void parse(std::string_view code, const char* label, ExceptionSink* xsink, ExceptionSink* wS, int wm,
             const char* orig_src = nullptr, int offset = 0) {
         //printd(5, "qore_program_private::parse(%s) pgm: %p po: %lld\n", label, pgm, pwo.parse_options);
 
-        assert(code && code[0]);
+        if (code.empty()) {
+            return;
+        }
         assert(xsink);
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
@@ -4090,8 +4106,8 @@ public:
             return nullptr;
         }
 
-        // ensure code string has correct character set encoding
-        TempEncodingHelper tstr(str, QCS_DEFAULT, xsink);
+        // Decode tagged source to the encoding of the scanner.
+        TempEncodingHelper tstr(str, QCS_UTF8, xsink);
         if (*xsink)
             return nullptr;
 
@@ -4104,14 +4120,15 @@ public:
         if (source && !source->empty() && !src.set(source, QCS_DEFAULT, xsink))
             return nullptr;
 
-        return parseExpression(tstr->c_str(), tlstr->c_str(), xsink, wS, wm, source ? src->c_str() : nullptr, offset);
+        return parseExpression(std::string_view(tstr->c_str(), tstr->size()), tlstr->c_str(), xsink, wS, wm,
+            source ? src->c_str() : nullptr, offset);
     }
 
-    DLLLOCAL q_exp_t parseExpression(const char* code, const char* label, ExceptionSink* xsink, ExceptionSink* wS,
+    DLLLOCAL q_exp_t parseExpression(std::string_view code, const char* label, ExceptionSink* xsink, ExceptionSink* wS,
             int wm, const char* orig_src = nullptr, int offset = 0) {
         //printd(5, "qore_program_private::parseExpression(%s) pgm: %p po: %lld\n", label, pgm, pwo.parse_options);
 
-        assert(code && code[0]);
+        assert(!code.empty());
         assert(xsink);
 
         // before the parse switches to the Program: the caller stays the caller of the code that runs for it
@@ -4159,13 +4176,15 @@ public:
             qore_program_private& pp;
         } epoh(*this);
 
-        QoreStringMaker exp_code("return (%s);", code);
+        std::string exp_code("return (");
+        exp_code.append(code);
+        exp_code += ");";
 
         NonStandardParseFlagHelper nspfh(*this);
         startParsing(xsink, wS, wm);
 
         // parse text given; the Program had no code pending, so the parse state ends with the expression's parse
-        if (!internParsePending(xsink, exp_code.c_str(), label, orig_src, offset, false)) {
+        if (!internParsePending(xsink, exp_code, label, orig_src, offset, false)) {
             internParseCommit(false);   // finalize parsing, back out or commit all changes
         } else {
             // the Program had no code pending: what its namespaces have pending was added by the failed expression,
@@ -4282,8 +4301,8 @@ public:
         assert(!str->empty());
         assert(xsink);
 
-        // ensure code string has correct character set encoding
-        TempEncodingHelper tstr(str, QCS_DEFAULT, xsink);
+        // Decode tagged source to the encoding of the scanner.
+        TempEncodingHelper tstr(str, QCS_UTF8, xsink);
         if (*xsink)
             return;
 
@@ -4296,7 +4315,8 @@ public:
         if (source && !source->empty() && !src.set(source, QCS_DEFAULT, xsink))
             return;
 
-        parsePending(tstr->c_str(), tlstr->c_str(), xsink, wS, wm, source ? src->c_str() : nullptr, offset);
+        parsePending(std::string_view(tstr->c_str(), tstr->size()), tlstr->c_str(), xsink, wS, wm,
+            source ? src->c_str() : nullptr, offset);
     }
 
     // called during run time (not during parsing)

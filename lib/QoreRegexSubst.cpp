@@ -39,7 +39,8 @@
 #include <strings.h>
 
 // constructor used when parsing
-QoreRegexSubst::QoreRegexSubst() : QoreRegexBase(new QoreString), newstr(new QoreString) {
+QoreRegexSubst::QoreRegexSubst()
+        : QoreRegexBase(new QoreString(QCS_UTF8)), newstr(new QoreString(QCS_UTF8)) {
     //printd(5, "QoreRegexSubst::QoreRegexSubst() this=%p\n", this);
 }
 

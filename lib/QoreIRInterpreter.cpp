@@ -12269,7 +12269,7 @@ dispatch_folded_step_host:
             }
             case QoreIROpcode::ConstString: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
-                QoreStringNode* str = new QoreStringNode(cinst->constant.string_value);
+                QoreStringNode* str = new QoreStringNode(cinst->constant.string_value, QCS_UTF8);
                 // a literal that is ASCII text has its ASCII prefix known, so that the operations on it do not scan
                 // it at each evaluation (qore#6625)
                 if (cinst->constant.string_ascii) {

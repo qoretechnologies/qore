@@ -1301,7 +1301,7 @@ enum class QoreAOTValueTag : uint8_t {
 };
 
 //! Returns true if a string constant cannot be an AOTExprKind::CONST_STRING (see format version 24)
-/** which is text in the default encoding up to its first null byte; such a string is a CONST_VALUE
+/** which is UTF-8 text up to its first null byte; such a string is a CONST_VALUE
 */
 inline bool qore_aot_string_needs_value(const char* str, size_t len, const QoreEncoding* enc) {
     return enc != QCS_UTF8 || memchr(str, '\0', len);

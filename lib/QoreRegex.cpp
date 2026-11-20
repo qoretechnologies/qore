@@ -33,7 +33,7 @@
 
 #include <memory>
 
-QoreRegex::QoreRegex() : QoreRegexBase(new QoreString) {
+QoreRegex::QoreRegex() : QoreRegexBase(new QoreString(QCS_UTF8)) {
 }
 
 QoreRegex::QoreRegex(const QoreString& s, int64 opts, ExceptionSink* xsink) : QoreRegexBase(PCRE2_UTF | (int)opts),

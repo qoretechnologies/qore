@@ -1681,14 +1681,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_string(const char* str) {
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_string_len(const char* str, uint64_t len) {
-    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
+    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len), QCS_UTF8);
     QoreValue v(s);
     return toBits(v);
 }
 
 //! As qore_rt_make_string_len() for a literal that is ASCII text: the string has its ASCII prefix known (qore#6625)
 extern "C" DLLEXPORT uint64_t qore_rt_make_ascii_string_len(const char* str, uint64_t len) {
-    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
+    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len), QCS_UTF8);
     qore_string_private::get(*s)->setOwnedAsciiText();
     return toBits(QoreValue(s));
 }
