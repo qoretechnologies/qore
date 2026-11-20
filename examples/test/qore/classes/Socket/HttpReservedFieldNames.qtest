@@ -12,11 +12,12 @@
 
 %modern
 
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/Mime.qm
-%requires ../../../../../qlib/HttpServerUtil.qm
-%requires ../../../../../qlib/HttpServer.qm
-%requires ../../../../../qlib/RestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
 %requires ../../../TestCertificates.qm
 
 %exec-class HttpReservedFieldNamesTest
