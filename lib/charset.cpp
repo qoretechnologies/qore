@@ -1790,8 +1790,8 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
       encodings such as GBK, Big5, or CP949, GB18030, Shift_JIS), it gets the character functions of the family, and
       searches only match at character boundaries, as the second byte of a character can be an ASCII character; an
       encoding whose definition Qore knows (EUC-JP, EUC-KR, EUC-CN, GBK, GB18030, Big5 and its forms, UHC, Johab, by
-      the names of named_multibyte_families in any spelling) then gets the bytes of its definition (see named_multibyte_families), and the input of its
-      conversions is checked with them (see defined_multibyte).
+      the names of named_multibyte_families in any spelling) then gets the bytes of its definition, and the input of
+      its conversions is checked with them (see defined_multibyte).
       Such an encoding stays ASCII-compatible, except for the Shift_JIS family (see multibyte_families).  Code points
       are decoded with iconv (QoreEncoding::getUnicode()).
     - Character width of encodings that are not ASCII-compatible: each character of a sample is converted alone and
@@ -1827,8 +1827,8 @@ void qore_encoding_private::probe() {
     // Select the named Shift_JIS forms directly. A probe of the platform converter can accept malformed
     // pairs or identify the extended Windows repertoire as Shift_JIS.  The name is matched as iconv implementations
     // match it, also with conversion flags (ex: "SJIS//IGNORE") (qore#6796); a spelling that the platform's iconv
-    // does not know (ex: "S-JIS" on glibc) gets these character functions too, as they are those of the definition, but its
-    // text cannot be converted
+    // does not know (ex: "S-JIS" on glibc) gets these character functions too, as they are those of the definition,
+    // but its text cannot be converted
     const std::string name = normalize_multibyte_family_name(code);
     const bool windows_sjis = name == "CP932" || name == "WINDOWS31J" || name == "MS932" || name == "SJISWIN"
         || name == "SJISOPEN" || name == "CSWINDOWS31J";
