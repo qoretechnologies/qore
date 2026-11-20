@@ -3079,6 +3079,13 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
     if (!class_ctx) {
         helper.vl.addMemberNotification(obj, key);
     }
+    // a member that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+    if (const ReferenceNode* ref = helper.getReference()) {
+        helper.clearPtr();
+        if (helper.doLValue(ref, false)) {
+            return;
+        }
+    }
 
     QoreValue stored = value.needsRef() ? value.refSelf() : value;
     helper.assign(stored);
@@ -14344,8 +14351,13 @@ load_local_done:
                         }
 
                         // Make the update with already-referenced value.
-                        // (hash is already in TLS and will be cleaned up normally)
-                        qore_hash_private::setKeyValueCanonical(*h, hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                        // (hash is already in TLS and will be cleaned up normally); an element that holds a
+                        // reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+                        if (!qore_assign_through_element_reference(h->getKeyValue(hks_inst->key_name.c_str()), val,
+                                xsink)) {
+                            qore_hash_private::setKeyValueCanonical(*h, hks_inst->key_name.c_str(), val.refSelf(),
+                                xsink);
+                        }
 
                         // Cleanup must happen AFTER modification completes and locks are released.
                         // Defer clearing refs that may trigger destructors.
@@ -14491,7 +14503,10 @@ load_local_done:
                             }
                             h = new_h;
                         }
-                        qore_hash_private::setKeyValueCanonical(*h, key_str.c_str(), val.refSelf(), xsink);
+                        // an element that holds a reference is assigned through it (qore#6661)
+                        if (!qore_assign_through_element_reference(h->getKeyValue(key_str.c_str()), val, xsink)) {
+                            qore_hash_private::setKeyValueCanonical(*h, key_str.c_str(), val.refSelf(), xsink);
+                        }
                         clearLoadSlots(hksd_inst->container_slot_id);
                         uint32_t csid = hksd_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
@@ -14676,7 +14691,11 @@ load_local_done:
 
                         // an assignment past the end of a list whose element type does not take NOTHING would
                         // leave a gap: setEntry() refuses it (qore#6435)
-                        if (!(xsink && *xsink)) {
+                        if (!(xsink && *xsink)
+                            // an element that holds a reference is assigned through it, as the AST interpreter
+                            // assigns it, before the value is checked against the element type (qore#6661)
+                            && !(static_cast<size_t>(index) < l->size()
+                                && qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink))) {
                             // Apply element type coercion if the list has a typed value type
                             // (e.g. list<softint> converts "50" → 50 before storing)
                             const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();

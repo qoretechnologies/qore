@@ -3448,6 +3448,20 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
     return rv;
 }
 
+bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val, ExceptionSink* xsink) {
+    if (cur.getType() != NT_REFERENCE) {
+        return false;
+    }
+    // the reference is held for the assignment, which can replace the container that holds it
+    ValueHolder ref(cur.refSelf(), xsink);
+    // an assignment: a member behind a write gate is not read first, as the AST interpreter assigns it
+    LValueHelper lvh(*ref->get<const ReferenceNode>(), xsink, false, true);
+    if (lvh) {
+        lvh.assign(val.refSelf(), "<lvalue>");
+    }
+    return true;
+}
+
 bool qore_is_indirect_ref_value(const QoreValue& val) {
     if (val.isOpaque()) {
         return true;
