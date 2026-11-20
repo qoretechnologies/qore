@@ -909,6 +909,31 @@ int QoreReflectionCaller::checkClassElementAccess(const QoreClass* cls, ClassAcc
     return -1;
 }
 
+bool QoreReflectionCaller::canUseObjectElementClass(const QoreObject& obj, const QoreClass& cls) const {
+    // a class reached without a private:internal edge below the object's class
+    if (obj.validInstanceOf(cls)) {
+        return true;
+    }
+    if (!obj.isValid()) {
+        return false;
+    }
+    const qore_class_private* oc = qore_class_private::get(*obj.getClass());
+    const qore_class_private* decl = qore_class_private::get(cls);
+    if (!member_access) {
+        // a caller that may use every element of a class may use every class of the object's hierarchy
+        ClassAccess access = Public;
+        return oc->inHierarchyStrict(*decl, access);
+    }
+    // the language's rules: the class context is in the object's hierarchy, and is the class or reaches it, also
+    // through a class that it inherits with private:internal itself
+    if (!caller_class) {
+        return false;
+    }
+    ClassAccess access;
+    return oc->getClass(*caller_class, access)
+        && (caller_class == decl || caller_class->getClass(*decl, access));
+}
+
 bool QoreReflectionCaller::appliesModuleExports(const QoreProgram* target) const {
     if (!member_access || !target || target == pgm) {
         return false;

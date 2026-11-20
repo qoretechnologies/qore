@@ -862,6 +862,22 @@ public:
     DLLEXPORT int checkClassElementAccess(const QoreClass* cls, ClassAccess access, const char* kind,
             const char* name, ExceptionSink* xsink) const;
 
+    //! Returns true if an element (a method or a member) of a class can be used on an object through reflection
+    /** The object must be valid and have \a cls in its class hierarchy.  An element of a class that the object's
+        class reaches only through a class inherited with \c private:internal below the object's own class is
+        reachable as the language makes it reachable: for callers to which the language's member access applies
+        (appliesMemberAccess()), only from the class context of the class on that \c private:internal path (the
+        class that inherits \a cls with \c private:internal, or a class between it and \a cls); other callers may
+        use every element of the object's hierarchy, as they may use every element whatever its access (issue
+        #6644)
+
+        @param obj the object
+        @param cls the class that declares the element
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool canUseObjectElementClass(const QoreObject& obj, const QoreClass& cls) const;
+
     //! Returns true if the export boundary of a user module limits the caller's reflection on a target Program
     /** It applies to callers to which the language's member access applies (appliesMemberAccess()), for a target
         that is a user module Program (\c PO_IN_MODULE) other than the caller's own Program: such a caller sees only

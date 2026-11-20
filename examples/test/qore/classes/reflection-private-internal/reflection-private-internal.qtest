@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of member access in class hierarchies
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ReflectionPrivateInternalTest
+
+#! Regression test for qore#6644: reflection uses a method or member of a class inherited with private:internal on an
+#! object of a subclass of the inheriting class
+/** A caller that may use every element of a class uses the method and the member on objects of the inheriting class
+    and of its subclass; a caller to which the language's member access applies (a Program whose functional domains
+    are restricted) uses them only from the class context of the inheriting class, as the language does.
+
+    ReflectionPrivateInternal.q checks NormalMethod::call(), NormalMethod::callArgs(), NormalMethodVariant::call(),
+    NormalMember::getValue() and NormalMember::setValue() from outside a class, from the inheriting class, from its
+    subclass and from another class; its output must be the one in ReflectionPrivateInternal.expected in every
+    execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+*/
+class ReflectionPrivateInternalTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/ReflectionPrivateInternal.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/ReflectionPrivateInternal.expected");
+    }
+
+    constructor() : QUnit::Test("reflection private internal", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                # the operations run once in child Programs: the tiered mode does not compile them to native code
+                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::Jit));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/reflection-private-internal";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

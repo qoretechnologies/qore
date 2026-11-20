@@ -99,6 +99,7 @@ DLLLOCAL extern QoreClass* QC_ABSTRACTMETHOD;
 DLLLOCAL void preinitAbstractMethodClass();
 DLLLOCAL QoreClass* initAbstractMethodClass(QoreNamespace& ns);
 
-DLLLOCAL int check_call(QoreObject* obj, const QoreMethod& m, ExceptionSink* xsink);
+DLLLOCAL int check_call(const QoreReflectionCaller& caller, QoreObject* obj, const QoreMethod& m,
+        ExceptionSink* xsink);
 
 #endif
