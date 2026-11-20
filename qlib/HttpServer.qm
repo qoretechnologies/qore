@@ -3061,6 +3061,43 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         rv.hdr."Content-Length" = string(len);
     }
 
+    #! sends an HTTP error message on the socket of a request of one of this server's listeners
+    /** @param listener the listener object that the handler of the request got (see
+        @ref HttpServer::HttpListenerInterface "HttpListenerInterface")
+        @param cx the request context
+        @param s the socket of the request
+        @param status_code the HTTP status code
+        @param msg the message
+        @param chunked_msg the message, streamed
+        @param extra_hdrs additional header fields
+        @param encoding the encoding of the response
+        @param head the request is a HEAD request
+
+        @throw INVALID-LISTENER-ERROR the object is not that of one of this server's listeners
+
+        @since HttpServer 1.7
+    */
+    sendHttpError(HttpServer::HttpListenerInterface listener, hash<auto> cx, Socket s, int status_code, *data msg,
+            *InputStream chunked_msg, *hash<auto> extra_hdrs, *string encoding, bool head) {
+        sendHttpError(getListenerOfHandlerView(listener), cx, s, status_code, msg, chunked_msg, extra_hdrs, encoding,
+            head);
+    }
+
+    #! Returns the listener of this server whose handlers get the given object (see HttpListener::getHandlerView())
+    /** @throw INVALID-LISTENER-ERROR the object is not that of one of this server's listeners
+    */
+    private:internal HttpListener getListenerOfHandlerView(HttpServer::HttpListenerInterface view) {
+        lm.enter();
+        on_exit lm.exit();
+
+        foreach HttpListener l in (listeners.iterator()) {
+            if (l.getHandlerView() === view) {
+                return l;
+            }
+        }
+        throw "INVALID-LISTENER-ERROR", "the object is not that of a listener of this server";
+    }
+
     #! sends an HTTP error message on the socket
     sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int status_code, *data msg, *InputStream chunked_msg,
             *hash<auto> extra_hdrs, *string encoding, bool head) {
@@ -5024,7 +5061,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # handle the request anyway
                 *hash<HttpResponseInfo> ah;
                 try {
-                    ah = handler.preprocessRequest(listener, \hdr, \cx);
+                    ah = handler.preprocessRequest(listener.getHandlerView(), \hdr, \cx);
                 } catch (hash<ExceptionInfo> ex) {
                     # log the error
                     string desc = sprintf("Handler %y preprocessing error from %s: ", cx.handler_name,
@@ -5042,7 +5079,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
                 if (!ah) {
                     try {
-                        ah = handler.authenticateRequest(listener, hdr, \cx);
+                        ah = handler.authenticateRequest(listener.getHandlerView(), hdr, \cx);
                     } catch (hash<ExceptionInfo> ex) {
                         # log the error
                         string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
@@ -5079,13 +5116,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # the decompressed octets are text in the charset of the request, decoded as an
                         # uncompressed body is (qore#6618)
                         body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
-                            handler.getMaxDecodedBodySize(listener));
+                            handler.getMaxDecodedBodySize(listener.getHandlerView()));
                         if (handler.decompress_to_string) {
                             body = decodeRequestText(hdr, body);
                         }
                     }
 
-                    hash<auto!> hrv = handler.handleRequest(listener, s, cx, hdr, body);
+                    hash<auto!> hrv = handler.handleRequest(listener.getHandlerView(), s, cx, hdr, body);
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";
                     }
@@ -5662,7 +5699,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             }
                         }
 
-                        hash<auto> sock_cx = cx + {"listener": listener, "id": sock_id};
+                        hash<auto> sock_cx = cx + {"listener": listener.getHandlerView(), "id": sock_id};
                         sock_cx."header-info".ws_end = getAsyncWebSocketEnd(holder, listener, NOTHING, sock_id,
                             cx.handler_name, pend);
                         sock_cx."header-info".ws_accept_end = sub () { holder.accept(); };
@@ -5784,7 +5821,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     }
 
                     # Pass poll_op and async I/O context to handler via header-info
-                    hash<auto> ws_cx = cx + {"listener": listener};
+                    hash<auto> ws_cx = cx + {"listener": listener.getHandlerView()};
                     # reports the end of the connection to the request's async target if the handler takes it over
                     *HttpServerAsyncIo::HttpPersistentRequestEnd pend;
                     if (ws_poll_op) {
@@ -6571,6 +6608,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         #! the listener's options, with its TLS certificate and private key: not readable by subclasses
         *hash<HttpListenerOptionInfo> opts;
 
+        #! the listener as the code of its handlers sees it (see getHandlerView())
+        HttpListenerHandlerView handler_view;
+
         #! the test hook that stop() calls once it has marked the listener as stopping (see dbgSetStoppingHook())
         static *code<nothing(HttpListener)> dbg_stopping_hook;
     }
@@ -6590,6 +6630,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
         self.name = opts.name;
         self.handleRequest = handleRequest;
+        handler_view = new HttpListenerHandlerView(self);
         if (opts.cert_loc && !opts.cert) {
             opts += http_get_ssl_objects(opts.cert_loc, opts.key_loc, opts.key_password);
         }
@@ -7649,6 +7690,33 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     removeExternalDedicatedSocket(softstring id) {
         removeDedicatedSocket(id, True);
+    }
+
+    #! Removes the given dedicated socket handler, if it is the handler of the given connection
+    /** @param id the ID of the connection
+        @param handler the handler of the connection; nothing is removed if the connection has another handler
+
+        @since HttpServer 1.7
+    */
+    removeExternalDedicatedSocket(softstring id, HttpServer::AbstractHttpSocketHandlerInterface handler) {
+        m.lock();
+        on_exit m.unlock();
+
+        if (shh{id} === handler) {
+            remove shh{id};
+        }
+    }
+
+    #! Returns the object that represents this listener to the code of its handlers
+    /** The handlers of the listener's requests and connections get this object, which gives only the methods of
+        @ref HttpServer::HttpListenerInterface "HttpListenerInterface", instead of the listener, whose other methods
+        (and those of its socket) are for the server only (qore#6921); the same object is returned for the life of
+        the listener
+
+        @since HttpServer 1.7
+    */
+    HttpServer::HttpListenerInterface getHandlerView() {
+        return handler_view;
     }
 
     removeDedicatedSocket(softstring id, *bool managed_externally) {
@@ -9137,6 +9205,106 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 logError("cid %d: error processing orphaned request: %s", cx.id,
                     etxt);
             }
+        }
+    }
+}
+
+#! The listener as the code of its handlers sees it (qore#6921)
+/** The handlers of a listener's requests and connections get this object instead of the listener: it gives only
+    the methods of @ref HttpServer::HttpListenerInterface "HttpListenerInterface", which it forwards to the listener,
+    so that the code of a handler, which may be sandboxed and may serve one of the listeners of a shared server,
+    cannot reach the listener's other methods (its TLS certificate and private key, the other connections' handlers,
+    its handlers and its stop) or those of its socket, whatever type it casts the object to or however it calls its
+    methods.  The class is not exported, so no code outside the module can name it.
+
+    Each listener has one such object for its whole life (see HttpListener::getHandlerView()), so code that keeps the
+    object of one request and uses it in a later one, also on another thread, reaches the same listener.  The object
+    refers to the listener weakly: once the listener is gone, its calls do nothing (or return the defaults of
+    @ref HttpServer::HttpListenerInterface "HttpListenerInterface").
+*/
+class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
+    private:internal {
+        #! the listener, weakly referenced
+        *HttpListener listener;
+    }
+
+    #! Creates the object for the given listener
+    constructor(HttpListener listener) {
+        self.listener := listener;
+    }
+
+    log(string fmt, ...) {
+        if (*HttpListener l = listener) {
+            l.log("%s", vsprintf(fmt, argv));
+        }
+    }
+
+    logError(string fmt, ...) {
+        if (*HttpListener l = listener) {
+            l.logError("%s", vsprintf(fmt, argv));
+        }
+    }
+
+    logResponse(hash<auto> cx, hash<auto> rv) {
+        if (*HttpListener l = listener) {
+            l.logResponse(cx, rv);
+        }
+    }
+
+    #! Removes a dedicated socket handler; refused to sandboxed code, which removes only its own handler's connection
+    /** @throw HTTPLISTENER-ACCESS-ERROR the calling code is sandboxed: it calls
+        removeExternalDedicatedSocket(softstring, AbstractHttpSocketHandlerInterface) instead
+    */
+    removeExternalDedicatedSocket(softstring id) {
+        if (SandboxManager::isSandboxed()) {
+            throw "HTTPLISTENER-ACCESS-ERROR", "sandboxed code can remove only the connection of its own handler";
+        }
+        if (*HttpListener l = listener) {
+            l.removeExternalDedicatedSocket(id);
+        }
+    }
+
+    removeExternalDedicatedSocket(softstring id, HttpServer::AbstractHttpSocketHandlerInterface handler) {
+        if (*HttpListener l = listener) {
+            l.removeExternalDedicatedSocket(id, handler);
+        }
+    }
+
+    int getMaxDecodedBodySize() {
+        if (*HttpListener l = listener) {
+            return l.getMaxDecodedBodySize();
+        }
+        return HttpListenerInterface::getMaxDecodedBodySize();
+    }
+
+    string getDefaultTextEncoding() {
+        if (*HttpListener l = listener) {
+            return l.getDefaultTextEncoding();
+        }
+        return HttpListenerInterface::getDefaultTextEncoding();
+    }
+
+    *hash<auto> getDefaultResponseHeaders() {
+        if (*HttpListener l = listener) {
+            return l.getDefaultResponseHeaders();
+        }
+    }
+
+    addUserThreadContext(hash<auto> uctx) {
+        if (*HttpListener l = listener) {
+            l.addUserThreadContext(uctx);
+        }
+    }
+
+    auto removeUserThreadContext(*string k) {
+        if (*HttpListener l = listener) {
+            return l.removeUserThreadContext(k);
+        }
+    }
+
+    signalPersistentSessionClose(softstring uh) {
+        if (*HttpListener l = listener) {
+            l.signalPersistentSessionClose(uh);
         }
     }
 }

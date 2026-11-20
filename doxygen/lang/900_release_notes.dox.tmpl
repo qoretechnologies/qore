@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par HTTP Handlers Get an Object of Their Listener's Interface, Not the Listener
+    The handlers of an HTTP server get an object with only the methods of
+    @ref HttpServer::HttpListenerInterface "HttpListenerInterface" for the listener of their request, one per listener,
+    instead of the listener itself (<a href="https://github.com/qoretechnologies/qore/issues/6921">issue 6921</a>).
+
     @par Sandboxed Code Cannot Disturb Other Callers Through Shared Runtime State
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
     get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
