@@ -201,17 +201,24 @@ string sub op_path(object schema) {
     return schema.info.title == "test" ? "/things" : "/v1/customers";
 }
 
-# the snapshot of the members of a REST schema that the changes change
+# the identity of a value: an object is given by its class and identity, never formatted with its members, as a
+# schema object can reach a large graph of shared schema objects, and a change can make it refer to itself
+auto sub ident(auto v) {
+    return v.typeCode() == NT_OBJECT ? sprintf("<%s %s>", v.className(), v.uniqueHash()) : v;
+}
+
+# the snapshot of the members of a REST schema that the changes change; values only, no object is formatted
 string sub rest_snapshot(object schema, string name) {
+    object op = schema.paths.match(op_path(schema)).getOperation("get", op_path(schema));
     string rv = sprintf("%y %y %y %y %y %y", schema.basePath, schema.getBasePath(), schema.host, schema.info.title,
-        (exists (auto tz = schema.getTimeZoneLocale()) ? tz.region() : NOTHING), schema.paths.match(op_path(schema)).getOperation("get", op_path(schema)).parameters.size());
+        (exists (auto tz = schema.getTimeZoneLocale()) ? tz.region() : NOTHING), op.parameters.size());
     *object so = schema instanceof SwaggerSchema ? schema.definitions{name} : schema.components.schemas{name};
     if (!so) {
         return rv + " no reusable schema";
     }
     return rv + sprintf(" %y %y %y %y %y %y %y %y %y", so.desc, so.dataType.typeCode(), so.orNothingDataType.typeCode(),
         keys so.properties, so.required,
-        so.items, so.additionalProperties, so.example, so.type);
+        ident(so.items), ident(so.additionalProperties), ident(so.example), so.type);
 }
 
 string sub async_snapshot(object schema) {

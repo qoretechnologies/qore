@@ -1210,6 +1210,10 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
         bool for_delete, bool* exists) {
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
+        // a member of a shared object held in external storage cannot be removed by sandboxed code (qore#6843)
+        if (checkSharedChange(key, runtime_get_class(), xsink)) {
+            return QoreValue();
+        }
         QoreValue value = cls->evalMemberWriteGate(obj, key, QoreValue(),
             for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, xsink);
         if (exists) {
@@ -1298,6 +1302,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     }
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
+        // a member of a shared object held in external storage cannot be removed by sandboxed code (qore#6843)
+        if (checkSharedChange(key, runtime_get_class(), lvh.vl.xsink)) {
+            return QoreValue();
+        }
         ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
         lvh.finishForCallback();
         if (*lvh.vl.xsink) {
@@ -1590,6 +1598,10 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
     lvh.disableMemberWriteBack();
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
+        // a member of a shared object held in external storage is written as any other (qore#6843)
+        if (!lvh.isReadValueOnly() && checkSharedChange(key, class_ctx, xsink)) {
+            return -1;
+        }
         return lvh.setMemberWriteGateLValue(obj, key);
     }
     const QoreTypeInfo* mti = nullptr;
