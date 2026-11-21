@@ -4098,19 +4098,6 @@ std::string QoreModuleManager::findTrustedModule(const char* name) const {
     return std::string();
 }
 
-bool qore_caller_may_load_native_code() {
-    // trusted code decides what native code to load
-    if (!qore_caller_is_untrusted()) {
-        return true;
-    }
-    // code that is not trusted may if it may use uncontrolled APIs, which can bypass a sandbox as native code can:
-    // neither its own options nor any sandbox that governs it forbid them (QoreSandboxManager::setUncontrolledApiPolicy())
-    if (qore_caller_restricts_domain(QDOM_UNCONTROLLED_API)) {
-        return false;
-    }
-    return !qore_caller_is_sandboxed() || qore_thread_sandbox_allows_uncontrolled_apis(false);
-}
-
 int QoreModuleManager::checkShadowingLoad(ExceptionSink& xsink, const char* path, const char* feature,
         bool trusted, bool& tenant_chosen, QoreSandboxManager*& owner, qore_program_id_t& owner_pgm_id,
         qore_shadow_load_e kind) const {

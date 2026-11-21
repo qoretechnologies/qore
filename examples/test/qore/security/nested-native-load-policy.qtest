@@ -1,0 +1,74 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - native module loader policy and sandbox manager composition
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class NestedNativeLoadPolicyTest
+
+class NestedNativeLoadPolicyTest inherits QUnit::Test {
+    private {
+        const Allowed = {
+            "nested": True, "destination": True, "initializing": True, "after_init": True, "restored": True,
+        };
+        const Refused = {
+            "nested": False, "destination": False, "initializing": False, "after_init": False, "restored": True,
+        };
+        const RefusedByDestination = {
+            "nested": True, "destination": False, "initializing": True, "after_init": True, "restored": True,
+        };
+    }
+
+    constructor() : Test("NestedNativeLoadPolicyTest", "1.0") {
+        addTestCase("unrestricted caller and destination", \checkPolicy(), (Allowed, 0));
+        addTestCase("caller with a parse-only restriction", \checkPolicy(), (Refused, PO_NO_UNCONTROLLED_APIS));
+        addTestCase("sandbox denies uncontrolled APIs", \checkPolicy(), (Refused, 0, False));
+        addTestCase("sandbox allows uncontrolled APIs", \checkPolicy(), (Allowed, 0, True));
+        addTestCase("permissive sandbox and restricted caller", \checkPolicy(), (Refused, PO_NO_UNCONTROLLED_APIS, True));
+        addTestCase("restricted destination Program", \checkPolicy(), (RefusedByDestination, 0, NOTHING,
+            PO_NO_UNCONTROLLED_APIS));
+        addTestCase("nested initializers observe revocation of the caller's sandbox permission", \revocationTest());
+        addTestCase("a restricted caller can load a host module by name into a destination Program",
+            \trustedModuleTest());
+        set_return_value(main());
+    }
+
+    private checkPolicy(hash<auto> expected, int options, *bool allows_uncontrolled = NOTHING, int target_options = 0) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("requires the Debug native-load policy probe");
+        }
+        Program caller(PO_NEW_STYLE | options);
+        if (exists allows_uncontrolled) {
+            SandboxManager sm();
+            sm.setUncontrolledApiPolicy(allows_uncontrolled);
+            caller.setSandboxManager(sm);
+        }
+        Program target(PO_NEW_STYLE | target_options);
+        assertEq(expected, call_function("dbg_nested_native_load_policy", caller, target));
+    }
+
+    revocationTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("requires the Debug native-load policy probe");
+        }
+        assertEq({
+            "outer_before": True, "inner_before": True,
+            "inner_after": False, "outer_after": False, "caller_after": False, "host_after": True,
+        }, call_function("dbg_native_load_init_revocation"));
+    }
+
+    trustedModuleTest() {
+        Program caller(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+        caller.parse("%modern\nsub load_yaml(Program target) { target.loadModule(\"yaml\"); }", "host-module");
+        Program target(PO_NEW_STYLE);
+        assertFalse(inlist("yaml", target.getFeatureList()), "the destination has not imported yaml");
+        caller.callFunction("load_yaml", target);
+        assertTrue(inlist("yaml", target.getFeatureList()), "the destination imported the host module");
+    }
+}

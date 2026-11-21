@@ -841,9 +841,9 @@ public:
 
     DLLLOCAL ~QoreModuleInitSandboxBarrierHelper();
 
-    //! returns true if a lift was needed and could not be recorded
+    //! returns true if a module load could not record its permission boundary
     DLLLOCAL bool failed() const {
-        return failed_lift;
+        return record_failed;
     }
 
     //! returns true if the helper recorded a barrier or a lift (it is restored when the helper is destroyed)
@@ -853,7 +853,7 @@ public:
 
 private:
     bool pushed = false;
-    bool failed_lift = false;
+    bool record_failed = false;
 };
 
 //! Marks module code that runs for no application: a module's init or del closure
@@ -1857,8 +1857,8 @@ DLLLOCAL bool qore_program_is_library_module(const QoreProgram* pgm);
     thread, so that qore_caller_is_sandboxed() stays true while it exists, and applies the sandbox that governs the
     caller as the provenance of the code that runs (see QoreSandboxProvenanceHelper).  Under a module initialization
     barrier set later (the initialization of library code that the call loads), neither is seen, as for any caller of
-    library code (see QoreModuleInitSandboxBarrierHelper).  Inactive if the target Program is the current one or the
-    caller is trusted.
+    library code (see QoreModuleInitSandboxBarrierHelper). A switch also preserves a caller's restriction on loading
+    native code, including one imposed by parse options alone. Inactive if the target Program is the current one.
 */
 class QoreCallerSandboxHelper {
 public:
@@ -1882,6 +1882,7 @@ public:
 private:
     QoreSandboxProvenanceHelper provenance;
     const QoreCallerSandboxHelper* previous = nullptr;
+    const QoreCallerSandboxHelper* previous_native_load_restriction = nullptr;
     size_t barrier_depth = 0;
     bool pushed = false;
 };

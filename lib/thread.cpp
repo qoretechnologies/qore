@@ -893,6 +893,10 @@ public:
         //! the Program of the library module initialized under the barrier, once it exists, or nullptr; never set
         //! for a lift or for the barrier of a deferred initialization (see qore_module_init_set_program())
         const QoreProgram* module_pgm = nullptr;
+        //! Whether the caller that initiated this load may select a native file outside the host module path
+        bool caller_may_select_native_file = true;
+        //! Governing managers at entry; their permission to use uncontrolled APIs can be revoked during the load.
+        QoreSandboxManager* native_file_policy = nullptr;
     };
     std::vector<ModuleInitBarrier> module_init_barriers;
 
@@ -954,6 +958,8 @@ public:
     }
     //! the innermost QoreCallerSandboxHelper that a sandboxed caller created on this thread, if any
     const QoreCallerSandboxHelper* sandboxed_caller = nullptr;
+    // A Program switch which would otherwise hide a restriction on loading native code.
+    const QoreCallerSandboxHelper* native_load_restriction = nullptr;
     // the budgets of the sandbox calls with a time limit that the thread is running (see
     // design/sandbox-resource-limits.md); only used by the thread itself
     QoreSandboxBudgetStack sandbox_budgets;
@@ -7022,6 +7028,31 @@ int64 qore_caller_denied_user_domains(int64 domain) {
     return denied.getLo();
 }
 
+bool qore_caller_may_load_native_code() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return true;
+    }
+    // A library initialization barrier changes who owns the module's state. It does not authorize a native file
+    // selected by an outer caller. A trusted host build is the boundary for both loader and Program-switch records.
+    size_t depth = td->module_init_barriers.size();
+    for (; depth; --depth) {
+        const auto& barrier = td->module_init_barriers[depth - 1];
+        if (barrier.build) {
+            break;
+        }
+        if (!barrier.caller_may_select_native_file
+                || (barrier.native_file_policy && !barrier.native_file_policy->getUncontrolledApiPolicy())) {
+            return false;
+        }
+    }
+    if (td->native_load_restriction && td->native_load_restriction->getBarrierDepth() >= depth) {
+        return false;
+    }
+    return !qore_caller_denied_user_domains(QDOM_UNCONTROLLED_API)
+        && qore_thread_sandbox_allows_uncontrolled_apis(false);
+}
+
 //! returns the functional-domain restrictions of the code that creates an object or call reference now (qore#6520)
 /** The restrictions that a check of a declared domain would apply to the creating code: those of a sandboxed caller,
     of the calling code, and of the objects and call references whose code runs; not looked up past a module
@@ -7200,17 +7231,20 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
     if (active) {
         // the code that loads the library module, which nested loads are checked for (see qore_caller_is_untrusted())
         const bool untrusted = qore_caller_is_untrusted();
-        QoreSandboxManager* sm = untrusted ? qore_caller_sandbox_ref() : nullptr;
-        // without the barrier recorded, the module's initialization stays governed by the code that loads it
         try {
+            ReferenceHolder<QoreSandboxManager> owner(untrusted ? qore_caller_sandbox_ref() : nullptr, nullptr);
+            // A nested initializer can have additional managers of its own. Keep their live composition as well
+            // as the original denial, so a later decision observes revocations during initialization.
+            ReferenceHolder<QoreSandboxManager> policy(find_thread_sandbox_manager_ref_intern(), nullptr);
             td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
-                td->sandbox_context, td->inherited_sandbox_context, false, untrusted, sm,
-                untrusted ? qore_caller_owner_program_id() : QORE_NO_PROGRAM_ID});
+                td->sandbox_context, td->inherited_sandbox_context, false, untrusted, owner.operator->(),
+                untrusted ? qore_caller_owner_program_id() : QORE_NO_PROGRAM_ID, false, nullptr,
+                qore_caller_may_load_native_code(), policy.operator->()});
+            owner.release();
+            policy.release();
             pushed = true;
         } catch (std::bad_alloc&) {
-            if (sm) {
-                sm->deref(nullptr);
-            }
+            record_failed = true;
         }
         return;
     }
@@ -7230,14 +7264,15 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
     const qore_program_id_t pgm_id = top.loader_pgm_id;
     try {
         td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
-            td->sandbox_context, td->inherited_sandbox_context, true, true, sm, pgm_id});
+            td->sandbox_context, td->inherited_sandbox_context, true, true, sm, pgm_id, false, nullptr,
+            top.caller_may_select_native_file});
         pushed = true;
     } catch (std::bad_alloc&) {
         if (sm) {
             sm->deref(nullptr);
         }
         // without the lift, the module would be initialized as library code
-        failed_lift = true;
+        record_failed = true;
     }
 }
 
@@ -7247,11 +7282,9 @@ QoreModuleInitSandboxBarrierHelper::~QoreModuleInitSandboxBarrierHelper() {
     }
     ThreadData* td = thread_data.get();
     assert(td && !td->module_init_barriers.empty());
-    QoreSandboxManager* sm = td->module_init_barriers.back().loader_manager;
+    ReferenceHolder<QoreSandboxManager> owner(td->module_init_barriers.back().loader_manager, nullptr);
+    ReferenceHolder<QoreSandboxManager> policy(td->module_init_barriers.back().native_file_policy, nullptr);
     td->module_init_barriers.pop_back();
-    if (sm) {
-        sm->deref(nullptr);
-    }
 }
 
 #ifdef DEBUG
@@ -7543,12 +7576,20 @@ void QoreSandboxProvenanceHelper::set(const QoreObject* object) {
 
 QoreCallerSandboxHelper::QoreCallerSandboxHelper(const QoreProgram* target, ExceptionSink* xsink) {
     ThreadData* td = thread_data.get();
-    // no switch hides the caller, or the caller is trusted
-    if (!td || !target || target == td->current_pgm || !qore_caller_is_sandboxed()) {
+    if (!td || !target || target == td->current_pgm) {
+        return;
+    }
+    barrier_depth = td->module_init_barriers.size();
+    // A caller can restrict uncontrolled APIs through its parse options alone. Preserve its native-load
+    // decision before the target Program takes its place, independently of whether it has a sandbox manager.
+    if (!qore_caller_may_load_native_code()) {
+        previous_native_load_restriction = td->native_load_restriction;
+        td->native_load_restriction = this;
+    }
+    if (!qore_caller_is_sandboxed()) {
         return;
     }
     previous = td->sandboxed_caller;
-    barrier_depth = td->module_init_barriers.size();
     td->sandboxed_caller = this;
     pushed = true;
     // the sandbox that governs the caller governs what runs for it in the target Program; a caller that no sandbox
@@ -7568,8 +7609,11 @@ QoreCallerSandboxHelper::QoreCallerSandboxHelper(const QoreProgram* target, Exce
 }
 
 QoreCallerSandboxHelper::~QoreCallerSandboxHelper() {
+    ThreadData* td = thread_data.get();
+    if (td && td->native_load_restriction == this) {
+        td->native_load_restriction = previous_native_load_restriction;
+    }
     if (pushed) {
-        ThreadData* td = thread_data.get();
         assert(td->sandboxed_caller == this);
         td->sandboxed_caller = previous;
     }
