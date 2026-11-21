@@ -62,7 +62,7 @@ class HandshakeHeaderValuesTest inherits QUnit::Test {
         assertEq("2", hdr."x-count");
         assertEq(version == "1.1" ? "1.25" : "1.250000", hdr."x-ratio");
         assertEq("1", hdr."x-enabled");
-        # The H1 server exposes repeated fields as a list. H2 and H3 expose their combined field value.
-        assertEq(version == "1.1" ? ("first", "3", "0") : "first, 3, 0", hdr."x-values");
+        # The H3 server combines repeated fields. H1 and H2 expose each field separately.
+        assertEq(version == "3.0" ? "first, 3, 0" : ("first", "3", "0"), hdr."x-values");
     }
 }
