@@ -190,6 +190,23 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
     // created them (ex: system objects, which hold no weak Program reference)
     qore_class_private::refClass(*const_cast<QoreClass*>(oc));
     sandbox_provenance = provenance.release();
+    // a sandbox owns the object if sandboxed code executes the expression that creates it (qore#6842)
+    if (sandbox_provenance && qore_sandboxed_code_active()) {
+        sandbox_owned.store(qore_creator_is_sandbox_owner(), std::memory_order_relaxed);
+    }
+}
+
+// returns true if the code that creates an object now makes the object owned by a sandbox (qore#6842): sandboxed code
+// (the code of a sandboxed Program), or trusted class code executing directly in a non-static method of an object that
+// a sandbox owns, whose ownership the new object inherits; not a static method or a function, which has no object of
+// its own, nor a method of another object, whose own object decides
+bool qore_creator_is_sandbox_owner() {
+    QoreProgram* pgm = getProgram();
+    if (pgm && qore_program_is_sandboxed(pgm)) {
+        return true;
+    }
+    const QoreObject* self = runtime_get_stack_object();
+    return self && qore_object_private::get(*self)->sandbox_owned.load(std::memory_order_acquire);
 }
 
 QoreStringNode* QoreObject::getUniqueHash() const {
@@ -1588,7 +1605,7 @@ bool qore_object_private::sandboxedWriterDeniedIntern(const qore_class_private& 
     if (qore_class_private::get(*theclass)->getClassIntern(class_ctx.classID, access, true)) {
         return false;
     }
-    return !qore_sandbox_current_code_created(sandbox_provenance);
+    return !qore_sandbox_current_code_created(sandbox_provenance, sandbox_owned.load(std::memory_order_acquire));
 }
 
 int qore_object_private::checkSandboxedMemberReadIntern(const char* mem, const qore_class_private* lookup_ctx,
@@ -1608,6 +1625,7 @@ int qore_object_private::checkSandboxedMemberReadIntern(const char* mem, const q
 }
 
 void qore_object_private::setCopyProvenance(const qore_object_private& source) {
+    sandbox_owned.store(source.sandbox_owned.load(std::memory_order_acquire), std::memory_order_release);
     QoreSandboxContext* src = source.sandbox_provenance;
     if (src) {
         src->ref();

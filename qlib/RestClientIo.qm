@@ -1510,7 +1510,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                     cookie_jar = new HttpClientIo::CookieJar();
                 }
             } else {
-                mgr = buildConnectionManager(opts);
+                # created directly by the client, which owns the manager: the owner of the client owns it too
+                mgr = new HttpClientIo::HttpClientConnectionManager(getConnectionManagerOptions(opts));
                 mgr_owner = new RestClientIoConnectionManagerOwner(mgr);
                 cookie_jar = mgr.getCookieJar();
             }
@@ -5232,6 +5233,12 @@ rest.addSensitiveHeaders("Qorus-Token");
             @return a new HttpClientConnectionManager configured from the options
         */
         static HttpClientIo::HttpClientConnectionManager buildConnectionManager(hash<auto> opts) {
+            return new HttpClientIo::HttpClientConnectionManager(getConnectionManagerOptions(opts));
+        }
+
+        #! Returns the options of a HttpClientConnectionManager from RestClientIo client options
+        private static hash<HttpClientIo::HttpClientConnectionManagerOptions> getConnectionManagerOptions(
+                hash<auto> opts) {
             hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts();
             if (opts.connect_timeout) {
                 mgr_opts.connect_timeout = opts.connect_timeout;
@@ -5302,7 +5309,7 @@ rest.addSensitiveHeaders("Qorus-Token");
             if (client_pk) {
                 mgr_opts.client_pk = client_pk;
             }
-            return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+            return mgr_opts;
         }
 
         #! Loads an X.509 client certificate from \c ssl_cert_path or \c ssl_cert_data

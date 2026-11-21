@@ -1585,9 +1585,9 @@
     and C++ macro \c QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL); see @ref sandbox_enforcement_level.
 
     @par Sandboxed Code Changes Only the Objects That Its Sandbox Created
-    At tenant isolation, the code of a class that sandboxed code declared cannot write a non-public member of an object
-    that its sandbox did not create, and the logger setters check the caller with
-    @ref Qore::SandboxManager::checkObjectOwnedByCaller(); see @ref sandbox_object_ownership
+    At tenant isolation, a class that sandboxed code declared cannot write non-public members of objects its sandbox
+    did not create, setters check @ref Qore::SandboxManager::checkObjectOwnedByCaller(), and trusted code hands objects
+    over with @ref Qore::SandboxManager::transferObjectToCaller(); see @ref sandbox_object_ownership
     (<a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>).
 
     @par Sandboxed Code Reads Only the Non-Public State of the Objects That Its Sandbox Created

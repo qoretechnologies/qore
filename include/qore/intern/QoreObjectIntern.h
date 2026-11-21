@@ -222,6 +222,9 @@ DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, Except
 */
 DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 
+//! Returns true if the code that creates an object now makes the object owned by a sandbox (qore#6842)
+DLLLOCAL bool qore_creator_is_sandbox_owner();
+
 class qore_object_private : public RObject {
 public:
     //! How a write of a non-public member is checked against the sandboxed write rule (qore#6842)
@@ -254,6 +257,10 @@ public:
     QoreProgram* pgm;
     //! Immutable creation context; does not retain a Program or any Qore object
     QoreSandboxContext* sandbox_provenance = nullptr;
+    //! true if a sandbox owns the object: sandboxed code created it, or trusted class code directly in a method of
+    //! an object that a sandbox owns, or trusted code transferred it to the sandboxed code that it served
+    //! (qore_transfer_object_to_caller()); the sandbox is the one that \c sandbox_provenance records (qore#6842)
+    std::atomic<bool> sandbox_owned{false};
     cdmap_t* cdmap = nullptr;
 
     // used for garbage collection

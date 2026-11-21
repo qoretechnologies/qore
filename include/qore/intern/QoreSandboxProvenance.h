@@ -34,10 +34,11 @@ DLLLOCAL QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* 
     one of those that governed the creation of the object, as recorded in its provenance \a creation (the
     provenance that an object created now would record is compared, see qore_capture_sandbox_provenance()).  False if
     no manager governs the current code (code that is sandboxed only by its Program's flag), if \a creation is
-    nullptr (an object that trusted code created), and if the sandboxes cannot be resolved: it fails closed.  The
-    caller decides that the code is sandboxed.
+    nullptr, or if \a owned is false (an object that no sandbox owns: one that trusted code created, also while it
+    served sandboxed code), and if the sandboxes cannot be resolved: it fails closed.  The caller decides that the
+    code is sandboxed.
 */
-DLLLOCAL bool qore_sandbox_current_code_created(const QoreSandboxContext* creation);
+DLLLOCAL bool qore_sandbox_current_code_created(const QoreSandboxContext* creation, bool owned);
 //! Returns true if the owner rules apply to the code that \a sm governs: its enforcement level is tenant isolation
 /** The owner rules are the rules that keep the objects that a sandbox's code created apart from the code of other
     sandboxes: the sandboxed write and read rules of non-public members and the owner checks of

@@ -1,0 +1,259 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A sandbox owns an object if sandboxed code created it, or if the code of a trusted class created it directly in a
+# method of an object that the sandbox owns (issue #6842): an object that trusted code creates while it serves a
+# tenant, such as a shared object that it creates lazily for its first caller or an object that it caches through a
+# static method or a function, is owned by no tenant, unless trusted code hands it to the tenant with
+# SandboxManager::transferObjectToCaller(), which is refused for sandboxed code and for an object that a sandbox owns
+# already.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires RestClientIo
+
+%exec-class SandboxObjectOwnershipTest
+
+#! a shared object of the host, created lazily for its first caller
+our *LoggerWrapper shared_wrapper;
+
+#! returns the shared object of the host, which it creates for its first caller
+LoggerWrapper sub host_get_shared() {
+    return shared_wrapper ?? (shared_wrapper = new LoggerWrapper(new Logger("host-shared")));
+}
+
+#! creates an object for the calling tenant and hands it over
+LoggerWrapper sub host_make_for_caller() {
+    LoggerWrapper w(new Logger("host-made"));
+    SandboxManager::transferObjectToCaller(w);
+    return w;
+}
+
+#! creates an object for the calling tenant without handing it over
+LoggerWrapper sub host_make() {
+    return new LoggerWrapper(new Logger("host-made"));
+}
+
+#! transfers the given object to the calling tenant; returns "ok" or the exception code
+string sub host_transfer(object o) {
+    try {
+        SandboxManager::transferObjectToCaller(o);
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! a library class whose objects create objects for their owner
+public class Lib {
+    public {
+        static *LoggerWrapper cache;
+    }
+
+    #! creates an object directly in a method of an object that the tenant owns
+    LoggerWrapper direct() {
+        return new LoggerWrapper(new Logger("direct"));
+    }
+
+    #! fills a static cache through a static method
+    LoggerWrapper viaStatic() {
+        return Lib::fill();
+    }
+
+    #! fills a static cache through a function
+    LoggerWrapper viaFunction() {
+        return lib_fill();
+    }
+
+    static LoggerWrapper fill() {
+        return Lib::cache ?? (Lib::cache = new LoggerWrapper(new Logger("static-cache")));
+    }
+}
+
+#! the global cache that Lib::viaFunction() fills
+our *LoggerWrapper lib_cache;
+
+LoggerWrapper sub lib_fill() {
+    return lib_cache ?? (lib_cache = new LoggerWrapper(new Logger("function-cache")));
+}
+
+#! the code of the tenants
+const TenantSource = "%modern
+%requires Logger
+%requires RestClientIo
+
+#! a subclass that reads and writes the logger of a LoggerWrapper
+class LSub inherits Logger::LoggerWrapper {
+    static string read(Logger::LoggerWrapper w) {
+        try {
+            return w.logger ? \"logger\" : \"nothing\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! what the tenant may do with the object: \"owned\" or \"not owned\", the result of a read of its private logger with
+#! a subclass and of a change of its logger
+string sub access(Logger::LoggerWrapper w) {
+    string set;
+    try {
+        w.setLogger(new Logger::Logger(\"tenant\"));
+        set = \"set\";
+    } catch (hash<ExceptionInfo> ex) {
+        set = ex.err;
+    }
+    return sprintf(\"%s %s %s\", SandboxManager::isObjectOwnedByCaller(w) ? \"owned\" : \"not-owned\",
+        LSub::read(w), set);
+}
+
+string sub shared() {
+    return access(host_get_shared());
+}
+
+string sub made_for_caller() {
+    return access(host_make_for_caller());
+}
+
+string sub made() {
+    return access(host_make());
+}
+
+string sub own() {
+    return access(new Logger::LoggerWrapper(new Logger::Logger(\"own\")));
+}
+
+string sub own_copy() {
+    return access((new Logger::LoggerWrapper(new Logger::Logger(\"own\"))).copy());
+}
+
+hash<string, string> sub lib() {
+    Lib l();
+    return {
+        \"direct\": access(l.direct()),
+        \"static\": access(l.viaStatic()),
+        \"function\": access(l.viaFunction()),
+    };
+}
+
+#! transfers with the tenant's own code
+string sub tenant_transfer(object o) {
+    try {
+        SandboxManager::transferObjectToCaller(o);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub transfer_own() {
+    return host_transfer(new Logger::LoggerWrapper());
+}
+
+string sub transfer_made() {
+    return host_transfer(host_make());
+}
+
+string sub transfer_host_object(object o) {
+    return host_transfer(o);
+}
+
+#! the connection manager of the tenant's own client
+string sub client_manager() {
+    RestClientIo::RestClientIo rc({\"url\": \"http://localhost:1\"});
+    object mgr = rc.getConnectionManager();
+    string rv = SandboxManager::isObjectOwnedByCaller(mgr) ? \"owned\" : \"not-owned\";
+    try {
+        rc.setLogger(new Logger::Logger(\"tenant\", Logger::LoggerLevel::getLevelInfo()));
+        mgr.setLogger(new Logger::Logger(\"tenant\", Logger::LoggerLevel::getLevelInfo()));
+        rv += \" set\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv += \" \" + ex.err;
+    }
+    return rv;
+}
+";
+
+class SandboxObjectOwnershipTest inherits QUnit::Test {
+    public {
+        #! the execution modes of the tenants' code
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the exception of a refused access
+        const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+
+        #! what a tenant may do with an object that it owns, and with one that it does not own
+        const Owned = "owned logger set";
+        const NotOwned = "not-owned " + Err + " " + Err;
+    }
+
+    constructor() : QUnit::Test("sandbox object ownership", "1.0", \ARGV) {
+        foreach string mode in (keys ExecModes) {
+            addTestCase("ownership in " + mode, getTest(mode));
+        }
+        set_return_value(main());
+    }
+
+    private code getTest(string mode) {
+        return sub () { ownershipTest(mode); };
+    }
+
+    #! creates a tenant
+    private static Program tenant(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setExecMode(ExecModes{mode});
+        p.setSandboxManager(new SandboxManager());
+        map p.importFunction($1), ("host_get_shared", "host_make_for_caller", "host_make", "host_transfer");
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    ownershipTest(string mode) {
+        # the shared and the cached objects start again for each mode
+        shared_wrapper = NOTHING;
+        Lib::cache = NOTHING;
+        lib_cache = NOTHING;
+        Program a = tenant(mode);
+        Program b = tenant(mode);
+
+        # an object that the host creates lazily for its first caller is owned by no tenant
+        assertEq(NotOwned, a.callFunction("shared"), mode + ": A on the shared object it caused");
+        assertEq(NotOwned, b.callFunction("shared"), mode + ": B on the shared object");
+
+        # objects that the tenant creates, also copies of them
+        assertEq(Owned, a.callFunction("own"), mode + ": A on its own object");
+        assertEq(Owned, a.callFunction("own_copy"), mode + ": A on a copy of its own object");
+
+        # an object that the host creates for the tenant: owned only if the host hands it over
+        assertEq(NotOwned, a.callFunction("made"), mode + ": A on an object that the host made for it");
+        assertEq(Owned, a.callFunction("made_for_caller"), mode + ": A on an object that the host handed over");
+
+        # a library object of the tenant creates an object for it directly, but not through a static method or a
+        # function, which may cache it for every caller
+        assertEq({"direct": Owned, "static": NotOwned, "function": NotOwned}, a.callFunction("lib"),
+            mode + ": A's library object");
+
+        # the connection manager that the tenant's own client creates
+        assertEq("owned set", a.callFunction("client_manager"), mode + ": the manager of A's own client");
+
+        # transfers
+        assertEq("SANDBOX-ACCESS-ERROR", a.callFunction("tenant_transfer", new LoggerWrapper()),
+            mode + ": the tenant's own code transfers");
+        assertEq("SANDBOX-ACCESS-ERROR", a.callFunction("transfer_own"), mode + ": an object that A owns already");
+        assertEq("ok", a.callFunction("transfer_made"), mode + ": an object that the host made for A");
+        assertEq("SANDBOX-ACCESS-ERROR", a.callFunction("transfer_host_object", new LoggerWrapper()),
+            mode + ": an object that the host made before it served A");
+        assertEq("SANDBOX-ACCESS-ERROR", host_transfer(new LoggerWrapper()), mode + ": no sandboxed caller");
+    }
+}

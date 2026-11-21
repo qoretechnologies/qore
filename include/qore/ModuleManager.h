@@ -68,7 +68,8 @@
     QoreSandboxManager::setEnforcementLevel(), getEnforcementLevel(), isEnforcementLevelFixed() and
     qore_caller_tenant_isolated()) with its feature macro QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL (#6842), and
     qore_caller_owns_object() and qore_check_caller_owns_object() with their feature macro
-    QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK (#7102);
+    QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK (#7102), and qore_transfer_object_to_caller() with its feature macro
+    QORE_HAVE_SANDBOX_OBJECT_TRANSFER (#6842);
     changed in 2.3 (never in a released module API): qore_type_get_code_param_types() and
     qore_type_get_type_arguments() copy the types to a type_vec_t that the caller gives and return a bool, instead of
     returning a pointer to internal storage (#6419)

@@ -7557,7 +7557,7 @@ bool qore_sandbox_owner_rules_apply(const QoreSandboxManager& sm) {
     return sm.getEnforcementLevel() == QSEL_TENANT_ISOLATION;
 }
 
-bool qore_sandbox_current_code_created(const QoreSandboxContext* creation) {
+bool qore_sandbox_current_code_created(const QoreSandboxContext* creation, bool owned) {
     try {
         // the sandboxes that govern the current code, as they would be recorded for an object that it created now
         // (qore_capture_sandbox_provenance())
@@ -7583,7 +7583,8 @@ bool qore_sandbox_current_code_created(const QoreSandboxContext* creation) {
         if (current_managers.empty()) {
             return true;
         }
-        if (!creation) {
+        // an object that no sandbox owns (one that trusted code created, also for a sandboxed caller)
+        if (!owned || !creation) {
             return false;
         }
         std::vector<const QoreSandboxManager*> creation_managers;
@@ -7604,7 +7605,9 @@ bool qore_caller_created_object(const QoreObject& obj) {
     if (!qore_caller_is_sandboxed()) {
         return true;
     }
-    return qore_sandbox_current_code_created(qore_object_private::get(obj)->sandbox_provenance);
+    const qore_object_private* priv = qore_object_private::get(obj);
+    return qore_sandbox_current_code_created(priv->sandbox_provenance,
+        priv->sandbox_owned.load(std::memory_order_acquire));
 }
 
 void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {

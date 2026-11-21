@@ -2321,6 +2321,7 @@ void qore_program_private_base::newProgram() {
     // the sandbox features that Qore code can test for, named as their C++ feature macros
     dmap["QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL"] = true;
     dmap["QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK"] = true;
+    dmap["QORE_HAVE_SANDBOX_OBJECT_TRANSFER"] = true;
 
     QoreNamespace* ns = QoreNS->findLocalNamespace("Option");
     assert(ns);

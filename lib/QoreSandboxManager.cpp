@@ -34,6 +34,7 @@
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
@@ -2241,6 +2242,36 @@ int qore_check_caller_owns_object(const QoreObject& obj, const char* what, Excep
     xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "code that is sandboxed or acts for sandboxed code cannot "
         "%s an object of class '%s' that its sandbox did not create", what, obj.getClassName());
     return -1;
+}
+
+int qore_transfer_object_to_caller(QoreObject& obj, ExceptionSink* xsink) {
+    assert(xsink);
+    // the code that transfers: never sandboxed code itself
+    const QoreProgram* pgm = getProgram();
+    const qore_class_private* class_ctx = runtime_get_class();
+    if ((pgm && qore_program_is_sandboxed(pgm)) || (class_ctx && class_ctx->isSandboxedCode())) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code cannot transfer an object to its caller");
+        return -1;
+    }
+    qore_object_private* priv = qore_object_private::get(obj);
+    if (priv->sandbox_owned.load(std::memory_order_acquire)) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' that a sandbox owns already cannot be "
+            "transferred", obj.getClassName());
+        return -1;
+    }
+    if (!qore_caller_is_sandboxed()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' can only be transferred to the "
+            "sandboxed code that the calling code serves", obj.getClassName());
+        return -1;
+    }
+    // the object must have been created for the caller: its provenance names the caller's sandbox
+    if (!qore_sandbox_current_code_created(priv->sandbox_provenance, true)) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "an object of class '%s' that was not created while its "
+            "caller was served cannot be transferred to it", obj.getClassName());
+        return -1;
+    }
+    priv->sandbox_owned.store(true, std::memory_order_release);
+    return 0;
 }
 
 int qore_check_process_wide_registration(const char* what, ExceptionSink* xsink) {

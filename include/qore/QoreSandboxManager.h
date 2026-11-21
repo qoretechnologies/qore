@@ -1350,6 +1350,34 @@ DLLEXPORT int qore_check_caller_owns_object(const QoreObject& obj, const char* w
 #define QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK 1
 // ---- end of sandbox object owner check ----
 
+// ---- sandbox object transfer (QORE_HAVE_SANDBOX_OBJECT_TRANSFER) ----
+//! Hands an object that trusted code created to the sandboxed code that it serves, which then owns it
+/** An object is owned by a sandbox if sandboxed code created it (or trusted class code did directly in a method of an
+    object that the sandbox owns); an object that trusted code creates while it serves sandboxed code is governed by
+    that code's sandbox but owned by none, so that a shared object that trusted code creates lazily, for example, does
+    not become the object of whichever sandboxed caller came first.  Trusted code that creates an object for the
+    sandboxed code that it serves (a factory, or host code that configures the object for its caller) hands it to that
+    code with this function; the transfer is one-way.
+
+    It is refused (\c SANDBOX-ACCESS-ERROR) for sandboxed code, for an object that a sandbox owns already, when no
+    sandboxed caller is served, and for an object that was not created while the caller was served (its provenance
+    does not name the caller's sandbox).
+
+    @param obj the object to hand over
+    @param xsink raises \c SANDBOX-ACCESS-ERROR if the transfer is refused
+
+    @return 0 if the caller owns \a obj now, -1 if an exception was raised
+
+    @since Qore 3.0
+*/
+DLLEXPORT int qore_transfer_object_to_caller(QoreObject& obj, ExceptionSink* xsink);
+
+//! defined if qore_transfer_object_to_caller() is available
+/** @since %Qore 3.0
+*/
+#define QORE_HAVE_SANDBOX_OBJECT_TRANSFER 1
+// ---- end of sandbox object transfer ----
+
 
 //! RAII barrier that stops a sandboxed CALLER's policy from being inherited
 /** Sandbox policy normally propagates across program boundaries: code in a Qore-language
