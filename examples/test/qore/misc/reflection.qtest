@@ -1498,7 +1498,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("PollPipeline", "addReadHttpBody", ("method",));
         assertNamedClassMethodVariantCount("PollPipeline", "addDelegate", ("operation",));
         assertNamedClassMethodVariantCount("PollPipeline", "addRecvExact", ("byte_count", "as_string"));
-        assertNamedClassMethodVariantCount("PollPipeline", "addRecvUntilBytes", ("pattern", "as_string"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addRecvUntilBytes", ("pattern", "as_string", "max_size"));
         assertNamedClassMethodVariantCount("PollPipeline", "addRecvData", ("as_string",));
         assertNamedClassMethodVariantCount("PollPipeline", "addValidateHeaderPrefix",
             ("header_name", "expected_prefix", "error_code"));
