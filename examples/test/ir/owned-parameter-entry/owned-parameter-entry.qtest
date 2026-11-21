@@ -22,11 +22,17 @@ class OwnedParameterEntryTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    private string counts(string mode) {
+        return ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_IR_THRESHOLD=1 "
+            "%s -b --exec-mode=%s %s/arguments.q", TestInterpreter::qore_interpreter(), mode, get_script_dir()));
+    }
+
     sourceModes() {
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            assertEq("made 6 destroyed 6\n", ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 "
-                "QORE_JIT_THRESHOLD=1 QORE_IR_THRESHOLD=1 %s -b --exec-mode=%s %s/arguments.q",
-                TestInterpreter::qore_interpreter(), mode, get_script_dir())), mode);
+        string ast = counts("ast");
+        assertEq("made 6 destroyed 6\ndepth 0 made 2 destroyed 2\ndepth 1 made 3 destroyed 3\n"
+            "depth 4 made 6 destroyed 6\ndepth 12 made 14 destroyed 14\n", ast, "AST destroys every marker");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, counts(mode), mode);
         }
     }
 
@@ -39,7 +45,7 @@ class OwnedParameterEntryTest inherits QUnit::Test {
         string exe = sprintf("%s/args-%d", tmp.path, opt);
         string dump = ExecModeHarness::run_any(sprintf("QORE_DUMP_LLVM_IR=1 %s -O%d -o %s %s/arguments.q",
             qcc, opt, exe, get_script_dir()));
-        assertEq("made 6 destroyed 6\n", ExecModeHarness::run_any(exe + " -b"), sprintf("qcc -O%d", opt));
+        assertEq(counts("ast"), ExecModeHarness::run_any(exe + " -b"), sprintf("qcc -O%d", opt));
         assertEq({"fast": True, "regular": True}, {
             "fast": ownsOnEntry(dump, True), "regular": ownsOnEntry(dump, False),
         }, "both the retained fast argument and the transferred regular argument are acquired after admission");
