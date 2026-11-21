@@ -8066,6 +8066,60 @@ QoreValue qore_class_private::evalMethod(LexicalSemanticPolicy policy, QoreObjec
     return evalMethodImpl<true>(policy, self, nme, args, class_ctx, rc, xsink, explicit_type_param_instantiation, pgm_ctx);
 }
 
+template <bool Lexical>
+QoreValue qore_class_private::evalMethodFromCallerImpl(LexicalSemanticPolicy policy, QoreObject* self,
+        const char* nme, const QoreListNode* args, const qore_class_private* caller_ctx, RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
+    assert(self);
+    assert(caller_ctx);
+    qore_object_private* self_priv = qore_object_private::get(*self);
+    // a deleted object and a copy are handled as by a call without a class context
+    if (self_priv->status == OS_DELETED || !strcmp(nme, "copy")) {
+        return evalMethodImpl<Lexical>(policy, self, nme, args, nullptr, rc, xsink);
+    }
+    // the lookup of a call without a class context: a method found, or an error raised, is as before; a method that
+    // a privately inherited (private, not private:internal) parent class declares raises BASE-CLASS-IS-PRIVATE here,
+    // as that edge is also visible to the code of the base classes of the object's class, whose dispatchers can take
+    // a method name from their input
+    const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, nullptr, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!w) {
+        // a public method that the class context reaches through a private:internal parent class of its own, which
+        // a lookup without a class context does not follow and which only the code of the class context can follow
+        // (qore#6859); a method that is not public is not called
+        w = getMethodForEval(nme, self_priv->pgm, caller_ctx, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (w && w->getAccess() != Public) {
+            w = nullptr;
+        }
+    }
+    if (w) {
+        // without a class context, so that only the public variants of the method can be called, as before
+        if (qore_method_private::get(*w)->static_flag) {
+            return qore_method_private::evalStaticOnObject<Lexical>(policy, *w, xsink, rc, self, args, nullptr,
+                nullptr, nullptr);
+        }
+        return qore_method_private::evalWithPolicy<Lexical>(policy, *w, xsink, rc, self, args, nullptr, nullptr,
+            nullptr, nullptr);
+    }
+    return qore_eval_missing_method<Lexical>(*this, policy, self, nme, args, nullptr, rc, xsink);
+}
+
+QoreValue qore_class_private::evalMethodFromCaller(QoreObject* self, const char* nme, const QoreListNode* args,
+        const qore_class_private* caller_ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    return evalMethodFromCallerImpl<false>({}, self, nme, args, caller_ctx, rc, xsink);
+}
+
+QoreValue qore_class_private::evalMethodFromCaller(LexicalSemanticPolicy policy, QoreObject* self, const char* nme,
+        const QoreListNode* args, const qore_class_private* caller_ctx, RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
+    return evalMethodFromCallerImpl<true>(policy, self, nme, args, caller_ctx, rc, xsink);
+}
+
 QoreObject* qore_class_private::execSystemConstructor(QoreObject* self, int code, va_list args) const {
     assert(system_constructor);
     const_cast<qore_class_private*>(this)->initialize();
@@ -9690,6 +9744,20 @@ bool qore_class_private::runtimeCheckPrivateClassAccess(const qore_class_private
     // the classes by identity, never by name and signature: a class with the name and the signature of another class
     // has no private access to it (qore#7036)
     return qc->getAccessClassIntern(*this, access, true) || (scl && scl->getAccessClass(*qc, access, true));
+}
+
+const QoreClass* qore_class_private::getContextBoundMethodClass(const QoreClass& obj_cls, const QoreClass& mcls,
+        bool& priv, const qore_class_private& class_ctx) {
+    ClassAccess access = Public;
+    // the class context, by identity, in the hierarchy of the object's class (qore#7036)
+    if (!obj_cls.priv->getAccessClassIntern(class_ctx, access, true)) {
+        return nullptr;
+    }
+    // the method's class in the hierarchy of the class context, through its private:internal parent classes as well
+    access = Public;
+    const QoreClass* rv = class_ctx.getAccessClassIntern(*mcls.priv, access, true);
+    priv = true;
+    return rv;
 }
 
 bool qore_class_private::runtimeCheckMethodVariantAccess(const QoreMethod& m, const AbstractQoreFunctionVariant* v,

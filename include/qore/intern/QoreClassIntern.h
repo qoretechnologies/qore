@@ -5364,6 +5364,31 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             QoreProgram* pgm_ctx = nullptr) const;
 
+    //! calls the method of the name of an object for builtin code called by code of a class (call_object_method())
+    /** As evalMethod() without a class context, except that when that finds no method of the name, a public method
+        that the class context of the caller reaches through a \c private:internal parent class of its own, which
+        only the code of the class context can follow, is called as a call of it in the caller's code calls it
+        (qore#6859), without a class context, so only its public variants can be called.  A method that is not
+        public is not called through it, nor a method reached through a \c private (hierarchy) edge, which raises
+        \c BASE-CLASS-IS-PRIVATE as before: that edge is also visible to the code of the base classes of the object's
+        class, whose dispatchers can take a method name from their input
+
+        @param caller_ctx the class context of the caller, which may access the private declarations of this class
+    */
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalMethodFromCallerImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme,
+            const QoreListNode* args, const qore_class_private* caller_ctx, RuntimeConfig& rc,
+            ExceptionSink* xsink) const;
+
+    //! see evalMethodFromCallerImpl()
+    DLLLOCAL QoreValue evalMethodFromCaller(QoreObject* self, const char* nme, const QoreListNode* args,
+            const qore_class_private* caller_ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    //! see evalMethodFromCallerImpl()
+    DLLLOCAL QoreValue evalMethodFromCaller(LexicalSemanticPolicy policy, QoreObject* self, const char* nme,
+            const QoreListNode* args, const qore_class_private* caller_ctx, RuntimeConfig& rc,
+            ExceptionSink* xsink) const;
+
     //! as evalMethod() by name, with a temporary argument list that the caller owns, whose values the parameters of
     //! a method found take over, as the AST interpreter's call moves its evaluated arguments into the parameters
     //! (issue #5882)
@@ -5828,16 +5853,42 @@ public:
         another class with the same name and signature must not get.  For the calls of a method named with its class
         (a call reference of a method of the object, a qualified call of a method of a base class, a background call)
 
+        A class that the object's class reaches only through a \c private:internal parent class of a class of its
+        hierarchy is the method's class for the code of that class (\a class_ctx), which calls the methods of its
+        \c private:internal parent classes on the objects of its subclasses directly (qore#6859); see
+        getContextBoundMethodClass()
+
         @param obj_cls the class of the object
         @param mcls the class of the method
         @param priv set to true if the method's class is inherited privately
+        @param class_ctx the class context of the code that binds the method, if any
     */
-    DLLLOCAL static const QoreClass* getBoundMethodClass(const QoreClass& obj_cls, const QoreClass& mcls, bool& priv) {
+    DLLLOCAL static const QoreClass* getBoundMethodClass(const QoreClass& obj_cls, const QoreClass& mcls, bool& priv,
+            const qore_class_private* class_ctx = nullptr) {
         ClassAccess access = Public;
         const QoreClass* rv = obj_cls.priv->getAccessClassIntern(*mcls.priv, access, true);
+        if (!rv && class_ctx) {
+            return getContextBoundMethodClass(obj_cls, mcls, priv, *class_ctx);
+        }
         priv = access > Public;
         return rv;
     }
+
+    //! returns the class of a method that the code of the class context binds to an object through a
+    //! \c private:internal parent class of the class context, or nullptr if there is none (qore#6859)
+    /** The class context must be the object's class or a class of its hierarchy, by identity (getAccessClassIntern();
+        qore#7036), and the method's class a class of the hierarchy of the class context, which reaches its own
+        \c private:internal parent classes, as the run-time method lookups follow the \c private:internal edges of
+        the class context only (InternalEdgeCutForContext).  Not inlined: called only when the method's class is not
+        a class of the object's hierarchy otherwise
+
+        @param obj_cls the class of the object
+        @param mcls the class of the method
+        @param priv set to true: the method's class is inherited privately
+        @param class_ctx the class context of the code that binds the method
+    */
+    DLLLOCAL static QORE_INTERN_NOINLINE const QoreClass* getContextBoundMethodClass(const QoreClass& obj_cls,
+            const QoreClass& mcls, bool& priv, const qore_class_private& class_ctx);
 
 #ifdef DEBUG_SKIP
     DLLLOCAL void parseShowHash() const {
