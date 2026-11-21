@@ -1,0 +1,9 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the destructor that the module cleanup runs at the end of the process submits the first asynchronous I/O operation
+# of the process, so the cleanup starts the I/O threads: the process ends (qore#6928)
+
+%requires CleanupFirstSubmit
+
+Holder::start();
+printf("started\n");

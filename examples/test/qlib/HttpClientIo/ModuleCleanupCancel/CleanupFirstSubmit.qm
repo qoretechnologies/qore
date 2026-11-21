@@ -1,0 +1,70 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose destructor submits the first asynchronous I/O operation of the process at its end, so that the module
+# cleanup starts the I/O threads; see ModuleCleanupCancel.qtest
+
+%modern
+
+module CleanupFirstSubmit {
+    version = "1.0";
+    desc = "a destructor that the module cleanup runs starts the asynchronous I/O threads";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CleanupFirstSubmit {
+#! an operation that reaches its goal in its first step
+public class FirstOperation inherits AbstractPollOperation<auto> {
+    private {
+        bool reached = False;
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return reached ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        reached = True;
+        return NOTHING;
+    }
+}
+
+#! submits the operation when the module cleanup deletes the module's data
+public class Submitter {
+    private {
+        EventNotifier notifier();
+    }
+
+    destructor() {
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new FirstOperation(),
+            "owner": "module-cleanup-first-submit",
+            "to": 10s,
+        });
+        printf("submitted\n");
+        flush();
+    }
+}
+
+public class Holder {
+    public {
+        static *Submitter submitter;
+    }
+
+    static start() {
+        submitter = new Submitter();
+    }
+}
+}
