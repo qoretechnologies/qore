@@ -98,6 +98,9 @@ static inline const char* get_action_method(SslAction action) {
 
 class SSLSocketHelper {
     friend class SSLSocketReferenceHelper;
+#ifdef DEBUG
+    friend class TlsDuplexPollTest;
+#endif
 public:
     DLLLOCAL SSLSocketHelper(qore_socket_private& qs) : qs(qs) {
     }
@@ -145,7 +148,17 @@ public:
         - < 0 = error (exception raised)
     */
     DLLLOCAL int doNonBlockingIo(ExceptionSink* xsink, const char* mname, void* buf, size_t size, SslAction action,
-            size_t& real_io);
+            size_t& real_io, size_t* awaiting_drain = nullptr);
+
+    //! A write is acknowledged to its owner only after the record reaches the transport.
+    DLLLOCAL int sendNonBlocking(ExceptionSink* xsink, const char* mname, void* buf, size_t size,
+            size_t& real_io, size_t& awaiting_drain) {
+        return doNonBlockingIo(xsink, mname, buf, size, WRITE, real_io, &awaiting_drain);
+    }
+
+    DLLLOCAL bool mustRetryWrite() const { return retry_events && retry_action == WRITE; }
+
+    DLLLOCAL bool mustRetryRead() const { return retry_events && retry_action == READ; }
 
     DLLLOCAL int setClient(ExceptionSink* xsink, const char* mname, const char* sni_target_host, int sd,
             QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr);
@@ -261,6 +274,22 @@ private:
 #endif
     //! the TLS connection that carries this connection, if any; see setLayeredClient()
     SSLSocketHelper* outer = nullptr;
+
+    // Installed only when a nonblocking TLS operation actually encounters write backpressure.
+    struct StagedOutput {
+        BIO* transport;
+        BIO* network;
+    };
+    static constexpr size_t MAX_STAGED_CIPHERTEXT = 64 * 1024;
+    StagedOutput* staged = nullptr;
+    int retry_events = 0;
+    SslAction retry_action = READ;
+    DLLLOCAL SSLSocketHelper* wireTls();
+    DLLLOCAL bool startStaging(ExceptionSink* xsink);
+    DLLLOCAL int drainStaged(ExceptionSink* xsink);
+    DLLLOCAL int resumePendingIo(ExceptionSink* xsink, const char* mname, SslAction action, size_t& real_io,
+        size_t* awaiting_drain);
+    DLLLOCAL void stopStaging();
 
     //! True once a write failed because the peer closed or reset the connection and the socket was kept open
     /** OpenSSL forbids SSL_shutdown() after a fatal error (SSL_ERROR_SYSCALL), so sendCloseNotify() sends no

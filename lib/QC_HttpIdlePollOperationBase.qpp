@@ -181,7 +181,6 @@ const char* HttpIdlePollOperationPriv::getStateImpl() const {
     @since %Qore 3.0
 */
 qclass HttpIdlePollOperationBase [
-    private_members=object sock,string goal;
     ns=Qore;
     arg=HttpIdlePollOperationPriv* priv;
     vparent=SocketPollOperationBase<hash<auto>>
@@ -199,10 +198,9 @@ HttpIdlePollOperationBase::constructor(Socket[QoreSocketObject] socket, timeout 
     QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_qobj) {
-        self->setMemberValue("sock", QC_HTTPIDLEPOLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_qobj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTPIDLEPOLLOPERATIONBASE,
-        new QoreStringNode("idle_monitor"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("idle_monitor"), xsink);
 
     sock_ptr->ref();
     self->setPrivate(CID_HTTPIDLEPOLLOPERATIONBASE,
@@ -231,7 +229,7 @@ HttpIdlePollOperationBase::copy() {
 /** @return "idle_monitor"
 */
 string HttpIdlePollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -301,5 +299,5 @@ nothing HttpIdlePollOperationBase::resetTimeout() {
 /** @return the Socket object
 */
 Socket HttpIdlePollOperationBase::getSocket() {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }

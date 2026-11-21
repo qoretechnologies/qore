@@ -83,8 +83,14 @@ class D {
 
 int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
 
+# a reference created in the function keeps its untyped locals on the runtime stack, where the handlers' native
+# code tracks them (#5951: a typed local that only a handler references is IR-only)
+sub touch(reference<int> z) {}
+
 string sub big(int n) {
-    int r = 0;
+    auto r = 0;
+    int z = 0;
+    touch(\\z);
     *D keep;
 ";
         for (int i = 0; i < n; ++i) {
@@ -92,7 +98,7 @@ string sub big(int n) {
         r += may_throw(n - %d);
         keep = new D(\"t%d\");
     } catch (hash<ExceptionInfo> ex) {
-        int l%d = r + %d;
+        auto l%d = r + %d;
         D d%d = new D(\"c%d\");
         on_exit { r += l%d; log += \"x%d\"; }
         r += d%d.get().size();

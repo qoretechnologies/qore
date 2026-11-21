@@ -129,6 +129,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                 # the peer) was not sent: the connection is closed now, so that a retry finds a new one
                 if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
                         || ex.err == "QUIC-RECV-ERROR" || ex.err == "HTTP3-IDLE-CLOSE"
+                        || ex.err == "HTTP3-PEER-UNRESPONSIVE"
                         || ex.err == "HTTP3-LOCAL-CLOSE" || ex.err == "HTTP3-PEER-CLOSE") {
                     self.setSubmitError(ex.err, ex.desc);
                 }
@@ -157,6 +158,9 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         operation resolves the host name and binds the socket in the family of the remote address once it is
         submitted to the I/O controller, so a connection can also be created on an async I/O thread (see
         @ref Qore::Http3ClientPollOperationBase::constructor() "Http3ClientPollOperationBase::constructor()")
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given; checked at run time, when the object is created (see
+        @ref httpclientio_caller_domains)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
@@ -612,6 +616,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     */
     private static Socket createAndConfigureSocket(*int ssl_verify_mode, bool accept_all_certs,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path) {
+        # the caller check of the operation, which this method runs first (qore#6981)
+        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
         Socket sock();
 
         # Apply SSL verification settings before connect

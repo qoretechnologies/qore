@@ -32,6 +32,7 @@
 #ifndef _QORE_INTERN_QOREAOTBINARY_H
 #define _QORE_INTERN_QOREAOTBINARY_H
 
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
@@ -43,6 +44,7 @@
 #include <functional>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -1895,14 +1897,95 @@ private:
     QoreAOTReadBounds saved;
 };
 
+//! The decompressed metadata of an opened AOT image, which every reader of the open shares (qore#6702)
+/** QoreAOTBinaryReader::open() decompresses compressed metadata into an object of this type, once; a copy of the
+    reader, or a reader that it is moved to (a deserializer, the debug metadata of the image), reads the same buffers,
+    which live as long as one of the readers that refer to them.
+
+    The body (metadata compressed whole) and the string pool (sectioned metadata) are set by open() before the
+    object is shared, and are not changed afterwards.  A section of sectioned metadata is decompressed the first time
+    a reader reads it, once, under @ref section_mutex, so that readers in several threads can share the object.  The
+    buffers are shared themselves, so that a reader kept for later (QoreAOTBinaryReaderRef) can keep only the parts
+    that it reads.
+*/
+struct QoreAOTDecodedMetadata {
+    //! The metadata after the header, if it was compressed whole (QORE_AOT_COMPRESSION_ZLIB or _ZSTD)
+    std::shared_ptr<const std::vector<uint8_t>> body;
+
+    //! The string pool of sectioned metadata (QORE_AOT_COMPRESSION_SECTIONED_ZSTD), if it was compressed
+    std::shared_ptr<const std::vector<uint8_t>> string_pool;
+
+    //! A section of sectioned metadata, decompressed when first read
+    struct Section {
+        //! true once @ref data holds the decompressed section; set with release order, under @ref section_mutex
+        std::atomic<bool> ready{false};
+        //! the decompressed section; not changed once @ref ready is set
+        std::shared_ptr<const std::vector<uint8_t>> data;
+    };
+
+    //! The sections of sectioned metadata, indexed like the section directory; null for other metadata
+    std::unique_ptr<Section[]> sections;
+
+    //! The number of entries in @ref sections
+    size_t section_count = 0;
+
+    //! Serializes the decompression of the sections
+    std::mutex section_mutex;
+};
+
+class QoreAOTBinaryReader;
+
+//! A reader of an opened AOT image kept for later use, which shares the decompressed metadata of the open (qore#6702)
+/** A later reader of the image (the debug metadata of its lazily built function contexts) is made from it instead
+    of opening the image again, so that its metadata is not decompressed again.  The reference to the decompressed
+    metadata is either strong, which keeps it alive, or weak, which lets the readers of the load free it when they are
+    done (QoreAOTBinaryReader::releaseDecompressedBody()); lock() then fails, and the caller opens the image again.
+
+    The image's encoded metadata must outlive the reference: it is metadata mapped with the image of a native binary.
+*/
+class QoreAOTBinaryReaderRef {
+public:
+    DLLLOCAL QoreAOTBinaryReaderRef();
+    DLLLOCAL ~QoreAOTBinaryReaderRef();
+
+    //! Makes this a reference to the open of \a reader, which must be open
+    /** @param reader the reader of the open
+        @param strong true to keep the decompressed metadata alive, false to refer to it weakly
+        @param keep_types the sections that the later reader reads, if \a strong: the sections of sectioned metadata
+        that are kept decompressed; the other sections that the readers of the load decompressed are freed with them,
+        and are decompressed again if the later reader reads them
+        @param keep_count the number of entries in \a keep_types
+    */
+    DLLLOCAL void set(const QoreAOTBinaryReader& reader, bool strong, const QoreAOTSectionType* keep_types = nullptr,
+            size_t keep_count = 0);
+
+    QoreAOTBinaryReaderRef(const QoreAOTBinaryReaderRef&) = delete;
+    QoreAOTBinaryReaderRef& operator=(const QoreAOTBinaryReaderRef&) = delete;
+
+    //! Returns a new reader of the open, or nullptr if there is none or its decompressed metadata was freed
+    DLLLOCAL std::unique_ptr<QoreAOTBinaryReader> lock() const;
+
+private:
+    //! a copy of the reader without its reference to the decompressed metadata
+    std::unique_ptr<QoreAOTBinaryReader> shell;
+    //! the decompressed metadata, if it is held strongly
+    std::shared_ptr<QoreAOTDecodedMetadata> strong_decoded;
+    //! the decompressed metadata, if it is held weakly
+    std::weak_ptr<QoreAOTDecodedMetadata> weak_decoded;
+    //! true if the reader reads decompressed metadata
+    bool needs_decoded = false;
+};
+
 //! Binary format reader for AOT metadata
-/** Reader instances are confined to one metadata deserialization session and
-    are not thread-safe. Sectioned metadata populates lazy decompression buffers
-    from getSectionData().
+/** A reader instance is used by one thread at a time; its copies can be used in other threads.  The decompressed
+    metadata is shared by the copies of a reader (QoreAOTDecodedMetadata): the sections of sectioned metadata are
+    decompressed by getSectionData() when first read, once, for all of them (qore#6702).
 
     The reads of a section are bounded by QoreAOTSectionBounds (qore#6265).
 */
 class QoreAOTBinaryReader {
+    friend class QoreAOTBinaryReaderRef;
+
     const uint8_t* data = nullptr;
     //! true if the last open() refused the metadata because it does not match its checksum
     bool checksum_mismatch = false;
@@ -1924,22 +2007,19 @@ class QoreAOTBinaryReader {
     const uint8_t* data_area = nullptr;
     uint32_t data_area_size = 0;
 
-    // Holds decompressed data if compression was used
-    std::vector<uint8_t> decompressed_body;
+    // The decompressed metadata, if it was compressed: the whole body, or the string pool and the lazily
+    // decompressed sections of QORE_AOT_COMPRESSION_SECTIONED_ZSTD metadata; shared by the readers of this open
+    // (qore#6702)
+    std::shared_ptr<QoreAOTDecodedMetadata> decoded;
 
-    // Holds the eagerly decompressed shared string pool for sectioned metadata.
-    std::vector<uint8_t> decompressed_string_pool;
-
-    // Physical section sizes and lazily decompressed section payloads for
-    // QORE_AOT_COMPRESSION_SECTIONED_ZSTD metadata.
+    // Physical section sizes of QORE_AOT_COMPRESSION_SECTIONED_ZSTD metadata.
     std::vector<uint32_t> section_stored_sizes;
-    mutable std::vector<std::vector<uint8_t>> decompressed_sections;
 
 public:
-    //! Releases the decompressed metadata pool and invalidates the reader
-    /** Whole-body compressed metadata is inflated into @ref decompressed_body at
-        open() time. Sectioned metadata uses @ref decompressed_string_pool and
-        lazily populated @ref decompressed_sections instead. For a large program
+    //! Releases this reader's reference to the decompressed metadata pool and invalidates the reader
+    /** Whole-body compressed metadata is inflated into @ref decoded at
+        open() time. Sectioned metadata uses the string pool and the
+        lazily populated sections of @ref decoded instead. For a large program
         these buffers are substantial, and they are only needed while the namespace
         tree, classes, functions, and slot maps are being deserialized.
 
@@ -1950,15 +2030,15 @@ public:
         once registration is done to return the pool to the allocator instead of
         holding it for the life of the process.
 
+        The buffers are freed unless another reader of the same open still refers to them (qore#6702).
+
         The reader is unusable afterwards: all section pointers are cleared so that
         any use-after-release faults immediately rather than reading recycled memory.
     */
     DLLLOCAL void releaseDecompressedBody() {
+        decoded.reset();
         // free the buffer's storage (clear() alone would keep the capacity)
-        std::vector<uint8_t>().swap(decompressed_body);
-        std::vector<uint8_t>().swap(decompressed_string_pool);
         std::vector<uint32_t>().swap(section_stored_sizes);
-        std::vector<std::vector<uint8_t>>().swap(decompressed_sections);
         data = nullptr;
         total_size = 0;
         input_data = nullptr;
@@ -4651,6 +4731,23 @@ public:
                 failure (error populated) */
     bool addBlob(const uint8_t* data, uint32_t size, std::string& error) {
         uint64_t t0 = timingEnabled() ? nowMicros() : 0;
+        QoreAOTBinaryReader reader;
+        if (!reader.open(data, size, error)) {
+            return false;
+        }
+        return addBlobIntern(std::move(reader), error, t0);
+    }
+
+    //! Phase 1 for a blob whose metadata the caller has already opened (and so decompressed) (qore#6702)
+    /** The session takes over the reader, so the metadata is not decompressed again
+        @return true on success; false on shell-phase failure (error populated)
+    */
+    bool addBlob(QoreAOTBinaryReader&& reader, std::string& error) {
+        return addBlobIntern(std::move(reader), error, timingEnabled() ? nowMicros() : 0);
+    }
+
+private:
+    bool addBlobIntern(QoreAOTBinaryReader&& reader, std::string& error, uint64_t t0) {
         // Apply this blob's %prepend-module-path / %append-module-path lists to
         // the target Program BEFORE shell deserialization runs — so any module
         // dependency loads triggered during shell creation see the expected
@@ -4659,13 +4756,13 @@ public:
         {
             std::vector<std::string> prepended, appended;
             std::string mp_err;
-            if (readModulePathLists(data, size, prepended, appended, mp_err)) {
+            if (readModulePathLists(reader, prepended, appended, mp_err)) {
                 applyModulePathListsToProgram(pgm, prepended, appended);
             }
         }
         auto deser = std::make_unique<QoreAOTBinaryDeserializer>();
         deser->setPreloadParseConstantValues(preload_parse_constant_values);
-        if (!deser->openAndDeserializeShells(pgm, data, size, error)) {
+        if (!deser->openAndDeserializeShells(pgm, std::move(reader), error)) {
             return false;
         }
         // Install the shared type-resolver cache so this session's
@@ -4678,6 +4775,7 @@ public:
         return true;
     }
 
+public:
     //! Phase 2: run all resolution passes for every blob added since
     //! construction.  Must be called exactly once after all
     //! addBlob()s, before any user code depends on the deserialized

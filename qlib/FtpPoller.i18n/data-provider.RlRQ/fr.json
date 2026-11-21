@@ -24,8 +24,8 @@
           "message": "Un fichier est téléversé sur un serveur FTP"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
-          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
-          "message": "Réagir aux fichiers téléversés sur un serveur FTP ; la configuration de l'action détermine si l'événement contient les données du fichier elles-mêmes ou un lien vers l'emplacement du fichier sur le système de fichiers local. Dans tous les cas, l'événement indique que les données du fichier ont déjà été téléchargées et sont disponibles localement"
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally. Set remote_file_disposition to DELETE or MOVE to remove the remote file after processing. With NONE, the handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "Réagir aux fichiers téléversés sur un serveur FTP ; la configuration de l'action détermine si l'événement contient les données du fichier elles-mêmes ou un lien vers l'emplacement du fichier sur le système de fichiers local. Dans tous les cas, l'événement indique que les données du fichier ont déjà été téléchargées et sont disponibles localement. Réglez remote_file_disposition sur DELETE ou MOVE pour retirer le fichier distant après traitement. Avec NONE, la règle suivante s’applique. Le gestionnaire doit déplacer, renommer ou supprimer le fichier, sinon il sera de nouveau transmis lors de la prochaine interrogation."
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
           "source": "Glob Mask",

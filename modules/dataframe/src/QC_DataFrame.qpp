@@ -301,7 +301,9 @@ static int qdfGetColumnSqlName(QoreObject* table, const std::string& name, std::
             "'string'", rv->getTypeName());
         return -1;
     }
-    sql_name = dataFrameStdString(rv->get<const QoreStringNode>());
+    // the name returned by Qore code can be an inline short string
+    QoreStringDataHelper str(*rv);
+    sql_name.assign(str.c_str(), str.size());
     return 0;
 }
 

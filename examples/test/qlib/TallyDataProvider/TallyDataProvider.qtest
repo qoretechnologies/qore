@@ -928,6 +928,7 @@ public class TallyDataProviderTest inherits QUnit::Test {
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
+        # live-provider-optin: the connection name comes only from the test's own command line (-c)
         AbstractConnection conn = get_connection(m_options.conn);
         hash<PingInfo> ping_result = conn.ping(True);
         assertEq(True, ping_result.ok, "connection ping succeeds");
@@ -937,6 +938,7 @@ public class TallyDataProviderTest inherits QUnit::Test {
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
+        # live-provider-optin: the connection name comes only from the test's own command line (-c)
         AbstractConnection conn = get_connection(m_options.conn);
         TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
         AbstractDataProvider dp = prov.getChildProvider("get-current-user");
@@ -954,6 +956,7 @@ public class TallyDataProviderTest inherits QUnit::Test {
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
+        # live-provider-optin: the connection name comes only from the test's own command line (-c)
         AbstractConnection conn = get_connection(m_options.conn);
         TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
         AbstractDataProvider dp = prov.getChildProvider("forms");
@@ -978,6 +981,7 @@ public class TallyDataProviderTest inherits QUnit::Test {
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
+        # live-provider-optin: the connection name comes only from the test's own command line (-c)
         AbstractConnection conn = get_connection(m_options.conn);
         TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
 
@@ -1049,6 +1053,7 @@ public class TallyDataProviderTest inherits QUnit::Test {
         if (!m_options.conn) {
             testSkip("no connection specified; use -c <connection_name>");
         }
+        # live-provider-optin: the connection name comes only from the test's own command line (-c)
         AbstractConnection conn = get_connection(m_options.conn);
         TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
 

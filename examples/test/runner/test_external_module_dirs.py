@@ -27,6 +27,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_watchdog import STAND_IN_COMMIT, build_commit, stand_in_build  # noqa: E402
 RUN_TESTS = Path(os.environ.get("QORE_RUN_TESTS_SH", str(ROOT / "run_tests.sh"))).resolve()
 
 # the build whose qore runs the qore tests
@@ -71,11 +73,23 @@ class RunnerTree:
             # modules of its own
             (self.build / "qore").symlink_to(BUILD_DIR / "qore")
             (self.build / LIBQORE.name).symlink_to(LIBQORE)
+            # the tree is an archive of the build's commit, whose qcc is next to its qore (#6897)
+            (self.root / ".git-archive-revision").write_text(build_commit() + "\n")
+            if (BUILD_DIR / "qcc").exists():
+                (self.build / "qcc").symlink_to(BUILD_DIR / "qcc")
+            else:
+                stand_in_build(self.root, self.build, build_commit())
         else:
             (self.build / "libqore.so").touch()
             # qore: runs the test file it is given with Python, in the same process
+            # the tree is an archive of the stand-in build's commit (#6897)
+            stand_in_build(self.root, self.build)
             self.write_script(self.build / "qore", f"""\
                 #!/bin/sh
+                if [ "$1" = --version ]; then
+                    echo "  git hash: {STAND_IN_COMMIT}"
+                    exit 0
+                fi
                 for arg in "$@"; do
                     case "$arg" in
                         *.qtest) exec '{sys.executable}' -B "$arg" ;;

@@ -181,18 +181,18 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
     }
 
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
-        date start = now_us();
+        int start_us = clock_get_monotonic_us();
 
         # LLM-based classification
         if ((mode == "llm" || mode == "both") && llm) {
             try {
-                return classifyWithLlm(text, start);
+                return classifyWithLlm(text, start_us);
             } catch (hash<ExceptionInfo> ex) {
                 if (getFailClosed()) {
                     hash<GuardrailResult> result = makeFailResult(
                         sprintf("toxicity classification unavailable (fail-closed): %s",
                             ex.desc));
-                    result.duration_ms = getElapsedMs(start);
+                    result.duration_ms = getElapsedMs(start_us);
                     return result;
                 }
             }
@@ -202,16 +202,16 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
         if (getFailClosed()) {
             hash<GuardrailResult> result = makeFailResult(
                 "toxicity detection unavailable (fail-closed)");
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
         hash<GuardrailResult> result = makePassResult();
-        result.duration_ms = getElapsedMs(start);
+        result.duration_ms = getElapsedMs(start_us);
         return result;
     }
 
     #! Uses LLM to classify toxicity
-    private hash<GuardrailResult> classifyWithLlm(string text, date start) {
+    private hash<GuardrailResult> classifyWithLlm(string text, int start_us) {
         string system_prompt =
             "You are a content safety classifier. Determine if the following "
             "text contains toxic, harmful, hateful, threatening, or unsafe content.\n\n"
@@ -247,12 +247,12 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
                     "reason": parsed.reason,
                 },
             );
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
 
         hash<GuardrailResult> result = makePassResult();
-        result.duration_ms = getElapsedMs(start);
+        result.duration_ms = getElapsedMs(start_us);
         return result;
     }
 }

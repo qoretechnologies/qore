@@ -86,6 +86,7 @@ class QoreStringNode;
     @see QoreEnvironmentValue
  */
 class SystemEnvironment {
+    friend class qore_system_environment_ops;
     friend class AtomicEnvironmentSetter;
 
 private:
@@ -96,47 +97,11 @@ private:
     DLLLOCAL SystemEnvironment& operator=(const SystemEnvironment&);
 
 protected:
-    //! sets the given environment variable to the value passed, respecting the overwrite flag
-    /** the caller must hold the environment lock exclusively
-        @param name the name of the environment variable to set
-        @param value the value of the environment variable
-        @param overwrite the overwrite flag
-     */
-    DLLLOCAL static int set_intern(const char* name, const char* value, bool overwrite = 1);
 
-    //! returns the value of the environment variable as a new QoreString object, 0 if not present, caller owns the pointer returned
-    /** the caller must hold the environment lock
-        @param name the name of the environment variable
-        @return a QoreString pointer (or 0 if the variable does not exist), caller owns the pointer returned
-     */
-    DLLLOCAL static QoreString* get_intern(const char* name);
 
-    //! returns the value of the environment variable as a new QoreStringNode object, 0 if not present, caller owns the reference count of the pointer returned
-    /** the caller must hold the environment lock
-        @param name the name of the environment variable
-        @return a QoreStringNode pointer (or 0 if the variable does not exist), caller owns the reference count of the pointer returned
-     */
-    DLLLOCAL static QoreStringNode* get_as_string_node_intern(const char* name);
 
-    //! appends the value of the given environment variable to a QoreString, returns 0 for OK, -1 for not found
-    /** the caller must hold the environment lock
-        @param name the name of the environment variable
-        @param str a reference to a QoreString object where the value will be concatenated if the environment variable exists
-        @return 0 for OK (environment variable found and value concatenated to string), or -1 for not found
-     */
-    DLLLOCAL static int get_intern(const char* name, QoreString& str);
 
-    //! unsets the given environment variable
-    /** the caller must hold the environment lock exclusively
-        @param name the name of the environment variable to unset
-        @return 0 for OK, non-0 for error
-     */
-    DLLLOCAL static int unset_intern(const char* name);
 
-    //! returns true if the environment variable exists and has a value, false if not
-    /** the caller must hold the environment lock
-     */
-    DLLLOCAL static bool value_exists_intern(const char* name);
 
 public:
     DLLLOCAL SystemEnvironment();

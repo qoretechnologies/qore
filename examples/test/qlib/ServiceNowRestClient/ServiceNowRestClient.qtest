@@ -4,6 +4,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Mime
 %requires MapperUtil
 %requires Logger
@@ -89,9 +90,9 @@ class ServiceNowTest inherits QUnit::Test {
 
     setupConnection() {
         # first try connection
-        *string conn_name = m_options.conn ?? ENV.SERVICENOW_CONNECTION;
+        *string conn_name = LiveProvider::get("servicenow", "SERVICENOW_CONNECTION", m_options.conn);
         if (conn_name.val()) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("servicenow", "SERVICENOW_CONNECTION", m_options.conn);
             if (!(conn instanceof ServiceNowRestConnection)) {
                 error("connection %y is type %y; expecting \"ServiceNowRestConnection\"", conn_name,
                     conn.className());
@@ -99,19 +100,20 @@ class ServiceNowTest inherits QUnit::Test {
             rc = conn.get();
             rc.setLogger(logger);
         } else {
-            snopts.url = m_options.url ?? ENV.SERVICENOW_URL;
+            snopts.url = m_options.url ?? LiveProvider::get("servicenow", "SERVICENOW_URL");
             if (!snopts.url)
                 error("missing --url option or SERVICENOW_URL environment variable");
-            if (m_options.client_id || ENV.SERVICENOW_CLIENT_ID
-                && (m_options.client_secret || ENV.SERVICENOW_CLIENT_SECRET)) {
-                snopts.oauth2_client_id = m_options.client_id ?? ENV.SERVICENOW_CLIENT_ID;
-                snopts.oauth2_client_secret = m_options.client_secret ?? ENV.SERVICENOW_CLIENT_SECRET;
+            if (m_options.client_id || LiveProvider::get("servicenow", "SERVICENOW_CLIENT_ID")
+                && (m_options.client_secret || LiveProvider::get("servicenow", "SERVICENOW_CLIENT_SECRET"))) {
+                snopts.oauth2_client_id = LiveProvider::get("servicenow", "SERVICENOW_CLIENT_ID", m_options.client_id);
+                snopts.oauth2_client_secret = LiveProvider::get("servicenow", "SERVICENOW_CLIENT_SECRET",
+                    m_options.client_secret);
             }
-            snopts.username = m_options.username ?? ENV.SERVICENOW_USERNAME;
+            snopts.username = LiveProvider::get("servicenow", "SERVICENOW_USERNAME", m_options.username);
             if (!snopts.username) {
                 error("missing --username option or SERVICENOW_USERNAME environment variable");
             }
-            snopts.password = m_options.password ?? ENV.SERVICENOW_PASSWORD;
+            snopts.password = LiveProvider::get("servicenow", "SERVICENOW_PASSWORD", m_options.password);
             if (!snopts.password) {
                 error("missing --password option or SERVICENOW_PASSWORD environment variable");
             }

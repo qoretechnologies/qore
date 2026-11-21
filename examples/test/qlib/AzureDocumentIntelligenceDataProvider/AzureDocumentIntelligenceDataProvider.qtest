@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -71,7 +72,7 @@ public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("AzureDocumentIntelligenceDataProvider Test", "1.0",
             \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.AZURE_DOCUMENTINTELLIGENCE_CONNECTION;
+        conn_name = LiveProvider::get("azure", "AZURE_DOCUMENTINTELLIGENCE_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + action registered",  \registrationTest());
         addTestCase("analyze-document with URL source",   \urlSourceTest());
@@ -184,6 +185,7 @@ public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
         on the prebuilt-layout model; resource pricing applies.
     */
     private liveAzureDocIntelTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Azure DI connection ping failed: %s",

@@ -2360,13 +2360,27 @@ const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         if (!owner || ref.module_storage != owner) {
             // A transitive dependency need not re-export the class. The consumer
             // can even declare a different class with the same namespace path.
+            // A class that several modules contribute (one that a binary module
+            // creates on demand for each Program that imports it, such as a Java
+            // class of the jni module) has the owner tag of the first one, which
+            // depends on the order in which the modules were loaded: the class
+            // that the module's Program has is the module's class whatever its
+            // tag (issue #6971)
             if (QoreAbstractModule* module = QMM.findModule(ref.module)) {
-                qc = resolveAOTClassRefInProgram(module->getModuleProgram(), ref.path, pseudo);
-                if (qc && (!qc->getModuleName() || ref.module_storage != qc->getModuleName())) {
+                const QoreClass* module_qc = resolveAOTClassRefInProgram(module->getModuleProgram(), ref.path,
+                    pseudo);
+                if (module_qc && module_qc != qc
+                        && (!module_qc->getModuleName() || ref.module_storage != module_qc->getModuleName())) {
+                    module_qc = nullptr;
+                }
+                qc = module_qc;
+            } else if (owner) {
+                // the module is not loaded yet: the class is the module's own if the module is the one being loaded
+                // into the Program (a compiled module referring to its own class, #6971)
+                const char* loading = get_module_context_name();
+                if (!loading || ref.module_storage != loading) {
                     qc = nullptr;
                 }
-            } else if (owner) {
-                qc = nullptr;
             }
             // An embedded source module has no separately loaded module or owner tag.
             // Its class was deserialized directly into the executable's Program.
@@ -3245,15 +3259,28 @@ struct QoreAOTDebugMetadata {
     uint32_t borrowed_size = 0;
     mutable std::unique_ptr<QoreAOTBinaryReader> reader;
     mutable std::mutex reader_mutex;
+    // Borrowed input: the open of the reader that this object is made from, whose decompressed metadata getReader()
+    // reads instead of opening the input again while it is alive (qore#6702)
+    QoreAOTBinaryReaderRef open_ref;
+
+    // the sections that the reader of this object reads
+    static constexpr QoreAOTSectionType retained_types[] = {
+        QoreAOTSectionType::SLOT_MAPS,
+        QoreAOTSectionType::DEBUG_IR,
+        QoreAOTSectionType::PLUGIN_IMPORTS,
+    };
 
     QoreAOTDebugMetadata(const QoreAOTBinaryReader& reader, const uint8_t* data, uint32_t size,
-            AOTMetadataStorage storage = AOTMetadataStorage::Copy) {
+            AOTMetadataStorage storage = AOTMetadataStorage::Copy, bool keep_decoded = false) {
         if (!data || !size) {
             return;
         }
         if (storage == AOTMetadataStorage::Borrow) {
             borrowed_data = data;
             borrowed_size = size;
+            if (reader.getInputData() == data) {
+                open_ref.set(reader, keep_decoded, retained_types, std::size(retained_types));
+            }
             return;
         }
         if (reader.getHeader().compression != QORE_AOT_COMPRESSION_NONE) {
@@ -3344,20 +3371,19 @@ struct QoreAOTDebugMetadata {
         if (reader) {
             return reader.get();
         }
-        auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
-        // the metadata, or a copy of it, was checked against its checksum by the reader of the module, whose
-        // load it belongs to (qore#6451)
-        if (!retained_reader->open(borrowed_data ? borrowed_data : metadata.data(),
-                borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error, false)) {
-            return nullptr;
+        // a reader of the open of the load reads its decompressed metadata if it is still alive (qore#6702)
+        std::unique_ptr<QoreAOTBinaryReader> retained_reader = open_ref.lock();
+        if (!retained_reader) {
+            retained_reader = std::make_unique<QoreAOTBinaryReader>();
+            // the metadata, or a copy of it, was checked against its checksum by the reader of the module, whose
+            // load it belongs to (qore#6451)
+            if (!retained_reader->open(borrowed_data ? borrowed_data : metadata.data(),
+                    borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error, false)) {
+                return nullptr;
+            }
         }
         // Force retained sections to decode before publishing the reader for
         // concurrent immutable access.
-        constexpr QoreAOTSectionType retained_types[] = {
-            QoreAOTSectionType::SLOT_MAPS,
-            QoreAOTSectionType::DEBUG_IR,
-            QoreAOTSectionType::PLUGIN_IMPORTS,
-        };
         for (QoreAOTSectionType type : retained_types) {
             const QoreAOTSectionHeader* sec = retained_reader->findSection(type);
             if (sec && !retained_reader->getSectionData(*sec)) {
@@ -3405,7 +3431,7 @@ struct QoreAOTLazyFunctionIR {
 
 static std::shared_ptr<const QoreAOTDebugMetadata> makeAOTDebugMetadata(
         const QoreAOTBinaryReader& reader, const uint8_t* metadata, int metadata_len,
-        AOTMetadataStorage storage = AOTMetadataStorage::Copy) {
+        AOTMetadataStorage storage = AOTMetadataStorage::Copy, bool keep_decoded = false) {
     if ((reader.getHeader().version < QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION
                 && (reader.getHeader().feature_flags
                     & (QORE_AOT_FEAT_DEBUG_IR | QORE_AOT_FEAT_NATIVE_CLOSURE_BODY)) == 0)
@@ -3413,7 +3439,7 @@ static std::shared_ptr<const QoreAOTDebugMetadata> makeAOTDebugMetadata(
         return nullptr;
     }
     auto retained = std::make_shared<QoreAOTDebugMetadata>(
-        reader, metadata, static_cast<uint32_t>(metadata_len), storage);
+        reader, metadata, static_cast<uint32_t>(metadata_len), storage, keep_decoded);
     if (q_env_is_set("QORE_AOT_TRACE_RETAINED_METADATA")) {
         fprintf(stderr,
             "[aot-retained-metadata] label=%s blob=%d retained=%zu compression=%u borrowed=%u\n",
@@ -10416,18 +10442,23 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
     return true;
 }
 
+//! Sets the error that applyAOTModuleCommandsToProgram() reports for metadata that cannot be opened
+static void setAOTModuleCommandOpenError(const char* label, const std::string& read_error, std::string& error) {
+    error = "AOT module-command metadata read error";
+    if (label && *label) {
+        error += " in ";
+        error += label;
+    }
+    error += ": " + read_error;
+}
+
 static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         const uint8_t* metadata, uint32_t metadata_len,
         const char* label, std::string& error, bool ignore_time_zone = false) {
     QoreAOTBinaryReader reader;
     std::string read_error;
     if (!reader.open(metadata, metadata_len, read_error)) {
-        error = "AOT module-command metadata read error";
-        if (label && *label) {
-            error += " in ";
-            error += label;
-        }
-        error += ": " + read_error;
+        setAOTModuleCommandOpenError(label, read_error, error);
         return false;
     }
     return applyAOTModuleCommandsToProgram(pgm, reader, label, error, ignore_time_zone);
@@ -11105,10 +11136,13 @@ static thread_local std::string aot_module_init_context_path;
 // QoreAOTModuleInitLoaderHelper)
 static thread_local QoreProgram* aot_module_init_loader_pgm = nullptr;
 
-//! The error code of an AOT module initialization error that is not \c MODULE-LOAD-ERROR
+//! The error code of an AOT module initialization error that is not \c MODULE-LOAD-ERROR, or its argument
 /** qore_aot_module_init_v3() returns only the description of an error, which the init adapter that qcc generates in
     every module passes to qore_aot_raise_init_error() in the same thread; an error with another code records its
-    description and its code here, and qore_aot_raise_init_error() raises that description with the code.
+    description and its code here, and qore_aot_raise_init_error() raises that description with the code.  An error
+    for a module that the module requires and that cannot be loaded records the name of that module, which
+    qore_aot_raise_init_error() raises as the argument of the exception, so that the module loader can name the
+    missing module when it loads the source module instead (qore#7004).
 
     The codes:
     - \c AOT-MODULE-RESTRICTED: the module uses functionality that the restrictions inherited from the Program loading
@@ -11121,8 +11155,21 @@ struct QoreAOTModuleInitError {
     const QoreStringNode* desc = nullptr;
     //! the error code
     const char* err = nullptr;
+    //! the module that the module requires and that could not be loaded, if that is the error (qore#7004)
+    std::string dep;
 };
 static thread_local QoreAOTModuleInitError aot_module_init_error;
+
+//! Returns the description of the error for a module that the module requires and that could not be loaded
+/** Records the name of the module for qore_aot_raise_init_error(), which raises it as the argument of the
+    \c MODULE-LOAD-ERROR exception (see QoreAOTModuleInitError; qore#7004)
+*/
+static QoreStringNode* aotMissingDependencyInitError(QoreStringNode* err, const std::string& dep) {
+    aot_module_init_error.desc = err;
+    aot_module_init_error.err = "MODULE-LOAD-ERROR";
+    aot_module_init_error.dep = dep;
+    return err;
+}
 
 //! Returns the description of an initialization error that depends on the stack of this thread, with its code
 /** The code is recorded for qore_aot_raise_init_error() (see QoreAOTModuleInitError); the description starts with the
@@ -12547,12 +12594,16 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             qpgm->setScriptPath(label);
         }
 
+        // the metadata is opened, checked against its checksum and decompressed once, and every section reader
+        // below reads it from this reader, which the deserializer takes over (qore#6702)
+        QoreAOTBinaryReader metadata_reader;
+
         // Read and apply program-level metadata (exec-class name)
         {
             std::string exec_class_name;
             std::string meta_error;
-            if (readProgramMetadata(metadata, static_cast<uint32_t>(metadata_len),
-                    exec_class_name, meta_error)) {
+            if (metadata_reader.open(metadata, static_cast<uint32_t>(metadata_len), meta_error)
+                    && readProgramMetadata(metadata_reader, exec_class_name, meta_error)) {
                 printd(2, "AOT v3: readProgramMetadata OK, exec_class_name='%s'\n",
                     exec_class_name.c_str());
                 if (!exec_class_name.empty()) {
@@ -12575,8 +12626,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         {
             std::vector<std::string> prepended, appended;
             std::string mp_error;
-            if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
-                    prepended, appended, mp_error)) {
+            if (readModulePathLists(metadata_reader, prepended, appended, mp_error)) {
                 applyModulePathListsToProgram(*qpgm, prepended, appended);
                 if (!prepended.empty() || !appended.empty()) {
                     printd(2, "AOT v3: applied %d prepended + %d appended module paths\n",
@@ -12593,8 +12643,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
 
         {
             std::string cmd_error;
-            if (!applyAOTModuleCommandsToProgram(*qpgm, metadata,
-                    static_cast<uint32_t>(metadata_len), label, cmd_error)) {
+            if (!applyAOTModuleCommandsToProgram(*qpgm, metadata_reader, label, cmd_error)) {
                 fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: %s\n",
                     (label && *label) ? label : "<unknown path>", cmd_error.c_str());
                 rc = 2;
@@ -12621,7 +12670,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
 
             std::vector<std::string> deps;
             std::string dep_error;
-            if (readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
+            if (readDependencies(metadata_reader, deps, dep_error)) {
                 printd(2, "AOT v3: loading %d dependencies\n", (int)deps.size());
                 for (const std::string& dep : deps) {
                     printd(2, "AOT v3: loading dependency '%s'\n", dep.c_str());
@@ -12682,8 +12731,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                 rc = 2;
                 break;
             }
-            if (!deserializer.deserializeIntoProgram(*qpgm,
-                    metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
+            if (!deserializer.deserializeIntoProgram(*qpgm, std::move(metadata_reader), deser_error)) {
                 fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: metadata "
                     "deserialization failed: %s\n", (label && *label) ? label : "<unknown path>",
                     deser_error.c_str());
@@ -12717,8 +12765,10 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             bool toplevel_registered = false;
             std::vector<std::string> registration_errors;
             AOTClosureRuntimeBindingMap native_closure_bindings;
+            // the code of the program runs once it is loaded: the parts of its decompressed metadata that its
+            // lazily built function contexts read are kept for them, not decompressed again (qore#6702)
             auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
-                metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions));
+                metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions), true);
 
             // Register _toplevel before other functions so setLVarsFromAOTContext()
             // populates the program LVList for closure deserialization in methods
@@ -12804,8 +12854,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             if (!init_func_contexts.empty()) {
                 std::vector<AOTInitFuncDescriptor> init_descriptors;
                 std::string init_error;
-                readInitFuncs(metadata, static_cast<uint32_t>(metadata_len),
-                    init_descriptors, init_error);
+                readInitFuncs(deserializer.getReader(), init_descriptors, init_error);
                 if (!init_descriptors.empty()) {
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
@@ -12911,10 +12960,10 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
 
         // Deserialization and function registration are complete, so the inflated
         // AOT metadata pool is dead: string refs that outlive it are interned into
-        // the program's string pool as they are read, and the debug metadata is
-        // copied by value.  For a large program the pool dominates the startup
-        // heap, so return it to the allocator now instead of pinning it for the
-        // whole run.
+        // the program's string pool as they are read, and the debug metadata keeps
+        // only the parts that its lazily built function contexts read (qore#6702).
+        // For a large program the pool dominates the startup heap, so return the
+        // rest to the allocator now instead of pinning it for the whole run.
         deserializer.releaseReaderBody();
 
         // Run the v3 program
@@ -12969,6 +13018,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         }
     }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
+    // the module's Program from now on, also while it is initialized (qore#7077)
+    qore_program_private::get(*local_pgm)->module_program.store(true, std::memory_order_release);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module init error: feature '%s' is already loaded in this Program container", mod_name);
@@ -13001,6 +13052,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // loaded and their initialization runs, as in the interpreter, which loads the other modules that a module
     // requires (qore#6217)
     SimpleRefHolder<QoreStringNode> dep_err;
+    // the module of dep_err if it could not be loaded (qore#7004)
+    std::string missing_dep;
     for (const std::string& dep : deps) {
         // Try to load the module (it may already be loaded, which is fine)
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
@@ -13038,6 +13091,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
                         "and cannot be loaded without it",
                         mod_name ? mod_name : "<unknown>",
                         (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                    missing_dep = dep;
                 }
                 continue;
             }
@@ -13047,7 +13101,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     }
     if (dep_err) {
         local_pgm->waitForTerminationAndDeref(nullptr);
-        return dep_err.release();
+        return missing_dep.empty() ? dep_err.release() : aotMissingDependencyInitError(dep_err.release(),
+            missing_dep);
     }
 
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
@@ -13817,6 +13872,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         }
     }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
+    // the module's Program from now on, also while it is initialized (qore#7077)
+    qore_program_private::get(*local_pgm)->module_program.store(true, std::memory_order_release);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module init error: feature '%s' is already loaded in this Program container", mod_name);
@@ -13921,12 +13978,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
                 "failed (%s)", mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
                 load_result.dependency.c_str(), load_result.init_error.c_str());
         } else {
-            err = new QoreStringNodeMaker(
+            err = aotMissingDependencyInitError(new QoreStringNodeMaker(
                 "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
                 "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
                 "and cannot be loaded without it",
                 mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
-                load_result.dependency.c_str(), load_result.dependency.c_str());
+                load_result.dependency.c_str(), load_result.dependency.c_str()), load_result.dependency);
         }
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
@@ -15844,6 +15901,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         }
     }
     QoreProgram* local_pgm = new QoreProgram(parse_options);
+    // the module's Program from now on, also while it is initialized (qore#7077)
+    qore_program_private::get(*local_pgm)->module_program.store(true, std::memory_order_release);
     qore_program_private::setAOTInheritedParseOptions(*local_pgm, inherited_po);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(
@@ -16027,12 +16086,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                 "failed (%s)", mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
                 load_result.dependency.c_str(), load_result.init_error.c_str());
         } else {
-            err = new QoreStringNodeMaker(
+            err = aotMissingDependencyInitError(new QoreStringNodeMaker(
                 "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
                 "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
                 "and cannot be loaded without it",
                 mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
-                load_result.dependency.c_str(), load_result.dependency.c_str());
+                load_result.dependency.c_str(), load_result.dependency.c_str()), load_result.dependency);
         }
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
@@ -16325,10 +16384,17 @@ extern "C" DLLEXPORT void qore_aot_fill_module_children(QoreModuleInfo* mod_info
     (see QoreAOTModuleInitError).
 */
 extern "C" DLLEXPORT void qore_aot_raise_init_error(ExceptionSink* xsink, QoreStringNode* err) {
-    const char* code = err && err == aot_module_init_error.desc ? aot_module_init_error.err : "MODULE-LOAD-ERROR";
+    bool recorded = err && err == aot_module_init_error.desc;
+    const char* code = recorded ? aot_module_init_error.err : "MODULE-LOAD-ERROR";
+    // the module that could not be loaded is the argument of the exception (qore#7004)
+    std::string dep = recorded ? std::move(aot_module_init_error.dep) : std::string();
     aot_module_init_error = QoreAOTModuleInitError();
     if (err) {
-        xsink->raiseException(code, err);
+        if (dep.empty()) {
+            xsink->raiseException(code, err);
+        } else {
+            xsink->raiseExceptionArg(code, new QoreStringNode(dep), err);
+        }
     }
 }
 
@@ -16477,8 +16543,10 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
     int ignored_unlinked = 0;
     std::vector<AOTInitFuncExecInfo> init_func_contexts;
     std::vector<std::string> registration_errors;
+    // the code of the program runs once it is loaded: the parts of its decompressed metadata that its
+    // lazily built function contexts read are kept for them, not decompressed again (qore#6702)
     auto debug_metadata = makeAOTDebugMetadata(reader, metadata, metadata_len,
-        getAOTMetadataStorage(metadata, metadata_len, functions));
+        getAOTMetadataStorage(metadata, metadata_len, functions), true);
     registerAOTFunctionsFromSlotMaps(reader, root_ns, tpgm, func_map, registered,
         &init_func_contexts, nullptr, &registration_errors, debug_metadata,
         allow_unlinked_native_inputs, &ignored_unlinked);
@@ -16578,19 +16646,27 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
 
     ExceptionSink xsink;
 
-    {
+    // the metadata is opened, checked against its checksum and decompressed once, and every section reader below
+    // reads it from this reader, which the deserializer takes over (qore#6702); metadata that cannot be opened is
+    // reported by the module-command replay, the first reader that fails on it
+    QoreAOTBinaryReader metadata_reader;
+    std::string open_error;
+    const bool metadata_open = metadata_reader.open(metadata, static_cast<uint32_t>(metadata_len), open_error);
+
+    if (metadata_open) {
         std::vector<std::string> prepended, appended;
         std::string mp_error;
-        if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
-                prepended, appended, mp_error)) {
+        if (readModulePathLists(metadata_reader, prepended, appended, mp_error)) {
             applyModulePathListsToProgram(tpgm, prepended, appended);
         }
     }
 
     {
         std::string cmd_error;
-        if (!applyAOTModuleCommandsToProgram(tpgm, metadata,
-                static_cast<uint32_t>(metadata_len), label, cmd_error,
+        if (!metadata_open) {
+            setAOTModuleCommandOpenError(label, open_error, cmd_error);
+        }
+        if (!metadata_open || !applyAOTModuleCommandsToProgram(tpgm, metadata_reader, label, cmd_error,
                 static_cast<bool>(qore_program_private::get(*tpgm)->pwo.parse_options & PO_NO_LOCALE_CONTROL))) {
             fprintf(stderr, "qore_aot_script_register(%s): "
                 "module-command replay failed: %s\n",
@@ -16613,7 +16689,7 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
     {
         std::vector<std::string> deps;
         std::string dep_error;
-        if (readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
+        if (readDependencies(metadata_reader, deps, dep_error)) {
             printd(2, "qore_aot_script_register(%s): loading %d dependencies\n",
                 label ? label : "<script>", (int)deps.size());
             size_t dep_cancel_i = 0;
@@ -16683,8 +16759,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
 
         QoreAOTBinaryDeserializer deserializer;
         std::string deser_error;
-        if (!deserializer.deserializeIntoProgram(tpgm, metadata,
-                static_cast<uint32_t>(metadata_len), deser_error)) {
+        if (!deserializer.deserializeIntoProgram(tpgm, std::move(metadata_reader),
+                deser_error)) {
             fprintf(stderr, "qore_aot_script_register(%s): metadata "
                 "deserialization failed: %s\n",
                 label ? label : "<script>", deser_error.c_str());
@@ -16713,8 +16789,10 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
             qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
             int registered = 0;
             std::vector<std::string> registration_errors;
+            // the code of the program runs once it is loaded: the parts of its decompressed metadata that its
+            // lazily built function contexts read are kept for them, not decompressed again (qore#6702)
             auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
-                metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions));
+                metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions), true);
             registerAOTFunctionsFromSlotMaps(deserializer.getReader(), root_ns,
                 tpgm, func_map, registered, &init_func_contexts, nullptr,
                 &registration_errors, debug_metadata, false, nullptr, nullptr, &deserializer);
@@ -16747,8 +16825,7 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
         if (!init_func_contexts.empty()) {
             std::vector<AOTInitFuncDescriptor> init_descriptors;
             std::string init_err;
-            if (readInitFuncs(metadata,
-                    static_cast<uint32_t>(metadata_len),
+            if (readInitFuncs(deserializer.getReader(),
                     init_descriptors, init_err)) {
                 if (!init_descriptors.empty()) {
                     ExceptionSink tch_xsink;
@@ -16885,9 +16962,15 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
     uint64_t us_register = 0;
     uint64_t us_init = 0;
 
+    // the metadata of each blob is opened, checked against its checksum and decompressed once, and every section
+    // reader below reads it from the blob's reader, which its deserializer session takes over (qore#6702); the
+    // readers are indexed like batch->deferred, and native-only blobs have none here
+    std::vector<std::unique_ptr<QoreAOTBinaryReader>> blob_readers(batch->deferred.size());
+
     {
         size_t setup_cancel_i = 0;
-        for (auto& d : batch->deferred) {
+        for (size_t i = 0; i < batch->deferred.size(); ++i) {
+            auto& d = batch->deferred[i];
             if (d.native_only) {
                 continue;
             }
@@ -16897,16 +16980,25 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 return 8;
             }
 
-            std::vector<std::string> prepended, appended;
-            std::string mp_error;
-            if (readModulePathLists(d.metadata, static_cast<uint32_t>(d.metadata_len),
-                    prepended, appended, mp_error)) {
-                applyModulePathListsToProgram(tpgm, prepended, appended);
+            // metadata that cannot be opened is reported by the module-command replay, the first reader that fails
+            // on it
+            auto reader = std::make_unique<QoreAOTBinaryReader>();
+            std::string open_error;
+            const bool metadata_open = reader->open(d.metadata, static_cast<uint32_t>(d.metadata_len), open_error);
+
+            if (metadata_open) {
+                std::vector<std::string> prepended, appended;
+                std::string mp_error;
+                if (readModulePathLists(*reader, prepended, appended, mp_error)) {
+                    applyModulePathListsToProgram(tpgm, prepended, appended);
+                }
             }
 
             std::string cmd_error;
-            if (!applyAOTModuleCommandsToProgram(tpgm, d.metadata,
-                    static_cast<uint32_t>(d.metadata_len),
+            if (!metadata_open) {
+                setAOTModuleCommandOpenError(d.label.c_str(), open_error, cmd_error);
+            }
+            if (!metadata_open || !applyAOTModuleCommandsToProgram(tpgm, *reader,
                     d.label.c_str(), cmd_error,
                     static_cast<bool>(qore_program_private::get(*tpgm)->pwo.parse_options & PO_NO_LOCALE_CONTROL))) {
                 fprintf(stderr, "qore_aot_script_end_batch(%s): "
@@ -16914,6 +17006,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                     d.label.c_str(), cmd_error.c_str());
                 return 6;
             }
+            blob_readers[i] = std::move(reader);
             ++setup_cancel_i;
         }
     }
@@ -16934,7 +17027,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
         // true if a dependency could not be loaded or its initialization failed: the other dependencies are loaded, and
         // their initialization runs, before the scripts fail, as in the interpreter
         bool dep_failed = false;
-        for (auto& d : batch->deferred) {
+        for (size_t i = 0; i < batch->deferred.size(); ++i) {
+            auto& d = batch->deferred[i];
             if (d.native_only) {
                 continue;
             }
@@ -16945,8 +17039,15 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             }
             std::vector<std::string> deps;
             std::string dep_error;
-            if (readDependencies(d.metadata, static_cast<uint32_t>(d.metadata_len),
-                    deps, dep_error)) {
+            // the setup opened every blob of the batch, which this function removed from the Program before its
+            // loops, so that no blob can be added to it
+            assert(i < blob_readers.size() && blob_readers[i]);
+            if (i >= blob_readers.size() || !blob_readers[i]) {
+                fprintf(stderr, "qore_aot_script_end_batch(%s): internal error: the metadata of the script was not "
+                    "opened\n", d.label.c_str());
+                return 14;
+            }
+            if (readDependencies(*blob_readers[i], deps, dep_error)) {
                 size_t dep_load_i = 0;
                 for (const std::string& dep : deps) {
                     if (dep_load_i && !(dep_load_i % 100)
@@ -17008,7 +17109,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
         }
 
         size_t cancel_i = 0;
-        for (auto& d : batch->deferred) {
+        for (size_t i = 0; i < batch->deferred.size(); ++i) {
+            auto& d = batch->deferred[i];
             if (d.native_only) {
                 continue;
             }
@@ -17018,8 +17120,19 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 return 9;
             }
             std::string err;
-            if (!batch->mdes.addBlob(d.metadata,
-                    static_cast<uint32_t>(d.metadata_len), err)) {
+            // the session takes over the reader that the setup opened
+            std::unique_ptr<QoreAOTBinaryReader> reader;
+            if (i < blob_readers.size()) {
+                reader = std::move(blob_readers[i]);
+            }
+            // the setup opened every blob of the batch (see above)
+            assert(reader);
+            if (!reader) {
+                fprintf(stderr, "qore_aot_script_end_batch(%s): internal error: the metadata of the script was not "
+                    "opened\n", d.label.c_str());
+                return 14;
+            }
+            if (!batch->mdes.addBlob(std::move(*reader), err)) {
                 fprintf(stderr, "qore_aot_script_end_batch(%s): "
                     "addBlob failed: %s\n", d.label.c_str(), err.c_str());
                 return 7;
@@ -17103,8 +17216,10 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             std::vector<std::string> registration_errors;
             uint64_t t0 = time_on ? now_us() : 0;
             if (!func_map.empty()) {
+                // the code of the program runs once it is loaded: the parts of its decompressed metadata that its
+                // lazily built function contexts read are kept for them, not decompressed again (qore#6702)
                 auto debug_metadata = makeAOTDebugMetadata(session.getReader(),
-                    d.metadata, d.metadata_len, getAOTMetadataStorage(d.metadata, d.metadata_len, d.functions));
+                    d.metadata, d.metadata_len, getAOTMetadataStorage(d.metadata, d.metadata_len, d.functions), true);
                 registerAOTFunctionsFromSlotMaps(session.getReader(), root_ns,
                     tpgm, func_map, registered, &init_func_contexts,
                     session.getTypeResolver(), &registration_errors, debug_metadata,
@@ -17128,9 +17243,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             if (!init_func_contexts.empty()) {
                 std::vector<AOTInitFuncDescriptor> init_descriptors;
                 std::string init_err;
-                if (readInitFuncs(d.metadata,
-                        static_cast<uint32_t>(d.metadata_len),
-                        init_descriptors, init_err)) {
+                if (readInitFuncs(session.getReader(), init_descriptors, init_err)) {
                     if (!init_descriptors.empty()) {
                         batch_init_contexts.insert(batch_init_contexts.end(),
                             init_func_contexts.begin(), init_func_contexts.end());

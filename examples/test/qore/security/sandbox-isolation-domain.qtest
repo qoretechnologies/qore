@@ -1,0 +1,973 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# SandboxManager isolation domains (qore#6536): the code of one tenant (isolation domain) never runs in a trusted build
+# (SandboxManager::createTrustedBuildCall()) that sandboxed code of another tenant called, on any path; the same
+# tenant's sandboxes, the build's own code, host code and builds that trusted code enters are unaffected, and so are
+# sandboxes without a domain
+
+%modern
+%no-child-restrictions
+%allow-debugger
+# the host injects modules into Programs in the Program method tests
+%allow-injection
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%exec-class SandboxIsolationDomainTest
+
+#! the code of a tenant
+const TenantSource = "%modern
+list<string> sub make(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += sprintf(\"entry %d\", i);
+    }
+    return l;
+}
+code sub mk_closure() {
+    return list<string> sub (int n) { return make(n); };
+}
+class Maker {
+    list<string> make(int n) {
+        return ::make(n);
+    }
+}
+object sub mk_object() {
+    return new Maker();
+}
+auto sub call(code c, *softlist<auto> args) {
+    return call_function_args(c, args);
+}
+code sub returning(code c) {
+    return code sub () { return c; };
+}
+hash<auto> sub mk_counter() {
+    int n = 0;
+    return {
+        \"inc\": sub () { n += 1; },
+        \"get\": int sub () { return n; },
+    };
+}
+# runs the code through the capability from a child Program that this tenant creates (governed by a composite of
+# this tenant's sandboxes)
+auto sub child_call(code cap, code c, softlist<auto> args) {
+    Qore::SandboxManager m();
+    m.setUncontrolledApiPolicy(True);
+    Program child(PO_MODERN);
+    child.setSandboxManager(m);
+    child.parse(\"auto sub run(code cap, code c, softlist<auto> args) { return cap(c, args); }\", \"child\");
+    return child.callFunction(\"run\", cap, c, args);
+}
+*string sub caller_domain() {
+    return Qore::SandboxManager::getCallerIsolationDomain();
+}
+*string sub new_manager_domain() {
+    Qore::SandboxManager m();
+    return m.getIsolationDomain();
+}
+string sub set_domain(Qore::SandboxManager m, string domain) {
+    try {
+        m.setIsolationDomain(domain);
+        return \"set\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+#! trusted code that a build runs: calls the code that the caller gives it
+auto sub build_call_args(code c, softlist<auto> args) {
+    return call_function_args(c, args);
+}
+
+#! trusted code that a build runs: calls a method of an object that the caller gives it
+auto sub build_call_method(object o, string method, softlist<auto> args) {
+    return call_object_method_args(o, method, args);
+}
+
+#! trusted code that a build runs: calls the first call reference of a list that the caller gives it
+auto sub build_call_first(list<auto> l, softlist<auto> args) {
+    return call_function_args(l[0], args);
+}
+
+#! trusted code that a build runs: calls the code that the caller's callback returns
+auto sub build_call_returned(code cb, softlist<auto> args) {
+    code c = cb();
+    return call_function_args(c, args);
+}
+
+#! trusted code that a build runs: calls the code in a thread that it starts and returns the result or the error
+auto sub build_thread_call(code c, softlist<auto> args) {
+    Queue q();
+    background sub () {
+        try {
+            q.push({"result": call_function_args(c, args)});
+        } catch (hash<ExceptionInfo> ex) {
+            q.push({"err": ex.err});
+        }
+    }();
+    hash<auto> h = q.get();
+    if (h.err) {
+        throw h.err, "in the thread of the build";
+    }
+    return h.result;
+}
+
+#! trusted code that a build runs: passes the code on to another build
+auto sub build_nested(code cap, code c, softlist<auto> args) {
+    return cap(c, args);
+}
+
+#! trusted code that a build runs: calls the code that the caller gives it directly, in a loop
+nothing sub build_call_loop(code c, int n) {
+    for (int i = 0; i < n; ++i) {
+        c();
+    }
+}
+
+#! trusted code that a build runs: parses code in a Program that the caller gives it
+nothing sub build_parse(Program p, string src) {
+    p.parse(src, "build-parse");
+}
+
+#! trusted code that a build runs: parses code in a Program that the caller gives it without committing it
+nothing sub build_parse_pending(Program p, string src) {
+    p.parsePending(src, "build-parse-pending");
+}
+
+#! trusted code that a build runs: performs an operation on a Program (or its ProgramControl) that the caller gives it
+nothing sub build_program_op(code op, object target) {
+    op(target);
+}
+
+#! a function, a global variable, a class and a hashdecl of the test that the import operations name
+int sub op_import_target() {
+    return 1;
+}
+our int op_global;
+class OpImportClass {
+}
+hashdecl OpImportHash {
+    int a;
+}
+
+#! every instance method of Program (except getProgramId(), which only identifies it) that the test performs on a
+#! Program of another tenant in a trusted build (qore#6536)
+const ProgramOps = {
+    "parse": sub (Program p) { p.parse("int sub z1() { return 1; }", "op"); },
+    "parsePending": sub (Program p) { p.parsePending("int sub z2() { return 1; }", "op"); },
+    "parseCommit": sub (Program p) { p.parseCommit(); },
+    "parseCommit(int)": sub (Program p) { p.parseCommit(0); },
+    "setParseDiagnosticsCollected": sub (Program p) { p.setParseDiagnosticsCollected(True); },
+    "parseDiagnosticsCollected": sub (Program p) { p.parseDiagnosticsCollected(); },
+    "getParseDiagnostics": sub (Program p) { p.getParseDiagnostics(); },
+    "parseRollback": sub (Program p) { p.parseRollback(); },
+    "callFunction": sub (Program p) { p.callFunction("f"); },
+    "callFunctionArgs": sub (Program p) { p.callFunctionArgs("f", ()); },
+    "callStaticMethod": sub (Program p) { p.callStaticMethod("C", "m"); },
+    "callStaticMethodArgs": sub (Program p) { p.callStaticMethodArgs("C", "m", ()); },
+    "existsFunction": sub (Program p) { p.existsFunction("f"); },
+    "run": sub (Program p) { p.run(); },
+    "skipPendingStatements": sub (Program p) { p.skipPendingStatements(); },
+    "importFunction": sub (Program p) { p.importFunction("op_import_target"); },
+    "importFunction(as)": sub (Program p) { p.importFunction("op_import_target", "op_imported", False); },
+    "importGlobalVariable": sub (Program p) { p.importGlobalVariable("op_global"); },
+    "importGlobalVariable(as)": sub (Program p) { p.importGlobalVariable("op_global", "op_global_2"); },
+    "importClass": sub (Program p) { p.importClass("OpImportClass"); },
+    "importHashDecl": sub (Program p) { p.importHashDecl("OpImportHash"); },
+    "getUserFunctionList": sub (Program p) { p.getUserFunctionList(); },
+    "getParseOptions": sub (Program p) { p.getParseOptions(); },
+    "getFullParseOptions": sub (Program p) { p.getFullParseOptions(); },
+    "getParseOptionStringList": sub (Program p) { p.getParseOptionStringList(); },
+    "setParseOptions": sub (Program p) { p.setParseOptions(0); },
+    "setParseOptions(ParseOptions)": sub (Program p) { p.setParseOptions(new ParseOptions()); },
+    "applySourceDefaults": sub (Program p) { p.applySourceDefaults("/nonexistent/op"); },
+    "disableParseOptions": sub (Program p) { p.disableParseOptions(0); },
+    "disableParseOptions(ParseOptions)": sub (Program p) { p.disableParseOptions(new ParseOptions()); },
+    "replaceParseOptions": sub (Program p) { p.replaceParseOptions(PO_MODERN); },
+    "setScriptPath": sub (Program p) { p.setScriptPath(); },
+    "getScriptDir": sub (Program p) { p.getScriptDir(); },
+    "getScriptName": sub (Program p) { p.getScriptName(); },
+    "getScriptPath": sub (Program p) { p.getScriptPath(); },
+    "lockOptions": sub (Program p) { p.lockOptions(); },
+    "getGlobalVariable": sub (Program p) { p.getGlobalVariable("x"); },
+    "setTimeZoneRegion": sub (Program p) { p.setTimeZoneRegion("UTC"); },
+    "setTimeZoneUTCOffset": sub (Program p) { p.setTimeZoneUTCOffset(0); },
+    "setTimeZone": sub (Program p) { p.setTimeZone(TimeZone::get()); },
+    "getTimeZone": sub (Program p) { p.getTimeZone(); },
+    "setSandboxManager": sub (Program p) { p.setSandboxManager(new SandboxManager()); },
+    "getSandboxManager": sub (Program p) { p.getSandboxManager(); },
+    "setExecMode": sub (Program p) { p.setExecMode(p.getExecMode()); },
+    "getExecMode": sub (Program p) { p.getExecMode(); },
+    "define": sub (Program p) { p.define("OP_DEFINE", 1); },
+    "undefine": sub (Program p) { p.undefine("OP_DEFINE"); },
+    "isDefined": sub (Program p) { p.isDefined("OP_DEFINE"); },
+    "getDefine": sub (Program p) { p.getDefine("OP_DEFINE"); },
+    "getAllDefines": sub (Program p) { p.getAllDefines(); },
+    "loadModule": sub (Program p) { p.loadModule("Mime"); },
+    "loadModuleWarn": sub (Program p) { p.loadModuleWarn("Mime"); },
+    "loadUserModuleWithProgram": sub (Program p) { p.loadUserModuleWithProgram("Mime", new Program(PO_NEW_STYLE)); },
+    "loadUserModuleWithProgramWarn": sub (Program p) {
+        p.loadUserModuleWithProgramWarn("Mime", new Program(PO_NEW_STYLE));
+    },
+    "loadApplyToUserModule": sub (Program p) { p.loadApplyToUserModule("Mime"); },
+    "loadApplyToUserModuleWarn": sub (Program p) { p.loadApplyToUserModuleWarn("Mime"); },
+    "loadApplyToPrivateUserModule": sub (Program p) { p.loadApplyToPrivateUserModule("Mime"); },
+    "loadApplyToPrivateUserModuleWarn": sub (Program p) { p.loadApplyToPrivateUserModuleWarn("Mime"); },
+    "importSystemClasses": sub (Program p) { p.importSystemClasses(); },
+    "importSystemHashDecls": sub (Program p) { p.importSystemHashDecls(); },
+    "importSystemConstants": sub (Program p) { p.importSystemConstants(); },
+    "importSystemFunctions": sub (Program p) { p.importSystemFunctions(); },
+    "importSystemApi": sub (Program p) { p.importSystemApi(); },
+    "setThreadInit": sub (Program p) { p.setThreadInit(); },
+    "setThreadEntryHandler": sub (Program p) { p.setThreadEntryHandler(); },
+    "subscribeThreadEvents": sub (Program p) { p.subscribeThreadEvents(new Queue()); },
+    "unsubscribeThreadEvents": sub (Program p) { p.unsubscribeThreadEvents(-1); },
+    "getGlobalVars": sub (Program p) { p.getGlobalVars(); },
+    "setGlobalVarValue": sub (Program p) { p.setGlobalVarValue("x", 2); },
+    "findFunctionVariants": sub (Program p) { p.findFunctionVariants("f"); },
+    "getThreadList": sub (Program p) { p.getThreadList(); },
+    "getThreadCount": sub (Program p) { p.getThreadCount(); },
+    "waitForThreads": sub (Program p) { p.waitForThreads(); },
+    "waitForThread": sub (Program p) { p.waitForThread(-1); },
+    "cancelThread": sub (Program p) { p.cancelThread(-1); },
+    "cancelThreads": sub (Program p) { p.cancelThreads(); },
+    "getProgram": sub (Program p) { p.getProgram(); },
+    "issueModuleCmd": sub (Program p) { p.issueModuleCmd("Mime", "op"); },
+    "getCallReference": sub (Program p) { p.getCallReference("f"); },
+    "getExpression": sub (Program p) { p.getExpression("1", "op"); },
+    "getFeatureList": sub (Program p) { p.getFeatureList(); },
+    "getCapabilityMask": sub (Program p) { p.getCapabilityMask(); },
+    "getJitOptimizationLevel": sub (Program p) { p.getJitOptimizationLevel(); },
+    "setJitOptimizationLevel": sub (Program p) { p.setJitOptimizationLevel(0); },
+    "saveObject": sub (Program p) { p.saveObject(new Mutex()); },
+    "clearObject": sub (Program p) { p.clearObject(new Mutex()); },
+    "checkObjectCache": sub (Program p) { p.checkObjectCache(new Mutex()); },
+    "clearObjectCache": sub (Program p) { p.clearObjectCache(); },
+    "clearObjectCache(date)": sub (Program p) { p.clearObjectCache(now()); },
+    "objectCacheSize": sub (Program p) { p.objectCacheSize(); },
+};
+
+#! a debugger that the test uses only to add Programs to and to break them
+class OpDebugProgram inherits DebugProgram {
+    onAttach(ProgramControl pgm, reference rs, reference rts) {}
+    onDetach(ProgramControl pgm, reference rs, reference rts) {}
+    onStep(ProgramControl pgm, int bsid, *int sid, *int bid, reference flow, reference rs, reference rts) {}
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {}
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+#! the debugger methods that act on a ProgramControl that they are given (qore#6536)
+const DebuggerOps = {
+    "DebugProgram::addProgram": sub (ProgramControl pc) { (new OpDebugProgram()).addProgram(pc); },
+    "DebugProgram::removeProgram": sub (ProgramControl pc) { (new OpDebugProgram()).removeProgram(pc); },
+    "DebugProgram::attachThread": sub (ProgramControl pc) { (new OpDebugProgram()).attachThread(pc, gettid()); },
+    "DebugProgram::breakProgramThread": sub (ProgramControl pc) {
+        (new OpDebugProgram()).breakProgramThread(pc, gettid());
+    },
+    "DebugProgram::setProgramTerminating": sub (ProgramControl pc) {
+        (new OpDebugProgram()).setProgramTerminating(pc);
+    },
+    "DebugProgram::breakProgram": sub (ProgramControl pc) { (new OpDebugProgram()).breakProgram(pc); },
+    "Breakpoint::assignProgram": sub (ProgramControl pc) { (new Breakpoint()).assignProgram(pc); },
+};
+
+#! the methods of a Breakpoint (except getBreakpointId(), which only identifies it) that the test calls on one
+#! that is assigned to a Program (qore#6958)
+const BoundBreakpointOps = {
+    "setEnabled": sub (Breakpoint b) { b.setEnabled(False); },
+    "getEnabled": sub (Breakpoint b) { b.getEnabled(); },
+    "setPolicy": sub (Breakpoint b) { b.setPolicy(BreakpointPolicyNone); },
+    "getPolicy": sub (Breakpoint b) { b.getPolicy(); },
+    "assignProgram": sub (Breakpoint b) { b.assignProgram((new Program(PO_NEW_STYLE)).getProgram()); },
+    "unassignProgram": sub (Breakpoint b) { b.unassignProgram(); },
+    "getProgram": sub (Breakpoint b) { b.getProgram(); },
+    "assignStatement": sub (Breakpoint b) { b.assignStatement(1); },
+    "unassignStatement": sub (Breakpoint b) { b.unassignStatement(1); },
+    "getStatementIds": sub (Breakpoint b) { b.getStatementIds(); },
+    "getThreadIds": sub (Breakpoint b) { b.getThreadIds(); },
+    "setThreadIds": sub (Breakpoint b) { b.setThreadIds((1,)); },
+    "addThreadId": sub (Breakpoint b) { b.addThreadId(1); },
+    "removeThreadId": sub (Breakpoint b) { b.removeThreadId(1); },
+    "isThreadId": sub (Breakpoint b) { b.isThreadId(1); },
+    "clearThreadIds": sub (Breakpoint b) { b.clearThreadIds(); },
+};
+
+#! the methods of a DebugProgram (except the callbacks) that the test calls on one that a Program was added to
+#! (qore#6958)
+const BoundDebugProgramOps = {
+    "waitForTerminationAndClear": sub (DebugProgram d) { d.waitForTerminationAndClear(); },
+    "getInterruptedCount": sub (DebugProgram d) { d.getInterruptedCount(); },
+    "getAllPrograms": sub (DebugProgram d) { d.getAllPrograms(); },
+    "addProgram": sub (DebugProgram d) { d.addProgram((new Program(PO_NEW_STYLE | PO_ALLOW_DEBUGGER)).getProgram()); },
+    "removeProgram": sub (DebugProgram d) { d.removeProgram((new Program(PO_NEW_STYLE)).getProgram()); },
+    "attachThread": sub (DebugProgram d) { d.attachThread((new Program(PO_NEW_STYLE)).getProgram(), gettid()); },
+    "breakProgramThread": sub (DebugProgram d) {
+        d.breakProgramThread((new Program(PO_NEW_STYLE)).getProgram(), gettid());
+    },
+    "setProgramTerminating": sub (DebugProgram d) {
+        d.setProgramTerminating((new Program(PO_NEW_STYLE)).getProgram());
+    },
+    "breakProgram": sub (DebugProgram d) { d.breakProgram((new Program(PO_NEW_STYLE)).getProgram()); },
+};
+
+#! every instance method of ProgramControl (except getProgramId()) that the test performs (qore#6536)
+const ControlOps = {
+    "createEvalProgram": sub (ProgramControl pc) { pc.createEvalProgram(); },
+    "getParseOptions": sub (ProgramControl pc) { pc.getParseOptions(); },
+    "getScriptDir": sub (ProgramControl pc) { pc.getScriptDir(); },
+    "getScriptName": sub (ProgramControl pc) { pc.getScriptName(); },
+    "getScriptPath": sub (ProgramControl pc) { pc.getScriptPath(); },
+    "getTimeZone": sub (ProgramControl pc) { pc.getTimeZone(); },
+    "isDefined": sub (ProgramControl pc) { pc.isDefined("OP_DEFINE"); },
+    "getDefine": sub (ProgramControl pc) { pc.getDefine("OP_DEFINE"); },
+    "getAllDefines": sub (ProgramControl pc) { pc.getAllDefines(); },
+    "getThreadList": sub (ProgramControl pc) { pc.getThreadList(); },
+    "cancelThread": sub (ProgramControl pc) { pc.cancelThread(-1); },
+    "existsFunction": sub (ProgramControl pc) { pc.existsFunction("f"); },
+    "getGlobalVariable": sub (ProgramControl pc) { pc.getGlobalVariable("x"); },
+    "getGlobalVars": sub (ProgramControl pc) { pc.getGlobalVars(); },
+    "setGlobalVarValue": sub (ProgramControl pc) { pc.setGlobalVarValue("x", 2); },
+    "assignBreakpoint": sub (ProgramControl pc) { pc.assignBreakpoint(new Breakpoint()); },
+    "deleteAllBreakpoints": sub (ProgramControl pc) { pc.deleteAllBreakpoints(); },
+    "getBreakpoints": sub (ProgramControl pc) { pc.getBreakpoints(); },
+    "getTopLevelLocalVars": sub (ProgramControl pc) { pc.getTopLevelLocalVars(); },
+    "getStatementIdInfo": sub (ProgramControl pc) { pc.getStatementIdInfo(0); },
+    "getStatementIds": sub (ProgramControl pc) { pc.getStatementIds(); },
+    "findStatementId": sub (ProgramControl pc) { pc.findStatementId("op", 1); },
+    "findStatementIds": sub (ProgramControl pc) { pc.findStatementIds("op", 1); },
+    "getStepInTargets": sub (ProgramControl pc) { pc.getStepInTargets(0); },
+    "findFunctionStatementId": sub (ProgramControl pc) { pc.findFunctionStatementId("f"); },
+    "findFunctionVariants": sub (ProgramControl pc) { pc.findFunctionVariants("f"); },
+    "getSourceLabels": sub (ProgramControl pc) { pc.getSourceLabels(); },
+    "getSourceFileNames": sub (ProgramControl pc) { pc.getSourceFileNames(); },
+};
+
+#! trusted code that a build runs: sets a global variable of a Program that the caller gives it
+nothing sub build_set_global(Program p, string name, auto value) {
+    p.setGlobalVarValue(name, value);
+}
+
+#! trusted code that a build runs: loads a module into a Program that the caller gives it
+nothing sub build_load_module(Program p, string mod) {
+    p.loadModule(mod);
+}
+
+#! trusted code that a build runs: starts the worker of a shared pool (a library's lazily started worker)
+ThreadPool sub build_start_pool() {
+    ThreadPool tp(1, 1, 1);
+    Queue q();
+    tp.submit(sub () { q.push(True); });
+    q.get();
+    return tp;
+}
+
+#! trusted code that a build runs: runs the code that the caller gives it on the shared pool and returns the result or
+#! the error
+auto sub build_on_pool(ThreadPool tp, code c, softlist<auto> args) {
+    Queue q();
+    tp.submit(sub () {
+        try {
+            q.push({"result": call_function_args(c, args)});
+        } catch (hash<ExceptionInfo> ex) {
+            q.push({"err": ex.err});
+        }
+    });
+    hash<auto> h = q.get();
+    if (h.err) {
+        throw h.err, "in the pool";
+    }
+    return h.result;
+}
+
+#! trusted code that runs the code that the caller gives it on the second pool from a task of the first pool, and returns
+#! the result or the error (the second task's isolation is the first task's, joined with the second worker's)
+auto sub build_on_pools(ThreadPool tp1, ThreadPool tp2, code c, softlist<auto> args) {
+    Queue q();
+    tp1.submit(sub () {
+        try {
+            tp2.submit(sub () {
+                try {
+                    q.push({"result": call_function_args(c, args)});
+                } catch (hash<ExceptionInfo> ex) {
+                    q.push({"err": ex.err});
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            q.push({"err": ex.err});
+        }
+    });
+    # the timeout only guards against a hang (QUEUE-TIMEOUT)
+    hash<auto> h = q.get(60s);
+    if (h.err) {
+        throw h.err, "in the second pool";
+    }
+    return h.result;
+}
+
+#! trusted code that a build runs: the isolation domain that it works for, also in a thread that it starts
+list<*string> sub build_caller_domain() {
+    Queue q();
+    background sub () {
+        q.push(SandboxManager::getCallerIsolationDomain());
+    }();
+    return (SandboxManager::getCallerIsolationDomain(), q.get());
+}
+
+#! trusted code that a build runs: creates an eval Program from a Program that the caller gives it
+string sub build_eval(Program p) {
+    ProgramControl pc = p.getProgram();
+    return pc.createEvalProgram(PO_NEW_STYLE).className();
+}
+
+#! trusted code that a build runs: calls a function of a Program that the caller gives it
+auto sub build_call_pgm(Program p, string f, softlist<auto> args) {
+    return p.callFunctionArgs(f, args);
+}
+
+#! a trusted class whose objects get the sandbox of the code that creates them as provenance
+class Holder {
+    int run() {
+        return 1;
+    }
+}
+
+#! trusted code that sandboxed code calls: the object gets the caller's sandbox as provenance
+Holder sub new_holder() {
+    return new Holder();
+}
+
+class SandboxIsolationDomainTest inherits QUnit::Test {
+    private {
+        code BuildCallArgs;
+        code BuildCallMethod;
+        code BuildCallFirst;
+        code BuildCallReturned;
+        code BuildThreadCall;
+        code BuildNested;
+        code BuildCallPgm;
+        code BuildCallLoop;
+        code BuildEval;
+        code BuildCallerDomain;
+        code BuildStartPool;
+        code BuildOnPool;
+        code BuildParse;
+        code BuildParsePending;
+        code BuildLoadModule;
+        code BuildSetGlobal;
+        code BuildProgramOp;
+
+        #! tenant A's interface, its second interface (same domain), tenant B's interface
+        Program a;
+        Program a2;
+        Program b;
+    }
+
+    constructor() : QUnit::Test("sandbox isolation domains", "1.0", \ARGV) {
+        addTestCase("the isolation domain of a sandbox", \domainApi());
+        addTestCase("the code of another tenant does not run in a build that a tenant called", \refused());
+        addTestCase("the same tenant's code, the build's own code and host code run", \allowed());
+        addTestCase("a build that trusted code enters may run any tenant's code", \trustedCaller());
+        addTestCase("the code of the Program that created the build runs in it, whatever its domain",
+            \creatorCode());
+        addTestCase("sandboxes without a domain refuse nothing", \noDomain());
+        addTestCase("the code of another tenant has no effect: direct calls, nested and lost calls, parsing",
+            \noEffect());
+        addTestCase("a build cannot use another tenant's Program: neither its code nor its state", \programOps());
+        addTestCase("a build cannot use another tenant's Program through a debugger object bound to it",
+            \boundDebuggerOps());
+        addTestCase("a worker started in a tenant's build runs other work under its submitter's isolation",
+            \sharedWorker());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        BuildCallArgs = SandboxManager::createTrustedBuildCall(\build_call_args());
+        BuildCallMethod = SandboxManager::createTrustedBuildCall(\build_call_method());
+        BuildCallFirst = SandboxManager::createTrustedBuildCall(\build_call_first());
+        BuildCallReturned = SandboxManager::createTrustedBuildCall(\build_call_returned());
+        BuildThreadCall = SandboxManager::createTrustedBuildCall(\build_thread_call());
+        BuildNested = SandboxManager::createTrustedBuildCall(\build_nested());
+        BuildCallPgm = SandboxManager::createTrustedBuildCall(\build_call_pgm());
+        BuildCallLoop = SandboxManager::createTrustedBuildCall(\build_call_loop());
+        BuildEval = SandboxManager::createTrustedBuildCall(\build_eval());
+        BuildCallerDomain = SandboxManager::createTrustedBuildCall(\build_caller_domain());
+        BuildStartPool = SandboxManager::createTrustedBuildCall(\build_start_pool());
+        BuildOnPool = SandboxManager::createTrustedBuildCall(\build_on_pool());
+        BuildParse = SandboxManager::createTrustedBuildCall(\build_parse());
+        BuildParsePending = SandboxManager::createTrustedBuildCall(\build_parse_pending());
+        BuildLoadModule = SandboxManager::createTrustedBuildCall(\build_load_module());
+        BuildSetGlobal = SandboxManager::createTrustedBuildCall(\build_set_global());
+        BuildProgramOp = SandboxManager::createTrustedBuildCall(\build_program_op());
+
+        a = tenant("a", "tenant-a");
+        a2 = tenant("a", "tenant-a2");
+        b = tenant("b", "tenant-b");
+    }
+
+    programOps() {
+        # every method of Program and of ProgramControl is refused on a Program of another tenant, before it reads or
+        # changes anything; the tenant's own Program is not refused
+        foreach hash<auto> i in (ProgramOps.pairIterator()) {
+            Program b_target = opTarget("b");
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (i.value, b_target)), "Program::" + i.key);
+            assertNotIsolationError(i.value, opTarget("a"), "Program::" + i.key);
+        }
+        foreach hash<auto> i in (ControlOps.pairIterator()) {
+            # the ProgramControl of a Program that is kept (the control does not keep its Program)
+            Program b_pgm = opTarget("b");
+            Program a_pgm = opTarget("a");
+            # createEvalProgram() names its own operation
+            assertThrows("SANDBOX-ISOLATION-ERROR", i.key == "createEvalProgram" ? "createEvalProgram" : "accessing a Program",
+                \a.callFunction(), ("call", BuildProgramOp, (i.value, b_pgm.getProgram())), "ProgramControl::" + i.key);
+            assertNotIsolationError(i.value, a_pgm.getProgram(), "ProgramControl::" + i.key);
+        }
+        foreach hash<auto> i in (DebuggerOps.pairIterator()) {
+            Program b_pgm = opTarget("b");
+            Program a_pgm = opTarget("a");
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (i.value, b_pgm.getProgram())), i.key);
+            assertNotIsolationError(i.value, a_pgm.getProgram(), i.key);
+        }
+        # another tenant's Program is not taken as the container of a module (which deletes its object): it is checked
+        # first, and its object is unchanged
+        hash<string, code> container_ops = {
+            "Program::loadUserModuleWithProgram": sub (Program c) {
+                opTarget("a").loadUserModuleWithProgram("Mime", c);
+            },
+            "Program::loadUserModuleWithProgramWarn": sub (Program c) {
+                opTarget("a").loadUserModuleWithProgramWarn("Mime", c);
+            },
+            "load_user_module_with_program()": sub (Program c) { load_user_module_with_program("Mime", c); },
+        };
+        foreach hash<auto> i in (container_ops.pairIterator()) {
+            Program b_container = opTarget("b");
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (i.value, b_container)), i.key);
+            assertEq(1, b_container.getGlobalVariable("x"), i.key);
+            assertNotIsolationError(i.value, opTarget("a"), i.key);
+        }
+        # the state of the other tenant's Program is unchanged
+        Program b_target = opTarget("b");
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildProgramOp,
+            (ProgramOps.setGlobalVarValue, b_target)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildProgramOp,
+            (ControlOps.setGlobalVarValue, b_target.getProgram())));
+        assertEq(1, b_target.getGlobalVariable("x"));
+        # Programs that are not another tenant's are not refused: the host's (a library's Program), one of a sandbox
+        # without a domain, the tenant's own
+        Program lib(PO_NEW_STYLE);
+        lib.parse("our int x; int sub f() { return 3; }", "library");
+        lib.setGlobalVarValue("x", 4);
+        Program none = tenantProgram();
+        none.parse("our int x;", "no-domain");
+        none.setGlobalVarValue("x", 5);
+        code read = int sub (Program p) { return p.getGlobalVariable("x"); };
+        assertEq(4, a.callFunction("call", BuildCallArgs, (read, (lib,))));
+        assertEq(5, a.callFunction("call", BuildCallArgs, (read, (none,))));
+        assertEq(1, a.callFunction("call", BuildCallArgs, (read, (opTarget("a"),))));
+        assertEq(3, a.callFunction("call", BuildCallArgs, (int sub (Program p) { return p.callFunction("f"); },
+            (lib,))));
+        # the code, constants and statics of a module that the host loaded (its Program has no sandbox) are read and
+        # run in the build
+        assertEq("text/plain|text/html", a.callFunction("call", BuildCallArgs, (string sub () {
+            return Mime::MimeTypeText + "|" + Mime::get_mime_type_from_ext("x.html"); }, ())));
+        # an expression of the other tenant's Program that the host created is not evaluated in the build (it enters
+        # the Program); one of the tenant's own is
+        Program b_expr_pgm = opTarget("b");
+        Expression b_expr = b_expr_pgm.getExpression("f() + 1", "expr");
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallArgs,
+            (auto sub (Expression e) { return e.eval(); }, (b_expr,))));
+        Program a_expr_pgm = opTarget("a");
+        Expression a_expr = a_expr_pgm.getExpression("f() + 1", "expr");
+        assertEq(2, a.callFunction("call", BuildCallArgs, (auto sub (Expression e) { return e.eval(); }, (a_expr,))));
+        # the Program's ID only identifies it
+        assertEq(b_target.getProgramId(), a.callFunction("call", BuildCallArgs, (int sub (Program p) {
+            return p.getProgramId(); }, (b_target,))));
+    }
+
+    boundDebuggerOps() {
+        # the host binds the objects to the Programs (outside any build); a build that tenant A called cannot use
+        # them for another tenant's Program, but can for its own
+        foreach hash<auto> i in (BoundBreakpointOps.pairIterator()) {
+            Program b_pgm = debuggableTarget("b");
+            Breakpoint b_bkpt();
+            b_bkpt.assignProgram(b_pgm.getProgram());
+            b_bkpt.setThreadIds((7,));
+            bool enabled = b_bkpt.getEnabled();
+            int policy = b_bkpt.getPolicy();
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (i.value, b_bkpt)), "Breakpoint::" + i.key);
+            # the breakpoint is unchanged and still assigned to the other tenant's Program
+            assertEq(b_pgm.getProgramId(), b_bkpt.getProgram().getProgramId(), "Breakpoint::" + i.key);
+            assertEq(enabled, b_bkpt.getEnabled(), "Breakpoint::" + i.key);
+            assertEq(policy, b_bkpt.getPolicy(), "Breakpoint::" + i.key);
+            assertEq((7,), b_bkpt.getThreadIds(), "Breakpoint::" + i.key);
+            Program a_pgm = debuggableTarget("a");
+            Breakpoint a_bkpt();
+            a_bkpt.assignProgram(a_pgm.getProgram());
+            assertNotIsolationError(i.value, a_bkpt, "Breakpoint::" + i.key);
+        }
+        foreach hash<auto> i in (BoundDebugProgramOps.pairIterator()) {
+            Program b_pgm = debuggableTarget("b");
+            OpDebugProgram b_dbg();
+            b_dbg.addProgram(b_pgm.getProgram());
+            on_exit b_dbg.removeProgram(b_pgm.getProgram());
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (i.value, b_dbg)), "DebugProgram::" + i.key);
+            # the debugger still has the other tenant's Program
+            assertEq(1, b_dbg.getAllPrograms().size(), "DebugProgram::" + i.key);
+            Program a_pgm = debuggableTarget("a");
+            OpDebugProgram a_dbg();
+            a_dbg.addProgram(a_pgm.getProgram());
+            on_exit a_dbg.removeProgram(a_pgm.getProgram());
+            assertNotIsolationError(i.value, a_dbg, "DebugProgram::" + i.key);
+        }
+        # a debugger bound to the Programs of both tenants is bound to the other tenant's: refused, also for an
+        # operation on the tenant's own Program
+        {
+            Program b_pgm = debuggableTarget("b");
+            Program a_pgm = debuggableTarget("a");
+            OpDebugProgram mixed();
+            mixed.addProgram(a_pgm.getProgram());
+            mixed.addProgram(b_pgm.getProgram());
+            on_exit {
+                mixed.removeProgram(a_pgm.getProgram());
+                mixed.removeProgram(b_pgm.getProgram());
+            }
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (sub (DebugProgram d) { d.getAllPrograms(); }, mixed)));
+            assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildProgramOp,
+                (sub (DebugProgram d) { d.removeProgram(a_pgm.getProgram()); }, mixed)));
+            assertEq(2, mixed.getAllPrograms().size());
+        }
+        # an object bound to no Program, or to one that is not another tenant's, is not refused
+        Breakpoint free();
+        assertNotIsolationError(BoundBreakpointOps.getEnabled, free, "Breakpoint::getEnabled (unassigned)");
+        # the breakpoint's ID only identifies it
+        Program b_pgm = debuggableTarget("b");
+        Breakpoint b_bkpt();
+        b_bkpt.assignProgram(b_pgm.getProgram());
+        assertEq(b_bkpt.getBreakpointId(), a.callFunction("call", BuildCallArgs, (int sub (Breakpoint b) {
+            return b.getBreakpointId(); }, (b_bkpt,))));
+    }
+
+    #! a Program of the given domain that allows debugging, with code
+    private Program debuggableTarget(string domain) {
+        SandboxManager m();
+        m.setUncontrolledApiPolicy(True);
+        m.setIsolationDomain(domain);
+        Program p(PO_MODERN | PO_ALLOW_DEBUGGER);
+        p.setSandboxManager(m);
+        p.parse("our int x; int sub f() { return 1; }", "debug-target");
+        return p;
+    }
+
+    #! the operation in a build that tenant A called on its own Program: any error but an isolation error
+    private assertNotIsolationError(code op, object target, string label) {
+        try {
+            a.callFunction("call", BuildProgramOp, (op, target));
+        } catch (hash<ExceptionInfo> ex) {
+            assertNeq("SANDBOX-ISOLATION-ERROR", ex.err, label + ": " + ex.desc);
+        }
+    }
+
+    #! a Program of the given domain with a global variable \c x (1) and a function \c f()
+    private Program opTarget(string domain) {
+        Program p = tenantProgram(domain);
+        p.parse("our int x; int sub f() { return 1; }", "op-target");
+        p.setGlobalVarValue("x", 1);
+        return p;
+    }
+
+    #! creates a Program governed by a sandbox of the given domain (none: a sandbox without a domain), with no code
+    private Program tenantProgram(*string domain) {
+        SandboxManager m();
+        m.setUncontrolledApiPolicy(True);
+        if (domain) {
+            m.setIsolationDomain(domain);
+        }
+        Program p(PO_MODERN);
+        p.setSandboxManager(m);
+        return p;
+    }
+
+    #! creates the Program of a tenant's interface
+    private Program tenant(*string domain, string name) {
+        SandboxManager m();
+        m.setUncontrolledApiPolicy(True);
+        if (domain) {
+            m.setIsolationDomain(domain);
+        }
+        Program p(PO_MODERN);
+        p.setSandboxManager(m);
+        p.parse(TenantSource, name);
+        return p;
+    }
+
+    domainApi() {
+        SandboxManager m();
+        assertNothing(m.getIsolationDomain());
+        assertThrows("SANDBOX-CONFIG-ERROR", "must not be empty", \m.setIsolationDomain(), "");
+        m.setIsolationDomain("x");
+        assertEq("x", m.getIsolationDomain());
+        # the same domain again changes nothing; another is refused
+        m.setIsolationDomain("x");
+        assertThrows("SANDBOX-CONFIG-ERROR", "cannot be changed", \m.setIsolationDomain(), "y");
+        # a copy belongs to the same tenant
+        assertEq("x", m.copy().getIsolationDomain());
+
+        # the domain is set before the sandbox governs code
+        SandboxManager n();
+        Program p(PO_MODERN);
+        p.setSandboxManager(n);
+        assertThrows("SANDBOX-CONFIG-ERROR", "already governs code", \n.setIsolationDomain(), "x");
+
+        # sandboxed code cannot set a domain, also not of a sandbox that it created
+        assertEq("SANDBOX-ACCESS-ERROR", a.callFunction("set_domain", new SandboxManager(), "b"));
+        # the domain of the calling code: the tenant's, also through trusted library code that it calls; none for the
+        # host
+        assertEq("a", a.callFunction("caller_domain"));
+        assertEq("b", b.callFunction("call", \SandboxManager::getCallerIsolationDomain()));
+        assertNothing(SandboxManager::getCallerIsolationDomain());
+        # the code of a trusted build works for the tenant that entered it (whose sandbox the build's barrier hides),
+        # also in a thread that it starts; for nobody in a build that the host entered
+        assertEq(("a", "a"), a.callFunction("call", BuildCallerDomain));
+        assertEq(("b", "b"), b.callFunction("call", BuildCallerDomain));
+        assertEq((NOTHING, NOTHING), BuildCallerDomain());
+        # a sandbox that sandboxed code creates belongs to the tenant of that code
+        assertEq("a", a.callFunction("new_manager_domain"));
+        assertEq("b", b.callFunction("new_manager_domain"));
+    }
+
+    refused() {
+        code b_ref = b.getCallReference("make");
+        code b_closure = b.callFunction("mk_closure");
+        object b_obj = b.callFunction("mk_object");
+        # an object of a trusted class with tenant B's sandbox as provenance
+        Holder b_holder = b.callFunction("call", \new_holder());
+        # tenant A's own code that returns tenant B's code
+        code a_returning = a.callFunction("returning", b_ref);
+
+        int frames = budgetFrames();
+        assertThrows("SANDBOX-ISOLATION-ERROR", "isolation domain 'b'.*isolation domain 'a'",
+            \a.callFunction(), ("call", BuildCallArgs, (b_ref, 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallArgs, (b_closure, 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallMethod, (b_obj, "make", 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallMethod, (b_holder, "run")));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallFirst, ((b_ref,), 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallReturned, (a_returning, 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildThreadCall, (b_ref, 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildNested, (BuildCallArgs, b_ref, 10)));
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallPgm, (b, "make", 10)));
+        # the refused entries left no frames
+        if (frames >= 0) {
+            assertEq(frames, budgetFrames());
+        }
+        # an eval Program of the other tenant's Program
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildEval, (b,)));
+        # a child Program of the tenant (a composite of its sandboxes) calls the build
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("child_call", BuildCallArgs, b_ref, 10));
+        assertEq(10, a.callFunction("child_call", BuildCallArgs, a.getCallReference("make"), 10).size());
+        # and the tenant can still call its own code through the build
+        assertEq(10, a.callFunction("call", BuildCallArgs, (a.getCallReference("make"), 10)).size());
+    }
+
+    allowed() {
+        # the same tenant's other interface (a TrustedSynchronousExecution-style build)
+        assertEq(10, a.callFunction("call", BuildCallArgs, (a2.getCallReference("make"), 10)).size());
+        assertEq(10, a.callFunction("call", BuildCallMethod, (a2.callFunction("mk_object"), "make", 10)).size());
+        assertEq(10, a.callFunction("call", BuildCallPgm, (a2, "make", 10)).size());
+        assertEq(10, a.callFunction("call", BuildThreadCall, (a2.getCallReference("make"), 10)).size());
+        # the caller's own code
+        assertEq(10, a.callFunction("call", BuildCallArgs, (a.callFunction("mk_closure"), 10)).size());
+        # host code
+        code host = list<string> sub (int n) { return map "x", xrange(n); };
+        assertEq(10, a.callFunction("call", BuildCallArgs, (host, 10)).size());
+    }
+
+    trustedCaller() {
+        # the host orchestrates across tenants
+        assertEq(10, BuildCallArgs(b.getCallReference("make"), 10).size());
+        assertEq(10, BuildThreadCall(b.getCallReference("make"), 10).size());
+        assertEq(10, BuildNested(BuildCallArgs, b.getCallReference("make"), 10).size());
+    }
+
+    creatorCode() {
+        # a capability created by the code of a trusted Program, which the host then gives a sandbox of another
+        # domain: the build's own code, and the creator's code that the caller's code calls in the build, run
+        Program creator(PO_MODERN);
+        creator.parse("%modern
+list<string> sub make(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += \"c\";
+    }
+    return l;
+}
+auto sub run(code c, softlist<auto> args) {
+    return call_function_args(c, args);
+}
+code sub mk() {
+    return Qore::SandboxManager::createTrustedBuildCall(\\run());
+}
+", "creator");
+        code cap = creator.callFunction("mk");
+        SandboxManager mc();
+        mc.setUncontrolledApiPolicy(True);
+        mc.setIsolationDomain("c");
+        creator.setSandboxManager(mc);
+        # the build's own code
+        assertEq(10, a.callFunction("call", cap, (creator.getCallReference("make"), 10)).size());
+        # the creator's code that the caller's code calls in the build
+        assertEq(10, a.callFunction("call", cap, (a.getCallReference("call"), (creator.getCallReference("make"),
+            10))).size());
+        # another tenant's code is still refused there
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", cap, (b.getCallReference("make"), 10)));
+        code c_make = creator.getCallReference("make");
+        # a nested build never widens what runs: the build that tenant A entered refuses the creator's code (domain c)
+        # also in a build of the creator's capability that it calls
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildNested, (cap, c_make, 10)));
+
+        # pool tasks run under the isolation of the code that submitted them, not that of the build that started the
+        # pool's worker: the worker of tp1 starts in a build that tenant A entered (which refuses the creator's code),
+        # the worker of tp2 in A's build of the creator's capability (which allows it); a task submitted from a task
+        # of tp1 continues the capability's build only (a continuation that runs inline in other builds keeps their
+        # isolation as well: ut_sandbox_isolation_joined_twice() in run_unit_tests())
+        ThreadPool tp1 = a.callFunction("call", BuildStartPool);
+        on_exit tp1.stop();
+        ThreadPool tp2 = a.callFunction("call", cap, (\build_start_pool(), ()));
+        on_exit tp2.stop();
+        assertEq(3, a.callFunction("call", cap, (\build_on_pool(), (tp2, c_make, 3))).size());
+        assertEq(3, a.callFunction("call", cap, (\build_on_pools(), (tp1, tp2, c_make, 3))).size());
+        # another tenant's code is refused on the same path
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", cap, (\build_on_pools(),
+            (tp1, tp2, b.getCallReference("make"), 3))));
+    }
+
+    noDomain() {
+        Program x = tenant(NOTHING, "no-domain-x");
+        Program y = tenant(NOTHING, "no-domain-y");
+        assertEq(10, x.callFunction("call", BuildCallArgs, (y.getCallReference("make"), 10)).size());
+        # a caller without a domain refuses no tenant's code either
+        assertEq(10, x.callFunction("call", BuildCallArgs, (b.getCallReference("make"), 10)).size());
+        # the code of a sandbox without a domain runs for a tenant
+        assertEq(10, a.callFunction("call", BuildCallArgs, (y.getCallReference("make"), 10)).size());
+    }
+
+    noEffect() {
+        # tenant B's counter, warmed up by calls of the host (which may call any tenant's code), so that the calls run
+        # on the fast paths of each execution mode
+        hash<auto> counter = b.callFunction("mk_counter");
+        for (int i = 0; i < 20; ++i) {
+            counter.inc();
+        }
+        assertEq(20, counter.get());
+
+        # a direct call of the closure by the build's code, in a loop: the host's build (which may run any tenant's
+        # code) warms up the build's call site first, so that the tenant's call takes its fast paths
+        BuildCallLoop(counter.inc, 50);
+        assertEq(70, counter.get());
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallLoop, (counter.inc, 50)));
+        assertEq(70, counter.get());
+
+        # a nested build that a sandbox without a domain enters inside the tenant's build: the tenant's isolation
+        # still holds
+        Program y = tenant(NOTHING, "nested-no-domain");
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallArgs,
+            (y.getCallReference("call"), (BuildCallArgs, (counter.inc,)))));
+        assertEq(70, counter.get());
+
+        # parsing code in the other tenant's Program
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildParse,
+            (b, "our int build_parse_x = make(1).size();")));
+        assertNothing(b.getGlobalVariable("build_parse_x"));
+        # parsing without committing (the parse is refused itself, not only its commit): nothing is pending
+        Program b_pending = tenantProgram("b");
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildParsePending,
+            (b_pending, "our int build_pending_x = 1;")));
+        b_pending.parseCommit();
+        assertNothing(b_pending.getGlobalVariable("build_pending_x"));
+        # loading a module into the other tenant's Program: the module is not loaded into it
+        Program b_module = tenantProgram("b");
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildLoadModule, (b_module, "Mime")));
+        b_module.parse("list<string> sub features() { return get_feature_list(); }", "module-check");
+        list<string> features = b_module.callFunction("features");
+        assertTrue(features.size() > 0);
+        assertFalse(inlist("Mime", features), sprintf("%y", features));
+        # changing a global variable of the other tenant's Program (no code of it runs: the Program access check)
+        Program b_global = tenantProgram("b");
+        b_global.parse("our int build_global;", "global");
+        b_global.setGlobalVarValue("build_global", 1);
+        assertThrows("SANDBOX-ISOLATION-ERROR", "accessing a Program", \a.callFunction(), ("call", BuildSetGlobal,
+            (b_global, "build_global", 2)));
+        assertEq(1, b_global.getGlobalVariable("build_global"));
+        # the tenant's own Program
+        Program a_global = tenantProgram("a");
+        a_global.parse("our int build_global;", "global");
+        a_global.setGlobalVarValue("build_global", 1);
+        a.callFunction("call", BuildSetGlobal, (a_global, "build_global", 2));
+        assertEq(2, a_global.getGlobalVariable("build_global"));
+
+        # a call whose limits cannot be enforced (its budget could not be recorded) keeps the isolation
+        try {
+            call_function("dbg_sandbox_fail_next_budgets", 0);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                return;
+            }
+            rethrow;
+        }
+        SandboxManager mw();
+        mw.setUncontrolledApiPolicy(True);
+        mw.setWallTimeLimit(600000);
+        mw.setIsolationDomain("a");
+        Program aw(PO_MODERN);
+        aw.setSandboxManager(mw);
+        aw.parse(TenantSource, "tenant-a-limited");
+        code aw_call = aw.getCallReference("call");
+        call_function("dbg_sandbox_fail_next_budgets", 1);
+        on_exit call_function("dbg_sandbox_fail_next_budgets", 0);
+        try {
+            a.callFunction("call", BuildCallArgs, (aw_call, (counter.inc,)));
+            assertTrue(False, "the call was not refused");
+        } catch (hash<ExceptionInfo> ex) {
+            # the isolation error, or the error of the call whose limits cannot be enforced; the counter is unchanged
+            assertTrue(ex.err == "SANDBOX-ISOLATION-ERROR" || ex.err == "SANDBOX-ERROR", ex.err);
+        }
+        assertEq(70, counter.get());
+    }
+
+    sharedWorker() {
+        # the worker of a shared pool starts in tenant A's build (a library that starts it lazily)
+        ThreadPool tp = a.callFunction("call", BuildStartPool);
+        on_exit tp.stop();
+        code b_make = b.getCallReference("make");
+        # a task of the host runs tenant B's code on it: the host may run any tenant's code
+        Queue q();
+        tp.submit(sub () { q.push(b_make(3).size()); });
+        assertEq(3, q.get());
+        # tenant A's task in its build still cannot run tenant B's code there
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildOnPool, (tp, b_make, 3)));
+        # and the host's tasks are not affected by it
+        tp.submit(sub () { q.push(b_make(4).size()); });
+        assertEq(4, q.get());
+    }
+
+    #! the number of call budget frames of the thread, or -1 in a release build
+    private int budgetFrames() {
+        try {
+            return call_function("dbg_sandbox_budget_frames");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                return -1;
+            }
+            rethrow;
+        }
+    }
+}

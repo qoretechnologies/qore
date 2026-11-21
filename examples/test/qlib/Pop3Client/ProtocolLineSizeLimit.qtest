@@ -1,0 +1,289 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Line limits of the clients of the line-based protocols (qore#6914): a POP3, SMTP, IMAP or FTP server that sends a
+    line that never ends, or a reply of many lines, makes the client fail with SOCKET-LINE-TOO-LARGE instead of keeping
+    the data in memory.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Pop3Client
+%requires SmtpClient
+%requires ImapClient
+
+%exec-class ProtocolLineSizeLimitTest
+
+#! A server that sends the same bytes to every client that connects, and then keeps the connection open
+class FloodServer {
+    private {
+        Socket listener();
+        int port;
+        Counter running(1);
+        Counter done(1);
+        string data;
+    }
+
+    constructor(string data) {
+        self.data = data;
+        listener.bindINET("127.0.0.1", 0, True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    stop() {
+        done.dec();
+        listener.shutdown();
+        listener.close();
+        running.waitForZero();
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket peer;
+            try {
+                peer = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            background answer(peer);
+        }
+    }
+
+    private answer(Socket peer) {
+        on_exit peer.close();
+        try {
+            peer.send(data, 30s);
+            # keep the connection open until the test ends: the client must fail by itself
+            done.waitForZero(30s);
+        } catch (hash<ExceptionInfo> ex) {
+            # the client closed the connection
+        }
+    }
+}
+
+#! A POP3 server that logs the client in and answers RETR with a message of the given size
+class Pop3MessageServer {
+    private {
+        Socket listener();
+        int port;
+        Counter running(1);
+        Counter done(1);
+        int size;
+    }
+
+    constructor(int size) {
+        self.size = size;
+        listener.bindINET("127.0.0.1", 0, True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    stop() {
+        done.dec();
+        listener.shutdown();
+        listener.close();
+        running.waitForZero();
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket peer;
+            try {
+                peer = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            background session(peer);
+        }
+    }
+
+    private string readLine(Socket s) {
+        binary line = binary();
+        while (True) {
+            binary c = s.recvBinary(1, 30s);
+            if (!c.size()) {
+                throw "SOCKET-CLOSED", "closed";
+            }
+            if (c == <0a>) {
+                break;
+            }
+            line += c;
+        }
+        return trim(line.toString());
+    }
+
+    private session(Socket s) {
+        on_exit s.close();
+        try {
+            s.send("+OK ready\r\n");
+            while (True) {
+                string cmd = readLine(s);
+                if (cmd =~ /^(USER|PASS|NOOP|RSET|CAPA)/) {
+                    s.send("+OK\r\n");
+                } else if (cmd =~ /^RETR/) {
+                    # a message of many short lines, then the end line
+                    s.send("+OK\r\n");
+                    s.send("Subject: test\r\nFrom: a@b.c\r\n\r\n", 30s);
+                    int sent = 0;
+                    string line = strmul("m", 62) + "\r\n";
+                    while (sent < size) {
+                        s.send(line, 30s);
+                        sent += line.size();
+                    }
+                    s.send(".\r\n", 30s);
+                } else if (cmd =~ /^QUIT/) {
+                    s.send("+OK bye\r\n");
+                    return;
+                } else {
+                    s.send("-ERR unknown\r\n");
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the client closed the connection
+        }
+    }
+}
+
+class ProtocolLineSizeLimitTest inherits QUnit::Test {
+    private {
+        #! the default maximum line size
+        const Limit = 1048576;
+
+        #! a line that never ends, longer than the limit
+        const Flood = 3 * 1024 * 1024;
+    }
+
+    constructor() : Test("ProtocolLineSizeLimitTest", "1.0") {
+        addTestCase("POP3 line that never ends", \pop3LineTest());
+        addTestCase("SMTP line that never ends", \smtpLineTest());
+        addTestCase("SMTP reply of many lines", \smtpLinesTest());
+        addTestCase("IMAP line that never ends", \imapLineTest());
+        addTestCase("FTP line that never ends", \ftpLineTest());
+        addTestCase("FTP reply of many lines", \ftpLinesTest());
+        addTestCase("POP3 message over the response limit", \pop3MessageTest());
+        addTestCase("POP3 message at the response limit", \pop3MessageOkTest());
+        set_return_value(main());
+    }
+
+    #! runs the code against a server that sends the data; returns the exception, if any
+    private *hash<ExceptionInfo> against(string data, code<nothing(int)> c) {
+        FloodServer server(data);
+        on_exit server.stop();
+        try {
+            c(server.getPort());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    private checkTooLarge(*hash<ExceptionInfo> ex, string msg) {
+        printf("%s: %s: %s\n", msg, ex.err, ex.desc);
+        assertRegex("SOCKET-LINE-TOO-LARGE", sprintf("%s: %s", ex.err, ex.desc), msg);
+    }
+
+    pop3LineTest() {
+        checkTooLarge(against("+OK " + strmul("a", Flood), sub (int port) {
+            Pop3Client c(sprintf("pop3://user:pass@127.0.0.1:%d", port));
+            c.connect();
+        }), "POP3");
+    }
+
+    smtpLineTest() {
+        checkTooLarge(against("220 " + strmul("a", Flood), sub (int port) {
+            SmtpClient c(sprintf("smtp://127.0.0.1:%d", port));
+            c.connect();
+        }), "SMTP");
+    }
+
+    smtpLinesTest() {
+        # many short lines of one reply: the reply is larger than the limit as a whole
+        checkTooLarge(against(strmul("220-" + strmul("b", 60) + "\r\n", Limit / 60 * 3), sub (int port) {
+            SmtpClient c(sprintf("smtp://127.0.0.1:%d", port));
+            c.connect();
+        }), "SMTP many lines");
+    }
+
+    imapLineTest() {
+        checkTooLarge(against("* OK " + strmul("a", Flood), sub (int port) {
+            ImapClient c(sprintf("imap://127.0.0.1:%d", port), {"username": "u", "password": "p"});
+            c.connect();
+        }), "IMAP");
+    }
+
+    ftpLineTest() {
+        checkTooLarge(against("220 " + strmul("a", Flood), sub (int port) {
+            FtpClient c(sprintf("ftp://user:pass@127.0.0.1:%d", port));
+            c.connect();
+        }), "FTP");
+    }
+
+    ftpLinesTest() {
+        checkTooLarge(against(strmul("220-" + strmul("b", 60) + "\r\n", Limit / 60 * 3), sub (int port) {
+            FtpClient c(sprintf("ftp://user:pass@127.0.0.1:%d", port));
+            c.connect();
+        }), "FTP many lines");
+    }
+
+    pop3MessageTest() {
+        Pop3MessageServer server(1024 * 1024);
+        on_exit server.stop();
+        Pop3Client c(sprintf("pop3://user:pass@127.0.0.1:%d", server.getPort()), {"max_response_size": 65536});
+        c.connect();
+        try {
+            c.getMessage("1");
+            assertTrue(False, "a message over the limit");
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("SOCKET-RESPONSE-TOO-LARGE", sprintf("%s: %s", ex.err, ex.desc), "POP3 message");
+        }
+    }
+
+    pop3MessageOkTest() {
+        # a message under the limit is retrieved
+        Pop3MessageServer server(16384);
+        on_exit server.stop();
+        Pop3Client c(sprintf("pop3://user:pass@127.0.0.1:%d", server.getPort()), {"max_response_size": 65536});
+        c.connect();
+        assertTrue(c.getMessage("1") instanceof MailMessage::Message);
+        # the option must not be negative
+        assertThrows("POP3-CONFIG-ERROR", sub () {
+            new Pop3Client("pop3://user:pass@127.0.0.1:1", {"max_response_size": -1});
+        });
+    }
+}

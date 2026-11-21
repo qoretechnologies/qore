@@ -58,7 +58,7 @@ QoreString *QoreNullCoalescingOperatorNode::getAsString(bool &del, int foff, Exc
 }
 
 int QoreNullCoalescingOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    qore_string_private::get(str)->concat(&null_coalescing_str);
+    qore_string_private::get(str)->concatAsciiName(null_coalescing_str);
     return 0;
 }
 

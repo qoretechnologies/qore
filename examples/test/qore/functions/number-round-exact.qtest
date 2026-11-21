@@ -16,8 +16,9 @@
 /** They scaled the number by a floating-point power of 10, which is inexact above 10^22 and was limited to 10^308, so
     that round(1.2345678901234567890123456789n, 24) gave a long inexact value and a precision beyond 308 gave a wrong
     multiple (ceil(123.5n, -400) gave about 10^308); the multiple of the power of 10 is now found exactly, in integer
-    arithmetic, from the binary value of the number, and is correctly rounded to the number's precision, so that it
-    also compares equal to a literal of the same precision.  The probes (number-round-exact/probes.q) run in each
+    arithmetic, from the binary value of the number, and is correctly rounded: with digits after the decimal point
+    to the precision of the number parsed from its decimal string (qore#7014), so that it compares equal to the
+    literal of its value, and otherwise to the number's precision.  The probes (number-round-exact/probes.q) run in each
     execution mode in a child process, with tiered execution at the IR tier and promoted to native code, and as
     qcc-compiled executables (-O0, -O3).  The expected output is number-round-exact/expected.txt.
 */

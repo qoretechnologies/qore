@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Mime
 %requires Logger
 %requires DataProvider
@@ -63,12 +64,12 @@ public class Pop3ClientDataProviderTest inherits QUnit::Test {
     }
 
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.POP3CLIENT_CONNECTION;
+        *string conn_name = LiveProvider::get("pop3", "POP3CLIENT_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             error("missing -c,--connection option or POP3CLIENT_CONNECTION environment variable");
         }
 
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("pop3", "POP3CLIENT_CONNECTION", m_options.conn);
         if (!(conn instanceof Pop3Connection)) {
             error("connection %y is type %y; expecting \"Pop3Connection\"", conn_name, conn.className());
         }

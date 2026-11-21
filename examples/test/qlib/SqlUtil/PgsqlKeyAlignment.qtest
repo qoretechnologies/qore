@@ -11,6 +11,7 @@
 %requires PgsqlSqlUtilBase
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module pgsql
 %define NO_PGSQL
@@ -44,7 +45,7 @@ class PgsqlKeyAlignmentTest inherits QUnit::Test {
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+            TestRun::failOrSkipConnect("no DB connection", ex);
         }
         ds.close();
     }

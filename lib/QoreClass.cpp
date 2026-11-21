@@ -46,6 +46,7 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -1423,7 +1424,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     // the bare references option of the declaration (issue #3286)
     parse_abr = old.parse_abr;
     hierarchy_initialized = old.hierarchy_initialized;
-    system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
+    system_constructor = old.system_constructor ? qore_method_ops(old.system_constructor).copy(cls) : nullptr;
 
     // set pointer to new copy
     old.new_copy = cls;
@@ -1601,7 +1602,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     orNothingTypeInfo = new QoreClassOrNothingTypeInfo(cls, name.c_str(), path.c_str(), instance_serial);
     owns_ornothingtypeinfo = true;
 
-    system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
+    system_constructor = old.system_constructor ? qore_method_ops(old.system_constructor).copy(cls) : nullptr;
 
     // set pointer to new copy
     old.new_copy = cls;
@@ -1616,7 +1617,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
     // copy methods and maintain method pointers
     for (auto& i : old.hm) {
-        QoreMethod* nf = i.second->copy(cls);
+        QoreMethod* nf = qore_method_ops(i.second).copy(cls);
 
         hm[nf->getName()] = nf;
         if (i.second == old.constructor)
@@ -1641,7 +1642,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
     // copy static methods
     for (auto& i : old.shm) {
-        QoreMethod* nf = i.second->copy(cls);
+        QoreMethod* nf = qore_method_ops(i.second).copy(cls);
         shm[nf->getName()] = nf;
     }
 
@@ -1970,8 +1971,9 @@ bool qore_class_private::checkInheritedInternalMemberContext(const qore_class_pr
     if (class_ctx == this) {
         return true;
     }
+    // the classes by identity, never by name and signature (qore#7036)
     ClassAccess ca;
-    return getClass(*class_ctx, ca) && (!decl || class_ctx == decl || class_ctx->getClass(*decl, ca));
+    return getAccessClass(*class_ctx, ca) && (!decl || class_ctx == decl || class_ctx->getAccessClass(*decl, ca));
 }
 
 bool qore_class_private::runtimeCanUseMember(const char* mem, const qore_class_private* class_ctx) const {
@@ -2009,8 +2011,9 @@ bool qore_class_private::checkPrivateMemberContext(const qore_class_private* cla
     if (!decl) {
         return true;
     }
+    // the classes by identity, never by name and signature (qore#7036)
     ClassAccess ca;
-    return class_ctx->getClass(*decl, ca) != nullptr;
+    return class_ctx->getAccessClass(*decl, ca) != nullptr;
 }
 
 int qore_class_private::initializeMembers() {
@@ -3975,6 +3978,25 @@ const QoreClass *BCNode::parseGetClass(const qore_class_private& qc, ClassAccess
     return rv;
 }
 
+const QoreClass* BCNode::getAccessClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
+    // sclass can be 0 if the class could not be found during parse initialization
+    if (!sclass) {
+        return nullptr;
+    }
+
+    if (access >= Internal && !toplevel) {
+        return nullptr;
+    }
+
+    const QoreClass* rv = sclass->priv->getAccessClassIntern(qc, n_access, false);
+
+    if (rv && n_access < access) {
+        n_access = access;
+    }
+
+    return rv;
+}
+
 bool BCNode::inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
     // sclass can be 0 if the class could not be found during parse initialization
     if (!sclass) {
@@ -3997,6 +4019,21 @@ bool BCNode::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_acce
     }
 
     bool rv = sclass->priv->inHierarchyStrict(qc, n_access);
+
+    if (rv && n_access < access) {
+        n_access = access;
+    }
+
+    return rv;
+}
+
+bool BCNode::inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
+    // sclass can be 0 if the class could not be found during parse initialization
+    if (!sclass) {
+        return false;
+    }
+
+    bool rv = sclass->priv->inAccessHierarchy(qc, n_access);
 
     if (rv && n_access < access) {
         n_access = access;
@@ -4205,7 +4242,7 @@ static bool lookup_context_in_hierarchy(const BCList& list, const qore_class_pri
         return true;
     }
     for (auto& i : list.sml) {
-        if (qore_class_private::get(*i.first)->equal(*ctx)) {
+        if (qore_class_private::get(*i.first)->sameClass(*ctx)) {
             return true;
         }
     }
@@ -4255,6 +4292,7 @@ struct RuntimeFindCommittedMethodLookup : InternalEdgeCutForContext {
     which the run-time lookups do not see from outside its class, and an abstract method, which another class of the
     hierarchy implements) leave the parent classes to be searched
 */
+
 static LookupVisit runtime_public_method_visit(const QoreMethod* m) {
     if (!m) {
         return LookupVisit::Descend;
@@ -4263,7 +4301,14 @@ static LookupVisit runtime_public_method_visit(const QoreMethod* m) {
     if (ma == Public) {
         return qore_method_private::get(*m)->isAbstract() ? LookupVisit::Descend : LookupVisit::Found;
     }
-    return ma == Private ? LookupVisit::Skip : LookupVisit::Descend;
+    if (ma == Private) {
+        // a private method that inherits a public variant of an ancestor through a public path is the method that is
+        // called: the call selects the inherited variant for its arguments, as a call resolved at parse time does,
+        // and the variant's own access is checked when it is selected (qore#7074)
+        return qore_method_private::get(*m)->getFunction()->hasInheritedPublicVariant() ? LookupVisit::Found
+            : LookupVisit::Skip;
+    }
+    return LookupVisit::Descend;
 }
 
 //! the committed method of the name of the class itself (as qore_class_private::findLocalCommittedMethod() and
@@ -4320,7 +4365,8 @@ static LookupVisit runtime_context_method_visit(const qore_class_private& priv, 
         return LookupVisit::Found;
     }
     if (ma >= Internal) {
-        return priv.equal(*class_ctx) ? LookupVisit::Found : LookupVisit::Descend;
+        // a private:internal method only for its own class, by identity (qore#7036)
+        return priv.sameClass(*class_ctx) ? LookupVisit::Found : LookupVisit::Descend;
     }
     return priv.runtimeCheckPrivateClassAccess(class_ctx) ? LookupVisit::Found : LookupVisit::Skip;
 }
@@ -4572,9 +4618,21 @@ struct GetClassIdLookup : InternalEdgeCut {
     }
 };
 
-//! BCList::getClass(const qore_class_private&, ...) and BCList::parseGetClass(): as
-//! qore_class_private::getClassIntern() and parseGetClassIntern()
-template <bool Parse>
+//! how GetClassLookup compares the classes
+enum class GetClassMatch {
+    //! qore_class_private::equal(): the type compatibility of classes
+    Runtime,
+    //! qore_class_private::parseEqual(): the type compatibility of classes at parse time
+    Parse,
+    //! qore_class_private::sameClass(): the identity of classes for private access (qore#7036)
+    Access,
+    //! qore_class_private::strictEqual(): InHierarchyLookup only
+    Strict,
+};
+
+//! BCList::getClass(const qore_class_private&, ...), BCList::parseGetClass() and BCList::getAccessClass(): as
+//! qore_class_private::getClassIntern(), parseGetClassIntern() and getAccessClassIntern()
+template <GetClassMatch Match>
 struct GetClassLookup : InternalEdgeCut {
     static constexpr bool CheckValid = false;
     ClassAccess* access;
@@ -4586,7 +4644,8 @@ struct GetClassLookup : InternalEdgeCut {
     }
 
     LookupVisit visit(const BCNode& n, qore_class_private& priv) {
-        if (Parse ? priv.parseEqual(qc) : priv.equal(qc)) {
+        if (Match == GetClassMatch::Access ? priv.sameClass(qc)
+                : (Match == GetClassMatch::Parse ? priv.parseEqual(qc) : priv.equal(qc))) {
             rv = priv.cls;
             return LookupVisit::Found;
         }
@@ -4594,9 +4653,12 @@ struct GetClassLookup : InternalEdgeCut {
     }
 };
 
+//! the type checks of a hierarchy (equal(), or strictEqual() for a caller that may use every element of the classes:
+//! QoreReflectionCaller::canUseObjectElementClass()); never private access, which compares the classes with
+//! qore_class_private::sameClass() (qore#7036)
 //! BCList::inHierarchy() and BCList::inHierarchyStrict(): as qore_class_private::inHierarchy() and
 //! inHierarchyStrict(), which follow every edge
-template <bool Strict>
+template <GetClassMatch Match>
 struct InHierarchyLookup : NoEdgeCut {
     static constexpr bool CheckValid = false;
     ClassAccess* access;
@@ -4607,7 +4669,8 @@ struct InHierarchyLookup : NoEdgeCut {
     }
 
     LookupVisit visit(const BCNode& n, qore_class_private& priv) {
-        if (Strict ? priv.strictEqual(qc) : priv.equal(qc)) {
+        if (Match == GetClassMatch::Access ? priv.sameClass(qc)
+                : (Match == GetClassMatch::Strict ? priv.strictEqual(qc) : priv.equal(qc))) {
             rv = true;
             return LookupVisit::Found;
         }
@@ -4975,7 +5038,7 @@ const QoreClass* BCList::getClass(qore_classid_t cid, ClassAccess& n_access, boo
 
 const QoreClass* BCList::getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
     if (!diamond_free) {
-        return lookup_walk<GetClassLookup<false>, const qore_class_private&, ClassAccess&, bool>(*this,
+        return lookup_walk<GetClassLookup<GetClassMatch::Runtime>, const qore_class_private&, ClassAccess&, bool>(*this,
             qc, n_access, toplevel);
     }
     for (auto& i : *this) {
@@ -4989,7 +5052,7 @@ const QoreClass* BCList::getClass(const qore_class_private& qc, ClassAccess& n_a
 
 const QoreClass* BCList::parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
     if (!diamond_free) {
-        return lookup_walk<GetClassLookup<true>, const qore_class_private&, ClassAccess&, bool>(*this,
+        return lookup_walk<GetClassLookup<GetClassMatch::Parse>, const qore_class_private&, ClassAccess&, bool>(*this,
             qc, n_access, toplevel);
     }
     for (auto& i : *this) {
@@ -5001,9 +5064,25 @@ const QoreClass* BCList::parseGetClass(const qore_class_private& qc, ClassAccess
     return nullptr;
 }
 
+const QoreClass* BCList::getAccessClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
+    if (!diamond_free) {
+        return lookup_walk<GetClassLookup<GetClassMatch::Access>, const qore_class_private&, ClassAccess&, bool>(
+            *this, qc, n_access, toplevel);
+    }
+    for (auto& i : *this) {
+        const QoreClass* rv = (*i).getAccessClass(qc, n_access, toplevel);
+        if (rv) {
+            return rv;
+        }
+    }
+
+    return nullptr;
+}
+
 bool BCList::inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
     if (!diamond_free) {
-        return lookup_walk<InHierarchyLookup<false>, const qore_class_private&, ClassAccess&>(*this, qc, n_access);
+        return lookup_walk<InHierarchyLookup<GetClassMatch::Runtime>, const qore_class_private&, ClassAccess&>(*this,
+            qc, n_access);
     }
     for (auto& i : *this) {
         bool b = (*i).inHierarchy(qc, n_access);
@@ -5017,12 +5096,27 @@ bool BCList::inHierarchy(const qore_class_private& qc, ClassAccess& n_access) co
 
 bool BCList::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const {
     if (!diamond_free) {
-        return lookup_walk<InHierarchyLookup<true>, const qore_class_private&, ClassAccess&>(*this, qc, n_access);
+        return lookup_walk<InHierarchyLookup<GetClassMatch::Strict>, const qore_class_private&, ClassAccess&>(*this,
+            qc, n_access);
     }
     for (auto& i : *this) {
         bool b = (*i).inHierarchyStrict(qc, n_access);
         if (b) {
             return b;
+        }
+    }
+
+    return false;
+}
+
+bool BCList::inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
+    if (!diamond_free) {
+        return lookup_walk<InHierarchyLookup<GetClassMatch::Access>, const qore_class_private&, ClassAccess&>(*this,
+            qc, n_access);
+    }
+    for (auto& i : *this) {
+        if ((*i).inAccessHierarchy(qc, n_access)) {
+            return true;
         }
     }
 
@@ -6532,18 +6626,21 @@ QoreValue qore_class_private::parseFindConstantValueIntern(const char* cname, co
 }
 
 int qore_class_private::parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& b_mi,
-        const QoreMemberInfo& l_mi) const {
-    // if both classes are system classes, then ignore
-    if (sys && l_mi.getClass()->sys) {
+        const QoreMemberInfo& l_mi, const char* cname) const {
+    // if both classes are system classes, then ignore; this function runs on the class of l_mi, so the other
+    // declaration's class is b_mi's (qore#6772)
+    if (sys && b_mi.getClass()->sys) {
         return 0;
     }
     if (l_mi.access != b_mi.access || l_mi.parseHasTypeInfo() || b_mi.parseHasTypeInfo()) {
         // raise an exception only if parse exceptions are enabled
         if (qore_program_ops(getProgram()).getParseExceptionSink()) {
-            qore_program_private::makeParseException(getProgram(), *l_mi.loc, "PARSE-ERROR",
+            // the declaration of a system class has no location of its own (qore#6772)
+            const QoreProgramLocation* loc = l_mi.loc ? l_mi.loc : b_mi.loc;
+            qore_program_private::makeParseException(getProgram(), loc ? *loc : loc_builtin, "PARSE-ERROR",
                 new QoreStringNodeMaker("class '%s' cannot be combined with class '%s' in the same hierarchy because "
                     "member '%s' is accessible from class '%s' from more than one declaration in the hierarchy",
-                    l_mi.getClass()->name.c_str(), b_mi.getClass()->name.c_str(), mname, name.c_str()));
+                    l_mi.getClass()->name.c_str(), b_mi.getClass()->name.c_str(), mname, cname));
         }
         return -1;
     }
@@ -6574,7 +6671,8 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
         if (mi) {
             // qore#6523: the same declaration reached through another path of the hierarchy is the same member, with
             // the least restrictive access of the paths
-            if (!mi->local() && mi->getClass()->equal(*i.second->getClass())) {
+            // the same declaration by identity, never by name and signature (qore#7036)
+            if (!mi->local() && mi->getClass()->sameClass(*i.second->getClass())) {
                 ClassAccess mi_access = (i.second->access == Internal)
                     ? Inaccessible
                     : QORE_MAX(i.second->access, access);
@@ -6612,7 +6710,7 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                 mi->addContextAccess(*i.second);
                 continue;
             } else if (i.second->access == Inaccessible && mi->access < Internal
-                    && !mi->getClass()->equal(*i.second->getClass())) {
+                    && !mi->getClass()->sameClass(*i.second->getClass())) {
                 // issue #6614: the mirror of the swap above, for the members imported in the other order: the
                 // accessible member imported first is the member of this class, and the hidden member, a
                 // private:internal member of another declaration, which is separate from it, is reached from the
@@ -6628,8 +6726,8 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                 "access: '%s' this access: '%s'\n", this, name.c_str(), qc.name.c_str(), i.first,
                 i.second->exp.getTypeName(), privpub(access), privpub(mi->access));
 
-            if (!mi->getClass()->equal(*i.second->getClass())
-                    && mi->getClass()->parseCheckClassHierarchyMembers(i.first, *(i.second), *mi)) {
+            if (!mi->getClass()->sameClass(*i.second->getClass())
+                    && mi->getClass()->parseCheckClassHierarchyMembers(i.first, *(i.second), *mi, name.c_str())) {
                 // the declarations cannot be combined: the hierarchy is a parse error
                 continue;
             }
@@ -6759,9 +6857,9 @@ const char* QoreMethod::getClassName() const {
     return priv->parent_class->getName();
 }
 
-void QoreMethod::assign_class(const QoreClass* p_class) {
-    assert(!priv->parent_class);
-    priv->parent_class = p_class;
+void qore_method_ops::assign_classImpl(QoreMethod* b, const QoreClass* p_class) {
+    assert(!b->priv->parent_class);
+    b->priv->parent_class = p_class;
 }
 
 QoreValue QoreMethod::execManaged(QoreObject* self, const QoreListNode* args, ExceptionSink* xsink) const {
@@ -6789,12 +6887,12 @@ method_type_e QoreMethod::getMethodType() const {
 }
 
 // only called for ::methodGate() and ::memberGate() which cannot be overloaded
-bool QoreMethod::inMethod(const QoreObject* self) const {
-    return ::runtime_in_object_method(priv->func->getName(), self);
+bool qore_method_ops::inMethodImpl(QoreMethod* b, const QoreObject* self) {
+    return ::runtime_in_object_method(b->priv->func->getName(), self);
 }
 
-QoreMethod* QoreMethod::copy(const QoreClass* p_class) const {
-    return new QoreMethod(p_class, priv->func->copy(p_class), priv->static_flag);
+QoreMethod* qore_method_ops::copyImpl(QoreMethod* b, const QoreClass* p_class) {
+    return new QoreMethod(p_class, b->priv->func->copy(p_class), b->priv->static_flag);
 }
 
 const QoreTypeInfo* QoreMethod::getUniqueReturnTypeInfo() const {
@@ -7673,7 +7771,7 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
     assert(nme);
     printd(5, "qore_class_private::evalMemberGate() member: %s\n", nme);
     // do not run memberGate method if we are already in it...
-    if (!memberGate || memberGate->inMethod(self))
+    if (!memberGate || qore_method_ops(memberGate).inMethod(self))
         return QoreValue();
 
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
@@ -7719,7 +7817,7 @@ int qore_class_private::checkMethodForEval(const QoreObject* self, const char* n
     }
     QoreClass* qc = nullptr;
     if (pseudo_classes_find_method(NT_OBJECT, nme, qc)
-            || (methodGate && !methodGate->inMethod(const_cast<QoreObject*>(self)))) {
+            || (methodGate && !qore_method_ops(methodGate).inMethod(const_cast<QoreObject*>(self)))) {
         return 0;
     }
     xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined and no pseudo-method " \
@@ -7849,7 +7947,7 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
                     if (call_args.needsDeref() && (!Lexical || ref->getType() == NT_RUNTIME_CLOSURE)) {
                         return qore_invoke_call_ref_given_args(ref, *call_args, xsink);
                     }
-                    if constexpr (Lexical) return ref->invokeLexical(*call_args, xsink, policy);
+                    if constexpr (Lexical) return qore_resolved_call_reference_node_ops(ref).invokeLexical(*call_args, xsink, policy);
                     else return ref->invoke(*call_args, xsink);
                 }
             }
@@ -7867,7 +7965,7 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
         }
         return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self,
             *call_args);
-    } else if (qcp.methodGate && !qcp.methodGate->inMethod(self)) { // call methodGate with unknown method name and arguments
+    } else if (qcp.methodGate && !qore_method_ops(qcp.methodGate).inMethod(self)) { // call methodGate with unknown method name and arguments
         // the object is checked again after the arguments (issue #6056)
         QoreListNodeEvalOptionalRefHolder call_args(xsink);
         if (qore_eval_missing_method_args(self, nme, args, class_ctx, call_args, xsink)) {
@@ -9547,8 +9645,11 @@ bool qore_class_private::parseCheckPrivateClassAccess(const qore_class_private* 
     if (!opc)
         return false;
 
+    // the classes by identity, never by name and signature: a class with the name and the signature of another class
+    // has no private access to it (qore#7036)
+    const_cast<qore_class_private*>(opc)->parseResolveHierarchy();
     ClassAccess access = Public;
-    return opc->parseGetClass(*this, access) || (scl && scl->parseGetClass(*opc, access, true));
+    return opc->getAccessClassIntern(*this, access, true) || (scl && scl->getAccessClass(*opc, access, true));
 }
 
 bool qore_class_private::runtimeCheckPrivateClassAccess(const qore_class_private* qc) const {
@@ -9559,7 +9660,9 @@ bool qore_class_private::runtimeCheckPrivateClassAccess(const qore_class_private
 
     ClassAccess access = Public;
     //printd(5, "runtimeCheckPrivateClassAccess() qc: %p '%s' test: %p '%s' okl: %d okr: %d\n", qc, qc->name.c_str(), this, name.c_str(), qc->getClassIntern(*this, access, true), (scl && scl->getClass(*qc, access, true)));
-    return qc->getClassIntern(*this, access, true) || (scl && scl->getClass(*qc, access, true));
+    // the classes by identity, never by name and signature: a class with the name and the signature of another class
+    // has no private access to it (qore#7036)
+    return qc->getAccessClassIntern(*this, access, true) || (scl && scl->getAccessClass(*qc, access, true));
 }
 
 bool qore_class_private::runtimeCheckMethodVariantAccess(const QoreMethod& m, const AbstractQoreFunctionVariant* v,
@@ -9575,7 +9678,7 @@ bool qore_class_private::runtimeCheckMethodVariantAccess(const QoreMethod& m, co
         return false;
     }
     // a private:internal variant only from the class that declares it (see IList::getFunction())
-    return va != Internal || METHV_const(v)->getClassPriv()->equal(*class_ctx);
+    return va != Internal || METHV_const(v)->getClassPriv()->sameClass(*class_ctx);
 }
 
 qore_type_result_e qore_class_private::parseCheckCompatibleClass(const qore_class_private& oc, bool& may_not_match) const {
@@ -9608,6 +9711,7 @@ qore_type_result_e qore_class_private::parseCheckCompatibleClassIntern(const qor
     printd(5, "qore_class_private::parseCheckCompatibleClass() %p '%s' (%d %s) == %p '%s' (%d %s)\n", this, name.c_str(), classID, h1.getBuffer(), &oc, oc.name.c_str(), oc.classID, h2.getBuffer());
 #endif
 
+    // the type compatibility of classes, as in runtimeCheckCompatibleClassIntern() (qore#7036)
     if (parseEqual(oc))
         return QTI_IDENT;
 
@@ -9646,6 +9750,8 @@ qore_type_result_e qore_class_private::runtimeCheckCompatibleClass(const qore_cl
 }
 
 qore_type_result_e qore_class_private::runtimeCheckCompatibleClassIntern(const qore_class_private& oc) const {
+    // the type compatibility of classes: classes of different Programs with the same name and signature are the same
+    // type; the private inheritance below is checked with runtimeCheckPrivateClassAccess(), by identity (qore#7036)
     if (equal(oc)) {
         return QTI_IDENT;
     }
@@ -9923,6 +10029,7 @@ const char* QoreClass::getPath() const {
     return priv->path.c_str();
 }
 
+// the public API's type equality of classes (equal()); not private access (qore#7036)
 bool QoreClass::isEqual(const QoreClass& cls) const {
     return priv->equal(*cls.priv);
 }
@@ -11324,7 +11431,7 @@ void qore_raise_deleted_missing_method_call_after_args(QoreObject* self, const c
     // the target that qore_eval_missing_method() chooses: a member holding a call reference, then a pseudo-method,
     // then methodGate()
     const qore_class_private* qcp = qore_class_private::get(*self->getClass());
-    bool gate = qcp->methodGate && !qcp->methodGate->inMethod(self);
+    bool gate = qcp->methodGate && !qore_method_ops(qcp->methodGate).inMethod(self);
     if (gate) {
         // the class context that a read of the member would use (runtimeGetCallableMemberInfo() clears it if it
         // cannot access the private members of the object's class)
@@ -11857,7 +11964,7 @@ const QoreMethod* QoreStaticMethodIterator::getMethod() const {
 
 // FIXME: eliminate this method; move injected fields to local, always copy classes with priv by reference
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls) :
-    QoreMemberInfoBaseAccess(old, old.access),
+    QoreMemberInfoBaseAccess(old, old.access, !old.pending_init_next),
     accessors(old.accessors),
     // the new class owner is in the initial position for a member that it declares; a member that it inherits keeps
     // the class that declares it, as its inheritance list and its context map do, or an object of a subclass of the
@@ -11867,10 +11974,12 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
     cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(old.is_local) {
+    deferInitializerCopy(old);
 }
 
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls, ClassAccess cls_access) :
-    QoreMemberInfoBaseAccess(old, (old.access == Internal) ? Inaccessible : QORE_MAX(old.access, cls_access)),
+    QoreMemberInfoBaseAccess(old, (old.access == Internal) ? Inaccessible : QORE_MAX(old.access, cls_access),
+        !old.pending_init_next),
     accessors(old.accessors),
     decl_cls(old.decl_cls),
     cls_list(old.cls_list),
@@ -11901,6 +12010,42 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
             //    member_info_list, privpub(old.access));
         }
     }
+    deferInitializerCopy(old);
+}
+
+void QoreMemberInfo::deferInitializerCopy(const QoreMemberInfo& old) {
+    if (old.pending_init_next) {
+        pending_init_next = old.pending_init_next;
+        old.pending_init_next = this;
+    }
+}
+
+QoreMemberInfo::~QoreMemberInfo() {
+    if (pending_init_next) {
+        QoreMemberInfo* prev = pending_init_next;
+        while (prev->pending_init_next != this) {
+            prev = prev->pending_init_next;
+        }
+        prev->pending_init_next = pending_init_next;
+    }
+    delete cls_context_map;
+    delete member_info_list;
+}
+
+void QoreMemberInfo::finishInitializer(bool resolved) {
+    while (pending_init_next != this) {
+        QoreMemberInfo* copy = pending_init_next;
+        pending_init_next = copy->pending_init_next;
+        copy->pending_init_next = nullptr;
+        assert(copy->exp.isNothing() && !copy->parseTypeInfo);
+        copy->typeInfo = typeInfo;
+        copy->initializer_filter = initializer_filter;
+        copy->initializer_type_info = initializer_type_info;
+        if (resolved) {
+            copy->exp = exp.refSelf();
+        }
+    }
+    pending_init_next = nullptr;
 }
 
 void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi) {
@@ -12196,6 +12341,11 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
         return 0;
     }
     init = true;
+    // An initializer can reenter inheritance resolution while its expression or type is being replaced.
+    // Only the declaring member owns the parse node. Publish its resolved state to surviving copies on exit.
+    pending_init_next = this;
+    bool resolved = false;
+    ON_BLOCK_EXIT([&] { finishInitializer(resolved); });
 
     int err = 0;
     if (!typeInfo) {
@@ -12266,6 +12416,7 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
             }
         }
     }
+    resolved = !err;
     return err;
 }
 
@@ -12971,4 +13122,28 @@ const QoreClass* QoreClassDestructorHierarchyIterator::get() const {
 
 bool QoreClassDestructorHierarchyIterator::isVirtual() const {
     return priv->isVirtual();
+}
+
+bool MethodFunctionBase::hasInheritedPublicVariant() const {
+    // a method has the variants of the methods of the same name of its ancestors (the inherited variants of the
+    // language documentation); one of them that is public, on a public path, and that no variant of the method itself
+    // overrides with the same signature, can be called from outside the class hierarchy: a private variant of the
+    // same signature overrides it (qore#6062)
+    for (IList::const_iterator i = ilist.begin() + 1, e = ilist.end(); i != e; ++i) {
+        if (i->access != Public) {
+            continue;
+        }
+        const VList& ancestor_variants = static_cast<const MethodFunctionBase*>(i->func)->vlist;
+        for (vlist_t::const_iterator vi = ancestor_variants.begin(), ve = ancestor_variants.end(); vi != ve; ++vi) {
+            if (METHVB_const(*vi)->getAccess() != Public) {
+                continue;
+            }
+            const AbstractFunctionSignature* vs;
+            if (QoreFunction::parseCompareResolvedSignature(vlist, (*vi)->getSignature(), vs)
+                    != QTI_IDENT) {
+                return true;
+            }
+        }
+    }
+    return false;
 }

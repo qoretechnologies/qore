@@ -261,7 +261,8 @@ class DataStreamClientTest inherits QUnit::Test {
         addTestCase("DS v1 protocol verification", \testDSv1ProtocolVerification());
         addTestCase("DS v1 explicit mode", \testDSv1ExplicitMode());
         addTestCase("DS v1 empty stream", \testDSv1EmptyStream());
-        addTestCase("DS v1 recvDataStream", \testDSv1RecvDataStream());
+        addTestCase("DS v1 recvDataStream", \testDSv1RecvDataStream(), True);
+        addTestCase("DS v1 recvDataStream with nested response fields", \testDSv1RecvDataStream(), False);
         addTestCase("protocol mode accessors", \testProtocolModeAccessors());
         addTestCase("max message size", \testMaxMessageSize());
         addTestCase("a server of a release before Qore 3.0 accepts DataStream requests", \testReleasedServer());
@@ -586,10 +587,10 @@ class DataStreamClientTest inherits QUnit::Test {
         assertEq(0, resp.body.rows, "empty stream: 0 records stored");
     }
 
-    testDSv1RecvDataStream() {
+    testDSv1RecvDataStream(bool top_level) {
         # Test recvDataStream — server sends YAML response consumed as stream
         DataStreamClient client({"url": "http://localhost:" + port, "timeout": 30000,
-            "protocol": "datastream"}, True);
+            "protocol": "datastream", "http_fields_at_top_level": top_level}, True);
 
         # First populate some data
         hash<auto> info;

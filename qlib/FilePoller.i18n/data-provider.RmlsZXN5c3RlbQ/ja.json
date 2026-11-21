@@ -20,12 +20,12 @@
           "message": "新規ファイル作成"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.short_desc": {
-          "source": "A file is created in a server directory",
-          "message": "サーバーディレクトリにファイルが作成されます"
+          "source": "The handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "ハンドラーでファイルを移動、改名、または削除してください。そのまま残すと、次のポーリングで再び配信されます。"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.desc": {
-          "source": "React to files created in a server directory",
-          "message": "サーバーディレクトリで作成されたファイルに反応します"
+          "source": "The handler must move, rename or delete the file, or it will be delivered again on the next poll. Move it outside the watched directory or rename it so that it no longer matches the file mask.",
+          "message": "ハンドラーでファイルを移動、改名、または削除してください。そのまま残すと、次のポーリングで再び配信されます。 監視対象のディレクトリの外に移動するか、ファイルマスクに一致しない名前に変更してください。"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.display_name": {
           "source": "Polling Mask",

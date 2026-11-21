@@ -1,0 +1,31 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - qcc AOT code generation and JIT native code of inline strings passed to the logger_bin module
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires ../../../examples/test/TestInterpreter.qm
+
+%include ../../../examples/test/ShortStringProbeTest.qc
+
+%exec-class LoggerShortStringAccessTest
+
+#! the logger_bin module reads the strings of its members in both of their representations (qore#7062)
+/** A value holds a string of up to 6 bytes inline, with no QoreStringNode behind it; LoggerAppenderFile read its
+    file name member, which Qore code assigns (as the rotating appenders of the Logger module do), as a QoreStringNode
+    after checking only its type, which dereferenced a null pointer for such a value (and a debug build aborted on an
+    assertion).  The probes (short-string-access/probes.q) run in each execution mode and as qcc-compiled executables.
+*/
+class LoggerShortStringAccessTest inherits ShortStringProbeTest {
+    constructor() : ShortStringProbeTest("logger_bin short string access",
+            get_script_dir() + DirSep + "short-string-access" + DirSep + "probes.q",
+            "LoggerAppenderFile::openFile: a.log True\n") {
+        set_return_value(main());
+    }
+}

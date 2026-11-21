@@ -93,7 +93,7 @@ public:
     }
 
     DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-        qore_string_private::get(str)->concat(&QoreParseCastOperatorNode::cast_str);
+        qore_string_private::get(str)->concatAsciiName(QoreParseCastOperatorNode::cast_str);
         return 0;
     }
 

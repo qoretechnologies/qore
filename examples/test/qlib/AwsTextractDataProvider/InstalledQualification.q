@@ -2,6 +2,7 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 # Run with QORE_MODULE_DIR_ONLY=1 and an installed-only module path; pass the stage prefix.
 %modern
+%requires ../../LiveProviderTest.qm
 %requires AwsTextractDataProvider
 %requires ProviderIndex
 %requires FsUtil

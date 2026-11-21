@@ -161,6 +161,12 @@ public:
         //! the statement that declares the handler, whose parse options its code runs with, in top-level code whose
         //! statements have different options; nullptr otherwise (see QoreIRLowering::top_level_code_parse_options)
         const AbstractStatement* code_po_statement = nullptr;
+        //! where the handler's own locals are released when an exception leaves the handler: the statement that
+        //! encloses the block that declares the handler, or nullptr for the root block of the function (the caller's
+        //! statement), as in the AST interpreter, which runs the handler when the block ends (qore#6831)
+        const QoreProgramLocation* owner_unwind_loc = nullptr;
+        //! false if the locals of the block that declares the handler have no release location (see owner_unwind_loc)
+        bool owner_unwind_mapped = true;
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
@@ -869,6 +875,17 @@ private:
         encloses the block whose cleanup entry is there
     */
     LoopJumpTarget findLoopJumpTarget(bool is_break, size_t max_cleanup_depth = SIZE_MAX) const;
+    //! Returns true if a loop or switch statement pushed at \a cleanup_depth was left by an exit that lowers the
+    //! handler whose code is being lowered inline (qore#6905)
+    /** A HandlerBarrier entry protects the Scope entry of the block whose handler is lowered inline at an exit (its
+        handler_start is the depth just above that entry): the loops and switch statements in that block, pushed above
+        the protected entry and below the barrier, belong to the blocks that the exit has already left, and the code of
+        the handler cannot break or continue them.  A loop that encloses the block of the handler is pushed at the
+        depth of the protected entry or below and stays a target.  Only the paths of a debugger's flow requests ask
+        for such a target (getScopeFlowPaths()): a break or a continue statement outside a loop or switch statement
+        in the handler does not parse.
+    */
+    bool flowTargetLeftByHandlerExit(size_t cleanup_depth) const;
     //! Lowers the jump of a break or a continue statement to \a jt at the current lowering position
     /** Emits the cleanups of the blocks that the jump leaves (emitBlockCleanups()), the restore of $# for a break out
         of a foreach loop and the branch to the target; the code of a debugger's break or continue request at a step
@@ -960,12 +977,36 @@ private:
         size_t cleanup_depth = 0;
         size_t temp_depth = 0;
         size_t flow_depth = 0;
-        //! the scope whose handler it is, and the index of its entry in cleanup_stack, for the last handler run
+        //! the scope whose handler it is, and the index of its entry in cleanup_stack (for every handler with a scope;
+        //! the last handler run takes the scope's paths)
         uint32_t scope_id = 0;
         size_t scope_entry = SIZE_MAX;
         bool last = false;
-        //! for a handler that is not the last: the code of the exit after the handler
+        //! for a handler that is not the last: the code of the exit after the handler; also for the last handler of
+        //! the cleanups of a return statement, for a request that ends the function (see return_walk)
         QoreIRBasicBlock* join = nullptr;
+        //! true if the exit that runs the handler is the block cleanups of a return statement (return_walk): a
+        //! request in the handler that the scope's paths would end with a return of the function (a return request,
+        //! or a break or a continue that no loop or switch statement takes) goes on with that return, which returns
+        //! its value, as the AST interpreter ends the handler and goes on with the return (qore#6949)
+        bool return_walk = false;
+        //! try_depth where the body starts: a return request in a try statement of the body, or of the body of a
+        //! handler around it below this one, ends that try statement, whose return value (none) replaces the value of
+        //! the return that runs the handler, as in the AST interpreter (TryStatement::execImpl(), qore#6949)
+        int try_depth = 0;
+        //! try_depth at the handler's scope: try_depth less the try statements that the exit running the handler left
+        //! (an exit from a try statement in the scope's block); a request that goes on in the handler around it passes
+        //! a try statement of that handler's body only if this differs from that handler's try_depth (qore#6949)
+        int scope_try_depth = 0;
+        //! for the last handler: the code of each request after the handler for a request made in a try statement of
+        //! the body (see try_depth), which the scope's paths end
+        QoreIRBasicBlock* request_end_try[3] = {};
+        //! for the last handler: the code of a break or a continue that goes on as a request of the handler around it
+        //! (lowerInlineHandlerOuterRequest()), which they share when that handler's code of both is the same
+        //! (propagated_outer_end)
+        QoreIRBasicBlock* propagated_end = nullptr;
+        //! the code of the handler around it that propagated_end ends with
+        QoreIRBasicBlock* propagated_outer_end = nullptr;
         //! for the last handler: the code of each request after the handler (RC_RETURN, RC_BREAK, RC_CONTINUE)
         QoreIRBasicBlock* request_end[3] = {};
         //! the paths of the requests that the step events of the body with the same lowering state share, as the
@@ -977,7 +1018,33 @@ private:
     std::vector<InlineHandlerFlow> inline_handler_flow_stack;
     //! Returns the block after the body of the innermost handler being lowered inline for the request \a rc
     //! (InlineHandlerFlow), creating it if needed; nullptr with \a error set on failure
-    QoreIRBasicBlock* getInlineHandlerFlowEnd(int rc, std::string& error);
+    QoreIRBasicBlock* getInlineHandlerFlowEnd(int rc, std::string& error, bool in_try = false);
+    //! Returns the block after the body of the handler at \a hf_index of inline_handler_flow_stack for the request
+    //! \a rc (see getInlineHandlerFlowEnd())
+    /** @param in_try true for a request made in a try statement of the handler's body (see InlineHandlerFlow::try_depth)
+    */
+    QoreIRBasicBlock* getInlineHandlerFlowEndAt(size_t hf_index, int rc, std::string& error, bool in_try = false);
+    //! Returns true if the handler at \a hf_index of inline_handler_flow_stack runs in the cleanups of a return
+    //! statement: its own exit is one (InlineHandlerFlow::return_walk), or it is a handler of a block of the body of a
+    //! handler that does, at any depth (qore#6949)
+    /** @param return_request true for a return request, which a try statement of a handler's body between them ends
+        with the try statement's own value (InlineHandlerFlow::try_depth)
+    */
+    bool inlineHandlerInReturnWalk(size_t hf_index, bool return_request) const;
+    //! Returns the code of the request \a rc in the handler at \a hf_index of inline_handler_flow_stack that goes on as
+    //! a request of the handler at \a outer_index, whose body has its scope (inlineHandlerOuterBody()): the cleanups
+    //! of the blocks of that body from where the handler's body starts, then that handler's code of the request
+    //! (getInlineHandlerFlowEndAt()); nullptr with \a error set on failure (qore#6949, qore#7040)
+    QoreIRBasicBlock* lowerInlineHandlerOuterRequest(size_t hf_index, size_t outer_index, int rc, std::string& error);
+    //! Returns true if a break (\a rc RC_BREAK) or a continue request that ends the body of the handler at \a hf_index
+    //! of inline_handler_flow_stack ends the function: the handler is the last of its exit, and no loop or switch
+    //! statement around its block takes the request, nor does the code of the handlers around it that the request goes
+    //! on in (getInlineHandlerFlowEndAt(), qore#7040)
+    bool inlineHandlerRequestEndsFunction(size_t hf_index, int rc) const;
+    //! Returns the index in inline_handler_flow_stack of the handler around the one at \a hf_index whose body (its top
+    //! block or a block in it) has that handler's scope: the innermost one whose body starts at or below the scope's
+    //! entry, or SIZE_MAX if none does (qore#6949)
+    size_t inlineHandlerOuterBody(size_t hf_index) const;
     //! Lowers a return statement without a value at the current lowering position: the cleanups of every block and
     //! the return (\a debug_flow: for the path of a debugger's return request, see lowerLoopJump())
     bool lowerReturnWithoutValue(std::string& error, bool debug_flow = false);
@@ -1124,6 +1191,21 @@ private:
     uint32_t block_counter = 0;
     uint32_t scope_counter = 0;  //!< Counter for generating unique scope IDs within a function
     int statement_block_depth = 0;  //!< Nesting depth for debug block markers
+    //! the release locations of the locals of the blocks being lowered, innermost last: whether the locals of the block
+    //! are mapped (QoreIRFunction::local_unwind_locations) and the statement that they are released at (nullptr: the
+    //! caller's statement), for the handlers that the blocks declare (qore#6831)
+    std::vector<std::pair<bool, const QoreProgramLocation*>> block_unwind_locs;
+    //! set in the lowering of a handler: its root block's locals are released at handler_root_unwind_loc (see
+    //! InlineHandler::owner_unwind_loc), not at the caller's statement of the handler's frame (qore#6831)
+    bool handler_root_unwind_set = false;
+    bool handler_root_unwind_mapped = true;
+    const QoreProgramLocation* handler_root_unwind_loc = nullptr;
+    //! the body of a handler that lowerHandlerAtExit() lowers inline next: its locals are released where those of the
+    //! handler's root block are when it runs as a function of its own (InlineHandler::owner_unwind_loc), not at the
+    //! statement of the exit that runs it (qore#6831); consumed by the next lowerStatementBlock()
+    const StatementBlock* inline_handler_unwind_block = nullptr;
+    bool inline_handler_unwind_mapped = true;
+    const QoreProgramLocation* inline_handler_unwind_loc = nullptr;
     //! True if the root block that this lowering lowers is the body of a handler (on_exit, on_error, on_success)
     /** The body of a handler has the block event of the debugger, as in the AST interpreter, which makes one for the
         block of each handler that it runs: a handler lowered inline is a nested block, which has it, while the body of

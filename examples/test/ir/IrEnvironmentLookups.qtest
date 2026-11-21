@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - IrEnvironmentLookups.qr runs in child processes that set their own --exec-mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+
+%exec-class IrEnvironmentLookupsTest
+
+#! the compilation of code reads the environment switches of the compiler once, not for each function or instruction
+#! (qore#7086)
+/** The IR optimizer, the lowering, the JIT and the LLVM code generation checked their environment switches
+    (\c QORE_DISABLE_IR_*, \c QORE_JIT_TIMING, ...) with a lookup in the environment for each instruction or function
+    that they processed: each lookup scans the whole environment, so the cost of compiling code grew with the size of
+    the environment (about 2,800 lookups for a small script).  Each switch is now read once, at its first use.
+
+    IrEnvironmentLookups.qr compiles and runs a Program of 10 functions and one of 200, after a first compilation
+    that reads the switches, and counts the lookups in the environment of each with dbg_environment_lookups() (debug
+    builds): the larger Program makes fewer lookups than one for each of its 190 more functions.
+*/
+class IrEnvironmentLookupsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("compiler environment lookups", "1.0", \ARGV) {
+        foreach string mode in (("ir", "jit", "tiered")) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase(mode, sub () { modeTest(mode_value); });
+        }
+        set_return_value(main());
+    }
+
+    private modeTest(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_environment_lookups() is only built with DEBUG");
+        }
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s "
+            "%s/IrEnvironmentLookups.qr 2>&1", libdir, libdir, qore_bin, mode, get_script_dir()), \status);
+        assertEq(0, status, out);
+        *list<*string> small = out =~ x/^small: ([0-9]+)$/m;
+        *list<*string> large = out =~ x/^large: ([0-9]+)$/m;
+        assertTrue(exists small && exists large, out);
+        if (!exists small || !exists large) {
+            return;
+        }
+        # before qore#7086, each function made about a dozen lookups (2,404 for the larger Program in IR mode)
+        assertLt(190, int(large[0]) - int(small[0]), out);
+    }
+}

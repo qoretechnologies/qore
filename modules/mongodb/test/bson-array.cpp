@@ -24,6 +24,18 @@ void require(bool condition, const char* message) {
     }
 }
 
+// returns true if the value is a string with the given bytes, in either string representation (a value can hold a
+// short string inline, with no QoreStringNode)
+bool strEq(const QoreValue v, const char* expected) {
+    return QoreStringDataHelper(v) == expected;
+}
+
+// returns true if the value is a string in UTF-8 with the given bytes, in either string representation
+bool utf8Eq(const QoreValue v, const char* expected) {
+    QoreStringDataHelper str(v);
+    return str.getEncoding() == QCS_UTF8 && str == expected;
+}
+
 class Document {
 public:
     bson_t value;
@@ -119,8 +131,7 @@ void mixedArrays() {
     require(decoded->retrieveEntry(0).isNothing() && decoded->retrieveEntry(6).isNothing(), "null values changed");
     require(decoded->retrieveEntry(1).getAsBool(), "boolean value changed");
     require(decoded->retrieveEntry(2).getAsFloat() == 3.25, "double value changed");
-    require(!std::strcmp(decoded->retrieveEntry(3).get<const QoreStringNode>()->c_str(), "caf\xc3\xa9"),
-        "UTF-8 value changed");
+    require(strEq(decoded->retrieveEntry(3), "caf\xc3\xa9"), "UTF-8 value changed");
     const QoreListNode* inner = decoded->retrieveEntry(4).get<const QoreListNode>();
     require(inner && inner->size() == 2 && inner->retrieveEntry(0).getAsBigInt() == 42
         && inner->retrieveEntry(1).isNothing(), "nested array changed");
@@ -157,9 +168,7 @@ void conversionFailures() {
 }
 
 bool takeError(ExceptionSink& xsink, const char* expected) {
-    QoreValue error = xsink.getExceptionErr();
-    bool matches = error.getType() == NT_STRING
-        && !std::strcmp(error.get<const QoreStringNode>()->c_str(), expected);
+    bool matches = QoreStringDataHelper(xsink.getExceptionErr()) == expected;
     xsink.clear();
     return matches;
 }
@@ -248,10 +257,9 @@ void programInterruption() {
 // returns the description of the INVALID-ENCODING exception in the sink and clears it, or "(other)" for another
 // exception
 std::string takeInvalidEncodingDesc(ExceptionSink& xsink) {
-    QoreValue err = xsink.getExceptionErr();
-    QoreValue desc = xsink.getExceptionDesc();
-    std::string rv = err.getType() == NT_STRING && !std::strcmp(err.get<const QoreStringNode>()->c_str(),
-        "INVALID-ENCODING") && desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "(other)";
+    QoreStringDataHelper err(xsink.getExceptionErr());
+    QoreStringDataHelper desc(xsink.getExceptionDesc());
+    std::string rv = err == "INVALID-ENCODING" && desc ? desc.c_str() : "(other)";
     xsink.clear();
     return rv;
 }
@@ -363,8 +371,7 @@ void invalidUtf8() {
         const QoreHashNode* w = h->getKeyValue("w").get<const QoreHashNode>();
         require(w, "BSON code with scope is not a hash");
         const QoreHashNode* s = w->getKeyValue("$scope").get<const QoreHashNode>();
-        require(s && s->getKeyValue("v").getType() == NT_STRING
-            && bytes(*s->getKeyValue("v").get<const QoreStringNode>()) == "\xc3\xa9", "BSON scope changed");
+        require(s && strEq(s->getKeyValue("v"), "\xc3\xa9"), "BSON scope changed");
     }
     {
         Document doc;
@@ -397,15 +404,11 @@ void invalidUtf8() {
         ReferenceHolder<QoreHashNode> h(bson_to_qore_hash(&doc.value, &xsink), &xsink);
         require(h && !xsink, "valid BSON text was refused");
         QoreValue v = h->getKeyValue("k\xc3\xa9");
-        require(v.getType() == NT_STRING && v.get<const QoreStringNode>()->getEncoding() == QCS_UTF8
-            && !std::strcmp(v.get<const QoreStringNode>()->c_str(), "\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80"),
-            "valid BSON string changed");
+        require(utf8Eq(v, "\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80"), "valid BSON string changed");
         QoreValue r = h->getKeyValue("r");
         require(r.getType() == NT_HASH, "BSON regular expression is not a hash");
         QoreValue re = r.get<const QoreHashNode>()->getKeyValue("$regex");
-        require(re.getType() == NT_STRING && re.get<const QoreStringNode>()->getEncoding() == QCS_UTF8
-            && !std::strcmp(re.get<const QoreStringNode>()->c_str(), "^\xc3\xa9"),
-            "valid BSON regular expression changed or is not tagged UTF-8");
+        require(utf8Eq(re, "^\xc3\xa9"), "valid BSON regular expression changed or is not tagged UTF-8");
     }
 }
 
@@ -421,9 +424,8 @@ void driverText() {
         ReferenceHolder<QoreListNode> l(mongo_utf8_string_list(names, "MongoClient::listDatabaseNames()",
             "database name", &xsink), &xsink);
         require(l && !xsink && l->size() == 2, "valid names were refused");
-        const QoreStringNode* s = l->retrieveEntry(1).get<const QoreStringNode>();
-        require(s && s->getEncoding() == QCS_UTF8 && bytes(*s) == "caf\xc3\xa9", "a name changed or is not UTF-8");
-        require(l->retrieveEntry(0).get<const QoreStringNode>()->getEncoding() == QCS_UTF8,
+        require(utf8Eq(l->retrieveEntry(1), "caf\xc3\xa9"), "a name changed or is not UTF-8");
+        require(QoreStringDataHelper(l->retrieveEntry(0)).getEncoding() == QCS_UTF8,
             "an ASCII name is not tagged UTF-8");
     }
     {
@@ -493,8 +495,7 @@ void defaultEncodingKeys() {
         ReferenceHolder<QoreHashNode> h(bson_to_qore_hash(&doc.value, &xsink), &xsink);
         require(h && !xsink, "a document with keys other than ASCII was refused");
         QoreValue v = h->getKeyValue("k\xe9");
-        require(v.getType() == NT_STRING && v.get<const QoreStringNode>()->getEncoding() == QCS_UTF8
-            && bytes(*v.get<const QoreStringNode>()) == "v\xc3\xa9", "a key was not converted to ISO-8859-1");
+        require(utf8Eq(v, "v\xc3\xa9"), "a key was not converted to ISO-8859-1");
         require(!h->existsKey("k\xc3\xa9"), "a UTF-8 key was kept as its bytes");
         const QoreHashNode* d = h->getKeyValue("d").get<const QoreHashNode>();
         require(d && d->getKeyValue("n\xe9").getAsBigInt() == 2, "a nested key was not converted to ISO-8859-1");
@@ -524,9 +525,7 @@ void defaultEncodingKeys() {
         ExceptionSink xsink;
         ReferenceHolder<QoreHashNode> h(bson_to_qore_hash(&doc.value, &xsink), &xsink);
         require(!h && xsink, "a key that the default encoding cannot represent was accepted");
-        QoreValue err = xsink.getExceptionErr();
-        require(err.getType() == NT_STRING
-            && !std::strcmp(err.get<const QoreStringNode>()->c_str(), "ENCODING-CONVERSION-ERROR"),
+        require(strEq(xsink.getExceptionErr(), "ENCODING-CONVERSION-ERROR"),
             "a key that the default encoding cannot represent raised another exception");
         xsink.clear();
     }

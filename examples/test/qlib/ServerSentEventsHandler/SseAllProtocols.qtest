@@ -310,6 +310,29 @@ class RecordingSseObserver inherits DataProvider::Observer {
         }
     }
 
+    bool waitForEvent(string event_id, timeout t = SseTestTimeout) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (True) {
+            foreach hash<auto> evt in (events) {
+                if (evt.event_id == event_id) {
+                    return True;
+                }
+            }
+
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+    }
+
+    list<hash<auto>> getEvents() {
+        AutoLock al(m);
+        return events;
+    }
+
     string describeEvents() {
         AutoLock al(m);
         return sprintf("%y", events);
@@ -892,17 +915,9 @@ l50Xb2GWQesIt9k5jF5IOw==
             sprintf("%s: second stream receives terminal ready event; events=%s actions=%s",
                 label, observer2.describeEvents(), callback_handler.describeActions()));
 
-        assertTrue(observer1.waitForCount(4, SseTestTimeout),
-            label + ": first stream receives closed event");
-        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
-            observer1.events[observer1.events.size() - 1].event_id,
-            label + ": first stream closes after ready");
+        assertClosesAfterReady(observer1, label + ": first stream closes after ready");
 
-        assertTrue(observer2.waitForCount(4, SseTestTimeout),
-            label + ": second stream receives closed event");
-        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
-            observer2.events[observer2.events.size() - 1].event_id,
-            label + ": second stream closes after ready");
+        assertClosesAfterReady(observer2, label + ": second stream closes after ready");
     }
 
     private runCallbackDrainedSseFlowSeparateManagers(string label,
@@ -941,17 +956,25 @@ l50Xb2GWQesIt9k5jF5IOw==
             sprintf("%s: second stream receives terminal ready event; events=%s actions=%s",
                 label, observer2.describeEvents(), callback_handler.describeActions()));
 
-        assertTrue(observer1.waitForCount(4, SseTestTimeout),
-            label + ": first stream receives closed event");
-        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
-            observer1.events[observer1.events.size() - 1].event_id,
-            label + ": first stream closes after ready");
+        assertClosesAfterReady(observer1, label + ": first stream closes after ready");
 
-        assertTrue(observer2.waitForCount(4, SseTestTimeout),
-            label + ": second stream receives closed event");
-        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
-            observer2.events[observer2.events.size() - 1].event_id,
-            label + ": second stream closes after ready");
+        assertClosesAfterReady(observer2, label + ": second stream closes after ready");
+    }
+
+    #! Asserts that a callback-drained stream closes after its terminal ready event
+    /** The stream gets a progress event each time the callback's tick passes while it waits for ready, so the number
+        of its events before the close depends on how long it waits (qore#6966): the closed event is waited for, and
+        it must be the last event, right after the ready event
+    */
+    private assertClosesAfterReady(RecordingSseObserver observer, string label) {
+        assertTrue(observer.waitForEvent(HttpClientStreamingIo::EVENT_SSE_CLOSED, SseTestTimeout),
+            sprintf("%s: the stream receives its closed event; events=%s", label, observer.describeEvents()));
+        list<hash<auto>> events = observer.getEvents();
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED, events[events.size() - 1].event_id,
+            sprintf("%s: the closed event is the last; events=%s", label, observer.describeEvents()));
+        hash<auto> before = events[events.size() - 2] ?? {};
+        assertEq((HttpClientStreamingIo::EVENT_SSE_DATA, "ready"), (before.event_id, before.data.event),
+            sprintf("%s: the ready event precedes it; events=%s", label, observer.describeEvents()));
     }
 
     private runCallbackDrainedDelayedSecondStreamFlow(string label, string url) {
@@ -1019,17 +1042,9 @@ l50Xb2GWQesIt9k5jF5IOw==
             sprintf("%s: second stream receives terminal ready event; events=%s actions=%s",
                 label, observer2.describeEvents(), callback_handler.describeActions()));
 
-        assertTrue(observer1.waitForCount(10, SseTestTimeout),
-            label + ": first stream receives closed event");
-        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
-            observer1.events[observer1.events.size() - 1].event_id,
-            label + ": first stream closes after delayed ready");
+        assertClosesAfterReady(observer1, label + ": first stream closes after delayed ready");
 
-        assertTrue(observer2.waitForCount(4, SseTestTimeout),
-            label + ": second stream receives closed event");
-        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
-            observer2.events[observer2.events.size() - 1].event_id,
-            label + ": second stream closes after ready");
+        assertClosesAfterReady(observer2, label + ": second stream closes after ready");
     }
 
     private runCallbackDrainedSseWithInterleavedRequests(string label, string url) {
@@ -1080,11 +1095,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertTrue(observer.waitForDataEvent("ready", SseTestTimeout),
             sprintf("%s: stream receives terminal ready event after interleaved requests; events=%s actions=%s",
                 label, observer.describeEvents(), callback_handler.describeActions()));
-        assertTrue(observer.waitForCount(4, SseTestTimeout),
-            label + ": stream receives closed event after interleaved requests");
-        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
-            observer.events[observer.events.size() - 1].event_id,
-            label + ": stream closes after ready");
+        assertClosesAfterReady(observer, label + ": stream closes after ready");
     }
 
     private runCallbackDrainedImmediateReadySseFlow(string label,
@@ -1104,11 +1115,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             sprintf("%s: stream receives immediate terminal ready event; events=%s actions=%s",
                 label, observer.describeEvents(), callback_handler.describeActions()));
 
-        assertTrue(observer.waitForCount(3, SseTestTimeout),
-            label + ": stream receives closed event");
-        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
-            observer.events[observer.events.size() - 1].event_id,
-            label + ": stream closes after immediate ready");
+        assertClosesAfterReady(observer, label + ": stream closes after immediate ready");
     }
 
     private runRestClientIoImmediateReadySseFlow(string label, string protocol,
@@ -1142,11 +1149,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertTrue(observer.waitForDataEvent("ready", SseTestTimeout),
             sprintf("%s: stream receives immediate terminal ready event; events=%s actions=%s",
                 label, observer.describeEvents(), callback_handler.describeActions()));
-        assertTrue(observer.waitForCount(3, SseTestTimeout),
-            label + ": stream receives closed event");
-        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
-            observer.events[observer.events.size() - 1].event_id,
-            label + ": stream closes after immediate ready");
+        assertClosesAfterReady(observer, label + ": stream closes after immediate ready");
     }
 
     testHttp1Sse() {
@@ -1632,6 +1635,11 @@ l50Xb2GWQesIt9k5jF5IOw==
         registered strictly after the close.
     */
     testHttp3SseDeregisterOnSessionCloseBeforeListener() {
+        # a handler no longer gets the persistent queue closures of its request's header information (qore#6921), with
+        # which this case observed the close of the QUIC session; the server-side deregistration itself is unchanged
+        testSkip("needs a session-close observation that #6921 allows: handlers no longer get the persistent-queue "
+            "closures; the server-side deregistration itself is unchanged; re-cover through a listener-side "
+            "observation (dugout, #6921 owner)");
         string label = "H3 SSE session-close-before-listener deregister";
         string url = sprintf("https://127.0.0.1:%d", h3_port);
         handler.reset();

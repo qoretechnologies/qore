@@ -173,6 +173,17 @@ class ResultPollingConnectionMonitor inherits PollingConnectionMonitor {
     }
 }
 
+#! A monitor whose thread does not run between the start of a ping and its first step for longer than the ping's
+#! timeout, as on a loaded machine (qore#6973)
+class StarvedStartPollingConnectionMonitor inherits ResultPollingConnectionMonitor {
+    private AbstractPollOperation startPollConnect(string name, AbstractConnection conn) {
+        AbstractPollOperation spop = ResultPollingConnectionMonitor::startPollConnect(name, conn);
+        # past the 250 ms deadline of the connection's operation
+        usleep(500ms);
+        return spop;
+    }
+}
+
 public class HttpAsyncRequestTest inherits QUnit::Test {
     private {
         HttpServer m_server;
@@ -194,6 +205,7 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         addTestCase("HttpPingPollOperation HTTP error status", \pingErrorStatusTest());
         addTestCase("HttpPingPollOperation connection refused", \pingConnectionRefusedTest());
         addTestCase("HttpPingPollOperation timeout", \pingTimeoutTest());
+        addTestCase("HttpPingPollOperation timeout with an unread request", \pingTimeoutUnreadTest());
         addTestCase("HttpRequestPollOperation redirects", \requestRedirectTest());
         addTestCase("HttpRequestPollOperation credentials and headers", \requestCredentialsTest());
         addTestCase("HttpRequestPollOperation invalid input", \requestInvalidInputTest());
@@ -202,6 +214,7 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         addTestCase("HttpConnectPollOperation", \connectPollTest());
         addTestCase("HttpBasedConnection polling ping", \httpBasedConnectionPingTest());
         addTestCase("PollingConnectionMonitor HTTP pings", \monitorPingTest());
+        addTestCase("PollingConnectionMonitor ping timeout before its first step", \monitorPingStartTimeoutTest());
 
         set_return_value(main());
     }
@@ -480,11 +493,33 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
             "timeout": 250ms,
         });
         AbstractPollOperation poller = conn.startPollConnect(logger);
-        # the handler never answers until released, so the operation must time out by itself
+        # the handler never answers until released, so the operation must time out by itself; whether the server
+        # has read the request by then is not part of the case: when the client does not run for the duration of the
+        # deadline, the connect or the request does not complete before it (pingTimeoutUnreadTest(), qore#6973)
         on_exit route_handler.release();
         date start = now_us();
         assertThrows("SOCKET-TIMEOUT", \drivePoll(), poller);
-        assertTrue(route_handler.entered.get(10s));
+        assertLt(20s, now_us() - start, "the timeout is raised before the test deadline");
+        assertEq("aborted", poller.getState());
+    }
+
+    #! the ping times out when the server never reads the request, as when it cannot read it before the deadline
+    #! (qore#6973)
+    pingTimeoutUnreadTest() {
+        # a listener whose connections the kernel completes, but that never accepts them or reads the requests
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        int unread_port = listener.getSocketInfo().port;
+        HttpConnection conn("test-ping-timeout-unread", "test", "http://127.0.0.1:" + unread_port, {}, {
+            "ping_method": "GET",
+            "ping_path": "/",
+            "timeout": 250ms,
+        });
+        AbstractPollOperation poller = conn.startPollConnect(logger);
+        date start = now_us();
+        assertThrows("SOCKET-TIMEOUT", \drivePoll(), poller);
         assertLt(20s, now_us() - start, "the timeout is raised before the test deadline");
         assertEq("aborted", poller.getState());
     }
@@ -723,5 +758,23 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         assertEq("mon-timeout", result.name);
         assertEq("timeout", result.result);
         pcm.removeConnection("mon-timeout");
+    }
+
+    #! a ping whose deadline passes before its first step is a timeout, as one whose deadline passes in the
+    #! controller's steps (qore#6973: the monitor reported it as an error)
+    monitorPingStartTimeoutTest() {
+        StarvedStartPollingConnectionMonitor pcm();
+        on_exit delete pcm;
+        HttpConnection conn("mon-start-timeout", "test", "http://127.0.0.1:" + port, {}, {
+            "ping_method": "GET",
+            "ping_path": "/route/block",
+            "timeout": 250ms,
+        });
+        on_exit route_handler.release();
+        pcm.add(conn);
+        hash<auto> result = pcm.waitForResult();
+        assertEq("mon-start-timeout", result.name);
+        assertEq("timeout", result.result);
+        pcm.removeConnection("mon-start-timeout");
     }
 }

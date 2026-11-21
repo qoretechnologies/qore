@@ -41,6 +41,9 @@ class HttpClientConnectWaitErrorTest inherits QUnit::Test {
             \testSubmitAsyncRetriedTimeout());
         addTestCase("a background request timeout after a retried connect timeout gives its error",
             \testRequestAsyncRetriedTimeout());
+        addTestCase("a streaming request ends at an earlier deadline of its caller", \testStreamingEarlierDeadline());
+        addTestCase("a streaming request ignores a later deadline of its caller", \testStreamingLaterDeadline());
+        addTestCase("a streaming request ends at once at a deadline that has passed", \testStreamingPassedDeadline());
         set_return_value(main());
     }
 
@@ -160,6 +163,49 @@ class HttpClientConnectWaitErrorTest inherits QUnit::Test {
             err = ex;
         }
         checkRetriedTimeout(err, "async submission");
+    }
+
+    #! starts a streaming request to the target with the given request timeout and deadline; returns its error and
+    #! the time that it took
+    private hash<auto> streamUntil(timeout request_timeout, int deadline_us) {
+        HttpClientConnectionManager mgr = getManager(request_timeout);
+        on_exit mgr.closeAll();
+        date start = now_us();
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.acquireAndStartStreaming(sprintf("http://127.0.0.1:%d", port), "GET", "/", NOTHING, False, NOTHING,
+                deadline_us);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        return {"err": err, "elapsed": now_us() - start};
+    }
+
+    #! the caller's deadline (1 s) ends the request before its request timeout (30 s) (qore#6850)
+    testStreamingEarlierDeadline() {
+        hash<auto> r = streamUntil(30s, clock_get_monotonic_us() + 1000000);
+        checkTimeout(r.err, "earlier deadline");
+        assertGe(900ms, r.elapsed, "the request waited until the deadline");
+        assertLt(20s, r.elapsed, "the deadline, not the request timeout, ended the request");
+    }
+
+    #! a deadline of the caller after the end of the request timeout (1 s) does not extend it (qore#6850)
+    testStreamingLaterDeadline() {
+        hash<auto> r = streamUntil(1s, clock_get_monotonic_us() + 60000000);
+        checkTimeout(r.err, "later deadline");
+        assertGe(900ms, r.elapsed, "the request waited for its timeout");
+        assertLt(20s, r.elapsed, "the request timeout ended the request");
+    }
+
+    #! a deadline that has passed ends the request at once, without waiting for a connection (qore#6850)
+    testStreamingPassedDeadline() {
+        hash<auto> r = streamUntil(30s, clock_get_monotonic_us() - 1);
+        if (!r.err) {
+            fail("the request did not fail");
+            return;
+        }
+        assertEq("HTTPCLIENT-TIMEOUT", r.err.err, sprintf("%s: %s", r.err.err, r.err.desc));
+        assertLt(20s, r.elapsed, "the request ended without waiting for its timeout");
     }
 
     #! a background request (HttpClientRequestPollOperation) retries the connection itself and gives the transport's

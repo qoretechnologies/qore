@@ -1,0 +1,19 @@
+%modern
+# Copyright 2026 Qore Technologies, s.r.o.
+%requires jni
+%module-cmd(jni) import java.util.ArrayList
+module SharedJavaB {
+    version = "1.0";
+    desc = "calls a method of a Java class that another module imports too (qore#6971)";
+    author = "Qore"; license = "MIT";
+}
+public namespace SharedJavaB {
+    public class Lists {
+        #! returns the size of a list after adding the strings given to it
+        static int add(list<string> strs) {
+            ArrayList l();
+            map l.add($1), strs;
+            return l.size();
+        }
+    }
+}

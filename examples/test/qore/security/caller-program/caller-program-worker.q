@@ -10,6 +10,8 @@
 %prepend-module-path "${SCRIPT_DIR}"
 
 %requires CallerProbeA
+# library code (a trusted module directory: caller-program/lib), loaded by the host (qore#7077)
+%requires CallerInitTrusted
 
 #! the code of each tenant
 const TenantCode = "%requires CallerProbeA
@@ -88,6 +90,43 @@ code build = SandboxManager::createTrustedBuildCall(hash<auto> sub () {
 hash<auto> built = build();
 check("trusted-build", NOTHING, built.in_build);
 check("trusted-build-program", NOTHING, built.pgm.callFunction("t_probe"));
+
+# the initialization of library code (a trusted module directory) creates state that the whole process shares: its
+# caller is unknown, also in a thread that it starts, whoever loads it first; a module that a tenant loads by its own
+# path serves that tenant (qore#7077)
+h = CallerInitTrusted::get();
+check("init-library-host-ran", True, h.ran);
+check("init-library-host", NOTHING, h.init);
+check("init-library-host-thread", NOTHING, h.thread);
+Program init_a = tenant("init-a", True, "%requires CallerInitTenant\n"
+    "hash<auto> sub t_init_get() { return CallerInitTenant::get(); }\n"
+    + sprintf("%%requires %s/CallerInitPath.qm\n", get_script_dir())
+    + "hash<auto> sub t_path_get() { return CallerInitPath::get(); }\n");
+h = init_a.callFunction("t_init_get");
+check("init-library-tenant-ran", True, h.ran);
+check("init-library-tenant", NOTHING, h.init);
+check("init-library-tenant-thread", NOTHING, h.thread);
+# another tenant that uses the library afterwards: its own calls are its own, and it gets nothing of the first
+Program init_b = tenant("init-b", True, "%requires CallerInitTenant\n"
+    "hash<auto> sub t_init_get() { return CallerInitTenant::get(); }\n");
+h = init_b.callFunction("t_init_get");
+check("init-library-other", NOTHING, h.init);
+check("init-library-other-call", init_b.getProgramId(), h.call);
+h = init_a.callFunction("t_path_get");
+check("init-path-ran", True, h.ran);
+check("init-path-tenant", init_a.getProgramId(), h.init);
+check("init-path-tenant-thread", init_a.getProgramId(), h.thread);
+
+# a Program that module code creates (with code that a tenant gave it) is not a module's: it does not inherit
+# PO_IN_MODULE (qore#7067), and its code is its own, whoever calls it (qore#7077)
+Program maker(PO_NEW_STYLE);
+maker.parse(sprintf("%%requires %s/ProgramMaker.qm\n"
+    "Program sub t_make_program(string src) { return ProgramMaker::make_program(src); }\n", get_script_dir()),
+    "maker");
+maker.setSandboxManager(new SandboxManager());
+Program made = maker.callFunction("t_make_program", TenantCode);
+check("module-made-program-flag", False, (made.getParseOptions() & PO_IN_MODULE).toBool());
+check("module-made-program", made.getProgramId(), made.callFunction("t_probe"));
 
 map printf("%s\n", $1), results;
 # the file the module was loaded from, so that the test can tell the source module from its AOT module

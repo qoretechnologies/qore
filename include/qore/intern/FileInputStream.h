@@ -40,6 +40,7 @@
 #include "qore/InputStream.h"
 #include "qore/intern/FileStreamIo.h"
 #include "qore/intern/qore_qf_private.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 /**
  * @brief Private data for the Qore::FileInputStream class.
@@ -56,7 +57,7 @@ public:
     }
 
     DLLLOCAL FileInputStream(int fd) : timeout(-1) {
-        f.makeSpecial(fd);
+        qore_file_ops(f).makeSpecial(fd);
     }
 
     DLLLOCAL const char *getName() override {

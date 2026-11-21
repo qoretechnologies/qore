@@ -18,6 +18,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_watchdog import STAND_IN_VERSION, stand_in_build  # noqa: E402
 
 
 # run_tests.sh reads the kernel's core pattern from /proc/sys/kernel/core_pattern, which the cat stand-in reports,
@@ -25,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[3]
 @unittest.skipUnless(sys.platform.startswith("linux"), "the runner's core and process checks are Linux's")
 class TimeoutDiagnosticsTest(unittest.TestCase):
     def run_runner(self, exit_code, *, gnu=False, plain_timeout=False, core_name="core.fixture",
-                   kernel_pattern=None, fresh_core=True):
+                   kernel_pattern=None, fresh_core=True, time_program=True):
         with tempfile.TemporaryDirectory(prefix="qore-runner-diagnostics-") as directory:
             root = Path(directory)
             binaries = root / "bin"
@@ -39,10 +41,14 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
             helpers.mkdir()
             (helpers / "ci-job-processes.sh").symlink_to(ROOT / "examples/test/docker_test/ci-job-processes.sh")
             (binaries / "libqore.so").touch()
-            # touch -t reads its time in UTC (TZ=UTC0): a local time can name two instants or none
+            # the test's core holds the test's mark, as a real core holds the environment of its process: a core that
+            # does not is not the test's (qore#6893); touch -t reads its time in UTC (TZ=UTC0): a local time can name
+            # two instants or none
             scripts = {
-                "qore": '#!/bin/sh\ncase "$*" in *one.qtest*) '
-                        'if [ "$FRESH_CORE" = 1 ]; then TZ=UTC0 touch -t 203001010000 "$TEST_CORE_TARGET"; fi; '
+                "qore": '#!/bin/sh\n' + STAND_IN_VERSION + 'case "$*" in *one.qtest*) '
+                        'if [ "$FRESH_CORE" = 1 ]; then '
+                        'printf "QORE_TEST_PROCESS_MARK=%s\\0" "$QORE_TEST_PROCESS_MARK" > "$TEST_CORE_TARGET"; '
+                        'TZ=UTC0 touch -t 203001010000 "$TEST_CORE_TARGET"; fi; '
                         'if [ "$TEST_EXIT" = TERM ]; then trap "exit 143" TERM; '
                         'printf "%s\\n" "$$" | (read -r pid && kill -TERM "$pid"); fi; '
                         'exit "$TEST_EXIT";; esac\nexit 0\n',
@@ -57,10 +63,17 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
                        'printf "%s\\n" "$TEST_KERNEL_CORE_PATTERN"; else exec /bin/cat "$@"; fi\n',
                 "sysctl": '#!/bin/sh\nexit 1\n',
             }
+            # -t (plain_timeout) times the tests: with time_program, a stand-in for GNU time ("time -f FORMAT cmd"),
+            # else none, so that the runner falls back to the shell's time keyword or to no timing; either way the
+            # host's time program is not used (QORE_TEST_TIME_BINS)
+            if time_program:
+                scripts["time"] = '#!/bin/sh\nif [ "$1" = -f ]; then shift 2; fi\nexec "$@"\n'
             for name, source in scripts.items():
                 path = binaries / name
                 path.write_text(source)
                 path.chmod(0o755)
+            # the tree is an archive of the stand-in build's commit (#6897)
+            stand_in_build(root, binaries)
             cores = root / "cores"
             cores.mkdir()
             system_cores = root / "system cores"
@@ -84,6 +97,7 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
                 "FRESH_CORE": str(int(fresh_core)),
                 "TEST_CORE_TARGET": str(target),
                 "TEST_KERNEL_CORE_PATTERN": pattern,
+                "QORE_TEST_TIME_BINS": str(binaries / "time") if time_program else "",
             }
             args = ["sh", str(ROOT / "run_tests.sh")]
             if plain_timeout:
@@ -159,6 +173,25 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
         result, debugger = self.run_runner(124, gnu=True, plain_timeout=True, kernel_pattern="|/usr/bin/core-handler %p")
         self.assertEqual(1, result.returncode, result.stdout + result.stderr)
         self.assertFalse(debugger)
+
+    def test_timed_run_without_a_time_program(self):
+        # -t with a timeout command but no time program: the runner must not hand the shell's time keyword to the
+        # timeout command (which can only run programs: "exec: time: not found" made every test fail)
+        for gnu in (False, True):
+            with self.subTest(gnu=gnu):
+                result, debugger = self.run_runner(0, gnu=gnu, plain_timeout=True, time_program=False)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertNotIn("not found", result.stderr)
+                self.assertFalse(debugger)
+                result, debugger = self.run_runner(1, gnu=gnu, plain_timeout=True, time_program=False)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertNotIn("not found", result.stderr)
+
+    def test_timed_run_with_a_time_program(self):
+        # -t with a time program and a timeout command: the time program runs under the timeout command
+        result, debugger = self.run_runner(0, gnu=True, plain_timeout=True, time_program=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertNotIn("not found", result.stderr)
 
     def test_success(self):
         result, debugger = self.run_runner(0)

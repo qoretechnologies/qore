@@ -1528,7 +1528,7 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
 
     private setup(SmtpClient smtp) {
         hash<auto> info = smtp.getInfo();
-        goal = "ping";
+        setGoal("ping");
 
         string hostname = gethostname();
         hash<SmtpAuthInfo> ai = SmtpClient::getAuthInfo(info);
@@ -1724,7 +1724,7 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
     */
     constructor(SmtpClient smtp, MailMessage::Message message) : PollPipeline(smtp.createSocket()) {
         hash<auto> info = smtp.getInfo();
-        goal = "send";
+        setGoal("send");
 
         # Validate message has required fields
         *string sender = message.getFrom();
@@ -1859,7 +1859,7 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
     constructor(SmtpClient smtp, Socket sock, MailMessage::Message message, hash<auto> hello_reply, bool do_auth)
             : PollPipeline(sock) {
         hash<auto> info = smtp.getInfo();
-        goal = "send";
+        setGoal("send");
         initial_reply = hello_reply;
         has_initial_reply = True;
 
@@ -2076,6 +2076,11 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
     @since %SmtpClient 1.6
 */
 public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SmtpClient",

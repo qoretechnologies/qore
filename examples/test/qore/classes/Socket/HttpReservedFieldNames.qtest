@@ -12,11 +12,14 @@
 
 %modern
 
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/Mime.qm
-%requires ../../../../../qlib/HttpServerUtil.qm
-%requires ../../../../../qlib/HttpServer.qm
-%requires ../../../../../qlib/RestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+%requires Swagger
+%requires OpenApi3
 %requires ../../../TestCertificates.qm
 
 %exec-class HttpReservedFieldNamesTest
@@ -56,6 +59,7 @@ public class HttpReservedFieldNamesTest inherits QUnit::Test {
         addTestCase("HTTPClient trailer section size", \httpClientTrailerSize());
         addTestCase("HTTPClient response header events", \httpClientEvents());
         addTestCase("RestClient with the fields not at the top level", \restClientFieldsNotAtTopLevel());
+        addTestCase("RestClient schema and error responses with nested fields", \restClientNestedSchema());
         addTestCase("PollPipeline with the fields not at the top level", \pollPipelineFieldsNotAtTopLevel());
         addTestCase("HttpServer request fields with reserved names", \httpServerRequest());
         addTestCase("HttpServer HTTP/2 request fields", \httpServerHttp2Request());
@@ -403,13 +407,15 @@ public class HttpReservedFieldNamesTest inherits QUnit::Test {
     httpClientTrailerSize() {
         string url = sprintf("http://localhost:%d", server_info.port);
         string trailer;
-        for (int i = 0; i < 20; ++i) {
+        # more than the default maximum size of a trailer section (65536 bytes; issue #6867)
+        for (int i = 0; i < 70; ++i) {
             trailer += sprintf("X-T%d: %s\r\n", i, strmul("x", 1000));
         }
         HTTPClient hc({"url": url, "timeout": 30s});
         Counter served = serveOnce("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: text/plain\r\n\r\n"
             "5\r\nhello\r\n0\r\n" + trailer + "\r\n");
-        assertThrows("HTTP1-RECV-ERROR", "trailer section.*exceeds the maximum size", \hc.send(), (NOTHING, "GET", "/"));
+        assertThrows("HTTP-HEADER-TOO-LARGE", "chunked body trailer.*exceeds the maximum size of 65536 bytes", \hc.send(),
+            (NOTHING, "GET", "/"));
         hc.disconnect();
         assertEq(0, served.waitForZero(30s), "the server thread is done");
     }
@@ -440,20 +446,83 @@ public class HttpReservedFieldNamesTest inherits QUnit::Test {
         }
     }
 
-    #! RestClient reads the fields of a response at the top level, so it does not take the setting yet (issue #6869)
+    #! RestClient reads response fields from the nested hash with either way of setting the option (issue #6869)
     restClientFieldsNotAtTopLevel() {
         string url = sprintf("http://localhost:%d", server_info.port);
-        assertThrows("RESTCLIENT-ERROR", "issue #6869", sub () {
-            new RestClient({"url": url, "http_fields_at_top_level": False}, True);
-        });
-        # an option without a value leaves the default
-        RestClient rc({"url": url, "http_fields_at_top_level": NOTHING}, True);
-        assertTrue(rc.getHttpFieldsAtTopLevel(), "the default setting");
-        rc = new RestClient({"url": url, "http_fields_at_top_level": True}, True);
-        assertThrows("RESTCLIENT-ERROR", "issue #6869", \rc.setHttpFieldsAtTopLevel(), False);
-        assertTrue(rc.getHttpFieldsAtTopLevel(), "the setting is not changed");
-        rc.setHttpFieldsAtTopLevel(True);
-        assertTrue(rc.getHttpFieldsAtTopLevel(), "the setting is True");
+        string response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nBody: header-body\r\n"
+            "Status_Code: 999\r\nContent-Length: 7\r\n\r\n{\"n\":1}";
+        foreach bool constructor_option in ((True, False)) {
+            RestClient rc({"url": url, "http_fields_at_top_level": constructor_option ? False : NOTHING}, True);
+            if (!constructor_option) {
+                assertTrue(rc.getHttpFieldsAtTopLevel(), "default field placement");
+                rc.setHttpFieldsAtTopLevel(False);
+            }
+            assertFalse(rc.getHttpFieldsAtTopLevel(), "only nested fields requested");
+            Counter served = serveOnce(response);
+            hash<auto> raw = rc.get("/");
+            rc.disconnect();
+            assertEq(0, served.waitForZero(30s), "server finished");
+            assertEq({"n": 1}, raw.body, "body decoded by Content-Type");
+            assertEq(200, raw.status_code, "HTTP status");
+            assertFalse(raw.hasKey("content-type"), "no duplicate header");
+            assertEq("header-body", raw.headers.body, "field named Body");
+            served = serveOnce(response);
+            hash<RestResponseInfo> rest = rc.restDoRawRequest("GET", "/");
+            rc.disconnect();
+            assertEq(0, served.waitForZero(30s), "raw request finished");
+            assertEq({"n": 1}, rest.body, "raw request decodes the response body");
+            assertEq("application/json", rest.content_type, "raw request content type");
+            assertEq("999", rest.headers.status_code, "field named Status_Code");
+            served = serveOnce(response);
+            raw = rc.doRequestWithResponseLimit("GET", "/", NOTHING, 16);
+            rc.disconnect();
+            assertEq(0, served.waitForZero(30s), "bounded request finished");
+            assertEq({"n": 1}, raw.body, "bounded response decoded");
+            assertEq("header-body", raw.headers.body, "bounded response headers");
+            assertFalse(raw.hasKey("content-type"), "bounded response has no duplicate header");
+
+            served = serveOnce(response);
+            RestRequestPollOperation poller = rc.startPollGet("/");
+            while (*hash<SocketPollInfo> poll_info = poller.continuePoll()) {
+                Socket::poll((poll_info,), 30s);
+            }
+            raw = poller.getOutput();
+            rc.disconnect();
+            assertEq(0, served.waitForZero(30s), "poll request finished");
+            assertEq({"n": 1}, raw.body, "poll response body");
+            assertEq("999", raw.headers.status_code, "poll response wire header");
+            assertEq(200, raw.status_code, "poll response status");
+            assertFalse(raw.hasKey("content-type"), "poll response has no duplicate header");
+            rc.setHttpFieldsAtTopLevel(True);
+            assertTrue(rc.getHttpFieldsAtTopLevel(), "legacy placement can be restored");
+        }
+    }
+
+    restClientNestedSchema() {
+        string url = sprintf("http://localhost:%d", server_info.port);
+        hash<auto> schema = {"type": "object", "properties": {"n": {"type": "integer"}}};
+        hash<auto> info = {"title": "Nested fields", "version": "1"};
+        Swagger::SwaggerSchema swagger("", {"swagger": "2.0", "info": info, "produces": ("application/json",),
+            "paths": {"/test": {"get": {"responses": {"200": {"description": "OK", "schema": schema}}}}}});
+        OpenApi3::OpenApi3Schema openapi("", {"openapi": "3.0.3", "info": info,
+            "paths": {"/test": {"get": {"responses": {"200": {"description": "OK",
+                "content": {"application/json": {"schema": schema}}}}}}}});
+        foreach AbstractRestSchemaValidator validator in ((swagger, openapi)) {
+            RestClient rc({"url": url, "validator": validator, "http_fields_at_top_level": False}, True);
+            Counter served = serveOnce("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\n"
+                "Content-Length: 7\r\n\r\n{\"n\":1}");
+            hash<RestResponseInfo> response = rc.restGet("/test");
+            rc.disconnect();
+            assertEq(0, served.waitForZero(30s), "schema request finished");
+            assertEq({"n": 1}, response.body, validator.className());
+        }
+        string body = "{\"err\":\"NESTED-TEST-ERROR\",\"desc\":\"structured error\"}";
+        RestClient rc({"url": url, "http_fields_at_top_level": False}, True);
+        Counter served = serveOnce(sprintf("HTTP/1.1 400 Bad Request\r\nContent-Type: application/json; charset=UTF-8\r\n"
+            "Content-Length: %d\r\n\r\n%s", body.size(), body));
+        assertThrows("NESTED-TEST-ERROR", "structured error", \rc.get(), "/");
+        rc.disconnect();
+        assertEq(0, served.waitForZero(30s), "error response finished");
     }
 
     #! a PollPipeline reads the fields of a header from its headers key

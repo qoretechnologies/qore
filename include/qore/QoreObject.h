@@ -616,6 +616,37 @@ public:
     */
     DLLEXPORT int setMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink);
 
+    //! sets the value of a private:internal member of the given class as it is, without a type check
+    /** for the members that the library keeps for a system class, such as the weak reference to the socket of a
+        poll operation (qore#6839); the class must declare the member with private:internal access
+
+        @param key the name of the member
+        @param cls the class that declares the member
+        @param val the value to set; its reference is consumed by this call
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return 0 = no errors, -1 = Qore-language exception raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int setInternalMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink);
+
+    //! returns the referenced value of a private:internal member of the given class
+    /** for the members that the library keeps for a system class (qore#6839); the read is made in the storage of the
+        class directly, without a class context of the thread; the class must declare the member with private:internal
+        access
+
+        @param key the name of the member
+        @param cls the class that declares the member
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return the referenced value of the member, or no value if it is not set
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue getReferencedInternalMemberValue(const char* key, const QoreClass* cls,
+            ExceptionSink* xsink) const;
+
     //! call this function when an object's private data is deleted externally
     /** this function will clear the private data and delete the object
         @param key the class ID of the class that owns the private data

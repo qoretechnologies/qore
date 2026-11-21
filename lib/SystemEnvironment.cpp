@@ -31,7 +31,9 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreHttpManagerSysEnvOps.h"
 
+#include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <cstdlib>
@@ -312,7 +314,7 @@ SystemEnvironment::SystemEnvironment() {
 SystemEnvironment::~SystemEnvironment() {
 }
 
-int SystemEnvironment::set_intern(const char* name, const char* value, bool overwrite) {
+int qore_system_environment_ops::set_intern(const char* name, const char* value, bool overwrite) {
 #ifdef HAVE_SETENV
     return setenv(name, value, static_cast<int>(overwrite));
 #else
@@ -326,7 +328,7 @@ int SystemEnvironment::set_intern(const char* name, const char* value, bool over
 #endif
 }
 
-int SystemEnvironment::get_intern(const char* name, QoreString& str) {
+int qore_system_environment_ops::get_intern(const char* name, QoreString& str) {
     const char* p = getenv(name);
     //printd(5, "SystemEnvironment::get_intern(name='%s') val=%s\n", name, p ? p : "(null)");
     if (p) {
@@ -335,17 +337,17 @@ int SystemEnvironment::get_intern(const char* name, QoreString& str) {
     return p ? 0 : -1;
 }
 
-QoreString* SystemEnvironment::get_intern(const char* name) {
+QoreString* qore_system_environment_ops::get_intern(const char* name) {
     const char* p = getenv(name);
     return p ? new QoreString(p) : nullptr;
 }
 
-QoreStringNode* SystemEnvironment::get_as_string_node_intern(const char* name) {
+QoreStringNode* qore_system_environment_ops::get_as_string_node_intern(const char* name) {
     const char* p = getenv(name);
     return p ? new QoreStringNode(p) : nullptr;
 }
 
-int SystemEnvironment::unset_intern(const char* name) {
+int qore_system_environment_ops::unset_intern(const char* name) {
 #ifdef HAVE_UNSETENV
     return unsetenv(name);
 #else
@@ -356,7 +358,7 @@ int SystemEnvironment::unset_intern(const char* name) {
 #endif
 }
 
-bool SystemEnvironment::value_exists_intern(const char* name) {
+bool qore_system_environment_ops::value_exists_intern(const char* name) {
     if (!name || !name[0]) {
         return false;
     }
@@ -369,22 +371,22 @@ int SystemEnvironment::set(const char* name, const char* value, bool overwrite) 
     if (!qore_env_held_exclusively()) {
         return qore_env_refuse_change();
     }
-    return set_intern(name, value, overwrite);
+    return qore_system_environment_ops::set_intern(name, value, overwrite);
 }
 
 int SystemEnvironment::get(const char* name, QoreString& str) {
     QoreEnvSharedHelper env_lock;
-    return get_intern(name, str);
+    return qore_system_environment_ops::get_intern(name, str);
 }
 
 QoreString* SystemEnvironment::get(const char* name) {
     QoreEnvSharedHelper env_lock;
-    return get_intern(name);
+    return qore_system_environment_ops::get_intern(name);
 }
 
 QoreStringNode* SystemEnvironment::getAsStringNode(const char* name) {
     QoreEnvSharedHelper env_lock;
-    return get_as_string_node_intern(name);
+    return qore_system_environment_ops::get_as_string_node_intern(name);
 }
 
 int SystemEnvironment::unset(const char* name) {
@@ -392,16 +394,21 @@ int SystemEnvironment::unset(const char* name) {
     if (!qore_env_held_exclusively()) {
         return qore_env_refuse_change();
     }
-    return unset_intern(name);
+    return qore_system_environment_ops::unset_intern(name);
 }
 
 bool SystemEnvironment::valueExists(const char* name) {
     QoreEnvSharedHelper env_lock;
-    return value_exists_intern(name);
+    return qore_system_environment_ops::value_exists_intern(name);
 }
+
+// the number of lookups of single variables in the environment by the library, for tests of code that must not read
+// the environment in its hot paths (dbg_environment_lookups(); qore#7086)
+std::atomic<uint64_t> qore_env_lookup_count{0};
 
 bool SystemEnvironment::isSet(const char* name) {
     assert(name);
+    qore_env_lookup_count.fetch_add(1, std::memory_order_relaxed);
     QoreEnvSharedHelper env_lock;
     return getenv(name) != nullptr;
 }
@@ -418,31 +425,31 @@ int AtomicEnvironmentSetter::set(const char* name, const char* value, bool overw
     if (!qore_env_held_exclusively()) {
         return qore_env_refuse_change();
     }
-    return SystemEnvironment::set_intern(name, value, overwrite);
+    return qore_system_environment_ops::set_intern(name, value, overwrite);
 }
 
 int AtomicEnvironmentSetter::get(const char* name, QoreString& str) {
-    return SystemEnvironment::get_intern(name, str);
+    return qore_system_environment_ops::get_intern(name, str);
 }
 
 QoreString* AtomicEnvironmentSetter::get(const char* name) {
-    return SystemEnvironment::get_intern(name);
+    return qore_system_environment_ops::get_intern(name);
 }
 
 QoreStringNode* AtomicEnvironmentSetter::getAsStringNode(const char* name) {
-    return SystemEnvironment::get_as_string_node_intern(name);
+    return qore_system_environment_ops::get_as_string_node_intern(name);
 }
 
 int AtomicEnvironmentSetter::unset(const char* name) {
     if (!qore_env_held_exclusively()) {
         return qore_env_refuse_change();
     }
-    return SystemEnvironment::unset_intern(name);
+    return qore_system_environment_ops::unset_intern(name);
 }
 
 bool AtomicEnvironmentSetter::valueExists(const char* name) {
     // the lock is already held by this object
-    return SystemEnvironment::value_exists_intern(name);
+    return qore_system_environment_ops::value_exists_intern(name);
 }
 
 QoreEnvironmentReadLock::QoreEnvironmentReadLock() {
@@ -455,6 +462,7 @@ QoreEnvironmentReadLock::~QoreEnvironmentReadLock() {
 
 QoreEnvironmentValue::QoreEnvironmentValue(const char* name) {
     assert(name);
+    qore_env_lookup_count.fetch_add(1, std::memory_order_relaxed);
     QoreEnvSharedHelper env_lock;
     const char* p = getenv(name);
     if (p) {

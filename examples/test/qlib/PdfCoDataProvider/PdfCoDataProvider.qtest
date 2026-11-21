@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -166,7 +167,7 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
 
     #! Sets up the PDF.co client for integration tests
     private setupConnection() {
-        *string apikey = m_options.apikey ?? ENV.PDFCO_API_KEY;
+        *string apikey = LiveProvider::get("pdfco", "PDFCO_API_KEY", m_options.apikey);
         if (!apikey) {
             if (m_options.verbose) {
                 printf("No API key provided (use -k option or PDFCO_API_KEY env var)\n");
@@ -210,7 +211,8 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
     #! Creates a provider using the real client (integration tests only)
     private *PdfCoDataProvider::PdfCoDataProvider createRealProvider() {
         if (!client) {
-            testSkip("No PDF.co API key provided; set PDFCO_API_KEY or use -k option");
+            testSkip(LiveProvider::enabled("pdfco") ? "No PDF.co API key provided; set PDFCO_API_KEY or use -k option"
+                : LiveProvider::skipReason("pdfco", "PDFCO_API_KEY"));
         }
         return new PdfCoDataProvider::PdfCoDataProvider(client);
     }
@@ -798,7 +800,8 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
     integrationTests() {
         checkJson();
         if (!client) {
-            testSkip("No PDF.co API key provided; set PDFCO_API_KEY or use -k option");
+            testSkip(LiveProvider::enabled("pdfco") ? "No PDF.co API key provided; set PDFCO_API_KEY or use -k option"
+                : LiveProvider::skipReason("pdfco", "PDFCO_API_KEY"));
         }
 
         testCreditBalance();
