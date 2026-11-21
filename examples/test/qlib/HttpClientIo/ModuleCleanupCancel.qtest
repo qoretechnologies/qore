@@ -104,6 +104,11 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
                 mode), sub () { runStepCase(m); });
         }
         foreach string mode in (ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("%s: the process ends when the module cleanup creates the asynchronous I/O "
+                "controller", mode), sub () { runFirstSubmitCase(m); });
+        }
+        foreach string mode in (ExecModes) {
             foreach string protocol in (Protocols) {
                 string m = mode;
                 string p = protocol;
@@ -181,6 +186,21 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             "work\\)\n.*held module cleanup work: an item ran and ended\n.*held module cleanup work: the hold ends "
             "\\(the user modules have been deleted\\)\n", out, "the cleanup waits for the work held: " + out);
         assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
+        assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
+    }
+
+    #! a destructor that the module cleanup runs submits the first asynchronous I/O operation of the process, so the
+    #! cleanup creates the asynchronous I/O controller, whose I/O threads' command queues keep a placeholder command:
+    #! it is not work of the cleanup, which waited for it forever (qore#6928); with several I/O threads, as the first
+    #! drain of an I/O thread's queue frees its placeholder
+    private runFirstSubmitCase(string mode) {
+        int status;
+        string out = backquote(sprintf("QORE_IO_THREADS=4 QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
+            + "ModuleCleanupCancel" + DirSep + "first-submit-client.qr")), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)started\n", out, "the module is loaded: " + out);
+        assertRegex("(^|\n)submitted\n", out, "the destructor submits the operation: " + out);
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
     }
 
