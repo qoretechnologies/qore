@@ -1874,7 +1874,7 @@ DLLLOCAL bool q_dbi_valid_driver_name(const char* name);
 DLLLOCAL int q_dbi_raise_invalid_driver_name(ExceptionSink* xsink, const char* err);
 
 //! appends the description of a datasource for a message, with its user name, password and database name masked
-/** The description has the form <tt>driver:****</tt><tt>/****</tt><tt>\@****[%host[:port]]</tt>, as in the database
+/** The description has the form <tt>driver:****</tt><tt>&#47;****</tt><tt>\@****[%host[:port]]</tt>, as in the database
     test helpers (qore#6934): the user name, the password and the database name are always replaced with
     \ref QORE_DS_MASK, whether they are set or not, so that a message shows none of them, and not whether they are set;
     the driver name is shown only if it is a valid driver name (see q_dbi_valid_driver_name()), as otherwise it can be
