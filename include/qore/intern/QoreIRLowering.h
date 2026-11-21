@@ -1030,6 +1030,13 @@ private:
     //! of the blocks of that body from where the handler's body starts, then that handler's code of the request
     //! (getInlineHandlerFlowEndAt()); nullptr with \a error set on failure (qore#6949, qore#7040)
     QoreIRBasicBlock* lowerInlineHandlerOuterRequest(size_t hf_index, size_t outer_index, int rc, std::string& error);
+    //! Returns the code of a return request in the handler at \a hf_index of inline_handler_flow_stack, which is not
+    //! the last of its exit: the handlers of the scope that have not run run, as the normal end of a handler keeps a
+    //! return (StatementBlock::execIntern()), then the return goes on; nullptr with \a error set on failure (qore#6999)
+    /** @param in_try true for a request made in a try statement of the handler's body, which ends the try statement
+        with its own value (see InlineHandlerFlow::try_depth)
+    */
+    QoreIRBasicBlock* lowerNonLastHandlerReturnRequest(size_t hf_index, bool in_try, std::string& error);
     //! Returns true if a break (\a rc RC_BREAK) or a continue request that ends the body of the handler at \a hf_index
     //! of inline_handler_flow_stack ends the function: the handler is the last of its exit, and no loop or switch
     //! statement around its block takes the request, nor does the code of the handlers around it that the request goes

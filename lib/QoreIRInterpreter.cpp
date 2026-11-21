@@ -9200,7 +9200,8 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
 }
 
 // Execute on_block_exit handlers in reverse order (LIFO), matching the AST's
-// StatementBlock::execIntern() semantics.  Returns the last non-zero return code, if any.
+// StatementBlock::execIntern() semantics.  Returns the request of the handlers (a normal end keeps a return and
+// replaces a break or a continue), if any.
 static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handlers, ExceptionSink* xsink,
         IRCallFrame* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
         QoreProgram* dbg_pgm = nullptr) {
@@ -9226,10 +9227,13 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
                     }
-                    // the block takes the request of the last handler run, as with the AST interpreter
-                    // (StatementBlock::execIntern())
-                    nrc = executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements, dbg_pgm,
-                        error || (xsink && xsink->isThreadExit()));
+                    // the block takes the request of the last handler run, except that a handler that ends normally
+                    // keeps a return request, as with the AST interpreter (StatementBlock::execIntern(), qore#6999)
+                    const int hrc = executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements,
+                        dbg_pgm, error || (xsink && xsink->isThreadExit()));
+                    if (hrc || nrc != RC_RETURN) {
+                        nrc = hrc;
+                    }
                     // Restore td->catchException BEFORE clearing xsink to avoid
                     // a use-after-free window where td->catchException points to
                     // the freed exception chain
@@ -18874,7 +18878,7 @@ load_local_done:
                         qore_ir_close_catch_scopes(catch_exception_stack, scope_stack.size() + 1, xsink);
                         ExceptionSink obe_xsink;
                         bool error = scope_inst->is_error || (xsink && xsink->isException());
-                        // a debugger's request that the last handler run ended with (#6201)
+                        // a debugger's request that the handlers ended with (#6201)
                         int handler_flow = 0;
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
                             obe_type_e type = on_block_exit_handlers[i - 1].type;
@@ -18890,8 +18894,8 @@ load_local_done:
                                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    handler_flow = executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &frame,
-                                        dbgHandlerStatements(), dbgHandlerProgram(),
+                                    const int hrc = executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink,
+                                        &frame, dbgHandlerStatements(), dbgHandlerProgram(),
                                         error || (xsink && xsink->isThreadExit()),
                                         // where a try statement of the function catches the exception, a handler's
                                         // return replaces the value of its try block's return (#6074); in the
@@ -18899,6 +18903,11 @@ load_local_done:
                                         // see executeHandlerBody())
                                         qore_ir_exception_catch_returns(func, scope_inst->exception_target),
                                         scope_inst);
+                                    // a handler that ends normally keeps a return request of a handler before it, and
+                                    // replaces a break or a continue, as with the AST interpreter (qore#6999)
+                                    if (hrc || handler_flow != RC_RETURN) {
+                                        handler_flow = hrc;
+                                    }
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
