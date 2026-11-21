@@ -56,6 +56,14 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
             "MongoDbConnection get": ("MongoDbDataProvider::MongoDbConnection", "mongodb", "get"),
         };
 
+        #! the connections whose client is, or creates, an HttpClientIo connection manager
+        const ManagerClients = {
+            "RestConnection getAsync": True,
+            "HttpConnection getAsync": True,
+            "ConnectConnection get": True,
+            "DataStreamConnectionIo get": True,
+        };
+
         #! the connections whose creator is checked: those that restricted code creates give no client
         const Checked = keys Connections;
 
@@ -71,20 +79,29 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
             addTestCase("connections that restricted code creates, " + m, sub () { testRestrictedCreator(m); });
             addTestCase("the domains of a connection class, " + m, sub () { testDomainOverride(m); });
             addTestCase("a file system connection, " + m, sub () { testFilesystem(m); });
+            addTestCase("a connection class that does not declare its domains, " + m, sub () { testUndeclared(m); });
         }
         set_return_value(main());
     }
 
-    #! a connection that the host created gives its clients to restricted code
+    #! a connection that the host created gives its clients to restricted code, except the clients that are or create
+    #! HttpClientIo connection managers
     private testLent(string mode) {
         int port = get_free_port();
         Program p = getProgram(mode);
         foreach hash<auto> i in (Connections.pairIterator()) {
             object c = create_object(i.value[0], "c", "d", getUrl(i.value[1], port),
                 {"monitor": False});
+            string rv = p.callFunction("client", c, i.value[2]);
+            # a client that is or creates an HttpClientIo connection manager is created for the calling code, which
+            # cannot create a manager if it is restricted from the network (qore#6981)
+            if (ManagerClients{i.key}) {
+                assertRegex("^PERMISSION-DENIED: the calling code may not create an HTTP client connection manager",
+                    rv, sprintf("%s, %s", i.key, mode));
+                continue;
+            }
             # the client is given, or it is created and fails to connect to the port where nothing listens (a client
             # that connects when it is created): either way it is not refused for its domain
-            string rv = p.callFunction("client", c, i.value[2]);
             assertRegex("^(client|[A-Z0-9-]+: .*(refused|connect))", rv, sprintf("%s, %s", i.key, mode));
             assertFalse(rv =~ /^(PERMISSION-DENIED|INVALID-FUNCTION-ACCESS)/,
                 sprintf("%s not refused, %s", i.key, mode));
@@ -152,6 +169,41 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
             "{ return ex.err + \": \" + ex.desc; } }", "filesystem");
         assertRegex("^PERMISSION-DENIED: code restricted from the FILESYSTEM functional domain cannot create "
             "connection \"c\"", p.callFunction("t"), "file system connection, " + mode);
+    }
+
+    #! code restricted from any I/O domain cannot create a connection of a class that does not declare its domains
+    private testUndeclared(string mode) {
+        string src = "%modern\n%requires ConnectionProvider\n"
+            "class U inherits AbstractConnectionWithInfo {\n"
+            "    constructor() : AbstractConnectionWithInfo(\"u\", \"d\", \"x://h\", {\"monitor\": False}) {}\n"
+            "    string getType() { return \"x\"; }\n"
+            "    private object getImpl(bool connect = True, *hash<auto> rtopts) { return new Mutex(); }\n"
+            "    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {\n"
+            "        return <ConnectionSchemeInfo>{\"display_name\": \"x\", \"short_desc\": \"x\", \"desc\": \"x\", "
+            "\"cls\": Class::getClass(self), \"schemes\": {\"x\": True}};\n"
+            "    }\n"
+            "}\n"
+            "class N inherits U {\n"
+            "    private int getConnectionDomainsImpl() { return 0; }\n"
+            "}\n"
+            "string sub t(string cls) { try { create_object(cls); return \"created\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }";
+        # each domain that the code is restricted from refuses the class, as its clients may use any of them
+        foreach hash<auto> i in ({"NETWORK": PO_NO_NETWORK, "FILESYSTEM": PO_NO_FILESYSTEM,
+                "DATABASE": PO_NO_DATABASE}.pairIterator()) {
+            Program p(PO_NEW_STYLE | i.value);
+            p.setExecMode(Modes{mode});
+            p.parse(src, "undeclared");
+            assertRegex("^PERMISSION-DENIED: code restricted from the " + i.key + " functional domain cannot create "
+                "connection \"u\"", p.callFunction("t", "U"), sprintf("undeclared, %s, %s", i.key, mode));
+            # a class that declares that its clients use no domain is created
+            assertEq("created", p.callFunction("t", "N"), sprintf("no domain, %s, %s", i.key, mode));
+        }
+        # unrestricted code creates a connection of a class that does not declare its domains
+        Program u(PO_NEW_STYLE);
+        u.setExecMode(Modes{mode});
+        u.parse(src, "undeclared");
+        assertEq("created", u.callFunction("t", "U"), "unrestricted, " + mode);
     }
 
     #! returns the URL of a connection; POP3 and IMAP connections need credentials

@@ -865,6 +865,10 @@ conn.checkSandboxAccess(True);
         @throw CONNECTION-ASYNC-UNSUPPORTED if the connection type does not support async I/O
         (the base class implementation throws this; subclasses override @ref getAsyncImpl()
         to provide the async variant)
+        @throw PERMISSION-DENIED the async client is, or creates, an \c HttpClientIo connection manager (the async
+        clients of HTTP and REST connections, for example), and the calling code is restricted from the \c NETWORK
+        functional domain: the manager is created for the calling code, also with a connection that unrestricted code
+        created (see the \c HttpClientIo module's restricted callers section)
 
         @since ConnectionProvider 2.2
 
@@ -1426,15 +1430,20 @@ scheme://user:pass@hostname:port/path
     private abstract object getImpl(bool connect = True, *hash<auto> rtopts);
 
     #! Returns the functional domains that the connection's clients use (qore#6981)
-    /** Code restricted from any of them cannot create the connection; 0 by default (a connection whose clients use
-        no functional domain); the connections to a network host return @ref Qore::DOM_NETWORK "DOM_NETWORK", those of
-        the file system @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM", those of a database
-        @ref Qore::DOM_DATABASE "DOM_DATABASE"
+    /** Code restricted from any of them cannot create the connection; the connections to a network host return
+        @ref Qore::DOM_NETWORK "DOM_NETWORK", those of the file system @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM",
+        those of a database @ref Qore::DOM_DATABASE "DOM_DATABASE", and a connection whose clients use no functional
+        domain returns 0.
+
+        The default implementation returns all of the domains that a connection's clients can use (\c NETWORK,
+        \c FILESYSTEM and \c DATABASE), so code restricted from any of them cannot create a connection of a class
+        that does not declare its domains; unrestricted code is not affected.  Every connection class should override
+        this method, declared \c final, to return the domains that its clients use.
 
         @since %ConnectionProvider 3.1
     */
     private int getConnectionDomainsImpl() {
-        return 0;
+        return DOM_NETWORK | DOM_FILESYSTEM | DOM_DATABASE;
     }
 
     #! Refuses a connection that code restricted from the connection's domains creates or deserializes (qore#7052)

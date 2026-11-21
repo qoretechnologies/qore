@@ -423,12 +423,23 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     private:internal {
         #! Lock for manager id allocation.
         static Mutex manager_id_lock();
+
+        #! Set when the code that created the manager passed its caller check (qore#6981)
+        /** Only a manager whose creator passed checkCreator() grants its connections the exemption of its own
+            creations (see HttpClientCallerExemption)
+        */
+        bool creator_checked;
     }
 
     #! Creates a new connection manager with the given options
     /** @param opts configuration options including protocol selection
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given (qore#6981)
     */
     constructor(*hash<HttpClientConnectionManagerOptions> opts) {
+        HttpClientConnectionManager::checkCreator(opts);
+        creator_checked = True;
         self.opts = opts ?? <HttpClientConnectionManagerOptions>{};
         self.logger = self.opts.logger;
         if (!HttpClientProtocolMap.hasKey(self.opts.protocol)) {
@@ -560,6 +571,36 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Copying is not supported
     private copy() {
         throw "COPY-ERROR", "HttpClientConnectionManager objects cannot be copied";
+    }
+
+    #! Refuses a manager to code restricted from the functional domains of its connections (qore#6981)
+    /** A manager creates its connections with the exemption of its own creations (see HttpClientCallerExemption), so
+        the code that creates it decides: code restricted from \c NETWORK cannot create one, nor can code restricted
+        from \c FILESYSTEM create one with CA certificate locations, which its connections read
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given
+    */
+    private:internal static checkCreator(*hash<HttpClientConnectionManagerOptions> opts) {
+        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection manager, as it is "
+                "restricted from the NETWORK functional domain";
+        }
+        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+            throw "PERMISSION-DENIED", "the calling code may not give an HTTP client connection manager CA "
+                "certificate locations, as it is restricted from the FILESYSTEM functional domain";
+        }
+    }
+
+    #! Grants the exemption of the manager's own creations, if its creator passed its caller check (qore#6981)
+    /** @throw PERMISSION-DENIED the creator of the manager did not pass its caller check
+    */
+    private:internal HttpClientCallerExemption getExemption() {
+        if (!creator_checked) {
+            throw "PERMISSION-DENIED", "the HTTP client connection manager was not created by code that passed its "
+                "caller check, so it does not create connections";
+        }
+        return new HttpClientCallerExemption();
     }
 
     #! Destructor - closes all connections
@@ -2819,7 +2860,7 @@ printf("%d connection(s) migrated\n", migrated);
         HttpClientCallerExemption
     */
     private:internal Http1ClientConnection newHttp1Connection(hash<auto> url_info, *hash<auto> proxy_info) {
-        HttpClientCallerExemption exemption();
+        HttpClientCallerExemption exemption = getExemption();
         return new Http1ClientConnection(url_info, opts.connect_timeout, logger, 1, opts.ssl_verify_mode,
             opts.accept_all_certs, proxy_info, opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
     }
@@ -2829,7 +2870,7 @@ printf("%d connection(s) migrated\n", migrated);
     */
     private:internal Http2ClientConnection newHttp2Connection(hash<auto> url_info, *hash<auto> proxy_info,
             bool offer_http11) {
-        HttpClientCallerExemption exemption();
+        HttpClientCallerExemption exemption = getExemption();
         return new Http2ClientConnection(url_info, opts.connect_timeout, logger, opts.max_streams_per_connection,
             opts.ssl_verify_mode, opts.accept_all_certs, proxy_info, opts.client_cert, opts.client_pk,
             opts.ssl_ca_file, opts.ssl_ca_path, offer_http11);
@@ -2839,7 +2880,7 @@ printf("%d connection(s) migrated\n", migrated);
     /** See newHttp1Connection()
     */
     private:internal Http3ClientConnection newHttp3Connection(hash<auto> url_info, *list<int> avoid_families) {
-        HttpClientCallerExemption exemption();
+        HttpClientCallerExemption exemption = getExemption();
         return new Http3ClientConnection(url_info, opts.connect_timeout, logger, opts.max_streams_per_connection,
             opts.ssl_verify_mode, opts.accept_all_certs, opts.client_cert, opts.client_pk, opts.ssl_ca_file,
             opts.ssl_ca_path, NOTHING, avoid_families);

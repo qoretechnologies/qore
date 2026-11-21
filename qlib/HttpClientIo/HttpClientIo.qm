@@ -228,6 +228,9 @@ if (state == HttpClientConnectionState::Draining) {
       @ref HttpClientIo::Http3ClientPollOperation "Http3ClientPollOperation") refuse code restricted from
       \c NETWORK, and from \c FILESYSTEM if CA certificate locations are given, when they are created: the refusal
       is made at run time (\c PERMISSION-DENIED), not when the code is parsed
+    - the connection manager (@ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"), which
+      creates its connections with the exemption of its own creations, refuses the same code when it is created, also
+      when a client of another module (a REST, JSON-RPC or Connect client, for example) creates one for its caller
 
     A connection manager that trusted code creates and gives to restricted code is a capability: it creates the
     connections that the restricted code asks for, with the options that its creator gave.  Code that runs while it

@@ -114,6 +114,7 @@ class HttpClientIoCallerDomainsTest inherits QUnit::Test {
         foreach string mode in (keys Modes) {
             string m = mode;
             addTestCase("connections and poll operations, " + m, sub () { testNetwork(m); });
+            addTestCase("a connection manager that restricted code creates, " + m, sub () { testManager(m); });
             addTestCase("CA locations, " + m, sub () { testFilesystem(m); });
             addTestCase("a look-alike exemption class, " + m, sub () { testLookAlike(m); });
             addTestCase("callbacks of a lent manager, " + m, sub () { testCallbacks(m); });
@@ -165,6 +166,63 @@ class HttpClientIoCallerDomainsTest inherits QUnit::Test {
         int free_port = get_free_port();
         foreach string cls in (keys Connections) {
             assertEq("created", u.callFunction(cls, free_port), sprintf("%s, unrestricted, %s", cls, mode));
+        }
+    }
+
+    #! code restricted from the network cannot create a connection manager, which creates its connections with the
+    #! exemption of its own creations, nor can code restricted from the file system create one with CA locations
+    private testManager(string mode) {
+        string code = "%modern\n%requires HttpClientIo\n"
+            "class M inherits HttpClientConnectionManager {\n"
+            "    constructor(*hash<HttpClientConnectionManagerOptions> opts) : HttpClientConnectionManager(opts) {}\n"
+            "}\n"
+            "string sub make(string how, int port, *string ca) {\n"
+            "    try {\n"
+            "        *hash<HttpClientConnectionManagerOptions> opts = ca ? <HttpClientConnectionManagerOptions>{"
+            "\"ssl_ca_file\": ca} : NOTHING;\n"
+            "        object m;\n"
+            "        switch (how) {\n"
+            "            case \"new\": m = new HttpClientConnectionManager(opts); break;\n"
+            "            case \"create_object\": m = create_object(\"HttpClientIo::HttpClientConnectionManager\", opts); "
+            "break;\n"
+            "            case \"subclass\": m = new M(opts); break;\n"
+            "        }\n"
+            "        m.request(\"http://127.0.0.1:\" + port, \"GET\", \"/\", NOTHING, NOTHING, 2s);\n"
+            "        return \"created\";\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
+            "}\n";
+        list<string> hows = ("new", "create_object", "subclass");
+
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse(code, "manager");
+        foreach string how in (hows) {
+            assertEq("PERMISSION-DENIED", p.callFunction("make", how, port), sprintf("network, %s, %s", how, mode));
+        }
+        # no connection was made
+        assertEq(NOTHING, listener.accept(0), "no connection, " + mode);
+
+        Program f(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        f.setExecMode(Modes{mode});
+        f.parse(code, "manager");
+        int free_port = get_free_port();
+        foreach string how in (hows) {
+            assertEq("PERMISSION-DENIED", f.callFunction("make", how, free_port, ca_file),
+                sprintf("CA file, %s, %s", how, mode));
+            # without CA locations, the manager is created; the request fails as nothing listens on the port
+            assertNeq("PERMISSION-DENIED", f.callFunction("make", how, free_port),
+                sprintf("no CA file, %s, %s", how, mode));
+        }
+
+        # unrestricted code creates one
+        Program u(PO_NEW_STYLE);
+        u.setExecMode(Modes{mode});
+        u.parse(code, "manager");
+        foreach string how in (hows) {
+            assertNeq("PERMISSION-DENIED", u.callFunction("make", how, free_port, ca_file),
+                sprintf("unrestricted, %s, %s", how, mode));
         }
     }
 

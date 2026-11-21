@@ -148,15 +148,24 @@ public hashdecl FileResourceResult {
 /** Not exported: only this module's code can create one.  The \c conn handler creates one for the handler and scheme
     that the connection resolves a location to, just before it gives the location to that handler; the handler's
     caller check takes it at once (take()), so it covers that call only, and the object removes it when it goes out of
-    scope if it was not taken.
+    scope if it was not taken.  The exemption is kept in a static member of this class, by thread, so code outside the
+    class can neither read nor create it (a class that other code declares with the same name and signature has static
+    members of its own), as with HttpClientIo's caller exemption
 */
 class FileLocationCallerExemption {
     private:internal {
-        #! the token in the thread's data
+        #! the token of this exemption; the exemption of the thread while it is held
         FileLocationCallerToken token;
-    }
 
-    const Key = "FileLocationHandler::FileLocationCallerExemption";
+        #! the key of this exemption's thread
+        string tid = string(gettid());
+
+        #! the exemptions held, by thread
+        static hash<string, FileLocationCallerToken> active = {};
+
+        #! the lock of \c active
+        static Mutex lock();
+    }
 
     #! Grants the exemption from the given domains for the next call of the handler for the scheme in this thread
     /** @param domains the domains that the connection's policy decides: those of the handler for the scheme with the
@@ -164,26 +173,27 @@ class FileLocationCallerExemption {
     */
     constructor(AbstractFileLocationHandler handler, string scheme, int domains) {
         token = new FileLocationCallerToken(handler, scheme, domains);
-        save_thread_data(Key, token);
+        AutoLock al(lock);
+        active{tid} = token;
     }
 
     #! Removes the exemption if it was not taken
     destructor() {
-        if (get_thread_data(Key) === token) {
-            remove_thread_data(Key);
+        AutoLock al(lock);
+        if (active{tid} === token) {
+            remove active{tid};
         }
     }
 
     #! Takes the exemption of the thread: returns the domains that it exempts if it is for the given handler and
     #! scheme, else 0
     static int take(AbstractFileLocationHandler handler, string scheme) {
-        auto v = get_thread_data(Key);
-        if (!exists v) {
-            return 0;
+        *FileLocationCallerToken t;
+        {
+            AutoLock al(lock);
+            t = remove active{string(gettid())};
         }
-        remove_thread_data(Key);
-        return v instanceof FileLocationCallerToken ? cast<FileLocationCallerToken>(v).getDomains(handler, scheme)
-            : 0;
+        return t ? t.getDomains(handler, scheme) : 0;
     }
 }
 
