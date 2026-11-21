@@ -733,3 +733,22 @@ DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
     ...
 });
 ```
+
+---
+
+## 18. Processing Locality and Billing Metadata (issue #6736)
+
+Apps and actions can declare, next to `display_name` and `short_desc`, where they process customer data and how
+their use is billed; every field is optional (missing means unknown), and an action's value of a field overrides its
+app's (`DataProviderActionCatalog::getActionProcessing()` / `getActionBilling()` return the effective values).
+
+- [ ] `processing` (`DataProviderProcessingInfo`): `locality` (`local` or `external`, see
+      `DataProviderProcessingLocalityValues`) and, for `external`, `external_recipient` (the vendor's identity, for
+      example its domain) — set it for every app whose actions send customer data to a vendor's API
+- [ ] `billing` (`DataProviderBillingInfo`): `model` (`DataProviderBillingModelValues`), `unit`
+      (`DataProviderBillingUnitValues`), `source` (the URL of the vendor's pricing or terms) and `effective_date`
+      (when the information was checked)
+- [ ] Never record rate amounts: prices change without notice and would be stale in a released module
+- [ ] Set the values on the app; set them on an action only where it differs (for example an action that runs
+      locally in an otherwise external app)
+- [ ] The values are validated at registration: an unknown value is refused with `APP-ERROR` / `ACTION-ERROR`

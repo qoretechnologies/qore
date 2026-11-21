@@ -90,6 +90,24 @@ class BadFrameConnection inherits WebSocketConnection {
             case "one-byte":
                 send(<03>, WSOP_Close, True);
                 break;
+            # an RSV bit on a control frame (issue #6781)
+            case "rsv-ping":
+                sendEncoded(ws_encode_message("ping", WSOP_Ping, NOTHING, True, WS_RSV1));
+                break;
+            # RSV1 on a continuation frame of a compressed message (RFC 7692 section 6.1; issue #6781)
+            case "rsv-continuation": {
+                binary payload = deflate_raw("fragmented café");
+                sendEncoded(ws_encode_message(payload.substr(0, 4), WSOP_Text, NOTHING, False, WS_RSV1));
+                sendEncoded(ws_encode_message(payload.substr(4), WSOP_Continuation, NOTHING, True, WS_RSV1));
+                break;
+            }
+            # a fragmented compressed message, RSV1 on its first frame only
+            case "fragmented": {
+                binary payload = deflate_raw("fragmented café");
+                sendEncoded(ws_encode_message(payload.substr(0, 4), WSOP_Text, NOTHING, False, WS_RSV1));
+                sendEncoded(ws_encode_message(payload.substr(4), WSOP_Continuation, NOTHING, True));
+                break;
+            }
             default:
                 # "code:<n>": a close frame with the code
                 send(msg.substr(5).toInt().encodeMsb(2), WSOP_Close, True);
@@ -137,6 +155,8 @@ class WebSocketClientInvalidFramesTest inherits QUnit::Test {
                 \testCompressedTextThenMessage(), ver);
             addTestCase(sprintf("HTTP/%s: close reason that is not valid UTF-8", ver), \testCloseReason(), ver);
             addTestCase(sprintf("HTTP/%s: close frame with a one-byte payload", ver), \testCloseOneByte(), ver);
+            addTestCase(sprintf("HTTP/%s: RSV bits on a control frame", ver), \testRsvControl(), ver);
+            addTestCase(sprintf("HTTP/%s: RSV1 on a continuation frame", ver), \testRsvContinuation(), ver);
             addTestCase(sprintf("HTTP/%s: invalid close codes", ver), \testInvalidCloseCodes(), ver);
             addTestCase(sprintf("HTTP/%s: valid close codes", ver), \testValidCloseCodes(), ver);
         }
@@ -273,6 +293,37 @@ class WebSocketClientInvalidFramesTest inherits QUnit::Test {
         on_exit wsc.disconnect();
         wsc.send("one-byte");
         assertClosed(events, plain, WSCC_ProtocolError, "one-byte close payload");
+    }
+
+    testRsvControl(string ver) {
+        # without an extension, and with permessage-deflate negotiated, which does not set RSV1 on a control frame
+        # (RFC 7692 section 6.1)
+        foreach hash<auto> i in ({"path": "/plain", "handler": plain, "deflate": False},
+                {"path": "/deflate", "handler": deflate, "deflate": True}) {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, i.path, events, i.deflate);
+            on_exit wsc.disconnect();
+            wsc.send("rsv-ping");
+            assertClosed(events, i.handler, WSCC_ProtocolError, "RSV bits on a ping frame on " + i.path);
+        }
+    }
+
+    testRsvContinuation(string ver) {
+        # a fragmented compressed message with RSV1 on its first frame only is taken
+        {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+            on_exit wsc.disconnect();
+            wsc.send("fragmented");
+            assertEq("fragmented café", events.get(HangGuard), "a fragmented compressed message is taken");
+        }
+        # the client disconnected: its end is taken, so that the next connection's is checked
+        assertEq(WSCC_GoingAway, deflate.closed.get(HangGuard), "the client disconnected (going away)");
+        Queue events();
+        WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+        on_exit wsc.disconnect();
+        wsc.send("rsv-continuation");
+        assertClosed(events, deflate, WSCC_ProtocolError, "RSV1 on a continuation frame");
     }
 
     testInvalidCloseCodes(string ver) {

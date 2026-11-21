@@ -288,6 +288,24 @@ public:
         setValidityBit(index, false);
     }
 
+    //! Sets the elements of \a b to the elements of \a source at \a indices (qore#6220)
+    /** \a b is a new buffer<decimal128> of \a count elements with the precision, scale and element nullability of
+        \a source; the 128-bit storage and the null flag of each element are copied, without converting the value to
+        a number and back.  An element whose value does not fit the precision of the buffer (only external storage can
+        hold one) is assigned as a number, which raises the BUFFER-RANGE-ERROR of the assignment.
+
+        @param b the new buffer
+        @param source the source buffer<decimal128>
+        @param indices the indices of the elements of \a source, each less than its size
+        @param count the number of indices, the size of \a b
+        @param cancel_context the context of the cancellation check made every 100 elements
+        @param xsink for errors
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int takeDecimalImpl(QoreBufferNode* b, const QoreBufferNode* source, const size_t* indices,
+            size_t count, const char* cancel_context, ExceptionSink* xsink);
+
     DLLLOCAL static int assignStringStorageImpl(QoreBufferNode* b, const std::vector<std::string>& values, const std::vector<uint8_t>& nulls, ExceptionSink* xsink);
 
     DLLLOCAL int assignStringStorage(const std::vector<std::string>& values, const std::vector<uint8_t>& nulls, ExceptionSink* xsink) {

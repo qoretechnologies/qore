@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class TypeRetirementDeepHierarchyTest
+
+#! The classes of deep hierarchies of a deleted Program are retired in time linear in the hierarchy
+/** Derived types name the top classes of a chain of diamonds (each level: two classes inheriting the class of the
+    level below, and a class inheriting both, so that the top class reaches the base class by 2^depth paths) and of a
+    long linear chain; the Program is deleted, and the classes are retired and repointed to tombstones, which are
+    fingerprinted by walking the hierarchy (issue #6419).  A hierarchy too deep to be tombstoned is kept as before;
+    its walk must stop at once, and a hierarchy that can be tombstoned is walked once per class: a walk of every path
+    did not end.  Values typed with the deleted Program's classes then accept the values of a Program reloaded from
+    the same source.
+*/
+class TypeRetirementDeepHierarchyTest inherits QUnit::Test {
+    public {
+        const Opts = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
+    }
+
+    constructor() : Test("TypeRetirementDeepHierarchyTest", "1.0") {
+        addTestCase("deep hierarchies", \deepTest());
+        set_return_value(main());
+    }
+
+    #! a chain of diamonds of the given depth, with the given prefix; \c <prefix>X<depth> is its top class
+    static string diamonds(string prefix, int depth) {
+        string src = sprintf("class %sX0 { public { int v = 1; } }\n", prefix);
+        for (int k = 1; k <= depth; ++k) {
+            src += sprintf("class %sL%d inherits %sX%d {}\n", prefix, k, prefix, k - 1);
+            src += sprintf("class %sR%d inherits %sX%d {}\n", prefix, k, prefix, k - 1);
+            src += sprintf("class %sX%d inherits %sL%d, %sR%d {}\n", prefix, k, prefix, k, prefix, k);
+        }
+        return src;
+    }
+
+    #! a linear chain of the given length; \c C<length> is its top class
+    static string linear(int length) {
+        string src = "class C0 { public { int v = 2; } }\n";
+        for (int k = 1; k <= length; ++k) {
+            src += sprintf("class C%d inherits C%d {}\n", k, k - 1);
+        }
+        return src;
+    }
+
+    static string source() {
+        return diamonds("S", 20) + diamonds("D", 40) + linear(100)
+            + "list<auto> sub mk() { list<SX20> a = (); list<DX40> b = (); list<C100> c = (); return (a, b, c); }\n"
+            + "list<auto> sub objs() { return (new SX20(), new DX40(), new C100()); }\n";
+    }
+
+    deepTest() {
+        date start = now_us();
+        list<auto> kept;
+        {
+            Program a(Opts);
+            a.parse(source(), "a");
+            kept = a.callFunction("mk");
+        }
+        # a debug build of a library that frees retired declarations frees them now
+        if (Option::HAVE_LIBRARY_DEBUGGING && exists_function("dbg_type_retirement_free")) {
+            call_function("dbg_type_retirement_free");
+        }
+
+        Program b(Opts);
+        b.parse(source(), "b");
+        list<auto> objs = b.callFunction("objs");
+        for (int i = 0; i < 3; ++i) {
+            list<auto> l = kept[i];
+            l += objs[i];
+            assertEq(1, l.size());
+            assertEq(i == 2 ? 2 : 1, l[0].v);
+        }
+        list<auto> l = kept[1];
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { l += objs[0]; });
+        # the walks of the hierarchies take milliseconds; a walk of every path of the diamonds does not end
+        assertLt(60s, now_us() - start);
+    }
+}

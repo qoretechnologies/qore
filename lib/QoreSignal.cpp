@@ -480,10 +480,12 @@ void QoreSignalManager::forkChild(int fork_tid) {
             handlers[i].release_tid = -1;
         }
     }
-    qore_counter_ops(tcount).reinitAfterFork(signal_threads);
+    // the counter's lock and the mutex are held by this thread since forkPrepare(): released, so that the releases are
+    // seen (by ThreadSanitizer, which otherwise considers them held by this thread for the rest of the child's life;
+    // issue #6817), as QoreForkThreadLock::child() does
+    qore_counter_ops(tcount).releaseAfterFork(signal_threads);
     qore_condition_ops(cond).reinitAfterFork();
-    // held by this thread since forkPrepare()
-    mutex.reinitAfterFork();
+    mutex.unlock();
 }
 
 namespace {

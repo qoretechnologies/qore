@@ -48,6 +48,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/ParserSupport.h"
+#include "qore/intern/QoreUtf8.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreParseHashNode.h"
@@ -68,6 +69,70 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+//! Validates RFC 3629 UTF-8 across buffer boundaries. The line of an incomplete character
+//! stays current until it is complete, including when its invalid continuation is a newline.
+//! Returns the invalid physical line, zero for valid input so far, or -1 on cancellation.
+static int scanner_validate_utf8(QoreParseState::FileInput& input, const char* buf, size_t size, bool eof,
+        ExceptionSink& xsink) {
+    size_t pos = 0;
+    if (input.partial_size) {
+        long width = -1;
+        while (pos < size && width < 0) {
+            input.partial[input.partial_size++] = buf[pos++];
+            width = q_utf8_char_len(input.partial, input.partial_size);
+        }
+        if (width <= 0) {
+            return width < 0 && !eof ? 0 : input.line;
+        }
+        input.partial_size = 0;
+    }
+    unsigned iterations = 0;
+    while (pos < size) {
+        if (!(++iterations % 100) && qore_check_thread_cancel(xsink, "validating source encoding")) {
+            return -1;
+        }
+        unsigned char first = buf[pos];
+        if (first == '\n') {
+            ++input.line;
+            input.line_first = -1;
+        } else if (input.line_first < 0) {
+            input.line_first = first;
+        }
+        if (first < 0x80) {
+            ++pos;
+            continue;
+        }
+        long width = q_utf8_char_len(buf + pos, size - pos);
+        if (width <= 0) {
+            if (!width || eof) {
+                return input.line;
+            }
+            input.partial_size = size - pos;
+            memcpy(input.partial, buf + pos, input.partial_size);
+            break;
+        }
+        pos += width;
+    }
+    return 0;
+}
+
+static void scanner_invalid_utf8(int line) {
+    parse_error(*qore_program_private::get(*getProgram())->getLocation(line, line),
+        "invalid UTF-8 in source");
+}
+
+int qore_invalid_source_utf8_line(const char* text, size_t size, ExceptionSink& xsink, bool* final_directive) {
+    QoreParseState::FileInput input;
+    int result = scanner_validate_utf8(input, text, size, true, xsink);
+    if (result) {
+        return result;
+    }
+    if (final_directive) {
+        *final_directive = input.line_first == '%';
+    }
+    return 0;
+}
+
 //! reads the next block of a source file for the scanner; at the end of a file whose last line is a parse directive
 //! (it starts with %) without a newline, it gives one newline, as the rules of the parse directives end with a newline
 //! ("$"), which such a directive would not match; other code is not changed, so that an error at its end keeps its
@@ -86,28 +151,21 @@ static ssize_t qore_scanner_read(QoreParseState* state, FILE* in, char* buf, siz
         }
         clearerr(in);
     }
-    if (n) {
-        // the first byte of the line that the block ends in, or -1 if the block ends with a newline
-        auto i = state->file_line_first.emplace(in, -1).first;
-        // the last newline of the block (memrchr() is not portable)
-        size_t nl = n;
-        while (nl && buf[nl - 1] != '\n') {
-            --nl;
+    auto& input = state->files[in];
+    int result = scanner_validate_utf8(input, buf, n, !n, state->xsink);
+    if (result) {
+        if (result > 0) {
+            scanner_invalid_utf8(result);
         }
-        if (nl) {
-            i->second = nl < n ? static_cast<unsigned char>(buf[nl]) : -1;
-        } else if (i->second == -1) {
-            i->second = static_cast<unsigned char>(buf[0]);
-        }
-        return n;
-    }
-    auto i = state->file_line_first.find(in);
-    if (i == state->file_line_first.end()) {
+        state->files.erase(in);
+        state->stop = true;
         return 0;
     }
-    // the file has ended: its entry is removed, as another file can have the same FILE* later
-    bool add_newline = i->second == '%' && max_size;
-    state->file_line_first.erase(i);
+    if (n) {
+        return n;
+    }
+    bool add_newline = input.line_first == '%' && max_size;
+    state->files.erase(in);
     if (!add_newline) {
         return 0;
     }
@@ -447,6 +505,49 @@ static void scanner_process_path(QoreString& npath, char* ip) {
     }
     //printd(5, "ip: '%s' npath: '%s'\n", ip, npath.c_str());
 }
+
+// Module directives, shell commands and the byte-oriented transliteration operator consume
+// process-encoded text. Keep Flex's buffer and location counters in source bytes.
+static char* scanner_process_text(char* text, std::string& converted) {
+    if (QCS_UTF8 == QCS_DEFAULT) {
+        return text;
+    }
+    ExceptionSink xsink;
+    QoreString spelling(text, QCS_UTF8);
+    TempEncodingHelper result(spelling, QCS_DEFAULT, &xsink);
+    if (xsink) {
+        qore_program_private::addParseException(getProgram(), xsink);
+        return nullptr;
+    }
+    converted.assign(result->c_str(), result->size());
+    return converted.data();
+}
+
+static bool append_transliteration_text(ExceptionSink& xsink, QoreTransliteration* tr, char* text,
+        void (QoreTransliteration::*append)(char)) {
+    std::string converted;
+    char* ptr = scanner_process_text(text, converted);
+    unsigned iterations = 0;
+    while (ptr && *ptr) {
+        if (!(++iterations % 100) && qore_check_cancel(&xsink, "parsing transliteration")) {
+            return false;
+        }
+        (tr->*append)(*ptr++);
+    }
+    return ptr != nullptr;
+}
+
+#define QORE_APPEND_TRANSLITERATION(text, method) \
+    if (!append_transliteration_text(yyextra->xsink, yylval->Trans, text, &QoreTransliteration::method)) { \
+        yyextra->stop = true; yylval->Trans->deref(); yylval->Trans = nullptr; \
+        qore_scanner_end_input(yyscanner); yyterminate(); \
+    }
+
+// The directive has consumed its argument. Resume tokenization on conversion failure.
+#define QORE_PROCESS_DIRECTIVE_TEXT(name) \
+    std::string directive_storage; \
+    char* name = scanner_process_text(yytext, directive_storage); \
+    if (!name) { BEGIN(INITIAL); continue; }
 
 static QoreString* get_include_file_name(char* file) {
 #ifdef _Q_WINDOWS
@@ -907,14 +1008,14 @@ static char* make_cast(const char* s) {
 }
 
 static void qore_parse_define(YYLTYPE* yylloc, const char* pstr) {
-    QoreString str(pstr);
+    QoreString str(pstr, QCS_UTF8);
     // trim trailing and leading whitespace
     str.trim();
     const char* p = strchr(str.c_str(), ' ');
-    QoreString arg;
+    QoreString arg(QCS_UTF8);
     if (p) {
         // copy arg to arg string
-        arg.set(p + 1);
+        arg.set(p + 1, QCS_UTF8);
         // trim leading whitespace, if any
         arg.trim_leading();
         // remove argument from define string
@@ -1605,7 +1706,8 @@ static bool scanner_match_ends_with(const char* text, size_t len, const char* kw
     return len >= kl && !memcmp(text + len - kl, kw, kl);
 }
 
-#define QORE_FLEX_DO_EOF { /* delete current buffer */ yy_delete_buffer(YY_CURRENT_BUFFER, yyscanner); \
+#define QORE_FLEX_DO_EOF { if (yyextra->stop) { qore_scanner_end_input(yyscanner); yyterminate(); } \
+    /* delete current buffer */ yy_delete_buffer(YY_CURRENT_BUFFER, yyscanner); \
     /* get last parse state */ YY_BUFFER_STATE yybs = (YY_BUFFER_STATE)endParsing(); \
     if (yybs) { /* need to close file and switch to previous buffer */ \
         fclose(yyin); if (yybs) yy_switch_to_buffer(yybs, yyscanner); \
@@ -1621,7 +1723,7 @@ static bool scanner_match_ends_with(const char* text, size_t len, const char* kw
 }
 // Ends a file in the middle of a literal: an included file reports it here, at the literal's start, since the
 // including file's parse cannot see it; at the end of the main file the parser reports the end of file itself
-#define QORE_FLEX_DO_UNTERMINATED_EOF(what) { if (parse_has_parent_buffer()) { yylloc->restoreFirst(); \
+#define QORE_FLEX_DO_UNTERMINATED_EOF(what) { if (!yyextra->stop && parse_has_parent_buffer()) { yylloc->restoreFirst(); \
     parse_error(*get_loc(yylloc), "unexpected end of file in %s", what); } QORE_FLEX_DO_EOF }
 %}
 
@@ -1880,6 +1982,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             parse_error(*get_loc(yylloc), "missing argument to %%append-module-path"); }
 ^%append-module-path{WS}+               { QORE_EXPR_DIRECTIVE(); BEGIN(append_module_state); }
 <append_module_state>[^\n\r]+           {
+                                           QORE_PROCESS_DIRECTIVE_TEXT(text);
                                            if (!parse_check_no_filesystem_path_directive(yylloc,
                                                    "append-module-path")) {
                                               if (parse_check_restriction(
@@ -1895,11 +1998,11 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                  // substitution) continues to write the process-global
                                                  // QMM.moduleDirList — preserving backward compatibility for
                                                  // pre-3.0 scripts.  Detection: peek at the first non-WS char.
-                                                 const char* p = yytext;
+                                                 const char* p = text;
                                                  while (*p == ' ' || *p == '\t') ++p;
                                                  if (*p == '"') {
                                                     qore_program_private::get(*getProgram())
-                                                        ->applyModulePathDirective(false, yytext, *get_loc(yylloc));
+                                                        ->applyModulePathDirective(false, text, *get_loc(yylloc));
                                                  } else if (!QoreModuleManager::mayChangeModulePath(
                                                         getProgram())) {
                                                     // the process-wide module path is shared by all code
@@ -1910,7 +2013,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                        "do; quote the path to add it to this Program's module "
                                                        "path");
                                                  } else {
-                                                    append_module_path(yytext);
+                                                    append_module_path(text);
                                                  }
                                               }
                                            }
@@ -1923,6 +2026,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
         parse_error(*get_loc(yylloc), "missing argument to %%prepend-module-path"); }
 ^%prepend-module-path{WS}+              { QORE_EXPR_DIRECTIVE(); BEGIN(prepend_module_state); }
 <prepend_module_state>[^\n\r]+          {
+                                           QORE_PROCESS_DIRECTIVE_TEXT(text);
                                            if (!parse_check_no_filesystem_path_directive(yylloc,
                                                    "prepend-module-path")) {
                                               if (parse_check_restriction(
@@ -1936,7 +2040,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                  // path with ${NAME} macro expansion, applied to the
                                                  // per-Program prepended list.
                                                  qore_program_private::get(*getProgram())
-                                                     ->applyModulePathDirective(true, yytext, *get_loc(yylloc));
+                                                     ->applyModulePathDirective(true, text, *get_loc(yylloc));
                                               }
                                            }
                                            BEGIN(INITIAL);
@@ -2019,7 +2123,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                         }
 ^%try-child-module                      { QORE_EXPR_DIRECTIVE(); BEGIN(try_child_module); }
 <try_child_module>[^\n\r]+              {
-                                           QoreString str(yytext);
+                                           QORE_PROCESS_DIRECTIVE_TEXT(text);
+                                           QoreString str(text);
 
                                            // the first character must be whitespace; otherwise this is not the
                                            // directive but an unknown one with a common prefix
@@ -2059,8 +2164,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                            BEGIN(try_module);
                                         }
 <try_module>[^\n\r]+                    {
+                                           QORE_PROCESS_DIRECTIVE_TEXT(text);
                                            parse_try_module_inc();
-                                           QoreString str(yytext);
+                                           QoreString str(text);
                                            bool ok = true;
 
                                            // we need to check the first character before we trim the string
@@ -2194,7 +2300,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             parse_error(*get_loc(yylloc), "missing argument to %%requires"); }
 ^%requires                              { QORE_EXPR_DIRECTIVE(); BEGIN(requires_state); }
 <requires_state>[^\n\r]+                {
-                                           char* cn = trim_inplace(yytext);
+                                           QORE_PROCESS_DIRECTIVE_TEXT(text);
+                                           char* cn = trim_inplace(text);
                                            QoreProgram* pgm = getProgram();
                                            if (!cn) {
                                               parse_error(*get_loc(yylloc), "missing argument to %%requires");
@@ -2208,7 +2315,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                     //printd(5, "scanner requesting feature: '%s'\n", cn);
                                                     ExceptionSink xsink;
                                                     // the token includes the whitespace before the module name
-                                                    int start = yylloc->first_col + (int)(cn - yytext);
+                                                    int start = yylloc->first_col + (int)(cn - text);
                                                     const QoreProgramLocation* loc = qore_program_private::get(*pgm)
                                                        ->getLocation(yylloc->first_line, yylloc->last_line, start,
                                                           start + (int)strlen(cn));
@@ -2231,7 +2338,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 ^%module-cmd                            { QORE_EXPR_DIRECTIVE(); BEGIN(module_cmd); }
 <module_cmd>{WS}*                       // ignore white space
 <module_cmd>[^\n\r]+                    {
-                                            QoreString str(yytext);
+                                           QORE_PROCESS_DIRECTIVE_TEXT(text);
+                                            QoreString str(text);
                                             str.trim();
                                             const char* p = str.c_str();
                                             const char* op = strchr(p, '(');
@@ -2525,7 +2633,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
    \/                                   // skip a lone slash that is not the start of a block comment
    \n                                   // skip newlines
    <<EOF>>                              {
-                                            parse_error(*get_loc(yylloc), "unexpected end of file in @assert expression");
+                                            if (!yyextra->stop) {
+                                                parse_error(*get_loc(yylloc), "unexpected end of file in @assert expression");
+                                            }
                                             QORE_FLEX_DO_EOF
                                         }
 }
@@ -2550,7 +2660,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
    \/                                   // skip a lone slash that is not the start of a block comment
    \n                                   // skip newlines
    <<EOF>>                              {
-                                            parse_error(*get_loc(yylloc), "unexpected end of file in @debug block");
+                                            if (!yyextra->stop) {
+                                                parse_error(*get_loc(yylloc), "unexpected end of file in @debug block");
+                                            }
                                             QORE_FLEX_DO_EOF
                                         }
 }
@@ -2594,6 +2706,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 }
 <incl>{WS}*                             // ignore white space
 <incl>[^\n\r]+                          {
+                                           // The source spelling is already UTF-8, including in a tagged Program.
                                            TempString fname(get_include_file_name(yytext));
                                            const char* fn = fname->c_str();
                                            // remove enclosing quotes if any
@@ -2609,7 +2722,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                               parse_error(*get_loc(yylloc), "cannot use the %%include parse directive when PO_NO_FILESYSTEM is in force");
                                               BEGIN(INITIAL);
                                            } else if (fname->empty()) {
-                                              parse_error(*get_loc(yylloc), "missing argument to %%include", yytext);
+                                              parse_error(*get_loc(yylloc), "missing argument to %%include");
                                               BEGIN(INITIAL);
                                            } else {
                                               // re-get the buffer pointer
@@ -2691,7 +2804,7 @@ c\"                                     {
                                               yylval->string = strdup("c");
                                               return IDENTIFIER;
                                            }
-                                           yylval->String = new QoreStringNode;
+                                           yylval->String = new QoreStringNode("", QCS_UTF8);
                                            yylloc->saveFirst();
                                            BEGIN(char_dq_state);
                                         }
@@ -2701,11 +2814,11 @@ c\'                                     {
                                               yylval->string = strdup("c");
                                               return IDENTIFIER;
                                            }
-                                           yylval->String = new QoreStringNode;
+                                           yylval->String = new QoreStringNode("", QCS_UTF8);
                                            yylloc->saveFirst();
                                            BEGIN(char_sq_state);
                                         }
-\"                                      yylval->String = new QoreStringNode; yylloc->saveFirst(); BEGIN(str_state);
+\"                                      yylval->String = new QoreStringNode("", QCS_UTF8); yylloc->saveFirst(); BEGIN(str_state);
 <str_state>{
       \"                                {
                                            yylloc->restoreFirst();
@@ -3010,11 +3123,12 @@ c\'                                     {
       \\f                               yylval->Trans->concatTarget('\f');
       \\\n                              yylval->Trans->concatTarget('\n');
       \\\/                              yylval->Trans->concatTarget('/');
+      \\[\x80-\xff][\x80-\xbf]*         {
+                                           QORE_APPEND_TRANSLITERATION(yytext + 1, concatTarget);
+                                        }
       \\.                               yylval->Trans->concatTarget(yytext[1]);
       [^\n\\/\-]+                               {
-                                           char* yptr = yytext;
-                                           while (*yptr)
-                                              yylval->Trans->concatTarget(*(yptr++));
+                                           QORE_APPEND_TRANSLITERATION(yytext, concatTarget);
                                         }
       <<EOF>>                           {
                                            yylval->Trans->deref();
@@ -3033,11 +3147,12 @@ c\'                                     {
       \\f                               yylval->Trans->concatSource('\f');
       \\\n                              yylval->Trans->concatSource('\n');
       \\\/                              yylval->Trans->concatSource('/');
+      \\[\x80-\xff][\x80-\xbf]*         {
+                                           QORE_APPEND_TRANSLITERATION(yytext + 1, concatSource);
+                                        }
       \\.                               yylval->Trans->concatSource(yytext[1]);
       [^\n\\/\-]+                       {
-                                           char* yptr = yytext;
-                                           while (*yptr)
-                                              yylval->Trans->concatSource(*(yptr++));
+                                           QORE_APPEND_TRANSLITERATION(yytext, concatSource);
                                         }
       <<EOF>>                           {
                                            yylval->Trans->deref();
@@ -3221,11 +3336,12 @@ c\'                                     {
       \\\n                              yylval->Trans->concatSource('\n');
       \\\{                              yylval->Trans->concatSource('{');
       \\\}                              yylval->Trans->concatSource('}');
+      \\[\x80-\xff][\x80-\xbf]*         {
+                                           QORE_APPEND_TRANSLITERATION(yytext + 1, concatSource);
+                                        }
       \\.                               yylval->Trans->concatSource(yytext[1]);
       [^\n\\\{\}\-]+                    {
-                                           char* yptr = yytext;
-                                           while (*yptr)
-                                              yylval->Trans->concatSource(*(yptr++));
+                                           QORE_APPEND_TRANSLITERATION(yytext, concatSource);
                                         }
       <<EOF>>                           {
                                            yylval->Trans->deref();
@@ -3270,11 +3386,12 @@ c\'                                     {
       \\\n                              yylval->Trans->concatTarget('\n');
       \\\{                              yylval->Trans->concatTarget('{');
       \\\}                              yylval->Trans->concatTarget('}');
+      \\[\x80-\xff][\x80-\xbf]*         {
+                                           QORE_APPEND_TRANSLITERATION(yytext + 1, concatTarget);
+                                        }
       \\.                               yylval->Trans->concatTarget(yytext[1]);
       [^\n\\\{\}\-]+                    {
-                                           char* yptr = yytext;
-                                           while (*yptr)
-                                              yylval->Trans->concatTarget(*(yptr++));
+                                           QORE_APPEND_TRANSLITERATION(yytext, concatTarget);
                                         }
       <<EOF>>                           {
                                            yylval->Trans->deref();
@@ -3975,9 +4092,11 @@ hash\<{WORD}\>\{                        {
       [^>]                              yylval->String->concat(yytext);
       <<EOF>>                           {
                                            yylloc->restoreFirst();
-                                           parse_error(*get_loc(yylloc), "unterminated type specification '%s'; "
-                                               "missing closing '>' before end of file",
-                                               yylval->String->c_str());
+                                           if (!yyextra->stop) {
+                                               parse_error(*get_loc(yylloc), "unterminated type specification '%s'; "
+                                                   "missing closing '>' before end of file",
+                                                   yylval->String->c_str());
+                                           }
                                            yylval->String->deref();
                                            yylval->String = nullptr;
                                            QORE_FLEX_DO_EOF
@@ -3986,8 +4105,13 @@ hash\<{WORD}\>\{                        {
 \%{WORD}                                yylval->string = strdup(yytext + 1); return CONTEXT_REF;
 \%{WORD}\:{WORD}                        yylval->string = strdup(yytext + 1); return COMPLEX_CONTEXT_REF;
 \%\%                                    return TOK_CONTEXT_ROW;
-\`[^`]*\`                               yylval->string = strdup(remove_quotes(yytext)); return BACKQUOTE;
-\'[^\']*\'                              yylval->String = new QoreStringNode(remove_quotes(yytext)); return QUOTED_WORD;
+\`[^`]*\`                               {
+                                           std::string converted;
+                                           char* text = scanner_process_text(remove_quotes(yytext), converted);
+                                           yylval->string = strdup(text ? text : "");
+                                           return BACKQUOTE;
+                                        }
+\'[^\']*\'                              yylval->String = new QoreStringNode(remove_quotes(yytext), QCS_UTF8); return QUOTED_WORD;
 \$\$                                    yylval->implicit_arg = new QoreImplicitArgumentNode(get_loc(yylloc), -1); return IMPLICIT_ARG_REF;
 \$[0-9][0-9]*                           yylval->implicit_arg = new QoreImplicitArgumentNode(get_loc(yylloc), parse_get_implicit_arg_offset(yylloc, yytext)); return IMPLICIT_ARG_REF;
 \$#                                     return IMPLICIT_ELEMENT;
@@ -4062,8 +4186,10 @@ hash\<{WORD}\>\{                        {
                                            // the parser cannot report this: any source unit with at least one
                                            // top-level command parses successfully no matter what the scanner
                                            // was in the middle of when the input ran out
-                                           parse_error(*get_loc(yylloc), "unexpected end of file in block comment "
-                                               "(unterminated \"/*\"; missing \"*/\")");
+                                           if (!yyextra->stop) {
+                                               parse_error(*get_loc(yylloc), "unexpected end of file in block comment "
+                                                   "(unterminated \"/*\"; missing \"*/\")");
+                                           }
                                            QORE_FLEX_DO_EOF;
                                         }
       [^\*]                             // ignore other input
@@ -4072,22 +4198,24 @@ hash\<{WORD}\>\{                        {
       \/                                BEGIN(INITIAL);
       \*                                // ignore
       <<EOF>>                           {
-                                           parse_error(*get_loc(yylloc), "unexpected end of file in block comment "
-                                               "(unterminated \"/*\"; missing \"*/\")");
+                                           if (!yyextra->stop) {
+                                               parse_error(*get_loc(yylloc), "unexpected end of file in block comment "
+                                                   "(unterminated \"/*\"; missing \"*/\")");
+                                           }
                                            QORE_FLEX_DO_EOF;
                                         }
       [^\/\*]                           BEGIN(block_comment1);
 }
 <regex_googleplex>{
-   s\{                                  yylval->RegexSubst = new QoreRegexSubst; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_subst1_brace);
-   s\/                                  yylval->RegexSubst = new QoreRegexSubst; yylloc->saveFirst(); BEGIN(regex_subst1);
-   x\{                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_extract_brace_state);
-   x\/                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); BEGIN(regex_extract_state);
+   s\{                                  yylval->RegexSubst = new QoreRegexSubst(); yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_subst1_brace);
+   s\/                                  yylval->RegexSubst = new QoreRegexSubst(); yylloc->saveFirst(); BEGIN(regex_subst1);
+   x\{                                  yylval->Regex = new QoreRegex(); yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_extract_brace_state);
+   x\/                                  yylval->Regex = new QoreRegex(); yylloc->saveFirst(); BEGIN(regex_extract_state);
    tr\{                                 yylval->Trans = new QoreTransliteration(get_loc(yylloc)); yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_trans1_brace);
    tr\/                                 yylval->Trans = new QoreTransliteration(get_loc(yylloc)); yylloc->saveFirst(); BEGIN(regex_trans1);
-   m\{                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state);
-   m\/                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); BEGIN(regex_state);
-   \/                                   yylval->Regex = new QoreRegex; yylloc->saveFirst(); BEGIN(regex_state);
+   m\{                                  yylval->Regex = new QoreRegex(); yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state);
+   m\/                                  yylval->Regex = new QoreRegex(); yylloc->saveFirst(); BEGIN(regex_state);
+   \/                                   yylval->Regex = new QoreRegex(); yylloc->saveFirst(); BEGIN(regex_state);
    {WSNL}+                              /* ignore whitespace */
    [^sxmt\/\{]                          parse_error(*get_loc(yylloc), "missing regular expression after =~"); BEGIN(INITIAL);
    <<EOF>>                              {
@@ -4095,9 +4223,9 @@ hash\<{WORD}\>\{                        {
                                         }
 }
 <regex_negative_universe>{
-   m\{                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state);
-   m\/                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); BEGIN(regex_state);
-   \/                                   yylval->Regex = new QoreRegex; yylloc->saveFirst(); BEGIN(regex_state);
+   m\{                                  yylval->Regex = new QoreRegex(); yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state);
+   m\/                                  yylval->Regex = new QoreRegex(); yylloc->saveFirst(); BEGIN(regex_state);
+   \/                                   yylval->Regex = new QoreRegex(); yylloc->saveFirst(); BEGIN(regex_state);
    {WSNL}+                              /* ignore whitespace */
    [^m\/\{]                             parse_error(*get_loc(yylloc), "missing regular expression after !~"); BEGIN(INITIAL);
    <<EOF>>                              {

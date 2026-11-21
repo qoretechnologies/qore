@@ -90,7 +90,8 @@ class TabularProfilerEncodingTest inherits QUnit::Test {
         const ExpectedIsoCurrencyParts = (
             "\"type\": \"number\"",
             "\"currency_position\": \"before\", \"currency\": \"£\"",
-            "\"samples\": [[\"£9\"], [\"£9.99\"]]",
+            "\"currency_position\": \"after\", \"currency\": \"£\"",
+            "\"samples\": [[\"£9\", \"9£\"], [\"£9.99\", \"9.99£\"]]",
         );
 
         #! the profiles that profile-unrepresentable.q printed by process encoding

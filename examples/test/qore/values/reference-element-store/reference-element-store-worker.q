@@ -79,6 +79,37 @@ sub write_loop_local() {
     }
     printf("a local read again in a loop: %y\n", seen);
 }
+# the stores of a function's own containers: locals and parameters, untyped and with an auto element type
+sub write_fn_list_local() {
+    g = 1;
+    list l = (\g,);
+    l[0] = 51;
+    printf("function list local: %d\n", g);
+}
+sub write_fn_list_auto_local() {
+    g = 1;
+    list<auto> l = (\g,);
+    l[0] = 52;
+    printf("function list<auto> local: %d\n", g);
+}
+sub write_fn_list_param(list l) {
+    l[0] = 53;
+}
+sub write_fn_hash_local() {
+    g = 1;
+    hash h = {"a": \g};
+    h.a = 54;
+    printf("function hash local: %d\n", g);
+}
+sub write_fn_hash_auto_local() {
+    g = 1;
+    hash<auto> h = {"a": \g};
+    h.a = 55;
+    printf("function hash<auto> local: %d\n", g);
+}
+sub write_fn_hash_param(hash h) {
+    h.a = 56;
+}
 sub write_local_target() {
     int x = 1;
     hash<string, reference<int>> h = {"a": \x};
@@ -137,3 +168,13 @@ printf("hash<HD>: %d\n", g);
     printf("an object member as the target: %d\n", c2.m);
 }
 write_loop_local();
+write_fn_list_local();
+write_fn_list_auto_local();
+g = 1;
+write_fn_list_param((\g,));
+printf("function list param: %d\n", g);
+write_fn_hash_local();
+write_fn_hash_auto_local();
+g = 1;
+write_fn_hash_param({"a": \g});
+printf("function hash param: %d\n", g);

@@ -44,6 +44,14 @@ class SocketBindNameReservationTest inherits QUnit::Test {
     public {
         #! the number of ports that the given-port test tries; only a port range almost all in use exhausts them
         const MaxPortAttempts = 1024;
+
+        #! bounds a wait for an event that must happen, such as a connection completing or being queued
+        /** The wait ends when the event happens; the bound only keeps a regression from hanging the test.  A
+            loopback connection is established, and queued by its listener, as late as the host's scheduling and
+            packet processing make it: a short bound on such a wait is an assertion about the load of the host
+            (qore#6547)
+        */
+        const HangGuard = 60s;
     }
 
     private {
@@ -137,13 +145,14 @@ class SocketBindNameReservationTest inherits QUnit::Test {
         hash<auto> info = listenLocalhost(s);
         assertOtherBindable(info, False, "the port is held in the other address family");
 
-        # a connection to the other loopback address is refused at once, as no socket listens there; it must not time
-        # out, as a client of the name that tries that address first would wait for it
+        # a connection to the other loopback address is refused, as no socket listens there; it must not time out, as
+        # a client of the name that tries that address first would wait for it: a refusal ends the connect however
+        # late it arrives, and a connection that is not refused times out at the bound
         (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
         Socket c();
         *hash<ExceptionInfo> err;
         try {
-            c.connectINET(addr, info.port, 10s, family);
+            c.connectINET(addr, info.port, HangGuard, family);
         } catch (hash<ExceptionInfo> ex) {
             err = ex;
         }
@@ -158,11 +167,11 @@ class SocketBindNameReservationTest inherits QUnit::Test {
         hash<auto> info = listenLocalhost(s);
         Socket c();
         on_exit c.close();
-        c.connect("localhost:" + info.port, 10s);
-        Socket a = s.accept(10s);
+        c.connect("localhost:" + info.port, HangGuard);
+        Socket a = s.accept(HangGuard);
         on_exit a.close();
         c.send("ping");
-        assertEq("ping", a.recv(4, 10s), "the client reached the socket bound to the name");
+        assertEq("ping", a.recv(4, HangGuard), "the client reached the socket bound to the name");
         assertEq(info.family, c.getPeerInfo(False).family, "the client connected in the socket's address family");
     }
 
@@ -287,9 +296,14 @@ class SocketBindNameReservationTest inherits QUnit::Test {
                 other.close();
                 continue;
             }
+            # the connection completes and is queued as late as the host's load makes it: the connect and the accept
+            # wait for it, bounded only against a regression (a connect bounded by 5 seconds timed out on a loaded
+            # host; qore#6547), and the accept returns the connection: a listener closed with the connection still
+            # in its queue would reset it, and no connection would hold the port
             Socket client();
-            client.connect(sprintf("%s:%d", info.family == AF_INET6 ? "[::1]" : first_addr, candidate), 5s);
-            held_peer = listener.accept(5s);
+            client.connect(sprintf("%s:%d", info.family == AF_INET6 ? "[::1]" : first_addr, candidate), HangGuard);
+            Socket peer = listener.accept(HangGuard);
+            held_peer = peer;
             listener.close();
             held_client = client;
             holder = other;

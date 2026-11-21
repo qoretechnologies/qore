@@ -29,7 +29,14 @@
     its own class, the object's class and a subclass) or a public override; the output of every execution mode and of
     qcc executables (-O0, -O3) must be the expected one.
 
-    The program is in \c class-context-private-method-skip/.
+    \c imported.q makes calls of the same kinds from the code of classes imported into a child Program
+    (Program::importClass()), for objects of the imported classes and of subclasses declared in the child, and typed
+    calls parsed in the child: a copy of a class is the class context of the code of its class at parse time and at run
+    time, so each call calls the method that it calls in the source Program (qore#6671); the calls of the methods of a
+    private:internal parent class looked up at run time (getMethodForEval()) by the code of the imported class raised
+    METHOD-DOES-NOT-EXIST for an object of the imported class.
+
+    The programs are in \c class-context-private-method-skip/.
 */
 class ClassContextPrivateMethodSkipTest inherits QUnit::Test {
     private {
@@ -37,7 +44,7 @@ class ClassContextPrivateMethodSkipTest inherits QUnit::Test {
         string dir = get_script_dir() + "/class-context-private-method-skip";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("probe",);
+        const Programs = ("probe", "imported");
     }
 
     constructor() : QUnit::Test("ClassContextPrivateMethodSkipTest", "1.0", \ARGV) {

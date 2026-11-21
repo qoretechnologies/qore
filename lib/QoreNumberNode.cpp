@@ -226,7 +226,78 @@ int qore_number_private::getRoundTripString(QoreString& str, bool scientific, Ex
     return qore_format_round_trip_digits(str, selected, static_cast<int64>(exponent), scientific, xsink);
 }
 
-void qore_number_private::getAsString(QoreString& str, bool round, int base) const {
+int qore_number_private::getDecimalString(QoreString& str, int precision, int scale, ExceptionSink* xsink) const {
+    size_t start = str.size();
+    qore_number_rounding_info_t rounding;
+    getAsString(str, true, 10, &rounding);
+    // the display string is the value, unless its rounding removed digits after a run of 0 or 9 digits
+    if (!rounding.sig_digits) {
+        return 0;
+    }
+    // the most significant digits of an exact decimal value: the decimal digits of the precision less the guard
+    // digits; log10(2) < 0.30103
+    size_t prec_digits = static_cast<size_t>(getPrec()) * 30103 / 100000;
+    if (prec_digits <= QORE_NUM_EXACT_DECIMAL_GUARD_DIGITS) {
+        return 0;
+    }
+    size_t max_digits = prec_digits - QORE_NUM_EXACT_DECIMAL_GUARD_DIGITS;
+    // a decimal value other than the display string that converts back to the number has at least the significant
+    // digits and the digits after the decimal point through the end of the run that the rounding removed (it ends
+    // with the run of 9 digits that the rounding rounded up, or with the digit after the run of 0 or 9 digits)
+    if (rounding.sig_digits > max_digits || (scale >= 0 && rounding.frac_digits > static_cast<size_t>(scale))) {
+        return 0;
+    }
+    QoreString exact;
+    if (getRoundTripString(exact, false, xsink)) {
+        return -1;
+    }
+    // the significant, integer and fractional digits of the exact value
+    size_t first = 0;
+    size_t last = 0;
+    size_t count = 0;
+    size_t int_digits = 0;
+    size_t frac_digits = 0;
+    bool frac = false;
+    for (const char* p = exact.c_str(); *p; ++p) {
+        if (*p == '.') {
+            frac = true;
+            continue;
+        }
+        if (*p < '0' || *p > '9') {
+            continue;
+        }
+        ++count;
+        if (frac) {
+            ++frac_digits;
+        }
+        if (*p != '0') {
+            if (!first) {
+                first = count;
+            }
+            last = count;
+        }
+        if (first && !frac) {
+            ++int_digits;
+        }
+    }
+    if (!first || (last - first + 1) > max_digits) {
+        return 0;
+    }
+    if (scale >= 0) {
+        if (frac_digits > static_cast<size_t>(scale)
+                || (precision > 0 && int_digits + static_cast<size_t>(scale) > static_cast<size_t>(precision))) {
+            return 0;
+        }
+    } else if (precision > 0 && int_digits + frac_digits > static_cast<size_t>(precision)) {
+        return 0;
+    }
+    str.terminate(start);
+    str.concat(exact.c_str(), exact.size());
+    return 0;
+}
+
+void qore_number_private::getAsString(QoreString& str, bool round, int base,
+        qore_number_rounding_info_t* rounding) const {
     // first check for zero
     if (zero()) {
         str.concat("0");
@@ -285,7 +356,7 @@ void qore_number_private::getAsString(QoreString& str, bool round, int base) con
         // try to do some rounding (noise reduction with binary->decimal conversions)
         if (dp && round) {
             applyRoundingHeuristic(str, dp, str.size(), QORE_MPFR_ROUND_THRESHOLD, QORE_MPFR_ROUND_THRESHOLD_2,
-                len - (sgn < 0 ? 1 : 0));
+                len - (sgn < 0 ? 1 : 0), rounding);
         }
     } else
         str.concat(buf);
@@ -294,7 +365,7 @@ void qore_number_private::getAsString(QoreString& str, bool round, int base) con
 }
 
 void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, size_t last, int round_threshold_1,
-        int round_threshold_2, size_t num_start) {
+        int round_threshold_2, size_t num_start, qore_number_rounding_info_t* rounding) {
     // the position of the last significant digit
     qore_offset_t pos = (qore_offset_t)dp;
     size_t i = dp;
@@ -315,6 +386,8 @@ void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, siz
     // 0 or 9 count
     unsigned cnt = 0;
     ssize_t has_e = str.find('e');
+    // the offset of the digit after the run that stopped the scan
+    size_t stop = 0;
     // don't check the last character
     --last;
     // check all except the last digit
@@ -329,6 +402,7 @@ void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, siz
 
             // check for 2nd threshold
             if (cnt > (unsigned)round_threshold_2) {
+                stop = i - 1;
                 break;
             }
 
@@ -337,6 +411,7 @@ void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, siz
         } else {
             // check for 2nd threshold
             if (cnt > (unsigned)round_threshold_2) {
+                stop = i - 1;
                 break;
             }
             // no 0 or 9 digit found
@@ -354,6 +429,21 @@ void qore_number_private::applyRoundingHeuristic(QoreString& str, size_t dp, siz
 
     // round the number for display
     if (cnt > (unsigned)round_threshold_1) {
+        if (rounding) {
+            // a run at the end of the scan is followed by the last digit, which is removed too
+            if (!stop) {
+                stop = last;
+            }
+            // count the significant digits before the digit after the run: the characters from the first nonzero
+            // digit, less the decimal point
+            const char* buf = str.c_str();
+            size_t first = num_start;
+            while (first < stop && (buf[first] < '1' || buf[first] > '9')) {
+                ++first;
+            }
+            rounding->sig_digits = stop - first - (first < dp ? 1 : 0);
+            rounding->frac_digits = stop - dp - 1;
+        }
         //printd(5, "ROUND BEFORE: (pos: %d dp: %d cnt: %d has_e: %d lc: '%c') '%s'\n", pos, dp, cnt, (int)has_e, lc,
         //    str.c_str());
         // if rounding right after the decimal point, then remove the decimal point
@@ -1166,6 +1256,10 @@ void QoreNumberNode::toString(QoreString& str, int fmt) const {
 
 int QoreNumberNode::toStringRoundTrip(QoreString& str, bool scientific, ExceptionSink* xsink) const {
     return priv->getRoundTripString(str, scientific, xsink);
+}
+
+int QoreNumberNode::getDecimalString(QoreString& str, int precision, int scale, ExceptionSink* xsink) const {
+    return priv->getDecimalString(str, precision, scale, xsink);
 }
 
 unsigned QoreNumberNode::getPrec() const {

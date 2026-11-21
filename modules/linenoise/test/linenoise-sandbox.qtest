@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%requires linenoise
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%exec-class LinenoiseSandboxTest
+
+#! The callbacks of the line editor are process-wide: sandboxed code cannot set, replace or remove them (issue #6743)
+/** The line editor is shared by the whole process, and its callbacks run for whatever code reads a line; a change by
+    sandboxed code raises \c SANDBOX-REGISTRATION-ERROR, and trusted code is not affected
+*/
+class LinenoiseSandboxTest inherits QUnit::Test {
+    public {
+        #! the calls that sandboxed code makes; each must raise SANDBOX-REGISTRATION-ERROR
+        const Calls = {
+            "set_callback": "Linenoise::set_callback(list<string> sub (string line) { return (); });",
+            "set_hints_callback": "Linenoise::set_hints_callback(*hash<auto> sub (string line) {});",
+            "clear_hints_callback": "Linenoise::set_hints_callback();",
+            "set_syntax_callback": "Linenoise::set_syntax_callback(*list<auto> sub (string line) {});",
+            "clear_syntax_callback": "Linenoise::set_syntax_callback();",
+            "bind_key": "Linenoise::bind_key(\"ctrl-x\", hash<auto> sub (hash<auto> info) { return {}; });",
+            "unbind_key": "Linenoise::unbind_key(\"ctrl-x\");",
+            "clear_history_provider": "Linenoise::set_history_provider();",
+            "set_history_provider": "Linenoise::set_history_provider(new HP());",
+        };
+    }
+
+    const HistoryProviderSource = "class HP inherits Linenoise::AbstractHistoryProvider {
+    *string prev(string prefix) {}
+    *string next(string prefix) {}
+    nothing reset() {}
+}
+";
+
+    constructor() : Test("LinenoiseSandboxTest", "1.0", \ARGV) {
+        addTestCase("sandboxed code cannot change the line editor's callbacks", \sandboxedTest());
+        addTestCase("trusted code is not refused", \trustedTest());
+        set_return_value(main());
+    }
+
+    sandboxedTest() {
+        # the calls that were not refused, with what they raised instead
+        hash<string, string> not_refused = {};
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            try {
+                Program tenant = LinenoiseSandboxTest::tenant(i.key, i.value);
+                tenant.callFunction("t_" + i.key);
+                not_refused{i.key} = "no exception";
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SANDBOX-REGISTRATION-ERROR") {
+                    not_refused{i.key} = sprintf("%s: %s", ex.err, ex.desc);
+                }
+            }
+        }
+        assertEq({}, not_refused);
+    }
+
+    trustedTest() {
+        Linenoise::bind_key("ctrl-x", hash<auto> sub (hash<auto> info) { return {}; });
+        Linenoise::unbind_key("ctrl-x");
+        Linenoise::set_hints_callback();
+        Linenoise::set_syntax_callback();
+        Linenoise::set_history_provider();
+        assertTrue(True);
+    }
+
+    #! Returns a sandboxed Program with one function
+    private static Program tenant(string func, string body) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(sprintf("%%requires linenoise\n%sauto sub t_%s() { %s }\n", HistoryProviderSource, func, body),
+            "tenant-" + func);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}

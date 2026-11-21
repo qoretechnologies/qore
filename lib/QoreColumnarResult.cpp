@@ -13,6 +13,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
+#include "qore/intern/QoreBufferNodePrivate.h"
 #include "qore/intern/QoreColumnarResultPrivate.h"
 
 #include <algorithm>
@@ -926,6 +927,28 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
             source->hasNullableElements(), selected, source->getDecimalPrecision(), source->getDecimalScale()),
             xsink);
+        if (source->getElementType() == QoreBufferElementType::Decimal128) {
+            // the elements are copied without a conversion to a number and back (qore#6220)
+            std::vector<size_t> indices;
+            indices.reserve(selected);
+            for (size_t i = 0; i < source->size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar buffer column")) {
+                    return QoreValue();
+                }
+                if (columnar_mask_at(mask, i, xsink)) {
+                    indices.push_back(i);
+                }
+                if (*xsink) {
+                    return QoreValue();
+                }
+            }
+            assert(indices.size() == selected);
+            if (qore_buffer_node_private::takeDecimalImpl(*rv, source, indices.data(), indices.size(),
+                    "filtering columnar buffer column", xsink)) {
+                return QoreValue();
+            }
+            return rv.release();
+        }
         size_t out = 0;
         for (size_t i = 0; i < source->size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar buffer column")) {
@@ -1005,6 +1028,14 @@ static QoreValue columnar_take_value(QoreValue value, const std::vector<size_t>&
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
             source->hasNullableElements(), indices.size(), source->getDecimalPrecision(),
             source->getDecimalScale()), xsink);
+        if (source->getElementType() == QoreBufferElementType::Decimal128) {
+            // the elements are copied without a conversion to a number and back (qore#6220)
+            if (qore_buffer_node_private::takeDecimalImpl(*rv, source, indices.data(), indices.size(),
+                    "taking columnar buffer rows", xsink)) {
+                return QoreValue();
+            }
+            return rv.release();
+        }
         for (size_t i = 0; i < indices.size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "taking columnar buffer rows")) {
                 return QoreValue();

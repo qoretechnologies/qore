@@ -54,6 +54,11 @@ public class DataProviderTypeCache inherits Qore::Serializable {
     */
     constructor(*bool shared) {
         self.shared = shared ?? False;
+        if (self.shared) {
+            # the entries, which DataProvider::getTypeRoot() gives to any caller, refuse changes by sandboxed code
+            # (qore#6744)
+            root.markShared();
+        }
     }
 
     #! Refuses a change of the process-wide cache to sandboxed code (qore#6747)
@@ -419,6 +424,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
 
     #! Locks all types
     lockAll() {
+        checkChange("*");
         root.lockAll();
     }
 

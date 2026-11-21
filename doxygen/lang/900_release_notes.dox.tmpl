@@ -122,6 +122,14 @@
     sandboxed or restricted code that may not use uncontrolled APIs; a compiled module whose source is next to it is
     loaded as source (see @ref sandbox_native_code; <a href="https://github.com/qoretechnologies/qore/issues/6776">issue
     6776</a>).
+    @par REPL History Files Use UTF-8
+    The @ref repl_linenoise "REPL writes its history files in UTF-8" with a byte order mark, which older
+    %Qore versions may display as a marker character at the start of the first entry (issue #6816).
+
+    @par Source Files and Standard Input Use UTF-8
+    %Qore reads @ref character_encoding "source text" as UTF-8 in every locale and reports malformed input at its
+    source line, so legacy Latin-1 files must be converted, for example with <tt>iconv -f ISO-8859-1 -t UTF-8</tt>
+    (issue #6816).
 
     @par An Encoding That Is Not Predefined Has One Canonical Name
     The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
@@ -561,7 +569,9 @@
     Every external binary module must be rebuilt for module API 2.3, which registers its metadata with a
     \c {name}_qore_module_desc() function, reports initialization errors as exceptions, covers all public ABI
     changes of %Qore 3.0 and lets a module command handler judge the code that issues a command
-    (\c QoreModuleCommandContext); a module built for another module API (such as 2.0, 2.1 or 2.2) is not found by
+    (\c QoreModuleCommandContext); the reflection functions \c qore_type_get_code_param_types() and
+    \c qore_type_get_type_arguments() copy the types to a vector that the caller gives (issue #6419); a module built
+    for another module API (such as 2.0, 2.1 or 2.2) is not found by
     its feature name, and the \c LOAD-MODULE-ERROR exception names its file.  See "Developing Qore Modules" in the C++ API documentation.
 
     @par AsyncSocketIo 3.0 Requires an Owner for Each Operation and Has No exec() Method
@@ -1157,9 +1167,11 @@
 
     @par Thread Capability Scopes
     A host sets capabilities for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope",
-    which module code uses through a guard (@ref Qore::get_thread_capability() "get_thread_capability()") when its
-    caller gives no \c start_thread or \c call_wrapper option
-    (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>).
+    or for one call with @ref Qore::Thread::ThreadCapabilityScope::call() "ThreadCapabilityScope::call()" also while
+    sandboxed callers are on the stack, which module code uses through a guard
+    (@ref Qore::get_thread_capability() "get_thread_capability()") when its caller gives no \c start_thread or
+    \c call_wrapper option (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/6737">issue 6737</a>; see @ref sandbox_thread_capabilities).
 
     @par Strict Parse Errors
     The @ref strict-parse-errors "%strict-parse-errors" parse option, implied by @ref modern "%modern", raises the
@@ -1545,6 +1557,17 @@
     that it performs for a restricted caller; see @ref sandbox_caller_domains
     (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>).
 
+    @par Process-Wide Registries Refuse Sandboxed Code
+    Process-wide callback, hook and handler registries and the async I/O controller settings refuse changes by sandboxed
+    code (\c SANDBOX-REGISTRATION-ERROR); modules use @ref Qore::SandboxManager::checkProcessWideRegistration(), and
+    binary modules the new C++ function \c qore_check_process_wide_registration()
+    (\c QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION; module API 2.3); see
+    @ref sandbox_process_wide_registries (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/6836">issue 6836</a>).  The factory, child data provider
+    and SSH provider registries of the standard modules and the module blacklist and options refuse changes by
+    sandboxed code as well, and the SSH registry does not give it its providers
+    (<a href="https://github.com/qoretechnologies/qore/issues/6744">issue 6744</a>).
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
@@ -1743,6 +1766,10 @@
         instead of raising an exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - the @ref DataProvider::EncodingErrorsOptionInfo "EncodingErrorsOptionInfo" option of the data providers that
         read text (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
+      - optional processing-locality and billing-model metadata on apps and actions
+        (@ref DataProvider::DataProviderProcessingInfo "DataProviderProcessingInfo",
+        @ref DataProvider::DataProviderBillingInfo "DataProviderBillingInfo"; an action's value of a field overrides
+        its app's) (<a href="https://github.com/qoretechnologies/qore/issues/6736">issue 6736</a>)
       - see @ref dataprovider_v3_12 for all changes
 
     - @ref datasourceproviderintro "DatasourceProvider" module
@@ -2071,6 +2098,9 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
       - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
         (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - the @ref select_option_lock_wait "lock_wait" select option gives a locking select \c NOWAIT, \c SKIP
+        \c LOCKED or \c WAIT \c n on PostgreSQL, Oracle, MySQL and MariaDB, with the classification of the
+        lock-not-available error (<a href="https://github.com/qoretechnologies/qore/issues/6803">issue 6803</a>)
       - see @ref sqlutilv3_11_0 for all changes
 
     - @ref tablemapperintro "TableMapper" module
@@ -2459,6 +2489,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
+      the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
+      (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
     - a call reference obtained by a class-scoped method name for an object applies the access rule of a method call
       on the object, where code of a subclass could get a reference to a parent class's private method through an
       object of another subclass (<a href="https://github.com/qoretechnologies/qore/issues/6806">issue 6806</a>)
@@ -2485,6 +2518,19 @@
       a Python module that module-python imported) skipped its destructor with a \c PROGRAM-ERROR exception (see
       @ref program_deletion_constant_objects; <a href="https://github.com/qoretechnologies/qore/issues/6791">issue
       6791</a>)
+    - a @ref number "number" parsed from a decimal string of 22 to 31 digits, including a value read from a
+      \c buffer<decimal128>, has enough precision to print as the value, where it could print with
+      binary conversion noise (see @ref number_string_precision; issue #6824)
+    - code that is not trusted (sandboxed or restricted) no longer adds a process-wide encoding for every new name that
+      it uses as an encoding name: a name that is not known resolves to a known encoding or a label that data may
+      select, registers only a plain name that iconv converts, and otherwise gives the encoding
+      \c "X-QORE-UNREGISTERED" (<a href="https://github.com/qoretechnologies/qore/issues/6826">issue 6826</a>)
+    - @ref Qore::Serializable::deserialize() "Serializable::deserialize()" reads serialized data in a process whose
+      @ref default_encoding "default character encoding" is not \c UTF-8, where it raised
+      \c DESERIALIZATION-ERROR for the header (<tt>expecting 'QS', got 'QS'</tt>; issue #6722)
+    - @ref qore_regex_result_encoding "Regular expression captures, split pieces and substitutions" preserve the subject's
+      encoding (issue #6815).
+
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)
@@ -2538,6 +2584,12 @@
     - \c self.<member> and \c $.<member> for a member that a class reaches only through a base class that one of
       its base classes inherits with @ref private_inheritance "private:internal" are refused when parsing, as the
       name alone is, instead of raising \c INVALID-MEMBER at run time (issue #6669)
+    - a private member is accessible only in the class that declares it and its subclasses, as a private method is,
+      not in another base class of a subclass (issue #6760)
+    - a member that a class imported into another Program inherits keeps the class that declares it, so that an
+      object of a subclass declared there has one value of a member inherited through
+      @ref private_inheritance "private:internal" in every class context, and such classes combine as in one Program
+      (issues #6671, #6668)
     - code that the AST interpreter runs (in any execution mode) returns the value of a return in an
       @ref on_exit "on_exit", @ref on_success "on_success" or @ref on_error "on_error" handler when a handler of the
       same block that runs after it completes normally, as compiled code does, instead of going on with the function
@@ -2814,7 +2866,8 @@
       \c qdx and the documentation builds accept it (issue #6024)
     - a value whose type or member types name a class, hashdecl or enum of a deleted @ref Qore::Program "Program"
       (such as \c list<*Foo>), and a class imported from such a Program, used the freed types of the Program and could
-      crash; the declarations are now kept with their types (see @ref program_deletion_types) (issue #5790)
+      crash; the declarations are now kept while anything can read them (see @ref program_deletion_types) (issues
+      #5790, #6419)
     - releasing the last @ref references_overview "reference" to a captured local now propagates exceptions from
       destruction of its value instead of reporting an unhandled exception or aborting the process (issue #6013)
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash

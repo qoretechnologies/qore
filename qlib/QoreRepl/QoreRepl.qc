@@ -87,7 +87,7 @@ public class QoreRepl {
         list<string> history = ();
 
         #! Shared history manager
-        QoreHistory::History qhistory();
+        QoreHistory::History qhistory({"utf8_entries": True});
 
         #! Whether to show execution timing
         bool show_timing = False;
@@ -1229,7 +1229,7 @@ if (!exists result) {
                     "desc": "Cannot load file while background threads are active. Wait for threads to complete first.",
                 }};
             }
-            string code = ReadOnlyFile::readTextFile(filename);
+            string code = binary_to_string(ReadOnlyFile::readBinaryFile(filename), "UTF-8");
             pgm.parse(code, filename);
             runInput();
             return {"value": sprintf("Loaded: %s", filename)};
@@ -1955,7 +1955,7 @@ if (!exists result) {
         }
 
         # Load persistent history
-        loadHistoryFile();
+        bool history_loaded = loadHistoryFile();
 
         # Initialize linenoise
         Linenoise::set_callback(\completion());
@@ -1980,6 +1980,13 @@ if (!exists result) {
         }
 
         # Main REPL loop
+        int input_line = 0;
+        # Piped input has no terminal editing. Read complete physical lines, including embedded NUL,
+        # so malformed input can be diagnosed before any command or expression consumes it.
+        *StreamReader redirected;
+        if (!stdin.isTty()) {
+            redirected = new StreamReader(stdin_stream, "UTF-8", "keep");
+        }
         while (True) {
             {
                 list<hash<ReplEvent>> events;
@@ -1993,7 +2000,7 @@ if (!exists result) {
                     printOutput(color.info(notice) + "\n");
                 }
             }
-            *string line = readLine(getPrompt());
+            *string line = redirected ? redirected.readLine() : readLine(getPrompt());
 
             # Handle EOF or Ctrl+C
             if (!exists line) {
@@ -2007,6 +2014,14 @@ if (!exists result) {
                 break;
             }
 
+            ++input_line;
+            # Linenoise returns terminal bytes tagged with the runtime default.
+            line = force_encoding(line, "UTF-8");
+            if (!line.isEncodingValid()) {
+                printError(sprintf("PARSE-EXCEPTION at <stdin>:%d: invalid UTF-8 in source\n", input_line));
+                reset();
+                continue;
+            }
             # Evaluate the input
             *hash<auto> result = eval(line);
 
@@ -2038,7 +2053,9 @@ if (!exists result) {
         }
 
         # Save persistent history
-        saveHistoryFile();
+        if (history_loaded) {
+            saveHistoryFile();
+        }
     }
 
     #! Reads a line of input from the user
@@ -2494,16 +2511,18 @@ if (!exists result) {
         available, a history provider is registered so linenoise delegates
         Up/Down/Ctrl+R navigation directly to QoreHistory.
     */
-    private loadHistoryFile() {
+    private bool loadHistoryFile() {
         if (!history_file) {
-            return;
+            return False;
         }
         try {
             # Load history via QoreHistory (owns persistence and file format)
             qhistory.load(history_file);
+            return True;
         } catch (hash<ExceptionInfo> ex) {
             # Warn but don't fail - history is optional
             printError(sprintf("Warning: Could not load history file: %s\n", ex.desc));
+            return False;
         }
     }
 

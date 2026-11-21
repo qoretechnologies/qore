@@ -33,6 +33,9 @@
 
 #define _QORE_BAREWORDNODE_H
 
+#include <qore/Qore.h>
+#include "qore/intern/QoreLibIntern.h"
+
 class BarewordNode : public ParseNoEvalNode {
 public:
     char *str;

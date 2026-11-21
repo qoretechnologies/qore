@@ -47,6 +47,7 @@ class RuntimeConfig;
 #include <new>
 
 #include "qore/intern/QoreSandboxLimits.h"
+#include "qore/intern/QoreTypeOwner.h"
 #include "qore/QoreSandboxManager.h"
 
 #ifndef QORE_THREAD_STACK_SIZE
@@ -368,6 +369,9 @@ DLLLOCAL const QoreProgram* runtime_get_module_call_program();
 */
 DLLLOCAL unsigned qore_get_cancel_raise_count();
 
+//! Checks for an explicit thread cancellation during parsing, respecting scope and cancellation deferral.
+DLLLOCAL bool qore_check_thread_cancel(ExceptionSink& xsink, const char* operation);
+
 //! Requests the cancellation of the current thread, scoped to a Program, as a cancellation of another thread
 /** Program::cancelThread() refuses the current thread; a debugger callback that ends the thread while it raises
     another exception (the one that the callback was made for) makes the end of the thread stick with it: the next
@@ -487,6 +491,10 @@ DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const Abstrac
         const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 
+//! Enters a compiled body in the caller's statement, with the callee's options and the usual stack check.
+DLLLOCAL void enter_compiled_body_options(ExceptionSink* xsink, QoreParseOptions po,
+        const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
 //! saves the thread's current statement, location and runtime parse options and sets only its runtime parse options
 /** As swap_runtime_statement_location() with the thread's current statement and location, which it keeps, in one
     lookup of the thread's data and without a stack check; restored with update_runtime_statement_location()
@@ -557,6 +565,17 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
     code it runs also in a thread that sandboxed code started.
 */
 DLLLOCAL bool qore_scope_creator_is_sandboxed();
+
+//! Returns why the calling code may not run ThreadCapabilityScope::call(), or nullptr if it may (qore#6737)
+/** The call is bound to the frame of the code that makes it, so only that code is judged: it must be Qore code that
+    calls the builtin directly (not a call reference to the builtin, which runs it for the reference's caller, nor
+    another builtin, such as call_static_method()), and neither its Program nor the Program running on the thread
+    may be sandboxed (by a manager or by its flag).  Sandboxed callers further up the stack do not count, unlike for
+    a scope object (qore_scope_creator_is_sandboxed()), whose set stays in effect after the call that creates it.
+
+    @param call_name the call name of the builtin's own frame
+*/
+DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
 
 #ifdef DEBUG
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
@@ -2185,6 +2204,10 @@ public:
             this->parse_options);
     }
 
+    DLLLOCAL QoreProgramLocationHelper(ExceptionSink* xsink, QoreParseOptions po) : has_po(true) {
+        enter_compiled_body_options(xsink, po, statement, loc, parse_options);
+    }
+
     DLLLOCAL QoreProgramLocationHelper(const QoreProgramLocation* loc) : has_po(false) {
         swap_runtime_location(loc, statement, this->loc);
     }
@@ -2387,6 +2410,10 @@ DLLLOCAL cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist);
 DLLLOCAL void thread_push_frame_boundary();
 DLLLOCAL void thread_pop_frame_boundary();
 
+//! Add a declaration whose value lives in a native frame to the result of get_local_vars().
+DLLLOCAL void qore_add_unavailable_local(QoreHashNode& h, const LocalVar& lv, ExceptionSink* xsink);
+//! Report a write that native code could not see from the runtime stack.
+DLLLOCAL void qore_raise_native_local_set_error(const char* name, ExceptionSink* xsink);
 DLLLOCAL QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink);
 //! Returns the number of local variables on the current thread's runtime stack of the current Program, for tests
 DLLLOCAL int64 thread_get_local_var_count(ExceptionSink* xsink);
@@ -2785,6 +2812,94 @@ struct QoreTypeRetirementThread {
     @return the lowest epoch of the threads that run Qore code, or 0 if none does
 */
 DLLLOCAL uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads);
+
+//! Publishes the current epoch of type retirement in a thread's slot (see qore_type_retire_epoch; issue #6419)
+/** The epoch is read again after it is published: a scan that read the slot before the store is ordered before the
+    second load in the total order of sequentially consistent operations, so that load reads the epoch of the
+    retirement that the scan was made for (or a later one) and synchronizes with its orphaning stores; the thread then
+    reads only tombstones where that retirement orphaned a pointer.  The slot holds the higher epoch afterwards.
+*/
+static inline void qore_publish_type_epoch(std::atomic<uint64_t>& slot) {
+    uint64_t e = qore_type_retire_epoch.load(std::memory_order_seq_cst);
+    slot.store(e, std::memory_order_seq_cst);
+    uint64_t e2 = qore_type_retire_epoch.load(std::memory_order_seq_cst);
+    if (e2 != e) {
+        slot.store(e2, std::memory_order_seq_cst);
+    }
+}
+
+//! Publishes the thread's epoch of type retirement while it reads types outside Qore code (issue #6419)
+/** For library code that reads derived types without a Program context (the orphaning of retired derived types, for
+    example); nothing is done in a thread that runs Qore code or has no thread data
+*/
+class QoreTypeEpochEntryHelper {
+public:
+    DLLLOCAL QoreTypeEpochEntryHelper();
+    DLLLOCAL ~QoreTypeEpochEntryHelper();
+
+private:
+    std::atomic<uint64_t>* slot = nullptr;
+};
+
+//! Makes the thread quiescent while it waits in a builtin's blocking wait made for the program (issue #6419)
+/** The thread's epoch is cleared before the wait and published again after it, unless the thread runs a frame that
+    holds a type read through a derived type (QoreTypeUnsafeFrameHelper); afterwards, the retired declarations that are
+    pending are freed if they can be.  Only for waits that no type check spans: see "Quiescent waits" in
+    design/derived-type-retirement.md for the list and the review of each.
+*/
+class QoreTypeQuiescentWaitHelper {
+public:
+    DLLLOCAL QoreTypeQuiescentWaitHelper();
+    DLLLOCAL ~QoreTypeQuiescentWaitHelper();
+
+    DLLLOCAL QoreTypeQuiescentWaitHelper(const QoreTypeQuiescentWaitHelper&) = delete;
+    DLLLOCAL QoreTypeQuiescentWaitHelper& operator=(const QoreTypeQuiescentWaitHelper&) = delete;
+
+private:
+    std::atomic<uint64_t>* slot = nullptr;
+};
+
+//! Marks a frame that holds a type read through a derived type across the code that it runs (issue #6419)
+/** The waits of the thread are not quiescent while it lives (see QoreTypeQuiescentWaitHelper)
+*/
+class QoreTypeUnsafeFrameHelper {
+public:
+    DLLLOCAL QoreTypeUnsafeFrameHelper();
+    DLLLOCAL ~QoreTypeUnsafeFrameHelper();
+
+    DLLLOCAL QoreTypeUnsafeFrameHelper(const QoreTypeUnsafeFrameHelper&) = delete;
+    DLLLOCAL QoreTypeUnsafeFrameHelper& operator=(const QoreTypeUnsafeFrameHelper&) = delete;
+
+private:
+    void* td;
+};
+
+//! Enters (\a delta 1) or leaves (\a delta -1) a frame that holds a type read through a derived type; see
+//! QoreTypeUnsafeFrameHelper
+DLLLOCAL void qore_type_unsafe_frame_add(int delta);
+//! Returns the number of such frames that the current thread runs (debug checks and tests)
+DLLLOCAL unsigned qore_type_unsafe_frames();
+
+#ifdef DEBUG
+//! Returns true if the current thread has thread data and publishes no epoch of type retirement (issue #6419)
+DLLLOCAL bool qore_thread_has_no_type_epoch();
+
+//! Waits until the thread \a tid has entered \a count builtin waits (QoreTypeQuiescentWaitHelper) or the timeout
+//! has passed; returns true in the first case (debug builds, for the tests of issue #6419)
+DLLLOCAL bool qore_type_dbg_wait_entered(int tid, int64 count, int64 timeout_ms);
+
+//! Returns the number of builtin waits (QoreTypeQuiescentWaitHelper) that the thread \a tid has entered, or -1 if
+//! there is no such thread (debug builds, for the tests of issue #6419)
+DLLLOCAL int64 qore_type_dbg_wait_entries(int tid);
+#endif
+
+//! qore_cancellable_poll() as a quiescent wait (see QoreTypeQuiescentWaitHelper), for the waits of builtins made for
+//! the program: file, stream and backquote I/O (issue #6419)
+static inline int qore_quiescent_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms,
+        ExceptionSink* xsink, const char* operation) {
+    QoreTypeQuiescentWaitHelper qwh;
+    return qore_cancellable_poll(fds, nfds, timeout_ms, xsink, operation);
+}
 
 //! A thread's entry into a Program, counted with its thread count, which is left with
 //! qore_program_private::decThreadCount(*pgm, tid, xsink)

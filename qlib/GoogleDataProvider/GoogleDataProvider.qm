@@ -82,6 +82,10 @@ AbstractDataProviderType event = GoogleDataProviderBase::getResponseTypeForSchem
     @section googledataprovider_relnotes Release Notes
 
     @subsection googledataprovider_v2_2 GoogleDataProvider v2.2
+    - the process-wide Discovery caches of \c GoogleDataProviderBase are private to the class, so a subclass cannot
+      change what other callers build their requests from; a subclass that has a document of its own publishes it
+      with \c GoogleDataProviderBase::registerSchemaInfo(), which keeps the first document of an API and refuses
+      sandboxed code (<a href="https://github.com/qoretechnologies/qore/issues/6838">issue 6838</a>)
     - \c GoogleApiParentDataProvider::getChildProviderImpl() is declared to return any data provider, as the
       subclasses do (see @ref override_return_types)
     - compose origin-absolute request targets for Discovery APIs with an empty base path, including Gmail;

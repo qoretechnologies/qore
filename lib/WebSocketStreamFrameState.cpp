@@ -185,6 +185,13 @@ int WebSocketStreamFrameState::processFrames() {
 }
 
 void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
+    // an RSV bit on a control frame, or RSV1 on a continuation frame, fails the connection whatever extensions are
+    // negotiated (RFC 6455 section 5.2, RFC 7692 section 6.1; qore#6781)
+    if (const char* rsv_error = q_ws_rsv_position_error(frame.opcode, frame.rsv)) {
+        setError(rsv_error, WSCC_ProtocolError);
+        return;
+    }
+
     // Control frames (never fragmented per RFC 6455 §5.5)
     if (frame.opcode >= WSOP_CLOSE) {
         switch (frame.opcode) {

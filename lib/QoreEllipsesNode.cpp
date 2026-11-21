@@ -31,7 +31,11 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
 
-QoreString QoreEllipsesNode::staticEllipses("...");
+// ASCII text without an encoding, which is the text of every default encoding (they are compatible with ASCII): a
+// static QoreString otherwise takes the default encoding of the time of its initialization, which depends on the order
+// of the initialization of the translation units, and which is not the default encoding of the process when it is set
+// with --charset or QORE_CHARSET (qore#6722)
+QoreString QoreEllipsesNode::staticEllipses("...", nullptr);
 
 QoreEllipsesNode::QoreEllipsesNode(const QoreProgramLocation* loc) : ParseNoEvalNode(loc, NT_ELLIPSES) {
 }

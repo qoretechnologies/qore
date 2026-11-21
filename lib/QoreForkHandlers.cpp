@@ -38,6 +38,7 @@
 #include <cstdio>
 #include <cstring>
 #include <new>
+#include <vector>
 #include <pthread.h>
 #include <unistd.h>
 
@@ -291,15 +292,54 @@ void qore_unregister_fork_handler(QoreForkHandlerRegistration* reg) {
     delete reg;
 }
 
+namespace {
+//! the locks that qore_fork_prepare_thread_lock() acquired in the forking thread for the current fork()
+/** Only the forking thread uses it, with the registry lock held from the prepare handlers to the parent or the child
+    handlers
+*/
+std::vector<void*>& qore_fork_prepared_thread_locks() {
+    // never destroyed: fork() can be called while static objects are destroyed
+    static std::vector<void*>* v = new std::vector<void*>;
+    return *v;
+}
+
+//! removes \a lock from the locks acquired by qore_fork_prepare_thread_lock(); returns true if it was there
+bool qore_fork_take_prepared_thread_lock(void* lock) {
+    std::vector<void*>& v = qore_fork_prepared_thread_locks();
+    for (std::vector<void*>::iterator i = v.begin(), e = v.end(); i != e; ++i) {
+        if (*i == lock) {
+            v.erase(i);
+            return true;
+        }
+    }
+    return false;
+}
+}
+
 void qore_fork_prepare_thread_lock(void* lock) {
     static_cast<QoreThreadLock*>(lock)->lock();
+    // reserved in advance would be better, but a prepare handler cannot fail: without memory, the child initializes
+    // the lock again instead of releasing it
+    try {
+        qore_fork_prepared_thread_locks().push_back(lock);
+    } catch (const std::bad_alloc&) {
+    }
 }
 
 void qore_fork_parent_thread_lock(void* lock) {
+    qore_fork_take_prepared_thread_lock(lock);
     static_cast<QoreThreadLock*>(lock)->unlock();
 }
 
 void qore_fork_child_thread_lock(void* lock) {
+    // a lock that qore_fork_prepare_thread_lock() acquired in this thread is released, so that the release is seen (by
+    // ThreadSanitizer, which otherwise considers it held for the rest of the child's life; issue #6817), as
+    // QoreForkThreadLock::child() does; one that a prepare handler did not acquire here can be held by a thread that
+    // does not exist in the child, and is initialized again
+    if (qore_fork_take_prepared_thread_lock(lock)) {
+        static_cast<QoreThreadLock*>(lock)->unlock();
+        return;
+    }
     static_cast<QoreThreadLock*>(lock)->reinitAfterFork();
 }
 
@@ -403,5 +443,6 @@ void QoreForkCounter::parent() noexcept {
 }
 
 void QoreForkCounter::child() noexcept {
-    qore_counter_ops(c).reinitAfterFork();
+    // held by this thread since prepare(): released, as QoreForkThreadLock::child() releases its lock
+    qore_counter_ops(c).releaseAfterFork();
 }

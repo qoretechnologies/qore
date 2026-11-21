@@ -45,6 +45,20 @@
 #define QORE_NUM_ALL_DIGITS -999999
 
 #define QORE_DEFAULT_PREC 128
+// the number of decimal digits of precision beyond the significant digits of a number parsed from a decimal string
+#define QORE_NUM_STRING_GUARD_DIGITS 20
+// the number of decimal digits of a number's precision beyond the significant digits of its exact decimal value that
+// make it an exact decimal value for decimal storage: the length of the shortest run of 0 or 9 digits that stops the
+// scan of the display rounding (see qore_number_private::getDecimalString())
+#define QORE_NUM_EXACT_DECIMAL_GUARD_DIGITS (QORE_MPFR_ROUND_THRESHOLD_2 + 2)
+
+//! the digits that the display rounding of a number keeps before the digits that it removes
+struct qore_number_rounding_info_t {
+    //! the significant digits through the end of the run of 0 or 9 digits removed with the digits after it
+    size_t sig_digits = 0;
+    //! the digits after the decimal point through the end of that run
+    size_t frac_digits = 0;
+};
 #define QORE_MAX_PREC 8192
 #ifndef HAVE_MPFR_RNDN
 #define MPFR_RNDN GMP_RNDN
@@ -186,7 +200,41 @@ struct qore_number_private : public qore_number_private_intern {
         mpfr_set_sj(num, i, QORE_MPFR_RND);
     }
 
-    DLLLOCAL qore_number_private(const char* str) : qore_number_private_intern(QORE_MAX(QORE_DEFAULT_PREC, strlen(str)*5)) {
+    //! returns the precision of a number parsed from a decimal string
+    /** The precision is at least QORE_DEFAULT_PREC and 5 bits per character of the string, and at least the bits of
+        the significant digits of the significand plus QORE_NUM_STRING_GUARD_DIGITS digits.  The guard digits make
+        the binary conversion error of a decimal value show as a run of more than QORE_MPFR_ROUND_THRESHOLD_2 0 or 9
+        digits after the digits of the value in the string form of the number, which the display rounding removes, so
+        that the number prints as the decimal value it was parsed from; at 5 bits per character alone, a value of 22
+        to 31 digits, such as "-567890123456789.0123456789" (a decimal128 value read as a number), could print with
+        the noise digits (issue #6824).
+    */
+    DLLLOCAL static mpfr_prec_t getDecimalStringPrec(const char* str) {
+        size_t len = 0;
+        size_t digits = 0;
+        bool significant = false;
+        bool in_exponent = false;
+        for (const char* p = str; *p; ++p, ++len) {
+            if (in_exponent) {
+                continue;
+            }
+            if (*p == 'e' || *p == 'E') {
+                in_exponent = true;
+            } else if (*p >= '0' && *p <= '9' && (significant || *p != '0')) {
+                significant = true;
+                ++digits;
+            }
+        }
+        // log2(10) < 3.322 bits per decimal digit
+        size_t digit_prec = ((digits + QORE_NUM_STRING_GUARD_DIGITS) * 3322 + 999) / 1000;
+        size_t prec = QORE_MAX(len * 5, digit_prec);
+        if (prec > QORE_MAX_PREC) {
+            prec = QORE_MAX_PREC;
+        }
+        return QORE_MAX(QORE_DEFAULT_PREC, static_cast<mpfr_prec_t>(prec));
+    }
+
+    DLLLOCAL qore_number_private(const char* str) : qore_number_private_intern(getDecimalStringPrec(str)) {
         // see if number has an exponent and increase the number's precision if necessary
         const char* p = strchrs(str, "eE");
         if (p) {
@@ -347,7 +395,20 @@ struct qore_number_private : public qore_number_private_intern {
         }
     }
 
-    DLLLOCAL void getAsString(QoreString& str, bool round = true, int base = 10) const;
+    //! appends the string form of the number
+    /** @param str the string to append to
+        @param round apply the display rounding (applyRoundingHeuristic())
+        @param base the base of the digits
+        @param rounding if not null and the display rounding removed digits, set to the digits through the end of
+        the run of 0 or 9 digits that it removed with the digits after it; otherwise unchanged
+    */
+    DLLLOCAL void getAsString(QoreString& str, bool round = true, int base = 10,
+            qore_number_rounding_info_t* rounding = nullptr) const;
+
+    //! appends the decimal string to convert the number to a fixed-scale decimal value
+    /** See QoreNumberNode::getDecimalString()
+    */
+    DLLLOCAL int getDecimalString(QoreString& str, int precision, int scale, ExceptionSink* xsink) const;
 
     DLLLOCAL int getRoundTripString(QoreString& str, bool scientific, ExceptionSink* xsink) const;
 
@@ -648,10 +709,12 @@ public:
         @param round_threshold_2 a run of more 0 or 9 digits than this stops the scan
         @param num_start the offset where the number starts in \a str; the leading zeros of a fraction whose
         integer part is zero are not noise, so the scan starts at its first significant digit
+        @param rounding if not null and the rounding removes digits, set to the digits from \a num_start through
+        the end of the run of 0 or 9 digits that the rounding removes with the digits after it; otherwise unchanged
     */
     DLLLOCAL static void applyRoundingHeuristic(QoreString& str, size_t dp, size_t last,
         int round_threshold_1 = QORE_MPFR_ROUND_THRESHOLD, int round_threshold_2 = QORE_MPFR_ROUND_THRESHOLD_2,
-        size_t num_start = 0);
+        size_t num_start = 0, qore_number_rounding_info_t* rounding = nullptr);
 
     // try to remove noise from the binary -> decimal conversion process in insignificant digits
     /** finds the decimal point and attempts to remove noise and round the number if found

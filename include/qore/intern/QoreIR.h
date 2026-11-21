@@ -64,6 +64,7 @@ class StatementBlock;
 class AbstractStatement;
 class CaseNodeRegex;
 class QoreIRFunction;
+class LVList;
 class QoreIRInstruction;
 class FunctionalOperator;
 class ContextStatement;
@@ -1527,6 +1528,8 @@ static constexpr uint8_t QORE_IR_KEEP_GIVES_REFSELF = 4;
 //! after the release of the locals of a block costs no dispatch of its own on the normal path; the check runs as before
 //! when an exception is pending (qore#6371)
 static constexpr uint8_t QORE_IR_STEPS_OVER_CHECK = 8;
+//! UninstantiateLocal releases a function body's local that may run a destructor in the caller's statement.
+static constexpr uint8_t QORE_IR_BODY_LOCAL_CLEANUP = 16;
 
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 enum class QoreIRFusedCallTargetCheck : uint8_t {
@@ -4540,8 +4543,8 @@ public:
 
     //! Transient (never serialized): when set, the outlined helper may signal
     //! an in-region `return` via qore_rt_outline_signal_return(); after the
-    //! call (and its exception check) the lowering consumes the flag with
-    //! qore_rt_outline_take_return() and branches here — a synthesized
+    //! call the lowering consumes the flag with qore_rt_outline_take_return().
+    //! If the exception check succeeds and the flag was set, it branches here — a synthesized
     //! coordinator block returning the helper's result value through the
     //! coordinator's own epilogue (see design/aot-function-outlining.md).
     QoreIRBasicBlock* return_target = nullptr;
@@ -4569,6 +4572,8 @@ public:
         return until after its locals (see QoreIRToLLVM::outline_held_return, qore#6650)
     */
     bool function_body = false;
+    //! The extracted helper takes the saved caller statement of the owning function for root-local cleanup.
+    bool takes_body_entry_location = false;
 };
 
 //! Returns the instruction as the given instruction class pointer type if it is one, otherwise nullptr
@@ -4898,6 +4903,8 @@ public:
     /** Empty for every other function; see getAOTSymbolOwner().
     */
     std::string aot_symbol_owner;
+    //! Transient native helper signature, set only when the helper releases one of its owner's root locals.
+    bool takes_body_entry_location = false;
     //! the count of the on_block_exit handlers lowered for this function; numbers their names deterministically
     uint32_t handler_name_seq = 0;
     //! Source QoreFunction this IR was lowered from.
@@ -5109,6 +5116,12 @@ public:
         (issue #5890); empty otherwise.
     */
     mutable std::unordered_map<const void*, uint8_t> aot_native_local_flags;
+    //! Locals whose value the standard AOT entry owns. The availability flags above also describe optimized-away
+    //! writes and locals that the code caches while continuing to assign their runtime variable.
+    mutable std::unordered_set<const void*> aot_private_body_locals;
+    //! The root declarations of a body compiled with private AOT storage. A null list keeps the original
+    //! runtime storage for code with access to debugger functions and for entries without scope information.
+    const LVList* aot_private_root_scope = nullptr;
 
     // Return type info for the function (populated in attemptIRLowering()).
     // Used by Return opcode lowering in QoreIRToLLVM to apply type coercion.
@@ -5144,6 +5157,15 @@ public:
     // IR or JIT execution, so that AST Invoke callbacks can find them on the
     // thread-local variable stack.
     std::vector<LocalVar*> all_body_locals;
+
+    //! Enclosing statement for a local's destruction on unwinding. A function-body local uses the caller's statement.
+    std::unordered_map<const LocalVar*, const QoreProgramLocation*> local_unwind_locations;
+
+    //! True for a mapped function-root local that finalizes at the saved caller statement.
+    bool releasesLocalAtCaller(const LocalVar* var) const {
+        auto it = local_unwind_locations.find(var);
+        return it != local_unwind_locations.end() && !it->second;
+    }
 
     // Subset of all_body_locals that are NOT IR-only: must be pre-instantiated by
     // evalTiered() so AST Invoke callbacks can find them on the thread-local stack.

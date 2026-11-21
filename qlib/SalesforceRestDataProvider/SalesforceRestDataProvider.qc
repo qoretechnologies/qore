@@ -38,9 +38,13 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
         };
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, code> dynamic_children = {};
+    }
 
+    private {
         const ChildMap = {
             "tables": Class::forName("SalesforceRestDataProvider::SalesforceRestTablesDataProvider"),
         };
@@ -89,8 +93,13 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
     #! Registers a child data provider
     /** @param name the child's name
         @param generator code to generate the child; prototype: sub (string name, AbstractConnection conn) {}
+
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot register a child
+        generator: the registry is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerChild(string name, code generator) {
+        # the generator runs for every caller that browses the provider, with its connection
+        SandboxManager::checkProcessWideRegistration("register a child data provider generator");
         dynamic_children{name} = generator;
     }
 

@@ -59,6 +59,10 @@
 - Prefer adding tests alongside similar modules and keep naming descriptive.
 - A test must end every process it starts (servers, helpers, children): on Linux, `run_tests.sh` fails a test that
   leaves processes running and kills them, as a leftover process keeps a CI job's output open and so the job running.
+- A test that `run_tests.sh` times (with `timeout`, or `gtimeout` on macOS) runs as the leader of a process group of
+  its own where perl or `setsid` is available (otherwise it is signalled alone); when it exceeds its time limit or the
+  run is interrupted, every process of the group is ended with it (after its call stacks are dumped), on every
+  platform.  A test must not rely on a process of its own outliving it, nor on being in the runner's process group.
 - Use `QORE_TEST_OPTS` and database env vars (for example `QORE_DB_CONNSTR`) when tests need external services.
 - A test that uses `examples/test/ExecModeHarness.qm` declares `# test-exec-mode: children - <why>` when all its checks
   run in child processes that set their own `--exec-mode` (the CI jobs that run every test in one execution mode leave
@@ -156,7 +160,10 @@
   `misc/stdio/stdio-startup.qtest` starts V8, which TSan cannot run; `misc/test-listener-addresses.qtest` does so
   much work in Qore code that it exceeds the 300 second limit of `run_tests.sh` at TSan's slowdown.  The test that
   exceeded it with it now runs in parts (`misc/module-loader/ConcurrentModuleProgramMerge-<n>.qtest`), which have not
-  been measured under TSan.
+  been measured under TSan.  `classes/Datasource/pending-values-lock.qtest` and
+  `classes/Program/program-thread-containers-fork.qtest` fork while other threads hold locks (pending-values-lock
+  with the debug hook of qore#6142, which forks while Datasource locks are held), and under TSan the forked child
+  blocks inside TSan's runtime, with no report; both pass in debug and release builds.
 
 ## Commit & Pull Request Guidelines
 - Commit messages use a short type prefix such as `fix:`, `feat:`, or `refactor:` in a present-tense summary.

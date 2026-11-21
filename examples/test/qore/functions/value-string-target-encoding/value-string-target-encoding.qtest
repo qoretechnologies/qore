@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks run in a child process with a default encoding of its own
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+
+# a number, boolean or date converted to a string for a target encoding takes that encoding, also when it is not the
+# default encoding (join() with a UTF-8 separator while the default encoding is ISO-8859-1; a debug build asserted in
+# the concatenation of strings of different encodings) (#6816)
+
+%exec-class Main
+
+public class Main inherits QUnit::Test {
+    constructor() : Test("ValueStringTargetEncoding", "1.0") {
+        addTestCase("numbers, booleans and dates take the target encoding", \targetTest());
+        set_return_value(main());
+    }
+
+    targetTest() {
+        string qore = TestInterpreter::qore_interpreter();
+        string script = get_script_dir() + DirSep + "child.q";
+        hash<string, string> commands;
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            commands{mode} = sprintf("'%s' --exec-mode=%s '%s'", qore, mode, script);
+        }
+        *string qcc = TestInterpreter::qcc_compiler();
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        if (qcc) {
+            foreach int opt in ((0, 3)) {
+                string exe = sprintf("%s%schild-%d", dir, DirSep, opt);
+                string log = backquote(sprintf("'%s' -O%d -o '%s' '%s' 2>&1", qcc, opt, exe, script));
+                assertTrue(is_file(exe), sprintf("qcc -O%d: %s", opt, log));
+                commands{"qcc-O" + opt} = sprintf("'%s'", exe);
+            }
+        }
+        foreach hash<auto> c in (commands.pairIterator()) {
+            string mode = c.key;
+            string output = binary_to_string(binary(backquote(sprintf("QORE_CHARSET=ISO-8859-1 %s 2>&1", c.value))),
+                "ISO-8859-1");
+            hash<string, list<string>> r;
+            foreach string line in (output.split("\n")) {
+                list<string> parts = line.split("=");
+                if (parts.size() == 3) {
+                    r{parts[0]} = (parts[1], parts[2]);
+                } else if (parts.size() == 2 && parts[0] == "default") {
+                    r.default = (parts[1],);
+                }
+            }
+            assertEq(("ISO-8859-1",), r.default, mode + ": the child's default encoding: " + output);
+            hash<string, string> expected = {
+                "join-int": "1,23",
+                "join-float": "1.5,2.25",
+                "join-bool": "1,0",
+                "join-number": "1.5,3",
+                "join-mixed": "1,2.5,1,3,x",
+                "plus-int": ",7",
+                "plus-float": ",0.5",
+                "plus-bool": ",1",
+                "plus-number": ",2.5",
+            };
+            foreach hash<auto> e in (expected.pairIterator()) {
+                assertEq(("UTF-8", make_hex_string(binary(e.value))), r{e.key}, sprintf("%s: %s: %s", mode, e.key,
+                    output));
+            }
+            assertEq("UTF-8", r."join-date"[0], mode + ": join-date encoding: " + output);
+        }
+    }
+}

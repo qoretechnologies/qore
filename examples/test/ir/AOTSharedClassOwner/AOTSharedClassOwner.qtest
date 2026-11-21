@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - loading of qcc module images that call methods of the jni module's Java classes
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%exec-class AOTSharedClassOwnerTest
+
+#! compiled modules that call a method of a class that both of them import (qore#6971)
+/** A class that several modules contribute, such as a Java class that the jni module creates for each Program that
+    imports it, has the owner tag (QoreClass::getModuleName()) of the module that contributed it first.  The loader of
+    a qcc module image resolved the class of a bound method call (a DOT_EVAL_TARGET with its declaring class) only if
+    the class had the tag of the module that the image recorded, so the second of two such modules failed to load
+    ("cannot resolve DOT_EVAL_TARGET declaration"), whichever was loaded first: MqttDataProvider failed data provider
+    discovery after another module of the jni module had imported java.util.ArrayList.
+
+    SharedJavaA and SharedJavaB both import java.util.ArrayList and call its add() method; they are compiled with
+    qcc, loaded in both orders in each execution mode, and their methods are called.
+*/
+class AOTSharedClassOwnerTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string script = get_script_dir() + "/LoadSharedJava.q";
+        #! the module path of the child processes: the images, then the path of this process
+        string module_path;
+    }
+
+    constructor() : Test("AOT shared class owner", "1.0", \ARGV) {
+        addTestCase("modules that call a method of a class that both import", \sharedClass());
+        set_return_value(main());
+    }
+
+    sharedClass() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir images("qore-aot-shared-class-");
+        module_path = images.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        # the jni module and a Java runtime are needed
+        hash<ExecModeHarness::ModeRunResult> probe = ExecModeHarness::run_command(command((qore_bin, "-e",
+            "load_module(\"jni\"); Qore::Program p(); p.parse(\"%module-cmd(jni) import java.util.ArrayList\", "
+            "\"probe\");")));
+        if (probe.rc) {
+            testSkip("the jni module cannot import a Java class: " + trim(probe.out));
+        }
+
+        string src = get_script_dir() + "/qmod";
+        foreach string name in ("SharedJavaA", "SharedJavaB") {
+            run((qcc_bin, "-O3", "-m", "-o", images.path + "/" + name + ".qmod", src + "/" + name + ".qm"));
+        }
+        foreach list<string> order in (("SharedJavaA", "SharedJavaB"), ("SharedJavaB", "SharedJavaA")) {
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq("1 2\n", run((qore_bin, "--exec-mode=" + mode, script) + order),
+                    sprintf("%s: %s", mode, order.join(", ")));
+            }
+        }
+    }
+
+    private string command(list<string> args) {
+        return "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " QORE_MODULE_DIR="
+            + quote(module_path) + " " + (map quote($1), args).join(" ");
+    }
+
+    private string run(list<string> args) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(args));
+        assertEq(0, r.rc, r.out);
+        # the JVM reports the options that it picks up from the environment
+        return (select r.out.split("\n"), $1 && !$1.equalPartial("Picked up "))
+            .join("\n") + "\n";
+    }
+
+    private static string quote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+}

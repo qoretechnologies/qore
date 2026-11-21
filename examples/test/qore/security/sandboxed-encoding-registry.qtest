@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class SandboxedEncodingRegistryTest
+
+#! Code that is not trusted cannot grow the process-wide table of encodings without bound (issue #6826)
+/** Every name that code used where an encoding name is accepted added a permanent entry to the process-wide table of
+    encodings; sandboxed or restricted code registers only the labels that untrusted data may select and the plain
+    names that iconv converts, and gets the shared encoding "X-QORE-UNREGISTERED" for any other name
+*/
+class SandboxedEncodingRegistryTest inherits QUnit::Test {
+    private {
+        SandboxManager sm();
+        Program sandboxed;
+        #! a plain name that iconv converts both ways on this platform (see sandboxedKnown())
+        *string plain_name;
+    }
+
+    const Unregistered = "X-QORE-UNREGISTERED";
+
+    #! plain names that are in no table of Qore's; which of them iconv converts depends on the platform's iconv
+    /** glibc converts all of them; musl and the libiconv of macOS only some (musl has no EBCDIC code page but 1047)
+    */
+    const PlainNames = ("IBM037", "IBM500", "CP1047", "CP858", "CP860", "CP863", "CP865");
+
+    #! the code of the sandboxed and restricted Programs
+    const Source = "%modern
+string sub enc(string name) {
+    return binary_to_string(<41>, name).encoding();
+}
+list<string> sub many(string prefix, int n) {
+    list<string> rv = ();
+    for (int i = 0; i < n; ++i) {
+        rv += binary_to_string(<41>, prefix + i).encoding();
+    }
+    return rv;
+}
+list<string> sub spellings(int n) {
+    list<string> rv = ();
+    string punct = \"!#$%&*+;<=>?@[]^`{|}~\";
+    for (int i = 0; i < n; ++i) {
+        string s = \"U\";
+        int v = i + 1;
+        while (v) {
+            s += punct[v % punct.length()];
+            v /= punct.length();
+        }
+        rv += binary_to_string(<41>, s + \"TF-8\").encoding();
+    }
+    return rv;
+}
+string sub assumed(string name) {
+    HTTPClient hc();
+    hc.setAssumedEncoding(name);
+    return hc.getAssumedEncoding();
+}
+string sub conv(string name) {
+    try {
+        convert_encoding(\"abc\", name);
+        return \"CONVERTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+    constructor() : Test("SandboxedEncodingRegistry", "1.0", \ARGV) {
+        addTestCase("trusted code registers any name", \trusted());
+        addTestCase("sandboxed code: names that resolve", \sandboxedKnown());
+        addTestCase("sandboxed code: other names are not registered", \sandboxedUnknown());
+        addTestCase("restricted code without a sandbox", \restricted());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        sandboxed = new Program(PO_NEW_STYLE);
+        sandboxed.setSandboxManager(sm);
+        sandboxed.parse(Source, "sandboxed");
+    }
+
+    #! a name of trusted code is registered as before
+    trusted() {
+        string name = "x-qore-test-trusted-" + get_random_string(8).lwr();
+        assertEq(name.upr(), binary_to_string(<41>, name).encoding());
+    }
+
+    #! known names, labels that untrusted data may select, and plain names that iconv converts resolve as before
+    sandboxedKnown() {
+        assertEq("UTF-8", sandboxed.callFunction("enc", "utf-8"));
+        assertEq("ISO-8859-1", sandboxed.callFunction("enc", "ISO-8859-1"));
+        # a label of the fixed table selects its encoding
+        assertEq("Shift_JIS", sandboxed.callFunction("enc", "x-sjis"));
+        # a plain name that iconv converts both ways (bounded by iconv's names) resolves, and any other gives the
+        # shared encoding; which plain names iconv converts depends on the platform, so the expectation is taken from
+        # trusted code's conversion, made after the sandboxed code's, which must not find the name registered already
+        foreach string name in (PlainNames) {
+            string enc = sandboxed.callFunction("enc", name);
+            string conv = sandboxed.callFunction("conv", name);
+            bool supported = iconvConverts(name);
+            assertEq(supported ? name : Unregistered, enc, name);
+            assertEq(supported ? "CONVERTED" : "ENCODING-CONVERSION-ERROR", conv, name);
+            if (supported && !plain_name) {
+                plain_name = name;
+            }
+        }
+        assertTrue(exists plain_name, sprintf("iconv converts one of %y", PlainNames));
+    }
+
+    #! returns True if iconv converts the given name both ways, as trusted code converts it
+    private static bool iconvConverts(string name) {
+        try {
+            string str = convert_encoding("abc", name);
+            return convert_encoding(str, "UTF-8") == "abc";
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    #! any other name gives the shared encoding, which cannot be converted
+    sandboxedUnknown() {
+        string tag = get_random_string(8).lwr();
+        assertEq(Unregistered, sandboxed.callFunction("enc", "x-qore-test-junk-" + tag));
+        # names that iconv accepts in unbounded spellings: another spelling of a known name gives its encoding, any other
+        # the shared encoding
+        assertEq(Unregistered, sandboxed.callFunction("enc", "UTF-8//X" + tag));
+        assertEq("ISO-8859-1", sandboxed.callFunction("enc", "ISO-8859-1/"));
+        assertEq("UTF-8", sandboxed.callFunction("enc", "  UTF-8"));
+        assertEq(Unregistered, sandboxed.callFunction("enc", strmul("A", 100)));
+        # another spelling of a known name, which iconv accepts (glibc ignores some punctuation, musl all of it), gives
+        # its encoding
+        foreach string n in (("U!TF-8", "UTF-8#$%", "!utf-8", "U-T-F-8", "U..T__F--8", "UTF8")) {
+            assertEq("UTF-8", sandboxed.callFunction("enc", n), n);
+        }
+        # another spelling of a plain name that iconv converts (see sandboxedKnown())
+        if (plain_name) {
+            assertEq(plain_name, sandboxed.callFunction("enc", plain_name.substr(0, 2) + "!" + plain_name.substr(2)));
+        }
+        list<string> spellings = sandboxed.callFunction("spellings", 1000);
+        assertEq(("UTF-8",), keys (map {$1: True}, spellings), "every spelling gives UTF-8");
+        # a NUL character in a name
+        assertEq(Unregistered, sandboxed.callFunction("enc", "UTF-8\x00" + tag));
+        # many names: none registers an encoding of its own
+        list<string> l = sandboxed.callFunction("many", "x-qore-test-many-" + tag + "-", 1000);
+        assertEq(1000, l.size());
+        assertEq((Unregistered,), keys (map {$1: True}, l), "every name gives the shared encoding");
+        # an HTTP client's assumed encoding keeps the spelling it was set with (it is resolved by the code that sets it)
+        assertEq("x-qore-test-http-" + tag, sandboxed.callFunction("assumed", "x-qore-test-http-" + tag));
+        assertEq("utf-8", sandboxed.callFunction("assumed", "utf-8"));
+        # the shared encoding cannot be converted
+        assertEq("ENCODING-CONVERSION-ERROR", sandboxed.callFunction("conv", "x-qore-test-conv-" + tag));
+        # the names were not registered for trusted code either: it registers them now under their own names
+        assertEq(("x-qore-test-many-" + tag + "-7").upr(), binary_to_string(<41>, "x-qore-test-many-" + tag
+            + "-7").encoding());
+    }
+
+    #! code with restrictions and no sandbox is not trusted either
+    restricted() {
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.parse(Source, "restricted");
+        assertEq(Unregistered, p.callFunction("enc", "x-qore-test-restricted-" + get_random_string(8).lwr()));
+        assertEq("UTF-8", p.callFunction("enc", "UTF-8"));
+    }
+}

@@ -26,6 +26,7 @@
 */
 
 #include "sshutil-module.h"
+#include <qore/QoreSandboxManager.h>
 
 //! Thread-safe registry for provider/store objects.
 /** Higher-level configuration should store stable registry names; runtime code resolves those names
@@ -40,23 +41,42 @@ qclass SshUtilRegistry [arg=SshUtilRegistryData* p; ns=Qore::SshUtil];
 
 //! Registers a client identity provider.
 /** @throw SSHUTIL-REGISTRY-ERROR the name is invalid or already registered and \c replace is False
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+        which is process-wide (see @ref sandbox_process_wide_registries)
 */
 static SshUtilRegistry::registerClientIdentityProvider(string name, AbstractSshClientIdentityProvider provider,
         bool replace = False) {
+    // the registry is process-wide: code that a sandbox governs cannot change it (qore#6744)
+    if (qore_check_process_wide_registration("change the SSH client identity provider registry", xsink)) {
+        return QoreValue();
+    }
     SshUtilRegistry::registerClientIdentityProvider(name->c_str(), provider, replace, xsink);
 }
 
 //! Deregisters a client identity provider.
 /** @return the previously registered provider or NOTHING
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+        which is process-wide (see @ref sandbox_process_wide_registries)
 */
 static *AbstractSshClientIdentityProvider SshUtilRegistry::deregisterClientIdentityProvider(string name) {
+    // the registry is process-wide: code that a sandbox governs cannot change it (qore#6744)
+    if (qore_check_process_wide_registration("change the SSH client identity provider registry", xsink)) {
+        return QoreValue();
+    }
     return SshUtilRegistry::deregisterClientIdentityProvider(name->c_str());
 }
 
 //! Returns a client identity provider by registry name.
 /** @return the registered provider or NOTHING
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot get providers from the
+        registry, which is process-wide and can hold credentials (see @ref sandbox_process_wide_registries)
 */
 static *AbstractSshClientIdentityProvider SshUtilRegistry::getClientIdentityProvider(string name) {
+    // the registered objects can hold the credentials of other tenants: code that a sandbox governs cannot get
+    // them from the process-wide registry (qore#6744)
+    if (qore_check_process_wide_registration("get a provider from the SSH client identity provider registry", xsink)) {
+        return QoreValue();
+    }
     return SshUtilRegistry::getClientIdentityProvider(name->c_str());
 }
 
@@ -69,23 +89,42 @@ static list<string> SshUtilRegistry::listClientIdentityProviders() {
 
 //! Registers a server host-key provider.
 /** @throw SSHUTIL-REGISTRY-ERROR the name is invalid or already registered and \c replace is False
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+        which is process-wide (see @ref sandbox_process_wide_registries)
 */
 static SshUtilRegistry::registerServerHostKeyProvider(string name, AbstractSshServerHostKeyProvider provider,
         bool replace = False) {
+    // the registry is process-wide: code that a sandbox governs cannot change it (qore#6744)
+    if (qore_check_process_wide_registration("change the SSH server host key provider registry", xsink)) {
+        return QoreValue();
+    }
     SshUtilRegistry::registerServerHostKeyProvider(name->c_str(), provider, replace, xsink);
 }
 
 //! Deregisters a server host-key provider.
 /** @return the previously registered provider or NOTHING
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+        which is process-wide (see @ref sandbox_process_wide_registries)
 */
 static *AbstractSshServerHostKeyProvider SshUtilRegistry::deregisterServerHostKeyProvider(string name) {
+    // the registry is process-wide: code that a sandbox governs cannot change it (qore#6744)
+    if (qore_check_process_wide_registration("change the SSH server host key provider registry", xsink)) {
+        return QoreValue();
+    }
     return SshUtilRegistry::deregisterServerHostKeyProvider(name->c_str());
 }
 
 //! Returns a server host-key provider by registry name.
 /** @return the registered provider or NOTHING
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot get providers from the
+        registry, which is process-wide and can hold credentials (see @ref sandbox_process_wide_registries)
 */
 static *AbstractSshServerHostKeyProvider SshUtilRegistry::getServerHostKeyProvider(string name) {
+    // the registered objects can hold the credentials of other tenants: code that a sandbox governs cannot get
+    // them from the process-wide registry (qore#6744)
+    if (qore_check_process_wide_registration("get a provider from the SSH server host key provider registry", xsink)) {
+        return QoreValue();
+    }
     return SshUtilRegistry::getServerHostKeyProvider(name->c_str());
 }
 
@@ -98,22 +137,41 @@ static list<string> SshUtilRegistry::listServerHostKeyProviders() {
 
 //! Registers a host-key store.
 /** @throw SSHUTIL-REGISTRY-ERROR the name is invalid or already registered and \c replace is False
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+        which is process-wide (see @ref sandbox_process_wide_registries)
 */
 static SshUtilRegistry::registerHostKeyStore(string name, AbstractSshHostKeyStore store, bool replace = False) {
+    // the registry is process-wide: code that a sandbox governs cannot change it (qore#6744)
+    if (qore_check_process_wide_registration("change the SSH host key store registry", xsink)) {
+        return QoreValue();
+    }
     SshUtilRegistry::registerHostKeyStore(name->c_str(), store, replace, xsink);
 }
 
 //! Deregisters a host-key store.
 /** @return the previously registered store or NOTHING
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the registry,
+        which is process-wide (see @ref sandbox_process_wide_registries)
 */
 static *AbstractSshHostKeyStore SshUtilRegistry::deregisterHostKeyStore(string name) {
+    // the registry is process-wide: code that a sandbox governs cannot change it (qore#6744)
+    if (qore_check_process_wide_registration("change the SSH host key store registry", xsink)) {
+        return QoreValue();
+    }
     return SshUtilRegistry::deregisterHostKeyStore(name->c_str());
 }
 
 //! Returns a host-key store by registry name.
 /** @return the registered store or NOTHING
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot get providers from the
+        registry, which is process-wide and can hold credentials (see @ref sandbox_process_wide_registries)
 */
 static *AbstractSshHostKeyStore SshUtilRegistry::getHostKeyStore(string name) {
+    // the registered objects can hold the credentials of other tenants: code that a sandbox governs cannot get
+    // them from the process-wide registry (qore#6744)
+    if (qore_check_process_wide_registration("get a provider from the SSH host key store registry", xsink)) {
+        return QoreValue();
+    }
     return SshUtilRegistry::getHostKeyStore(name->c_str());
 }
 

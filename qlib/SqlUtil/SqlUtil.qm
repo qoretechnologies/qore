@@ -156,6 +156,18 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - added the @ref select_option_lock_wait "lock_wait" select option (\c NOWAIT, \c SKIP \c LOCKED and
+      \c WAIT \c n of a locking select) with
+      @ref SqlUtil::AbstractSqlUtilBase::supportsLockWait() "supportsLockWait()",
+      @ref SqlUtil::AbstractSqlUtilBase::isLockNotAvailable() "isLockNotAvailable()" and
+      @ref SqlUtil::AbstractSqlUtilBase::lockNotAvailableReleasesLocks() "lockNotAvailableReleasesLocks()", and the
+      functions @ref SqlUtil::sqlutil_get_sql_state() "sqlutil_get_sql_state()" and
+      @ref SqlUtil::sqlutil_get_vendor_error_code() "sqlutil_get_vendor_error_code()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/6803">issue 6803</a>)
+    - fixed a schema alignment that turns a unique constraint into the primary key on the same columns on PostgreSQL
+      and Oracle, which based the primary key on the constraint's index (\c "using index"), which the drop of the
+      constraint drops, so that the SQL failed; the primary key gets an index of its own
+      (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>)
     - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" with a \c sequence_map,
       \c function_map or \c procedure_map entry whose target exists, which renamed the source onto it (and left a
       target sequence unaligned); as documented, the source is renamed only when the target does not exist
@@ -1006,6 +1018,8 @@ hash soh = (
     - @ref select_option_recursive "recursive": (@ref hash_type "hash") a recursive query (a recursive common table
       expression); the other options select from its rows
     - @ref select_option_forupdate_no_key "forupdate_no_key": (@c bool) explicitly permits concurrent key-share locks
+    - @ref select_option_lock_wait "lock_wait": (\c string or \c int) whether a locking select waits for the rows
+      that other transactions have locked: \c "nowait", \c "skip_locked" or a number of seconds to wait
     - @ref select_option_forupdate "forupdate": (\c bool_type "bool") adds a \c "for update" clause to a select query
 
     @subsubsection select_option_alias Select Option "alias"
@@ -1532,6 +1546,62 @@ hash<auto> sh = {
         rethrow;
     }
     @endcode
+
+    @subsubsection select_option_lock_wait Select Option "lock_wait"
+    With a locking select (@ref select_option_forupdate "forupdate", also with
+    @ref select_option_forupdate_no_key "forupdate_no_key"), @c lock_wait tells what the select does with a row that
+    another transaction has locked:
+    - \c "nowait": the select fails at once with the database's error for a lock that is not available
+      (<tt>FOR UPDATE NOWAIT</tt>)
+    - \c "skip_locked": the locked rows are skipped; only the other rows are returned and locked
+      (<tt>FOR UPDATE SKIP LOCKED</tt>)
+    - an integer greater than or equal to 0: the select waits at most that many seconds for a lock, and fails with the
+      error for a lock that is not available when the time runs out (<tt>FOR UPDATE WAIT n</tt>)
+
+    @ref SqlUtil::AbstractSqlUtilBase::supportsLockWait() "supportsLockWait()" (of a table or of a database object)
+    tells whether the database supports a mode (\c "nowait", \c "skip_locked" or \c "wait"); it depends on the
+    version of the connected server.  A mode that the database does not support, the option without a locking select
+    or with a @ref select_option_superquery "superquery", and any other value raise a \c SELECT-ERROR exception; a
+    select is never made without the option.
+
+    |!Database|!\c "nowait"|!\c "skip_locked"|!\c "wait"|!lockNotAvailableReleasesLocks()
+    |PostgreSQL|9.5 and later|9.5 and later|no|True
+    |Oracle|yes|11g and later|yes|True
+    |MySQL|8.0 and later|8.0 and later|no|False
+    |MariaDB|10.3 and later|10.6 and later|10.3 and later|False
+    |other databases|no|no|no|False
+
+    A select with \c "nowait" or \c "wait" that does not get a lock fails with the database's error for a lock that
+    is not available, which
+    @ref SqlUtil::AbstractSqlUtilBase::isLockNotAvailable() "isLockNotAvailable()" recognizes (PostgreSQL's SQLSTATE
+    \c 55P03, Oracle's \c ORA-00054 or \c ORA-30006, MySQL's error \c 3572 and the lock wait timeout error \c 1205),
+    also with the \c jdbc driver.  Such a select can have locked rows before it reached the locked one; PostgreSQL
+    and Oracle release them when the statement fails, while MySQL and MariaDB (InnoDB) keep them until the
+    transaction ends:
+    @ref SqlUtil::AbstractSqlUtilBase::lockNotAvailableReleasesLocks() "lockNotAvailableReleasesLocks()" tells which;
+    if it returns @ref False, the caller must end the transaction before it waits for the locked row.
+
+    A select that never waits cannot take part in a deadlock: rows can be locked as a set with \c "nowait", with a
+    fallback to locking them one at a time in order when one of them is locked:
+    @code{.py}
+    *list<auto> ids;
+    try {
+        ids = table.select({"columns": "id", "where": {"id": op_in(page)}, "orderby": "id", "forupdate": True,
+            "lock_wait": "nowait"}).id;
+    } catch (hash<ExceptionInfo> ex) {
+        if (!table.isLockNotAvailable(ex)) {
+            rethrow;
+        }
+        if (!table.lockNotAvailableReleasesLocks()) {
+            # the failed statement can hold locks until the transaction ends
+            table.rollback();
+        }
+        # lock the rows one at a time, in order
+        ids = map table.selectRow({"columns": "id", "where": {"id": $1}, "forupdate": True}).id, page;
+    }
+    @endcode
+
+    @since %SqlUtil 3.11.0
 
     @subsection sql_paging Select With Paging
 
@@ -5749,6 +5819,56 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     /** @see op_in_select()
     */
     public const string OP_IN_SELECT = "in_select";
+
+    #! Returns the SQLSTATE or the alternative error code of a database driver's exception
+    /** The native drivers give it in the \c "alterr" key of the exception's argument (the pgsql and mysql drivers give
+        the SQLSTATE there, the oracle driver its error code, ex: \c "OCI-00054"); the jdbc driver gives the Java
+        exception (a \c java.sql.SQLException) as the argument, whose \c getSQLState() gives the SQLSTATE
+
+        @param ex the exception
+
+        @return the SQLSTATE or the alternative error code, or @ref nothing if the exception has none
+
+        @since %SqlUtil 3.11.0
+    */
+    public *string sub sqlutil_get_sql_state(hash<ExceptionInfo> ex) {
+        switch (ex.arg.typeCode()) {
+            case NT_HASH:
+                return ex.arg.alterr.typeCode() == NT_STRING ? ex.arg.alterr : NOTHING;
+            case NT_OBJECT:
+                try {
+                    *string rv = ex.arg.getSQLState();
+                    return rv;
+                } catch () {
+                    # not a java.sql.SQLException
+                }
+                break;
+        }
+    }
+
+    #! Returns the vendor error code of a database driver's exception
+    /** The mysql driver gives it in the \c "alterr_code" key of the exception's argument; the jdbc driver gives the
+        Java exception (a \c java.sql.SQLException) as the argument, whose \c getErrorCode() gives it
+
+        @param ex the exception
+
+        @return the vendor error code, or @ref nothing if the exception has none
+
+        @since %SqlUtil 3.11.0
+    */
+    public *int sub sqlutil_get_vendor_error_code(hash<ExceptionInfo> ex) {
+        switch (ex.arg.typeCode()) {
+            case NT_HASH:
+                return ex.arg.alterr_code.typeCode() == NT_INT ? ex.arg.alterr_code : NOTHING;
+            case NT_OBJECT:
+                try {
+                    return ex.arg.getErrorCode().toInt();
+                } catch () {
+                    # not a java.sql.SQLException
+                }
+                break;
+        }
+    }
 
     #! Normalizes a digest algorithm name for the @ref DataProvider::DP_FUNC_DIGEST expression
     /** Lower-cases the value and strips \c "-", \c "_", and space characters so that, for example,

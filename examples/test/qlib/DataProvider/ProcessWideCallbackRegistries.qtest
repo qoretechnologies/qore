@@ -1,0 +1,246 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires AsyncSocketIo
+%requires CdsRestDataProvider
+%requires DiscordDataProvider
+%requires FileLocationHandler
+%requires HttpServer
+%requires KlaviyoDataProvider
+%requires BitbucketDataProvider
+%requires RestSchemaActions
+%requires SalesforceRestDataProvider
+%requires XeroDataProvider
+%requires YamlTagHandler
+
+%exec-class ProcessWideCallbackRegistriesTest
+
+#! a catalog change listener of trusted code
+class TestListener inherits DataProviderCatalogChangeListener {
+    catalogChanged(int revision) {}
+}
+
+#! The process-wide callback, hook, handler and listener registries of the standard modules refuse sandboxed code
+/** A standard module from the module path is loaded once per process, so a registry that it keeps is shared by the
+    code of every Program, and what it holds runs later for every caller: a change by sandboxed code is refused
+    (issue #6743), and what trusted code registered stays in place for every tenant
+*/
+class ProcessWideCallbackRegistriesTest inherits QUnit::Test {
+    public {
+        #! the calls that sandboxed code makes: name -> code, and the exception that each must raise
+        const Calls = {
+            "salesforce_register_child": "SalesforceRestDataProvider::SalesforceRestDataProvider::registerChild("
+                "\"tenant\", sub (string name, AbstractConnection conn) {});",
+            "cds_register_child": "CdsRestDataProvider::CdsRestDataProvider::registerChild(\"tenant\", "
+                "sub (string name, AbstractConnection conn) {});",
+            "bc_register_child": "CdsRestDataProvider::BcRestDataProvider::registerChild(\"tenant\", "
+                "sub (string name, AbstractConnection conn) {});",
+            "discord_register_child": "DiscordDataProvider::DiscordDataProvider::registerChild(\"tenant\", "
+                "sub (string name, AbstractConnection conn) {});",
+            "async_socket_io_logger": "getGlobalAsyncIoController().setLogger();",
+            "http_listener_stopping_hook": "HttpListener::dbgSetStoppingHook();",
+            "add_catalog_listener": "DataProviderActionCatalog::addCatalogChangeListener(new TCL());",
+        };
+
+        #! the calls whose module raises an exception of its own
+        /** The registries, lookups, resolvers, serializers and codecs of the standard modules (qore#6747) are tested
+            with their modules; only the catalog listeners are here, as both kinds of check apply to them
+        */
+        const CallErrors = {
+            "add_catalog_listener": "DATA-PROVIDER-LISTENER-ERROR",
+            "remove_catalog_listener": "DATA-PROVIDER-REGISTRATION-DENIED",
+        };
+
+        #! the code of the tenants besides the calls
+        const TenantSource = "%requires DataProvider
+%requires AsyncSocketIo
+%requires BitbucketDataProvider
+%requires CdsRestDataProvider
+%requires DiscordDataProvider
+%requires FileLocationHandler
+%requires HttpServer
+%requires KlaviyoDataProvider
+%requires RestSchemaActions
+%requires SalesforceRestDataProvider
+%requires XeroDataProvider
+%requires YamlTagHandler
+class TH inherits AbstractYamlTagHandler {
+    string getTagPrefix() { return \"!qore-test-6743\"; }
+    auto parseScalar(string tag, string value) { return value; }
+    bool canEmit(auto value) { return False; }
+    hash<YamlTagEmitInfo> getEmitInfo(auto value) { return <YamlTagEmitInfo>{}; }
+}
+class TCL inherits DataProviderCatalogChangeListener {
+    catalogChanged(int revision) {}
+}
+class TL inherits LoggerInterfaceBase {
+    logArgs(int level, string message, *softlist<auto> format_args) {}
+    bool isEnabledFor(int level) { return True; }
+}
+";
+    }
+
+    constructor() : Test("process-wide callback registries of the standard modules", "1.0", \ARGV) {
+        addTestCase("sandboxed code cannot change a process-wide callback registry", \sandboxedTest());
+        addTestCase("what trusted code registered stays in place for every tenant", \trustedStateTest());
+        addTestCase("a server that sandboxed code creates leaves the process-wide logger alone", \httpServerTest());
+        addTestCase("a module's own codecs are registered when it is initialized", \moduleCodecsTest());
+        addTestCase("a subclass cannot write a process-wide registry's storage", \subclassWriteTest());
+        addTestCase("a policy-barrier capability cannot change the catalog listeners", \listenerBarrierTest());
+        set_return_value(main());
+    }
+
+    sandboxedTest() {
+        # a listener of trusted code, which a tenant tries to remove
+        TestListener listener();
+        int listener_id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(listener_id);
+        hash<string, string> calls = Calls + {
+            "remove_catalog_listener": sprintf("DataProviderActionCatalog::removeCatalogChangeListener(%d);",
+                listener_id),
+        };
+
+        # the calls that were not refused, with what they raised instead
+        hash<string, string> not_refused = {};
+        foreach hash<auto> i in (calls.pairIterator()) {
+            string err = CallErrors{i.key} ?? "SANDBOX-REGISTRATION-ERROR";
+            try {
+                Program tenant = ProcessWideCallbackRegistriesTest::tenant("tenant-" + i.key, i.key, i.value);
+                tenant.callFunction("t_" + i.key);
+                not_refused{i.key} = "no exception";
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != err) {
+                    not_refused{i.key} = sprintf("%s: %s", ex.err, ex.desc);
+                }
+            }
+        }
+        assertEq({}, not_refused);
+    }
+
+    trustedStateTest() {
+        # trusted code registers; one tenant tries to replace or remove it; another tenant still gets the trusted one
+        bool filter_called;
+        FileLocationHandler::setConnectionFilter(bool sub (string n, bool w) { filter_called = True; return False; });
+        on_exit FileLocationHandler::setConnectionFilter();
+        RestSchemaActionCodecs::registerCodec(<RestSchemaWireCodecInfo>{
+            "name": "qore-test-6743",
+            "type": AbstractDataProviderType::get(StringType),
+            "to_wire": auto sub (auto v) { return "trusted"; },
+            "from_wire": auto sub (auto v) { return v; },
+        });
+        on_exit RestSchemaActionCodecs::deregisterCodec("qore-test-6743");
+
+        Program tenant_a = ProcessWideCallbackRegistriesTest::tenant("tenant-a", "replace_filter",
+            "FileLocationHandler::setConnectionFilter(bool sub (string n, bool w) { return True; });");
+        Program tenant_a_codec = ProcessWideCallbackRegistriesTest::tenant("tenant-a", "replace_codec",
+            "RestSchemaActionCodecs::registerCodec(<RestSchemaWireCodecInfo>{\"name\": \"qore-test-6743\", "
+            "\"type\": AbstractDataProviderType::get(StringType), \"to_wire\": auto sub (auto v) { "
+            "return \"tenant\"; }, \"from_wire\": auto sub (auto v) { return v; }});");
+        Program tenant_b = ProcessWideCallbackRegistriesTest::tenant("tenant-b", "use",
+            "return {\"allowed\": FileLocationHandler::connectionAllowed(\"x\", False), "
+            "\"wire\": RestSchemaActionCodecs::getCodec(\"qore-test-6743\").to_wire(1)};");
+        assertThrows("FILE-LOCATION-REGISTRATION-DENIED", \tenant_a.callFunction(), "t_replace_filter");
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", \tenant_a_codec.callFunction(), "t_replace_codec");
+        assertEq({"allowed": False, "wire": "trusted"}, tenant_b.callFunction("t_use"));
+        assertTrue(filter_called);
+    }
+
+    httpServerTest() {
+        # the logger of the process-wide async I/O controller, set by trusted code
+        *LoggerInterfaceBase old_logger = Qore::AsyncIoController::getLogger();
+        on_exit Qore::AsyncIoController::setLogger(old_logger);
+        Logger trusted_logger("trusted", LoggerLevel::getLevelInfo());
+        Qore::AsyncIoController::setLogger(trusted_logger);
+
+        Program tenant = ProcessWideCallbackRegistriesTest::tenant("tenant", "server",
+            "Logger logger(\"tenant\", LoggerLevel::getLevelInfo()); "
+            "HttpServer server(<HttpServerOptionInfo>{\"logger\": logger}); "
+            "bool same = AsyncIoController::getLogger() == logger; server.stop(); return same;");
+        # a sandboxed caller's server logs through its own logger only
+        assertFalse(tenant.callFunction("t_server"));
+        assertEq(trusted_logger, Qore::AsyncIoController::getLogger());
+
+        # as does a controller wrapper that sandboxed code creates with a logger
+        Program tenant_c = ProcessWideCallbackRegistriesTest::tenant("tenant-c", "controller",
+            "Logger logger(\"tenant\", LoggerLevel::getLevelInfo()); "
+            "AsyncSocketIoController ctrl(logger); return AsyncIoController::getLogger() == logger;");
+        assertFalse(tenant_c.callFunction("t_controller"));
+        assertEq(trusted_logger, Qore::AsyncIoController::getLogger());
+    }
+
+    moduleCodecsTest() {
+        # the modules registered their codecs when they were initialized: a tenant that builds their actions first
+        # registers nothing
+        Program tenant = ProcessWideCallbackRegistriesTest::tenant("tenant", "codecs",
+            "KlaviyoCodecs::register(); BitbucketCodecs::register(); XeroCodecs::register(); return True;");
+        assertTrue(tenant.callFunction("t_codecs"));
+        assertTrue(exists RestSchemaActionCodecs::getCodec(BitbucketCodecs::BranchRef));
+        assertTrue(exists RestSchemaActionCodecs::getCodec(XeroCodecs::QueryDate));
+
+        # trusted code that removes a module's codec can register it again
+        RestSchemaActionCodecs::deregisterCodec(BitbucketCodecs::BranchRef);
+        RestSchemaActionCodecs::deregisterCodec(XeroCodecs::QueryDate);
+        RestSchemaActionCodecs::deregisterCodec(KlaviyoCodecs::Sort);
+        BitbucketCodecs::register();
+        XeroCodecs::register();
+        KlaviyoCodecs::register();
+        assertTrue(exists RestSchemaActionCodecs::getCodec(BitbucketCodecs::BranchRef));
+        assertTrue(exists RestSchemaActionCodecs::getCodec(XeroCodecs::QueryDate));
+        assertTrue(exists RestSchemaActionCodecs::getCodec(KlaviyoCodecs::Sort));
+    }
+
+    subclassWriteTest() {
+        # the storage of the global YAML tag handler registry, an instance member, written by a sandboxed subclass
+        string src = TenantSource + "class R inherits YamlTagHandlerRegistry {
+    static write(YamlTagHandlerRegistry r) {
+        r.handlers{\"!qore-test-6743\"} = new TH();
+    }
+}
+auto sub t_write() { R::write(globalTagRegistry()); }
+";
+        try {
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+            p.parse(src, "tenant-subclass");
+            p.setSandboxManager(new SandboxManager());
+            p.callFunction("t_write");
+        } catch (hash<ExceptionInfo> ex) {
+            # a refusal when it is parsed or when it runs is fine too
+        }
+        # the storage is not reachable from a subclass: the global registry is unchanged
+        assertFalse(globalTagRegistry().isRegistered("!qore-test-6743"));
+    }
+
+    listenerBarrierTest() {
+        # trusted infrastructure that adds and removes a listener for its callers, under a policy barrier
+        TestListener listener();
+        int listener_id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(listener_id);
+        code add_cap = SandboxManager::createSystemPolicyCall(int sub () {
+            return DataProviderActionCatalog::addCatalogChangeListener(new TestListener());
+        });
+        code remove_cap = SandboxManager::createSystemPolicyCall(bool sub () {
+            return DataProviderActionCatalog::removeCatalogChangeListener(listener_id);
+        });
+        Program tenant = ProcessWideCallbackRegistriesTest::tenant("tenant", "run", "return c();", "code c");
+        assertThrows("DATA-PROVIDER-LISTENER-ERROR", \tenant.callFunction(), ("t_run", add_cap));
+        assertThrows("DATA-PROVIDER-REGISTRATION-DENIED", \tenant.callFunction(), ("t_run", remove_cap));
+        # the trusted listener is still registered
+        assertTrue(DataProviderActionCatalog::removeCatalogChangeListener(listener_id));
+    }
+
+    #! Returns a sandboxed Program with one function
+    private static Program tenant(string name, string func, string body, *string args) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(TenantSource + sprintf("auto sub t_%s(%s) { %s }\n", func, args ?? "", body), name);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}

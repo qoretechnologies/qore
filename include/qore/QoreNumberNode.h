@@ -292,6 +292,33 @@ public:
     */
     DLLEXPORT int toStringRoundTrip(QoreString& str, bool scientific, ExceptionSink* xsink) const;
 
+    //! appends the decimal string to convert this number to a fixed-scale decimal value
+    /** Appends the exact decimal value of the number (the string returned by toStringRoundTrip()) when the display
+        rounding of the number (getStringRepresentation()) removes digits of it and it is an exact decimal value of
+        the number that fits the precision and scale given; otherwise appends the string of
+        getStringRepresentation().
+
+        An exact decimal value of a number is a round-trip string whose significant digits are at most the decimal
+        digits of the number's precision (getPrec() * log10(2), rounded down) less 17, the length of the shortest run
+        of \c 0 or \c 9 digits at which the display rounding stops its scan.  A number parsed from a decimal string has 20
+        such guard digits beyond the digits of the string, so its exact decimal value is that string, also when it
+        has a run of more than 16 \c 0 or \c 9 digits in its fraction, which the display rounding removes (ex:
+        \c 1.00000000000000000001n displays as \c 1).  A number computed in binary (ex: <tt>0.1n + 0.2n</tt> or
+        <tt>1n / 3n</tt>) has no shorter round-trip string than about the decimal digits of its precision, so its
+        display string is used, which removes the noise of the binary computation.
+
+        @param str the string to append to
+        @param precision the maximum number of digits of the decimal value (its integer digits plus \a scale); a
+        value less than 1 means no limit
+        @param scale the number of digits after the decimal point of the decimal value, or -1 for the number of
+        digits after the decimal point of the exact value itself
+        @param xsink receives cancellation or conversion errors
+        @return 0 on success, -1 on error
+
+        @since Qore 3.0
+    */
+    DLLEXPORT int getDecimalString(QoreString& str, int precision, int scale, ExceptionSink* xsink) const;
+
     //! returns the precision of the number
     DLLEXPORT unsigned getPrec() const;
 
