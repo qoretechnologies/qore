@@ -1406,9 +1406,10 @@ public:
     //! Returns true if a sandbox governed the thread that captured the object
     DLLEXPORT bool isSandboxed() const;
 
-    //! Returns true if both objects captured the same sandbox (or both captured none)
+    //! Returns true if both objects captured the same sandbox (or both captured none) for code with the same
+    //! functional-domain restrictions
     /** Work captured under the same sandbox can be combined, for example into one batch, and run under either
-        capture.
+        capture: the work of either then runs with the same restrictions (see QoreSandboxCaptureHelper).
     */
     DLLEXPORT bool sameSandbox(const QoreSandboxCapture& other) const;
 
@@ -1466,6 +1467,11 @@ private:
 /** The captured sandbox governs the work as its outermost caller, exactly as if the work ran on a thread that the
     capturing code had started: a Program that the work enters and that has a sandbox manager of its own is still
     governed by that manager.
+
+    The work also runs for the capturing code: it has the functional-domain restrictions of that code (the
+    restrictions of a restricted Program that made the capture, or of the restricted caller that library code made it
+    for, see @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()") instead of those
+    of the code that started the thread, also when no sandbox governed the capturing code.
 
     @since %Qore 3.0
 */

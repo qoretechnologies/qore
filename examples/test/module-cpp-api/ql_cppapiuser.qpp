@@ -2608,6 +2608,41 @@ auto sb_capture_applied_call(int handle, code c) [dom=THREAD_CONTROL] {
     return c->execValue(nullptr, xsink);
 }
 
+//! Calls code in a foreign thread while a capture is applied, as a native bridge runs a handler on its own thread
+/** The thread is registered with QoreForeignThreadHelper, so no %Program is on its stack, and the capture is applied
+    with QoreSandboxCaptureHelper; the code runs as the submitter's operation, with the functional-domain restrictions
+    of the code that made the capture (qore#6844)
+
+    @param handle the handle of the capture
+    @param c the code to call
+    @param call_args the arguments for \a c
+
+    @return the value that \a c returns
+
+    @throw SB-CAPTURE-ERROR unknown handle
+    @throw the exception of \a c
+*/
+auto sb_capture_foreign_call(int handle, code c, *softlist<auto> call_args) [dom=THREAD_CONTROL] {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return QoreValue();
+    }
+    QoreValue rv;
+    ExceptionSink thread_xsink;
+    std::thread worker([&capture, c, call_args, &rv, &thread_xsink] () {
+        QoreForeignThreadHelper qfth;
+        QoreSandboxCaptureHelper sch(*capture);
+        rv = c->execValue(call_args, &thread_xsink);
+    });
+    worker.join();
+    if (thread_xsink) {
+        rv.discard(&thread_xsink);
+        xsink->assimilate(thread_xsink);
+        return QoreValue();
+    }
+    return rv;
+}
+
 //! Checks read access to a path with one capture applied inside another, as a native bridge does
 /** Applies the outer capture with QoreSandboxCaptureHelper, so that only the inherited context of the outer capture
     governs the thread, then applies the inner capture and checks the path against the policy of the inner capture

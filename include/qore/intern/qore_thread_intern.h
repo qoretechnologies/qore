@@ -813,6 +813,25 @@ private:
     int tid = 0;
 };
 
+//! Adds the functional-domain restrictions of the code that submitted work to those of the code that started the
+//! thread while the work's references are released (qore#6844)
+/** For a release that runs on a thread of other code (a drain or a cancellation by the code that calls it): the
+    restrictions are added, not replaced, so that the release is never less restricted than the thread's own code
+*/
+class QoreSubmitterRestrictionsHelper {
+public:
+    DLLLOCAL explicit QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions);
+    DLLLOCAL ~QoreSubmitterRestrictionsHelper();
+
+    DLLLOCAL QoreSubmitterRestrictionsHelper(const QoreSubmitterRestrictionsHelper&) = delete;
+    DLLLOCAL QoreSubmitterRestrictionsHelper& operator=(const QoreSubmitterRestrictionsHelper&) = delete;
+
+private:
+    QoreParseOptions old_restrictions;
+    uint64_t old_gen = 0;
+    bool active = false;
+};
+
 //! Selects the barrier of a trusted build (see QoreModuleInitSandboxBarrierHelper)
 struct QoreTrustedBuildTag {
     //! the Program that created the capability, whose code the build runs for (qore#6844)
@@ -952,6 +971,12 @@ public:
         qore_get_provenance_origin_restrictions()
     */
     QoreParseOptions origin_restrictions;
+    //! The functional-domain restrictions of the code that captured the context (qore_get_calling_code_restrictions())
+    /** Work that the context continues on another thread (a step of a poll operation on a worker of the async I/O
+        controller, a task of a pool that applies a QoreSandboxCapture) runs for that code: the restrictions replace
+        those that the worker thread got from the code that started it while the work runs (qore#6844)
+    */
+    QoreParseOptions caller_restrictions;
     //! True for a continuation that the module cleanup hands over (qore_module_cleanup_delegation() in the capturing
     //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
     //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())

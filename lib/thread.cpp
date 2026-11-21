@@ -885,6 +885,20 @@ public:
     const QoreProgram* governed_host_pgm = nullptr;
     //! the generation of thread_caller_restrictions: changed each time it is set, restored with it
     uint64_t thread_caller_restrictions_gen = 0;
+    // the restrictions of the code that started the thread (thread_caller_restrictions) and their generation that
+    // each active QoreSandboxCaptureHelper replaced with those of the code that submitted its work, innermost last
+    // (qore#6844)
+    struct CaptureSavedRestrictions {
+        QoreParseOptions restrictions;
+        uint64_t gen;
+        //! the nesting depth of the helper that saved them (capture_depth)
+        size_t depth;
+    };
+    std::vector<CaptureSavedRestrictions> capture_saved_caller_restrictions;
+    //! the number of active QoreSandboxCaptureHelper objects on the thread; a helper whose entry could not be saved
+    //! (std::bad_alloc) has none at its depth: it added the capture's restrictions to those in effect instead of
+    //! replacing them (fail closed), which the helper that saved them before restores
+    size_t capture_depth = 0;
 
     // the program context helpers current when each active module lifecycle barrier was set, innermost last (see
     // QoreModuleLifecycleBarrierHelper); module_lifecycle_unrecorded counts the barriers that could not be recorded,
@@ -7516,6 +7530,8 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     if (capture_budgets && td) {
         td->sandbox_budgets.capture(budgets);
         in_build = td->sandbox_budgets.inBuild();
+        // the work that continues on another thread runs for the capturing code (qore#6844)
+        caller_restrictions = qore_get_calling_code_restrictions(td);
     }
     // a continuation of work that the module cleanup runs is part of the cleanup (see qore_close_module_programs())
     module_cleanup_delegate = capture_budgets && qore_module_cleanup_delegation();
@@ -7571,6 +7587,7 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool modul
     // a continuation of code in a trusted build stays one, and keeps the restrictions of the code that created it
     in_build = src->in_build;
     origin_restrictions = src->origin_restrictions;
+    caller_restrictions = src->caller_restrictions;
     for (QoreSandboxCallBudget* budget : budgets) {
         budget->ref();
     }
@@ -7883,12 +7900,26 @@ bool QoreSandboxCapture::sameSandbox(const QoreSandboxCapture& other) const {
         && QoreSandboxComposition::same(ctx->policy_manager, other.ctx->policy_manager)
         && QoreSandboxComposition::same(ctx->provenance_manager, other.ctx->provenance_manager)
         && QoreSandboxComposition::same(ctx->provenance_policy_manager, other.ctx->provenance_policy_manager)
-        && ctx->program_ids == other.ctx->program_ids;
+        && ctx->program_ids == other.ctx->program_ids
+        // the work of one capture runs with its caller restrictions under the other (qore#6844)
+        && ctx->caller_restrictions == other.ctx->caller_restrictions;
 }
 
 QoreSandboxCaptureHelper::QoreSandboxCaptureHelper(const QoreSandboxCapture& capture) {
     ThreadData* td = thread_data.get();
     if (td) {
+        // the work runs for the code that submitted it: its caller restrictions replace those of the code that started
+        // the thread; saved in the thread's data, as the public class has no room for them (qore#6844)
+        size_t depth = ++td->capture_depth;
+        try {
+            td->capture_saved_caller_restrictions.push_back({td->thread_caller_restrictions,
+                td->thread_caller_restrictions_gen, depth});
+            td->thread_caller_restrictions = capture.ctx->caller_restrictions;
+        } catch (std::bad_alloc&) {
+            // not saved: the restrictions of the capture are added to those in effect (fail closed)
+            td->thread_caller_restrictions |= capture.ctx->caller_restrictions;
+        }
+        td->thread_caller_restrictions_gen = ++td->restriction_gen;
         // an unsandboxed submitter's work runs as on a thread it started: governed by the Programs it enters only
         old_ctx = td->inherited_sandbox_context;
         td->inherited_sandbox_context = capture.isSandboxed() ? capture.ctx : nullptr;
@@ -7999,11 +8030,40 @@ QoreValue qore_sandbox_call_governed(const ResolvedCallReferenceNode* factory, Q
     return factory->execValue(args, xsink);
 }
 
+QoreSubmitterRestrictionsHelper::QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions) {
+    ThreadData* td = thread_data.get();
+    if (!td || !restrictions) {
+        return;
+    }
+    old_restrictions = td->thread_caller_restrictions;
+    old_gen = td->thread_caller_restrictions_gen;
+    td->thread_caller_restrictions |= restrictions;
+    td->thread_caller_restrictions_gen = ++td->restriction_gen;
+    active = true;
+}
+
+QoreSubmitterRestrictionsHelper::~QoreSubmitterRestrictionsHelper() {
+    if (active) {
+        ThreadData* td = thread_data.get();
+        td->thread_caller_restrictions = old_restrictions;
+        td->thread_caller_restrictions_gen = old_gen;
+    }
+}
+
 QoreSandboxCaptureHelper::~QoreSandboxCaptureHelper() {
     if (active) {
         ThreadData* td = thread_data.get();
         td->sandbox_budgets.leave(td->tid, this);
         td->inherited_sandbox_context = old_ctx;
+        assert(td->capture_depth);
+        // the helpers end in the reverse order of their creation: the last entry is this helper's if it saved one
+        if (!td->capture_saved_caller_restrictions.empty()
+                && td->capture_saved_caller_restrictions.back().depth == td->capture_depth) {
+            td->thread_caller_restrictions = td->capture_saved_caller_restrictions.back().restrictions;
+            td->thread_caller_restrictions_gen = td->capture_saved_caller_restrictions.back().gen;
+            td->capture_saved_caller_restrictions.pop_back();
+        }
+        --td->capture_depth;
     }
 }
 

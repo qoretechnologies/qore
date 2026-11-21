@@ -170,6 +170,9 @@ struct AsyncIoDeferredRelease {
     //! destructors of objects of module classes, which enter the Programs of the modules (see
     //! qore_close_module_programs())
     bool module_cleanup_delegate = false;
+    //! the functional-domain restrictions of the code that submitted the work whose references these are, which the
+    //! release runs with (see QoreSubmitterRestrictionsHelper, qore#6844)
+    QoreParseOptions caller_restrictions;
 
     //! Returns True if no references are held
     DLLLOCAL bool empty() const {
@@ -302,6 +305,11 @@ typedef std::shared_ptr<const QoreThreadRuntimeParseOptions> AsyncIoRuntimeOptio
 //! (QoreSandboxContext::module_cleanup_delegate)
 DLLLOCAL inline bool async_io_module_cleanup_delegate(const std::shared_ptr<const QoreSandboxContext>& ctx) {
     return ctx && ctx->module_cleanup_delegate;
+}
+
+//! Returns the functional-domain restrictions of the code that captured the context, or none (qore#6844)
+DLLLOCAL inline QoreParseOptions async_io_caller_restrictions(const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx ? ctx->caller_restrictions : QoreParseOptions();
 }
 
 //! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it
