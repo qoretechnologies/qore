@@ -1451,6 +1451,29 @@ public:
         ownedBuffer()[1] = '\0';
     }
 
+    //! Appends a name of the library (a static or global string of ASCII characters) in the encoding of this string
+    /** The encoding of such a string depends on the order of the static initialization of the library: it has no
+        encoding when it is created before the default encoding is set, and the default encoding (UTF-8) otherwise;
+        its characters are ASCII, and so the same in the encoding of any string that a name is written to
+        (qore#6820)
+    */
+    DLLLOCAL void concatAsciiName(const QoreString& name) {
+        const qore_string_private* p = name.priv;
+        // the bytes are the same in this string's encoding only if it is ASCII-compatible
+        assert(!encoding || encoding->isAsciiCompat());
+#ifdef DEBUG
+        for (size_t i = 0; i < p->len; ++i) {
+            assert(!(static_cast<unsigned char>(p->effective_buf()[i]) & 0x80));
+        }
+#endif
+        if (p->len) {
+            check_char(p->len + len + STR_CLASS_EXTRA);
+            memcpy(ownedBuffer() + len, p->effective_buf(), p->len);
+            len += p->len;
+            ownedBuffer()[len] = '\0';
+        }
+    }
+
     DLLLOCAL void concat(const qore_string_private* str) {
         assert(!str || (str->encoding == encoding) || !str->encoding);
 

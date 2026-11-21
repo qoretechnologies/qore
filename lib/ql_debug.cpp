@@ -849,6 +849,64 @@ static void ut_string_compare_soft_and_concat_chars(UnitTestCounters& c) {
     xsink.clear();
 }
 
+//! appends the name of the node to an ISO-8859-1 string; checks that it is written in that encoding as its type name
+static void ut_check_node_name(UnitTestCounters& c, AbstractQoreNode* node, const char* what) {
+    ExceptionSink xsink;
+    QoreString str("", QCS_ISO_8859_1);
+    node->getAsString(str, FMT_NONE, &xsink);
+    std::string m(what);
+    UT_ASSERT(c, !xsink, (m + ": no exception").c_str());
+    UT_ASSERT(c, str.getEncoding() == QCS_ISO_8859_1, (m + ": the string keeps its encoding").c_str());
+    UT_ASSERT(c, !strcmp(node->getTypeName(), str.c_str()), (m + ": the name is written").c_str());
+    node->deref(&xsink);
+    UT_ASSERT(c, !xsink, (m + ": released without an exception").c_str());
+}
+
+//! the names of the library are written in the encoding of the string they are appended to, whatever the encoding
+//! that the order of the static initialization gave them (qore#6820)
+static void ut_library_names_encoding(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // a name tagged UTF-8, as the operator names are in a SINGLE_COMPILATION_UNIT build
+    {
+        QoreString name("foldl", QCS_UTF8);
+        QoreString str("x ", QCS_ISO_8859_1);
+        qore_string_private::get(str)->concatAsciiName(name);
+        UT_ASSERT(c, str.getEncoding() == QCS_ISO_8859_1, "concatAsciiName(): the string keeps its encoding");
+        UT_ASSERT(c, !strcmp("x foldl", str.c_str()), "concatAsciiName(): the bytes are copied");
+        UT_ASSERT_EQ(c, (size_t)7, str.size(), "concatAsciiName(): the length");
+        QoreString empty("", QCS_UTF8);
+        qore_string_private::get(str)->concatAsciiName(empty);
+        UT_ASSERT(c, !strcmp("x foldl", str.c_str()), "concatAsciiName(): an empty name appends nothing");
+    }
+    // the operator names of the parse tree: of OP_COMMON (%), of their own (+, foldl, map), of a single-expression
+    // operator (logical not)
+    ut_check_node_name(c, new QoreModuloOperatorNode(&loc_builtin, QoreValue(), QoreValue()), "% operator");
+    ut_check_node_name(c, new QorePlusOperatorNode(&loc_builtin, QoreValue(), QoreValue()), "+ operator");
+    ut_check_node_name(c, new QoreFoldlOperatorNode(&loc_builtin, QoreValue(), QoreValue()), "foldl operator");
+    ut_check_node_name(c, new QoreMapOperatorNode(&loc_builtin, QoreValue(), QoreValue()), "map operator");
+    ut_check_node_name(c, new QoreLogicalNotOperatorNode(&loc_builtin, QoreValue()), "! operator");
+    // the global names of values
+    {
+        QoreString str("", QCS_ISO_8859_1);
+        QoreValue().getAsString(str, FMT_NONE, &xsink);
+        str.concat('|');
+        QoreValue(true).getAsString(str, FMT_NONE, &xsink);
+        str.concat('|');
+        QoreValue(false).getAsString(str, FMT_NONE, &xsink);
+        str.concat('|');
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+        h->getAsString(str, FMT_NONE, &xsink);
+        str.concat('|');
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), &xsink);
+        l->getAsString(str, FMT_NONE, &xsink);
+        UT_ASSERT(c, !xsink, "value names: no exception");
+        UT_ASSERT(c, str.getEncoding() == QCS_ISO_8859_1, "value names: the string keeps its encoding");
+        UT_ASSERT(c, !strcmp("<NOTHING>|True|False|<EMPTY HASH>|<EMPTY LIST>", str.c_str()),
+            "value names: the names are written");
+    }
+}
+
+
 // the C++ API of strings in a stateful encoding (ex: ISO-2022-JP), whose characters have no bytes of their own
 static void ut_stateful_string_api(UnitTestCounters& c) {
     const QoreEncoding* enc = QEM.findCreate("ISO-2022-JP");
@@ -22001,6 +22059,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_date_checked_arithmetic(c);
     ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
+    ut_library_names_encoding(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
@@ -22406,6 +22465,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_date_checked_arithmetic(c);
     ut_number_exact_key(c);
     ut_string_compare_soft_and_concat_chars(c);
+    ut_library_names_encoding(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);

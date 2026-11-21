@@ -245,7 +245,7 @@ QoreString* QoreParseCastOperatorNode::getAsString(bool& del, int foff, Exceptio
 }
 
 int QoreParseCastOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    qore_string_private::get(str)->concat(&cast_str);
+    qore_string_private::get(str)->concatAsciiName(cast_str);
     return 0;
 }
 
