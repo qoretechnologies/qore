@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - sandboxed Programs, lazy index reads and qcc native executable linking
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires reflection
+%requires ProviderIndexUtil
+
+%exec-class ProviderIndexCallerPermissionsTest
+
+class ProviderIndexCallerPermissionsTest inherits QUnit::Test {
+    constructor() : Test("provider index caller permissions", "1.0", \ARGV) {
+        addTestCase("caller-supplied diagnostics", \testLogAccess());
+        addTestCase("process-wide initialization", \testInitializationAccess());
+        addTestCase("sandboxed initialization", \testSandboxedInitialization());
+        addTestCase("qcc logging permissions", sub () { testCompiledCaller("log"); });
+        addTestCase("qcc initialization permissions", sub () { testCompiledCaller("initialization"); });
+        addTestCase("module diagnostics", \testModuleDiagnostics());
+        addTestCase("restricted lazy lookup", \testLazyLookup());
+        set_return_value(main());
+    }
+
+    testLogAccess() {
+        # With no sink, debug messages are discarded even by an unrestricted caller.
+        assertNothing(ProviderIndexUtil::getGlobalLogger());
+        CaptureLogger sink();
+        ProviderIndexUtil::setGlobalLogger(sink);
+        on_exit ProviderIndexUtil::setGlobalLogger();
+        assertEq(sink, ProviderIndexUtil::getGlobalLogger());
+        foreach int restriction in ((PO_NO_TERMINAL_IO, 0)) {
+            Program p(PO_NEW_STYLE | restriction);
+            p.loadModule("ProviderIndexUtil");
+            p.parse("sub log_message() { ProviderIndexUtil::log(LoggerLevel::LevelDebug, \"\"); }\n"
+                "sub log_args() { ProviderIndexUtil::logArgs(LoggerLevel::LevelDebug, \"\", ()); }\n"
+                "*object sub get_logger() { return ProviderIndexUtil::getGlobalLogger(); }", "log-permissions");
+            if (!restriction) {
+                p.setSandboxManager(new SandboxManager());
+            }
+            assertNothing(p.callFunction("get_logger"));
+            foreach string fn in (("log_message", "log_args")) {
+                assertThrows("PERMISSION-DENIED", \p.callFunction(), (fn,), fn);
+            }
+        }
+    }
+
+    testInitializationAccess() {
+        Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        p.loadModule("ProviderIndexUtil");
+        # No code is executed: the declaration must be rejected when it is parsed.
+        *string refusal;
+        try {
+            p.parse("sub claim() { ProviderIndexUtil::getAllAppModulesToLoad(); }", "initialization-domain");
+        } catch (hash<ExceptionInfo> ex) {
+            refusal = ex.desc;
+        }
+        assertRegex("PROCESS_CONTROL", refusal ?? "");
+        Class cls = Class::forName("ProviderIndexUtil::ProviderIndexUtil");
+        foreach AbstractMethodVariant v in (cls.getStaticMethod("getAllAppModulesToLoad").getVariants()) {
+            assertEq(DOM_PROCESS_CONTROL, v.getDomain() & DOM_PROCESS_CONTROL);
+        }
+    }
+
+    testSandboxedInitialization() {
+        # Trusted code consumes the empty build-mode index first. Even on the original code a subsequent call
+        # would have no work and would leave the process state unchanged.
+        ProviderIndexUtil::setBuildMode(True);
+        on_exit ProviderIndexUtil::setBuildMode(False);
+        ProviderIndexUtil::getAllAppModulesToLoad();
+        Program p(PO_NEW_STYLE);
+        p.loadModule("ProviderIndexUtil");
+        p.parse("sub claim() { ProviderIndexUtil::getAllAppModulesToLoad(); }", "completed-initialization");
+        p.setSandboxManager(new SandboxManager());
+        assertThrows("PROVIDER-INDEX-REGISTRATION-DENIED", \p.callFunction(), ("claim",));
+    }
+
+    private testCompiledCaller(string fixture) {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("qcc is unavailable");
+        }
+        TmpDir tmp("provider-index-compiled-caller-");
+        string source = get_script_dir() + "/caller-permissions/compiled-" + fixture + ".q";
+        string exe = tmp.path + "/caller";
+        string modules = realpath(get_script_dir() + "/../../../../qlib");
+        if (ENV.QORE_MODULE_DIR) {
+            modules += PathSep + ENV.QORE_MODULE_DIR;
+        }
+        string env = "QORE_MODULE_DIR=" + shellQuote(modules) + " ";
+        int rc;
+        string out = backquote(env + shellQuote(qcc) + " -O0 -o " + shellQuote(exe) + " " + shellQuote(source)
+            + " 2>&1", \rc);
+        if (fixture == "initialization") {
+            assertNeq(0, rc, out);
+            assertRegex("functional domain: PROCESS_CONTROL", out);
+        } else {
+            assertEq(0, rc, out);
+            out = backquote(env + shellQuote(exe) + " 2>&1", \rc);
+            assertEq(0, rc, out);
+        }
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    testModuleDiagnostics() {
+        code restore = useIndexDir("");
+        on_exit restore();
+        CaptureLogger sink();
+        ProviderIndexUtil::setGlobalLogger(sink);
+        on_exit ProviderIndexUtil::setGlobalLogger();
+
+        ProviderIndexUtil::log(LoggerLevel::LevelInfo, "trusted %d", 1);
+        ProviderIndexUtil::logArgs(LoggerLevel::LevelInfo, "trusted %d", (2,));
+        assertEq(("trusted 1", "trusted 2"), sink.messages);
+        Program p(PO_NEW_STYLE | PO_NO_TERMINAL_IO);
+        p.loadModule("ProviderIndexUtil");
+        p.parse("*string sub read_dir() { return ProviderIndexUtil::tryGetIndexDir(); }", "missing-directory");
+        p.setSandboxManager(new SandboxManager());
+        assertNothing(p.callFunction("read_dir"));
+        assertEq(3, sink.messages.size());
+        assertRegex(ProviderIndexEnvVar, sink.messages[-1]);
+    }
+
+    testLazyLookup() {
+        TmpDir tmp("provider-index-caller-permissions-");
+        code restore = useIndexDir(tmp.path);
+        on_exit {
+            restore();
+            ProviderIndexUtil::setBuildMode(True);
+            ProviderIndexUtil::setBuildMode(False);
+        }
+        string app = "QoreTestLazyApp";
+        string dependency = "QoreTestAppDependency";
+        ProviderIndexUtil::writeDataProviderIndexByApp({
+            "factorymap": {}, "appmap": {app: {dependency: True}}, "schememap": {},
+            "appinfomap": {app: {"name": app, "desc": "lazy app"}},
+        }, (), hash<auto> sub (string name) { return {}; }, 0s, {}, True);
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+        Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        p.loadModule("ProviderIndexUtil");
+        p.parse("*string sub read_app(string app) { return ProviderIndexUtil::tryGetAppInfo(app).desc; }",
+            "lazy-lookup");
+        p.setSandboxManager(new SandboxManager());
+        assertEq("lazy app", p.callFunction("read_app", app));
+        assertEq((dependency,), ProviderIndexUtil::getAllAppModulesToLoad());
+        assertNothing(ProviderIndexUtil::getAllAppModulesToLoad());
+    }
+
+    private static code useIndexDir(string dir) {
+        *string saved = ENV{ProviderIndexEnvVar};
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        return sub () {
+            ProviderIndexUtil::setEnvironmentVariable(saved ?? "");
+            if (!exists saved) {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+        };
+    }
+}
+
+class CaptureLogger inherits Qore::Logger::Logger {
+    public {
+        list<string> messages();
+    }
+
+    constructor() : Logger("index-permissions", LoggerLevel::LevelAll) {
+    }
+
+    logArgs(LoggerLevel level, string fmt, *softlist<auto> args) {
+        push messages, vsprintf(fmt, args);
+    }
+}
