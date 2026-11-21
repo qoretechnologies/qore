@@ -2653,6 +2653,8 @@ add_dependencies(QPP_GENERATED_FILES qpp)
 add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity CHECK_GRAMMAR_CONFLICTS)
 
 target_compile_definitions(libqore PUBLIC _QORE_LIB_INTERN HAVE_UNIX_CONFIG_H)
+# defined only when libqore itself is compiled, not for the code that uses it (see DLLEXPORT_BOUND, #7006)
+target_compile_definitions(libqore PRIVATE QORE_BUILDING_LIBQORE)
 if (APPLE)
     # Required to expose IPV6_PKTINFO and struct in6_pktinfo in <netinet/in.h>
     # on macOS/Darwin.  Must be a global define so it takes effect before the
