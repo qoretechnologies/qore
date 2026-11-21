@@ -408,6 +408,16 @@ public class AbstractDataField inherits Qore::Serializable {
         getType().freeze();
     }
 
+    #! Makes a copy of the field that belongs to the code that makes it
+    /** A copy is a new field: it is shared only if code that no sandbox governs makes it, as for a field that such
+        code creates, whatever the field copied was (qore#6843).  The copy has the type of the field copied.
+
+        @since DataProvider 3.12
+    */
+    copy() {
+        shared_object = SandboxManager::isProcessWideRegistrationAllowed();
+    }
+
     private checkChange() {
         if (shared_object && !SandboxManager::isProcessWideRegistrationAllowed()) {
             SandboxManager::checkProcessWideRegistration(sprintf("change data field %y, which is shared by every "

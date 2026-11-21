@@ -1290,6 +1290,18 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         freezeImpl();
     }
 
+    #! Makes a copy of the type that belongs to the code that makes it
+    /** A copy is a new type: it is shared only if code that no sandbox governs makes it, as for a type that such code
+        creates, whatever the type copied was (qore#6843).  The types and fields that the copy holds are those of the
+        type copied.
+
+        @since DataProvider 3.12
+    */
+    copy() {
+        shared_object = SandboxManager::isProcessWideRegistrationAllowed();
+        frozen = False;
+    }
+
     #! Marks the types and fields that the type holds as shared; see freeze()
     /** The base class method does nothing; a type that holds other types or fields overrides it
     */
