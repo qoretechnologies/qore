@@ -9293,8 +9293,18 @@ SocketConnectInetHappyEyeballsPollState::~SocketConnectInetHappyEyeballsPollStat
     closeAllFds();
 }
 
+#ifdef DEBUG
+static void qore_socket_dbg_before_adopt(int where);
+#endif
+
 int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) {
     if (he_state == HEBS_RESOLVING) {
+#ifdef DEBUG
+        // a test closes the socket here, while the connection has no descriptor, as another thread can
+        if (void (*hook)() = qore_dbg_connect_in_resolve.load(std::memory_order_acquire)) {
+            hook();
+        }
+#endif
         int rc = continueResolve(xsink);
         if (*xsink || rc) {
             return *xsink ? -1 : SOCK_POLLIN;
@@ -9680,6 +9690,9 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
         // Assign first racing fd to sock->sock so isOpen() returns true; the socket takes the attempt's descriptor
         // over
         if (sock->sock == QORE_INVALID_SOCKET) {
+#ifdef DEBUG
+            qore_socket_dbg_before_adopt(4);
+#endif
             if (!sock->setDescriptorIfGeneration(sock_gen, fd, active_attempts.back().owned, true,
                     &active_attempts.back().sock_hold, &sock_gen)) {
                 // the socket was closed since the operation started: it takes no descriptor (qore#7003)
@@ -9738,6 +9751,9 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
     if (sock->sock != winner.fd) {
         int old_primary = sock->sock;
         if (old_primary == QORE_INVALID_SOCKET) {
+#ifdef DEBUG
+            qore_socket_dbg_before_adopt(1);
+#endif
             if (!sock->setDescriptorIfGeneration(sock_gen, winner.fd, winner.owned, true, nullptr, &sock_gen)) {
                 closeAllFds();
                 qore_socket_raise_canceled("connect", xsink);
@@ -9756,6 +9772,9 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
                 }
             }
             bool close_old = false;
+#ifdef DEBUG
+            qore_socket_dbg_before_adopt(2);
+#endif
             bool replaced = sock->replaceDescriptor(old_primary, winner.fd, close_old, &winner.owned, nullptr,
                 &sock_gen, &sock_gen);
             if (replaced && close_old) {
@@ -9804,6 +9823,15 @@ std::atomic<bool> qore_dbg_connect_no_immediate_check{false};
 std::atomic<bool> qore_dbg_connect_complete_before_immediate_check{false};
 std::atomic<void (*)()> qore_dbg_connect_before_check_attempts{nullptr};
 std::atomic<void (*)()> qore_dbg_connect_before_assign_winner{nullptr};
+std::atomic<void (*)(int)> qore_dbg_connect_before_adopt{nullptr};
+std::atomic<void (*)()> qore_dbg_connect_in_resolve{nullptr};
+
+//! Calls the hook that a test sets to run right before a connection gives the socket a descriptor
+static void qore_socket_dbg_before_adopt(int where) {
+    if (void (*hook)(int) = qore_dbg_connect_before_adopt.load(std::memory_order_acquire)) {
+        hook(where);
+    }
+}
 std::atomic<bool> qore_dbg_inert_socket_fails{false};
 std::atomic<bool> qore_dbg_inert_dup_fails{false};
 std::atomic<unsigned> qore_dbg_inert_socket_fallbacks{0};
@@ -9815,6 +9843,9 @@ QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
 
 void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, ConnAttempt* next) {
     bool close_old = false;
+#ifdef DEBUG
+    qore_socket_dbg_before_adopt(3);
+#endif
     if (sock->replaceDescriptor(fd, next ? next->fd : QORE_INVALID_SOCKET, close_old, next ? &next->owned : nullptr,
             next ? &next->sock_hold : nullptr, &sock_gen, &sock_gen)) {
         // the attempt that gives the descriptor up has a hold of it, so the socket leaves its close to the hold

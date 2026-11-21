@@ -2812,7 +2812,13 @@ public:
     //! Closes the descriptor and resets the connection state; does nothing if the descriptor is already released
     DLLLOCAL int close_and_reset() {
         CloseLockHelper cl(*this);
-        return sock != QORE_INVALID_SOCKET ? close_and_reset_locked() : 0;
+        if (sock == QORE_INVALID_SOCKET) {
+            // a connection that is being made (ex: resolving its host) gives the socket no descriptor after a close
+            // (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003)
+            ++fd_generation;
+            return 0;
+        }
+        return close_and_reset_locked();
     }
 
     //! Replaces the open descriptor with another one, as for a QUIC connection migration
@@ -2966,7 +2972,7 @@ public:
         any more; I/O on the number fails as on a socket that is not connected.  Nothing happens if no inert socket
         can be made: the descriptor is then only shut down.
     */
-    DLLLOCAL static void makeInertLocked(int fd) {
+    DLLLOCAL static bool makeInertLocked(int fd) {
         int inert;
 #ifdef DEBUG
         if (qore_dbg_inert_socket_fails.load(std::memory_order_relaxed)) {
@@ -2981,7 +2987,7 @@ public:
 #endif
         if (inert < 0) {
             inertFallback(fd, "no inert socket");
-            return;
+            return false;
         }
         // the number keeps the close-on-exec flag of the socket's descriptors, which dup2() clears
         int rc;
@@ -3008,15 +3014,16 @@ public:
             ::close(inert);
             errno = err;
             inertFallback(fd, "the inert socket cannot take the number");
-            return;
+            return false;
         }
 #ifndef __linux__
         ::fcntl(fd, F_SETFD, FD_CLOEXEC);
 #endif
         ::close(inert);
+        return true;
     }
 
-    //! The descriptor could not be made inert: it is only shut down, and the attempt's hold still keeps its number
+    //! The descriptor could not be made inert: the caller shuts it down, and the attempt's hold still keeps its number
     DLLLOCAL static void inertFallback(int fd, const char* why) {
 #ifdef DEBUG
         qore_dbg_inert_socket_fallbacks.fetch_add(1, std::memory_order_relaxed);
@@ -3056,8 +3063,10 @@ public:
             // a connection attempt in progress holds the descriptor (qore#6962): the shutdown does not stop a
             // connection that is being established, so the connection is closed now and the number is kept by an
             // inert descriptor until the attempt releases it
-            if (shared_fd->attempt_hold) {
-                makeInertLocked(sock);
+            if (shared_fd->attempt_hold && !makeInertLocked(sock)) {
+                // no inert socket: the connection being established is at least shut down, whichever close path
+                // this is (close_internal() shuts it down before, close_and_reset() does not)
+                ::shutdown(sock, SHUTDOWN_ARG);
             }
 #endif
         } else {
@@ -3218,6 +3227,10 @@ public:
                 ++connection_id;
 
                 rc = close_and_reset_locked();
+            } else {
+                // a connection that is being made (ex: resolving its host) gives the socket no descriptor after a
+                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003)
+                ++fd_generation;
             }
         }
 
@@ -5305,6 +5318,19 @@ DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_check_attempts;
     closed (see SocketConnectInetHappyEyeballsPollState::assignWinner())
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_assign_winner;
+
+//! Debug builds: if set, called by a happy-eyeballs connection right before it gives the socket a descriptor
+/** With the place: 1 the winner when the socket has none, 2 the winner replacing the socket's descriptor, 3 another
+    attempt replacing the descriptor of a failed attempt, 4 the first attempt in progress; for the C++ unit tests of a
+    close of the socket between the connection's check and the adoption, which the adoption refuses with the socket's
+    close lock held (qore#7003)
+*/
+DLLLOCAL extern std::atomic<void (*)(int)> qore_dbg_connect_before_adopt;
+
+//! Debug builds: if set, called by a happy-eyeballs connection step while it resolves the host
+/** For the C++ unit tests of a close of the socket while the connection has no descriptor yet (qore#7003)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_in_resolve;
 
 #ifndef _Q_WINDOWS
 //! Debug builds: if not 0, the connect checked fails with this error after its pending error was read as 0

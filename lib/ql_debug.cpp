@@ -8361,6 +8361,170 @@ public:
         xsink.clear();
     }
 
+    //! Where runConnectCloseAt() closes the socket: the place of qore_dbg_connect_before_adopt, or this for the resolve
+    static constexpr int CLOSE_IN_RESOLVE = 0;
+    //! The place where runConnectCloseAt() closes the socket, and whether it did
+    static inline int close_at_where = -1;
+    static inline bool close_at_done = false;
+
+    //! Closes the socket, as another thread can, at the place that the test is for
+    static void closeAt(int where) {
+        if (close_at_done || where != close_at_where) {
+            return;
+        }
+        close_at_done = true;
+        close_assign_sock->close_internal();
+    }
+
+    //! The hook of the resolve phase: closes the socket while the connection has no descriptor
+    static void closeInResolve() {
+        closeAt(CLOSE_IN_RESOLVE);
+    }
+
+    //! A connection whose socket is closed while it is resolving its host, or between its check of the socket and the
+    //! socket's adoption of a descriptor, fails as closed and leaves the socket closed (qore#7003)
+    /** @p where is CLOSE_IN_RESOLVE (the close while the host is resolved, when the socket has no descriptor; debug hook
+        qore_dbg_connect_in_resolve) or a place of qore_dbg_connect_before_adopt (2: the winner replacing the socket's
+        descriptor, 4: the first attempt in progress), where the adoption is refused with the socket's close lock held.
+        The name of the test's own resolves to 127.0.0.1, where a listener accepts, and with @p two_addresses also to
+        ::1 first, where nothing answers, so that the winner is the second attempt and replaces the first one's
+        descriptor.
+    */
+    static void runConnectCloseAt(UnitTestCounters& c, int where, bool two_addresses) {
+        const std::string when = " (closed " + (where == CLOSE_IN_RESOLVE ? std::string("while resolving")
+            : "before adoption " + std::to_string(where)) + ")";
+        ExceptionSink xsink;
+        std::vector<int> fds;
+        struct FdCloser {
+            std::vector<int>& fds;
+            ~FdCloser() {
+                for (int fd : fds) {
+                    ::close(fd);
+                }
+            }
+        } fd_closer{fds};
+        int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
+        UT_ASSERT(c, lfd >= 0, ("the listener is created" + when).c_str());
+        if (lfd < 0) {
+            return;
+        }
+        fds.push_back(lfd);
+        struct sockaddr_in sa = {};
+        sa.sin_family = AF_INET;
+        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t salen = sizeof(sa);
+        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)
+            && !::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen) && !::listen(lfd, 16);
+        UT_ASSERT(c, ok, ("the listener listens" + when).c_str());
+        if (!ok || (two_addresses && !makeSilentTarget6(c, fds, sa.sin_port, when))) {
+            return;
+        }
+
+        const char* tmp = getenv("TMPDIR");
+        std::string hosts = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-he-closeat-hosts-" + std::to_string(getpid());
+        {
+            FILE* f = fopen(hosts.c_str(), "w");
+            UT_ASSERT(c, f != nullptr, ("the hosts file is written" + when).c_str());
+            if (!f) {
+                return;
+            }
+            if (two_addresses) {
+                fprintf(f, "::1 qore-he-closeat\n");
+            }
+            fprintf(f, "127.0.0.1 qore-he-closeat\n");
+            fclose(f);
+        }
+        struct HostsRestorer {
+            std::string prev, path;
+            ~HostsRestorer() {
+                qore_dbg_cares_set_hosts_file(prev);
+                ::unlink(path.c_str());
+            }
+        } hosts_restorer{qore_dbg_cares_set_hosts_file(hosts), hosts};
+        std::string target = "qore-he-closeat:" + std::to_string(ntohs(sa.sin_port));
+
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            ~Cleanup() {
+                qore_dbg_connect_before_adopt.store(nullptr, std::memory_order_release);
+                qore_dbg_connect_in_resolve.store(nullptr, std::memory_order_release);
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink};
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, ("the controller starts" + when).c_str());
+        if (!ready || xsink) {
+            return;
+        }
+
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        sock->ref();
+        close_assign_sock = qore_socket_private::get(*sock->priv->socket);
+        close_at_where = where;
+        close_at_done = false;
+        SocketConnectPollOperation* op = new SocketConnectPollOperation(&xsink, false, target.c_str(), sock, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        UT_ASSERT(c, !xsink, ("the connect operation is created" + when).c_str());
+        if (xsink) {
+            return;
+        }
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("connect"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("connect-close-at-unit-test"), &xsink);
+        info->setKeyValue("to", 10000, &xsink);
+        if (where == CLOSE_IN_RESOLVE) {
+            qore_dbg_connect_in_resolve.store(closeInResolve, std::memory_order_release);
+        } else {
+            qore_dbg_connect_before_adopt.store(closeAt, std::memory_order_release);
+        }
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the connection is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
+        UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH, ("the connection ends" + when).c_str());
+        UT_ASSERT(c, close_at_done, ("the socket was closed at the place of the test" + when).c_str());
+        if (result->getType() == NT_HASH) {
+            QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
+            const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
+            QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
+            UT_ASSERT(c, err.getType() == NT_STRING
+                && !strcmp(err.get<const QoreStringNode>()->c_str(), "SOCKET-CLOSED"),
+                ("the connection fails as closed" + when).c_str());
+        }
+        xsink.clear();
+        UT_ASSERT(c, sock->getPollableDescriptor() < 0, ("the closed socket stays closed" + when).c_str());
+        result.release().discard(&xsink);
+        queue = nullptr;
+        queue_obj = nullptr;
+        op_obj = nullptr;
+        sock->close();
+        xsink.clear();
+    }
+
     //! replaceDescriptor() with the generation read with the number replaces only the descriptor that was read
     /** A contract test (qore#7003), not a reproduction: no path of the library can give a socket a new descriptor
         between the read of its descriptor and its replacement, as the paths that give a socket a descriptor run with
@@ -24366,6 +24530,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c);
     AsyncIoDescriptorHoldTest::runConnectCloseTwoAttempts(c);
     AsyncIoDescriptorHoldTest::runConnectCloseBeforeAssign(c);
+    AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_IN_RESOLVE, false);
+    AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 4, false);
+    AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 2, true);
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
