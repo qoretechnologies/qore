@@ -1635,20 +1635,28 @@ int qore_object_private::checkSandboxedMethodCallIntern(const QoreObject& obj, c
     return -1;
 }
 
+bool qore_object_private::hasSandboxProvenance() const {
+    const QoreSandboxContext* p = sandbox_provenance;
+    return p && (p->manager || p->policy_manager || p->provenance_manager || p->provenance_policy_manager);
+}
+
 bool qore_object_private::callerReadsNonPublicMembersIntern() const {
-    // the code of a class that trusted code declared reads as it did before the rule, also for a sandboxed caller; a
-    // builtin class (such as Serializable) reads for its caller, which decides
-    const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !class_ctx->sys && !class_ctx->isSandboxedCode()) {
-        return true;
-    }
-    // the code of a trusted Program that is not a library module's, such as the host's, reads its objects as it did
-    // before the rule, also for a sandboxed caller; library code that formats or serializes an object for its caller
-    // reads it as its caller
-    if (!class_ctx || class_ctx->sys) {
-        const QoreProgram* pgm = getProgram();
-        if (pgm && !qore_program_is_sandboxed(pgm) && !qore_program_is_library_module(pgm)) {
-            return true;
+    // the code of a class that trusted code declared, or of a trusted Program that is not a library module's (such as
+    // the host's), reads the objects that trusted code created as it did before the rule, also for a sandboxed caller;
+    // an object that sandboxed code created only for the caller that owns it, so that trusted code cannot show a
+    // sandboxed caller the state of another sandbox's objects.  A builtin class (such as Serializable) and library code
+    // read for their caller, which decides
+    if (!hasSandboxProvenance()) {
+        const qore_class_private* class_ctx = runtime_get_class();
+        if (class_ctx && !class_ctx->sys) {
+            if (!class_ctx->isSandboxedCode()) {
+                return true;
+            }
+        } else {
+            const QoreProgram* pgm = getProgram();
+            if (pgm && !qore_program_is_sandboxed(pgm) && !qore_program_is_library_module(pgm)) {
+                return true;
+            }
         }
     }
     return qore_caller_created_object(*obj);

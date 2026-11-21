@@ -743,6 +743,9 @@ public:
     //! see callerReadsNonPublicMembers()
     DLLLOCAL bool callerReadsNonPublicMembersIntern() const;
 
+    //! Returns true if a sandbox governed the creation of the object (its provenance names a sandbox manager)
+    DLLLOCAL bool hasSandboxProvenance() const;
+
     //! Returns a copy of the members of the object that the calling code may read as a whole (qore#7033)
     /** As copyData(), but with the public members only if callerReadsNonPublicMembers() is false
     */

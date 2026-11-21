@@ -40,6 +40,13 @@ string sub host_show(Target w) {
     return str =~ /secret/ ? "private" : "public";
 }
 
+#! a class of the host whose static method formats an object for its caller
+public class HostFmt {
+    static string show(Target w) {
+        return sprintf("%y", w) =~ /secret/ ? "private" : "public";
+    }
+}
+
 #! the code of the tenants (and of a trusted Program, where it is not restricted)
 const TenantSource = "%modern
 #! the formatting forms
@@ -183,7 +190,8 @@ class SandboxObjectFormatTest inherits QUnit::Test {
             p.setSandboxManager(sm);
         }
         p.importFunction("host_show");
-        p.parse(TenantSource + "string sub call_host_show(Target w) { return host_show(w); }\n", "tenant");
+        p.parse(TenantSource + "string sub call_host_show(Target w) { return host_show(w); }\n"
+            + "string sub call_host_class_show(Target w) { return HostFmt::show(w); }\n", "tenant");
         return p;
     }
 
@@ -201,6 +209,15 @@ class SandboxObjectFormatTest inherits QUnit::Test {
 
         # the host's code formats and serializes the host's objects for the tenant as before
         assertEq("private", a.callFunction("call_host_show", new Target()), mode + ": the host's code for A");
+        assertEq("private", a.callFunction("call_host_class_show", new Target()),
+            mode + ": the host's class for A");
+        # but not the objects of another tenant: the host's code reads them for its caller
+        Target b_obj = b.callFunction("make_target");
+        assertEq("public", a.callFunction("call_host_show", b_obj), mode + ": the host's code for A on B's object");
+        assertEq("public", a.callFunction("call_host_class_show", b_obj),
+            mode + ": the host's class for A on B's object");
+        assertEq("private", b.callFunction("call_host_show", b_obj), mode + ": the host's code for B on its object");
+        assertEq("private", HostFmt::show(b_obj), mode + ": the host's own code on B's object");
 
         # code that a sandbox at the enforcement level of code safety governs is not subject to the owner rules
         Program safe = tenant(mode, True, QSEL_CODE_SAFETY);
