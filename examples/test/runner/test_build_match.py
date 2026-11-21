@@ -276,7 +276,7 @@ class BuildMatchTest(unittest.TestCase):
                             "the .qmod files in %s/qlib-qmod: from the build in" % other.resolve())
         # a qlib/*.qmod link into another build
         (self.tree / "qlib/Mod.qmod").symlink_to(other / "qlib-qmod/Mod.qmod")
-        self.assert_refused(self.run_runner(), "the qlib/*.qmod links into %s" % other)
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other)
         # links into the build itself
         (self.tree / "qlib/Mod.qmod").unlink()
         (self.tree / "qlib/Mod.qmod").symlink_to(self.build / "qlib-qmod/Mod.qmod")
@@ -339,8 +339,20 @@ class BuildMatchTest(unittest.TestCase):
                 self.assert_runs(self.run_runner())
 
     def test_files_that_the_build_makes_nothing_from_are_not_compared(self):
-        # a binary module's tests, and a source under examples/ that CMake does not compile (no object file)
-        for path in ("modules/m/test/m.qtest", "examples/test/cmake/samples/sample.cpp"):
+        # a binary module's tests and other files that are not sources, a source under examples/ that a test compiles
+        # when it runs (no object of its own, though a directory above has objects of other sources), a source of lib/
+        # that libqore does not have (a build with an object for each source has none for it), and an include/
+        # header that only a module includes, whose module was built again
+        (self.build / "modules/m").mkdir(parents=True)
+        (self.build / "modules/m/m-api-1.0.qmod").touch()
+        os.utime(self.build / "modules/m/m-api-1.0.qmod", (LATER + 10, LATER + 10))
+        for obj in ("CMakeFiles/libqore.dir/lib/a.cpp.o", "CMakeFiles/other-test.dir/examples/test/qore/misc/other.cpp.o"):
+            (self.build / obj).parent.mkdir(parents=True, exist_ok=True)
+            (self.build / obj).touch()
+            os.utime(self.build / obj, (BUILD_TIME, BUILD_TIME))
+        for path in ("modules/m/test/m.qtest", "modules/m/README", "modules/m/package.json",
+                     "examples/test/qore/threads/small_thread_stack.cpp", "examples/test/cmake/samples/sample.cpp",
+                     "lib/qpp.cpp", "include/qore/QoreJsonApi.h"):
             (self.tree / path).parent.mkdir(parents=True, exist_ok=True)
             (self.tree / path).write_text("// changed\n")
             git(self.tree, "add", path)
@@ -374,7 +386,7 @@ class BuildMatchTest(unittest.TestCase):
             [ $# -eq 1 ] || {{ echo "usage: readlink FILE" >&2; exit 1; }}
             exec '{real_readlink}' "$@"
             """)
-        self.assert_refused(self.run_runner(), "the qlib/*.qmod links into %s" % other)
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other)
 
     def test_an_installed_qcc_is_not_the_build_s(self):
         # a qcc whose qore has no libqore next to it (an installed one) names the commit of the libqore that its own
@@ -440,33 +452,78 @@ class BuildMatchTest(unittest.TestCase):
                 os.utime(self.tree / directory, (LATER, LATER))
         self.assert_runs(self.run_runner())
 
-    def test_a_file_removed_from_a_module_in_qlib_is_compared_with_its_qmod(self):
-        # the module's other sources are still there: their directory is compared with the module's .qmod
+    def separated_module(self):
+        """Adds a separated module in qlib, Sep (qlib/Sep/Sep.qm, X.qc, Y.qc and a file that is not a source), as the
+        build's commit, with its .qmod in the real layout: <build>/qlib-qmod/Sep/Sep.qmod, linked from
+        qlib/Sep/Sep.qmod; returns the .qmod"""
         sep = self.tree / "qlib/Sep"
-        sep.mkdir()
+        (sep / "i18n").mkdir(parents=True)
+        (sep / "Sep.qm").write_text("# module\n")
         (sep / "X.qc").write_text("# x\n")
         (sep / "Y.qc").write_text("# y\n")
+        (sep / "i18n/en.json").write_text("{}\n")
         git(self.tree, "add", "-A")
         git(self.tree, "commit", "-q", "-m", "sep")
         (self.build / "hash").write_text(git(self.tree, "rev-parse", "HEAD") + "\n")
-        qmod = self.build / "qlib-qmod/Sep.qmod"
+        set_times(sep, SOURCE_TIME)
+        qmod = self.build / "qlib-qmod/Sep/Sep.qmod"
+        qmod.parent.mkdir()
         qmod.touch()
         os.utime(qmod, (BUILD_TIME, BUILD_TIME))
+        (sep / "Sep.qmod").symlink_to(qmod)
+        return qmod
+
+    def test_a_separated_module_is_compared_with_its_qmod(self):
+        qmod = self.separated_module()
+        (self.tree / "qlib/Sep/X.qc").write_text("# x, changed\n")
+        os.utime(self.tree / "qlib/Sep/X.qc", (LATER, LATER))
+        self.assert_refused(self.run_runner(), "    qlib/Sep/X.qc")
+        os.utime(qmod, (LATER + 10, LATER + 10))
+        self.assert_runs(self.run_runner())
+        # a file of the module that is not a source (the .qmod does not hold it) is not compared
+        (self.tree / "qlib/Sep/i18n/en.json").write_text("{\"a\": 1}\n")
+        os.utime(self.tree / "qlib/Sep/i18n/en.json", (LATER + 20, LATER + 20))
+        self.assert_runs(self.run_runner())
+
+    def test_a_separated_module_s_link_into_another_build_is_refused(self):
+        self.separated_module()
+        other = self.base / "other-build"
+        stand_in_build(other, self.tree, OTHER_COMMIT)
+        (other / "qlib-qmod/Sep").mkdir()
+        (other / "qlib-qmod/Sep/Sep.qmod").touch()
+        (self.tree / "qlib/Sep/Sep.qmod").unlink()
+        (self.tree / "qlib/Sep/Sep.qmod").symlink_to(other / "qlib-qmod/Sep/Sep.qmod")
+        self.assert_refused(self.run_runner(), "the qlib .qmod links into %s" % other)
+
+    def test_a_file_removed_from_a_module_in_qlib_is_compared_with_its_qmod(self):
+        # the module's other sources are still there: the newest of them is compared with the module's .qmod, not
+        # their directory, which an editor's file changes
+        qmod = self.separated_module()
         git(self.tree, "rm", "-q", "qlib/Sep/X.qc")
-        os.utime(sep, (LATER, LATER))
+        (self.tree / "qlib/Sep/.Y.qc.swp").write_text("an editor's file\n")
+        os.utime(self.tree / "qlib/Sep", (LATER + 30, LATER + 30))
+        self.assert_runs(self.run_runner())
+        # a remaining source changed after the .qmod
+        os.utime(self.tree / "qlib/Sep/Y.qc", (LATER, LATER))
         self.assert_refused(self.run_runner(), "    qlib/Sep/X.qc")
         os.utime(qmod, (LATER + 10, LATER + 10))
         self.assert_runs(self.run_runner())
 
     def test_headers_of_example_modules_in_other_directories_are_compared(self):
-        # a header in include/ with the sources at the module's top, and a header at the top with the sources in src/
+        # a header in include/ with the sources at the module's top, and a header at the top with the sources in src/:
+        # each is compared with the objects of its example module (the nearest directory whose CMakeLists.txt defines a
+        # target)
         for header, obj in (("examples/test/mod/include/mod.h", "examples/test/mod/CMakeFiles/mod.dir/mod.cpp.o"),
                             ("examples/test/mod2/mod2.h", "examples/test/mod2/CMakeFiles/mod2.dir/src/mod2.cpp.o")):
             with self.subTest(header=header):
+                module = self.tree / "/".join(header.split("/")[:3])
+                module.mkdir(parents=True, exist_ok=True)
+                (module / "CMakeLists.txt").write_text("add_library(m MODULE m.cpp)\n")
+                os.utime(module / "CMakeLists.txt", (SOURCE_TIME, SOURCE_TIME))
                 path = self.tree / header
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("// changed\n")
-                git(self.tree, "add", header)
+                git(self.tree, "add", header, str(module / "CMakeLists.txt"))
                 os.utime(path, (LATER, LATER))
                 (self.build / obj).parent.mkdir(parents=True, exist_ok=True)
                 (self.build / obj).touch()
