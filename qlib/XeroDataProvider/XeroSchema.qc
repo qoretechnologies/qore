@@ -135,18 +135,6 @@ public class XeroSchema {
     }
 
     private {
-        #! The ID of the lazy value of getAccountingSchema() (qore#6843)
-        static int accounting_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \XeroSchema::buildAccountingSchemaValue());
-        #! The ID of the lazy value of getProjectsSchema() (qore#6843)
-        static int projects_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \XeroSchema::buildProjectsSchemaValue());
-        #! The ID of the lazy value of getAccountingActionSet() (qore#6843)
-        static int accounting_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \XeroSchema::buildAccountingActionSetValue());
-        #! The ID of the lazy value of getProjectsActionSet() (qore#6843)
-        static int projects_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \XeroSchema::buildProjectsActionSetValue());
         #! The parsed schemas, keyed by file name
         static hash<string, OpenApi3Schema> schemas = {};
 
@@ -158,6 +146,18 @@ public class XeroSchema {
     }
 
     private:internal {
+        #! The ID of the lazy value of getAccountingActionSet() (qore#6843)
+        static int accounting_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \XeroSchema::buildAccountingActionSetValue());
+        #! The ID of the lazy value of getAccountingSchema() (qore#6843)
+        static int accounting_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \XeroSchema::buildAccountingSchemaValue());
+        #! The ID of the lazy value of getProjectsActionSet() (qore#6843)
+        static int projects_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \XeroSchema::buildProjectsActionSetValue());
+        #! The ID of the lazy value of getProjectsSchema() (qore#6843)
+        static int projects_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \XeroSchema::buildProjectsSchemaValue());
         #! Serializes construction of the schemas and the action sets
         static Mutex lck();
     }

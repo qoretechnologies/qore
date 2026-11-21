@@ -51,17 +51,17 @@ public class StabilityAiApi {
     }
 
     private {
-        #! The ID of the lazy value of getSchema() (qore#6843)
-        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \StabilityAiApi::buildSchemaValue());
-        #! The ID of the lazy value of getActionSet() (qore#6843)
-        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
-            \StabilityAiApi::buildActionSetValue());
         static *OpenApi3::OpenApi3Schema schema;
         static *RestSchemaActionSet actions;
     }
 
     private:internal {
+        #! The ID of the lazy value of getActionSet() (qore#6843)
+        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \StabilityAiApi::buildActionSetValue());
+        #! The ID of the lazy value of getSchema() (qore#6843)
+        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \StabilityAiApi::buildSchemaValue());
         static Mutex mutex();
     }
 
