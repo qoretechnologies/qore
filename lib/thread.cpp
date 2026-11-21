@@ -8208,6 +8208,11 @@ void qore_thread_program_teardown_leave() {
     --td->pgm_teardown_depth;
 }
 
+QoreProgram* qore_thread_current_program_if_any() {
+    ThreadData* td = thread_data.get();
+    return td ? td->current_pgm : nullptr;
+}
+
 QoreProgram* getProgram() {
     ThreadData* td = thread_data.get();
     printd(5, "getProgram(): (td: %p) current: %p call: %p\n", td, td ? td->current_pgm : nullptr,

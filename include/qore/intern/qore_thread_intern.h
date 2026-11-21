@@ -904,6 +904,9 @@ private:
 */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref();
 
+//! returns the current Program of the thread, or nullptr, also on a thread without thread data (a native thread)
+DLLLOCAL QoreProgram* qore_thread_current_program_if_any();
+
 //! Returns true if every sandbox that governs the current thread's code allows uncontrolled APIs, or if none does
 /** Visits the managers that qore_find_thread_sandbox_policy_manager_ref() (\a policy true) or
     qore_find_thread_sandbox_manager_ref() (\a policy false) would combine, with the same resolution rules, without
