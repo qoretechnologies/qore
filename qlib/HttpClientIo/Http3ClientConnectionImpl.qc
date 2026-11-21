@@ -61,6 +61,9 @@ public class Http3ClientConnection inherits HttpClientConnection {
         Creating the connection runs nothing that can block, so it can also be created on an async I/O thread: the
         host name is resolved and the UDP socket is bound by the connection's poll operation once it is submitted to
         the I/O controller (see @ref getAddressFamily())
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given; checked at run time, when the object is created (see
+        @ref httpclientio_caller_domains)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
@@ -68,10 +71,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
             *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
             *int address_family, *list<int> avoid_families)
             : HttpClientConnection(url_info, connect_timeout, logger, max_streams) {
-
+        # the caller check comes first, before any code of a caller (such as the logger) runs (qore#6981)
+        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
         log(LoggerLevel::DEBUG, "creating QUIC connection to %s:%d (max_streams=%d)",
             url_info.host, url_info.port, max_streams);
 
+        HttpClientCallerExemption exemption();
         poll_op = new Http3ClientPollOperation(url_info, connect_timeout, logger, ssl_verify_mode,
             accept_all_certs, client_cert, client_pk, self, ssl_ca_file, ssl_ca_path, address_family,
             avoid_families);

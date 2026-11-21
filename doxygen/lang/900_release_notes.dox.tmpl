@@ -2523,6 +2523,17 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a Program that the code of a user module creates does not inherit the module mark (\c PO_IN_MODULE) from the
+      module's Program, so it is not taken for module code; see @ref Qore::Program "Program"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7067">issue 7067</a>)
+    - code restricted from the functional domain of a qlib connection cannot create it (see @ref connectionprovider_3_1),
+      and the connection, poll operation and connection manager classes of @ref httpclientiointro "HttpClientIo"
+      refuse such code (see @ref httpclientio_caller_domains)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6981">issue 6981</a>)
+    - @ref filelocationhandlerintro "FileLocationHandler" refuses a caller restricted from the functional domain of a
+      location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
+      locations); see @ref filelocationhandler_v3_0
+      (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0

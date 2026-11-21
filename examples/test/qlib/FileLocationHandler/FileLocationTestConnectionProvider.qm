@@ -138,6 +138,15 @@ hash<string, hash<auto>> sub ConnectionMap() {
                 "url": "ftp://ftpuser:" + PasswordMarker + "@localhost:1/base",
             },
         },
+        # an HTTPS connection to a port on which nothing listens; its locations go to the https handler (qore#6959)
+        "web": {
+            "class_name": "ConnectionProvider::HttpConnection",
+            "config": {
+                "name": "web",
+                "desc": "test HTTPS connection",
+                "url": "https://localhost:1/base",
+            },
+        },
         # a connection type with no file location support at all
         "no-files": {
             "class_name": "FileLocationTestConnectionProvider::NoFileConnection",

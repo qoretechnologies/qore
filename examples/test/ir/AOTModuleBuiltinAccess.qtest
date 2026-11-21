@@ -156,8 +156,11 @@ sandboxed untyped: INVALID-FUNCTION-ACCESS: parse options do not allow access to
 ";
 
         #! expected output of the issue's reproduction: the module code runs and the sandbox refuses the connection
-        const ExpectedReproOutput = "NETWORK-ACCESS-DENIED: Connection to 127.0.0.1 denied by security policy "
-            "(private/blocked network)\n";
+        #! the repro's lockdown Program is restricted from the network, so the HttpClientIo connection manager that
+        #! Util::get_file_from_url() creates refuses it (qore#6981); the manager's members, whose initializers use the
+        #! builtins of issue #5556 (RWLock), are initialized before its constructor makes the check
+        const ExpectedReproOutput = "PERMISSION-DENIED: the calling code may not create an HTTP client connection "
+            "manager, as it is restricted from the NETWORK functional domain\n";
     }
 
     constructor() : QUnit::Test("AOTModuleBuiltinAccessTest", "1.0", \ARGV) {

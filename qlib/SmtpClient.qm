@@ -2076,6 +2076,11 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
     @since %SmtpClient 1.6
 */
 public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("SmtpClient",

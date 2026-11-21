@@ -7,7 +7,7 @@
 # Thread capability scopes and the code of Programs that sandboxed code created (qorus#867, D6/D7): such code is
 # governed by the sandbox that its Program keeps of the code that created it, wherever it runs, so it neither sees a
 # host's capabilities nor sets a scope, also when trusted code calls it without the Program object; and a Program
-# that inherits PO_IN_MODULE from a module that sandboxed code loaded is not trusted for the capabilities
+# that the code of a module that sandboxed code loaded creates is not trusted for the capabilities
 
 %modern
 %no-child-restrictions
@@ -150,12 +150,12 @@ hash<auto> sub module_probe(string src, code set) {
 
     moduleProgram() {
         ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
-        # the module's Program and a Program that its code creates have PO_IN_MODULE, but sandboxed code loaded the
-        # module and gave the code
+        # sandboxed code loaded the module and gave the code of the Program that the module's code creates
         assertEq(Governed, sandboxed.callFunction("module_probe", ProbeSource, \try_set()));
-        # also when trusted code calls the Program's code later
+        # also when trusted code calls the Program's code later; the Program does not inherit the module mark of the
+        # module's Program (qore#7067)
         Program p = sandboxed.callFunction("module_make", ProbeSource);
-        assertTrue((p.getParseOptions() & PO_IN_MODULE).toBool());
+        assertFalse((p.getParseOptions() & PO_IN_MODULE).toBool());
         assertEq(Governed, p.callFunction("probe", \try_set()));
     }
 

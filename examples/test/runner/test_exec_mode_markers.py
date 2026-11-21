@@ -423,6 +423,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
+                                 "examples/test/qlib/ConnectionProvider/NamedConnectionCreation.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-3.qtest",
