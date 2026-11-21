@@ -9189,6 +9189,8 @@ SocketConnectInetHappyEyeballsPollState::SocketConnectInetHappyEyeballsPollState
 
     // close socket if already open
     qore_socket_close_private_from_controller(sock);
+    // a close of the socket or a descriptor given to it by another caller from now on ends the operation (qore#7003)
+    sock->getDescriptorGeneration(sock_gen);
 
     destinations = std::make_shared<QoreConnectionDestinations>();
 
@@ -9266,14 +9268,12 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
     }
 #endif
 
-    // the socket was closed while the step runs (by another thread): the attempt whose descriptor it took over has it
-    // only by its hold, inert; the connection is not continued (qore#6962)
-    for (auto& a : active_attempts) {
-        if (a.fd != QORE_INVALID_SOCKET && a.sock_hold && sock->sock != a.fd) {
-            closeAllFds();
-            qore_socket_raise_canceled("connect", xsink);
-            return -1;
-        }
+    // the socket was closed, or given another descriptor, since the operation last gave it one (by another thread,
+    // while the step runs): the connection is not continued (qore#6962, qore#7003)
+    if (socketChanged()) {
+        closeAllFds();
+        qore_socket_raise_canceled("connect", xsink);
+        return -1;
     }
 
     // Check all active attempts for completion
@@ -9353,7 +9353,6 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
                 }
             }
             closeAllFds();
-            sock->sock = QORE_INVALID_SOCKET;
             return -1;
         }
         if (rc == 0) {
@@ -9374,7 +9373,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
     }
 
     if (!any_active) {
-        sock->sock = QORE_INVALID_SOCKET;
+        // the socket has no descriptor: the attempt that was its descriptor gave it up through releasePrimaryFd()
         raiseConnectError(xsink);
         return -1;
     }
@@ -9599,7 +9598,13 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
         // Assign first racing fd to sock->sock so isOpen() returns true; the socket takes the attempt's descriptor
         // over
         if (sock->sock == QORE_INVALID_SOCKET) {
-            sock->setDescriptor(fd, active_attempts.back().owned, true, &active_attempts.back().sock_hold);
+            if (!sock->setDescriptorIfGeneration(sock_gen, fd, active_attempts.back().owned, true,
+                    &active_attempts.back().sock_hold, &sock_gen)) {
+                // the socket was closed since the operation started: it takes no descriptor (qore#7003)
+                closeAllFds();
+                qore_socket_raise_canceled("connect", xsink);
+                return -1;
+            }
             sock->resetCloseInterrupt();
         }
 
@@ -9629,21 +9634,33 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
 
     SocketResolvedAddrInfo& wp = addrs[sorted_addrs[winner.addr_idx]];
 
-    // a winner that the socket took over and no longer has: the socket was closed while the attempt was in progress,
-    // and the attempt has the descriptor only by its hold; the socket must not take it again, as its close has given
-    // it up already (qore#6962)
-    if (winner.sock_hold && sock->sock != winner.fd) {
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can after the step has checked it
+    if (void (*hook)() = qore_dbg_connect_before_assign_winner.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
+
+    // the socket was closed, or given another descriptor, since the operation last gave it one: it takes no
+    // descriptor, whether the winner is the attempt that it took over (which has the descriptor only by its hold) or
+    // another one, and the connection fails as closed (qore#6962, qore#7003)
+    if (socketChanged()) {
         closeAllFds();
         qore_socket_raise_canceled("connect", xsink);
         return;
     }
 
     // Assign winning fd to socket (may already be sock->sock if first attempt won); the socket takes the winner's
-    // descriptor over
+    // descriptor over, only if it has not been closed meanwhile (the checks with the socket's generation are made
+    // with its close lock held, where a close changes it)
     if (sock->sock != winner.fd) {
         int old_primary = sock->sock;
         if (old_primary == QORE_INVALID_SOCKET) {
-            sock->setDescriptor(winner.fd, winner.owned, true);
+            if (!sock->setDescriptorIfGeneration(sock_gen, winner.fd, winner.owned, true, nullptr, &sock_gen)) {
+                closeAllFds();
+                qore_socket_raise_canceled("connect", xsink);
+                return;
+            }
         } else {
             // the previous primary attempt is given up through the socket: an async I/O thread can have it
             // registered, and holds it open until it has removed it; the attempt's hold is released after the
@@ -9657,16 +9674,19 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
                 }
             }
             bool close_old = false;
-            if (sock->replaceDescriptor(old_primary, winner.fd, close_old, &winner.owned)) {
-                if (close_old) {
-                    qore_socket_private::closeDescriptor(old_primary);
-                }
-            } else {
-                // a concurrent close released the previous descriptor
-                sock->setDescriptor(winner.fd, winner.owned, true);
+            bool replaced = sock->replaceDescriptor(old_primary, winner.fd, close_old, &winner.owned, nullptr,
+                &sock_gen, &sock_gen);
+            if (replaced && close_old) {
+                qore_socket_private::closeDescriptor(old_primary);
             }
             if (old) {
                 sock->releaseAttemptHold(old->sock_hold);
+            }
+            if (!replaced) {
+                // a concurrent close released the previous descriptor: the socket takes no descriptor
+                closeAllFds();
+                qore_socket_raise_canceled("connect", xsink);
+                return;
             }
         }
     }
@@ -9701,7 +9721,9 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
 std::atomic<bool> qore_dbg_connect_no_immediate_check{false};
 std::atomic<bool> qore_dbg_connect_complete_before_immediate_check{false};
 std::atomic<void (*)()> qore_dbg_connect_before_check_attempts{nullptr};
+std::atomic<void (*)()> qore_dbg_connect_before_assign_winner{nullptr};
 std::atomic<bool> qore_dbg_inert_socket_fails{false};
+std::atomic<bool> qore_dbg_inert_dup_fails{false};
 std::atomic<unsigned> qore_dbg_inert_socket_fallbacks{0};
 
 QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
@@ -9712,7 +9734,7 @@ QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
 void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, ConnAttempt* next) {
     bool close_old = false;
     if (sock->replaceDescriptor(fd, next ? next->fd : QORE_INVALID_SOCKET, close_old, next ? &next->owned : nullptr,
-            next ? &next->sock_hold : nullptr)) {
+            next ? &next->sock_hold : nullptr, &sock_gen, &sock_gen)) {
         // the attempt that gives the descriptor up has a hold of it, so the socket leaves its close to the hold
         if (close_old) {
             qore_socket_private::closeDescriptor(fd);
@@ -9721,6 +9743,12 @@ void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, ConnAttem
             sock->resetCloseInterrupt();
         }
     }
+}
+
+bool SocketConnectInetHappyEyeballsPollState::socketChanged() const {
+    uint32_t gen;
+    sock->getDescriptorGeneration(gen);
+    return gen != sock_gen;
 }
 
 void SocketConnectInetHappyEyeballsPollState::closeAllFds() {

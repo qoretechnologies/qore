@@ -73,6 +73,12 @@
 #include <vector>
 #include <strings.h>
 #include <sys/time.h>
+#ifndef _Q_WINDOWS
+// dup3(), fcntl() and their flags of the inert socket of a connection attempt (see makeInertLocked())
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 
 #include <ares.h>
 #include <ares_version.h>
@@ -702,6 +708,9 @@ struct QoreSharedDescriptor {
 //! Debug builds: if true, no inert socket can be made for a descriptor that a connection attempt holds when the socket
 //! is closed (see qore_socket_private::makeInertLocked()), as when the process has no free descriptor
 DLLLOCAL extern std::atomic<bool> qore_dbg_inert_socket_fails;
+//! Debug builds: if true, the inert socket cannot take the number of a descriptor held by a connection attempt when
+//! the socket is closed (a failed dup2() or dup3(); see qore_socket_private::makeInertLocked())
+DLLLOCAL extern std::atomic<bool> qore_dbg_inert_dup_fails;
 //! Debug builds: the number of closes of a descriptor held by a connection attempt that could not make it inert
 DLLLOCAL extern std::atomic<unsigned> qore_dbg_inert_socket_fallbacks;
 #endif
@@ -1138,6 +1147,10 @@ private:
         the error is raised, all with system calls of their own
     */
     int last_error = 0;
+    //! The @ref qore_socket_private::fd_generation "generation" of the socket's descriptor since this operation last
+    //! gave it one (or since the operation started): a close of the socket, or a descriptor that another caller gave
+    //! it, changes it, and the operation then gives the socket no descriptor (qore#7003)
+    uint32_t sock_gen = 0;
 
     //! Continue asynchronous DNS resolution
     /** Returns 0 when resolved, 1 when polling must continue, -1 on error */
@@ -1175,6 +1188,11 @@ private:
         socket has released the descriptor already, nothing is closed here.
     */
     DLLLOCAL void releasePrimaryFd(int fd, ConnAttempt* next);
+
+    //! Returns true if the socket was closed, or given another descriptor, since this operation last gave it one
+    /** Read with the socket's close lock held, where a close changes the generation (see @ref sock_gen)
+    */
+    DLLLOCAL bool socketChanged() const;
 };
 
 #ifndef _Q_WINDOWS
@@ -2677,13 +2695,15 @@ public:
         @param old_generation the @ref fd_generation that the caller read with @a old_fd (getDescriptorGeneration()),
         if any: the descriptor is then replaced only if the socket still has that descriptor, not only its number
         (qore#7003)
+        @param new_generation set to the @ref fd_generation of @a new_fd when it is replaced, read with @ref close_m
+        held
 
         @return true if @a old_fd was replaced by @a new_fd; false if the socket no longer has @a old_fd, because a
         concurrent close released it, in which case the caller keeps @a new_fd and must not close @a old_fd
     */
     DLLLOCAL bool replaceDescriptor(int old_fd, int new_fd, bool& close_old,
             std::shared_ptr<SharedDescriptor>* adopt = nullptr, std::shared_ptr<SharedDescriptor>* hold = nullptr,
-            const uint32_t* old_generation = nullptr) {
+            const uint32_t* old_generation = nullptr, uint32_t* new_generation = nullptr) {
         CloseLockHelper cl(*this);
         if (sock != old_fd || old_fd == QORE_INVALID_SOCKET || (old_generation && fd_generation != *old_generation)) {
             return false;
@@ -2706,6 +2726,9 @@ public:
         }
         // any sync I/O helper mid-wait returns QSE_NOT_OPEN instead of using the old descriptor
         ++fd_generation;
+        if (new_generation) {
+            *new_generation = fd_generation;
+        }
         fd_nonblocking.store(false, std::memory_order_relaxed);
         return true;
     }
@@ -2733,10 +2756,38 @@ public:
         the last reference closes it (see close_and_reset_locked()), so the number cannot be given to another
         descriptor while the caller has it; the caller never closes the descriptor itself, and releases the hold
         with releaseAttemptHold()
+        @param new_generation set to the @ref fd_generation of @a fd, read with @ref close_m held
     */
     DLLLOCAL void setDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt, bool nonblocking,
-            std::shared_ptr<SharedDescriptor>* hold = nullptr) {
+            std::shared_ptr<SharedDescriptor>* hold = nullptr, uint32_t* new_generation = nullptr) {
         CloseLockHelper cl(*this);
+        setDescriptorLocked(fd, adopt, nonblocking, hold, new_generation);
+    }
+
+    //! Makes an owned descriptor the descriptor of the socket only if the socket has had no other descriptor since
+    //! the caller read its generation
+    /** As setDescriptor(); a close of the socket, or a descriptor given to it, after the caller's read changes its
+        @ref fd_generation: the socket then does not take @a fd, which the caller still owns (qore#7003)
+
+        @param expected_generation the @ref fd_generation that the caller read (getDescriptorGeneration(), or the
+        @a new_generation of its last setDescriptor() or replaceDescriptor())
+
+        @return true if the socket took @a fd over
+    */
+    DLLLOCAL bool setDescriptorIfGeneration(uint32_t expected_generation, int fd,
+            std::shared_ptr<SharedDescriptor>& adopt, bool nonblocking, std::shared_ptr<SharedDescriptor>* hold = nullptr,
+            uint32_t* new_generation = nullptr) {
+        CloseLockHelper cl(*this);
+        if (sock != QORE_INVALID_SOCKET || fd_generation != expected_generation) {
+            return false;
+        }
+        setDescriptorLocked(fd, adopt, nonblocking, hold, new_generation);
+        return true;
+    }
+
+    //! Makes an owned descriptor the descriptor of the socket; @ref close_m must be held
+    DLLLOCAL void setDescriptorLocked(int fd, std::shared_ptr<SharedDescriptor>& adopt, bool nonblocking,
+            std::shared_ptr<SharedDescriptor>* hold, uint32_t* new_generation) {
         sock = fd;
         shared_fd = adopt ? qore_owned_descriptor_adopt(adopt) : nullptr;
         if (hold && shared_fd) {
@@ -2744,6 +2795,9 @@ public:
             shared_fd->attempt_hold = true;
         }
         ++fd_generation;
+        if (new_generation) {
+            *new_generation = fd_generation;
+        }
         fd_nonblocking.store(nonblocking, std::memory_order_relaxed);
     }
 
@@ -2789,19 +2843,55 @@ public:
             errno = EMFILE;
         } else
 #endif
+#ifdef SOCK_CLOEXEC
+        inert = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+#else
         inert = ::socket(AF_UNIX, SOCK_STREAM, 0);
-        if (inert < 0) {
-            // the descriptor is only shut down; the attempt's hold still keeps its number
-#ifdef DEBUG
-            qore_dbg_inert_socket_fallbacks.fetch_add(1, std::memory_order_relaxed);
-            printd(1, "qore_socket_private::makeInertLocked() fd %d: no inert socket: %s; the descriptor is only shut "
-                "down\n", fd, strerror(errno));
 #endif
+        if (inert < 0) {
+            inertFallback(fd, "no inert socket");
             return;
         }
-        while (::dup2(inert, fd) < 0 && errno == EINTR) {
+        // the number keeps the close-on-exec flag of the socket's descriptors, which dup2() clears
+        int rc;
+        while (true) {
+#ifdef DEBUG
+            if (qore_dbg_inert_dup_fails.load(std::memory_order_relaxed)) {
+                // as if the number could not be taken: nothing is replaced
+                rc = -1;
+                errno = EBADF;
+                break;
+            }
+#endif
+#ifdef __linux__
+            rc = ::dup3(inert, fd, O_CLOEXEC);
+#else
+            rc = ::dup2(inert, fd);
+#endif
+            if (rc >= 0 || errno != EINTR) {
+                break;
+            }
         }
+        if (rc < 0) {
+            int err = errno;
+            ::close(inert);
+            errno = err;
+            inertFallback(fd, "the inert socket cannot take the number");
+            return;
+        }
+#ifndef __linux__
+        ::fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
         ::close(inert);
+    }
+
+    //! The descriptor could not be made inert: it is only shut down, and the attempt's hold still keeps its number
+    DLLLOCAL static void inertFallback(int fd, const char* why) {
+#ifdef DEBUG
+        qore_dbg_inert_socket_fallbacks.fetch_add(1, std::memory_order_relaxed);
+        printd(1, "qore_socket_private::makeInertLocked() fd %d: %s: %s; the descriptor is only shut down\n", fd, why,
+            strerror(errno));
+#endif
     }
 #endif
 
@@ -5037,6 +5127,13 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_che
     SocketConnectInetHappyEyeballsPollState::continuePoll()
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_check_attempts;
+
+//! Debug builds: if set, called by a happy-eyeballs connect step right before the socket takes the winning attempt's
+//! descriptor over
+/** For the C++ unit tests of a close of the socket by another thread after the step has checked that the socket was not
+    closed (see SocketConnectInetHappyEyeballsPollState::assignWinner())
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_assign_winner;
 
 #ifndef _Q_WINDOWS
 //! Debug builds: if not 0, the connect checked fails with this error after its pending error was read as 0

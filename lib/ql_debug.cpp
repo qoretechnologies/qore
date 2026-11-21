@@ -7862,24 +7862,189 @@ public:
         result.release().discard(&xsink);
         queue = nullptr;
         queue_obj = nullptr;
-        // a descriptor takes each attempt's number that is free now; the operation is then destroyed
-        std::vector<int> probes;
+        // each attempt's number is either still reserved by the operation, which closes it when it is destroyed, or
+        // free: a descriptor then takes it, which must survive the destruction of the operation
+        std::vector<int> probes, reserved;
+        std::vector<struct stat> reserved_st;
         for (int fd : attempt_fds) {
             if (fcntl(fd, F_GETFD) == -1) {
                 int p = fcntl(sp[0], F_DUPFD_CLOEXEC, fd);
+                UT_ASSERT_EQ(c, fd, p, ("a descriptor takes a free number of an attempt" + when).c_str());
                 if (p >= 0) {
                     fds.push_back(p);
                     probes.push_back(p);
                 }
+            } else {
+                struct stat st;
+                if (!fstat(fd, &st)) {
+                    reserved.push_back(fd);
+                    reserved_st.push_back(st);
+                }
             }
         }
+        UT_ASSERT_EQ(c, attempt_fds.size(), probes.size() + reserved.size(),
+            ("every attempt's number is checked" + when).c_str());
         op_obj = nullptr;
         sock->close();
+        // the I/O thread gives its references to the operation up when the controller stops: the operation is then
+        // destroyed
+        ctrl->stopClear(&xsink);
+        xsink.clear();
         for (int p : probes) {
             UT_ASSERT(c, fcntl(p, F_GETFD) != -1,
                 ("a descriptor given an attempt's number is still open after the operation is destroyed" + when)
                 .c_str());
         }
+        for (size_t i = 0; i < reserved.size(); ++i) {
+            // the number may have been given to another descriptor of the process since: it is not the same file
+            struct stat st;
+            UT_ASSERT(c, fstat(reserved[i], &st) || st.st_ino != reserved_st[i].st_ino
+                || st.st_dev != reserved_st[i].st_dev,
+                ("a number that the operation reserved is closed when it is destroyed" + when).c_str());
+        }
+        xsink.clear();
+    }
+
+    //! The socket of the connection that runConnectCloseBeforeAssign() closes before the winner is taken over
+    static inline qore_socket_private* close_assign_sock = nullptr;
+
+    //! Closes the socket's descriptor right before the socket takes the winning attempt over, as another thread can
+    static void closeBeforeAssign() {
+        qore_dbg_connect_before_assign_winner.store(nullptr, std::memory_order_release);
+        close_assign_sock->close_and_reset();
+    }
+
+    //! A connection whose socket is closed by another thread after the step has checked it, and before the socket
+    //! takes the winning attempt over, fails as closed (qore#7003)
+    /** A name that resolves to ::1 and 127.0.0.1 (a hosts file of the test's own) gives a happy-eyeballs connection
+        two attempts under an async I/O controller: the first one gets no answer, and the second one connects, so
+        that the winner is an attempt that the socket has not taken over.  A debug hook
+        (qore_dbg_connect_before_assign_winner) closes the socket right before the winner is taken over: the socket
+        must stay closed and the connection must fail with SOCKET-CLOSED.
+    */
+    static void runConnectCloseBeforeAssign(UnitTestCounters& c) {
+        const std::string when = " (closed before the winner is taken over)";
+        ExceptionSink xsink;
+        std::vector<int> fds;
+        struct FdCloser {
+            std::vector<int>& fds;
+            ~FdCloser() {
+                for (int fd : fds) {
+                    ::close(fd);
+                }
+            }
+        } fd_closer{fds};
+        // a listener on 127.0.0.1 that accepts, and a target on ::1 with its port that gets no answer
+        int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
+        UT_ASSERT(c, lfd >= 0, ("the listener is created" + when).c_str());
+        if (lfd < 0) {
+            return;
+        }
+        fds.push_back(lfd);
+        struct sockaddr_in sa = {};
+        sa.sin_family = AF_INET;
+        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t salen = sizeof(sa);
+        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)
+            && !::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen) && !::listen(lfd, 16);
+        UT_ASSERT(c, ok, ("the listener listens" + when).c_str());
+        if (!ok || !makeSilentTarget6(c, fds, sa.sin_port, when)) {
+            return;
+        }
+
+        const char* tmp = getenv("TMPDIR");
+        std::string hosts = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-he-assign-hosts-" + std::to_string(getpid());
+        {
+            FILE* f = fopen(hosts.c_str(), "w");
+            UT_ASSERT(c, f != nullptr, ("the hosts file is written" + when).c_str());
+            if (!f) {
+                return;
+            }
+            fprintf(f, "::1 qore-he-assign\n127.0.0.1 qore-he-assign\n");
+            fclose(f);
+        }
+        struct HostsRestorer {
+            std::string prev, path;
+            ~HostsRestorer() {
+                qore_dbg_cares_set_hosts_file(prev);
+                ::unlink(path.c_str());
+            }
+        } hosts_restorer{qore_dbg_cares_set_hosts_file(hosts), hosts};
+        std::string target = "qore-he-assign:" + std::to_string(ntohs(sa.sin_port));
+
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            ~Cleanup() {
+                qore_dbg_connect_before_assign_winner.store(nullptr, std::memory_order_release);
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink};
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, ("the controller starts" + when).c_str());
+        if (!ready || xsink) {
+            return;
+        }
+
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        sock->ref();
+        close_assign_sock = qore_socket_private::get(*sock->priv->socket);
+        SocketConnectPollOperation* op = new SocketConnectPollOperation(&xsink, false, target.c_str(), sock, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        UT_ASSERT(c, !xsink, ("the connect operation is created" + when).c_str());
+        if (xsink) {
+            return;
+        }
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("connect"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("connect-close-before-assign-unit-test"), &xsink);
+        info->setKeyValue("to", 10000, &xsink);
+        qore_dbg_connect_before_assign_winner.store(closeBeforeAssign, std::memory_order_release);
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the connection is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
+        UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH, ("the connection ends" + when).c_str());
+        UT_ASSERT(c, !qore_dbg_connect_before_assign_winner.load(std::memory_order_acquire),
+            ("a winner was taken over: the hook ran" + when).c_str());
+        if (result->getType() == NT_HASH) {
+            QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
+            const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
+            QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
+            UT_ASSERT(c, err.getType() == NT_STRING
+                && !strcmp(err.get<const QoreStringNode>()->c_str(), "SOCKET-CLOSED"),
+                ("the connection fails as closed" + when).c_str());
+        }
+        xsink.clear();
+        UT_ASSERT(c, sock->getPollableDescriptor() < 0, ("the closed socket stays closed" + when).c_str());
+        result.release().discard(&xsink);
+        queue = nullptr;
+        queue_obj = nullptr;
+        op_obj = nullptr;
+        sock->close();
         xsink.clear();
     }
 
@@ -7976,24 +8141,29 @@ public:
         that it cannot queue; elsewhere a port that is bound and does not listen, which macOS does not answer.
 
         With @p inert_fails, no inert socket can be made (qore_dbg_inert_socket_fails, as when the process has no
-        free descriptor): the descriptor is then only shut down, and its number must still be kept by the attempt and
-        nothing adopted.
+        free descriptor), or with @p dup_fails it cannot take the number (qore_dbg_inert_dup_fails): the descriptor is
+        then only shut down, and its number must still be kept by the attempt and nothing adopted.  Without them, the
+        inert socket keeps the close-on-exec flag of the number.
     */
-    static void runConnectCloseInProgress(UnitTestCounters& c, ConnectCloseMode mode, bool inert_fails = false) {
+    static void runConnectCloseInProgress(UnitTestCounters& c, ConnectCloseMode mode, bool inert_fails = false,
+            bool dup_fails = false) {
         std::string when = mode == CCM_DESTROY ? " (closed, then destroyed"
             : (mode == CCM_POLL_AFTER ? " (closed, then stepped" : " (closed in a step");
-        when += inert_fails ? ", no inert socket)" : ")";
+        when += inert_fails ? ", no inert socket)" : (dup_fails ? ", inert socket not taken)" : ")");
         auto msg = [&when](const char* text) {
             return std::string(text) + when;
         };
         struct InertFailHelper {
-            explicit InertFailHelper(bool fail) {
+            explicit InertFailHelper(bool fail, bool dup) {
                 qore_dbg_inert_socket_fails.store(fail, std::memory_order_relaxed);
+                qore_dbg_inert_dup_fails.store(dup, std::memory_order_relaxed);
             }
             ~InertFailHelper() {
                 qore_dbg_inert_socket_fails.store(false, std::memory_order_relaxed);
+                qore_dbg_inert_dup_fails.store(false, std::memory_order_relaxed);
             }
-        } ifh(inert_fails);
+        } ifh(inert_fails, dup_fails);
+        const bool fallback = inert_fails || dup_fails;
         unsigned fallbacks = qore_dbg_inert_socket_fallbacks.load(std::memory_order_relaxed);
         ExceptionSink xsink;
         std::vector<int> fds;
@@ -8079,7 +8249,7 @@ public:
                 struct sockaddr_storage ss;
                 socklen_t sslen = sizeof(ss);
                 int rc = ::getsockname(attempt_fd, reinterpret_cast<struct sockaddr*>(&ss), &sslen);
-                if (inert_fails) {
+                if (fallback) {
                     // the fallback: only shut down, the attempt's descriptor itself
                     UT_ASSERT(c, !rc && ss.ss_family == AF_INET,
                         msg("the attempt's number still has its descriptor when no inert socket can be made").c_str());
@@ -8088,6 +8258,9 @@ public:
                 } else {
                     UT_ASSERT(c, !rc && ss.ss_family == AF_UNIX,
                         msg("the attempt's number has an inert descriptor, not the connection being established").c_str());
+                    int fdflags = fcntl(attempt_fd, F_GETFD);
+                    UT_ASSERT(c, fdflags >= 0 && (fdflags & FD_CLOEXEC),
+                        msg("the inert descriptor is closed on exec").c_str());
                 }
             }
             if (mode == CCM_POLL_AFTER) {
@@ -23499,8 +23672,12 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_IN_STEP);
     AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_DESTROY, true);
     AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_POLL_AFTER, true);
+    AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_IN_STEP, true);
+    AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_DESTROY, false, true);
+    AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_POLL_AFTER, false, true);
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c);
     AsyncIoDescriptorHoldTest::runConnectCloseTwoAttempts(c);
+    AsyncIoDescriptorHoldTest::runConnectCloseBeforeAssign(c);
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
