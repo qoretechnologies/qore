@@ -1927,6 +1927,61 @@ DLLLOCAL void q_ds_append_masked_string_desc(QoreString& str, const QoreString& 
 */
 DLLLOCAL void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h);
 
+//! the database name is shown in a masked datasource (see q_ds_masked_hash()); a db:// safe URL shows it (qore#7017)
+#define QDS_MASK_SHOW_DB (1 << 0)
+//! the character encoding and the option names are shown in a masked datasource, with every option value masked
+/** See q_ds_masked_hash(); a db:// safe URL and serialized SqlUtil data show them (qore#7016, qore#7017)
+*/
+#define QDS_MASK_SHOW_OPTIONS (1 << 1)
+
+//! returns the masked form of a datasource hash as a hash (qore#7016, qore#7017)
+/** The hash has the keys of a datasource hash, with the masking of q_ds_append_masked_flags():
+    - \c "type": the driver name, or \ref QORE_DS_MASK if it is not a valid driver name
+    - \c "user": always \ref QORE_DS_MASK, whether a user is set or not
+    - \c "db": the database name with \ref QDS_MASK_SHOW_DB if it has no control character, otherwise always
+      \ref QORE_DS_MASK
+    - \c "charset": the encoding, with \ref QDS_MASK_SHOW_OPTIONS only, if it is a valid encoding name
+    - \c "host" and \c "port": as in q_ds_append_masked()
+    - \c "options": with \ref QDS_MASK_SHOW_OPTIONS only: the option names, each with the value
+      \ref QORE_DS_MASK, as no driver declares which of its options hold secrets (qore#7070); if a name is not a
+      valid option name, the value of \c "options" is \ref QORE_DS_MASK instead
+
+    The password is never in the hash.  Never raises an exception; values are read with QoreStringDataHelper, so
+    inline short strings are read as well.
+
+    @param h the datasource hash, if any
+    @param flags a combination of QDS_MASK_* flags
+*/
+DLLLOCAL QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags);
+
+//! appends the masked description of a datasource hash with the given flags (qore#7016, qore#7017)
+/** The description has the form
+    <tt>driver:****</tt><tt>/****</tt><tt>\@db[(charset)][%host[:port]][{opt=****,...}]</tt>, made from
+    q_ds_masked_hash(); with no flags, it is identical to the description of q_ds_append_masked_hash().  A separate
+    name, so that a call with flags never resolves to an overload of q_ds_append_masked().
+*/
+DLLLOCAL void q_ds_append_masked_flags(QoreString& str, const QoreHashNode* h, unsigned flags);
+
+//! appends the masked description of a datasource string with the given flags (qore#7016, qore#7017)
+/** As q_ds_append_masked_string_desc() with no flags: a string that cannot be parsed, or whose option block has an
+    \c '@', is described by its driver name only
+*/
+DLLLOCAL void q_ds_append_masked_string_flags(QoreString& str, const QoreString& ds, unsigned flags);
+
+//! returns the masked form of a datasource string as a hash (qore#7016, qore#7017)
+/** As q_ds_masked_hash(); a string that cannot be parsed, or whose option block has an \c '@', gives a hash with
+    only \c "type": the driver name, or \ref QORE_DS_MASK
+*/
+DLLLOCAL QoreHashNode* q_ds_masked_string_hash(const QoreString& ds, unsigned flags);
+
+//! returns the QDS_MASK_* flags for the options of mask_datasource() and mask_datasource_hash()
+/** The options are \c "show_db" (\ref QDS_MASK_SHOW_DB) and \c "show_options" (\ref QDS_MASK_SHOW_OPTIONS), each
+    taken as a boolean value.
+
+    @return 0 for OK, -1 if \c DATASOURCE-MASK-ERROR was raised for an unknown option (whose name is not shown)
+*/
+DLLLOCAL int q_ds_mask_flags(const QoreHashNode* opts, unsigned& flags, ExceptionSink* xsink);
+
 //! checks that a secret string (a password, a datasource or URL string with a password) has no NUL character
 /** Like q_check_no_nul(const char*, size_t, const char*, const char*, const char*, ExceptionSink*), except that the
     exception raised does not show the string or the position of the NUL character, so that no part of the secret
