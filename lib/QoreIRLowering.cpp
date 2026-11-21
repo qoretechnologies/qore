@@ -8,6 +8,7 @@
 */
 
 #include <algorithm>
+#include <iterator>
 #include <cstring>
 #include <exception>
 
@@ -5933,27 +5934,49 @@ const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t
                 --try_depth;
             }
         }
+        // the handlers of the block and of the blocks in it have run too: a Scope entry left on the stack takes the
+        // handlers registered after its own up to the end of block_handlers for its own (emitBlockCleanups()), so the
+        // handlers of the blocks that are left must not be there, or the paths run them again (qore#6955)
+        const size_t handler_start = std::min(entry.handler_start, block_handlers.size());
+        std::vector<InlineHandler> saved_handlers(block_handlers.begin() + handler_start, block_handlers.end());
         cleanup_stack.resize(scope_entry);
+        block_handlers.erase(block_handlers.begin() + handler_start, block_handlers.end());
         builder.truncateTempScopes(temp_depth);
         // restores the state of the block on every way out, also on an exception, and drops the scope's paths unless
         // they were all lowered
         struct ScopePathsRestore {
             QoreIRLowering& lowering;
             std::vector<BlockCleanupEntry>& saved_entries;
+            size_t scope_entry;
+            std::vector<InlineHandler>& saved_handlers;
+            size_t handler_start;
             QoreIRBuilder::TempScopeState& temp_state;
             int saved_try_depth;
             uint32_t scope_id;
             bool done = false;
             ~ScopePathsRestore() {
-                lowering.cleanup_stack.insert(lowering.cleanup_stack.end(), saved_entries.begin(),
-                    saved_entries.end());
+                // the lowering of the paths leaves both as it found them, unless an exception ended it; the saved
+                // entries are moved back into the capacity that they had, so nothing here allocates
+                if (lowering.cleanup_stack.size() > scope_entry) {
+                    lowering.cleanup_stack.erase(lowering.cleanup_stack.begin() + scope_entry,
+                        lowering.cleanup_stack.end());
+                }
+                lowering.cleanup_stack.insert(lowering.cleanup_stack.end(),
+                    std::make_move_iterator(saved_entries.begin()), std::make_move_iterator(saved_entries.end()));
+                if (lowering.block_handlers.size() > handler_start) {
+                    lowering.block_handlers.erase(lowering.block_handlers.begin() + handler_start,
+                        lowering.block_handlers.end());
+                }
+                lowering.block_handlers.insert(lowering.block_handlers.end(),
+                    std::make_move_iterator(saved_handlers.begin()), std::make_move_iterator(saved_handlers.end()));
                 lowering.builder.restoreTempScopeState(std::move(temp_state));
                 lowering.try_depth = saved_try_depth;
                 if (!done) {
                     lowering.scope_exit_flow_paths.erase(scope_id);
                 }
             }
-        } scope_paths_restore{*this, saved_entries, temp_state, saved_try_depth, scope_id};
+        } scope_paths_restore{*this, saved_entries, scope_entry, saved_handlers, handler_start, temp_state,
+            saved_try_depth, scope_id};
         paths.return_path = lowerDebugFlowPath(RC_RETURN, LoopJumpTarget(), loc, error);
         for (int rc : {RC_BREAK, RC_CONTINUE}) {
             if (!paths.return_path) {
