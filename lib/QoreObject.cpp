@@ -2254,15 +2254,24 @@ void QoreObject::externalDelete(qore_classid_t key, ExceptionSink* xsink) {
     {
         QoreAutoVarRWWriteLocker al(priv->rml);
 
-        if (priv->in_destructor || priv->status == OS_DELETED || !priv->privateData)
+        // a deleted object's private data can be being released now, outside the lock: it is left alone
+        if (priv->status == OS_DELETED || !priv->privateData) {
             return;
+        }
 
-        // remove the private data that's already been deleted
-#ifdef DEBUG
-        assert(priv->privateData->getAndClearPtr(key));
-#else
-        priv->privateData->getAndClearPtr(key);
-#endif
+        // remove the private data that the caller has already deleted, also when a deletion of the object is
+        // running, which must not release it again (qore#7071)
+        AbstractPrivateData* pd = priv->privateData->getAndClearPtr(key);
+
+        // an object whose deletion has started (in its destructor after its last dereference, or with the deleting
+        // thread's TID while an explicit deletion runs its destructor and releases its data) is left to that
+        // deletion, which must not run twice (qore#7071)
+        if (priv->in_destructor || priv->status != OS_OK) {
+            return;
+        }
+        assert(pd);
+        (void)pd;
+
         // mark status as in destructor
         priv->status = q_gettid();
     }
