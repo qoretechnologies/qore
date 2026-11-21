@@ -331,6 +331,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   processes of its own binary started without an execution mode
         # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
         # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
+        # - value-encoding (#6960): the checks run in child processes with a default encoding of their own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
         #   without an execution mode
         # - aot-standalone-format-floor (#6699, batch AM v49): its checks run qcc executables in child processes started
@@ -360,6 +361,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/closure-default-self-ref.qtest",
                                  "examples/test/qore/classes/Serializable/DeserializationSizes.qtest",
                                  "examples/test/qore/classes/FtpClient/FtpPortAcceptUnreferenced.qtest",
+                                 "examples/test/qore/classes/Datasource/value-encoding/value-encoding.qtest",
                                  "examples/test/qore/functions/user-functional-domains/library-registry-origin.qtest",
                                  "examples/test/qore/classes/deleted-object-generic-variant.qtest",
                                  "examples/test/qore/classes/deleted-object-overload.qtest",
