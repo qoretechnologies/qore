@@ -322,9 +322,6 @@ public:
     DLLEXPORT virtual const char* getStateImpl() const override;
 
     DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
-    //! Drives a native child operation and returns its readiness mask directly to the parent.
-    DLLLOCAL int continuePollEvents(ExceptionSink* xsink);
-
 
     //! Returns the number of payload bytes already written to the socket
     /** Non-decreasing; equal to the payload size once @ref goalReached() returns @ref True.  Only the thread
@@ -349,7 +346,8 @@ public:
     DLLEXPORT size_t getBytesSent() const;
 
 private:
-    DLLLOCAL QoreHashNode* continuePollImpl(ExceptionSink* xsink, int* events);
+    friend class qore_socket_poll_events_ops;
+
     SimpleRefHolder<SimpleValueQoreNode> data;
     const char* buf;
     size_t size;
@@ -398,11 +396,9 @@ public:
     DLLEXPORT virtual QoreValue getOutput() const override;
 
     DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
-    //! Drives a native child operation and returns its readiness mask directly to the parent.
-    DLLLOCAL int continuePollEvents(ExceptionSink* xsink);
 
 private:
-    DLLLOCAL QoreHashNode* continuePollImpl(ExceptionSink* xsink, int* events);
+    friend class qore_socket_poll_events_ops;
 
 protected:
     SimpleRefHolder<SimpleValueQoreNode> data;

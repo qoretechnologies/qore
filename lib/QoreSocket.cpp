@@ -58,6 +58,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/SocketRecvHttpLinePollOperation.h"
+#include "qore/intern/SocketPollEventsOps.h"
 #include "qore/intern/HttpFastRoutes.h"
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRequest.h"
@@ -17957,52 +17958,52 @@ bool SocketSendPollOperation::abortNeedsClose() const {
 }
 
 QoreHashNode* SocketSendPollOperation::continuePoll(ExceptionSink* xsink) {
-    return continuePollImpl(xsink, nullptr);
+    return qore_socket_poll_events_ops::continuePollImpl(this, xsink, nullptr);
 }
 
-int SocketSendPollOperation::continuePollEvents(ExceptionSink* xsink) {
+int qore_socket_poll_events_ops::continuePollEvents(SocketSendPollOperation* b, ExceptionSink* xsink) {
     int events = 0;
-    continuePollImpl(xsink, &events);
+    continuePollImpl(b, xsink, &events);
     return events;
 }
 
-QoreHashNode* SocketSendPollOperation::continuePollImpl(ExceptionSink* xsink, int* events) {
-    AutoLocker al(sock->priv->m);
+QoreHashNode* qore_socket_poll_events_ops::continuePollImpl(SocketSendPollOperation* b, ExceptionSink* xsink, int* events) {
+    AutoLocker al(b->sock->priv->m);
 
-    if (!initialized) {
-        if (initLocked(xsink)) {
+    if (!b->initialized) {
+        if (b->initLocked(xsink)) {
             return nullptr;
         }
-    } else if (sock->priv->checkOpen(xsink)) {
+    } else if (b->sock->priv->checkOpen(xsink)) {
         return nullptr;
     }
 
-    if (!poll_state) {
+    if (!b->poll_state) {
         return nullptr;
     }
 
 #ifdef DEBUG
     // tests hold the write here, with the socket's lock held, until the connection is shut down or reset
     if (qore_dbg_socket_send_hook_t hook = qore_dbg_socket_send_hook.load()) {
-        hook(sock->getPollableDescriptor());
+        hook(b->sock->getPollableDescriptor());
     }
 #endif
 
     // see if we are able to continue
-    int rc = poll_state->continuePoll(xsink);
+    int rc = b->poll_state->continuePoll(xsink);
     //printd(5, "SocketConnectPollOperation::continuePoll() state: %s rc: %d (exp: %d)\n", getStateImpl(), rc,
     //    (int)*xsink);
     if (*xsink || !rc) {
         if (*xsink) {
-            assert(dynamic_cast<SocketSendPollState*>(poll_state.get()));
-            failed_bytes_sent = static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent();
+            assert(dynamic_cast<SocketSendPollState*>(b->poll_state.get()));
+            b->failed_bytes_sent = static_cast<SocketSendPollState*>(b->poll_state.get())->getBytesSent();
         }
         // release the AbstractPollState value
-        poll_state.reset();
-        sock->priv->clearNonBlock(NB_SEND);
-        set_non_block = false;
+        b->poll_state.reset();
+        b->sock->priv->clearNonBlock(NB_SEND);
+        b->set_non_block = false;
         if (!*xsink) {
-            sent = true;
+            b->sent = true;
         }
         return nullptr;
     }
@@ -18010,7 +18011,7 @@ QoreHashNode* SocketSendPollOperation::continuePollImpl(ExceptionSink* xsink, in
         *events = rc;
         return nullptr;
     }
-    return getSocketPollInfoHash(xsink, rc);
+    return b->getSocketPollInfoHash(xsink, rc);
 }
 
 SocketSendInputStreamPollOperation::SocketSendInputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
@@ -19030,39 +19031,39 @@ QoreHashNode* SocketWriteOutputStreamPollOperation::continuePollIntern(Exception
 }
 
 QoreHashNode* SocketRecvPollOperationBase::continuePoll(ExceptionSink* xsink) {
-    return continuePollImpl(xsink, nullptr);
+    return qore_socket_poll_events_ops::continuePollImpl(this, xsink, nullptr);
 }
 
-int SocketRecvPollOperationBase::continuePollEvents(ExceptionSink* xsink) {
+int qore_socket_poll_events_ops::continuePollEvents(SocketRecvPollOperationBase* b, ExceptionSink* xsink) {
     int events = 0;
-    continuePollImpl(xsink, &events);
+    continuePollImpl(b, xsink, &events);
     return events;
 }
 
-QoreHashNode* SocketRecvPollOperationBase::continuePollImpl(ExceptionSink* xsink, int* events) {
-    AutoLocker al(sock->priv->m);
+QoreHashNode* qore_socket_poll_events_ops::continuePollImpl(SocketRecvPollOperationBase* b, ExceptionSink* xsink, int* events) {
+    AutoLocker al(b->sock->priv->m);
 
-    if (!initialized) {
-        if (initPollState(xsink)) {
+    if (!b->initialized) {
+        if (b->initPollState(xsink)) {
             return nullptr;
         }
-    } else if (sock->priv->checkOpen(xsink)) {
+    } else if (b->sock->priv->checkOpen(xsink)) {
         return nullptr;
     }
 
-    if (!poll_state) {
+    if (!b->poll_state) {
         return nullptr;
     }
 
     // see if we are able to continue
-    int rc = poll_state->continuePoll(xsink);
+    int rc = b->poll_state->continuePoll(xsink);
     //printd(5, "SocketRecvPollOperation::continuePoll() state: %s rc: %d (exp: %d)\n", getStateImpl(), rc,
     //    (int)*xsink);
     if (!rc) {
         // get output data
-        SimpleRefHolder<BinaryNode> d(poll_state->takeOutput().get<BinaryNode>());
+        SimpleRefHolder<BinaryNode> d(b->poll_state->takeOutput().get<BinaryNode>());
         bool ok = true;
-        if (to_string) {
+        if (b->to_string) {
             size_t len = d->size();
             char* buf = reinterpret_cast<char*>(d->giveBuffer());
             char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
@@ -19071,27 +19072,27 @@ QoreHashNode* SocketRecvPollOperationBase::continuePollImpl(ExceptionSink* xsink
                 ok = false;
             } else {
                 nbuf[len] = '\0';
-                data = new QoreStringNode(nbuf, len, len + 1, sock->getEncoding());
+                b->data = new QoreStringNode(nbuf, len, len + 1, b->sock->getEncoding());
             }
         } else {
-            data = d.release();
+            b->data = d.release();
         }
         if (ok) {
-            received = true;
+            b->received = true;
         }
     }
     if (*xsink || !rc) {
         // release the AbstractPollState value
-        poll_state.reset();
-        sock->priv->clearNonBlock(NB_RECV);
-        set_non_block = false;
+        b->poll_state.reset();
+        b->sock->priv->clearNonBlock(NB_RECV);
+        b->set_non_block = false;
         return nullptr;
     }
     if (events) {
         *events = rc;
         return nullptr;
     }
-    return getSocketPollInfoHash(xsink, rc);
+    return b->getSocketPollInfoHash(xsink, rc);
 }
 
 int SocketRecvPollOperationBase::initPollState(ExceptionSink* xsink) {

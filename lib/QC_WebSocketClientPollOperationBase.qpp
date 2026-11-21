@@ -40,6 +40,7 @@
 #include "qore/intern/PollStateCloseHook.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_websocket.h"
+#include "qore/intern/SocketPollEventsOps.h"
 
 /** @cond INTERNAL */
 
@@ -100,7 +101,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
             PollStateCloseHook::fired(goalReached());
         }
 #endif
-        int send_events = send_op->continuePollEvents(xsink);
+        int send_events = qore_socket_poll_events_ops::continuePollEvents(send_op, xsink);
         if (*xsink) {
             setError(xsink);
             return nullptr;
@@ -127,7 +128,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
 
     // --- Phase 2: Drive active recv operation ---
     if (recv_op) {
-        int recv_events = recv_op->continuePollEvents(xsink);
+        int recv_events = qore_socket_poll_events_ops::continuePollEvents(recv_op, xsink);
         if (*xsink) {
             releaseRecvOp(xsink);
             // Recv errors on EAGAIN/TIMEOUT are not fatal — clear and continue
