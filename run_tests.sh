@@ -650,12 +650,12 @@ fi
 #   commit made after the build), while a file changed after the build (an edit or a checkout that was not built) is
 #   not.  A file that the build makes nothing from that the tests use (a source under examples/ that a test compiles
 #   when it runs, a file of a binary module that CMake does not build here, a module in qlib that has no .qmod, which
-#   is loaded from its source, a file that is not a source) is not compared, and neither is a file that is gone,
-#   except a source of a module in qlib whose other sources are there.  A new file that git does not know of is not
+#   is loaded from its source, a file that is not a source) is not compared, and neither is a file that is gone.  A
+#   new file that git does not know of is not
 #   seen.  The times tell what a build has only as far as the build writes what the tests use again, so these cases
 #   are not seen, and QORE_TEST_ALLOW_BUILD_MISMATCH=1 runs one that is refused wrongly:
 #   - a configure that is not followed by a build hides a change of a CMake file (CMakeCache.txt is written);
-#   - a file removed from libqore, a binary module or the test programs and not built since;
+#   - a file removed from libqore, a module in qlib, a binary module or the test programs and not built since;
 #   - a header of include/ counts as built when anything that includes such headers was built after it (libqore, qcc,
 #     qore, a binary module), so an old libqore is accepted when a module that includes the header was built again;
 #     a header that an example module includes too is not compared with the example module;
@@ -757,8 +757,14 @@ check_companion_build() {
 add_build_refs() {
     for build_ref in "$@"; do
         if [ -e "$build_ref" ]; then
-            BUILD_REFS="$BUILD_REFS$build_ref
-"
+            case "
+$BUILD_REFS" in
+                *"
+$build_ref
+"*) ;;
+                *) BUILD_REFS="$BUILD_REFS$build_ref
+" ;;
+            esac
         fi
     done
 }
@@ -838,20 +844,6 @@ qlib_module_qmod() {
     done
 }
 
-# Prints the newest of the sources (.qm, .qc) of the given module in qlib that exist, or nothing
-qlib_module_newest_source() {
-    newest_source=""
-    for source in "$QORE_SOURCE_DIR/qlib/$1.qm" "$QORE_SOURCE_DIR/qlib/$1/"*.qm "$QORE_SOURCE_DIR/qlib/$1/"*.qc \
-            "$QORE_SOURCE_DIR/qlib/$1/"*/*.qc "$QORE_SOURCE_DIR/qlib/$1/"*/*/*.qc; do
-        if [ -f "$source" ] && { [ -z "$newest_source" ] || [ "$source" -nt "$newest_source" ]; }; then
-            newest_source=$source
-        fi
-    done
-    if [ -n "$newest_source" ]; then
-        echo "$newest_source"
-    fi
-}
-
 # Sets BUILD_REFS to the files that the tests use that the build makes from the given changed file (relative to the
 # tree), one per line, whose times tell whether the build has the change (see above), or to nothing if the tests use
 # nothing that the build makes from it.  BUILD_REFS_ANY is 1 if the build has the change when the file is older than
@@ -859,12 +851,13 @@ qlib_module_newest_source() {
 # files costs little.  Only a file of a kind that a target compiles is compared, and only with what the tests use,
 # never with an object of a helper target that a normal build does not make again (such as one that compiles libqore's
 # sources once more), which would keep a file refused for good:
-# - a CMake file: CMakeCache.txt, which CMake writes when it configures the build again;
+# - a CMake file: CMakeCache.txt, which CMake writes when it configures the build again; under examples/, only one in
+#   a directory that CMake has processed;
 # - a source of a module in qlib (.qm, .qc; not its other files, which the .qmod does not hold): the module's .qmod
 #   (see qlib_module_qmod()), or nothing (it is loaded from its source);
 # - a source of libqore (lib/: C, C++, qpp, bison, flex, assembler and headers): libqore, but nothing for a C or C++
-#   source that a build with an object for each source (not one compilation unit) did not compile into it (a file of
-#   another platform, or a program's own);
+#   source that a build of this tree with an object for each source (not one compilation unit) did not compile into
+#   it (a file of another platform, or a program's own);
 # - a header of include/: any of libqore, qcc, qore and the binary modules' files (BUILD_REFS_ANY): a header that only
 #   modules include is in a module that was built again, not in libqore;
 # - a source of a binary module (modules/<name>/: C, C++, qpp, headers, Qore): the module's file, or nothing if the
@@ -878,6 +871,13 @@ build_references() {
     BUILD_REFS=""
     BUILD_REFS_ANY=0
     case "$1" in
+        examples/*/CMakeLists.txt|examples/*.cmake)
+            # only one that CMake has processed (a build directory of its own): a test compiles some fixtures with a
+            # CMakeLists.txt of their own when it runs
+            if [ -d "$QORE_BUILD_DIR/${1%/*}/CMakeFiles" ]; then
+                add_build_refs "$QORE_BUILD_DIR/CMakeCache.txt"
+            fi
+            ;;
         CMakeLists.txt|*/CMakeLists.txt|*.cmake|cmake/*|*.in)
             add_build_refs "$QORE_BUILD_DIR/CMakeCache.txt"
             ;;
@@ -892,7 +892,11 @@ build_references() {
             fi
             ;;
         lib/*.c|lib/*.cc|lib/*.cpp)
-            if [ -d "$QORE_BUILD_DIR/CMakeFiles/libqore.dir/lib" ] \
+            # In a build of this tree with an object for each source (not one compilation unit, CMakeCache.txt's
+            # SINGLE_COMPILATION_UNIT, which is on by default and keeps a few objects of their own), a source that
+            # has none is not in libqore (a file of another platform, or a program's own).  Another tree's build is
+            # compared for every source.
+            if [ "$same_tree" = 1 ] && [ "$BUILD_SCU" = 0 ] \
                     && [ ! -e "$QORE_BUILD_DIR/CMakeFiles/libqore.dir/$1.o" ]; then
                 return
             fi
@@ -1000,6 +1004,11 @@ check_build_matches_tree() {
         # a build configured from this tree: the files that it is newer than are in it
         build_source=`sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null`
         same_tree=0
+        BUILD_SCU=1
+        if grep -Eiq '^SINGLE_COMPILATION_UNIT:BOOL=(OFF|FALSE|NO|N|0)[[:space:]]*$' "$QORE_BUILD_DIR/CMakeCache.txt" \
+                2>/dev/null; then
+            BUILD_SCU=0
+        fi
         if [ -n "$build_source" ] && [ "`physical_dir "$build_source"`" = "$QORE_SOURCE_DIR" ]; then
             same_tree=1
         fi
@@ -1010,21 +1019,11 @@ check_build_matches_tree() {
                 continue
             fi
             # A file that is gone, in a build of this tree, is not compared (a directory's time is no build's: an
-            # editor's file changes it), except a source of a module in qlib that has others still: the newest of them
-            # is compared with the module's .qmod.  Another build that has a file that the tree no longer has differs,
-            # if the tests use what it makes from it.
+            # editor's file changes it).  Another build that has a file that the tree no longer has differs, if the
+            # tests use what it makes from it.
             file=$QORE_SOURCE_DIR/$path
             if [ ! -e "$file" ] && [ $same_tree -eq 1 ]; then
-                case "$path" in
-                    qlib/*/*.qm|qlib/*/*.qc)
-                        gone_module=${path#qlib/}
-                        file=`qlib_module_newest_source "${gone_module%%/*}"`
-                        ;;
-                    *) file="" ;;
-                esac
-                if [ -z "$file" ]; then
-                    continue
-                fi
+                continue
             fi
             build_references "$path"
             if [ -z "$BUILD_REFS" ]; then
@@ -1109,8 +1108,8 @@ check_build_parts() {
             case "$qmod_link" in
                 */qlib/*/*.qmod)
                     # relative to the module's directory in qlib; the build is three levels up
-                    qmod_base=${qmod_link##* }
-                    qmod_base=${qmod_base%/*}
+                    qmod_base=${qmod_link##*/}
+                    qmod_base=$QORE_SOURCE_DIR/qlib/${qmod_base%.qmod}
                     qmod_build=${qmod_target%/*/*/*}
                     ;;
                 *)
