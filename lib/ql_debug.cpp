@@ -8386,10 +8386,14 @@ public:
     //! socket's adoption of a descriptor, fails as closed and leaves the socket closed (qore#7003)
     /** @p where is CLOSE_IN_RESOLVE (the close while the host is resolved, when the socket has no descriptor; debug hook
         qore_dbg_connect_in_resolve) or a place of qore_dbg_connect_before_adopt (2: the winner replacing the socket's
-        descriptor, 4: the first attempt in progress), where the adoption is refused with the socket's close lock held.
-        The name of the test's own resolves to 127.0.0.1, where a listener accepts, and with @p two_addresses also to
-        ::1 first, where nothing answers, so that the winner is the second attempt and replaces the first one's
-        descriptor.
+        descriptor; 3: the second attempt replacing the descriptor of the first one, which failed, made to fail with
+        qore_dbg_connect_fail_held_attempt once the second attempt is in progress, whose result is read only once it
+        is writable with qore_dbg_connect_no_immediate_check; 4: the first attempt in progress), where the adoption is
+        refused with the socket's close lock held.  Place 1, the winner when the socket has no descriptor, is reached
+        only by a first attempt that connects within connect() itself, which a TCP connection over loopback does not:
+        it goes through setDescriptorIfGeneration(), as place 4 does.  The name of the test's own resolves to
+        127.0.0.1, where a listener accepts, and with @p two_addresses also to ::1 first, where nothing answers, so that
+        the second attempt is the one that connects.
     */
     static void runConnectCloseAt(UnitTestCounters& c, int where, bool two_addresses) {
         const std::string when = " (closed " + (where == CLOSE_IN_RESOLVE ? std::string("while resolving")
@@ -8475,6 +8479,22 @@ public:
         close_assign_sock = qore_socket_private::get(*sock->priv->socket);
         close_at_where = where;
         close_at_done = false;
+        // place 3: the first attempt fails once the second one is in progress, whose result is read in a later step
+        struct PlaceThreeHelper {
+            bool on;
+            explicit PlaceThreeHelper(bool on) : on(on) {
+                if (on) {
+                    qore_dbg_connect_fail_held_attempt.store(true, std::memory_order_release);
+                    qore_dbg_connect_no_immediate_check.store(true, std::memory_order_relaxed);
+                }
+            }
+            ~PlaceThreeHelper() {
+                if (on) {
+                    qore_dbg_connect_fail_held_attempt.store(false, std::memory_order_release);
+                    qore_dbg_connect_no_immediate_check.store(false, std::memory_order_relaxed);
+                }
+            }
+        } p3h(where == 3);
         SocketConnectPollOperation* op = new SocketConnectPollOperation(&xsink, false, target.c_str(), sock, true);
         ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
         UT_ASSERT(c, !xsink, ("the connect operation is created" + when).c_str());
@@ -24584,6 +24604,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_IN_RESOLVE, false);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 4, false);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 2, true);
+    AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 3, true);
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);

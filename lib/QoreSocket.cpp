@@ -9369,7 +9369,23 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
         if (active_attempts[i].fd == QORE_INVALID_SOCKET) {
             continue;
         }
-        int rc = checkAttempt(i);
+        int rc;
+#ifdef DEBUG
+        // a test makes the attempt that the socket took over fail once another attempt is in progress
+        bool other_active = false;
+        for (size_t j = 0; j < active_attempts.size(); ++j) {
+            if (j != i && active_attempts[j].fd != QORE_INVALID_SOCKET) {
+                other_active = true;
+                break;
+            }
+        }
+        if (active_attempts[i].sock_hold && other_active
+                && qore_dbg_connect_fail_held_attempt.exchange(false, std::memory_order_acq_rel)) {
+            qore_socket_set_raw_error(ECONNREFUSED);
+            rc = -1;
+        } else
+#endif
+        rc = checkAttempt(i);
         if (rc < 0) {
             // the error is taken before the attempt is given up, which makes system calls of its own
             last_error = sock_get_raw_error();
@@ -9821,6 +9837,7 @@ std::atomic<void (*)()> qore_dbg_connect_before_check_attempts{nullptr};
 std::atomic<void (*)()> qore_dbg_connect_before_assign_winner{nullptr};
 std::atomic<void (*)(int)> qore_dbg_connect_before_adopt{nullptr};
 std::atomic<void (*)()> qore_dbg_connect_in_resolve{nullptr};
+std::atomic<bool> qore_dbg_connect_fail_held_attempt{false};
 
 //! Calls the hook that a test sets to run right before a connection gives the socket a descriptor
 static void qore_socket_dbg_before_adopt(int where) {

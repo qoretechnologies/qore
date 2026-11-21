@@ -5340,6 +5340,12 @@ DLLLOCAL extern std::atomic<void (*)(int)> qore_dbg_connect_before_adopt;
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_in_resolve;
 
+//! Debug builds: if true, the next check of the attempt that the socket took over fails (ECONNREFUSED) once another
+//! attempt is in progress; reset when it is used
+/** For the C++ unit tests of the replacement of a failed attempt's descriptor by another attempt's (qore#7003)
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_connect_fail_held_attempt;
+
 #ifndef _Q_WINDOWS
 //! Debug builds: if not 0, the connect checked fails with this error after its pending error was read as 0
 /** For the C++ unit tests of the error that a failed connect reports (issue #6119): makes the interleaving of
