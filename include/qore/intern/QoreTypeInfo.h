@@ -1799,6 +1799,44 @@ typedef std::vector<QoreOrphanablePtr<const QoreTypeInfo>> orphanable_type_vec_t
 //! A read-only view of an orphanable_type_vec_t
 typedef QoreOrphanablePtrVecView<const QoreTypeInfo> orphanable_type_vec_view_t;
 
+//! The type_vec_t of a derived type that the deprecated reflection functions return a pointer to (issue #6936)
+/** qore_type_get_type_arguments(const QoreTypeInfo*) and qore_type_get_code_param_types(const QoreTypeInfo*) return a
+    pointer to a vector that lives as long as the type, as they did before the types of a derived type could be
+    orphaned (issue #6419); a derived type lives until library cleanup.  The derived type keeps its types in an
+    orphanable_type_vec_t, which is no type_vec_t, so the vector is a copy, made on the first call and kept with the
+    type.  When the types are orphaned, the orphaner stores their tombstones to the copy as well (refresh()) before
+    the retirement epoch is taken, so that the copy never names the type of a freed declaration; a caller that reads
+    an element while it is repointed reads either pointer, as the library's own reads of the orphanable vector do (the
+    library's store is atomic; the caller's read is a plain load of an aligned pointer, which old callers make).
+    Both are made under the complex type lock, so a copy made while the types are orphaned has their tombstones.
+*/
+class QoreLegacyTypeVec {
+public:
+    DLLLOCAL QoreLegacyTypeVec() = default;
+
+    DLLLOCAL QoreLegacyTypeVec(const QoreLegacyTypeVec&) = delete;
+    DLLLOCAL QoreLegacyTypeVec& operator=(const QoreLegacyTypeVec&) = delete;
+
+    DLLLOCAL ~QoreLegacyTypeVec() {
+        delete vec.load(std::memory_order_relaxed);
+    }
+
+    //! Returns the copy of \a src, which is made on the first call
+    DLLLOCAL const type_vec_t* get(const orphanable_type_vec_t& src) const {
+        const type_vec_t* rv = vec.load(std::memory_order_acquire);
+        return rv ? rv : make(src);
+    }
+
+    //! Stores the current elements of \a src to the copy, if made; called after the elements are orphaned
+    DLLLOCAL void refresh(const orphanable_type_vec_t& src) const;
+
+private:
+    //! the copy; never resized once published
+    mutable std::atomic<type_vec_t*> vec{nullptr};
+
+    DLLLOCAL const type_vec_t* make(const orphanable_type_vec_t& src) const;
+};
+
 class QoreParameterizedClassTypeInfo : public QoreTypeInfo {
 public:
     DLLLOCAL QoreParameterizedClassTypeInfo(const QoreClass* qc,
@@ -1817,6 +1855,18 @@ public:
     //! Returns the type arguments; each is read with an acquire load, as it can be orphaned (issue #6419)
     DLLLOCAL orphanable_type_vec_view_t getTypeArgs() const {
         return orphanable_type_vec_view_t(type_args);
+    }
+
+    //! Returns the type arguments in a vector that lives as long as the type (see QoreLegacyTypeVec)
+    /** For the deprecated qore_type_get_type_arguments(const QoreTypeInfo*) (issue #6936)
+    */
+    DLLLOCAL const type_vec_t* getLegacyTypeArgs() const {
+        return legacy_type_args.get(type_args);
+    }
+
+    //! Stores the orphaned type arguments to the vector of getLegacyTypeArgs(), if it was made (issue #6936)
+    DLLLOCAL void refreshLegacyTypeArgs() const {
+        legacy_type_args.refresh(type_args);
     }
 
     DLLLOCAL size_t getArgCount() const {
@@ -1840,6 +1890,8 @@ protected:
     QoreOrphanablePtr<const QoreClass> base_class;
     //! the type arguments; orphaned when a declaration that one is the type of is retired (issue #6419)
     orphanable_type_vec_t type_args;
+    //! the copy of the type arguments for the deprecated reflection function (issue #6936)
+    QoreLegacyTypeVec legacy_type_args;
     bool or_nothing;
     std::string pname;
 
@@ -5154,6 +5206,18 @@ public:
         return orphanable_type_vec_view_t(paramTypes);
     }
 
+    //! Returns the parameter types in a vector that lives as long as the type (see QoreLegacyTypeVec)
+    /** For the deprecated qore_type_get_code_param_types(const QoreTypeInfo*) (issue #6936)
+    */
+    DLLLOCAL const type_vec_t* getLegacyParamTypes() const {
+        return legacyParamTypes.get(paramTypes);
+    }
+
+    //! Stores the orphaned parameter types to the vector of getLegacyParamTypes(), if it was made (issue #6936)
+    DLLLOCAL void refreshLegacyParamTypes() const {
+        legacyParamTypes.refresh(paramTypes);
+    }
+
     //! Returns true if this callable accepts variable arguments
     DLLLOCAL bool hasVarArgs() const {
         return varargs;
@@ -5184,6 +5248,8 @@ protected:
     QoreOrphanablePtr<const QoreTypeInfo> returnType;
     //! parameter types; orphaned when a declaration that one is the type of is retired (issue #6419)
     orphanable_type_vec_t paramTypes;
+    //! the copy of the parameter types for the deprecated reflection function (issue #6936)
+    QoreLegacyTypeVec legacyParamTypes;
     bool varargs;                    //!< true if accepts variable arguments
     bool orNothing;                  //!< true if accepts NOTHING
     QoreString pname;                //!< path name for type
