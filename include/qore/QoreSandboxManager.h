@@ -589,20 +589,6 @@ public:
     */
     DLLEXPORT std::string getIsolationDomain() const;
 
-    //! Returns the isolation domain of a manager that governs code, or nullptr if it has none
-    /** The domain of a manager cannot change once it governs code, so it is read without a lock; a composite has no
-        domain of its own (see its members)
-    */
-    DLLLOCAL const std::string* governingIsolationDomain() const {
-        return isolation_domain.empty() ? nullptr : &isolation_domain;
-    }
-
-    //! Marks the manager as governing code: its isolation domain is fixed from then on
-    DLLLOCAL void setGoverns() {
-        // after a concurrent setIsolationDomain() has written the domain
-        std::lock_guard<std::mutex> lck(domain_lock);
-        governs.store(true, std::memory_order_release);
-    }
 
     //! Sets the wall-clock time limit of each call into the sandbox in milliseconds
     /** @param ms the limit in milliseconds; 0 (or a negative value) = unlimited
@@ -994,15 +980,6 @@ private:
     //! The number of running threads that this sandbox governs and counts against @ref max_threads
     std::atomic<int> active_threads;
 
-    //! The isolation domain (tenant) of the sandbox, or empty; written only before the manager governs code
-    std::string isolation_domain;
-
-    //! True once the manager governs code (see setGoverns()): the isolation domain cannot be set any more
-    std::atomic<bool> governs{false};
-
-    //! Serializes setIsolationDomain() and the reads of the domain by getIsolationDomain()
-    mutable std::mutex domain_lock;
-
     //! Disallow copying via assignment
     QoreSandboxManager& operator=(const QoreSandboxManager&) = delete;
 
@@ -1161,6 +1138,10 @@ DLLEXPORT bool qore_caller_restricts_domain(int64 domain);
     @since %Qore 3.0
 */
 DLLEXPORT std::string qore_caller_isolation_domain();
+
+//! defined if QoreSandboxManager::setIsolationDomain(), QoreSandboxManager::getIsolationDomain() and
+//! qore_caller_isolation_domain() are available
+#define QORE_HAVE_ISOLATION_DOMAINS 1
 
 //! defined if qore_caller_restricts_domain() is available
 #define QORE_HAVE_CALLER_RESTRICTS_DOMAIN 1
