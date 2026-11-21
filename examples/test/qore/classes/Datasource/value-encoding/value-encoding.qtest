@@ -17,7 +17,7 @@
 # parse_datasource() stored the bytes of a value in another encoding without converting them, so that a getter (and a
 # driver) returned the bytes of a UTF-8 value tagged with the default encoding (module-jni's jdbc driver connected to
 # a JDBC URL with the UTF-8 bytes of a database name decoded as ISO-8859-1); each entry point is checked in a child
-# process whose default encoding is ISO-8859-1 (see child.q), in each execution mode and compiled with qcc
+# process whose default encoding is ISO-8859-1 (see child.q), in each execution mode and compiled with qcc (qore#6960)
 
 %exec-class Main
 
