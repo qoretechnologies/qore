@@ -52,6 +52,7 @@ auto sub connect(int port) {
         addTestCase("a sandboxed Program without a resolvable policy is denied", \failClosedTest());
         addTestCase("the C++ send API checks its destination", \sendToTest());
         addTestCase("a send started by a capability is checked with its own policy", \capabilitySendTest());
+        addTestCase("a Program that a capability creates is not denied", \capabilityProgramTest());
         set_return_value(main());
     }
 
@@ -116,6 +117,27 @@ auto sub connect(int port) {
             senders += s;
             return s.startPollSendTo("127.0.0.1", udp_port, <01>);
         }));
+    }
+
+    #! a Program that trusted code creates in a system-policy capability for a sandboxed caller keeps the caller's sandbox
+    #! but not its policy: its network access is not denied by the fail-closed lookup
+    capabilityProgramTest() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        int lport = listener.getSocketInfo().port;
+        code cap = SandboxManager::createSystemPolicyCall(auto sub () {
+            Program q(PO_NEW_STYLE);
+            q.parse(Source, "capability-program");
+            return q.callFunction("connect", lport);
+        });
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("auto sub run(code c) { return c(); }", "deny-network");
+        assertEq("CONNECTED", p.callFunction("run", cap));
     }
 
     sendToTest() {
