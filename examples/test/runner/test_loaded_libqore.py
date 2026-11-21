@@ -64,7 +64,7 @@ def make_copy(source, target, rpath_to=None):
 class QoreLibdirTest(unittest.TestCase):
     """QORE_LIBDIR must be the directory of the build's libqore"""
 
-    def run_tree(self, libdir):
+    def run_tree(self, libdir, missing=False):
         with tempfile.TemporaryDirectory(prefix="qore-runner-libqore-") as directory:
             tree = RunnerTree(directory)
             marker = tree.root / "marker"
@@ -73,7 +73,10 @@ class QoreLibdirTest(unittest.TestCase):
                 """)
             other = tree.root / "installed/lib"
             other.mkdir(parents=True)
-            result = tree.run(QORE_LIBDIR=str(libdir(tree, other)))
+            variables = {"QORE_LIBDIR": str(libdir(tree, other))}
+            if missing:
+                variables = {"LIBQORE_BINARY": str(tree.root / "bin/libqore-missing.so")}
+            result = tree.run(**variables)
             result.ran = marker.exists()
             return result
 
@@ -81,6 +84,28 @@ class QoreLibdirTest(unittest.TestCase):
         result = self.run_tree(lambda tree, other: other)
         self.assertNotEqual(0, result.returncode, result.output)
         self.assertIn("is not the directory of the libqore of the run", result.output)
+        self.assertFalse(result.ran, result.output)
+
+    def test_a_relative_qore_libdir_is_given_to_the_tests_as_an_absolute_path(self):
+        """qcc records QORE_LIBDIR in the programs that it links as it is given: a relative one would be taken from
+        the directory that a program runs in"""
+        with tempfile.TemporaryDirectory(prefix="qore-runner-libqore-") as directory:
+            tree = RunnerTree(directory)
+            tree.add_test("libdir.qtest", """\
+                import os
+                import sys
+                print("QORE_LIBDIR=%r" % os.environ.get("QORE_LIBDIR"))
+                sys.exit(0 if os.path.isabs(os.environ.get("QORE_LIBDIR", "")) else 1)
+                """)
+            result = tree.run(QORE_LIBDIR="bin")
+            self.assertEqual(0, result.returncode, result.output)
+            self.assertIn("QORE_LIBDIR=%r" % str(Path(tree.root / "bin").resolve()), result.output)
+
+    def test_a_missing_libqore_is_refused(self):
+        """LIBQORE_BINARY naming no file would disable the check of the libqore that the programs load"""
+        result = self.run_tree(lambda tree, other: tree.root / "bin", missing=True)
+        self.assertNotEqual(0, result.returncode, result.output)
+        self.assertIn("does not exist; set LIBQORE_BINARY to the build's libqore", result.output)
         self.assertFalse(result.ran, result.output)
 
     def test_the_build_libdir_runs(self):
@@ -122,6 +147,22 @@ class LoadedLibqoreTest(unittest.TestCase):
             result = tree.run(MARKER=str(marker), QORE_TEST_ALLOW_BUILD_MISMATCH="1", **variables)
             result.ran = marker.exists()
             return result
+
+    @staticmethod
+    def build_without_qcc(tree):
+        """A build directory without qcc (the build's qore and libqore), and a decoy qcc first in the PATH"""
+        build = tree.root / "build-without-qcc"
+        build.mkdir()
+        (build / "qore").symlink_to(BUILD_DIR / "qore")
+        (build / LIBQORE.name).symlink_to(LIBQORE.resolve())
+        (build / "CMakeCache.txt").write_text("# a build directory\n")
+        decoy = tree.root / "decoy"
+        decoy.mkdir()
+        real = LIBQORE.resolve()
+        make_copy(real, decoy / real.name)
+        make_copy(BUILD_DIR / "qcc", decoy / "qcc", decoy)
+        return {"QORE_BINARY": str(build / "qore"), "LIBQORE_BINARY": str(build / LIBQORE.name),
+                "PATH": str(decoy) + ":" + tree.env()["PATH"]}
 
     def assert_refused(self, result, what):
         self.assertNotEqual(0, result.returncode, result.output)
@@ -169,19 +210,20 @@ class LoadedLibqoreTest(unittest.TestCase):
     @unittest.skipUnless(HAVE_QCC and HAVE_TOOLS, f"no qcc in {BUILD_DIR}, or no install_name_tool and codesign")
     def test_a_build_without_qcc_and_another_qcc_in_the_path_is_refused(self):
         """The tests of a build without qcc that look for qcc themselves take the one in the PATH (a decoy)"""
+        setup = self.build_without_qcc
+        result = self.run_tree(setup)
+        self.assert_refused(result, "the qcc that the tests use")
+        # how to fix it
+        self.assertIn("Build the build's qcc (cmake --build <build> --target qcc)", result.output)
+
+    @unittest.skipUnless(HAVE_QCC and HAVE_TOOLS, f"no qcc in {BUILD_DIR}, or no install_name_tool and codesign")
+    def test_a_build_without_qcc_and_another_qcc_in_the_path_is_refused_with_qcc_set(self):
+        """A test that reads only QORE_QCC_EXECUTABLE (not QCC) takes the qcc in the PATH (a decoy) when the build has
+        none, whatever QCC names"""
         def setup(tree):
-            build = tree.root / "build-without-qcc"
-            build.mkdir()
-            (build / "qore").symlink_to(BUILD_DIR / "qore")
-            (build / LIBQORE.name).symlink_to(LIBQORE.resolve())
-            (build / "CMakeCache.txt").write_text("# a build directory\n")
-            decoy = tree.root / "decoy"
-            decoy.mkdir()
-            real = LIBQORE.resolve()
-            make_copy(real, decoy / real.name)
-            make_copy(BUILD_DIR / "qcc", decoy / "qcc", decoy)
-            return {"QORE_BINARY": str(build / "qore"), "LIBQORE_BINARY": str(build / LIBQORE.name),
-                    "PATH": str(decoy) + ":" + tree.env()["PATH"]}
+            variables = self.build_without_qcc(tree)
+            variables["QCC"] = str(BUILD_DIR / "qcc")
+            return variables
         self.assert_refused(self.run_tree(setup), "the qcc that the tests use")
 
     @unittest.skipUnless(HAVE_QCC, f"no qcc in {BUILD_DIR}")

@@ -589,6 +589,13 @@ if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
     exit 1
 fi
 
+if [ ! -f "$LIBQORE" ]; then
+    # a libqore that is not there cannot be compared with the one that the programs of the tests load (#7029)
+    echo "ERROR: the libqore of the run ($LIBQORE, LIBQORE_BINARY) does not exist; set LIBQORE_BINARY to the build's" \
+        "libqore. Exiting." >&2
+    exit 1
+fi
+
 export QORE_BINARY="$QORE"
 export LIBQORE_BINARY="$LIBQORE"
 
@@ -602,6 +609,12 @@ if [ -n "$QORE_LIBDIR" ] \
         "that qcc compiles in the tests would load the libqore in QORE_LIBDIR (#7029); unset it or set it to the" \
         "build's directory. Exiting." >&2
     exit 1
+fi
+if [ -n "$QORE_LIBDIR" ]; then
+    # absolute: qcc records the directory in the programs that it links as it is given, and a relative one would be
+    # taken from the directory that a program runs in (#7029)
+    QORE_LIBDIR=`cd "$QORE_LIBDIR" && pwd -P`
+    export QORE_LIBDIR
 fi
 QORE_BUILD_DIR="$QORE_DIR"
 if [ -n "$QORE_LIBDIR" ] && [ -d "$QORE_LIBDIR" ]; then
@@ -758,10 +771,11 @@ physical_file() {
     )
 }
 
-# Prints the qcc programs that the tests use, one per line: the one that QCC, QORE_QCC or QORE_QCC_EXECUTABLE names
-# (the first one set), else those of the build that the tests look for (in QORE_LIBDIR, which must be the directory of
-# the build's libqore, and next to qore: examples/test/TestInterpreter.qm and the tests that look for qcc themselves),
-# and the one in the PATH, which a test that finds none in the directory that it looks in takes
+# Prints the qcc programs that the tests use, one per line: each one that QCC, QORE_QCC or QORE_QCC_EXECUTABLE names
+# (tests read different ones of them), the build's qcc in the directories that the tests look in (QORE_LIBDIR, which
+# must be the directory of the build's libqore, and next to qore: examples/test/TestInterpreter.qm and the tests that
+# look for qcc themselves), and the one in the PATH, which a test that finds none in the variable that it reads and in
+# the directory that it looks in takes
 tests_qccs() {
     for qcc_candidate in "$QCC" "$QORE_QCC" "$QORE_QCC_EXECUTABLE"; do
         if [ -n "$qcc_candidate" ]; then
@@ -769,14 +783,13 @@ tests_qccs() {
                 */*) echo "$qcc_candidate" ;;
                 *) command -v "$qcc_candidate" 2>/dev/null ;;
             esac
-            return
         fi
     done
     for qcc_dir in "${QORE_LIBDIR:-$QORE_DIR}" "$QORE_DIR"; do
         if [ -f "$qcc_dir/qcc" ]; then
             echo "$qcc_dir/qcc"
         fi
-    done | sort -u
+    done
     if [ ! -f "${QORE_LIBDIR:-$QORE_DIR}/qcc" ] || [ ! -f "$QORE_DIR/qcc" ]; then
         command -v qcc 2>/dev/null
     fi
@@ -818,7 +831,7 @@ check_loaded_libqore() {
     while IFS= read -r check_lib; do
         if [ "$check_lib" != "$EXPECTED_LIBQORE" ]; then
             echo "ERROR: $1 loads $check_lib, not the libqore of the run ($LIBQORE, $EXPECTED_LIBQORE); the tests" \
-                "would run on another libqore (#7029). Exiting." >&2
+                "would run on another libqore (#7029).$3 Exiting." >&2
             exit 1
         fi
     done <<CHECK_LOADED_EOF
@@ -1401,19 +1414,22 @@ unset QORE_BIN
 # and a qcc from another build or installation (QCC in the environment, or the one in the PATH that the tests take
 # when the build has none) compiles programs that load its own.  A run with a build refuses them (#7029), and a qore or
 # qcc that the loader cannot be asked about (a script, or a program that does not report the libqore it loads).  A
-# libqore that is not a Mach-O library is a stand-in that no program can load (the runner's checkers), and is not checked.
+# libqore that is not a Mach-O library (it exists, see above) is a stand-in that no program can load (the runner's
+# checkers), and is not checked.
 if [ "$QORE_IS_BUILD_TREE" = "1" ] && [ "`uname -s`" = "Darwin" ] && is_macho "$LIBQORE"; then
     EXPECTED_LIBQORE=`physical_file "$LIBQORE" || echo "$LIBQORE"`
     check_loaded_libqore "the qore of the run ($QORE)" "$QORE"
+    tests_qcc_hint=" Build the build's qcc (cmake --build <build> --target qcc), or name a qcc that loads the"\
+" build's libqore in QCC, QORE_QCC and QORE_QCC_EXECUTABLE and put it first in the PATH."
     tests_qcc_list=`tests_qccs`
     if [ -n "$tests_qcc_list" ]; then
         while IFS= read -r check_qcc; do
-            check_loaded_libqore "the qcc that the tests use ($check_qcc)" "$check_qcc"
+            check_loaded_libqore "the qcc that the tests use ($check_qcc)" "$check_qcc" "$tests_qcc_hint"
         done <<TESTS_QCC_EOF
 $tests_qcc_list
 TESTS_QCC_EOF
     fi
-    unset tests_qcc_list check_qcc
+    unset tests_qcc_list tests_qcc_hint check_qcc
 fi
 
 # Enable core dumps for crash diagnostics
