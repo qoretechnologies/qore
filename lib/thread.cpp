@@ -7561,10 +7561,16 @@ bool qore_sandbox_current_code_created(const QoreSandboxContext* creation) {
     try {
         // the sandboxes that govern the current code, as they would be recorded for an object that it created now
         // (qore_capture_sandbox_provenance())
-        QoreSandboxContext* current = new QoreSandboxContext(false);
+        // held until the managers are compared, also when an allocation below fails, so that the context is
+        // released and the managers that it references stay alive while they are compared
+        struct ContextHolder {
+            QoreSandboxContext* ctx;
+            ~ContextHolder() {
+                ctx->deref();
+            }
+        } current{new QoreSandboxContext(false)};
         std::vector<const QoreSandboxManager*> current_managers;
-        qore_add_sandbox_context_managers(*current, current_managers);
-        current->deref();
+        qore_add_sandbox_context_managers(*current.ctx, current_managers);
         // sandboxed code that no manager governs: fails closed
         if (current_managers.empty()) {
             return false;
