@@ -6,6 +6,9 @@ module ThreadEscapeHelper {
     desc = "runs a callable that it is given in another thread";
     author = "Qore"; license = "MIT";
 }
+# a thread-local variable of the module (runThreadLocal())
+thread_local code tl_callable;
+
 public namespace ThreadEscapeHelper {
     #! runs a callable on a new thread
     public sub runInBackground(code<nothing()> c) {
@@ -36,6 +39,51 @@ public namespace ThreadEscapeHelper {
     #! calls a method of an object that it is given on a new thread with an argument that the new thread computes
     public sub runMethodInBackgroundWithArg(object o, int x) {
         background o.runWith(x + 1);
+    }
+
+    #! runs a callable that it holds in a member, or calls a method of an object that it holds in a member, on a new
+    #! thread
+    public class MemberRunner {
+        private {
+            code c;
+            object o;
+        }
+
+        constructor(code c, object o) {
+            self.c = c;
+            self.o = o;
+        }
+
+        runClosureWithArg(int x) {
+            background c(x + 1);
+        }
+
+        runClosure() {
+            background c(1);
+        }
+
+        runObjectWithArg(int x) {
+            background o.runWith(x + 1);
+        }
+    }
+
+    #! runs callables that it is given as the implicit argument of a map, on new threads
+    public sub runImplicit(list<code> l, int x) {
+        map background $1(x + 1), l;
+    }
+
+    #! runs a callable that it holds in a thread-local variable on a new thread
+    public sub runThreadLocal(code c, int x) {
+        tl_callable = c;
+        background tl_callable(x + 1);
+    }
+
+    #! runs a callable on a new thread from a closure of the module, with an argument that the new thread computes
+    public sub runInClosure(code<nothing(int)> c, int x) {
+        code f = sub () {
+            background c(x + 1);
+        };
+        f();
     }
 
     #! runs a callable on a thread pool of the module and waits for it

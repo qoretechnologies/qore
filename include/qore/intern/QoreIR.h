@@ -3414,6 +3414,14 @@ public:
         checked when the thread starts only when the expression is such a call (qore#5973).
     */
     QoreBackgroundHelperSelf helper_uses_self = static_cast<QoreBackgroundHelperSelf>(0);
+    //! Helper only: the index in \a helper_params of the callee of the expression, set by the lowering (qore#7087)
+    /** The parameter that holds the closure or call reference that the expression calls, or the object whose method
+        it calls; -2 (QBH_NO_CALLEE) for a call of a function, a static method or a method of the object of the
+        starting code, which have no such callee; -1 (QBH_CALLEE_UNKNOWN), the default, for any other expression and
+        for an instruction that does not record it (serialized IR): every closure, call reference and object of the
+        operands is checked then
+    */
+    int helper_callee = -1;
 };
 
 //! @name Inline call-state cache publication

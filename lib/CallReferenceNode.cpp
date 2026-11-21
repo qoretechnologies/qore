@@ -171,11 +171,12 @@ static QoreParseOptions qore_callable_restrictions_po(const QoreValue v, bool re
             } else {
                 rv |= qore_non_module_program_restrictions(qore_call_reference_code_program(rcr));
             }
-            // the code of a closure is that of the Program that defines it: the Program that was current when it was
-            // created is not its author (a closure of module code created in a method that runs for an object of a
-            // restricted subclass, for example); the creator below gives a closure that restricted code created
-            // (qore#7056)
-            if (recorded_origin || v.getType() != NT_RUNTIME_CLOSURE) {
+            // the Program of the reference is not its author: for a method reference it is the Program of the object,
+            // for a closure the Program that was current when it was created (that of a restricted subclass for code of
+            // a module that runs a method of its object); the author is the code that the reference runs (above: the
+            // method that a call dispatches to on the object's class, the Program that defines a closure or a
+            // function) and the code that created it (below) (qore#7056, qore#7087)
+            if (recorded_origin) {
                 rv |= qore_non_module_program_restrictions(rcr->getProgram());
             }
             // the code that created a run-time reference, if it is the code of a Program that is not a module's: a

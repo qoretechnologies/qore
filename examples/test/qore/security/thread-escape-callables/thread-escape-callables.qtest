@@ -45,6 +45,12 @@ class ThreadEscapeCallablesTest inherits QUnit::Test {
             "module background, call reference with a computed argument: PERMISSION-DENIED\n"
             "module background, method of an own object: PERMISSION-DENIED\n"
             "module background, method of an own object with a computed argument: PERMISSION-DENIED\n"
+            "module background, member closure with a computed argument: PERMISSION-DENIED\n"
+            "module background, member closure: PERMISSION-DENIED\n"
+            "module background, member object with a computed argument: PERMISSION-DENIED\n"
+            "module background, implicit argument: PERMISSION-DENIED\n"
+            "module background, thread-local variable: PERMISSION-DENIED\n"
+            "module background in a closure of the module: PERMISSION-DENIED\n"
             "subclass runOnThreadOfItsOwn: PARSE-EXCEPTION\n"
             "subclass peer lookup: PARSE-EXCEPTION\n"
             "submitToHandlerPool: PERMISSION-DENIED\n"
@@ -84,7 +90,9 @@ class ThreadEscapeCallablesTest inherits QUnit::Test {
             libqore_dir, libqore_dir, qlib + (ENV.QORE_MODULE_DIR ? PathSep + ENV.QORE_MODULE_DIR : ""));
 
         addTestCase("execution modes", \modesTest());
+        addTestCase("module code promoted to native code", \promotedTest());
         addTestCase("qcc executable", \aotTest());
+        addTestCase("helper module compiled with qcc", \aotModuleTest());
         set_return_value(main());
     }
 
@@ -95,6 +103,33 @@ class ThreadEscapeCallablesTest inherits QUnit::Test {
         }
         assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
             scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    # the module's code is compiled to native code at its first call, before the probes call it again (qore#7087)
+    promotedTest() {
+        assertEq(Expected, ExecModeHarness::run(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 %s", env,
+            qore_bin, scriptPath())), "tiered --jit-ir-threshold=1");
+    }
+
+    # the helper module compiled with qcc: its code does not give the callee of a background expression whose
+    # arguments the new thread computes, and its closures are built from serialized IR, which does not record it
+    # either: every closure of the restricted code that such an expression takes is refused, also one that is only an
+    # argument of a call of the module's own code (qore#7087)
+    aotModuleTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("thread-escape-helper-");
+        string qmod = dir.path + "/ThreadEscapeHelper.qmod";
+        string out = backquote(sprintf("%s %s -m -o %s %s/ThreadEscapeHelper.qm 2>&1", env, qcc_bin, qmod,
+            get_script_dir()));
+        assertTrue(is_file(qmod), "qcc compiles the helper module: " + out);
+        string expected = replace(Expected, "module background, module function with a closure argument: ran\n",
+            "module background, module function with a closure argument: PERMISSION-DENIED\n");
+        foreach string mode in (("ir", "jit")) {
+            assertEq(expected, ExecModeHarness::run(sprintf("THREAD_ESCAPE_HELPER=%s %s %s --exec-mode=%s %s", qmod,
+                env, qore_bin, mode, scriptPath())), "AOT helper module, " + mode);
+        }
     }
 
     aotTest() {

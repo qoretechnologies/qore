@@ -12315,7 +12315,6 @@ extern "C" DLLEXPORT int32_t qore_rt_switch_string_case_lookup_noguard_v2(
 // --- DotEval with pre-evaluated base helper ---
 
 #include "qore/intern/QoreDotEvalOperatorNode.h"
-#include "qore/intern/QoreBackgroundOperatorNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 
 #if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
@@ -25238,50 +25237,15 @@ QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, Excep
     return rv;
 }
 
-//! returns the index of the helper's parameter that is the callee of the call of a closure or call reference that the
-//! background expression is, or QBH_NO_CALLEE (qore#7087)
-/** The callee is a local variable of the starting code that the expression uses, which is one of the helper's
-    parameters; the AST interpreter checks the value of such a callee (do_op_background()), and a callee that it does
-    not resolve when the thread starts, as any other expression, is not checked there either
-*/
+// the callee of the expression of a background helper, as the lowering recorded it (qore#7087)
+static_assert(QBH_CALLEE_UNKNOWN == -1 && QBH_NO_CALLEE == -2, "QoreIRBackgroundInstruction::helper_callee");
 static int qore_background_helper_callee(const QoreIRBackgroundInstruction& inst) {
-    // the instruction keeps the background operator; its expression is the one that the new thread evaluates
-    QoreValue expr = inst.expr;
-    if (expr.getType() == NT_OPERATOR) {
-        const QoreBackgroundOperatorNode* op = dynamic_cast<const QoreBackgroundOperatorNode*>(
-            expr.getInternalNode());
-        if (op) {
-            expr = op->getExp();
-        }
+    int callee = inst.helper_callee;
+    // an index that is not one of the parameters is never trusted: every value is checked then
+    if (callee >= static_cast<int>(inst.helper_params.size()) || callee < QBH_NO_CALLEE) {
+        return QBH_CALLEE_UNKNOWN;
     }
-    // the callee of a call of a closure or call reference, or the object of a call of a method
-    QoreValue callee;
-    if (expr.getType() == NT_FUNCREFCALL) {
-        callee = expr.get<const CallReferenceCallNode>()->getExp();
-    } else if (expr.getType() == NT_OPERATOR) {
-        const QoreDotEvalOperatorNode* call = dynamic_cast<const QoreDotEvalOperatorNode*>(
-            expr.getInternalNode());
-        if (!call) {
-            return QBH_NO_CALLEE;
-        }
-        callee = call->getExpression();
-    } else {
-        return QBH_NO_CALLEE;
-    }
-    if (callee.getType() != NT_VARREF) {
-        return QBH_NO_CALLEE;
-    }
-    const VarRefNode* vr = callee.get<const VarRefNode>();
-    qore_var_t vt = vr->getType();
-    if (vt != VT_LOCAL && vt != VT_CLOSURE && vt != VT_LOCAL_TS) {
-        return QBH_NO_CALLEE;
-    }
-    for (size_t i = 0, e = inst.helper_params.size(); i < e; ++i) {
-        if (inst.helper_params[i] == vr->ref.id) {
-            return static_cast<int>(i);
-        }
-    }
-    return QBH_NO_CALLEE;
+    return callee;
 }
 
 //! starts a background helper thread with the values given by native or interpreted starting code

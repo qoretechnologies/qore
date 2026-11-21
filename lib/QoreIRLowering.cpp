@@ -15689,6 +15689,81 @@ bool QoreIRLowering::extractLValuePath(const QoreValue& expr, std::vector<LVPath
     return true;
 }
 
+int QoreIRLowering::backgroundHelperCallee(const QoreValue& expr, const std::vector<LocalVar*>& params,
+        const BackgroundHelperLowering& state) {
+    // QBH_NO_CALLEE and QBH_CALLEE_UNKNOWN of qore_thread_intern.h
+    static constexpr int no_callee = -2;
+    static constexpr int unknown = -1;
+    // the callee of the expression: a call of a named function, a static method or a method of the object of the
+    // starting code has none; the callee of a call of a closure or call reference, or the object of a call of a method,
+    // is checked when the thread starts, as the AST interpreter checks it (do_op_background()); any other expression
+    // is unknown, and every closure, call reference and object that it takes is checked (qore#7087)
+    QoreValue callee;
+    switch (expr.getType()) {
+        case NT_FUNCTION_CALL:
+        case NT_PROGRAM_FUNC_CALL:
+        case NT_STATIC_METHOD_CALL:
+        case NT_SELF_CALL:
+            return no_callee;
+        case NT_FUNCREFCALL:
+            callee = expr.get<const CallReferenceCallNode>()->getExp();
+            break;
+        case NT_OPERATOR: {
+            const QoreDotEvalOperatorNode* call = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
+            if (!call) {
+                return unknown;
+            }
+            callee = call->getExpression();
+            break;
+        }
+        default:
+            return unknown;
+    }
+    const AbstractQoreNode* node = callee.getInternalNode();
+    if (!node) {
+        return unknown;
+    }
+    // a local variable of the starting code: one of the first parameters
+    if (const VarRefNode* var = dynamic_cast<const VarRefNode*>(node)) {
+        qore_var_t vt = var->getType();
+        if (vt == VT_LOCAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS) {
+            for (size_t i = 0, e = params.size() - state.params.size(); i < e; ++i) {
+                if (params[i] == var->ref.id) {
+                    return static_cast<int>(i);
+                }
+            }
+            return unknown;
+        }
+    }
+    // a value that the thread takes when it starts (a member, an implicit argument, a thread-local variable, ...):
+    // the parameter that holds it, found by the key that lowerBackgroundLeaf() gave it, or by its node
+    size_t first_leaf = params.size() - state.params.size();
+    std::string key;
+    if (auto* impl_arg = dynamic_cast<const QoreImplicitArgumentNode*>(node)) {
+        key = "arg:" + std::to_string(impl_arg->getOffset());
+    } else if (dynamic_cast<const QoreImplicitElementNode*>(node)) {
+        key = "element";
+    } else if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
+        key = std::string("member:") + self_ref->str;
+    } else if (auto* var = dynamic_cast<const VarRefNode*>(node);
+            var && (var->getType() == VT_THREAD_LOCAL || var->getType() == VT_IMMEDIATE)) {
+        key = "var:" + std::to_string(reinterpret_cast<uintptr_t>(var->ref.var));
+    }
+    if (!key.empty()) {
+        auto i = state.leaf_index.find(key);
+        if (i != state.leaf_index.end()) {
+            return static_cast<int>(first_leaf + i->second);
+        }
+        return unknown;
+    }
+    for (size_t i = 0, e = state.leaves.size(); i < e; ++i) {
+        if (state.leaves[i].getInternalNode() == node) {
+            return static_cast<int>(first_leaf + i);
+        }
+    }
+    return unknown;
+}
+
 QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const QoreBackgroundOperatorNode* op,
         std::string& error) {
     QoreIRFunction* starting_func = builder.getFunction();
@@ -15784,6 +15859,7 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     }
 
     auto* inst = builder.createBackground(QoreIRBackgroundKind::Helper, std::string(), expr, operands, op->loc);
+    inst->helper_callee = backgroundHelperCallee(op->getExp(), params, state);
     inst->helper_ir = std::move(helper);
     inst->helper_params = std::move(params);
     inst->owned_params = std::move(state.params);

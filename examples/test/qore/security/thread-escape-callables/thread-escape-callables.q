@@ -8,7 +8,9 @@
 # the host loads the helper module at run time, so that the restricted Programs use the host's copy, also in a qcc
 # executable, which would embed a module that it requires by path instead of loading it
 const ScriptDir = realpath(get_script_dir());
-load_module(ScriptDir + "/ThreadEscapeHelper.qm");
+# the helper module: its source, or the module compiled with qcc that THREAD_ESCAPE_HELPER gives
+string HelperPath = ENV.THREAD_ESCAPE_HELPER ?? (ScriptDir + "/ThreadEscapeHelper.qm");
+load_module(HelperPath);
 
 const Restricted = PO_NEW_STYLE | PO_NO_THREAD_CONTROL | PO_NO_NETWORK | PO_NO_EXTERNAL_INFO;
 
@@ -18,7 +20,7 @@ sub probe(string label, string code, *softlist<auto> args, int po = Restricted) 
     try {
         Program p(po);
         p.parse("%modern\n%requires AsyncSocketIo\n%requires HttpServerAsyncIo\n%requires "
-            + ScriptDir + "/ThreadEscapeHelper.qm\n" + code, label);
+            + HelperPath + "\n" + code, label);
         result = p.callFunctionArgs("t", args);
     } catch (hash<ExceptionInfo> ex) {
         result = ex.err;
@@ -106,6 +108,42 @@ probe("module background, method of an own object", RunOrRefuse + ObjClass + 'st
 }');
 probe("module background, method of an own object with a computed argument", RunOrRefuse + ObjClass + 'string sub t() {
     return run(sub (Counter done) { ThreadEscapeHelper::runMethodInBackgroundWithArg(new O(done), 1); });
+}');
+
+# the callee of module code held in a member, an implicit argument or a thread-local variable of the module: the
+# value that the thread takes when it starts is checked, in every mode (qore#7087)
+const DecClass = 'class D {
+    private { Counter done; }
+    constructor(Counter done) { self.done = done; }
+    runWith(int x) { done.dec(); }
+}
+';
+probe("module background, member closure with a computed argument", RunOrRefuse + DecClass + 'string sub t() {
+    return run(sub (Counter done) {
+        (new ThreadEscapeHelper::MemberRunner(sub (int x) { done.dec(); }, new D(done))).runClosureWithArg(1);
+    });
+}');
+probe("module background, member closure", RunOrRefuse + DecClass + 'string sub t() {
+    return run(sub (Counter done) {
+        (new ThreadEscapeHelper::MemberRunner(sub (int x) { done.dec(); }, new D(done))).runClosure();
+    });
+}');
+probe("module background, member object with a computed argument", RunOrRefuse + DecClass + 'string sub t() {
+    return run(sub (Counter done) {
+        (new ThreadEscapeHelper::MemberRunner(sub (int x) {}, new D(done))).runObjectWithArg(1);
+    });
+}');
+probe("module background, implicit argument", RunOrRefuse + 'string sub t() {
+    return run(sub (Counter done) { ThreadEscapeHelper::runImplicit((sub (int x) { done.dec(); },), 1); });
+}');
+probe("module background, thread-local variable", RunOrRefuse + 'string sub t() {
+    return run(sub (Counter done) { ThreadEscapeHelper::runThreadLocal(sub (int x) { done.dec(); }, 1); });
+}');
+
+# the same in a closure of the module: a module compiled with qcc builds the closure from its serialized IR when it is
+# first called, which does not record the callee: every closure of the restricted code that it takes is refused
+probe("module background in a closure of the module", RunOrRefuse + 'string sub t() {
+    return run(sub (Counter done) { ThreadEscapeHelper::runInClosure(sub (int x) { done.dec(); }, 1); });
 }');
 
 # the private helpers of the HTTP controller are internal: a subclass cannot call them
