@@ -683,7 +683,8 @@ fi
 #   new file that git does not know of is not seen.  The times tell what a build has only as far as the build writes
 #   what the tests use again, so these cases are not seen, and QORE_TEST_ALLOW_BUILD_MISMATCH=1 runs one that is
 #   refused wrongly:
-#   - a configure that is not followed by a build hides a change of a CMake file (CMakeCache.txt is written);
+#   - a configure that is not followed by a build hides a change of a CMake file (CMakeCache.txt is written), and a
+#     source of lib/ that a CMake file adds is in no depfile until a build compiles it (see read_libqore_sources());
 #   - a file removed from libqore, a module in qlib, a binary module or the test programs and not built since;
 #   - a header of include/ counts as built when anything that includes such headers was built after it (libqore, qcc,
 #     qore, a binary module), so an old libqore is accepted when a module that includes the header was built again;
@@ -959,36 +960,114 @@ qlib_module_qmod() {
 
 # Sets LIBQORE_SOURCES to the C and C++ sources of lib/ (relative to the tree, one per line, between newlines) that
 # the compiler read for libqore, from the depfiles that it wrote next to libqore's objects (<build>/CMakeFiles/
-# libqore.dir/**/*.o.d, with CMake's Makefile generators), and LIBQORE_DEPFILES to 1; a source can be in libqore
-# without an object of its own: the single compilation unit, which is the default, includes most of them, and in a
-# build with an object for each source, a few are included by another one (the handlers of the expression
-# registries).  Where there are no depfiles (Ninja keeps them in .ninja_deps) or they cannot be read within the time
-# limit, LIBQORE_DEPFILES is 0, and every source is compared.  The paths in the depfiles start with the source
-# directory that CMake was configured with (build_source) or with the tree's physical path.
+# libqore.dir/**/*.o.d), and LIBQORE_DEPFILES to 1; a source can be in libqore without an object of its own: the single
+# compilation unit, which is the default, includes most of them, and in a build with an object for each source, a few
+# are included by another one (the handlers of the expression registries).  Only CMake's Makefile generators leave the
+# depfiles there (CMakeCache.txt's CMAKE_GENERATOR): Ninja keeps the dependencies in .ninja_deps and removes the
+# depfiles of what it compiles, so that those left are a former Makefile build's.  Where there are none, where they
+# name no source of lib/, or where they cannot be read within the time limit, LIBQORE_DEPFILES is 0, and every source
+# is compared.  A depfile's paths escape a space ("\ "), "#" ("\#") and "$" ("$$"), and continue on the next line after
+# a "\"; "x/../" and "./" are removed from a path.  They start with the source directory that CMake was configured
+# with (build_source) or with the tree's physical path.  The file names are listed and the files read by one command
+# each, each limited in time, so that nothing is left running when a file system stalls.
 read_libqore_sources() {
     LIBQORE_SOURCES_READ=1
     LIBQORE_DEPFILES=0
     LIBQORE_SOURCES=""
-    if [ -z "`find "$QORE_BUILD_DIR/CMakeFiles/libqore.dir" -name '*.o.d' 2>/dev/null | head -1`" ]; then
+    if ! run_build_check grep -q '^CMAKE_GENERATOR:INTERNAL=.*Makefiles[[:space:]]*$' "$QORE_BUILD_DIR/CMakeCache.txt" \
+            2>/dev/null; then
         return
     fi
-    libqore_sources=`run_build_check find "$QORE_BUILD_DIR/CMakeFiles/libqore.dir" -name '*.o.d' -exec awk \
-        -v a="${build_source%/}/" -v b="$QORE_SOURCE_DIR/" '{
-            for (i = 1; i <= NF; ++i) {
-                t = $i
-                if (index(t, a) == 1) {
-                    t = substr(t, length(a) + 1)
-                } else if (index(t, b) == 1) {
-                    t = substr(t, length(b) + 1)
-                } else {
-                    continue
-                }
-                if (t ~ /^lib\/.*\.(c|cc|cpp)$/ && !(t in seen)) {
-                    seen[t] = 1
-                    print t
-                }
+    depfile_list=`mktemp "${TMPDIR:-/tmp}/qore-build-depfiles.XXXXXX"` || return
+    BUILD_CHECK_FILES="$BUILD_CHECK_FILES $depfile_list"
+    if ! run_build_check find "$QORE_BUILD_DIR/CMakeFiles/libqore.dir" -name '*.o.d' > "$depfile_list" 2>/dev/null \
+            || [ ! -s "$depfile_list" ]; then
+        rm -f "$depfile_list"
+        return
+    fi
+    # $(...): backslashes in the program are not taken by the shell, as in `...`
+    libqore_sources=$(run_build_check env QORE_DEP_PREFIX_A="${build_source%/}/" QORE_DEP_PREFIX_B="$QORE_SOURCE_DIR/" \
+        awk 'function add(t,   a, b) {
+            # only a C or C++ source (most are headers)
+            if (t !~ /\.(c|cc|cpp)$/) {
+                return
             }
-        }' {} + 2>/dev/null` || return
+            # "x/../" and "./" are removed
+            while (sub(/\/\.\//, "/", t)) {
+            }
+            while (sub(/\/[^\/]+\/\.\.\//, "/", t)) {
+            }
+            a = ENVIRON["QORE_DEP_PREFIX_A"]
+            b = ENVIRON["QORE_DEP_PREFIX_B"]
+            if (a != "/" && index(t, a) == 1) {
+                t = substr(t, length(a) + 1)
+            } else if (index(t, b) == 1) {
+                t = substr(t, length(b) + 1)
+            } else {
+                return
+            }
+            if (t ~ /^lib\/.*\.(c|cc|cpp)$/ && !(t in seen)) {
+                seen[t] = 1
+                print t
+            }
+        }
+        BEGIN {
+            # a read that fails (a depfile that cannot be read, or that is removed while it is read) ends the read with
+            # an error, so that every source is compared
+            while ((list_rc = (getline file < ARGV[1])) > 0) {
+                # a line ends a token: one that continues ends with a "\" after a space
+                while ((line_rc = (getline line < file)) > 0) {
+                    if (substr(line, length(line), 1) == "\\") {
+                        line = substr(line, 1, length(line) - 1)
+                    }
+                    if (index(line, "\\") == 0 && index(line, "$$") == 0) {
+                        n = split(line, tokens, /[ \t]+/)
+                        for (i = 1; i <= n; ++i) {
+                            if (tokens[i] != "") {
+                                add(tokens[i])
+                            }
+                        }
+                        continue
+                    }
+                    token = ""
+                    n = length(line)
+                    for (i = 1; i <= n; ++i) {
+                        c = substr(line, i, 1)
+                        d = substr(line, i + 1, 1)
+                        if (c == "\\" && (d == " " || d == "#" || d == "\\")) {
+                            token = token d
+                            ++i
+                        } else if (c == "$" && d == "$") {
+                            token = token "$"
+                            ++i
+                        } else if (c == " " || c == "\t") {
+                            if (token != "") {
+                                add(token)
+                            }
+                            token = ""
+                        } else {
+                            token = token c
+                        }
+                    }
+                    if (token != "") {
+                        add(token)
+                    }
+                }
+                if (line_rc < 0) {
+                    exit 1
+                }
+                close(file)
+            }
+            if (list_rc < 0) {
+                exit 1
+            }
+            exit
+        }' "$depfile_list" 2>/dev/null)
+    depfile_rc=$?
+    rm -f "$depfile_list"
+    if [ $depfile_rc -ne 0 ] || [ -z "$libqore_sources" ]; then
+        return
+    fi
     LIBQORE_SOURCES="
 $libqore_sources
 "
@@ -1144,6 +1223,9 @@ check_build_matches_tree() {
         # set -f: the pathspecs are not file name patterns for the shell; git's messages (a warning on a diff that
         # works) are no file names: they are shown only if the diff fails
         build_errors=`mktemp "${TMPDIR:-/tmp}/qore-build-check.XXXXXX"` || build_errors=/dev/null
+        if [ "$build_errors" != /dev/null ]; then
+            BUILD_CHECK_FILES="$BUILD_CHECK_FILES $build_errors"
+        fi
         set -f
         build_changes=`tree_git diff --name-only --no-renames "$BUILD_HASH" -- $BUILD_INPUT_PATHSPECS 2>"$build_errors"`
         build_diff_rc=$?
@@ -1160,7 +1242,8 @@ check_build_matches_tree() {
             return
         fi
         # a build configured from this tree: the files that it is newer than are in it
-        build_source=`sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null`
+        build_source=`run_build_check sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$QORE_BUILD_DIR/CMakeCache.txt" \
+            2>/dev/null`
         same_tree=0
         LIBQORE_SOURCES_READ=0
         if [ -n "$build_source" ] && [ "`physical_dir "$build_source"`" = "$QORE_SOURCE_DIR" ]; then
@@ -1400,7 +1483,15 @@ else
 fi
 
 # the build must match the tree, before anything runs: with the library path that the tests get (see above)
+# the check's temporary files (see read_libqore_sources() and check_build_matches_tree()) are removed if a signal ends
+# the run during the check, which comes before the runner's own traps are set
+BUILD_CHECK_FILES=""
+# the run is ended by the signal itself, so that its caller sees why (see runner_signaled())
+for build_check_signal in HUP INT TERM; do
+    trap "rm -f \$BUILD_CHECK_FILES; trap - $build_check_signal; kill -$build_check_signal \$\$" $build_check_signal
+done
 check_build
+trap - HUP INT TERM
 
 # The children of the tests run the interpreter of the run (QORE_BINARY): QORE_BIN, which TestInterpreter.qm takes
 # first, is for a test run without this script, and one left in the environment would run another qore (#7029)
