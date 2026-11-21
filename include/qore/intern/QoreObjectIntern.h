@@ -486,7 +486,7 @@ public:
         itself, whose lock this thread holds for writing
     */
     DLLLOCAL bool raiseIfDeleted(const AutoVLock& vl, ExceptionSink* xsink) const {
-        QoreSafeVarRWReadLocker sl(rml, vl.getRWL() != &rml);
+        QoreSafeVarRWReadLocker sl(rml, qore_auto_vlock_ops(&vl).getRWL() != &rml);
         if (status == OS_DELETED) {
             makeAccessDeletedObjectException(xsink, theclass->getName());
             return true;

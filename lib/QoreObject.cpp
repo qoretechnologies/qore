@@ -1226,7 +1226,7 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     // the lvalue holds this object's lock for writing when it is a member of the object itself (`t.o = t;
     // remove t.o.a`): the member is taken after the lvalue has released it, as from an object in a local variable,
     // with the object's own lock and scan (qore#7107)
-    if (lvh.vl.getRWL() == &rml) {
+    if (qore_auto_vlock_ops(&lvh.vl).getRWL() == &rml) {
         ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
         lvh.finishForCallback();
         if (*lvh.vl.xsink) {
@@ -1350,7 +1350,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
     // members held in external storage are taken one at a time, as their accessors and gates run without locks; so
     // are the members of an object whose lock the lvalue holds, as it is a member of the object itself (qore#7107)
     if (theclass->hasMemberWriteGate() || qore_class_private::get(*theclass)->has_member_accessors
-            || lvh.vl.getRWL() == &rml) {
+            || qore_auto_vlock_ops(&lvh.vl).getRWL() == &rml) {
         takeExternalMembers(rv, lvh, l, for_delete);
         return;
     }
