@@ -719,7 +719,21 @@ while (i.next) {}  # parse exception: the call is i.next()
     its private access to the objects of the subclass, and classes declared by trusted code are not affected.  A
     library class that is meant to be subclassed by sandboxed code offers the members and methods that its subclasses
     need as public members and methods.  The access is decided by the state of the class's Program when the class is
-    committed (see @ref sandbox_private_access).
+    committed (see @ref sandbox_private_access).\n\n
+    The standard modules give such subclasses public methods in place of the private declarations that their
+    subclasses use: \c DataProvider (\c AbstractDataProvider::checkOptions(), \c logCaughtError(),
+    \c processSearchParameters(), \c getWrappedExceptionArg(), \c AbstractDataProviderType::checkChange(),
+    \c AbstractDataProviderRecordIterator::doMemberGate() and \c matchGeneric(),
+    \c AbstractWatchDataProviderBase::isStopping() and \c logPollError(),
+    \c AbstractTimestampWatchDataProvider::getEventName() and \c getWatchRecordTimestamp(),
+    \c Observable::hasObservers() and \c getObserverCount()), \c FtpPoller (\c setFatal() and \c isFatal()),
+    \c HttpServerUtil (\c AbstractStreamRequest::getContext(), \c getHeaders() and \c getBody()) and \c RestHandler
+    (\c AbstractRestStreamRequestHandler::getContext() and \c getArgs()); a context that they give is a copy with the
+    request metadata only.  The private methods that change shared state or reach the host's resources stay private:
+    a data provider subclass declared by sandboxed code cannot call \c AbstractDataProvider::resolveValue() or
+    \c valueNeedsResolution() (the host's dynamic value resolution) or
+    \c AbstractWatchDataProviderBase::persistCheckpoint() (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7032">issue 7032</a>).
 
     @subsection transient Transient Members
     Members declared with the <b><tt>transient</tt></b> keyword will not be processed with @ref Qore::Serializable "object serialization"

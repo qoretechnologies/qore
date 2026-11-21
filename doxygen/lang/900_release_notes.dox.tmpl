@@ -107,14 +107,10 @@
     (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
 
     @par Classes Declared by Sandboxed Code Have No Private Access to Trusted Classes
-    A class declared by sandboxed code cannot use the private members, methods, static variables and constants that a
-    class declared by trusted code declares, on any object including its own, as if they were \c private:internal; it
-    can still override them and call a base class's version of an overridden method, and the methods of the
-    DataProvider module that subclasses call are public (see @ref sandboxed_class_private_access and
-    @ref dataprovider_v3_12 "DataProvider v3.12"); a data provider subclass declared by sandboxed code can no longer
-    call \c AbstractDataProvider::resolveValue(), \c valueNeedsResolution() or
-    \c AbstractWatchDataProviderBase::persistCheckpoint()
-    (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>).
+    A class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, as if
+    they were \c private:internal, but can override them and call an overridden method's base version; library classes
+    give such subclasses public methods instead (see @ref sandboxed_class_private_access;
+    <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>).
 
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
     The static members in which public classes of the standard modules keep state shared by all of their callers
