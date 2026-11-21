@@ -1165,6 +1165,10 @@ static code SandboxManager::bindCall(code call) [flags=RET_VALUE_ONLY] {
     valid port
     @throw QOREADDRINFO-GETINFO-ERROR \a host cannot be resolved
 
+    @note This method is in the \c NETWORK @ref function_domains "functional domain", as it resolves names: code
+    restricted from the network cannot call it, but module code that such code calls (a token cache, for example) can
+    call it, with the module's own restrictions
+
     @par Example:
     @code{.py}
 SandboxManager::checkNetworkConnect("169.254.169.254", 80);
@@ -1172,7 +1176,7 @@ SandboxManager::checkNetworkConnect("169.254.169.254", 80);
 
     @since %Qore 3.0
 */
-static nothing SandboxManager::checkNetworkConnect(string host, int port) {
+static nothing SandboxManager::checkNetworkConnect(string host, int port) [dom=NETWORK] {
     qore_sandbox_check_network_connect(host->c_str(), port, xsink);
 }
 
