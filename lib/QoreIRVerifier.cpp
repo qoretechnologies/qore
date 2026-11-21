@@ -3303,12 +3303,34 @@ static const QoreValue* getSerializationOnlyInstructionExpr(const QoreIRInstruct
 
 static void collectLocalsFromIRFunction(const QoreIRFunction& func,
         std::unordered_set<const void*>& ast_locals,
-        bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers);
+        bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers,
+        std::unordered_set<const void*>* ir_locals = nullptr);
+
+
+//! Returns true if the locals of its function that an on_block_exit handler references can be found in its IR (#5951)
+/** A handler that delegates a statement to the AST evaluates locals that its IR does not show
+*/
+static bool qore_ir_handler_locals_from_ir(const QoreIRFunction& handler) {
+    for (const auto& block : handler.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst && isDelegateToASTStatement(inst->opcode)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
 //! Collects the locals of \a func and of its handlers, each handler function once (they can be shared, #6087)
+/** With \a ir_locals, the locals that \a func itself reaches through the IR instructions of locals (LoadLocal,
+    StoreLocal, UninstantiateLocal and the fused local instructions) go there instead of to \a ast_locals; those of its
+    handlers always go to \a ast_locals (#5951)
+*/
 static void collectLocalsFromIRFunction(const QoreIRFunction& func,
         std::unordered_set<const void*>& ast_locals,
-        bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers) {
+        bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers,
+        std::unordered_set<const void*>* ir_locals) {
+    std::unordered_set<const void*>& local_insts = ir_locals ? *ir_locals : ast_locals;
     auto collect_context_exprs = [&](const QoreIRContextInstruction* ctx_inst) {
         collectLocalsFromExpr(ctx_inst->exp, ast_locals, unknown_node_found);
         collectLocalsFromExpr(ctx_inst->where_exp, ast_locals, unknown_node_found);
@@ -3322,28 +3344,28 @@ static void collectLocalsFromIRFunction(const QoreIRFunction& func,
                     inst->opcode == QoreIROpcode::UninstantiateLocal) {
                 auto* linst = static_cast<const QoreIRLocalInstruction*>(inst.get());
                 if (linst->local) {
-                    ast_locals.insert(reinterpret_cast<const void*>(linst->local));
+                    local_insts.insert(reinterpret_cast<const void*>(linst->local));
                 }
             } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
                 auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst.get());
                 if (fused->target) {
-                    ast_locals.insert(reinterpret_cast<const void*>(fused->target));
+                    local_insts.insert(reinterpret_cast<const void*>(fused->target));
                 }
                 if (fused->source) {
-                    ast_locals.insert(reinterpret_cast<const void*>(fused->source));
+                    local_insts.insert(reinterpret_cast<const void*>(fused->source));
                 }
             } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
                 auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst.get());
                 if (fused->local) {
-                    ast_locals.insert(reinterpret_cast<const void*>(fused->local));
+                    local_insts.insert(reinterpret_cast<const void*>(fused->local));
                 }
             } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
                 auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst.get());
                 if (fused->lhs) {
-                    ast_locals.insert(reinterpret_cast<const void*>(fused->lhs));
+                    local_insts.insert(reinterpret_cast<const void*>(fused->lhs));
                 }
                 if (fused->rhs) {
-                    ast_locals.insert(reinterpret_cast<const void*>(fused->rhs));
+                    local_insts.insert(reinterpret_cast<const void*>(fused->rhs));
                 }
             }
 
@@ -3931,6 +3953,12 @@ void QoreIRFunction::computeIROnlyLocals() {
     stored_locals.clear();
     ast_referenced_locals.clear();
     non_structured_ast_referenced_locals.clear();
+    handler_ir_locals.clear();
+    // the body locals, which the handlers' locals can be (#5951)
+    std::unordered_set<const void*> handler_body_local_keys;
+    for (LocalVar* lv : all_body_locals) {
+        handler_body_local_keys.insert(reinterpret_cast<const void*>(lv));
+    }
     // the handler functions walked, each once (they can be shared, #6087)
     std::unordered_set<const QoreIRFunction*> visited_handlers;
     has_opaque_ast_local_access = false;
@@ -4130,17 +4158,40 @@ void QoreIRFunction::computeIROnlyLocals() {
                 reference_created = true;
             }
 
-            // OnBlockExit: walk handler body AST to find referenced locals.
-            // Only those locals must remain AST-visible — others can be IR-only.
+            // OnBlockExit: the locals that the handler references.  A local of this function that the handler's IR
+            // reaches only through the IR instructions of locals can be IR-only (handler_ir_locals, #5951); one that
+            // it reaches otherwise, or that a handler without IR or delegating a statement to the AST references,
+            // must remain AST-visible
             if (inst->opcode == QoreIROpcode::OnBlockExit) {
                 auto* obe_inst = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
-                if (obe_inst->stmt) {
-                    collectLocalsFromStatementBlock(obe_inst->stmt->getCode(),
-                            ast_referenced_locals, unknown_node_found);
-                }
-                if (obe_inst->handler_ir && visited_handlers.insert(obe_inst->handler_ir.get()).second) {
-                    collectLocalsFromIRFunction(*obe_inst->handler_ir,
-                            ast_referenced_locals, unknown_node_found, visited_handlers);
+                const QoreIRFunction* handler = obe_inst->handler_ir.get();
+                if (handler && qore_ir_handler_locals_from_ir(*handler)) {
+                    if (visited_handlers.insert(handler).second) {
+                        std::unordered_set<const void*> handler_locals;
+                        collectLocalsFromIRFunction(*handler, ast_referenced_locals, unknown_node_found,
+                                visited_handlers, &handler_locals);
+                        for (const void* key : handler_locals) {
+                            // a body local of the function, which is pre-instantiated in its handler (one that the
+                            // handler declares is not); a parameter, whose native storage can be bound without a
+                            // reference of its own, and a local that a reference can reach stay on the runtime stack
+                            if (handler->pre_instantiated_locals.count(key)
+                                    && handler_body_local_keys.count(key)
+                                    && !reference_store_locals.count(key)) {
+                                handler_ir_locals.insert(key);
+                            } else {
+                                ast_referenced_locals.insert(key);
+                            }
+                        }
+                    }
+                } else {
+                    if (obe_inst->stmt) {
+                        collectLocalsFromStatementBlock(obe_inst->stmt->getCode(),
+                                ast_referenced_locals, unknown_node_found);
+                    }
+                    if (handler && visited_handlers.insert(handler).second) {
+                        collectLocalsFromIRFunction(*handler,
+                                ast_referenced_locals, unknown_node_found, visited_handlers);
+                    }
                 }
             }
         }
@@ -4307,6 +4358,16 @@ void QoreIRFunction::computeIROnlyLocals() {
         if (!hasIRStorage(key)) {
             lvalue_path_locals.insert(key);
             ast_referenced_locals.insert(key);
+        }
+    }
+
+    // the handlers' locals that keep their value in IR storage: those that are on the runtime stack are found there by
+    // the handlers already (#5951)
+    for (auto i = handler_ir_locals.begin(); i != handler_ir_locals.end();) {
+        if (hasIRStorage(*i)) {
+            ++i;
+        } else {
+            i = handler_ir_locals.erase(i);
         }
     }
 

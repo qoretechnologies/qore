@@ -5593,6 +5593,131 @@ void QoreIRToLLVM::publishLocalsForHandlers(llvm::Module& module) {
     // their LocalVar, innermost frame first.  The native code's own references to them are released before the
     // handler call that the caller records with recordHandlerSite() (see finalizeHandlerSites()).
     syncLocalsToRuntimeForHandlers(module);
+    // the IR-only locals that the handlers reference are put on the runtime stack only for this run
+    materializeHandlerIRLocals(module);
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::materializeHandlerIRLocals(llvm::Module& module) {
+    assert(materialized_handler_locals.empty());
+    if (!current_ir_func || current_ir_func->handler_ir_locals.empty()) {
+        return;
+    }
+    auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
+            llvm::FunctionType::get(void_type, {i64_type}, false));
+    // the locals in declaration order: they are removed in the reverse order
+    std::vector<const void*> keys = getLocalsInReverseDeclarationOrder(local_allocas);
+    for (auto i = keys.rbegin(), e = keys.rend(); i != e; ++i) {
+        const void* key = *i;
+        // only a local that the native code keeps IR-only: the others are on the runtime stack already (published by
+        // syncLocalsToRuntimeForHandlers()), as a lowering can keep a local of the function's handler_ir_locals there
+        if (!current_ir_func->handler_ir_locals.count(key) || !ir_only_locals_set || !ir_only_locals_set->count(key)) {
+            continue;
+        }
+        llvm::Value* alloca = local_allocas.find(key)->second.storage();
+        if (aot_mode) {
+            auto inst_fn = module.getOrInsertFunction("qore_rt_instantiate_local_aot",
+                    llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+            int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+            builder->CreateCall(inst_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot)});
+        } else {
+            auto inst_fn = module.getOrInsertFunction("qore_rt_instantiate_local",
+                    llvm::FunctionType::get(void_type, {ptr_type}, false));
+            builder->CreateCall(inst_fn, {builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                reinterpret_cast<uint64_t>(key)), ptr_type)});
+        }
+        // the value as it is stored; a boxed temporary of a native number is released after it is published
+        llvm::Value* val;
+        bool boxed_temp = false;
+        bool owned = false;
+        if (native_int_locals.count(key)) {
+            val = boxInt(builder->CreateLoad(i64_type, alloca));
+            boxed_temp = true;
+        } else if (native_float_locals.count(key)) {
+            val = boxFloat(builder->CreateLoad(double_type, alloca));
+            boxed_temp = true;
+        } else if (native_bool_locals.count(key)) {
+            val = boxBool(builder->CreateLoad(i1_type, alloca));
+        } else {
+            val = builder->CreateLoad(i64_type, alloca);
+            owned = true;
+        }
+        // the runtime stack takes a reference of its own
+        if (aot_mode) {
+            auto sync_fn = module.getOrInsertFunction("qore_rt_sync_local_aot",
+                    llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type}, false));
+            int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+            builder->CreateCall(sync_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), val});
+        } else {
+            auto sync_fn = module.getOrInsertFunction("qore_rt_sync_local",
+                    llvm::FunctionType::get(void_type, {ptr_type, i64_type}, false));
+            builder->CreateCall(sync_fn, {builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                reinterpret_cast<uint64_t>(key)), ptr_type), val});
+        }
+        if (boxed_temp) {
+            builder->CreateCall(decref_nothrow, {val});
+        } else if (owned) {
+            // the native storage gives its reference up, so that the runtime stack holds the only reference of the
+            // function while the handlers run (as for the locals whose reload storage finalizeHandlerSites()
+            // releases, qore#5942): it cannot be the last one; the object of an object local is released with the
+            // real reference of its native storage
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+            if (isRealReferenceLocal(key)) {
+                auto release_fn = module.getOrInsertFunction("qore_rt_object_slot_release",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                builder->CreateCall(release_fn, {val, xsink_arg});
+            } else {
+                builder->CreateCall(decref_nothrow, {val});
+            }
+        }
+        materialized_handler_locals.push_back(key);
+    }
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::retireHandlerIRLocals(llvm::Module& module) {
+    if (materialized_handler_locals.empty()) {
+        return;
+    }
+    auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
+            llvm::FunctionType::get(void_type, {i64_type}, false));
+    for (auto i = materialized_handler_locals.rbegin(), e = materialized_handler_locals.rend(); i != e; ++i) {
+        const void* key = *i;
+        llvm::Value* alloca = local_allocas.find(key)->second.storage();
+        // an owned value: the native storage takes the reference
+        llvm::Value* val = emitLocalCacheLoad(key, *builder, module);
+        if (native_int_locals.count(key)) {
+            builder->CreateStore(unboxInt(val), alloca);
+            builder->CreateCall(decref_nothrow, {val});
+        } else if (native_float_locals.count(key)) {
+            builder->CreateStore(unboxFloat(val), alloca);
+            builder->CreateCall(decref_nothrow, {val});
+        } else if (native_bool_locals.count(key)) {
+            builder->CreateStore(unboxBool(val), alloca);
+        } else {
+            builder->CreateStore(val, alloca);
+            if (isRealReferenceLocal(key)) {
+                // the object of an object local is marked with the real reference of its native storage, which
+                // replaces NOTHING
+                auto replace_fn = module.getOrInsertFunction("qore_rt_object_slot_replace",
+                        llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+                builder->CreateCall(replace_fn, {llvm::ConstantInt::get(i64_type, VAL_NOTHING), val, xsink_arg});
+            }
+        }
+        // the runtime stack releases its reference, which is not the last one
+        if (aot_mode) {
+            auto uninst_fn = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
+                    llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+            int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+            builder->CreateCall(uninst_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+        } else {
+            auto uninst_fn = module.getOrInsertFunction("qore_rt_uninstantiate_local",
+                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+            builder->CreateCall(uninst_fn, {builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                reinterpret_cast<uint64_t>(key)), ptr_type), xsink_arg});
+        }
+    }
+    materialized_handler_locals.clear();
 }
 
 llvm::BasicBlock* QoreIRToLLVM::beginPendingHandlerRun(llvm::Module& module, llvm::Value* saved_count) {
@@ -5628,6 +5753,7 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     publishLocalsForHandlers(module);
     // every local is reloaded below
     recordHandlerSite(emitOnBlockExitHoldCall(module, obe_saved_count, true), false);
+    retireHandlerIRLocals(module);
     // On-block-exit handlers execute user code and can mutate AST-visible/AOT
     // body locals through the runtime local stack.  Refresh eagerly here:
     // fused local ops can read allocas directly, so a lazy epoch alone is not
@@ -15801,6 +15927,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
     // Retain the existing switches for native scalars and strings.
     aot_adjusted_ir_only.clear();
+    aot_reload_exempt.clear();
+    handler_demoted_ir_only.clear();
     if (aot_mode && ir_only_locals_set && !func.all_body_locals.empty()) {
         aot_adjusted_ir_only = *ir_only_locals_set;
         static constinit QoreEnvFlag native_aot_body_locals_env("QORE_DISABLE_AOT_NATIVE_BODY_LOCALS");
@@ -15831,6 +15959,39 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
         ir_only_locals_set = aot_adjusted_ir_only.empty()
             ? nullptr : &aot_adjusted_ir_only;
+    }
+
+    // The IR-only locals that only the handlers reference (QoreIRFunction::handler_ir_locals) are put on the runtime
+    // stack while handlers run out of line, by code emitted at each place where they can run (see
+    // materializeHandlerIRLocals()); in a function whose handlers run with the table protocol (a large function, see
+    // shouldUseObeTables()), whose code would grow with the product of its handlers and those locals, they are kept
+    // on the runtime stack instead, as the AOT code keeps some locals (#5951)
+    if (ir_only_locals_set && !func.handler_ir_locals.empty() && shouldUseObeTables(func)) {
+        handler_demoted_ir_only = *ir_only_locals_set;
+        for (const void* key : func.handler_ir_locals) {
+            handler_demoted_ir_only.erase(key);
+        }
+        ir_only_locals_set = handler_demoted_ir_only.empty() ? nullptr : &handler_demoted_ir_only;
+    }
+    // such a local that the native code keeps on the runtime stack can be assigned there by a handler that runs out of
+    // line: it is reloaded after the handlers as any other local of the runtime stack, not exempt (#5951)
+    if (reload_exempt_locals_set && !func.handler_ir_locals.empty()) {
+        bool demoted = false;
+        for (const void* key : func.handler_ir_locals) {
+            if (reload_exempt_locals_set->count(key) && (!ir_only_locals_set || !ir_only_locals_set->count(key))) {
+                demoted = true;
+                break;
+            }
+        }
+        if (demoted) {
+            aot_reload_exempt = *reload_exempt_locals_set;
+            for (const void* key : func.handler_ir_locals) {
+                if (!ir_only_locals_set || !ir_only_locals_set->count(key)) {
+                    aot_reload_exempt.erase(key);
+                }
+            }
+            reload_exempt_locals_set = aot_reload_exempt.empty() ? nullptr : &aot_reload_exempt;
+        }
     }
 
     // Phase 4: Check if ALL locals are reload-exempt, enabling bulk skip of
@@ -25591,6 +25752,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // (#6074)
                     recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count, false,
                         qore_ir_landing_pad_catch_returns(*current_ir_func, inst)), true);
+                    retireHandlerIRLocals(module);
                     endPendingHandlerRun(done_bb);
                     // On-block-exit handlers execute through the AST path and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths: the instruction that
@@ -39207,6 +39369,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         handed = builder->CreateICmpNE(builder->CreateSub(builder->CreateCall(count_fn, {}),
                             handed_count), llvm::ConstantInt::get(i64_type, 0), "handed_over");
                     }
+                    retireHandlerIRLocals(module);
                     llvm::BasicBlock* run_end_bb = builder->GetInsertBlock();
                     endPendingHandlerRun(done_bb);
                     if (handed) {
