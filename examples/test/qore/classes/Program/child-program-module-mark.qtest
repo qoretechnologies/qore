@@ -1,0 +1,46 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/child-program-module-mark"
+%requires QUnit
+
+%exec-class ChildProgramModuleMarkTest
+
+#! Tests that a Program that a user module's code creates is not module code (qore#7067)
+/** PO_IN_MODULE marks the Program of a user module.  A child Program inherits the restrictions of its parent unless
+    the parent has PO_NO_CHILD_PO_RESTRICTIONS, but not the mark: the Program that a module's code creates is not
+    module code, also when the module's Program does not have PO_NO_CHILD_PO_RESTRICTIONS (a module that a
+    restricted Program loads first, or that Program::loadApplyToUserModule() applies: see the restricted caller case
+    of FileLocationHandlerConnection.qtest); otherwise the caller walk would look past it as module code and find the
+    restrictions of the code that called the module instead of the child Program's.
+*/
+class ChildProgramModuleMarkTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+    }
+
+    constructor() : QUnit::Test("ChildProgramModuleMark", "1.0", \ARGV) {
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("a module that a restricted Program loads first, " + m, sub () { testRestricted(m); });
+        }
+        set_return_value(main());
+    }
+
+    #! the code of a module that a restricted Program loads first creates Programs that are not module code
+    private testRestricted(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.setExecMode(Modes{mode});
+        p.parse("%modern\n%requires ChildPgmMarkRestricted\n"
+            "hash<auto> sub t() { return ChildPgmMarkRestricted::child_marks(); }", "restricted");
+        hash<auto> h = p.callFunction("t");
+        assertTrue(h.module_in_module, "the module's Program is a module's, " + mode);
+        assertFalse(h.module_no_child, "the module's Program gives its options to its children, " + mode);
+        assertFalse(h.child_in_module, "the Program that the module's code creates is not module code, " + mode);
+    }
+}

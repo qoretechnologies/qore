@@ -2373,6 +2373,9 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     // the parent's options are read once, so that the test and the steps below use the same value (issue #6078); the
     // creator's checks read them already, and the child inherits that value, not one that changed meanwhile (#6176)
     QoreParseOptions p_po = p_parse_options ? *p_parse_options : p_pgm->priv->pwo.parse_options.load();
+    // PO_IN_MODULE marks the Program of a user module: a Program that the module's code creates is not module code,
+    // so it does not inherit the mark, or the caller walk would look past it as module code (qore#7067)
+    p_po &= ~QoreParseOptions(PO_IN_MODULE);
     // if children inherit restrictions, then set all child restrictions
     if (!(p_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
         // lock child parse options
