@@ -15796,15 +15796,13 @@ private:
     std::atomic_flag& lock;
 };
 
-SocketPollOperationMembers::~SocketPollOperationMembers() {
+void SocketPollOperationMembers::releaseRemainingPollMembers() {
     // the values are released when the object of the operation is deleted (releasePollMembers()); values that are
     // left (an operation whose object was not deleted normally) are released here, where no exception can be raised
-    if (poll_sock || poll_goal) {
-        ExceptionSink xsink;
-        poll_sock.discard(&xsink);
-        poll_goal.discard(&xsink);
-        xsink.clear();
-    }
+    ExceptionSink xsink;
+    poll_sock.discard(&xsink);
+    poll_goal.discard(&xsink);
+    xsink.clear();
 }
 
 void SocketPollOperationMembers::setPollMember(const char* key, QoreValue val, ExceptionSink* xsink) {
@@ -15945,7 +15943,8 @@ QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xs
     // the operations of a SocketPollOperation object keep the socket with the operation, the others in the
     // private:internal member of SocketPollOperationBase (qore#6839)
     const QoreObject* self_obj = *self;
-    ValueHolder rv(xsink);
+    // the referenced value of the member: returned as it is when it is an object, the usual case
+    QoreValue rv;
     // the class of the object decides first (kept with the class): only the operations of the objects of
     // SocketPollOperation or a subclass of it keep the members with the operation, so an operation that runs in the
     // object of another class (the inner operations of an HTTP client operation, for example) reads the member at
@@ -15968,9 +15967,16 @@ QoreObject* SocketPollOperationBase::getReferencedSocketObject(ExceptionSink* xs
         rv = self_obj->getReferencedInternalMemberValue("sock", QC_SOCKETPOLLOPERATIONBASE, xsink);
     }
     if (*xsink) {
+        rv.discard(xsink);
         return nullptr;
     }
-    QoreValue v = rv->resolveIndirect();
+    if (rv.getType() == NT_OBJECT) {
+        // the reference of the read is the reference returned
+        return rv.get<QoreObject>();
+    }
+    // a weak reference, for example
+    ValueHolder holder(rv, xsink);
+    QoreValue v = holder->resolveIndirect();
     if (v.getType() != NT_OBJECT) {
         xsink->raiseException("POLL-ERROR", "'sock' member is no longer an object; got type '%s' instead",
             v.getFullTypeName());

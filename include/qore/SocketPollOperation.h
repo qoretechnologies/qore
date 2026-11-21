@@ -110,7 +110,15 @@ class SocketPollOperationMembers {
 public:
     DLLLOCAL SocketPollOperationMembers() = default;
 
-    DLLEXPORT ~SocketPollOperationMembers();
+    //! releases any values left (an operation whose object was not deleted normally)
+    /** inline, as an operation that keeps no values (an operation that runs in the object of another class) is
+        created and destroyed for each step of an operation
+    */
+    DLLLOCAL ~SocketPollOperationMembers() {
+        if (poll_sock || poll_goal) {
+            releaseRemainingPollMembers();
+        }
+    }
 
     //! sets the value of \c "sock" or \c "goal"; the reference of the value is consumed
     DLLEXPORT void setPollMember(const char* key, QoreValue val, ExceptionSink* xsink);
@@ -133,6 +141,9 @@ public:
     class RObject* poll_scan_holder = nullptr;
 
 private:
+    //! releases the values left when the operation is destroyed
+    DLLEXPORT void releaseRemainingPollMembers();
+
     //! the lock of the values: the async I/O controller reads the socket while the object can be deleted
     /** a spin lock, held only to copy a value: an operation is created for each synchronous Socket call, and a mutex
         would cost its creation more than the member storage that the members save
