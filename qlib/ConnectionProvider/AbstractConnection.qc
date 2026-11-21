@@ -577,7 +577,7 @@ conn.checkSandboxAccess(True);
         });
         # Ping results are diagnostics, including when authentication fails. Apply
         # the same sensitive-option policy as getInfo() before returning either result.
-        map remove rv.opts{$1.key}, getConnectionSchemeInfo().options.pairIterator(), $1.value.sensitive;
+        rv.opts = getSafeOptions(rv.opts);
         rv.url = safe_url;
 
         last_check = now_us();
@@ -682,13 +682,29 @@ conn.checkSandboxAccess(True);
             h.url = safe_url;
             delete h.url_hash.password;
             # remove all sensitive option values as well
-            map remove h.opts{$1.key}, getConnectionSchemeInfo().options.pairIterator(), $1.value.sensitive;
+            h.opts = getSafeOptions(h.opts);
         }
         # sort options by key
         if (h.opts) {
             h.opts = h.opts{sort(keys h.opts)};
         }
         return h;
+    }
+
+    #! Returns the options of the connection without the values of its sensitive options
+    /** Used for the information (getInfo() without the \c with_passwords option) and the ping results of the
+        connection: the base implementation removes the options that the connection scheme declares sensitive; a
+        connection whose options can hold credentials that its scheme does not declare reimplements it
+
+        @param opts the options of the connection
+
+        @return the options to show
+
+        @since ConnectionProvider 3.1
+    */
+    private *hash<auto> getSafeOptions(*hash<auto> opts) {
+        map remove opts{$1.key}, getConnectionSchemeInfo().options.pairIterator(), $1.value.sensitive;
+        return opts;
     }
 
     #! Returns a @ref ConnectionDataInfo hash of information about the connection
