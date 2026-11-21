@@ -586,7 +586,7 @@ public:
             if (mi->access > Public && class_ctx) {
                 if constexpr (SW == SW_CHECK) {
                     // a load and a branch while no code in the process is sandboxed
-                    if (qore_sandboxed_code_present.load(std::memory_order_relaxed)
+                    if (qore_sandboxed_code_active()
                             && checkSandboxedMemberWrite(mem, class_ctx, xsink)) {
                         return -1;
                     }
@@ -652,7 +652,7 @@ public:
         @param class_ctx the class of the writing code, or nullptr (no access to non-public members)
     */
     DLLLOCAL bool sandboxedWriterDenied(const qore_class_private* class_ctx) const {
-        return class_ctx && qore_sandboxed_code_present.load(std::memory_order_relaxed)
+        return class_ctx && qore_sandboxed_code_active()
             && sandboxedWriterDeniedIntern(*class_ctx);
     }
 
@@ -687,7 +687,7 @@ public:
     */
     DLLLOCAL int checkSandboxedMemberRead(const char* mem, const qore_class_private* lookup_ctx,
             const qore_class_private* reader_ctx, ExceptionSink* xsink) const {
-        if (!reader_ctx || !qore_sandboxed_code_present.load(std::memory_order_relaxed)) {
+        if (!reader_ctx || !qore_sandboxed_code_active()) {
             return 0;
         }
         return checkSandboxedMemberReadIntern(mem, lookup_ctx, *reader_ctx, xsink);
@@ -713,7 +713,7 @@ public:
     */
     DLLLOCAL static int checkSandboxedMethodCall(const QoreObject* obj, ClassAccess access, const char* mname,
             ExceptionSink* xsink) {
-        if (!qore_sandboxed_code_present.load(std::memory_order_relaxed) || access <= Public || !obj) {
+        if (!qore_sandboxed_code_active() || access <= Public || !obj) {
             return 0;
         }
         return checkSandboxedMethodCallIntern(*obj, mname, xsink);
@@ -737,7 +737,7 @@ public:
         no code in the process is sandboxed.  Must be called without the object's lock
     */
     DLLLOCAL bool callerReadsNonPublicMembers() const {
-        return !qore_sandboxed_code_present.load(std::memory_order_relaxed) || callerReadsNonPublicMembersIntern();
+        return !qore_sandboxed_code_active() || callerReadsNonPublicMembersIntern();
     }
 
     //! see callerReadsNonPublicMembers()

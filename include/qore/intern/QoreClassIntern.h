@@ -132,6 +132,14 @@ DLLLOCAL extern std::atomic<int64> qore_param_class_check_steps;
 */
 DLLLOCAL extern std::atomic<bool> qore_sandboxed_code_present;
 
+//! Returns true once code in the process is sandboxed (qore_sandboxed_code_present): the gate of the owner rules
+/** A plain load (relaxed) and a test that is predicted not taken, for the hot paths that the owner rules hook
+    (qore#6842, qore#7033, qore#7102): the code of the rules is in functions of its own (out of line and cold)
+*/
+static inline bool qore_sandboxed_code_active() {
+    return __builtin_expect(qore_sandboxed_code_present.load(std::memory_order_relaxed), 0);
+}
+
 //! Process-wide epoch incremented whenever a callable method table changes or a class or hashdecl is destroyed
 /** A dispatch cache keyed by class, hashdecl or type pointers matches only entries made in the current epoch: the
     increment at destruction makes every entry naming the destroyed metadata stale before its memory can be reused
@@ -551,7 +559,7 @@ private:
     //! calls first (qore#7102)
     /** Outlined from evalMethod(), so that its frame is as before the rule
     */
-    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalCheckedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue evalCheckedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
             ExceptionSink* xsink) const;
 };
 

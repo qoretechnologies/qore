@@ -6746,7 +6746,7 @@ static const AbstractQoreFunctionVariant* getSingleInterpreterMethodVariant(cons
 
 //! returns true if the sandboxed rule of non-public method calls refuses the call (qore#7102); outlined from the
 //! inline method call path, which runs it only while code in the process is sandboxed
-static QORE_INTERN_NOINLINE bool interpreterInlineMethodCallDenied(const AbstractQoreFunctionVariant* inst_variant,
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD bool interpreterInlineMethodCallDenied(const AbstractQoreFunctionVariant* inst_variant,
         const QoreMethod* method, QoreObject* self, ExceptionSink* xsink) {
     if (!method || method->isStatic()) {
         return false;
@@ -6764,7 +6764,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     QoreSandboxProvenanceHelper provenance(self);
     // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller; outlined
-    if (qore_sandboxed_code_present.load(std::memory_order_relaxed)
+    if (qore_sandboxed_code_active()
             && interpreterInlineMethodCallDenied(inst->variant, method, self, xsink)) {
         result = QoreValue();
         return true;

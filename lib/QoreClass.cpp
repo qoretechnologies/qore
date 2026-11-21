@@ -10733,7 +10733,7 @@ QoreValue UserMethodVariant::evalMethod(QoreObject* self, CodeEvaluationHelper& 
     //QORE_TRACE("UserMethodVariant::evalMethod()");
     // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller: outlined, so
     // that the frame of a method call has no more than before the rule while no code in the process is sandboxed
-    if (qore_sandboxed_code_present.load(std::memory_order_relaxed)) {
+    if (qore_sandboxed_code_active()) {
         return evalCheckedMethod(self, ceh, xsink);
     }
     if (synchronized) {

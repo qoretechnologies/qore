@@ -21713,7 +21713,7 @@ DLLLOCAL bool qore_rt_try_dispatch_method_given_by_name(QoreObject* o, const Qor
 
 //! returns true if the sandboxed rule of non-public method calls refuses the call (qore#7102); outlined from the fast
 //! method dispatch, which runs it only while code in the process is sandboxed
-static QORE_INTERN_NOINLINE bool qore_rt_fast_method_call_denied(QoreObject* o, const QoreMethod* method,
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD bool qore_rt_fast_method_call_denied(QoreObject* o, const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink) {
     return !method->isStatic() && qore_object_private::checkSandboxedMethodCall(o, METHV_const(variant)->getAccess(),
         method->getName(), xsink);
@@ -21729,7 +21729,7 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         return false;
     }
     // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller
-    if (qore_sandboxed_code_present.load(std::memory_order_relaxed)
+    if (qore_sandboxed_code_active()
             && qore_rt_fast_method_call_denied(o, method, variant, xsink)) {
         result = toBits(QoreValue());
         return true;
