@@ -3498,8 +3498,17 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             # Return a RestClientIo pointing at the token endpoint plus the request
             # parameters. The caller starts the connection async and submits the
             # request once the connection is ready — fully event-driven.
+            *HttpClientIo::HttpClientConnectionManager token_mgr;
+            if (mgr.hasBoundTlsCredentials()) {
+                mgr.checkTlsCredentialOrigin(base_url_str);
+                token_mgr = mgr;
+            }
+            RestClientIo token_client({"url": base_url_str}, token_mgr);
+            if (token_mgr) {
+                token_client.setConnectionManagerOwner(mgr_owner);
+            }
             return {
-                "rcio": new RestClientIo({"url": base_url_str}),
+                "rcio": token_client,
                 "path": req_path,
                 "headers": auth_hdr,
                 "body": body_str,
@@ -5298,7 +5307,8 @@ rest.addSensitiveHeaders("Qorus-Token");
             }
             if (credentials.cert || credentials.key) {
                 mgr_opts.origin_tls_credentials = <HttpClientIo::HttpClientOriginTlsCredentials>{
-                    "url": opts.url, "cert": credentials.cert, "key": credentials.key};
+                    "url": opts.url, "cert": credentials.cert, "key": credentials.key,
+                    "additional_origins": credentials.additional_origins};
             }
             # Explicit options remain ordinary socket credentials when paired with a connection-owned credential.
             *SSLCertificate client_cert = credentials.cert ? NOTHING : RestClientIo::loadSslCertificate(opts);

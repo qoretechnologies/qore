@@ -692,8 +692,27 @@ HTTPClient::constructor() {
 HTTPClient::constructor(hash<auto> options, *SSLCertificate[QoreSSLCertificate] certificate,
         *SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
-    qore_httpclient_set_owned_credentials(**client, certificate.release(), private_key.release());
+    qore_httpclient_set_owned_credentials(**client, certificate.release(), private_key.release(), nullptr, xsink);
     if (!client->setOptions(options, xsink)) {
+        self->setPrivate(CID_HTTPCLIENT, client.release());
+    }
+}
+
+//! Creates an HTTP client that may present the supplied TLS credentials at specified additional origins
+/** @param options ordinary HTTP client constructor options, including the primary URL
+    @param certificate client certificate omitted from configuration exports
+    @param private_key client key omitted from configuration exports
+    @param additional_origins absolute HTTP(S) URLs fixed by the credential owner at construction.
+    The scheme, host and effective port identify each permitted origin.
+    @throw HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR an origin is invalid or a request selects an unconfigured origin
+    @since %Qore 3.0
+*/
+HTTPClient::constructor(hash<auto> options, *SSLCertificate[QoreSSLCertificate] certificate,
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key, list<string> additional_origins) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
+    qore_httpclient_set_owned_credentials(**client, certificate.release(), private_key.release(), additional_origins,
+        xsink);
+    if (!*xsink && !client->setOptions(options, xsink)) {
         self->setPrivate(CID_HTTPCLIENT, client.release());
     }
 }

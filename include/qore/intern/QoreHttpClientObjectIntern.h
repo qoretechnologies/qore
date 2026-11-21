@@ -68,7 +68,7 @@ class QoreSSLPrivateKey;
 
 // Transfers the reference to each credential to the HTTP transport during construction.
 DLLLOCAL void qore_httpclient_set_owned_credentials(QoreHttpClientObject& client, QoreSSLCertificate* cert,
-    QoreSSLPrivateKey* key);
+    QoreSSLPrivateKey* key, const QoreListNode* origins, ExceptionSink* xsink);
 DLLLOCAL void qore_httpclient_set_connection_path(QoreHttpClientObject& client, const char* path, ExceptionSink* xsink);
 DLLLOCAL void qore_httpclient_set_secure(QoreHttpClientObject& client, bool secure, ExceptionSink* xsink);
 

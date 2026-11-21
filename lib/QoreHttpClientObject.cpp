@@ -1256,11 +1256,12 @@ struct qore_httpclient_priv {
 
     con_info connection, proxy_connection;
 
-    // Only HTTP handshakes at the original origin receive these objects. In particular, the raw Socket
+    // Only HTTP handshakes at the configured origins receive these objects. In particular, the raw Socket
     // methods inherited by HTTPClient must never inherit them as reusable socket credentials.
     SimpleRefHolder<QoreSSLCertificate> owned_cert;
     SimpleRefHolder<QoreSSLPrivateKey> owned_key;
     std::unique_ptr<const con_info> owned_origin;
+    std::vector<con_info> additional_credential_origins;
 
     DLLLOCAL QoreSSLCertificate* httpCertificate() {
         return msock->opaque_cert ? *owned_cert : msock->cert;
@@ -1271,13 +1272,26 @@ struct qore_httpclient_priv {
     }
 
     DLLLOCAL int checkCredentialOrigin(const con_info& target, const char* scheme, ExceptionSink* xsink) const {
-        if (owned_origin && (!target.has_url() || !is_same_origin(*owned_origin, target)
-                || !scheme || strcasecmp(scheme, owned_origin->ssl ? "https" : "http"))) {
-            xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR",
-                "TLS client credentials are restricted to the originally configured origin");
-            return -1;
+        if (!owned_origin) {
+            return 0;
         }
-        return 0;
+        if (target.has_url() && scheme && !strcasecmp(scheme, target.ssl ? "https" : "http")) {
+            if (is_same_origin(*owned_origin, target)) {
+                return 0;
+            }
+            size_t checked = 0;
+            for (const auto& origin : additional_credential_origins) {
+                if (!(++checked % 100) && qore_check_cancel(xsink, "checking TLS credential origins")) {
+                    return -1;
+                }
+                if (is_same_origin(origin, target)) {
+                    return 0;
+                }
+            }
+        }
+        xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR",
+            "TLS client credentials are restricted to the configured origins");
+        return -1;
     }
 
     // issue #3978: default output encoding
@@ -3754,12 +3768,47 @@ const char* QoreHttpClientObject::getConnectionPath() const {
 }
 
 void qore_httpclient_set_owned_credentials(QoreHttpClientObject& client, QoreSSLCertificate* cert,
-        QoreSSLPrivateKey* key) {
+        QoreSSLPrivateKey* key, const QoreListNode* origins, ExceptionSink* xsink) {
     auto* http = qore_httpclient_priv::get(client);
     http->owned_cert = cert;
     http->owned_key = key;
     http->msock->opaque_cert = cert != nullptr;
     http->msock->opaque_key = key != nullptr;
+    if (!origins) {
+        return;
+    }
+    ConstListIterator it(origins);
+    while (it.next()) {
+        if (!((it.index() + 1) % 100) && qore_check_cancel(xsink, "reading TLS credential origins")) {
+            return;
+        }
+        const QoreStringNode* value = it.getValue().get<const QoreStringNode>();
+        if (q_check_no_nul(value->c_str(), value->size(), "credential origin", "HTTP client credentials",
+                "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", xsink)) {
+            return;
+        }
+        QoreURL url(value->c_str());
+        const QoreString* scheme = url.getProtocol();
+        if (!url.isValid() || !url.getHost() || !scheme
+                || (strcasecmp(scheme->c_str(), "https") && strcasecmp(scheme->c_str(), "http"))) {
+            xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "expected an absolute HTTP(S) credential origin");
+            return;
+        }
+        con_info origin;
+        bool has_port = false;
+        if (origin.set_url(url, has_port, xsink)) {
+            return;
+        }
+        if (origin.host != url.getHost()->c_str()) {
+            xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "ambiguous credential origin host");
+            return;
+        }
+        origin.ssl = !strcasecmp(scheme->c_str(), "https");
+        if (!has_port && !origin.is_unix) {
+            origin.port = origin.ssl ? 443 : 80;
+        }
+        http->additional_credential_origins.push_back(std::move(origin));
+    }
 }
 
 void qore_httpclient_set_connection_path(QoreHttpClientObject& client, const char* path, ExceptionSink* xsink) {
@@ -5368,10 +5417,12 @@ QoreStringNode* QoreHttpClientObject::getProxyPassword() const {
 void qore_httpclient_set_secure(QoreHttpClientObject& client, bool secure, ExceptionSink* xsink) {
     auto* http = qore_httpclient_priv::get(client);
     SafeLocker sl(http->msock->m);
-    if (http->owned_origin && secure != http->owned_origin->ssl) {
-        xsink->raiseException("HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR",
-            "TLS client credentials are restricted to the originally configured scheme");
-        return;
+    if (http->owned_origin && secure != http->connection.ssl) {
+        con_info target(http->connection);
+        target.ssl = secure;
+        if (http->checkCredentialOrigin(target, secure ? "https" : "http", xsink)) {
+            return;
+        }
     }
     http->connection.ssl = secure;
 }

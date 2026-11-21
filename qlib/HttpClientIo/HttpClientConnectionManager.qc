@@ -424,8 +424,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Credentials for target TLS handshakes, omitted from the subclass-visible options
         transient *hash<HttpClientOriginTlsCredentials> origin_tls_credentials;
 
-        #! Normalized origin of the bound credentials
-        *string client_credential_origin;
+        #! Canonical origins fixed by the credential owner
+        hash<string, bool> client_credential_origins;
 
         #! Lock for manager id allocation.
         static Mutex manager_id_lock();
@@ -450,8 +450,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         self.logger = self.opts.logger;
         origin_tls_credentials = remove self.opts.origin_tls_credentials;
         if (origin_tls_credentials) {
-            client_credential_origin = HttpRedirectFollower::getOriginKey(
-                HttpRedirectFollower::parseOrigin(origin_tls_credentials.url));
+            foreach string url in ((origin_tls_credentials.url,) + (origin_tls_credentials.additional_origins ?? ())) {
+                hash<UrlInfo> target = HttpRedirectFollower::parseOrigin(url);
+                client_credential_origins{tlsOriginKey(target)} = True;
+            }
         }
         if (!HttpClientProtocolMap.hasKey(self.opts.protocol)) {
             throw "HTTPCLIENT-OPTION-ERROR",
@@ -2248,12 +2250,22 @@ printf("%d connection(s) migrated\n", migrated);
         return !url_info.port && url_info.host =~ /^\//;
     }
 
+    # Include the scheme for UNIX socket origins too.
+    private:internal static string tlsOriginKey(hash<UrlInfo> target) {
+        return target.protocol + "|" + HttpRedirectFollower::getOriginKey(target);
+    }
+
+    #! Reports whether another client using this transport must share its TLS origin policy
+    bool hasBoundTlsCredentials() {
+        return exists origin_tls_credentials;
+    }
+
     #! Checks that the URL can be used with this manager's connection-owned TLS credentials
     nothing checkTlsCredentialOrigin(string url) {
-        if (client_credential_origin) {
+        if (origin_tls_credentials) {
             hash<UrlInfo> target = HttpRedirectFollower::parseOrigin(url);
-            if (HttpRedirectFollower::getOriginKey(target) != client_credential_origin) {
-                throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origin";
+            if (!client_credential_origins.hasKey(tlsOriginKey(target))) {
+                throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origins";
             }
         }
     }
@@ -2797,7 +2809,7 @@ printf("%d connection(s) migrated\n", migrated);
     private hash<auto> prepareH3Probe(hash<auto> url_info, string key) {
         AutoWriteLock al(pool_lock);
         h3_probe_times{key} = clock_get_monotonic_us();
-        if (!client_credential_origin && alt_svc_port_map.hasKey(key)) {
+        if (!origin_tls_credentials && alt_svc_port_map.hasKey(key)) {
             url_info.port = alt_svc_port_map{key};
         }
         return url_info;
@@ -2882,8 +2894,8 @@ printf("%d connection(s) migrated\n", migrated);
             return url_info;
         }
         hash<UrlInfo> target = <UrlInfo>{"protocol": url_info.protocol, "host": url_info.host, "port": url_info.port};
-        if (HttpRedirectFollower::getOriginKey(target) != client_credential_origin) {
-            throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origin";
+        if (!client_credential_origins.hasKey(tlsOriginKey(target))) {
+            throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origins";
         }
         return url_info + {"bound_tls_cert": exists origin_tls_credentials.cert,
             "bound_tls_key": exists origin_tls_credentials.key};

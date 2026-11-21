@@ -588,12 +588,15 @@ public namespace HttpClientIo {
         string password = "";
     }
 
-    #! TLS credentials supplied for handshakes at one origin
+    #! TLS credentials supplied for handshakes at the configured origins
     public hashdecl HttpClientOriginTlsCredentials {
         #! An HTTP(S) URL whose scheme, host and effective port identify the origin
         string url;
 
-        #! The certificate to use at this origin
+        #! Additional origins fixed by the credential owner
+        *list<string> additional_origins;
+
+        #! The certificate to use at these origins
         *SSLCertificate cert;
 
         #! The private key to use at this origin

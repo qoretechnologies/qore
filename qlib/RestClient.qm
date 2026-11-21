@@ -1726,7 +1726,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
     constructor(hash<auto> opts, *softbool do_not_connect, hash<RestConnectionTlsCredentials> credentials)
             : HTTPClient(getRestClientHttpClientConstructorOptions(opts)
                 + ((opts.url || !opts.validator) ? NOTHING : {"url": opts.validator.getTargetUrl()}),
-                credentials.cert, credentials.key) {
+                credentials.cert, credentials.key, credentials.additional_origins ?? ()) {
         if (credentials.cert || credentials.key) {
             connection_tls_credentials = credentials;
             if (*string origin = opts.url ?: HTTPClient::getURL(UC_TARGET)) {
@@ -2736,13 +2736,30 @@ hash<auto> ans = rest.del("/orders/1");
                     "copying a REST client with TLS credential paths requires filesystem access";
             }
             hash<UrlInfo> target = HttpRedirectFollower::parseOrigin(new_url);
-            if (!connection_tls_origin || target.protocol != connection_tls_origin.protocol
-                    || HttpRedirectFollower::getOriginKey(target)
-                        != HttpRedirectFollower::getOriginKey(connection_tls_origin)) {
-                throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origin";
+            *hash<RestConnectionTlsCredentials> credentials = connection_tls_credentials;
+            bool original = connection_tls_origin && target.protocol == connection_tls_origin.protocol
+                && HttpRedirectFollower::getOriginKey(target) == HttpRedirectFollower::getOriginKey(connection_tls_origin);
+            if (!original) {
+                # Swap the primary origin with the matching secondary origin for the sibling.
+                # Repeated copies retain exactly the set that the owner supplied.
+                int i = 0;
+                bool allowed = False;
+                foreach string url in (credentials.additional_origins ?? ()) {
+                    hash<UrlInfo> origin = HttpRedirectFollower::parseOrigin(url);
+                    if (target.protocol == origin.protocol
+                            && HttpRedirectFollower::getOriginKey(target) == HttpRedirectFollower::getOriginKey(origin)) {
+                        credentials.additional_origins[i] = HttpRedirectFollower::getOriginUrl(connection_tls_origin);
+                        allowed = True;
+                        break;
+                    }
+                    ++i;
+                }
+                if (!allowed) {
+                    throw "HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR", "TLS credentials are bound to the configured origins";
+                }
             }
-            if (connection_tls_credentials) {
-                return cast<AbstractRestClient>(Class::getClass(self).newObject(opts, True, connection_tls_credentials));
+            if (credentials) {
+                return cast<AbstractRestClient>(Class::getClass(self).newObject(opts, True, credentials));
             }
             # Serialization drops the TLS objects. The saved paths are informational and must not restore them.
             opts -= connection_tls_paths;
@@ -4646,6 +4663,8 @@ public hashdecl RestConnectionTlsCredentials {
     *SSLCertificate cert;
     #! Private key parsed from the configured key file
     *SSLPrivateKey key;
+    #! Additional HTTP(S) origins selected by the connection owner at construction
+    *list<string> additional_origins;
 }
 
 #! Base class for REST HTTP connections: options, authentication (including OAuth2), features, pings and polling
@@ -4656,7 +4675,10 @@ public hashdecl RestConnectionTlsCredentials {
 
     The options are those of @ref RestClient::RestConnection "RestConnection" (see @ref ConnectionScheme).
     Both get() and getAsync() bind certificates and private keys read from the connection's original files to
-    its HTTP origin. Configuration exports and serialization omit the file contents even for trusted callers.
+    the origin of its main URL and the origins of absolute HTTP(S) URLs supplied at construction in
+    \c oauth2_token_url, \c oauth2_alt_token_url and \c ping_path. Scheme, host and effective port identify
+    an origin. Relative paths use the main origin. Later option changes cannot authorize another origin.
+    Configuration exports and serialization omit the file contents even for trusted callers.
     Restoring an exported client requires supplying its credentials again for mutual TLS. Credentials supplied
     directly as option data, including \c ssl_key_data, retain their ordinary export behavior.
     Reading credential paths supplied by the caller requires filesystem access.
@@ -5918,6 +5940,8 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         # A reader captures its location at construction and never accepts a filename to open.
         transient *code<*data(string, string, bool)> cert_reader;
         transient *code<*data(string, string, bool)> key_reader;
+        # Captured with the readers, before any caller can change the connection options.
+        *list<string> tls_endpoint_origins;
     }
 
     private:internal static *code<*data(string, string, bool)> bindTlsFile(*string location, string endpoint) {
@@ -5951,6 +5975,17 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         }
         if (configured.ssl_key_path == opts.ssl_key_path) {
             key_reader = bindTlsFile(opts.ssl_key_path, real_url);
+        }
+        if (cert_reader || key_reader) {
+            foreach string option in ("oauth2_token_url", "oauth2_alt_token_url", "ping_path") {
+                *string url = configured{option};
+                if (url && url == opts{option} && url =~ /^https?:\/\//i) {
+                    string origin = HttpRedirectFollower::getOriginUrl(HttpRedirectFollower::parseOrigin(url));
+                    if (origin !~ /[${}]/) {
+                        push tls_endpoint_origins, origin;
+                    }
+                }
+            }
         }
     }
 
@@ -6338,6 +6373,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
                 && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
             throw "PERMISSION-DENIED", "caller cannot select TLS credential files";
         }
+        credentials.additional_origins = tls_endpoint_origins;
         return credentials;
     }
 
