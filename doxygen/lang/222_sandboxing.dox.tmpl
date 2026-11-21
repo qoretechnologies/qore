@@ -553,10 +553,11 @@ authenticate();
     \c SANDBOX-ISOLATION-ERROR before it reads or changes anything (parsing, loading modules, reading or setting global
     variables, taking call references, introspection), except \c getProgramId(), which only identifies it.  So do
     the methods of @ref Qore::DebugProgram "DebugProgram" and @ref Qore::Breakpoint "Breakpoint" given its
-    @ref Qore::ProgramControl "ProgramControl", and @ref Qore::load_user_module_with_program()
+    @ref Qore::ProgramControl "ProgramControl" or bound to it (a breakpoint assigned to it, a debugger that it was
+    added to; except \c Breakpoint::getBreakpointId()), and @ref Qore::load_user_module_with_program()
     "load_user_module_with_program()" and @ref Qore::Program::loadUserModuleWithProgram()
-    "Program::loadUserModuleWithProgram()" given it as the container of a module.  Deleting its object is not
-    refused.  The %Program of a module from a trusted module directory, a %Program of the host and one of a sandbox
+    "Program::loadUserModuleWithProgram()" given it as the container of a module.  Deleting its object, or a
+    breakpoint or debugger bound to it (which unassigns or detaches it), is not refused.  The %Program of a module from a trusted module directory, a %Program of the host and one of a sandbox
     without a domain are not another domain's.
 
     A build that trusted code calls may run the code of any domain: the host can orchestrate across tenants.  A host

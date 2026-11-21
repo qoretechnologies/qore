@@ -7240,6 +7240,11 @@ int qore_sandbox_check_program_isolation(QoreProgram* pgm, ExceptionSink* xsink,
     return 0;
 }
 
+bool qore_sandbox_isolation_active() {
+    ThreadData* td = thread_data.get();
+    return td && td->sandbox_budgets.currentIsolation();
+}
+
 QoreProgram* qore_take_module_container(const QoreObject* obj, QoreProgram* pgm, ExceptionSink* xsink) {
     assert(obj && pgm);
     // another tenant's Program is not used as the container of a module in a trusted build that a tenant called;
