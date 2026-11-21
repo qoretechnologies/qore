@@ -2026,6 +2026,22 @@ void qore_setup_argv(int pos, int argc, char* argv[]) {
     }
 }
 
+void qore_tag_argv_encoding() {
+    for (QoreListNode* l : {ARGV, QORE_ARGV}) {
+        if (!l) {
+            continue;
+        }
+        ConstListIterator li(l);
+        while (li.next()) {
+            const QoreValue v = li.getValue();
+            if (v.getType() == NT_STRING) {
+                // the strings are not shared yet: no Program has copied the lists
+                const_cast<QoreStringNode*>(v.get<const QoreStringNode>())->setEncoding(QCS_DEFAULT);
+            }
+        }
+    }
+}
+
 void init_lib_intern(char* env[]) {
    // set up environment hash; the environment is read under the environment lock, and its strings are not
    // modified, since other threads (of a program embedding the library) may read them at the same time

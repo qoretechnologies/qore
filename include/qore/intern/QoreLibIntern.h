@@ -1694,6 +1694,11 @@ DLLLOCAL int qore_fd_write_all(int fd, const void* data, size_t len, ExceptionSi
 */
 DLLLOCAL int qore_stdio_write(FILE* fp, const char* data, size_t len, ExceptionSink* xsink, const char* operation);
 DLLLOCAL void delete_global_variables();
+//! tags the strings of ARGV and QORE_ARGV with the default encoding once it is set (qore#7045)
+/** qore_setup_argv() makes them from the command line before the library is initialized, when the default encoding is
+    not set yet; the bytes of the command line are in the default encoding of the process
+*/
+DLLLOCAL void qore_tag_argv_encoding();
 DLLLOCAL void init_lib_intern(char* env[]);
 //! runs the one-time initializations of the network code when the library is initialized (see QoreForkHandlers.h)
 DLLLOCAL void qore_network_init_once();
