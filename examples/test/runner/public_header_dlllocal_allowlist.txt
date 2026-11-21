@@ -100,13 +100,13 @@ include/qore/QoreNamespace.h|QoreNamespace|QoreNamespace(qore_ns_private* p) # c
 include/qore/QoreNamespace.h|RootQoreNamespace|RootQoreNamespace(class qore_root_ns_private* p) # constructor
 include/qore/QoreNamespace.h|RootQoreNamespace|virtual ~RootQoreNamespace() # destructor
 include/qore/QoreNothingNode.h|QoreNothingNode|QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override # virtual
-include/qore/QoreNothingNode.h|QoreNothingNode|virtual int parseInit(QoreValue& val, QoreParseContext& parse_context) # virtual
+include/qore/QoreNothingNode.h|QoreNothingNode|virtual int parseInit(QoreValue& val, QoreParseContext& parse_context) override # virtual
 include/qore/QoreNullNode.h|QoreNullNode|QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override # virtual
-include/qore/QoreNullNode.h|QoreNullNode|virtual bool getAsBoolImpl() const # virtual
-include/qore/QoreNullNode.h|QoreNullNode|virtual double getAsFloatImpl() const # virtual
-include/qore/QoreNullNode.h|QoreNullNode|virtual int getAsIntImpl() const # virtual
-include/qore/QoreNullNode.h|QoreNullNode|virtual int parseInit(QoreValue& val, QoreParseContext& parse_context) # virtual
-include/qore/QoreNullNode.h|QoreNullNode|virtual int64 getAsBigIntImpl() const # virtual
+include/qore/QoreNullNode.h|QoreNullNode|virtual bool getAsBoolImpl() const override # virtual
+include/qore/QoreNullNode.h|QoreNullNode|virtual double getAsFloatImpl() const override # virtual
+include/qore/QoreNullNode.h|QoreNullNode|virtual int getAsIntImpl() const override # virtual
+include/qore/QoreNullNode.h|QoreNullNode|virtual int parseInit(QoreValue& val, QoreParseContext& parse_context) override # virtual
+include/qore/QoreNullNode.h|QoreNullNode|virtual int64 getAsBigIntImpl() const override # virtual
 include/qore/QoreNumberNode.h|QoreNumberNodeHelper|QoreNumberNodeHelper& operator=(const QoreNumberNodeHelper&) # operator
 include/qore/QoreNumberNode.h|QoreNumberNodeHelper|QoreNumberNodeHelper(const QoreNumberNodeHelper&) # constructor
 include/qore/QoreNumberNode.h|QoreNumberNodeHelper|QoreNumberNodeHelper(const QoreValue n) # constructor
