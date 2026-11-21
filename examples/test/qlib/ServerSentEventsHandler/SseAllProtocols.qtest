@@ -171,9 +171,9 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
         }
         if (q) {
             # bound before the connection is registered (and the setup gate parks), so before the close notifier;
-            # the key is the connection's own (the QUIC session's), as a request's closures register only the queue of
-            # its own connection (qore#6921)
-            string key = cx.sock_key;
+            # the key is the connection's own, the QUIC session's as the server derives it from the listener socket,
+            # as a request's closures register only the queue of its own connection (qore#6921)
+            string key = sock.uniqueHash() + ":quic:" + session_id;
             cx."header-info".register_persistent_queue(key, q);
             code deregister = cx."header-info".deregister_persistent_queue;
             session_close_deregister = sub () { deregister(key); };
