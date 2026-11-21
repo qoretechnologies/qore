@@ -144,7 +144,7 @@ class TestRunIsolationTest inherits QUnit::Test {
         assertEq(-1, TestRun::maskSecrets(msg, bad).find(pw));
         # without the datasource string: the "user/password@" form
         assertEq(-1, TestRun::maskSecrets(msg).find(pw));
-        assertEq("x 'pgsql:u/****@db' and u/****@db2", TestRun::maskSecrets("x 'pgsql:u/p@db' and u/q@db2"));
+        assertEq("x 'pgsql:****/****@db' and ****/****@db2", TestRun::maskSecrets("x 'pgsql:u/p@db' and u/q@db2"));
         # a password with an "@" is masked whole when its datasource string is given
         string at = "oracle:scott/a@b" + pw + "@orcl";
         assertEq(-1, TestRun::maskSecrets("error in " + at, at).find(pw));

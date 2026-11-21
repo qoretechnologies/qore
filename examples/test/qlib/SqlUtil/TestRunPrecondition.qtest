@@ -44,7 +44,24 @@ class TestRunPreconditionTest inherits QUnit::Test {
         # a user, password and database that are the same value are masked as when they differ
         assertEq("mysql:****/****@****", TestRun::describeDatasource("mysql:same/same@same"));
         assertEq("mysql:****/****@****%dbhost", TestRun::describeDatasource("mysql:u/p@d%dbhost"));
-        assertEq("<unparsable>", TestRun::describeDatasource("this is not a datasource"));
+        # the rules of libqore's masking of datasource strings in its errors (qore#6961); the stricter one wins:
+        # a string that cannot be parsed shows only a valid driver name
+        assertEq("pgsql:****", TestRun::describeDatasource("pgsql:u/p@db("));
+        assertEq("****", TestRun::describeDatasource("p g:u/p@db("));
+        assertEq("****", TestRun::describeDatasource("/tmp/x:u/p@db("));
+        assertEq("****", TestRun::describeDatasource("u/p@db("));
+        assertEq("****", TestRun::describeDatasource("this is not a datasource"));
+        # a missing or invalid driver name is never shown, nor a path or string given as the driver
+        assertEq("****:****/****@****%h:5", TestRun::describeDatasource("u/p@db%h:5"));
+        assertEq("****:****/****@****", TestRun::describeDatasource("p g:u/p@db"));
+        assertEq("****:****/****@****%h", TestRun::describeDatasource("/etc/x y:u/p@db%h"));
+        # the port only with a host, and only when it is not 0
+        assertEq("pgsql:****/****@****", TestRun::describeDatasource("pgsql:u/p@db:5"));
+        # free text: the user is masked with the password
+        assertEq("x 'pgsql:****/****@db' and ****/****@db2", TestRun::maskSecrets("x 'pgsql:u/p@db' and u/q@db2"));
+        assertEq("****/****@db", TestRun::maskSecrets("secretuser/secretpass@db"));
+        map assertEq(-1, TestRun::describeDatasource($1).find("secret"), $1), ("secretuser/secretpass@db(",
+            "/secret/path:u/p@db", "secretdrv x:u/p@db(", "pgsql:secretuser/secretpass@secretdb%h:5");
     }
 
     reason() {
