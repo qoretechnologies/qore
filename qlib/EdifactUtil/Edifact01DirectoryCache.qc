@@ -189,7 +189,7 @@ public namespace EdifactUtil {
                             release, ex.err, ex.desc);
                         if (cache_warnings != NOTHING) {
                             push cache_warnings, msg;
-                        } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                        } else if (SandboxManager::isTerminalIoAllowed()) {
                             stderr.printf("%s\n", msg);
                         }
                     }

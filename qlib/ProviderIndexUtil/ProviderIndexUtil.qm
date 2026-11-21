@@ -163,9 +163,10 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
       <a href="https://github.com/qoretechnologies/qore/issues/7061">issue 7061</a>)
     - the internal state and helpers of @ref ProviderIndexUtil::ProviderIndexUtil "ProviderIndexUtil" are not visible
       to subclasses (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
-    - errors that are written to @ref Qore::stderr "stderr" without a logger are left out when the module's code has no
-      terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
-      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+    - errors that are written to @ref Qore::stderr "stderr" without a logger are left out when the module's code or the
+      code that calls it has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an
+      exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
     - @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "writeDataProviderIndexByApp()"
       accepts index maps whose values all have the same type, such as an index of factories only
     - added a versioned, app-sharded MessagePack metadata cache with per-shard integrity validation and canonical
