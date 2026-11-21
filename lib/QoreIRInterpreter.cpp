@@ -24888,7 +24888,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             }
         } else if (right.getType() == NT_OBJECT) {
             auto* op = qore_object_private::get(*right.get<QoreObject>());
-            if (v.getAutoVLock().getRWL() == &op->rml) {
+            if (qore_auto_vlock_ops(&v.getAutoVLock()).getRWL() == &op->rml) {
                 // the object is the one whose member is the lvalue, whose lock this thread holds for writing: its
                 // members are copied without locking it again, before the lvalue's hash is made unique, as the hash
                 // can be one of them (qore#7107)
@@ -24923,7 +24923,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
         QoreObject* o = v.getValue().get<QoreObject>();
         if (right.getType() == NT_HASH || right.getType() == NT_OBJECT) {
             // the lock that the lvalue holds: that of the object whose member is the lvalue
-            const QoreVarRWLock* vl_lock = v.getAutoVLock().getRWL();
+            const QoreVarRWLock* vl_lock = qore_auto_vlock_ops(&v.getAutoVLock()).getRWL();
             if (qore_class_private::get(*o->getClass())->has_member_accessors
                     || (vl_lock && (vl_lock == &qore_object_private::get(*o)->rml
                         || (right.getType() == NT_OBJECT
@@ -25206,7 +25206,7 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             // the lvalue holds the object's lock when it is a member of the object itself (`t.o = t; t.o -= "a"`):
             // the members are then removed after the lvalue has released it (qore#7107)
             if (cls->has_member_accessors || cls->member_write_gate
-                    || v.getAutoVLock().getRWL() == &qore_object_private::get(*o)->rml) {
+                    || qore_auto_vlock_ops(&v.getAutoVLock()).getRWL() == &qore_object_private::get(*o)->rml) {
                 return removeExternalObjectMembers(v, o, right, xsink);
             }
             removeObjectMembers(v, o, right, xsink);
