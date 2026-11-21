@@ -26833,6 +26833,48 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
     return QoreValue();
 }
 
+namespace {
+//! the stream whose acknowledged byte count dbg_quic_simulate_stream_progress() advances, the number of reads of the
+//! count that still advance it, and the progress added so far
+std::atomic<int64_t> dbg_quic_progress_stream{-1};
+std::atomic<int64_t> dbg_quic_progress_reads{0};
+std::atomic<int64_t> dbg_quic_progress_added{0};
+}
+
+int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id) {
+    if (dbg_quic_progress_stream.load(std::memory_order_acquire) != stream_id) {
+        return 0;
+    }
+    int64_t reads = dbg_quic_progress_reads.load(std::memory_order_acquire);
+    while (reads > 0) {
+        if (dbg_quic_progress_reads.compare_exchange_weak(reads, reads - 1, std::memory_order_acq_rel)) {
+            return dbg_quic_progress_added.fetch_add(1, std::memory_order_acq_rel) + 1;
+        }
+    }
+    return dbg_quic_progress_added.load(std::memory_order_acquire);
+}
+
+//! simulates a peer that takes the data of an HTTP/3 client stream a little at a time
+/** The next \a reads reads of the stream's acknowledged byte count (Socket::getQuicClientStreamAckedBytes(), which
+    a send waiting for a full send buffer to drain makes at the start and at the end of each wait) each see one byte
+    more acknowledged than the one before, with no clock involved: with the stream's staged data held back (see
+    dbg_quic_hold_stream_data()), a wait that times out after such a read has seen progress.  Setting it again
+    starts a new count.
+
+    @param stream_id the HTTP/3 stream ID of the client stream
+    @param reads the number of reads that see progress; zero or less ends the simulation
+*/
+static QoreValue f_dbg_quic_simulate_stream_progress(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t stream_id = get_param_value(params, 0).getAsBigInt();
+    int64_t reads = get_param_value(params, 1).getAsBigInt();
+    dbg_quic_progress_stream.store(-1, std::memory_order_release);
+    dbg_quic_progress_added.store(0, std::memory_order_release);
+    dbg_quic_progress_reads.store(reads > 0 ? reads : 0, std::memory_order_release);
+    dbg_quic_progress_stream.store(reads > 0 ? stream_id : -1, std::memory_order_release);
+    return QoreValue();
+}
+
 //! stops holding the staged response data of the stream held with dbg_quic_hold_stream_data()
 /** The held streams are resumed; their data is written with the session's next write, for example when a packet of
     the peer is processed.
@@ -29294,6 +29336,9 @@ void init_debug_functions(QoreNamespace& qns) {
         "stream_id");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");
     qns.addBuiltinVariant("dbg_http_hold_at", f_dbg_http_hold_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 4,
         stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release", objectOrNothingTypeInfo, QORE_PARAM_NO_ARG,

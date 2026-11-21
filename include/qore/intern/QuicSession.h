@@ -224,6 +224,7 @@ struct QuicStreamingBodyData {
     */
     std::deque<std::vector<uint8_t>> sent_bufs;
     size_t front_acked = 0;          //!< bytes of sent_bufs.front() already acknowledged
+    uint64_t acked_total = 0;        //!< bytes of the stream acknowledged by the peer so far (never decreases)
     bool eof = false;                //!< InputStream signaled EOF
     bool deferred = false;           //!< WOULDBLOCK returned, waiting for resume
     bool no_end_stream = false;      //!< Keep stream open after data exhausted (CONNECT tunnels)
@@ -645,6 +646,14 @@ public:
     //! Returns 0 if the peer has acknowledged all the data staged for the stream (or the stream is gone), 1 otherwise;
     //! waiters are woken by notifyStreamDrain() when the data is acknowledged or the stream closes
     DLLLOCAL int streamSendFlushed(int64_t stream_id);
+
+    //! Returns the number of bytes of the stream's data that the peer has acknowledged so far (never decreases)
+    /** A client waiting for a full send buffer to drain uses it as its measure of progress: the peer takes the data
+        only while it reads the stream and grants flow-control credit (issue #6968).
+
+        @return the acknowledged byte count, or -1 if the stream has no staged data record
+    */
+    DLLLOCAL int64_t streamAckedBytes(int64_t stream_id);
 
     //! Take the next completed stream (transfers ownership)
     DLLLOCAL std::unique_ptr<QuicStreamInfo> takeCompletedStream();

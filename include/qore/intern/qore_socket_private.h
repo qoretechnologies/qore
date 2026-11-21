@@ -165,6 +165,13 @@ class QoreSocketObject;
     @return 0 if the stream has no data buffered to be sent (or the stream or the session is gone), 1 if the wait timed
     out, -1 if an exception was raised (\c HTTP2-ERROR or \c QUIC-ERROR without a session)
 */
+//! Returns the bytes of a client stream's data that the peer has acknowledged on the socket's first QUIC session
+/** @return the byte count (never decreases), -1 if the session or the stream's data record is gone, or if an
+    exception was raised
+*/
+DLLLOCAL int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id,
+        ExceptionSink* xsink);
+
 DLLLOCAL int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool http2, int64_t stream_id, int timeout_ms,
         ExceptionSink* xsink);
 //! Returns a reference to the sandbox manager whose network policy applies to the calling thread, or nullptr
