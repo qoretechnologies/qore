@@ -200,6 +200,8 @@ protected:
 #ifdef DEBUG
     //! signalled with the pool lock held when a thread starts to wait for a free connection; see dbgWaitForWaiters()
     QoreCondition dbg_waiter_cond;
+    //! microseconds added to the measured time of the next wait for a free connection; see dbgAddNextWait()
+    int64 dbg_next_wait_us = 0;
 #endif
 
     int64 tl_timeout_ms,
@@ -328,6 +330,8 @@ public:
 #ifdef DEBUG
         // a thread of the parent can wait on it in dbgWaitForWaiters()
         qore_condition_ops(&dbg_waiter_cond).reinitAfterFork();
+        // set for a wait of a thread of the parent
+        dbg_next_wait_us = 0;
 #endif
         QoreThreadLock::reinitAfterFork();
         wait_count = 0;
@@ -420,6 +424,11 @@ public:
     /** @return true if that many threads are waiting, false if the timeout expired first
     */
     DLLLOCAL bool dbgWaitForWaiters(unsigned count, int timeout_ms);
+
+    //! adds the given microseconds to the measured time of the next wait for a free connection; see lib/ql_debug.cpp
+    /** The time is added once, by the next thread that ends a wait, and then reset
+    */
+    DLLLOCAL void dbgAddNextWait(int64 us);
 #endif
 
     // functions supporting DatasourceStatementHelper
