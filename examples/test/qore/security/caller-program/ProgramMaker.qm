@@ -1,9 +1,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# a module of caller-program.qtest whose code creates a Program from the code that it is given (qore#7077): loaded first
-# by a Program that does not allow its children other options, so that the Program that it creates inherits
-# PO_IN_MODULE from the module's Program
+# a module of caller-program.qtest whose code creates a Program from the code that it is given (qore#7077): the
+# Program that it creates is not a module's, and does not inherit PO_IN_MODULE from the module's Program (qore#7067)
 
 %new-style
 %require-types

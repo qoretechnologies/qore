@@ -6834,7 +6834,8 @@ CallerWalkStep qore_caller_walk_step(const QoreProgram* pgm) {
     // the Program of a module, library code or not, serves the code that calls it; also while the module is
     // initialized, before it is registered and has the lifetime of a module: the module manager marks the Program
     // that it creates or takes for a module before its code runs; not a Program that module code creates, whose code
-    // is its own (it inherits PO_IN_MODULE, so that option does not tell a module's Program; qore#7077)
+    // is its own: a Program that module code creates is not a module's (it does not inherit PO_IN_MODULE, qore#7067;
+    // qore#7077)
     return (priv->module_lifetime.load(std::memory_order_acquire) || priv->module_program.load(std::memory_order_acquire))
         ? CallerWalkStep::Skip : CallerWalkStep::Found;
 }

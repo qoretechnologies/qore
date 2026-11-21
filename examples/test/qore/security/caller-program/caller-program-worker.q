@@ -117,15 +117,15 @@ check("init-path-ran", True, h.ran);
 check("init-path-tenant", init_a.getProgramId(), h.init);
 check("init-path-tenant-thread", init_a.getProgramId(), h.thread);
 
-# a Program that module code creates (with code that a tenant gave it) is not a module's, although it inherits
-# PO_IN_MODULE: its code is its own, whoever calls it (qore#7077)
+# a Program that module code creates (with code that a tenant gave it) is not a module's: it does not inherit
+# PO_IN_MODULE (qore#7067), and its code is its own, whoever calls it (qore#7077)
 Program maker(PO_NEW_STYLE);
 maker.parse(sprintf("%%requires %s/ProgramMaker.qm\n"
     "Program sub t_make_program(string src) { return ProgramMaker::make_program(src); }\n", get_script_dir()),
     "maker");
 maker.setSandboxManager(new SandboxManager());
 Program made = maker.callFunction("t_make_program", TenantCode);
-check("module-made-program-flag", True, (made.getParseOptions() & PO_IN_MODULE).toBool());
+check("module-made-program-flag", False, (made.getParseOptions() & PO_IN_MODULE).toBool());
 check("module-made-program", made.getProgramId(), made.callFunction("t_probe"));
 
 map printf("%s\n", $1), results;

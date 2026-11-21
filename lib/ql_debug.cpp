@@ -3833,6 +3833,48 @@ static void ut_tld_save_reentrant_destructor(void* data) {
 
 //! saving data for a key that has data replaces it: the old data's destructor runs once, and the new data and its
 //! destructor are stored (qore#7075)
+//! no Program API sets or clears a system parse option (PO_SYSTEM_OPS) of a Program that has it (qore#7109)
+/** A Program that module code creates does not inherit PO_IN_MODULE (qore#7067), so no Program that Qore code can
+    reach has the option: this test makes one as the module manager does, and checks that the setter, the clearing
+    method and the replacement refuse to change the option, and that a replacement that keeps it is allowed.
+*/
+static void ut_program_system_option_changes(UnitTestCounters& c) {
+    // the PROGRAM-OPTION-ERROR exception of a sink, cleared
+    auto option_error = [](ExceptionSink& xsink) -> bool {
+        bool rc = false;
+        if (xsink.isException()) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            rc = !strcmp(err->c_str(), "PROGRAM-OPTION-ERROR");
+        }
+        xsink.clear();
+        return rc;
+    };
+    ExceptionSink xsink;
+    QoreProgram* pgm = new QoreProgram(QoreParseOptions(PO_NEW_STYLE | PO_IN_MODULE));
+    const QoreParseOptions before = qore_program_private::readParseOptions(*pgm);
+    UT_ASSERT(c, before.hasAny(QoreParseOptions(PO_IN_MODULE)), "system options: the Program has PO_IN_MODULE");
+
+    pgm->disableParseOptions(QoreParseOptions(PO_IN_MODULE), &xsink);
+    UT_ASSERT(c, option_error(xsink), "system options: disableParseOptions() refuses to clear PO_IN_MODULE");
+    pgm->replaceParseOptions(before & ~QoreParseOptions(PO_IN_MODULE), &xsink);
+    UT_ASSERT(c, option_error(xsink), "system options: replaceParseOptions() refuses to clear PO_IN_MODULE");
+    pgm->setParseOptions(QoreParseOptions(PO_IN_MODULE), &xsink);
+    UT_ASSERT(c, option_error(xsink), "system options: setParseOptions() refuses PO_IN_MODULE");
+    UT_ASSERT(c, qore_program_private::readParseOptions(*pgm) == before,
+        "system options: the refused changes leave the options as they were");
+
+    // a replacement that keeps the option as the Program has it is allowed
+    pgm->replaceParseOptions(before | QoreParseOptions(PO_NO_NETWORK), &xsink);
+    UT_ASSERT(c, !xsink, "system options: a replacement that keeps PO_IN_MODULE is allowed");
+    xsink.clear();
+    UT_ASSERT(c, qore_program_private::readParseOptions(*pgm)
+        == (before | QoreParseOptions(PO_NO_NETWORK)), "system options: the replacement keeps PO_IN_MODULE");
+
+    pgm->deref(&xsink);
+    UT_ASSERT(c, !xsink, "system options: the Program's teardown raises no exception");
+    xsink.clear();
+}
+
 static void ut_tld_save_existing_key(UnitTestCounters& c) {
     ut_tld_save_destroyed[0] = ut_tld_save_destroyed[1] = 0;
     int key = q_get_unique_thread_local_data_key();
@@ -22441,6 +22483,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_string_compare_soft_and_concat_chars(c);
     ut_external_delete_during_deletion(c);
     ut_tld_save_existing_key(c);
+    ut_program_system_option_changes(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
@@ -22880,6 +22923,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_string_compare_soft_and_concat_chars(c);
     ut_external_delete_during_deletion(c);
     ut_tld_save_existing_key(c);
+    ut_program_system_option_changes(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);

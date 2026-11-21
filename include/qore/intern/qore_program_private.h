@@ -2372,7 +2372,7 @@ public:
 
     //! set by the module manager for the Program that it creates or takes for a user module, before the module's code
     //! is parsed or initialized: the Program is a module's from then on (qore_find_caller_program(), qore#7077);
-    //! PO_IN_MODULE does not tell it, as a Program that module code creates inherits it
+    //! a Program that module code creates is not a module's (it does not inherit PO_IN_MODULE, qore#7067)
     //! (atomic: the threads that already run a container Program's code read it while the loader sets it)
     std::atomic<bool> module_program{false};
 

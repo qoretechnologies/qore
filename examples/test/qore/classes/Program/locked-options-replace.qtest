@@ -56,11 +56,14 @@ class LockedOptionsReplaceTest inherits QUnit::Test {
         loader.parse("Program sub makeChild() { return SystemOptionsFixture::child(); }", "factory");
         Program moduleChild = loader.callFunction("makeChild");
         int inherited = moduleChild.getParseOptions();
-        assertTrue((inherited & PO_IN_MODULE) != 0, "a module child inherits the runtime option");
+        # a Program that module code creates runs its own code, so it does not inherit the module mark (#7067); the
+        # refusal to clear PO_IN_MODULE from a Program that has it is tested in C++ (ut_program_system_option_changes()
+        # in run_unit_tests()), as no Program that Qore code can reach has the option
+        assertEq(0, inherited & PO_IN_MODULE, "a module child does not inherit the runtime option");
         moduleChild.replaceParseOptions(inherited | PO_NO_NETWORK);
         assertEq(inherited | PO_NO_NETWORK, moduleChild.getParseOptions());
         assertThrows("PROGRAM-OPTION-ERROR", "PO_IN_MODULE", \moduleChild.replaceParseOptions(),
-            inherited & ~PO_IN_MODULE);
+            inherited | PO_NO_NETWORK | PO_IN_MODULE);
         assertEq(inherited | PO_NO_NETWORK, moduleChild.getParseOptions());
     }
 
