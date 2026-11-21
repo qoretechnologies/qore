@@ -305,7 +305,8 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
     asynchronous work: the %Qore-level `AsyncIoController::submit()`, `addTimer*()` and `submitTask()` raise
     `ASYNC-IO-SHUTDOWN-ERROR` (`checkModuleCleanupNewWork()`), so an `onComplete()` that re-arms itself, a timer that
     re-adds itself or a destructor that resubmits cannot make the end of the process wait forever; nor can the work
-    that the cleanup handed over add a timer after its deadline (a timer callback or a heartbeat that re-arms itself);
+    that the cleanup handed over add a timer after its deadline (a timer callback or a heartbeat that re-arms itself),
+    nor a task of the cleanup submit a task then (`qore_module_cleanup_task_running`: a task that submits itself);
     its operations are canceled when admitted and its tasks waited for (a message delivery), and the cleanup thread
     itself can do all of it (its operations are canceled by its next round).
     Synchronous I/O and `AsyncIoController::exec()`, which use the internal `submit()`, are not refused

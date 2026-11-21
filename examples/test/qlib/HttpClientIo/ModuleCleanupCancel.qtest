@@ -136,6 +136,9 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             "window-b": ("window-b onComplete: canceled: null\nwindow-b timer refused: " + Refused,),
             # and an operation that it runs synchronously gets a canceled result at once, as its wait would keep the
             # cleanup from ending
+            # and a task that it submits, which the cleanup waits for, cannot submit itself again then
+            "window-b-chain": ("window-b-chain onComplete: canceled: null", "window-b-chain chain task ran\n"
+                "window-b-chain chain task resubmit refused: " + Refused),
             "window-b-exec": ("window-b-exec onComplete: canceled: null", "window-b-exec exec: canceled: True",
                 sprintf(SubmittedAfterWarning, 0) + " ExecOperation \\(owner "
                 "'module-cleanup-follow-up-window-b-exec-exec'\\)"),
@@ -160,6 +163,7 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             "window-a": "QORE_MODULE_CLEANUP_TIMEOUT=0 %s",
             "window-b": "QORE_MODULE_CLEANUP_TIMEOUT=0 %s",
             "window-b-exec": "QORE_MODULE_CLEANUP_TIMEOUT=0 %s",
+            "window-b-chain": "QORE_MODULE_CLEANUP_TIMEOUT=0 %s",
         };
 
         #! the deadline in milliseconds of the case of several modules

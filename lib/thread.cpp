@@ -5703,6 +5703,8 @@ void qore_module_cleanup_drain_work() {
     }
 }
 
+thread_local bool qore_module_cleanup_task_running = false;
+
 bool qore_module_cleanup_handed_over_work() {
     if (module_programs_closed_tid.load(std::memory_order_seq_cst) < 0) {
         return false;

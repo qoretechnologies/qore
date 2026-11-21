@@ -41,6 +41,8 @@ public enum FollowUpAction {
     Exec = "exec",
     #! runs an operation that never reaches its goal synchronously with AsyncIoController::exec()
     ExecNever = "exec-never",
+    #! submits a task that submits itself again (a polling loop)
+    TaskChain = "task-chain",
 }
 
 #! the destructor of this object submits an operation: an operation that keeps one runs it when its references are
@@ -137,6 +139,9 @@ public class FollowUpOperation inherits AbstractPollOperation<auto> {
                     AsyncIoController::submitTask(follow_up_printer(label + " task ran"));
                     printf("%s task submitted\n", label);
                     break;
+                case FollowUpAction::TaskChain:
+                    AsyncIoController::submitTask(follow_up_chain_task(label));
+                    break;
                 case FollowUpAction::Exec:
                 case FollowUpAction::ExecNever: {
                     EventNotifier exec_notifier();
@@ -211,6 +216,20 @@ class ExecOperation inherits AbstractPollOperation<auto> {
 code sub follow_up_printer(string msg) {
     return sub () {
         printf("%s\n", msg);
+        flush();
+    };
+}
+
+#! returns a task that writes that it ran and submits itself again; created outside of a method (see
+#! follow_up_printer())
+code sub follow_up_chain_task(string label) {
+    return sub () {
+        printf("%s chain task ran\n", label);
+        try {
+            AsyncIoController::submitTask(follow_up_chain_task(label));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s chain task resubmit refused: %s\n", label, ex.err);
+        }
         flush();
     };
 }

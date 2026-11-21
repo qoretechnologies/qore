@@ -63,6 +63,7 @@ public class Canceller {
             case "window-a":
             case "window-b":
             case "window-b-exec":
+            case "window-b-chain":
                 # the step of the operation is held in flight; the cleanup, at its deadline, releases it after (a) or
                 # before (b) its cancel round
                 call_function("dbg_async_io_hold_step_results", True);
@@ -92,6 +93,7 @@ public class Canceller {
 const WindowActions = {
     "window-b": FollowUpAction::Timer,
     "window-b-exec": FollowUpAction::ExecNever,
+    "window-b-chain": FollowUpAction::TaskChain,
 };
 
 #! what the onComplete() of the first operation of the chain modes does

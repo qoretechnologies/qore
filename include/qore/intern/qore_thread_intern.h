@@ -2080,6 +2080,9 @@ DLLLOCAL bool qore_module_cleanup_delegation();
 //! not the cleanup itself (qore#7027)
 DLLLOCAL bool qore_module_cleanup_handed_over_work();
 
+//! True while the current thread runs a task that the module cleanup counts (ThreadTask::run(), qore#7027)
+DLLLOCAL extern thread_local bool qore_module_cleanup_task_running;
+
 //! Keeps the Programs of the modules open to the calling thread while it runs work that the module cleanup handed
 //! over, if \a delegate (the result of qore_module_cleanup_delegation() in the handing thread) is true
 /** See qore_close_module_programs(); the helpers of a thread nest

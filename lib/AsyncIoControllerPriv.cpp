@@ -5687,8 +5687,10 @@ int AsyncIoControllerPriv::checkModuleCleanupNewWork(const char* method, bool ti
     // callbacks; its operations are canceled when they are admitted after the deadline, and its tasks are waited for
     // (the delivery of a message that a connection received), and the cleanup itself can do all of it (a destructor
     // of the data of a module that it deletes after its deadline) (qore#7027)
-    if (!module_cleanup_async_callback && !(timer && qore_module_cleanup_deadline_passed()
-            && qore_module_cleanup_handed_over_work())) [[likely]] {
+    // nor can a task of the cleanup start a task after the deadline: a task that submits itself again would keep the
+    // cleanup waiting for ever, as the cleanup waits for its tasks and does not cancel them
+    if (!module_cleanup_async_callback && !((timer || qore_module_cleanup_task_running)
+            && qore_module_cleanup_deadline_passed() && qore_module_cleanup_handed_over_work())) [[likely]] {
         return 0;
     }
     xsink->raiseException("ASYNC-IO-SHUTDOWN-ERROR", "AsyncIoController::%s(): the asynchronous I/O controller "

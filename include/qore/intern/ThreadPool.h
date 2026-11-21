@@ -110,6 +110,16 @@ public:
             return QoreValue();
         }
         SandboxScope sandbox_scope(sandbox_context);
+        // a task that the cleanup counts cannot start another one after its deadline (qore#7027)
+        struct CleanupTaskScope {
+            bool prev;
+            CleanupTaskScope(bool set) : prev(qore_module_cleanup_task_running) {
+                qore_module_cleanup_task_running = prev || set;
+            }
+            ~CleanupTaskScope() {
+                qore_module_cleanup_task_running = prev;
+            }
+        } cleanup_task_scope(module_cleanup_work);
         return code->invoke(0, xsink);
     }
 
