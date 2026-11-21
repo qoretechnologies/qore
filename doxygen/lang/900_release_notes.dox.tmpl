@@ -2742,6 +2742,8 @@
       that @ref sandboxing "sandboxed" code built for the other callers (the OpenApi3, Swagger, RestSchema and
       AsyncApi request providers, the record table provider and RestSchemaActions actions;
       <a href="https://github.com/qoretechnologies/qore/issues/7104">issue 7104</a>)
+    - generic specialization and compiled programs retain all declared alternatives of a @ref union_type "union type"
+      that begins with a parameterized class (<a href="https://github.com/qoretechnologies/qore/issues/7147">issue 7147</a>)
     - substituting type arguments in nullable declarations preserves the \c NOTHING alternative of a
       @ref generic_class_type "parameterized class" and the signature of a @ref code_complex_type "typed callable"
       (<a href="https://github.com/qoretechnologies/qore/issues/7135">issue 7135</a>,
