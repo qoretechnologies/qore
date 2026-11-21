@@ -193,8 +193,8 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       them; see @ref ConnectionProvider::AbstractConnection "AbstractConnection"
       (<a href="https://github.com/qoretechnologies/qore/issues/6981">issue 6981</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/7052">issue 7052</a>)
-    - @ref ConnectionProvider::AbstractConnection::getSafeOptions() "AbstractConnection::getSafeOptions()" gives the
-      options shown by @ref ConnectionProvider::AbstractConnection::getInfo() "getInfo()" and
+    - the private method \c AbstractConnection::getSafeOptions() gives the options shown by
+      @ref ConnectionProvider::AbstractConnection::getInfo() "getInfo()" and
       @ref ConnectionProvider::AbstractConnection::ping() "ping()", so that a connection can mask options that its
       scheme does not declare (issue #7070)
     - @ref ConnectionProvider::ConnectionSchemeCache::validateConnectionOptions() "validateConnectionOptions()"

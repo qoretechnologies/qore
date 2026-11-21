@@ -228,7 +228,7 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
     }
 
     #! Returns the options with the value of each driver option that cannot be shown masked; the pool options are kept
-    private:internal hash<auto> maskDriverOptions(*string type, hash<auto> o) {
+    private:internal *hash<auto> maskDriverOptions(*string type, *hash<auto> o) {
         *hash<auto> driver_opts = o - ("min", "max");
         return driver_opts ? o + mask_datasource_options(type ?? "", driver_opts) : o;
     }
