@@ -1974,6 +1974,14 @@ DLLLOCAL void q_ds_append_masked_string_flags(QoreString& str, const QoreString&
 */
 DLLLOCAL QoreHashNode* q_ds_masked_string_hash(const QoreString& ds, unsigned flags);
 
+//! sets the name of the connection that a datasource was created for, once (qore#7016)
+/** @return 0 for OK, -1 if \c DATASOURCE-CONNECTION-NAME-ERROR was raised (an empty name, or another name is set)
+*/
+DLLLOCAL int q_ds_set_connection_name(Datasource& ds, const QoreString& name, ExceptionSink* xsink);
+
+//! returns the name of the connection that a datasource was created for with a reference, or nullptr (qore#7016)
+DLLLOCAL QoreStringNode* q_ds_get_connection_name(const Datasource& ds);
+
 //! returns the QDS_MASK_* flags for the options of mask_datasource() and mask_datasource_hash()
 /** The options are \c "show_db" (\ref QDS_MASK_SHOW_DB) and \c "show_options" (\ref QDS_MASK_SHOW_OPTIONS), each
     taken as a boolean value.

@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Serialized SqlUtil Objects Keep No Datasource Credentials
+    Serialized @ref sqlutilintro "SqlUtil" objects keep the masked configuration of their datasource instead of its
+    credentials, and the datasource is restored with a registered deserializer or credential resolver (see
+    @ref sqlutil_serialization; <a href="https://github.com/qoretechnologies/qore/issues/7016">issue 7016</a>).
+
     @par Private Access Needs the Class Itself
     Private access needs the class of the object's hierarchy itself: another declaration with the same name and
     signature (the same source parsed in another %Program, a module loaded again privately) is the same type but has
@@ -2239,6 +2244,7 @@
         default value (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
 
     - @ref sqlutilintro "SqlUtil" module
+      - serialized objects keep no credentials of their datasource (see @ref sqlutil_serialization)
       - portable table partitioning APIs for PostgreSQL, Oracle, MySQL/MariaDB and SQL Server
       - deferrable foreign constraints for PostgreSQL and Oracle
         (<a href="https://github.com/qoretechnologies/qore/issues/5373">issue 5373</a>)
