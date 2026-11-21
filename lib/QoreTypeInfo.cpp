@@ -300,9 +300,20 @@ static type_typeinfo_map_t extern_type_info_map;
 typedef std::map<qore_type_t, const char* > type_str_map_t;
 static type_str_map_t type_str_map;
 
-// map from simple types to "or nothing" types
+// map from "or nothing" types to simple types
 typedef std::map<const QoreTypeInfo*, const QoreTypeInfo*> typeinfo_map_t;
-static typeinfo_map_t typeinfo_map, typeinfo_or_nothing_map;
+static typeinfo_map_t typeinfo_or_nothing_map;
+
+// the or-nothing types of the builtin types, found with QoreTypeInfo::getBuiltinOrNothingIndex() - 1; filled by
+// init_qore_types() before other threads run
+static std::vector<const QoreTypeInfo*> builtin_or_nothing_types;
+
+static void set_builtin_or_nothing_type(const QoreTypeInfo* typeInfo, const QoreTypeInfo* orNothingTypeInfo) {
+    builtin_or_nothing_types.push_back(orNothingTypeInfo);
+    // the index is stored as a 16-bit value; there are a few dozen builtin types
+    assert(builtin_or_nothing_types.size() < 0xffff);
+    typeInfo->setBuiltinOrNothingIndex(static_cast<uint16_t>(builtin_or_nothing_types.size()));
+}
 
 static QoreThreadLock ctl; // complex type lock
 // the type caches can be used in a child process created with fork() (see QoreForkHandlers.h)
@@ -640,13 +651,13 @@ static void do_maps(qore_type_t t, const char* name, const QoreTypeInfo* typeInf
    type_typeinfo_map[t]                       = typeInfo;
    type_ornothingtypeinfo_map[t]              = orNothingTypeInfo;
    type_str_map[t]                            = name;
-   typeinfo_map[typeInfo]                     = orNothingTypeInfo;
    typeinfo_or_nothing_map[orNothingTypeInfo] = typeInfo;
+   set_builtin_or_nothing_type(typeInfo, orNothingTypeInfo);
 }
 
 static void do_maps(const QoreTypeInfo* typeInfo, const QoreTypeInfo* orNothingTypeInfo) {
-   typeinfo_map[typeInfo]                     = orNothingTypeInfo;
    typeinfo_or_nothing_map[orNothingTypeInfo] = typeInfo;
+   set_builtin_or_nothing_type(typeInfo, orNothingTypeInfo);
 }
 
 // at least the NullString must be created after the default character encoding is set
@@ -2602,9 +2613,11 @@ const QoreTypeInfo* get_or_nothing_type_check(const QoreTypeInfo* typeInfo) {
 const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
     assert(!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING));
 
-    typeinfo_map_t::iterator i = typeinfo_map.find(typeInfo);
-    if (i != typeinfo_map.end())
-        return i->second;
+    // a builtin type holds its or-nothing type, which is read without a map lookup (issue #6126)
+    if (unsigned index = typeInfo ? typeInfo->getBuiltinOrNothingIndex() : 0) {
+        assert(index <= builtin_or_nothing_types.size());
+        return builtin_or_nothing_types[index - 1];
+    }
 
     // see if we have a complex type
     {
@@ -3123,6 +3136,7 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const QoreClass* owner, siz
     assert(name && *name);
     assert(!or_nothing || value_type);
     pname = tname.c_str();
+    type_parameter = true;
 }
 
 QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const TypedHashDecl* owner, size_t n_index,
@@ -3139,6 +3153,7 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const TypedHashDecl* owner,
     assert(name && *name);
     assert(!or_nothing || value_type);
     pname = tname.c_str();
+    type_parameter = true;
 }
 
 QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const UserSignature* owner, size_t n_index,
@@ -3155,6 +3170,7 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const UserSignature* owner,
     assert(name && *name);
     assert(!or_nothing || value_type);
     pname = tname.c_str();
+    type_parameter = true;
 }
 
 QoreTypeParameterTypeSpec::QoreTypeParameterTypeSpec(const QoreTypeParameterTypeInfo* ti)
@@ -3312,10 +3328,6 @@ const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSignature* 
     type_param_owner_keys.insert(key.owner);
     type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
     return ti;
-}
-
-const QoreTypeParameterTypeInfo* qore_get_type_parameter_type_info(const QoreTypeInfo* ti) {
-    return dynamic_cast<const QoreTypeParameterTypeInfo*>(ti);
 }
 
 static const QoreTypeInfo* qore_get_wildcard_type_intern(QoreWildcardKind kind, const QoreTypeInfo* bound) {
@@ -3484,36 +3496,53 @@ public:
 
     //! References the declarations that \a ti and the types in it refer to; \a p is created with the first one
     /** A type is a finite tree of types: the declarations are not entered, so no type is visited twice on a path
+
+        @return true if the walk finds a declaration (also one that \a p references already), false if it finds none,
+        in which case the type at the root of the walk is marked with QoreTypeInfo::setNamesNoDeclarations() (issue
+        #6126)
     */
-    DLLLOCAL static void add(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreTypeInfo* ti, int depth) {
-        if (!ti || depth > 64) {
-            return;
+    DLLLOCAL static bool add(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreTypeInfo* ti, int depth) {
+        if (!ti || depth > 64 || ti->namesNoDeclarations()) {
+            return false;
         }
+        bool found = false;
         for (const QoreReturnSpec& rs : ti->return_vec) {
             const QoreTypeSpec& spec = rs.spec;
             if (const TypedHashDecl* hd = spec.getHashDecl()) {
                 get(p).addHashDecl(hd);
+                found = true;
             } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
                 get(p).addClass(pti->getBaseClass());
+                found = true;
                 for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
                     add(p, arg, depth + 1);
                 }
             } else if (const QoreClass* qc = spec.getClass()) {
                 get(p).addClass(qc);
+                found = true;
             } else if (const QoreEnumDecl* ed = spec.getEnum()) {
                 get(p).addEnum(ed);
+                found = true;
             } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
-                add(p, wti->getBound(), depth + 1);
+                found |= add(p, wti->getBound(), depth + 1);
             } else if (const QoreTypeInfo* elem = spec.getElementType()) {
-                add(p, elem, depth + 1);
+                found |= add(p, elem, depth + 1);
             }
         }
         if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
-            add(p, cti->getReturnType(), depth + 1);
+            found |= add(p, cti->getReturnType(), depth + 1);
             for (const QoreTypeInfo* param : cti->getParamTypes()) {
-                add(p, param, depth + 1);
+                found |= add(p, param, depth + 1);
             }
         }
+        // the walk of a type that finds no declaration never finds one (an orphaned pointer is repointed to a
+        // tombstone of the same kind only), so later references of it need neither the type lock nor this walk; only
+        // the root of the walk is marked: a type nested in it is walked with less depth left, so its walk can have
+        // been cut short by the depth limit, which a later walk from it would not reach
+        if (!found && !depth) {
+            ti->setNamesNoDeclarations();
+        }
+        return found;
     }
 
     DLLLOCAL ~qore_type_decl_refs_private() {
@@ -3564,6 +3593,11 @@ private:
 };
 
 QoreExternalTypeDeclRefs::QoreExternalTypeDeclRefs(const QoreTypeInfo* ti) {
+    // a type known to name no declaration (ex: *int) has nothing to reference, so neither the lock nor the walk of
+    // the type is needed (issue #6126)
+    if (!ti || ti->namesNoDeclarations()) {
+        return;
+    }
     // nothing is allocated for a type without declarations, such as a builtin type
     std::unique_ptr<qore_type_decl_refs_private> p;
     // the references are taken under the type lock: a declaration reached through a type can be a member of a group
@@ -3583,6 +3617,18 @@ QoreTypeDeclRefs::~QoreTypeDeclRefs() {
 }
 
 void QoreTypeDeclRefs::add(const type_vec_t& types) {
+    // the type arguments of generic code are mostly types that name no declaration (ex: int): then neither the lock
+    // nor a walk of the types is needed (issue #6126)
+    bool names = false;
+    for (const QoreTypeInfo* ti : types) {
+        if (ti && !ti->namesNoDeclarations()) {
+            names = true;
+            break;
+        }
+    }
+    if (!names) {
+        return;
+    }
     std::unique_ptr<qore_type_decl_refs_private> p(priv);
     priv = nullptr;
     {
@@ -3596,7 +3642,7 @@ void QoreTypeDeclRefs::add(const type_vec_t& types) {
 }
 
 void QoreTypeDeclRefs::add(const QoreTypeInfo* ti) {
-    if (!ti) {
+    if (!ti || ti->namesNoDeclarations()) {
         return;
     }
     std::unique_ptr<qore_type_decl_refs_private> p(priv);
@@ -4796,8 +4842,8 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
     if (subtype) {
         const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
         if (subst != subtype) {
-            bool is_soft = !strncmp(QoreTypeInfo::getName(ti), "softlist<", 9)
-                || !strncmp(QoreTypeInfo::getName(ti), "*softlist<", 10);
+            // a softlist is told by its spec, not by comparing its name (issue #6126)
+            bool is_soft = QoreTypeInfo::getReturnComplexSoftListOrNothing(ti) != nullptr;
             if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
                 return is_soft ? qore_get_complex_softlist_or_nothing_type(subst)
                     : qore_get_complex_list_or_nothing_type(subst);
@@ -4935,8 +4981,8 @@ const QoreUnionTypeInfo* QoreTypeInfo::getUnionType(const QoreTypeInfo* ti) {
     if (!ti || !hasType(ti)) {
         return nullptr;
     }
-    // Check if the type is a QoreUnionTypeInfo by attempting a dynamic_cast
-    return dynamic_cast<const QoreUnionTypeInfo*>(ti);
+    // classified with the type's flag, not a dynamic_cast (issue #6126)
+    return ti->isUnion() ? static_cast<const QoreUnionTypeInfo*>(ti) : nullptr;
 }
 
 bool QoreTypeInfo::checkComplexCodeCompatibility(const QoreTypeInfo* target, const QoreTypeInfo* source) {

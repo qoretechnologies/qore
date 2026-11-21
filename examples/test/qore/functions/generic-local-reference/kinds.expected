@@ -1,0 +1,57 @@
+iteration 0
+param<int>: null | 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+param<Foo>: null | {<Foo object>: {}} | RUNTIME-TYPE-ERROR
+param<int> again: null | 3 | RUNTIME-TYPE-ERROR
+union<int>: null | 1 | True | RUNTIME-TYPE-ERROR
+union<string>: null | "a" | False | RUNTIME-TYPE-ERROR
+code<int>: null | 2 | RUNTIME-TYPE-ERROR
+list<int>: null | [1, 2] | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+list<string>: null | ["a"] | RUNTIME-TYPE-ERROR
+softlist<int>: null | [1] | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+softlist<int> plain: [1] | [2, 3] | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+param<code<int(Foo)>>: null | 7
+param<code<int(int)>>: null | 3
+hash<string, int>: null | {a: 1} | RUNTIME-TYPE-ERROR
+Box<int>: 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+HBox<int>: null | 2 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+ref<int>: null | 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+ref<Foo>: null | RUNTIME-TYPE-ERROR
+ref list<int>: null | [1] | RUNTIME-TYPE-ERROR
+iteration 1
+param<int>: null | 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+param<Foo>: null | {<Foo object>: {}} | RUNTIME-TYPE-ERROR
+param<int> again: null | 3 | RUNTIME-TYPE-ERROR
+union<int>: null | 1 | True | RUNTIME-TYPE-ERROR
+union<string>: null | "a" | False | RUNTIME-TYPE-ERROR
+code<int>: null | 2 | RUNTIME-TYPE-ERROR
+list<int>: null | [1, 2] | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+list<string>: null | ["a"] | RUNTIME-TYPE-ERROR
+softlist<int>: null | [1] | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+softlist<int> plain: [1] | [2, 3] | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+param<code<int(Foo)>>: null | 7
+param<code<int(int)>>: null | 3
+hash<string, int>: null | {a: 1} | RUNTIME-TYPE-ERROR
+Box<int>: 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+HBox<int>: null | 2 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+ref<int>: null | 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+ref<Foo>: null | RUNTIME-TYPE-ERROR
+ref list<int>: null | [1] | RUNTIME-TYPE-ERROR
+iteration 2
+param<int>: null | 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+param<Foo>: null | {<Foo object>: {}} | RUNTIME-TYPE-ERROR
+param<int> again: null | 3 | RUNTIME-TYPE-ERROR
+union<int>: null | 1 | True | RUNTIME-TYPE-ERROR
+union<string>: null | "a" | False | RUNTIME-TYPE-ERROR
+code<int>: null | 2 | RUNTIME-TYPE-ERROR
+list<int>: null | [1, 2] | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+list<string>: null | ["a"] | RUNTIME-TYPE-ERROR
+softlist<int>: null | [1] | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+softlist<int> plain: [1] | [2, 3] | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+param<code<int(Foo)>>: null | 7
+param<code<int(int)>>: null | 3
+hash<string, int>: null | {a: 1} | RUNTIME-TYPE-ERROR
+Box<int>: 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+HBox<int>: null | 2 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+ref<int>: null | 1 | RUNTIME-TYPE-ERROR | RUNTIME-TYPE-ERROR
+ref<Foo>: null | RUNTIME-TYPE-ERROR
+ref list<int>: null | [1] | RUNTIME-TYPE-ERROR
