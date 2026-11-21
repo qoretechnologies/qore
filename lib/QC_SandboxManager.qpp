@@ -222,7 +222,10 @@ SandboxManager sm();
 SandboxManager::constructor() {
     QoreSandboxManager* nsm = new QoreSandboxManager();
     // a sandbox that sandboxed code creates belongs to the tenant of that code (qore#6536)
-    QoreSandboxComposition::inheritIsolationDomain(nsm);
+    if (QoreSandboxComposition::inheritIsolationDomain(nsm, xsink)) {
+        nsm->deref(xsink);
+        return;
+    }
     // code that is not trusted may change the managers that it creates (issue #5659)
     qore_sandbox_manager_record_creator(nsm);
     self->setPrivate(CID_SANDBOXMANAGER, nsm);
@@ -241,7 +244,10 @@ SandboxManager::destructor() {
 SandboxManager::copy() {
     QoreSandboxManager* nsm = sm->copy();
     // a copy that sandboxed code makes belongs to the tenant of that code (qore#6536)
-    QoreSandboxComposition::inheritIsolationDomain(nsm);
+    if (QoreSandboxComposition::inheritIsolationDomain(nsm, xsink)) {
+        nsm->deref(xsink);
+        return;
+    }
     // code that is not trusted may change the managers that it creates (issue #5659)
     qore_sandbox_manager_record_creator(nsm);
     self->setPrivate(CID_SANDBOXMANAGER, nsm);
@@ -324,16 +330,24 @@ nothing SandboxManager::setIsolationDomain(string domain) [flags=NAMED_ARGS] {
 }
 
 //! Returns the isolation domain (the tenant) of the sandbox
-/** @return the isolation domain, or @ref nothing if the sandbox has none; for a composite sandbox, the domain of its
-    first member that has one
+/** @return the isolation domain, or @ref nothing if the sandbox has none; for a composite sandbox, the domain that
+    its members with a domain have
+
+    @throw SANDBOX-ISOLATION-ERROR the sandbox combines the sandboxes of different isolation domains, so it belongs to
+    no isolation domain
 
     @see @ref Qore::SandboxManager::setIsolationDomain() "setIsolationDomain()"
 
     @since %Qore 3.0
 */
-*string SandboxManager::getIsolationDomain() [flags=CONSTANT] {
+*string SandboxManager::getIsolationDomain() {
     std::string domain = sm->getIsolationDomain();
     if (domain.empty()) {
+        return QoreValue();
+    }
+    if (qore_isolation_domain_is_mixed(domain)) {
+        xsink->raiseException("SANDBOX-ISOLATION-ERROR", "SandboxManager::getIsolationDomain(): the sandbox combines "
+            "the sandboxes of more than one isolation domain, so it belongs to no isolation domain");
         return QoreValue();
     }
     return new QoreStringNode(domain.c_str(), QCS_UTF8);
@@ -1545,6 +1559,10 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     @return the isolation domain of the sandbox that governs the calling code, or @ref nothing if no sandbox governs
     it or its sandbox has no domain
 
+    @throw SANDBOX-ISOLATION-ERROR the sandboxes of different tenants govern the calling code together (as when one
+    tenant's code calls code or an object of another tenant): it belongs to no tenant, and nothing that is kept for a
+    tenant may be given to it
+
     @par Example:
     @code{.py}
 # a cache whose entries one tenant never sees from another
@@ -1556,9 +1574,16 @@ string key = sprintf("%s:%s", domain ?? "", name);
 
     @since %Qore 3.0
 */
-static *string SandboxManager::getCallerIsolationDomain() [flags=RET_VALUE_ONLY] {
+static *string SandboxManager::getCallerIsolationDomain() {
     std::string domain = qore_caller_isolation_domain();
     if (domain.empty()) {
+        return QoreValue();
+    }
+    // fails closed: no value names a tenant for code that belongs to none (qore#7009)
+    if (qore_isolation_domain_is_mixed(domain)) {
+        xsink->raiseException("SANDBOX-ISOLATION-ERROR", "SandboxManager::getCallerIsolationDomain(): the sandboxes "
+            "of more than one isolation domain govern the calling code together, so it belongs to no isolation "
+            "domain");
         return QoreValue();
     }
     return new QoreStringNode(domain.c_str(), QCS_UTF8);

@@ -7166,10 +7166,14 @@ int qore_sandbox_check_program_isolation(QoreProgram* pgm, ExceptionSink* xsink,
         }
         if (const std::string* domain = td->sandbox_budgets.isolationRefuses(sm)) {
             const std::string* caller = td->sandbox_budgets.currentIsolation()->callerDomain();
-            // the operation names what is refused (parsing, committing, accessing a Program)
+            // the operation names what is refused (parsing, committing, accessing a Program); a mixed value is named
+            // as such (see qore_isolation_domain_is_mixed())
+            auto name = [] (const std::string* d) -> const char* {
+                return !d ? "" : (qore_isolation_domain_is_mixed(*d) ? "(more than one)" : d->c_str());
+            };
             xsink->raiseException("SANDBOX-ISOLATION-ERROR", "%s: a Program of isolation domain '%s' cannot be used "
-                "in a trusted build that sandboxed code of isolation domain '%s' called", operation, domain->c_str(),
-                caller ? caller->c_str() : "");
+                "in a trusted build that sandboxed code of isolation domain '%s' called", operation, name(domain),
+                name(caller));
             return -1;
         }
     }
@@ -10088,6 +10092,18 @@ QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink) {
     reaper; Qore code that runs afterwards (the destructors of the objects of a Program that outlives the modules: see
     qore_program_private::clearRemainingPrograms()) cannot start a thread at all (qore#6045)
 */
+//! raises SANDBOX-ISOLATION-ERROR if the sandboxes of different tenants govern the code that starts a thread
+/** Such code belongs to no tenant, and the thread would keep their composite for good (qore#7009)
+*/
+static int q_check_thread_start_isolation(ExceptionSink* xsink) {
+    if (QoreSandboxComposition::callerIsMixed()) {
+        xsink->raiseException("SANDBOX-ISOLATION-ERROR", "code that the sandboxes of more than one isolation domain "
+            "govern together cannot start a thread");
+        return -1;
+    }
+    return 0;
+}
+
 static int q_check_thread_start_allowed(ExceptionSink* xsink, int flags) {
     if (qore_thread_start_closed.load(std::memory_order_acquire)
             || (qore_shutdown.load(std::memory_order_relaxed) && !(flags & QTF_EXTERNAL_LIFECYCLE))) {
@@ -10095,7 +10111,7 @@ static int q_check_thread_start_allowed(ExceptionSink* xsink, int flags) {
             "up");
         return -1;
     }
-    return 0;
+    return q_check_thread_start_isolation(xsink);
 }
 
 //! raises THREAD-CREATION-FAILURE if a background thread cannot be started because the library is being cleaned up
@@ -10109,7 +10125,7 @@ static int q_check_background_start_allowed(ExceptionSink* xsink) {
             "up");
         return -1;
     }
-    return 0;
+    return q_check_thread_start_isolation(xsink);
 }
 
 QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink) {

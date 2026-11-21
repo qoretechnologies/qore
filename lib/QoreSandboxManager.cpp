@@ -1261,6 +1261,10 @@ int QoreSandboxManager::getMaxThreads() const {
     return sandbox_intersection_limit<int>(this, max_threads.load(), &QoreSandboxManager::getMaxThreads);
 }
 
+//! true once a sandbox has an isolation domain: until then no sandbox can be mixed (see
+//! QoreSandboxComposition::callerIsMixed())
+static std::atomic<bool> qore_isolation_domains_used{false};
+
 int QoreSandboxManager::setIsolationDomain(const char* domain, ExceptionSink* xsink) {
     // the domain decides which code may run for which tenant: only the host sets it
     if (qore_calling_code_is_untrusted()) {
@@ -1293,14 +1297,17 @@ int QoreSandboxManager::setIsolationDomain(const char* domain, ExceptionSink* xs
         return -1;
     }
     fs_mgr.priv->isolation_domain = domain;
+    qore_isolation_domains_used.store(true, std::memory_order_release);
     return 0;
 }
 
 std::string qore_caller_isolation_domain() {
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
     if (governing) {
-        std::string domain = governing->getIsolationDomain();
-        if (!domain.empty()) {
+        std::string domain;
+        // code that the sandboxes of different tenants govern together belongs to no tenant: the mixed value is
+        // returned, never one of their domains nor that of the caller of a trusted build (fails closed)
+        if (QoreSandboxComposition::foldIsolationDomain(governing.get(), domain)) {
             return domain;
         }
     }
@@ -1325,32 +1332,84 @@ void QoreSandboxComposition::setGoverns(QoreSandboxManager* sm) {
 }
 
 std::string QoreSandboxManager::getIsolationDomain() const {
-    if (const auto* managers = QoreSandboxComposition::members(this)) {
-        for (const QoreSandboxManager* member : *managers) {
-            std::string domain = member->getIsolationDomain();
-            if (!domain.empty()) {
-                return domain;
-            }
-        }
-        return std::string();
-    }
-    std::lock_guard<std::mutex> lck(fs_mgr.priv->domain_lock);
-    return fs_mgr.priv->isolation_domain;
+    std::string domain;
+    QoreSandboxComposition::foldIsolationDomain(this, domain);
+    return domain;
 }
 
-void QoreSandboxComposition::inheritIsolationDomain(QoreSandboxManager* sm) {
+// starts with a NUL character, so that QoreSandboxManager::setIsolationDomain() can never set it
+const std::string QoreSandboxComposition::MixedIsolationDomain("\0mixed", 6);
+
+int QoreSandboxComposition::foldIsolationDomain(const QoreSandboxManager* sm, std::string& domain) {
+    domain.clear();
+    const auto* managers = members(sm);
+    if (!managers) {
+        std::lock_guard<std::mutex> lck(sm->fs_mgr.priv->domain_lock);
+        domain = sm->fs_mgr.priv->isolation_domain;
+        if (domain.empty()) {
+            return 0;
+        }
+        return qore_isolation_domain_is_mixed(domain) ? -1 : 1;
+    }
+    // the sandboxes of different tenants govern code together when one tenant calls code or an object of another
+    // tenant's (whose provenance applies that tenant's sandbox), and such code belongs to neither: the composite is
+    // mixed, which every caller treats as refused (fails closed); a member without a domain belongs to no tenant and
+    // adds nothing, as for the isolation of trusted builds
+    for (const QoreSandboxManager* member : *managers) {
+        std::string d;
+        {
+            std::lock_guard<std::mutex> lck(member->fs_mgr.priv->domain_lock);
+            d = member->fs_mgr.priv->isolation_domain;
+        }
+        if (d.empty()) {
+            continue;
+        }
+        if (qore_isolation_domain_is_mixed(d) || (!domain.empty() && d != domain)) {
+            domain = MixedIsolationDomain;
+            return -1;
+        }
+        if (domain.empty()) {
+            domain = std::move(d);
+        }
+    }
+    return domain.empty() ? 0 : 1;
+}
+
+bool QoreSandboxComposition::callerIsMixed() {
+    // no sandbox has a domain: nothing can be mixed, at no cost
+    if (!qore_isolation_domains_used.load(std::memory_order_acquire)) {
+        return false;
+    }
+    try {
+        ReferenceHolder<QoreSandboxManager> sm(qore_find_thread_sandbox_manager_ref(), nullptr);
+        std::string domain;
+        return sm && foldIsolationDomain(*sm, domain) < 0;
+    } catch (std::bad_alloc&) {
+        return true;
+    }
+}
+
+int QoreSandboxComposition::inheritIsolationDomain(QoreSandboxManager* sm, ExceptionSink* xsink) {
     if (!qore_calling_code_is_untrusted()) {
-        return;
+        return 0;
     }
     // a sandbox that sandboxed code creates belongs to the tenant of that code
     ReferenceHolder<QoreSandboxManager> creator(qore_find_thread_sandbox_manager_ref(), nullptr);
     if (!creator) {
-        return;
+        return 0;
     }
-    std::string domain = creator->getIsolationDomain();
+    std::string domain;
+    // code that the sandboxes of different tenants govern together belongs to no tenant, so it cannot create a
+    // sandbox of one of them, nor one without a domain that would escape theirs (fails closed)
+    if (foldIsolationDomain(*creator, domain) < 0) {
+        xsink->raiseException("SANDBOX-ISOLATION-ERROR", "SandboxManager: code that the sandboxes of more than one "
+            "isolation domain govern together cannot create a sandbox");
+        return -1;
+    }
     std::lock_guard<std::mutex> lck(sm->fs_mgr.priv->domain_lock);
     assert(!sm->fs_mgr.priv->governs.load(std::memory_order_relaxed));
     sm->fs_mgr.priv->isolation_domain = std::move(domain);
+    return 0;
 }
 
 void QoreSandboxManager::setWallTimeLimit(int64 ms) {

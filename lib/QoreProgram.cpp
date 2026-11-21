@@ -72,6 +72,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <string>
 #include <set>
@@ -1106,6 +1107,17 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
         qore_caller_sandbox_refs(all, policy);
         ReferenceHolder<QoreSandboxManager> creator_sm(all, nullptr);
         ReferenceHolder<QoreSandboxManager> creator_policy(policy, nullptr);
+        // code that the sandboxes of different tenants govern together belongs to no tenant, and a Program that it
+        // created would keep their composite for good: the Program is not created (the caller deletes it; qore#7009);
+        // a Program created without an exception sink (a module's) keeps the composite, which every isolation
+        // decision treats as mixed
+        if (xsink && creator_sm) {
+            std::string domain;
+            if (QoreSandboxComposition::foldIsolationDomain(*creator_sm, domain) < 0) {
+                xsink->raiseException("SANDBOX-ISOLATION-ERROR", "code that the sandboxes of more than one isolation "
+                    "domain govern together cannot create a Program");
+            }
+        }
         if (creator_sm || creator_policy) {
             try {
                 addCreatorSandbox(*creator_sm, *creator_policy);

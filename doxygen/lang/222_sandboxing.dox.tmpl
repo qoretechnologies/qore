@@ -562,6 +562,19 @@ authenticate();
     A build that trusted code calls may run the code of any domain: the host can orchestrate across tenants.  A host
     that sets no domains is not affected.
 
+    Code that the sandboxes of more than one domain govern together, as a method of an object that one tenant's call
+    created when another tenant calls it, belongs to no domain: @ref Qore::SandboxManager::getCallerIsolationDomain()
+    "SandboxManager::getCallerIsolationDomain()" raises \c SANDBOX-ISOLATION-ERROR for it, and so do the creation of
+    a sandbox by its sandboxed code, the creation of a %Program and the start of a thread; a trusted build that it
+    calls runs the code of none of those domains, only the build's own code and the code of sandboxes without a
+    domain.
+
+    Isolation applies between the sandboxes that have a domain: a host that isolates tenants gives every tenant's
+    sandbox a domain.  A sandbox without a domain is the host's (as the sandboxes of system policies are) and is
+    outside isolation by design: it is treated as host code, so a sandbox without a domain that governs a tenant's
+    code together with the tenant's sandbox does not change the tenant's domain, and the code of a sandboxed %Program
+    whose sandbox has no domain is not isolated from the tenants.
+
     @note Isolation domains decide which code runs where; they do not by themselves keep a tenant from obtaining
     another tenant's objects through state that the process shares (see @ref sandbox_module_state)
 
