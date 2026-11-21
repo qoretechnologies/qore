@@ -2522,9 +2522,9 @@
     - a Program that the code of a user module creates does not inherit the module mark (\c PO_IN_MODULE) from the
       module's Program, so it is not taken for module code; see @ref Qore::Program "Program"
       (<a href="https://github.com/qoretechnologies/qore/issues/7067">issue 7067</a>)
-    - a qlib connection that code restricted from its functional domain created gives no client, and the connection
-      and poll operation classes of @ref httpclientiointro "HttpClientIo" refuse such code when they are created; see
-      @ref httpclientio_caller_domains (<a href="https://github.com/qoretechnologies/qore/issues/6981">issue 6981</a>)
+    - code restricted from the functional domain of a qlib connection cannot create it (see @ref connectionprovider_3_1),
+      and the connection and poll operation classes of @ref httpclientiointro "HttpClientIo" refuse such code (see
+      @ref httpclientio_caller_domains) (<a href="https://github.com/qoretechnologies/qore/issues/6981">issue 6981</a>)
     - @ref filelocationhandlerintro "FileLocationHandler" refuses a caller restricted from the functional domain of a
       location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
       locations); see @ref filelocationhandler_v3_0

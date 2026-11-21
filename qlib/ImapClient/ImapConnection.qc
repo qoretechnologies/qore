@@ -30,7 +30,7 @@ public namespace ImapClient {
 */
 public class ImapConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     #! The connection's clients connect to a network host (qore#6981)
-    private int getConnectionDomainsImpl() {
+    private final int getConnectionDomainsImpl() {
         return DOM_NETWORK;
     }
 

@@ -352,7 +352,9 @@ public class AbstractFileLocationHandler {
         - the \c file handler: @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM"
         - the \c http, \c https, \c ftp, \c ftps, \c sftp, \c rest and \c rests handlers:
           @ref Qore::DOM_NETWORK "DOM_NETWORK", unless the handler is bound to a client that code not restricted from
-          the network bound it to (see isBound()); and @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM" when the options
+          the network bound it to (see isBound()): such a handler, given to restricted code, keeps working for it as
+          the capability of the code that bound it, while the module's default handlers are not bound and refuse a
+          restricted caller; and @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM" when the options
           name local files that the handler reads for the caller (the \c ssl_cert_path and \c ssl_key_path options of
           the \c http and \c https handlers, the \c ssh2_private_key and \c ssh2_public_key options of the \c sftp
           handler)

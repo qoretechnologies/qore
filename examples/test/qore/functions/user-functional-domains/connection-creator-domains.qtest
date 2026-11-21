@@ -18,6 +18,8 @@
 %requires MemcachedDataProvider
 %requires ServerSentEventClient
 %requires MllpUtil
+%requires WebSocketClient
+%requires ConnectDataProvider
 
 %exec-class ConnectionCreatorDomainsTest
 
@@ -47,13 +49,12 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
             "ServerSentEventConnection get": ("ServerSentEventClient::ServerSentEventConnection", "sse", "get"),
             "MllpConnection get": ("MllpUtil::MllpConnection", "mllp", "get"),
             "FtpConnection getAsync": ("ConnectionProvider::FtpConnection", "ftp", "getAsync"),
+            "WebSocketConnectionObject get": ("WebSocketClient::WebSocketConnectionObject", "ws", "get"),
+            "ConnectConnection get": ("ConnectDataProvider::ConnectConnection", "connect", "get"),
         };
 
         #! the connections whose creator is checked: those that restricted code creates give no client
-        const Checked = ("RestConnection get", "RestConnection getAsync", "HttpConnection get",
-            "HttpConnection getAsync", "SmtpConnection get", "ImapConnection get", "TelnetConnection get",
-            "RedisConnection get", "MemcachedConnection get", "ServerSentEventConnection get",
-            "FtpConnection getAsync");
+        const Checked = keys Connections;
     }
 
     constructor() : QUnit::Test("ConnectionCreatorDomains", "1.0", \ARGV) {
@@ -61,6 +62,7 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
             string m = mode;
             addTestCase("connections that the host lends, " + m, sub () { testLent(m); });
             addTestCase("connections that restricted code creates, " + m, sub () { testRestrictedCreator(m); });
+            addTestCase("the domains of a connection class, " + m, sub () { testDomainOverride(m); });
         }
         set_return_value(main());
     }
@@ -87,12 +89,44 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
         Program p = getProgram(mode);
         foreach string key in (Checked) {
             list<string> i = Connections{key};
-            object c = p.callFunction("make", i[0], getUrl(i[1], port));
-            assertRegex("^PERMISSION-DENIED: connection \"c\" was created by code restricted from the NETWORK",
-                p.callFunction("client", c, i[2]), sprintf("%s by the restricted code, %s", key, mode));
-            assertThrows("PERMISSION-DENIED", sub () { call_object_method(c, i[2], False); }, NOTHING,
-                sprintf("%s by trusted code, %s", key, mode));
+            # the connection cannot be created, so no client path exists
+            assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create "
+                "connection \"c\"", p.callFunction("make", i[0], getUrl(i[1], port)),
+                sprintf("%s, %s", key, mode));
+            # nor deserialized from a connection that the host serialized
+            object c = create_object(i[0], "c", "d", getUrl(i[1], port), {"monitor": False});
+            binary data = c.serialize();
+            assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create "
+                "connection \"c\"", p.callFunction("deserialize", data), sprintf("%s deserialized, %s", key, mode));
+            # the host deserializes it
+            assertEq(i[0].split("::").last(), Serializable::deserialize(data).className(),
+                sprintf("%s deserialized by the host, %s", key, mode));
         }
+        # nor can a subclass that the restricted code declares be created
+        Program sp(PO_NEW_STYLE | PO_NO_NETWORK);
+        sp.setExecMode(Modes{mode});
+        sp.parse("%modern\n%requires RestClient\nclass X inherits RestClient::RestConnection {\n"
+            "    constructor(string url) : RestConnection(\"x\", \"d\", url, {\"monitor\": False}) {}\n"
+            "    object client() { return getImpl(False); }\n}\n"
+            "string sub t(string url) { try { X x(url); x.client(); return \"client\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }", "subclass");
+        assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create "
+            "connection \"x\"", sp.callFunction("t", getUrl("http", port)), "subclass, " + mode);
+    }
+
+    #! a subclass that restricted code declares cannot change the domains of a connection class
+    private testDomainOverride(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        string result;
+        try {
+            p.parse("%modern\n%requires RestClient\nclass X inherits RestClient::RestConnection {\n"
+                "    private int getConnectionDomainsImpl() { return 0; }\n}\n", "override");
+            result = "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            result = ex.err + ": " + ex.desc;
+        }
+        assertRegex("^PARSE-EXCEPTION: .*getConnectionDomainsImpl", result, "override, " + mode);
     }
 
     #! returns the URL of a connection; POP3 and IMAP connections need credentials
@@ -106,8 +140,12 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
         p.parse("%modern\n%requires ConnectionProvider\n%requires RestClient\n%requires SmtpClient\n"
             "%requires Pop3Client\n%requires ImapClient\n%requires TelnetClient\n%requires RedisDataProvider\n"
             "%requires MemcachedDataProvider\n%requires ServerSentEventClient\n%requires MllpUtil\n"
-            "object sub make(string cls, string url) { return create_object(cls, \"c\", \"d\", url, "
-            "{\"monitor\": False}); }\n"
+            "%requires WebSocketClient\n%requires ConnectDataProvider\n"
+            "string sub make(string cls, string url) { try { create_object(cls, \"c\", \"d\", url, "
+            "{\"monitor\": False}); return \"created\"; } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err + \": \" + ex.desc; } }\n"
+            "string sub deserialize(binary data) { try { Serializable::deserialize(data); return \"created\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n"
             "string sub client(object c, string method) { try { call_object_method(c, method, False); "
             "return \"client\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }", "conn");
         return p;

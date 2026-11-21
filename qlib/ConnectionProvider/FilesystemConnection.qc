@@ -35,7 +35,7 @@ public namespace ConnectionProvider {
 */
 public class FilesystemConnection inherits AbstractConnectionWithInfo {
     #! The connection's clients use the file system (qore#6981)
-    private int getConnectionDomainsImpl() {
+    private final int getConnectionDomainsImpl() {
         return DOM_FILESYSTEM;
     }
 
