@@ -22,10 +22,10 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
     }
 
     parseDefine() {
-%ifdef QoreHasDbiSensitiveOptions
+%ifdef QORE_HAVE_DBI_SENSITIVE_OPTIONS
         assertTrue(True);
 %else
-        fail("QoreHasDbiSensitiveOptions is not defined");
+        fail("QORE_HAVE_DBI_SENSITIVE_OPTIONS is not defined");
 %endif
     }
 

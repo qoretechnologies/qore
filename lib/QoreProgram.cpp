@@ -2324,7 +2324,7 @@ void qore_program_private_base::newProgram() {
     }
 
     // DBI driver option information declares the options whose values are sensitive (qore#7070)
-    dmap["QoreHasDbiSensitiveOptions"] = true;
+    dmap["QORE_HAVE_DBI_SENSITIVE_OPTIONS"] = true;
 
     // the built-in defines that the identity of an AOT image fixes (the version and the platform): a conditional on
     // them takes the same branch where the code is compiled and where it is loaded (qore#6351); not the options

@@ -98,7 +98,7 @@
 #endif
     @endcode
 
-    %Qore code tests the parse define \c QoreHasDbiSensitiveOptions.
+    %Qore code tests the parse define of the same name.
 
     @since %Qore 3.0 (qore#7070)
 */
