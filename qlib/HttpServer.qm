@@ -7917,6 +7917,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return handler_view;
     }
 
+    #! Returns the header information of a request as its handler gets it (\c cx."header-info")
+    /** The persistent queue closures of the async I/O controller are for the listener only: it registers the queue
+        of a persistent session for its handler, and the entries of the queue refer to the server's own objects, so a
+        handler, which may be sandboxed, does not get them (qore#6921)
+    */
+    private:internal static hash<auto> getHandlerHeaderInfo(hash<auto> header_info) {
+        return header_info - ("register_persistent_queue", "deregister_persistent_queue");
+    }
+
     removeDedicatedSocket(softstring id, *bool managed_externally) {
         m.lock();
         on_exit m.unlock();
@@ -8211,7 +8220,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         if (header_info.body_streaming) {
             header_info.sock = s;
         }
-        cx."header-info" = header_info;
+        cx."header-info" = HttpListener::getHandlerHeaderInfo(header_info);
 
         # Add client certificate if requested and available
         if (get_remote_certs) {
@@ -9054,7 +9063,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     log("cid %d: received end-persistent signal, terminating "
                         "persistent session", cx.id);
                     hash<auto> end_cx = cx_listener;
-                    end_cx."header-info" = conn_info.header_info;
+                    end_cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info);
                     end_cx.close = conn_info.header_info.close;
                     hash<HttpAsyncResponseInfo> end_response = <HttpAsyncResponseInfo>{
                         "code": 200,
@@ -9125,7 +9134,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 if (conn_info.header_info.body_streaming) {
                     conn_info.header_info.sock = s;
                 }
-                cx."header-info" = conn_info.header_info;
+                cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info);
 
                 if (get_remote_certs) {
                     if (conn_info.header_info.http3) {
@@ -9347,7 +9356,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (conn_info.header_info.body_streaming) {
                 conn_info.header_info.sock = s;
             }
-            cx."header-info" = conn_info.header_info;
+            cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info);
 
             if (get_remote_certs) {
                 if (conn_info.header_info.http3) {

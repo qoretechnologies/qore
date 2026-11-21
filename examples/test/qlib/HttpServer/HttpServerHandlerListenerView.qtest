@@ -16,8 +16,8 @@
 
 %exec-class HttpServerHandlerListenerViewTest
 
-#! a hang guard only, never a timing assertion
-const HangGuard = 30s;
+#! a hang guard only, never a timing assertion; longer than the bound of a persistent session's close (60 s)
+const HangGuard = 90s;
 
 #! A listener that tells the test whether a connection is registered as a dedicated connection
 class DedicatedListener inherits HttpListener {
@@ -112,6 +112,36 @@ class PersistHandler inherits AbstractHttpRequestHandler {
             return makeResponse({"x-key": cx.sock_key, "x-tid": string(gettid())}, 200, "started");
         }
         return makeResponse({"x-tid": string(gettid())}, 200, isPersistent() ? "continued" : "not persistent");
+    }
+}
+
+#! A trusted handler that answers the requests that follow a tenant's on the same connection
+class OtherHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, "other");
+    }
+}
+
+#! A trusted handler with a persistent session whose cleanup is held until the test releases it
+class HeldCloseHandler inherits AbstractHttpRequestHandler {
+    public {
+        *HttpListenerInterface kept;
+        Counter release(1);
+        Queue closing();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        kept = listener;
+        Counter c = release;
+        Queue q = closing;
+        notifyClosed(sub () {
+            q.push(True);
+            c.waitForZero(HangGuard);
+        });
+        setPersistent(True);
+        return makeResponse({"x-key": cx.sock_key}, 200, "started");
     }
 }
 
@@ -255,6 +285,55 @@ AbstractHttpRequestHandler sub get_handler() {
 }
 ";
 
+        #! a tenant's handler that registers a queue on its own connection's key, then reports what it received
+        const TenantOwnKeySource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+
+class OwnKeyProbe inherits AbstractHttpRequestHandler {
+    private {
+        Queue q();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        if (hdr.path =~ /check$/) {
+            return makeResponse(200, string(q.size()));
+        }
+        string r = sprintf(\"register=%y deregister=%y \", exists cx.\"header-info\".register_persistent_queue,
+            exists cx.\"header-info\".deregister_persistent_queue);
+        try {
+            cx.\"header-info\".register_persistent_queue(cx.sock_key, q);
+            r += \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            r += ex.err;
+        }
+        return makeResponse(200, r);
+    }
+}
+
+AbstractHttpRequestHandler sub get_handler() {
+    return new OwnKeyProbe();
+}
+";
+
+        #! a tenant's code that reads the member of a listener object through reflection
+        const TenantReflectionSource = "%modern
+%requires reflection
+%requires HttpServer
+
+string sub read_member(object o) {
+    try {
+        Class c = Class::getClass(o);
+        NormalMember m = cast<NormalMember>(c.getMember(\"listener\"));
+        m.getValue(o);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
         #! a tenant's socket handler: tries to remove its connection with another handler, then ends it as its own
         const TenantSocketSource = "%modern
 %requires HttpServer
@@ -311,6 +390,11 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         addTestCase("the server takes only the objects of its own listeners", \sendHttpErrorTest());
         addTestCase("a handler closes, takes over and ends only its own persistent session", \persistentTest());
         addTestCase("a sandboxed socket handler removes only its own connection", \dedicatedTest());
+        addTestCase("HTTP/1.1: a handler cannot take over the requests of its own connection", \ownKeyTest(), "1.1");
+        addTestCase("HTTP/2: a handler cannot take over the requests of its own connection", \ownKeyTest(), "2.0");
+        addTestCase("HTTP/3: a handler cannot take over the requests of its own connection", \ownKeyTest(), "3.0");
+        addTestCase("the wait for the cleanup of a closed persistent session is bounded", \closeBoundTest());
+        addTestCase("sandboxed code cannot read the listener of the object through reflection", \reflectionTest());
         set_return_value(main());
     }
 
@@ -474,9 +558,9 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
             "close1": "HTTPLISTENER-ACCESS-ERROR",
             # with its own handler, it does not close a session that another handler registered
             "close2": "ok",
-            # the closures of its request register and deregister only its own connection's queue
-            "register": "PERSISTENT-QUEUE-ERROR",
-            "deregister": "PERSISTENT-QUEUE-ERROR",
+            # the closures that register and deregister persistent queues are not in its request's header information
+            "register": "PSEUDO-METHOD-DOES-NOT-EXIST",
+            "deregister": "PSEUDO-METHOD-DOES-NOT-EXIST",
         }, r);
         # the owner's session is still the owner's: its next request reaches its thread
         hash<auto> next;
@@ -518,6 +602,78 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         # the handler ends its own connection through setExternallyManaged() (no false refusal)
         assertEq("ok", to_host.get(HangGuard));
         assertFalse(server.last.hasDedicated(step.cid), "the handler removed its own connection");
+    }
+
+    #! The registration of the review's PoC on the handler's own key: the closures are not in the handler's header
+    #! information, and the next request on the connection reaches its own handler
+    ownKeyTest(string http_version) {
+        Program tenant = getTenantProgram(TenantOwnKeySource);
+        AbstractHttpRequestHandler probe = tenant.callFunction("get_handler");
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("probe", "^probe", NOTHING, probe);
+        server.setHandler("other", "^other", NOTHING, new OtherHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({
+            "url": "https://localhost:" + port,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": 10s,
+        });
+        on_exit hc.disconnect();
+        assertEq("register=False deregister=False PSEUDO-METHOD-DOES-NOT-EXIST", hc.get("/probe/grab"));
+        # the next request on the same connection, for another handler, reaches it
+        string next;
+        try {
+            next = hc.get("/other/next");
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("the next request did not reach its handler: %s: %s", ex.err, ex.desc));
+        }
+        assertEq("other", next);
+        assertEq("0", hc.get("/probe/check"), "the tenant's queue received nothing");
+    }
+
+    #! The owner's close returns although the session's cleanup does not complete
+    closeBoundTest() {
+        HeldCloseHandler owner();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setDefaultHandler("h", owner);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": "http://127.0.0.1:" + port, "timeout": 10s});
+        hc.connect();
+        on_exit hc.disconnect();
+        string key = hc.send(NOTHING, "GET", "/start")."x-key";
+        on_exit owner.release.dec();
+        Queue done();
+        background sub () {
+            owner.kept.signalPersistentSessionClose(key, owner);
+            done.push(True);
+        }();
+        # the session's cleanup has started and is held: the close returns at the end of its bound only
+        assertTrue(owner.closing.get(HangGuard));
+        assertTrue(done.get(2 * HangGuard), "the close returned while the cleanup was held");
+    }
+
+    reflectionTest() {
+        KeepingHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setDefaultHandler("keep", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": "http://127.0.0.1:" + port, "timeout": 10s});
+        hc.get("/");
+        Program tenant = getTenantProgram(TenantReflectionSource);
+        assertNeq("ok", tenant.callFunction("read_member", handler.kept));
     }
 
     #! Returns a sandboxed Program with the given source
