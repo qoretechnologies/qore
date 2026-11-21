@@ -168,6 +168,9 @@ DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_
 //! Returns True if dbg_http2_hold_stream_data() holds the buffered data of this HTTP/2 stream back
 DLLLOCAL bool qore_dbg_h2_stream_data_held(int32_t stream_id);
 
+//! Returns True if dbg_http3_client_hide_error() makes the HTTP/3 client poll operations report no error
+DLLLOCAL bool qore_dbg_h3_client_error_hidden();
+
 //! Returns the bytes of progress that dbg_quic_simulate_stream_progress() adds to the acknowledged byte count of a
 //! stream for this read of the count (0 when no progress is simulated for the stream)
 DLLLOCAL int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id);

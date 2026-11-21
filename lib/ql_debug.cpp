@@ -26200,6 +26200,33 @@ namespace {
 std::atomic<int64_t> dbg_h2_hold_stream{-1};
 }
 
+namespace {
+//! set by dbg_http3_client_hide_error()
+std::atomic<bool> dbg_h3_client_error_hidden{false};
+}
+
+bool qore_dbg_h3_client_error_hidden() {
+    return dbg_h3_client_error_hidden.load(std::memory_order_acquire);
+}
+
+//! makes the HTTP/3 client poll operations report no error, as if a connection left the connecting state without one
+/** For a test of how a connection race reports a leg that settled without an error (issue #6970): the error is
+    recorded as usual, and only reading it returns nothing.
+
+    @param on True to hide the errors, False to report them again
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_http3_client_hide_error(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_h3_client_error_hidden.exchange(HARD_QORE_VALUE_BOOL(params, 0));
+}
+
+//! returns True if dbg_http3_client_hide_error() hides the errors of the HTTP/3 client poll operations
+static QoreValue f_dbg_http3_client_error_hidden(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_h3_client_error_hidden.load(std::memory_order_acquire);
+}
+
 bool qore_dbg_h2_stream_data_held(int32_t stream_id) {
     return dbg_h2_hold_stream.load(std::memory_order_acquire) == stream_id;
 }
@@ -28680,6 +28707,10 @@ void init_debug_functions(QoreNamespace& qns) {
         "stream_id");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http3_client_hide_error", f_dbg_http3_client_hide_error, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
+    qns.addBuiltinVariant("dbg_http3_client_error_hidden", f_dbg_http3_client_error_hidden, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
     qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
     qns.addBuiltinVariant("dbg_http2_release_stream_data", f_dbg_http2_release_stream_data, QCF_NO_FLAGS,

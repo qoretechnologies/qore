@@ -742,6 +742,21 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 }
 
 void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {
+    // an operation that is closed has an error, as the HTTP/2 operation does: a connection that leaves the connecting
+    // state without one (closed before it connected, for example) gave a reader of the error nothing to report
+    // (issue #6970)
+    {
+        AutoLocker al(stream_lock);
+        if (!error_info) {
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+            info->setKeyValue("err", new QoreStringNode("HTTP3-ABORT"), xsink);
+            info->setKeyValue("desc", new QoreStringNode("connection aborted"), xsink);
+            if (!*xsink) {
+                error_info = info.release();
+                has_error.store(true, std::memory_order_release);
+            }
+        }
+    }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
     failMigrations();
     wakeSettingsWaiters();
@@ -2019,6 +2034,12 @@ bool Http3ClientPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
     \c arg, as for a TLS connection over TCP
 */
 *hash<auto> Http3ClientPollOperationBase::getError() [flags=RET_VALUE_ONLY] {
+#ifdef DEBUG
+    // a test makes the operation report no error (see dbg_http3_client_hide_error())
+    if (qore_dbg_h3_client_error_hidden()) {
+        return QoreValue();
+    }
+#endif
     return priv->getErrorInfo();
 }
 
