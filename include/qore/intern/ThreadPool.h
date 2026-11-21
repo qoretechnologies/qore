@@ -92,6 +92,13 @@ public:
         // This ensures tlpd is set up for thread pool threads
         // a call reference to builtin code has no Program: it runs in the context of the worker
         QoreProgram* pgm = code->getProgram();
+#ifdef DEBUG
+        // a task of the module cleanup is held by the test hook until the cleanup waits for it (qore#7027); before it
+        // enters its Program, whose teardown would wait for it
+        if (sandbox_context.module_cleanup_delegate) {
+            qore_dbg_hold_module_cleanup_task(module_cleanup_work);
+        }
+#endif
         // declared before the Program is entered, which can be the Program of a module
         QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
         // the submitter's options, installed before the Program is entered, whose thread entry handler and
@@ -103,12 +110,6 @@ public:
             return QoreValue();
         }
         SandboxScope sandbox_scope(sandbox_context);
-#ifdef DEBUG
-        // a task of the module cleanup is held by the test hook until the cleanup waits for it (qore#7027)
-        if (sandbox_context.module_cleanup_delegate) {
-            qore_dbg_hold_module_cleanup_task(module_cleanup_work);
-        }
-#endif
         return code->invoke(0, xsink);
     }
 
