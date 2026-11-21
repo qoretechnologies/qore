@@ -10731,9 +10731,10 @@ MethodVariantBase* MethodFunctionBase::runtimeHasVariantWithSignature(MethodVari
 
 QoreValue UserMethodVariant::evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
     //QORE_TRACE("UserMethodVariant::evalMethod()");
-    // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller
-    if (qore_object_private::checkSandboxedMethodCall(self, getAccess(), qmethod->getName(), xsink)) {
-        return QoreValue();
+    // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller: outlined, so
+    // that the frame of a method call has no more than before the rule while no code in the process is sandboxed
+    if (qore_sandboxed_code_present.load(std::memory_order_relaxed)) {
+        return evalCheckedMethod(self, ceh, xsink);
     }
     if (synchronized) {
         return evalSynchronizedMethod(self, ceh, xsink);
@@ -10744,6 +10745,18 @@ QoreValue UserMethodVariant::evalMethod(QoreObject* self, CodeEvaluationHelper& 
     // shared with the original declaring method. Execute the body in the
     // declaring class context so self-member access resolves private:internal
     // storage from the class where the body was parsed.
+    return eval(qmethod->getName(), &ceh, self, xsink, getClassPriv());
+}
+
+QoreValue UserMethodVariant::evalCheckedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+        ExceptionSink* xsink) const {
+    if (qore_object_private::checkSandboxedMethodCall(self, getAccess(), qmethod->getName(), xsink)) {
+        return QoreValue();
+    }
+    if (synchronized) {
+        return evalSynchronizedMethod(self, ceh, xsink);
+    }
+    assert(!*xsink);
     return eval(qmethod->getName(), &ceh, self, xsink, getClassPriv());
 }
 

@@ -21711,6 +21711,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
 DLLLOCAL bool qore_rt_try_dispatch_method_given_by_name(QoreObject* o, const QoreMethod* method, const QoreClass* qc,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result);
 
+//! returns true if the sandboxed rule of non-public method calls refuses the call (qore#7102); outlined from the fast
+//! method dispatch, which runs it only while code in the process is sandboxed
+static QORE_INTERN_NOINLINE bool qore_rt_fast_method_call_denied(QoreObject* o, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink) {
+    return !method->isStatic() && qore_object_private::checkSandboxedMethodCall(o, METHV_const(variant)->getAccess(),
+        method->getName(), xsink);
+}
+
 template <bool CONSUME>
 static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
@@ -21721,9 +21729,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         return false;
     }
     // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller
-    if (qore_sandboxed_code_present.load(std::memory_order_relaxed) && !method->isStatic()
-            && qore_object_private::checkSandboxedMethodCall(o, METHV_const(variant)->getAccess(), method->getName(),
-                xsink)) {
+    if (qore_sandboxed_code_present.load(std::memory_order_relaxed)
+            && qore_rt_fast_method_call_denied(o, method, variant, xsink)) {
         result = toBits(QoreValue());
         return true;
     }

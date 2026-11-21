@@ -546,6 +546,13 @@ private:
     */
     DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalSynchronizedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
             ExceptionSink* xsink) const;
+
+    //! evaluates a method while code in the process is sandboxed: checks the sandboxed rule of non-public method
+    //! calls first (qore#7102)
+    /** Outlined from evalMethod(), so that its frame is as before the rule
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalCheckedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+            ExceptionSink* xsink) const;
 };
 
 #define UMV(f) (reinterpret_cast<UserMethodVariant*>(f))
