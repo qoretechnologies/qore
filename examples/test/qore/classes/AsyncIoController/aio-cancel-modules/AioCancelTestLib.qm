@@ -79,7 +79,7 @@ class ChainOperation inherits AbstractPollOperation<auto> {
         Lib::keep(n);
         AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": n,
-            "spop": new WaitingOperation(n),
+            "spop": Lib::keep(new WaitingOperation(n)),
             "owner": follow_key,
             "key": follow_key,
             "to": -1s,
@@ -129,7 +129,7 @@ class ReportingOperation inherits AbstractPollOperation<auto> {
         Lib::keep(n);
         AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": n,
-            "spop": new WaitingOperation(n),
+            "spop": Lib::keep(new WaitingOperation(n)),
             "owner": follow_key,
             "key": follow_key,
             "to": -1s,
@@ -197,19 +197,22 @@ class LoadingOperation inherits AbstractPollOperation<auto> {
 
 public class Lib {
     private:internal {
-        static list<EventNotifier> notifiers;
+        #! the notifiers and the operation objects of the submitted operations: an operation whose object is deleted
+        #! is canceled
+        static list<auto> held;
         static Mutex lck();
     }
 
-    static keep(EventNotifier n) {
+    static auto keep(auto o) {
         AutoLock al(lck);
-        push notifiers, n;
+        push held, o;
+        return o;
     }
 
     static auto submit(EventNotifier n, string owner, string key) {
         return AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": n,
-            "spop": new WaitingOperation(n),
+            "spop": Lib::keep(new WaitingOperation(n)),
             "owner": owner,
             "key": key,
             "to": -1s,
@@ -225,7 +228,7 @@ public class Lib {
         Queue submitted();
         AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": n,
-            "spop": new ChainOperation(n, follow_key, submitted),
+            "spop": keep(new ChainOperation(n, follow_key, submitted)),
             "owner": key,
             "key": key,
             "to": 30s,
@@ -242,7 +245,7 @@ public class Lib {
         Queue report();
         AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": n,
-            "spop": new ReportingOperation(n, follow_key, report),
+            "spop": keep(new ReportingOperation(n, follow_key, report)),
             "owner": key + "-reporting",
             "key": key,
             "to": 30s,
@@ -258,7 +261,7 @@ public class Lib {
         Queue loaded();
         AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": n,
-            "spop": new LoadingOperation(n, module, loaded),
+            "spop": keep(new LoadingOperation(n, module, loaded)),
             "owner": key,
             "key": key,
             "to": 30s,

@@ -42,7 +42,9 @@ class WaitingOperation inherits AbstractPollOperation<auto> {
 
 public class Lib {
     private:internal {
-        static list<EventNotifier> notifiers;
+        #! the notifiers and the operation objects of the submitted operations: an operation whose object is
+        #! deleted is canceled
+        static list<auto> held;
         static Mutex lck();
     }
 
@@ -50,11 +52,16 @@ public class Lib {
         EventNotifier n();
         {
             AutoLock al(lck);
-            push notifiers, n;
+            push held, n;
+        }
+        WaitingOperation op(n);
+        {
+            AutoLock al(lck);
+            push held, op;
         }
         return AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": n,
-            "spop": new WaitingOperation(n),
+            "spop": op,
             "owner": owner,
             "key": key,
             "to": -1s,

@@ -180,7 +180,7 @@ class TenantReportingOperation inherits AbstractPollOperation<auto> {
             push notifiers, n;
             AsyncIoController::submit(<SocketPollOperationInfo>{
                 \"sock\": n,
-                \"spop\": new TenantOperation(n),
+                \"spop\": keep(new TenantOperation(n)),
                 \"owner\": follow_key,
                 \"key\": follow_key,
                 \"to\": -1s,
@@ -192,7 +192,15 @@ class TenantReportingOperation inherits AbstractPollOperation<auto> {
     }
 }
 
+# the notifiers and the operation objects of the tenant's operations: an operation whose object is deleted is
+# canceled
 list<auto> notifiers;
+
+# keeps an object for the life of the tenant, and returns it
+auto sub keep(auto o) {
+    push notifiers, o;
+    return o;
+}
 
 # returns an operation object of the tenant's code
 object sub make_reporting(EventNotifier n, string host_key, string follow_key, Queue report) {
@@ -204,7 +212,7 @@ auto sub submit_own(string owner, string key) {
     push notifiers, n;
     return AsyncIoController::submit(<SocketPollOperationInfo>{
         \"sock\": n,
-        \"spop\": new TenantOperation(n),
+        \"spop\": keep(new TenantOperation(n)),
         \"owner\": owner,
         \"key\": key,
         \"to\": -1s,
@@ -227,7 +235,7 @@ list<auto> sub collide(string key, int n, bool replace) {
         push notifiers, en;
         try {
             auto rq = AsyncIoController::submit(<SocketPollOperationInfo>{
-                \"sock\": en, \"spop\": new TenantOperation(en), \"owner\": key + \"-tenant\", \"key\": key,
+                \"sock\": en, \"spop\": keep(new TenantOperation(en)), \"owner\": key + \"-tenant\", \"key\": key,
                 \"to\": -1s,
             }, replace);
             push rv, rq;
@@ -328,6 +336,9 @@ bool sub direct_key(string key) {
 
     private {
         int serial;
+        #! the operation objects of the host's operations: an operation whose object is deleted is canceled
+        list<auto> held;
+        Mutex held_lock();
     }
 
     constructor() : QUnit::Test("AsyncIoController cancel ownership", "1.0", \ARGV) {
@@ -353,6 +364,8 @@ bool sub direct_key(string key) {
         addTestCase("sandboxed code with no known application replaces only its own operation",
             \unknownAppReplaceTest());
         addTestCase("the canceled result of a refused submission runs for the submitter", \refusedResultTest());
+        addTestCase("a submission that is not started leaves no registration of its object behind",
+            \refusedRegistrationTest());
         set_return_value(main());
     }
 
@@ -450,7 +463,7 @@ bool sub direct_key(string key) {
         EventNotifier n1();
         n1.notify();
         AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n1,
-            "spop": new CompletingOperation(n1, c1, gate), "owner": owner, "to": HangGuard});
+            "spop": hold(new CompletingOperation(n1, c1, gate)), "owner": owner, "to": HangGuard});
         assertTrue(c1.get(HangGuard), "the first callback runs");
         Queue flushed();
         background sub () {
@@ -467,7 +480,7 @@ bool sub direct_key(string key) {
         EventNotifier n2();
         n2.notify();
         AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n2,
-            "spop": new CompletingOperation(n2, c2), "owner": owner, "to": HangGuard});
+            "spop": hold(new CompletingOperation(n2, c2)), "owner": owner, "to": HangGuard});
         bool got;
         try {
             got = c2.get(HangGuard);
@@ -617,6 +630,34 @@ bool sub direct_key(string key) {
         assertTrue(tenant.callFunction("direct_key", key + "-follow"), "the callback's operation is the tenant's");
     }
 
+    #! a submission that is not started (another code's key) ends the registration of its operation object: one left
+    #! behind would outlive the object, and the operation of an object later made at its address would be canceled
+    #! (qore#7167)
+    refusedRegistrationTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the registrations are counted with a test hook of a debug build");
+        }
+        Program tenant = getTenant();
+        string key = getName("host-registration");
+        EventNotifier n();
+        auto rq = submitHost(key, key, n);
+        on_exit {
+            AsyncIoController::cancelByOwner(key);
+            AsyncIoController::cancelByOwner(key + "-tenant");
+        }
+        # the host's operation is in the cache of the one I/O thread
+        assertTrue(inlist(key, AsyncIoController::getInfo().cache_keys));
+        int before = call_function("dbg_async_io_qop_registered_count");
+        list<auto> r = tenant.callFunction("collide", key, 4, False);
+        foreach auto i in (r) {
+            assertTrue(i.get(HangGuard).canceled, "the submission is refused");
+        }
+        # the I/O thread has processed the refusals (getInfo() is answered after the commands sent before it)
+        AsyncIoController::getInfo();
+        assertEq(before, call_function("dbg_async_io_qop_registered_count"), "no registration is left behind");
+        assertEq(0, rq.size(), "the host's operation is still there");
+    }
+
     #! runs the given code in a child process with the test's library modules in the process-wide module path
     /** The modules must be in the process-wide module path for their initialization to be that of library code
     */
@@ -653,7 +694,7 @@ bool sub direct_key(string key) {
     private auto submitHost(string owner, string key, EventNotifier n) {
         return AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": n,
-            "spop": new WaitingOperation(n),
+            "spop": hold(new WaitingOperation(n)),
             "owner": owner,
             "key": key,
             "to": -1s,
@@ -678,6 +719,13 @@ bool sub direct_key(string key) {
         sm.setNetworkDefaultPolicy(True);
         p.setSandboxManager(sm);
         return p;
+    }
+
+    #! keeps an operation object of the host's for the life of the test, and returns it
+    private auto hold(auto o) {
+        AutoLock al(held_lock);
+        push held, o;
+        return o;
     }
 
     private string getName(string test) {

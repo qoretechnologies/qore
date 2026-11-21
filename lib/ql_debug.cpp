@@ -18927,6 +18927,15 @@ static QoreValue f_dbg_async_io_wait_owner_flush_blocked(const QoreListNode* par
     return ctrl->dbgWaitOwnerFlushBlocked(static_cast<int>(timeout_ms));
 }
 
+//! Debug-only: the number of operation objects that the async I/O controllers have registered (qore#6531)
+/** The registration of an operation without a C++ poll operation by its object ends with the operation; a test
+    checks with it that a submission that is not started leaves none behind (qore#7167)
+*/
+static QoreValue f_dbg_async_io_qop_registered_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(AsyncIoControllerPriv::dbgQoreOpRegisteredCount());
+}
+
 //! Debug-only: returns True if a submission takes the key of an operation that it may not replace (qore#7010)
 /** @param sandboxed if the submitting code is sandboxed
     @param app_id the application that the submitting code runs for; -1 for none (\c QORE_NO_PROGRAM_ID)
@@ -29335,6 +29344,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_wait_owner_flush_blocked", f_dbg_async_io_wait_owner_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_qop_registered_count", f_dbg_async_io_qop_registered_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_async_io_submit_takes_key_of_other", f_dbg_async_io_submit_takes_key_of_other,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 4,
         boolTypeInfo, QORE_PARAM_NO_ARG, "sandboxed",

@@ -44,6 +44,8 @@ class WaitingOperation inherits AbstractPollOperation<auto> {
 public class Lib {
     private:internal {
         static *EventNotifier notifier;
+        #! the operation object: an operation whose object is deleted is canceled
+        static *WaitingOperation op;
     }
 
     #! the key of the operation that the module's initialization submits
@@ -55,7 +57,7 @@ public class Lib {
         notifier = new EventNotifier();
         AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": notifier,
-            "spop": new WaitingOperation(notifier),
+            "spop": (op = new WaitingOperation(notifier)),
             "owner": getKey(),
             "key": getKey(),
             "to": -1s,

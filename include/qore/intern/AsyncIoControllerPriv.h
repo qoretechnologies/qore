@@ -1084,6 +1084,11 @@ public:
     //! Returns true if the Qore object of a registered poll operation was deleted
     DLLLOCAL static bool isQoreOpDeleted(const QoreObject* obj);
 
+#ifdef DEBUG
+    //! Debug-only: the number of objects in the registry of the operations without a C++ poll operation
+    DLLLOCAL static size_t dbgQoreOpRegisteredCount();
+#endif
+
     //! Called when the Qore object of a poll operation is deleted: a submitted operation without a C++ poll operation
     //! is canceled (qore#6531)
     /** Does not wait for the I/O threads and runs no Qore code
