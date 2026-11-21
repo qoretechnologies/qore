@@ -7054,11 +7054,6 @@ bool qore_caller_is_sandboxed() {
     }
 }
 
-bool qore_thread_in_trusted_build() {
-    ThreadData* td = thread_data.get();
-    return td && td->sandbox_budgets.inBuild();
-}
-
 namespace {
 //! the result of a step of the walk of qore_find_caller_program()
 enum class CallerWalkStep {
@@ -7066,8 +7061,6 @@ enum class CallerWalkStep {
     Skip,
     //! the Program is the caller Program
     Found,
-    //! the caller Program is unknown
-    Unknown,
 };
 
 //! classifies a Program on the walk of qore_find_caller_program()
@@ -7076,16 +7069,12 @@ CallerWalkStep qore_caller_walk_step(const QoreProgram* pgm) {
         return CallerWalkStep::Skip;
     }
     const qore_program_private* priv = qore_program_private::get(*const_cast<QoreProgram*>(pgm));
-    // a Program that a trusted build created does not identify the code that the build serves (qore#6536 records
-    // the build's caller)
-    if (priv->created_in_trusted_build) {
-        return CallerWalkStep::Unknown;
-    }
-    // the Program of a module, library code or not, serves the code that calls it; also while the module is
-    // initialized, before it is registered and has the lifetime of a module: the module manager marks the Program
-    // that it creates or takes for a module before its code runs; not a Program that module code creates, whose code
-    // is its own: a Program that module code creates is not a module's (it does not inherit PO_IN_MODULE, qore#7067;
-    // qore#7077)
+    // the Program of a module, library code or not, serves the code that calls it, also one that a trusted build
+    // loaded first, and also while the module is initialized, before it is registered and has the lifetime of a
+    // module: the module manager marks the Program that it creates or takes for a module before its code runs
+    // (qore#7077); any other Program's code is its own: one that module code creates (it is not a module's,
+    // qore#7067) and one that a trusted build created (its code may be any code that ran in the build, so it
+    // identifies no other Program; qore#6852)
     return (priv->module_lifetime.load(std::memory_order_acquire) || priv->module_program.load(std::memory_order_acquire))
         ? CallerWalkStep::Skip : CallerWalkStep::Found;
 }
@@ -7130,7 +7119,6 @@ int qore_find_caller_program(QoreProgram*& pgm, qore_program_id_t& id) {
     if (!(mib && td->current_pgm_ctx == mib->ctx && td->current_pgm == mib->pgm)) {
         switch (qore_caller_walk_step(td->current_pgm)) {
             case CallerWalkStep::Found: return found(td->current_pgm);
-            case CallerWalkStep::Unknown: return -1;
             case CallerWalkStep::Skip: break;
         }
     } else {
@@ -7145,7 +7133,6 @@ int qore_find_caller_program(QoreProgram*& pgm, qore_program_id_t& id) {
         while (save && td->programContextSave(save - 1).ctx == ch) {
             switch (qore_caller_walk_step(td->programContextSave(--save).pgm)) {
                 case CallerWalkStep::Found: return found(td->programContextSave(save).pgm);
-                case CallerWalkStep::Unknown: return -1;
                 case CallerWalkStep::Skip: break;
             }
         }
@@ -7162,7 +7149,6 @@ int qore_find_caller_program(QoreProgram*& pgm, qore_program_id_t& id) {
         QoreProgram* p = ch->getOldProgram();
         switch (qore_caller_walk_step(p)) {
             case CallerWalkStep::Found: return found(p);
-            case CallerWalkStep::Unknown: return -1;
             case CallerWalkStep::Skip: break;
         }
     }

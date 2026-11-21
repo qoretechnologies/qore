@@ -1475,10 +1475,6 @@ public:
     //! qore_program_set_module_lifetime()); never cleared once set
     std::atomic<bool> module_lifetime{false};
 
-    //! true if a trusted build created the Program (SandboxManager::createTrustedBuildCall()); its code does not
-    //! identify the code that it serves, so qore_find_caller_program() reports an unknown caller there (qore#6852)
-    bool created_in_trusted_build = false;
-
     // define map
     dmap_t dmap;
 

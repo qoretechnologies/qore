@@ -1094,8 +1094,6 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
-    // a Program that a trusted build creates does not identify the code that the build serves (qore#6852)
-    created_in_trusted_build = qore_thread_in_trusted_build();
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {

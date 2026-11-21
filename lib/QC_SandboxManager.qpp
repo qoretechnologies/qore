@@ -1661,7 +1661,7 @@ static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_
 }
 
 //! Returns the ID of the caller %Program: the %Program whose code called the running code
-/** The caller %Program is the first %Program, from the running code outward, that is not the %Program of a user
+/** The caller %Program is the first %Program, from the running code outward, that is not the %Program of a
     module: library module code that serves a call from a %Program's code, also through more library module code,
     gets the ID of that %Program.  Library code uses it to record the %Program that owns an object that it creates for
     its caller, and to allow a later change of the object only to code of that %Program (compare with
@@ -1677,14 +1677,23 @@ static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_
     A module's %Program is a module's from its creation, also while the module is initialized: the initialization of
     a module that a %Program loads by its own path serves that %Program.  The initialization of library code (a module
     from a trusted module directory, not one that a sandboxed %Program loads into a container of its own) creates
-    state that the whole process shares, whoever loads it first, so the code
-    that loads it is not its caller, which would own that state.
+    state that the whole process shares, whoever loads it first, so the code that loads it is not its caller, which
+    would own that state.
+
+    A trusted build (createTrustedBuildCall()) runs its creator's code: entered by another %Program's code, the code
+    of the %Program that created the capability is that %Program's code, as a closure's is.  A %Program that a build
+    created is a %Program like any other, whose code is its own; a module that a build loaded first serves the code
+    that calls it, as any module does.  The code of a %Program that several tenants can run code in (a shared %Program
+    that a build created, with an expression, for example) identifies no tenant: what it owns is shared by all of
+    them.
 
     The caller is unknown, and the method returns @ref nothing, where the code that the running code serves cannot be
-    identified: in the initialization of library code and the threads and tasks that it starts, whoever loads it, in code that
-    a trusted build (createTrustedBuildCall()) created or runs, and in work that started on a thread that no code
-    submitted (an I/O callback or a signal handler) when only module code runs in it.  An unknown
-    caller must be treated as not being any given %Program.
+    identified: in the initialization of library code and the threads and tasks that it starts, whoever loads it; in
+    the module code of a trusted build that module code created, and in the threads and tasks that it starts
+    (a build creates shared state for whichever caller needs it first, so the code that entered it is not the caller,
+    which would own that state); in a build that its creator's own code entered; and in work that started on a thread
+    that no code submitted (an I/O callback or a signal handler) when only module code runs in it.  An unknown caller
+    must be treated as not being any given %Program.
 
     It is not a sandbox check: a sandboxed caller that it identifies is still refused by the checks that consider
     every sandbox that governs the code (see isProcessWideRegistrationAllowed() and isSandboxed()).  It reveals only

@@ -1201,12 +1201,21 @@ DLLEXPORT int qore_check_process_wide_registration(const char* what, ExceptionSi
     A module's Program is a module's from its creation, also while the module is initialized: the initialization of a
     module that a Program loads by its own path serves that Program.  The initialization of library code (a module
     from a trusted module directory, see QoreModuleManager::isTrustedModulePath(), not one that a sandboxed Program
-    loads into a container of its own) creates state that the whole
-    process shares, whoever loads it first, so the code that loads it is not its caller, which would own that state.
+    loads into a container of its own) creates state that the whole process shares, whoever loads it first, so the
+    code that loads it is not its caller, which would own that state.
+
+    A trusted build (SandboxManager::createTrustedBuildCall()) runs its creator's code: entered by another Program's
+    code, the code of the Program that created the capability is that Program's code, as a closure's is.  A Program
+    that a build created is a Program like any other, whose code is its own; a module that a build loaded first serves
+    the code that calls it, as any module does.  The code of a Program that several tenants can run code in (a shared
+    Program that a build created, with an expression, for example) identifies no tenant: what it owns is shared by
+    all of them.
 
     The caller is unknown, and the function fails, where the code that the running code serves cannot be identified:
     - the initialization of library code, and the threads and tasks that it starts, whoever loads it (qore#7077)
-    - code that a trusted build (SandboxManager::createTrustedBuildCall()) created or runs
+    - the module code of a trusted build that module code created, and the threads and tasks that it starts:
+      a build creates shared state for whichever caller needs it first, so the code that entered it is not the caller
+      (it would own that state); also a build that its creator's own code entered
     - work that started on a thread that no code submitted (an I/O callback, a signal handler), when no Program that
       is not a module's runs in it
 
