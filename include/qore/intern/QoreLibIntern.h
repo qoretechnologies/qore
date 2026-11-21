@@ -1694,6 +1694,9 @@ DLLLOCAL int qore_fd_write_all(int fd, const void* data, size_t len, ExceptionSi
 */
 DLLLOCAL int qore_stdio_write(FILE* fp, const char* data, size_t len, ExceptionSink* xsink, const char* operation);
 DLLLOCAL void delete_global_variables();
+//! releases ARGV and QORE_ARGV, which qore_setup_argv() makes before qore_init(), before a startup error ends the
+//! process with exit() (qore#7000)
+DLLLOCAL void qore_release_argv();
 DLLLOCAL void init_lib_intern(char* env[]);
 //! runs the one-time initializations of the network code when the library is initialized (see QoreForkHandlers.h)
 DLLLOCAL void qore_network_init_once();
