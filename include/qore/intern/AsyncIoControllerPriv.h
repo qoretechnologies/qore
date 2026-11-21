@@ -171,6 +171,13 @@ struct AsyncIoDeferredRelease {
     //! qore_close_module_programs()); counted until the references are released (QoreModuleCleanupWorkFlag), as the
     //! module cleanup waits for their release (qore#6928)
     QoreModuleCleanupWorkFlag module_cleanup_delegate;
+    //! True if the references belong to an operation that the module cleanup canceled
+    //! (QoreSandboxContext::module_cleanup_canceled): the destructors that releasing them runs cannot start new
+    //! asynchronous work (AsyncIoControllerPriv::checkModuleCleanupNewWork(), qore#7027)
+    bool module_cleanup_canceled = false;
+
+    //! Sets the module cleanup flags of the references from the context of the work that they belong to
+    DLLLOCAL void setModuleCleanup(const std::shared_ptr<const QoreSandboxContext>& ctx);
 
     //! Returns True if no references are held
     DLLLOCAL bool empty() const {
@@ -305,6 +312,33 @@ DLLLOCAL inline bool async_io_module_cleanup_delegate(const std::shared_ptr<cons
     return ctx && ctx->module_cleanup_delegate;
 }
 
+//! Returns true if @a ctx belongs to work of the module cleanup that the cleanup does not count (qore#7027)
+/** An operation, a timer or a work item that work of the cleanup submitted, whose context it captured
+    (QoreSandboxContext::module_cleanup_delegate without QoreSandboxContext::module_cleanup_work): the cleanup counts
+    its work items when they are queued, and cancels the operations and timers when it waits for its work
+    (AsyncIoControllerPriv::cancelModuleCleanupUncounted()); timers and the operations that the controller does not
+    submit for it are such work, while the operations that it submits are counted (AsyncIoControllerPriv::submit())
+*/
+DLLLOCAL inline bool async_io_module_cleanup_uncounted(const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx && ctx->module_cleanup_delegate && !ctx->module_cleanup_work;
+}
+
+//! Returns true if @a ctx belongs to an operation that the module cleanup canceled
+//! (QoreSandboxContext::module_cleanup_canceled, qore#7027)
+DLLLOCAL inline bool async_io_module_cleanup_canceled(const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx && ctx->module_cleanup_canceled;
+}
+
+//! Returns true if a cancel round of the module cleanup cancels the operation or timer of @a ctx (qore#7027)
+/** Before the deadline of the cleanup, the work that it does not count (async_io_module_cleanup_uncounted()); at and
+    after it (@a deadline), all of its work that it has not canceled yet
+*/
+DLLLOCAL inline bool async_io_module_cleanup_cancel_match(const std::shared_ptr<const QoreSandboxContext>& ctx,
+        bool deadline) {
+    return deadline ? ctx && ctx->module_cleanup_delegate && !ctx->module_cleanup_canceled
+        : async_io_module_cleanup_uncounted(ctx);
+}
+
 //! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it
 //! and the thread does not run the module cleanup or work that the cleanup handed over
 /** A nested capture keeps a context that is applied, so work submitted by a step of another operation inherits that
@@ -360,6 +394,11 @@ public:
         //! For DT_ABORT: the task in native_task delivers the result after abort() (see
         //! AsyncIoControllerPriv::AbortThenDeliverTask) and calls onComplete() when it is run
         bool after_abort_on_complete = false;
+        //! Counts the item as work of the module cleanup if its context is delegated but not counted (qore#7027)
+        /** Set when the item is queued (see async_io_module_cleanup_uncounted()): the item of an operation that work
+            of the cleanup submitted and that ended on its own, which the cleanup waits for as it waits for its own
+        */
+        QoreModuleCleanupWorkFlag module_cleanup_work;
 #ifdef DEBUG
         //! Debug-only: the item was held by the dbg_async_io_hold_module_cleanup_work() test hook; the worker writes on
         //! stderr when it has ended (qore#6928)
@@ -1195,6 +1234,30 @@ public:
     */
     DLLLOCAL void cancelByProgram(QoreProgram* pgm, ExceptionSink* xsink);
 
+    //! Cancels for the module cleanup the operations and timers of work of the cleanup that it does not count
+    /** Called by the module cleanup when it waits for its work (qore_module_cleanup_drain_work()), on its own thread:
+        an operation or timer whose context is delegated but not counted (async_io_module_cleanup_uncounted()), which
+        work of the cleanup submitted, would otherwise run its onComplete() or callback after the Program of its
+        module has been deleted; canceled for the cleanup, its onComplete() is counted work of the cleanup (qore#7027)
+
+        With \a deadline (the cleanup reached its deadline: qore_module_cleanup_deadline_passed()), all of the work of
+        the cleanup that it has not canceled yet, counted or not (async_io_module_cleanup_cancel_match()); the names of
+        the operations are then appended to \a names, if given
+
+        @return the number of operations and timers canceled
+    */
+    DLLLOCAL size_t cancelModuleCleanupUncounted(bool deadline, std::vector<std::string>* names,
+            ExceptionSink* xsink);
+
+    //! Raises ASYNC-IO-SHUTDOWN-ERROR and returns -1 if the current thread cannot start new asynchronous work
+    /** Called by the %Qore-language entry points that start asynchronous work (AsyncIoController::submit(),
+        addTimer*(), submitTask()): the work of an operation that the module cleanup canceled cannot start any, as the
+        cleanup would wait for it in turn; nor can the work that the cleanup handed over add a timer (\a timer) after
+        its deadline; synchronous I/O and AsyncIoController::exec() are not refused (qore#7027)
+    */
+    DLLLOCAL static int checkModuleCleanupNewWork(const char* method, bool timer, ExceptionSink* xsink);
+
+
     //! Custom deref with ExceptionSink
     DLLLOCAL virtual void deref(ExceptionSink* xsink);
 
@@ -1316,6 +1379,9 @@ private:
             exit drain (abandoned path). */
         CancelCountRef* cancel_count = nullptr;
         QoreProgram* pgm = nullptr;       //!< For CancelByProgram: the program being destroyed
+        //! For CancelByProgram without a Program: the module cleanup reached its deadline (see
+        //! cancelModuleCleanupUncounted())
+        bool module_cleanup_deadline = false;
         int64_t timer_deadline_us = 0;  //!< For AddTimer: absolute deadline in microseconds
         //! For AddTimer: true if timer_deadline_us is on the monotonic clock (addTimerDelay()), not since the epoch
         bool timer_monotonic = false;
@@ -1364,6 +1430,9 @@ private:
         AsyncIoSandboxContext submit_sandbox_ctx;        //!< For SubmitOp: the submitter's sandbox context
         //! For SubmitOp: the references taken by the synchronous exec() call that waits for the operation, or empty
         std::shared_ptr<AsyncIoSyncRelease> submit_sync_release;
+        //! For SubmitOp: work that the module cleanup handed over submitted the operation, not the cleanup itself
+        //! (see cancelAdmittedAfterModuleCleanupDeadline(), qore#7027)
+        bool submit_module_cleanup_handed_over = false;
         //! For CancelDeletedOp: the C++ poll operation whose Qore object was deleted (referenced)
         /** The reference keeps the address from being reused for another operation until the command is processed
         */
@@ -1548,6 +1617,12 @@ private:
         QoreHashNode* info_result = nullptr;
         //! Accumulated PollInfos (CancelByProgram), guarded by pinfos_lock
         std::vector<PollInfo> cancel_pinfos;
+        //! The operations of a CancelByProgram without a Program (cancelModuleCleanupUncounted()) whose cancel waits
+        //! for their step in flight (pending_aborts), which are canceled too (qore#7027)
+        std::atomic<size_t> in_flight_canceled{0};
+        //! The names of the operations of in_flight_canceled at the deadline of the module cleanup, guarded by
+        //! pinfos_lock (moduleCleanupOpName())
+        std::vector<std::string> in_flight_names;
         //! Protects cancel_pinfos against concurrent appends from I/O threads
         QoreThreadLock pinfos_lock;
 
@@ -2383,13 +2458,21 @@ public:
     */
     DLLLOCAL static void dbgHoldStepResults(bool hold);
 
-    //! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (qore#6928)
-    /** Called by the dbg_async_io_hold_module_cleanup_work() test hook: such an item (a canceled operation's
-        onComplete() with QoreSandboxContext::module_cleanup_delegate) is held instead of queued until the module
+    //! Debug-only: holds the onComplete() and timer work items that the module cleanup hands over from now on
+    /** Called by the dbg_async_io_hold_module_cleanup_work() test hook (qore#6928, qore#7027): such an item (a canceled
+        operation's onComplete() or a timer's callback with QoreSandboxContext::module_cleanup_delegate) is held
+        instead of queued until the module
         cleanup releases it (qore_dbg_release_held_module_cleanup_work()), so that a test can make it run as late as
         the cleanup lets it
     */
     DLLLOCAL static void dbgHoldModuleCleanupWork(bool hold);
+
+    //! Debug-only: the held test-hook work that the drain of the module cleanup releases (QDMCDP_* flags, qore#7027)
+    /** QDMCDP_BEFORE_CANCEL_ROUND: the step results held by dbg_async_io_hold_step_results(), before the drain's cancel
+        round; QDMCDP_WAIT_AFTER_CANCEL: the same, when the drain waits after a cancel round; QDMCDP_AFTER_TIMER_SCAN:
+        the timer callbacks held by dbg_async_io_hold_timer_callbacks(), after the round's scan of the timers
+    */
+    DLLLOCAL static void dbgModuleCleanupDrainReleases(int flags);
 
     //! Debug-only: waits until at least @p count step results are held; returns false if the wait timed out
     DLLLOCAL static bool dbgWaitHeldStepResults(size_t count, int64_t timeout_ms);
@@ -2455,6 +2538,20 @@ private:
         (pending_aborts); keeps the context if the copy cannot be allocated
     */
     DLLLOCAL void applyModuleCleanupCancel(PollInfo& pinfo);
+
+    //! Cancels the operation of \a key that the I/O thread has just admitted, if work that the module cleanup handed
+    //! over submitted it (\a handed_over), the cleanup has not canceled it and the cleanup has reached its deadline
+    //! (qore#7027)
+    /** Called on the I/O thread where an operation enters its cache: such an operation would otherwise be canceled
+        only by a later cancel round of the cleanup, which runs only when its wait ends, which the work that waits for
+        it synchronously would keep from ending; also named in a warning.  An operation of the cleanup thread itself
+        is canceled by the cleanup's next round, and a synchronous wait of it keeps the operation's own timeout
+    */
+    DLLLOCAL void cancelAdmittedAfterModuleCleanupDeadline(IoThreadContext& t, const std::string& key,
+            bool handed_over, ExceptionSink* xsink);
+
+    //! Returns a name of the operation of \a pinfo for a message of the module cleanup: its class and owner
+    DLLLOCAL static std::string moduleCleanupOpName(const PollInfo& pinfo);
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);

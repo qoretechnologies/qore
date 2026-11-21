@@ -37,6 +37,7 @@
 #include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
+#include <limits>
 
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -5673,7 +5674,60 @@ bool qore_module_entry_refusals_only(ExceptionSink* xsink) {
     return true;
 }
 
+namespace {
+//! the deadline of the module cleanup in milliseconds, set by qore_set_module_cleanup_timeout() or the
+//! QORE_MODULE_CLEANUP_TIMEOUT environment variable (qore#7027)
+std::atomic<int64> module_cleanup_timeout_ms{QORE_DEFAULT_MODULE_CLEANUP_TIMEOUT_MS};
+//! true once qore_set_module_cleanup_timeout() has set the deadline, which the environment variable then does not
+std::atomic<bool> module_cleanup_timeout_set{false};
+//! the time of the start of the module cleanup (q_clock_getmicros_monotonic()), or -1 before
+//! qore_close_module_programs()
+std::atomic<int64> module_cleanup_start_us{-1};
+//! true once the module cleanup has reached its deadline and canceled the work that it waited for
+std::atomic<bool> module_cleanup_deadline_reached{false};
+}
+
+int qore_set_module_cleanup_timeout(int64 timeout_ms) {
+    if (timeout_ms < 0) {
+        return -1;
+    }
+    module_cleanup_timeout_ms.store(timeout_ms, std::memory_order_relaxed);
+    module_cleanup_timeout_set.store(true, std::memory_order_relaxed);
+    return 0;
+}
+
+int64 qore_get_module_cleanup_timeout() {
+    return module_cleanup_timeout_ms.load(std::memory_order_relaxed);
+}
+
+void qore_init_module_cleanup_timeout() {
+    if (module_cleanup_timeout_set.load(std::memory_order_relaxed)) {
+        return;
+    }
+    const char* env = getenv("QORE_MODULE_CLEANUP_TIMEOUT");
+    if (!env) {
+        return;
+    }
+    // a non-negative decimal integer of milliseconds, nothing else
+    char* end = nullptr;
+    errno = 0;
+    long long v = *env >= '0' && *env <= '9' ? strtoll(env, &end, 10) : -1;
+    if (v < 0 || errno || !end || *end) {
+        fprintf(stderr, "error: QORE_MODULE_CLEANUP_TIMEOUT='%s' is not valid: expecting a non-negative integer "
+            "number of milliseconds; the default of %d ms is used\n", env, QORE_DEFAULT_MODULE_CLEANUP_TIMEOUT_MS);
+        fflush(stderr);
+        return;
+    }
+    module_cleanup_timeout_ms.store(v, std::memory_order_relaxed);
+}
+
+bool qore_module_cleanup_deadline_passed() {
+    return module_cleanup_deadline_reached.load(std::memory_order_acquire);
+}
+
 void qore_close_module_programs() {
+    // the deadline of the work that the cleanup waits for is measured from here (see qore_module_cleanup_drain_work())
+    module_cleanup_start_us.store(q_clock_getmicros_monotonic(), std::memory_order_relaxed);
     module_programs_closed_tid.store(q_gettid(), std::memory_order_seq_cst);
 }
 
@@ -5683,7 +5737,7 @@ namespace {
     child process created with fork(), so the child handler resets the count.
 */
 struct QoreModuleCleanupWork : public QoreForkHandler {
-    DLLLOCAL QoreModuleCleanupWork() : QoreForkHandler(QFLR_LEAF, "module_cleanup_work") {
+    QoreModuleCleanupWork() : QoreForkHandler(QFLR_LEAF, "module_cleanup_work") {
     }
 
     void prepare() noexcept override {
@@ -5754,7 +5808,23 @@ void qore_dbg_module_cleanup_work_held() {
 }
 #endif
 
-void qore_module_cleanup_drain_work() {
+//! returns the count of the work of the cleanup
+static size_t qore_module_cleanup_work_count() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    return work.count;
+}
+
+//! waits until the count of the work of the cleanup is zero; see qore_module_cleanup_drain_work()
+/** With \a deadline_us >= 0 (a time of q_clock_getmicros_monotonic()), the wait ends at that time: returns true if it
+    ended there with work still counted
+*/
+static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us) {
+#ifdef DEBUG
+    if (after_cancel) {
+        qore_dbg_module_cleanup_drain_point(QDMCDP_WAIT_AFTER_CANCEL);
+    }
+#endif
     QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
     SafeLocker sl(work.lock);
 #ifdef DEBUG
@@ -5773,15 +5843,119 @@ void qore_module_cleanup_drain_work() {
         }
 #endif
         if (!work.count) {
+            return false;
+        }
+        if (deadline_us < 0) {
+            work.cond.wait(work.lock);
+            continue;
+        }
+        int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+        if (remaining_us <= 0) {
+            return true;
+        }
+        // rounded up, so that the wait does not end before the deadline
+        work.cond.wait2(work.lock, (remaining_us + 999) / 1000);
+    }
+}
+
+void qore_module_cleanup_report_canceled(int kind, const std::vector<std::string>& names) {
+    if (names.empty()) {
+        // timers only, or the work still counted is the work of operations that the cleanup canceled already
+        return;
+    }
+    char head[256];
+    snprintf(head, sizeof head, "warning: the module cleanup at the end of the process %s its deadline of " QLLD
+        " ms (QORE_MODULE_CLEANUP_TIMEOUT) and canceled the asynchronous I/O operation%s %s:",
+        kind == QMCRC_AT_DEADLINE ? "reached" : "is past", qore_get_module_cleanup_timeout(),
+        names.size() == 1 ? "" : "s",
+        kind == QMCRC_SUBMITTED_AFTER_DEADLINE ? "submitted after it" : "that had not ended");
+    // written with one call, so that the output of other threads does not split it
+    try {
+        std::string msg = head;
+        for (size_t i = 0; i < names.size(); ++i) {
+            msg += i ? ", " : " ";
+            msg += names[i];
+        }
+        msg += '\n';
+        fputs(msg.c_str(), stderr);
+    } catch (std::bad_alloc&) {
+        // without memory for the message, its parts are written one after the other
+        fputs(head, stderr);
+        for (size_t i = 0; i < names.size(); ++i) {
+            fputs(i ? ", " : " ", stderr);
+            fputs(names[i].c_str(), stderr);
+        }
+        fputc('\n', stderr);
+    }
+    fflush(stderr);
+}
+
+//! runs a cancel round of the module cleanup; at or after its deadline, writes a warning that names the operations
+//! that it canceled; returns the number of operations and timers canceled
+/** See qore_async_io_cancel_module_cleanup_uncounted()
+*/
+static size_t qore_module_cleanup_cancel_round(bool at_deadline) {
+    if (!qore_module_cleanup_deadline_passed()) {
+        return qore_async_io_cancel_module_cleanup_uncounted();
+    }
+    std::vector<std::string> names;
+    size_t canceled = qore_async_io_cancel_module_cleanup_uncounted(true, &names);
+    qore_module_cleanup_report_canceled(at_deadline ? QMCRC_AT_DEADLINE : QMCRC_PAST_DEADLINE, names);
+    return canceled;
+}
+
+void qore_module_cleanup_drain_work() {
+    // the work that the cleanup counts ends, and can submit operations and timers of its own, which it does not count
+    // (their context is captured from it): these are canceled for the cleanup, whose onComplete() is then counted, and
+    // so on until none is left, so that no work of the cleanup outlives the module it runs in (qore#7027)
+    // The round is a command round-trip with every I/O thread: an operation that completed on its own before an I/O
+    // thread processed it has its onComplete() queued, and so counted, and so has a timer that fired; so the drain
+    // ends only when a round cancels nothing and the count is still zero after it
+    // The operations that the work of the cleanup submits are counted and waited for until the deadline of the
+    // cleanup, measured from its start (qore_close_module_programs()): then those not ended are canceled, once, and
+    // their onComplete() runs as counted work; after the deadline, the cleanup does not wait for the time of any
+    // operation (qore#7027)
+    int64 start_us = module_cleanup_start_us.load(std::memory_order_relaxed);
+    if (start_us < 0) {
+        start_us = q_clock_getmicros_monotonic();
+    }
+    int64 timeout_ms = qore_get_module_cleanup_timeout();
+    int64 deadline_us;
+    if (__builtin_mul_overflow(timeout_ms, static_cast<int64>(1000), &deadline_us)
+            || __builtin_add_overflow(deadline_us, start_us, &deadline_us)) {
+        deadline_us = std::numeric_limits<int64>::max();
+    }
+    bool after_cancel = false;
+    while (true) {
+        bool timed = !module_cleanup_deadline_reached.load(std::memory_order_acquire);
+        if (qore_module_cleanup_wait_work(after_cancel, timed ? deadline_us : -1)) {
+            // set before the cancel round: the work of the cleanup cannot start new asynchronous work from now on,
+            // and the rounds that follow cancel all of its operations that are not canceled yet
+            module_cleanup_deadline_reached.store(true, std::memory_order_release);
+            qore_module_cleanup_cancel_round(true);
+            after_cancel = true;
+            continue;
+        }
+        after_cancel = qore_module_cleanup_cancel_round(false) > 0;
+        if (!after_cancel && !qore_module_cleanup_work_count()) {
             break;
         }
-        work.cond.wait(work.lock);
     }
 }
 
 uint64_t qore_module_entry_refusals() {
     ThreadData* td = thread_data.get();
     return td ? td->module_entry_refusals : 0;
+}
+
+thread_local bool qore_module_cleanup_task_running = false;
+
+bool qore_module_cleanup_handed_over_work() {
+    if (module_programs_closed_tid.load(std::memory_order_seq_cst) < 0) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    return td && td->module_cleanup_delegate;
 }
 
 bool qore_module_cleanup_delegation() {
@@ -7840,11 +8014,16 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     }
 }
 
-QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate)
-        : module_cleanup_delegate(module_cleanup_delegate), module_cleanup_work(module_cleanup_delegate) {
+QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, ModuleCleanupWork kind)
+        : module_cleanup_delegate(true), module_cleanup_work(true),
+        module_cleanup_canceled(kind == ModuleCleanupWork::Canceled) {
     if (!src) {
         return;
     }
+    // the properties of the capture that decide how the sandbox governs the work (see
+    // qore_scope_creator_is_sandboxed())
+    inherited_only = src->inherited_only;
+    capturer_sandboxed = src->capturer_sandboxed;
     // copied first, as they can throw std::bad_alloc; the references below are taken only after that
     program_ids = src->program_ids;
     budgets = src->budgets;

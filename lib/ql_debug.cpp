@@ -18680,6 +18680,14 @@ static QoreValue f_dbg_async_io_hold_module_cleanup_work(const QoreListNode* par
     return QoreValue();
 }
 
+//! Debug-only: the held test-hook work that the module cleanup's drain releases (qore#7027); see
+//! AsyncIoControllerPriv::dbgModuleCleanupDrainReleases()
+static QoreValue f_dbg_async_io_module_cleanup_drain_releases(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgModuleCleanupDrainReleases(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+
 //! Debug-only: waits until at least the given number of step results are held; False if the wait timed out
 static QoreValue f_dbg_async_io_wait_held_step_results(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -29261,6 +29269,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_async_io_hold_module_cleanup_work", f_dbg_async_io_hold_module_cleanup_work,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_module_cleanup_drain_releases",
+        f_dbg_async_io_module_cleanup_drain_releases, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "flags");
     qns.addBuiltinVariant("dbg_async_io_wait_held_step_results", f_dbg_async_io_wait_held_step_results,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
