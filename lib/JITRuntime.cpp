@@ -13730,6 +13730,13 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_cross_module_fast_entry(Qor
     return target_ctx;
 }
 
+//! Enters the Program of the callee of a native cross-module call; see QoreRtCrossModuleCallState
+/** The AOT code that makes the call (QoreIRToLLVM::emitEnterCrossModuleCall()) must push the frame of the call at once
+    after this returns 0, with the frame of the call's expression slot (emitPushAotInlineCallFrame(), a
+    QoreAOTNativeCallStackLocation): that frame takes the caller's Program that this sets for it
+    (set_runtime_call_site_program()), and no other frame may be pushed in between (qore#7101); debug builds assert
+    that no other frame finds it set
+*/
 extern "C" DLLEXPORT int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, int32_t slot, void* state_buf,
         ExceptionSink* xsink) {
     auto* state = new (state_buf) QoreRtCrossModuleCallState;
