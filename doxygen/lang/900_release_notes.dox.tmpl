@@ -2523,6 +2523,10 @@
       without a controlling terminal; descriptions are shortened to the width in the \c COLUMNS environment variable,
       else to that of the terminal, and are not shortened without one
       (<a href="https://github.com/qoretechnologies/qore/issues/7125">issue 7125</a>)
+    - fixed \c qdp ending with an unhandled exception for an app action without its connection or a required option,
+      or with an unknown connection; these are usage errors that name the options, and the connection can also be
+      given with \c qorus_app_connection, the name of the option in Qorus
+      (<a href="https://github.com/qoretechnologies/qore/issues/7126">issue 7126</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0

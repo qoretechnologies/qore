@@ -2140,6 +2140,30 @@ class QdpCmd {
         QdpCmd::exitProgram(0);
     }
 
+    #! returns the connection of an app action and removes it from \a options (qore#7126)
+    /** The connection is given with the \c "connection" option, or with \c "qorus_app_connection", the name of the
+        option in Qorus and the IDE; a missing connection is a usage error.
+    */
+    private static string getAppActionConnection(string app_name, string action_name, reference<*hash<auto>> options) {
+        auto connection = options.connection;
+        auto alias = options.qorus_app_connection;
+        # an empty value is no value
+        if (connection.val() && alias.val() && connection != alias) {
+            error("@%s/%s: the options \"connection\" (%y) and \"qorus_app_connection\" (%y) name different "
+                "connections; give one of them", app_name, action_name, connection, alias);
+        }
+        # a missing connection is reported with the other required options
+        string key = connection.val() ? "connection" : "qorus_app_connection";
+        auto value = options{key};
+        if (value.typeCode() != NT_STRING) {
+            error("@%s/%s: the %y option must be a connection name; got type %y", app_name, action_name, key,
+                value.type());
+        }
+        remove options.connection;
+        remove options.qorus_app_connection;
+        return value;
+    }
+
     private AbstractDataProvider getDataProviderForAppAction(string app_name, string action_name, *string opts) {
         if (!ENV.QORE_PROVIDER_INDEX_DIR) {
             DataProvider::registerKnownFactories();
@@ -2163,30 +2187,45 @@ class QdpCmd {
         }
         hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(app_name);
 
+        # the required options: the connection of an app with a connection scheme and the data provider path options
+        # (qore#7126)
+        list<string> missing = map $1.key, action.path_vars.pairIterator(), !options{$1.key}.val();
+        if (app.scheme.val() && !options.connection.val() && !options.qorus_app_connection.val()) {
+            unshift missing, "connection";
+        }
+        if (missing) {
+            # the syntax with every required option of the action
+            list<string> required = keys action.path_vars ?? ();
+            if (app.scheme.val()) {
+                unshift required, "connection";
+            }
+            error("@%s/%s requires the option%s %s: qdp '@%s/%s{%s}' ...", app_name, action_name,
+                missing.size() == 1 ? "" : "s", (map sprintf("%y", $1), missing).join(", "), app_name, action_name,
+                (map $1 + "=<value>", required).join(","));
+        }
+
         string connection;
         AbstractConnection conn;
         if (app.scheme.val()) {
-            connection = OptionHelper::getString(options, "connection", True);
-            remove options.connection;
-            conn = get_connection(connection);
+            connection = getAppActionConnection(app_name, action_name, \options);
+            try {
+                conn = get_connection(connection);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "CONNECTION-ERROR") {
+                    rethrow;
+                }
+                error("@%s/%s: connection %y cannot be used: %s", app_name, action_name, connection, ex.desc);
+            }
             hash<ConnectionSchemeInfo> scheme_info = ConnectionSchemeCache::getSchemeEx(app.scheme);
             if (!scheme_info.schemes{string scheme = conn.getType()}) {
-                throw "APP-CONFIG-ERROR", sprintf("app %y action %y: connection %y has scheme %y; expecting %y", app.name,
-                    action.action, connection, scheme, keys scheme_info.schemes);
+                error("@%s/%s: connection %y has scheme %y; expecting %y", app_name, action_name, connection, scheme,
+                    keys scheme_info.schemes);
             }
             if (!conn.hasDataProvider()) {
-                throw "APP-CONFIG-ERROR", sprintf("connection %y has no data provider but should be valid for "
-                    "app %y action %y", connection, app.name, action.action);
+                error("@%s/%s: connection %y has no data provider", app_name, action_name, connection);
             }
         }
 
-        # check data provider path options
-        foreach hash<auto> i in (action.path_vars.pairIterator()) {
-            if (!options{i.key}.val()) {
-                throw "ACTION-ARG-ERROR", sprintf("app %y action %y: required option %y is missing in \"options\"",
-                    app.name, action.action, i.key);
-            }
-        }
 
         AbstractDataProvider prov;
         try {
@@ -2466,6 +2505,10 @@ class QdpCmd {
         printHelpLine(color.key("<connection>"), "Use a named connection", key_width);
         printHelpLine(color.key("<factory>{options}"), "Use a factory with options", key_width);
         printHelpLine(color.key("@<app>/<action>"), "Use an app action", key_width);
+        printHelpLine(color.key("@<app>/<action>{...}"), "Use an app action with options, ex: connection=<name>",
+            key_width);
+        printHelpLine(color.key("  qorus_app_connection"), "Alias of the connection option of an app action",
+            key_width);
         printHelpLine(color.key("<provider>/child/..."), "Navigate to child providers", key_width);
         printf("\n");
 
