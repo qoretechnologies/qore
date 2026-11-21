@@ -52,8 +52,8 @@ LD_LIBRARY_PATH=build "${QCC}" -c --output-dir="${TMP}/out" \
 test -f "${TMP}/out/${LIB_ID}.qo"
 test -f "${TMP}/out/${BIN_ID}.qo"
 
-nm "${TMP}/out/${LIB_ID}.qo" | grep -q "qore_${LIB_ID}_${LIB_ID}_script_register"
-nm "${TMP}/out/${BIN_ID}.qo" | grep -q "qore_${BIN_ID}_${BIN_ID}_script_register"
+nm "${TMP}/out/${LIB_ID}.qo" | grep "qore_${LIB_ID}_${LIB_ID}_script_register" >/dev/null
+nm "${TMP}/out/${BIN_ID}.qo" | grep "qore_${BIN_ID}_${BIN_ID}_script_register" >/dev/null
 
 # Capture --dump-info output once, then grep it.  Piping `qcc --dump-info`
 # directly into `grep -q` is unsafe under `set -o pipefail`: `grep -q` exits

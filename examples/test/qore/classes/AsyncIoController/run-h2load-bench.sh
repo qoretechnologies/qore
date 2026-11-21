@@ -163,7 +163,8 @@ run_h2load() {
     local req_sec time_sec status
 
     # h2load outputs "req/s: <num>" — extract the number after "req/s:"
-    req_sec=$(echo "$output" | awk '/req\/s:/ {for(i=1;i<=NF;i++) if($i=="req/s:") {print $(i+1); exit}}') || req_sec=""
+    req_sec=$(awk '!n && /req\/s:/ {for(i=1;i<=NF;i++) if($i=="req/s:" && !n) {print $(i+1); n = 1}}' <<<"$output") \
+        || req_sec=""
     if [ -z "$req_sec" ]; then
         # Alternative: "NNN requests/sec" format
         req_sec=$(echo "$output" | awk '/requests\/sec/ {print $1}') || req_sec=""
@@ -171,13 +172,14 @@ run_h2load() {
     : "${req_sec:=N/A}"
 
     # h2load outputs "finished in Xs, ..." — extract the time
-    time_sec=$(echo "$output" | awk '/^finished in/ {gsub(/[^0-9.]/, "", $3); print $3; exit}') || time_sec=""
+    time_sec=$(awk '!n && /^finished in/ {gsub(/[^0-9.]/, "", $3); print $3; n = 1}' <<<"$output") || time_sec=""
     : "${time_sec:=N/A}"
 
     # Check for errors: "NNN succeeded, ..." line
-    if echo "$output" | grep -q "succeeded"; then
+    if grep -q -- "succeeded" <<<"$output"; then
         local succeeded
-        succeeded=$(echo "$output" | awk '/succeeded/ {for(i=1;i<=NF;i++) if($(i+1)=="succeeded,") {print $i; exit}}') || succeeded="0"
+        succeeded=$(awk '!n && /succeeded/ {for(i=1;i<=NF;i++) if($(i+1)=="succeeded," && !n) {print $i; n = 1}}' \
+            <<<"$output") || succeeded="0"
         if [ "$succeeded" = "$requests" ]; then
             status="OK"
         else
@@ -228,7 +230,7 @@ if [ "$HAS_WRK" = "1" ]; then
         req_sec=$(echo "$output" | grep "Requests/sec" | awk '{print $2}') || req_sec="N/A"
         latency=$(echo "$output" | grep "Latency" | awk '{print $2}') || latency="N/A"
 
-        if echo "$output" | grep -q "errors"; then
+        if grep -q -- "errors" <<<"$output"; then
             status="ERRORS"
         else
             status="OK"
