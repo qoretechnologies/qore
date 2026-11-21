@@ -23062,8 +23062,8 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
                 return QoreValue(static_cast<int64>(value.get<const QoreBufferNode>()->size()));
             }
             if (t == NT_OBJECT) {
-                return QoreValue(static_cast<int64>(
-                    const_cast<QoreObject*>(value.get<const QoreObject>())->size(xsink)));
+                // the members that the calling code can see (#7048)
+                return QoreValue(qore_object_private::get(*value.get<const QoreObject>())->getRuntimeMemberCount());
             }
             return QoreValue(0ll);
         }

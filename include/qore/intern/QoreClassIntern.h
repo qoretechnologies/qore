@@ -3189,6 +3189,9 @@ public:
         serializes its setting.
     */
     std::atomic<bool> reachable{false};
+    //! the cached result of runtimeAllMembersPublic(): -1 if not determined yet, otherwise 0 or 1; beside the flag above,
+    //! in its padding, so that the size of the class's data does not change (#7048)
+    mutable std::atomic<int8_t> runtime_all_members_public{-1};
 
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
@@ -3996,6 +3999,19 @@ public:
             const QoreClass* scope_cls, const qore_class_private* class_ctx, bool& current_receiver);
 
     DLLLOCAL bool runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const;
+
+    //! Returns true if the class hierarchy declares no member that is non-public for code outside it and no
+    //! private:internal member; cached once the class can get no more members (#7048)
+    /** This covers the members that the class and its parents declare: a caller must also check that the object holds
+        no internal data, as a child class's method can store its private:internal members on an object of this class
+    */
+    DLLLOCAL bool runtimeAllMembersPublic() const {
+        int8_t cached = runtime_all_members_public.load(std::memory_order_acquire);
+        return cached >= 0 ? cached : runtimeFindAllMembersPublic();
+    }
+
+    //! determines the result of runtimeAllMembersPublic() and caches it if the class can get no more members
+    DLLLOCAL bool runtimeFindAllMembersPublic() const;
 
     DLLLOCAL void parseImportMembers(qore_class_private& qc, ClassAccess access);
 
