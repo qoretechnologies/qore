@@ -28074,6 +28074,129 @@ static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfi
     return qore_sandbox_dbg_cpu_used();
 }
 
+//! Observes native-load policy in library code, across a destination switch and during trusted module initialization.
+//! The probe takes no pathname and opens no file.
+static QoreValue f_dbg_nested_native_load_policy(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* caller_obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> caller(static_cast<QoreProgram*>(caller_obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!caller) {
+        return QoreValue();
+    }
+    const QoreObject* target_obj = get_param_value(params, 1).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> target(static_cast<QoreProgram*>(target_obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!target) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreProgram> outer(new QoreProgram(PO_IN_MODULE), xsink);
+    ReferenceHolder<QoreProgram> inner(new QoreProgram(PO_IN_MODULE), xsink);
+    qore_program_private::get(**outer)->library_module = true;
+    qore_program_private::get(**inner)->library_module = true;
+
+    bool nested;
+    bool switched;
+    bool initializing;
+    bool after_init;
+    {
+        ProgramThreadCountContextHelper caller_frame(xsink, *caller, true);
+        if (*xsink) {
+            return QoreValue();
+        }
+        ProgramThreadCountContextHelper outer_frame(xsink, *outer, true);
+        if (*xsink) {
+            return QoreValue();
+        }
+        {
+            ProgramThreadCountContextHelper inner_frame(xsink, *inner, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            nested = qore_caller_may_load_native_code();
+            // The same scope and destination switch as QoreModuleManager::runTimeLoadModule().
+            QoreCallerSandboxHelper issuer(*target, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            ProgramRuntimeParseContextHelper destination(xsink, *target);
+            if (*xsink) {
+                return QoreValue();
+            }
+            switched = qore_caller_may_load_native_code();
+        }
+        {
+            QoreModuleInitSandboxBarrierHelper barrier(true);
+            if (barrier.failed()) {
+                xsink->outOfMemory();
+                return QoreValue();
+            }
+            ProgramThreadCountContextHelper module_init(xsink, *inner, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            initializing = qore_caller_may_load_native_code();
+        }
+        after_init = qore_caller_may_load_native_code();
+    }
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("nested", nested, xsink);
+    result->setKeyValue("destination", switched, xsink);
+    result->setKeyValue("initializing", initializing, xsink);
+    result->setKeyValue("after_init", after_init, xsink);
+    result->setKeyValue("restored", qore_caller_may_load_native_code(), xsink);
+    return result.release();
+}
+
+//! Observes a live policy change of a test-owned sandbox while two library initializers are active.
+static QoreValue f_dbg_native_load_init_revocation(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreSandboxManager> manager(new QoreSandboxManager, nullptr);
+    manager->setUncontrolledApiPolicy(true);
+    ReferenceHolder<QoreProgram> caller(new QoreProgram(QoreParseOptions(PO_DEFAULT)), xsink);
+    caller->setSandboxManager(*manager);
+    ReferenceHolder<QoreProgram> outer(new QoreProgram(PO_IN_MODULE), xsink);
+    ReferenceHolder<QoreProgram> inner(new QoreProgram(PO_IN_MODULE), xsink);
+    qore_program_private::get(**outer)->library_module = true;
+    qore_program_private::get(**inner)->library_module = true;
+
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    {
+        ProgramThreadCountContextHelper caller_frame(xsink, *caller, true);
+        if (*xsink) {
+            return QoreValue();
+        }
+        {
+            QoreModuleInitSandboxBarrierHelper outer_barrier(true);
+            if (outer_barrier.failed()) {
+                xsink->outOfMemory();
+                return QoreValue();
+            }
+            ProgramThreadCountContextHelper outer_frame(xsink, *outer, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            result->setKeyValue("outer_before", qore_caller_may_load_native_code(), xsink);
+            {
+                QoreModuleInitSandboxBarrierHelper inner_barrier(true);
+                if (inner_barrier.failed()) {
+                    xsink->outOfMemory();
+                    return QoreValue();
+                }
+                ProgramThreadCountContextHelper inner_frame(xsink, *inner, true);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                result->setKeyValue("inner_before", qore_caller_may_load_native_code(), xsink);
+                manager->setUncontrolledApiPolicy(false);
+                result->setKeyValue("inner_after", qore_caller_may_load_native_code(), xsink);
+            }
+            result->setKeyValue("outer_after", qore_caller_may_load_native_code(), xsink);
+        }
+        result->setKeyValue("caller_after", qore_caller_may_load_native_code(), xsink);
+    }
+    result->setKeyValue("host_after", qore_caller_may_load_native_code(), xsink);
+    return result.release();
+}
+
 //! Returns the number of call budget frames of the current thread
 static QoreValue f_dbg_sandbox_budget_frames(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_sandbox_dbg_budget_frames();
@@ -28237,6 +28360,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_native_load_init_revocation", f_dbg_native_load_init_revocation, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_nested_native_load_policy", f_dbg_nested_native_load_policy, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "caller",
+        QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_sandbox_budget_frames", f_dbg_sandbox_budget_frames, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

@@ -669,6 +669,10 @@ authenticate();
     module statically linked into a program built with \c qcc is part of that program's own native code and needs no
     such decision.
 
+    When library code accepts a module path at run time, the restrictions of its caller apply through nested library
+    calls and when loading into a different %Program. Host-controlled module directories remain the way to provide
+    native dependencies to restricted callers.
+
     What the library checks when it loads native code that it may load is the integrity of the file, not its trust:
     the code signature of a module on macOS (when signatures are verified) detects a damaged file, and the
     verification of the IR that a compiled module carries (the IR that the IR interpreter and the debugger run)
