@@ -1153,7 +1153,7 @@ public:
         @return the timer ID (> 0)
     */
     DLLLOCAL int64_t addTimer(const DateTimeNode* deadline, QoreValue udata, ExceptionSink* xsink,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), ResolvedCallReferenceNode* cancel = nullptr);
 
     //! Adds a timer that fires after the given delay, measured on the monotonic clock
     /** As addTimer(), but the deadline is the time of the call plus \a delay_us on the monotonic clock: a step of the
@@ -1166,11 +1166,15 @@ public:
         @return the timer ID (> 0)
     */
     DLLLOCAL int64_t addTimerDelay(int64_t delay_us, QoreValue udata, ExceptionSink* xsink,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), ResolvedCallReferenceNode* cancel = nullptr);
 
     //! Adds a timer with the given deadline: since the epoch, or on the monotonic clock if \a monotonic is true
     DLLLOCAL int64_t addTimerIntern(int64_t deadline_us, bool monotonic, const char* method, QoreValue udata,
-        ExceptionSink* xsink, const std::string& owner);
+        ExceptionSink* xsink, const std::string& owner, ResolvedCallReferenceNode* cancel);
+
+    //! Cancels a timer for the module cleanup and runs its cancel callback (TimerInfo::cancel_cb), if any, as the
+    //! work of a canceled operation (qore#7116); returns true if the timer was found
+    DLLLOCAL bool cancelTimerForModuleCleanup(int64_t id, ExceptionSink* xsink);
 
     //! Cancels a timer
     /** @param id the timer ID returned by addTimer()
@@ -1728,6 +1732,12 @@ private:
     //! Timer info stored under lock
     struct TimerInfo {
         QoreValue udata;                //!< Referenced Qore user data
+        //! The code (referenced) run when the module cleanup cancels the timer, or NOTHING (qore#7116)
+        /** So that an owner that counts its scheduled timers can balance the count of a timer that the cleanup
+            cancels at the end of the process, whose callback never runs; not run when the owner cancels the timer,
+            when it fires or when the controller stops
+        */
+        QoreValue cancel_cb;
         std::string owner;              //!< Owner identifier for per-owner callback flush (empty if untracked)
         AsyncIoSandboxContext sandbox_ctx; //!< The sandbox of the code that added the timer, for its callback
         //! The run-time parse options of the code that added the timer, which its callback runs with (qore#6208)

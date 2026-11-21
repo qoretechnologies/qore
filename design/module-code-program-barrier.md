@@ -293,6 +293,10 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
     it have their completion items queued, and counted (`AsyncWorkItem::module_cleanup_work`, set when an
     `abort()`, `onComplete()`, timer callback or native task item with a delegated but uncounted context is queued;
     the steps of such an operation are not counted, as the cleanup cancels the operation)
+  - a timer that the cleanup cancels runs its cancel callback, if it was added with one (`addTimer*()` with an owner
+    and a cancel callback; `TimerInfo::cancel_cb`, dispatched by `cancelTimerForModuleCleanup()` as the work of a
+    canceled operation), and a task that the cleanup refuses runs its cancel callback, so that an owner that counts
+    its scheduled timers or tasks balances its count (`PollingConnectionMonitor`'s ping timers; qore#7116)
   - a task that such work submits with `AsyncIoController::submitTask()` is counted until it ends (`ThreadTask` with
     `count_module_cleanup`); it is not canceled; the `dbg_async_io_hold_module_cleanup_work()` hook holds such
     tasks too, and the cleanup releases those that it counts when it waits for its work

@@ -43,6 +43,8 @@ public enum FollowUpAction {
     ExecNever = "exec-never",
     #! submits a task that submits itself again (a polling loop)
     TaskChain = "task-chain",
+    #! submits a task with a cancel callback
+    TaskCancel = "task-cancel",
 }
 
 #! the destructor of this object submits an operation: an operation that keeps one runs it when its references are
@@ -141,6 +143,11 @@ public class FollowUpOperation inherits AbstractPollOperation<auto> {
                     break;
                 case FollowUpAction::TaskChain:
                     AsyncIoController::submitTask(follow_up_chain_task(label));
+                    break;
+                case FollowUpAction::TaskCancel:
+                    AsyncIoController::submitTask(follow_up_printer(label + " task ran"),
+                        follow_up_printer(label + " task cancel callback ran"));
+                    printf("%s task submitted\n", label);
                     break;
                 case FollowUpAction::Exec:
                 case FollowUpAction::ExecNever: {

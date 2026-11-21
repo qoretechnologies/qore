@@ -112,6 +112,9 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             "chain": ("first onComplete: canceled: True\nfirst resubmit refused: " + Refused,),
             "chain-timer": ("first onComplete: canceled: True\nfirst timer refused: " + Refused,),
             "chain-task": ("first onComplete: canceled: True\nfirst task refused: " + Refused,),
+            # and a refused task's cancel callback runs, so that an owner that counts its tasks balances its count
+            "chain-task-cancel": ("first onComplete: canceled: True\nfirst task cancel callback ran\nfirst "
+                "task-cancel refused: " + Refused,),
             "chain-release": ("first onComplete: canceled: True", "first release resubmit refused: " + Refused),
             # synchronous work is not refused
             "chain-exec": ("first onComplete: canceled: True\nfirst exec: canceled: null",),
@@ -229,6 +232,11 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         }
         foreach string mode in (ExecModes) {
             string m = mode;
+            addTestCase(sprintf("%s: a polling connection monitor whose ping timer the module cleanup cancels can be "
+                "stopped", mode), sub () { runMonitorCase(m); });
+        }
+        foreach string mode in (ExecModes) {
+            string m = mode;
             addTestCase(sprintf("%s: a WebSocket server stream and an SSE stream refused their heartbeat timer at the "
                 "end of the process go on quietly", mode), sub () { runServersCase(m); });
         }
@@ -298,6 +306,19 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertRegex("(^|\n)client log: [^\n]*heartbeat timer not re-armed at the end of the process: "
             "ASYNC-IO-SHUTDOWN-ERROR", out, "the refused re-arm is logged at the debug level: " + out);
         assertRegex("(^|\n)client done\n", out, "the client disconnects: " + out);
+        assertNRegex("unhandled [^\n]*exception|(^|\n)ASYNC-IO-SHUTDOWN-ERROR", out, "nothing is reported: " + out);
+    }
+
+    #! a destructor that the module cleanup runs starts a polling connection monitor, whose ping timer the cleanup
+    #! cancels when it waits for its work: the timer's cancel callback balances the monitor's count of scheduled pings,
+    #! so its stopClear() returns instead of waiting for ever (qore#7116)
+    private runMonitorCase(string mode) {
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=600000 QORE_MODULE_DIR=%s %s --exec-mode=%s %s "
+            "2>&1", shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
+            + "ModuleCleanupCancel" + DirSep + "monitor-client.qr")), \status);
+        assertEq(0, status, out);
+        assertRegex("(?s)(^|\n)monitor started\n.*monitor stopped\n", out, "the monitor is stopped: " + out);
         assertNRegex("unhandled [^\n]*exception|(^|\n)ASYNC-IO-SHUTDOWN-ERROR", out, "nothing is reported: " + out);
     }
 

@@ -347,7 +347,8 @@ AsyncIoController::copy() {
       It bounds the waits of the cleanup for this work, not a destructor that itself waits for the result of the
       operation that it submits: such a destructor gives its operation a timeout
     - a task that such a destructor or that work submits (@ref submitTask()) is waited for; it is not canceled
-    - a timer that such a destructor or that work adds is canceled before the next module is deleted; a timer whose
+    - a timer that such a destructor or that work adds is canceled before the next module is deleted (its cancel
+      callback, if it was added with one, runs then); a timer whose
       callback adds it again keeps the cleanup waiting for its callbacks until the deadline, after which the callback
       cannot add it again
     - the work of an operation that the end of the process canceled (its
@@ -869,6 +870,10 @@ static int AsyncIoController::addTimer(date deadline, auto user_data)
     @param udata either a closure/call-reference to dispatch, or arbitrary user data
         to deliver through the @ref setTimerCallback() handler
     @param owner the owner identifier to tag the timer's callback dispatch with
+    @param cancel_callback an optional @ref closure "closure" or @ref call_reference "call reference" run when the
+    module cleanup cancels the timer at the end of the process (see @ref asynciocontroller_module_cleanup), so that
+    code that counts its scheduled timers can balance the count of a timer whose callback then never runs; it is not
+    run when the timer fires, when it is canceled with @ref cancelTimer() or when the controller stops
     @return the unique timer ID
 
     @note The deadline is a time of the system clock: a step of the system clock (a VM's time synchronization, a manual
@@ -890,13 +895,16 @@ static int AsyncIoController::addTimer(date deadline, auto user_data)
 
     @since %Qore 3.0
 */
-static int AsyncIoController::addTimer(date deadline, auto udata, string owner)
+static int AsyncIoController::addTimer(date deadline, auto udata, string owner,
+        *code<nothing()> cancel_callback)
         [dom=NETWORK,THREAD_CONTROL;flags=MODULE_OWNED] {
     if (AsyncIoControllerPriv::checkModuleCleanupNewWork("addTimer", true, xsink)) {
         return 0;
     }
     if (qore_check_module_owned_code(udata, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()",
-            "schedule", xsink)) {
+            "schedule", xsink)
+        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+            "AsyncIoController::addTimer()", "schedule", xsink))) {
         return 0;
     }
     QoreObject* obj;
@@ -906,7 +914,8 @@ static int AsyncIoController::addTimer(date deadline, auto udata, string owner)
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
-    return ctrl->addTimer(deadline, udata, xsink, owner->c_str());
+    return ctrl->addTimer(deadline, udata, xsink, owner->c_str(),
+        const_cast<ResolvedCallReferenceNode*>(cancel_callback));
 }
 
 //! Adds a timer on the global singleton that fires after the given delay
@@ -980,6 +989,10 @@ int timer_id = AsyncIoController::addTimerDelay(30s, sub () { sendHeartbeat(); }
     @param udata either a closure/call-reference to dispatch, or arbitrary user data
         to deliver through the @ref setTimerCallback() handler
     @param owner the owner identifier to tag the timer's callback dispatch with
+    @param cancel_callback an optional @ref closure "closure" or @ref call_reference "call reference" run when the
+    module cleanup cancels the timer at the end of the process (see @ref asynciocontroller_module_cleanup), so that
+    code that counts its scheduled timers can balance the count of a timer whose callback then never runs; it is not
+    run when the timer fires, when it is canceled with @ref cancelTimer() or when the controller stops
     @return the unique timer ID, which @ref cancelTimer() takes
 
     @note A timer that a destructor adds at the end of the process, when the modules are deleted, is canceled before
@@ -998,13 +1011,16 @@ int timer_id = AsyncIoController::addTimerDelay(30s, sub () { sendHeartbeat(); }
 
     @since %Qore 3.0
 */
-static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string owner)
+static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string owner,
+        *code<nothing()> cancel_callback)
         [dom=NETWORK,THREAD_CONTROL;flags=MODULE_OWNED] {
     if (AsyncIoControllerPriv::checkModuleCleanupNewWork("addTimerDelay", true, xsink)) {
         return 0;
     }
     if (qore_check_module_owned_code(udata, QDOM_NETWORK | QDOM_THREAD_CONTROL,
-            "AsyncIoController::addTimerDelay()", "schedule", xsink)) {
+            "AsyncIoController::addTimerDelay()", "schedule", xsink)
+        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+            "AsyncIoController::addTimerDelay()", "schedule", xsink))) {
         return 0;
     }
     QoreObject* obj;
@@ -1014,7 +1030,8 @@ static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string ow
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
-    return ctrl->addTimerDelay(delay * 1000, udata, xsink, owner->c_str());
+    return ctrl->addTimerDelay(delay * 1000, udata, xsink, owner->c_str(),
+        const_cast<ResolvedCallReferenceNode*>(cancel_callback));
 }
 
 //! Cancels a timer on the global singleton
@@ -1088,7 +1105,8 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
 //! Submits a task to the global singleton's thread pool
 /** @param task the @ref closure "closure" or @ref call_reference "call reference" to execute
     @param cancel_callback an optional @ref closure "closure" or @ref call_reference "call reference"
-    to execute if the pool is stopped before the task can be executed
+    to execute if the pool is stopped before the task can be executed, or if the end of the process refuses the task
+    (see @ref asynciocontroller_module_cleanup)
 
     @throw ASYNC-IO-ERROR if the controller's thread pool has been stopped
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller submitted code that is not its own
@@ -1113,6 +1131,13 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
 static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing()> cancel_callback)
         [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
     if (AsyncIoControllerPriv::checkModuleCleanupNewWork("submitTask", false, xsink)) {
+        // the task does not run: its owner is told with the cancel callback, so that an owner that counts its tasks
+        // balances its count (qore#7116)
+        if (cancel_callback) {
+            ExceptionSink cancel_xsink;
+            cancel_callback->execValue(nullptr, &cancel_xsink).discard(&cancel_xsink);
+            xsink->assimilate(cancel_xsink);
+        }
         return QoreValue();
     }
     if (qore_check_module_owned_code(task, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()",

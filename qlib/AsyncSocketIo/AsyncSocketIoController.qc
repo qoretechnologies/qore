@@ -481,10 +481,13 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         <em>the callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>; see
         @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()"
 
+        @param cancel_callback optional code run when the module cleanup cancels the timer at the end of the process;
+        see @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()"
+
         @throw INVALID-FUNCTION-ACCESS a caller that may not control threads passed code that is not its own module's
     */
-    int addTimer(date deadline, code<nothing()> callback, string owner) {
-        return Qore::AsyncIoController::addTimer(deadline, callback, owner);
+    int addTimer(date deadline, code<nothing()> callback, string owner, *code<nothing()> cancel_callback) {
+        return Qore::AsyncIoController::addTimer(deadline, callback, owner, cancel_callback);
     }
 
     #! Adds a timer that fires after the given delay, measured on the monotonic clock
@@ -525,12 +528,15 @@ int timer_id = controller.addTimerDelay(1s, sub () { checkConnection(); });
 
         @return the unique timer ID that can be passed to cancelTimer() to cancel the timer
 
+        @param cancel_callback optional code run when the module cleanup cancels the timer at the end of the process;
+        see @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()"
+
         @throw INVALID-FUNCTION-ACCESS a caller that may not control threads passed code that is not its own module's
 
         @since AsyncSocketIo 3.0
     */
-    int addTimerDelay(timeout delay, code<nothing()> callback, string owner) {
-        return Qore::AsyncIoController::addTimerDelay(delay, callback, owner);
+    int addTimerDelay(timeout delay, code<nothing()> callback, string owner, *code<nothing()> cancel_callback) {
+        return Qore::AsyncIoController::addTimerDelay(delay, callback, owner, cancel_callback);
     }
 
     #! Cancels a pending timer

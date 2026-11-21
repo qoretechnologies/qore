@@ -1,0 +1,41 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# stops the polling connection monitor that a destructor of AbMonitor started, when the module cleanup deletes the
+# data of this module, after that of AbMonitor and the cleanup's wait for its work, which cancels the monitor's ping
+# timer (qore#7116); see monitor-client.qr
+
+%modern
+
+%requires ConnectionProvider
+
+module AcMonitorStop {
+    version = "1.0";
+    desc = "stops a polling connection monitor in the module cleanup";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AcMonitorStop {
+#! stops the monitor when the cleanup deletes it
+class MonitorStopper {
+    destructor() {
+        if (Stopper::monitor) {
+            Stopper::monitor.stopClear();
+            printf("monitor stopped\n");
+            flush();
+        }
+    }
+}
+
+#! the data of this module
+public class Stopper {
+    public {
+        #! the monitor, set by AbMonitor
+        static *PollingConnectionMonitor monitor;
+        static MonitorStopper stopper();
+    }
+}
+}
