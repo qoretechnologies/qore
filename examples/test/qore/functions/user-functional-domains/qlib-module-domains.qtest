@@ -189,6 +189,7 @@ printf(\"end\\n\");
     testUnrestricted() {
         string out = run(0, "ProviderIndexUtil",
             "ProviderIndexUtil::ProviderIndexUtil::setEnvironmentVariable(\"/qlib-module-domains\"); "
+            # live-provider-optin: the provider index directory that the child sets
             "printf(\"%s\\n\", getenv(ProviderIndexUtil::ProviderIndexEnvVar));");
         assertEq("loaded\n/qlib-module-domains\nend\n", out);
     }

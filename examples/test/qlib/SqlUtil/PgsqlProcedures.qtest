@@ -78,6 +78,7 @@ class PgsqlProceduresTest inherits QUnit::Test {
 %endif
         foreach hash<auto> i in ({"pgsql": "QORE_DB_CONNSTR_PGSQL", "jdbc": "QORE_DB_CONNSTR_JDBC_PGSQL"}
                 .pairIterator()) {
+            # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             *string connstr = ENV{i.value};
             if (!connstr.val()) {
                 continue;

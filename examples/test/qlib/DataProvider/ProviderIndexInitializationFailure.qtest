@@ -169,10 +169,13 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
 
     private environmentFailureTest() {
         string env_name = "QORE_DATA_PROVIDERS";
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         *string old_value = getenv(env_name);
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         auto old_env_value = ENV{env_name};
         string module_name = "MissingDiscoveryModule_" + get_random_string(8);
         setenv(env_name, module_name);
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         ENV{env_name} = module_name;
         on_exit {
             if (old_value) {
@@ -181,8 +184,10 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
                 unsetenv(env_name);
             }
             if (exists old_env_value) {
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 ENV{env_name} = old_env_value;
             } else {
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 remove ENV{env_name};
             }
         }
@@ -222,10 +227,14 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
 
     private environmentProviderFailureTest() {
         string env_name = "QORE_DATA_PROVIDERS";
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         *string old_value = getenv(env_name);
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         auto old_env_value = ENV{env_name};
         string fixture_env_name = "QORE_PROVIDER_INDEX_FIXTURE_MODULE";
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         *string old_fixture_value = getenv(fixture_env_name);
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         auto old_fixture_env_value = ENV{fixture_env_name};
         string registration_module = "ProviderIndexEnvironmentMapFixture";
         string provider_root = make_tmp_dir();
@@ -233,8 +242,10 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
         string provider_module = join_paths(provider_root,
             "ProviderIndexRecoveredProviderFixture.qm");
         setenv(env_name, registration_module);
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         ENV{env_name} = registration_module;
         setenv(fixture_env_name, provider_module);
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         ENV{fixture_env_name} = provider_module;
         on_exit {
             if (old_value) {
@@ -243,8 +254,10 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
                 unsetenv(env_name);
             }
             if (exists old_env_value) {
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 ENV{env_name} = old_env_value;
             } else {
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 remove ENV{env_name};
             }
             if (old_fixture_value) {
@@ -253,8 +266,10 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
                 unsetenv(fixture_env_name);
             }
             if (exists old_fixture_env_value) {
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 ENV{fixture_env_name} = old_fixture_env_value;
             } else {
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 remove ENV{fixture_env_name};
             }
         }

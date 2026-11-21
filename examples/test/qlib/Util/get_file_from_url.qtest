@@ -219,6 +219,7 @@ public class GetFileFromUrlTest inherits QUnit::Test {
         if (m_options.privkey) {
             options.ssh2_private_key = m_options.privkey;
         } else {
+            # live-provider-optin: the SSH key of the user for the SFTP login to localhost
             string sshdir = ENV.HOME + DirSep + ".ssh";
             if (is_file(sshdir + "/id_rsa.old")) {
                 options.ssh2_private_key = sshdir + "/id_rsa.old";

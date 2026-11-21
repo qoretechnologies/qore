@@ -346,10 +346,13 @@ class Test inherits QUnit::Test {
                 "output": "mylogger mylogger Logger" + LoggerLayoutPattern::getLineDelimiter(),
             ),
 
+            # live-provider-optin: a format test of the first and last variables; the value stays in the process
             "%E{"+ENV.firstKey()+"}|%E{"+ENV.lastKey()+"}": (
                 "parsed": (
+                    # live-provider-optin: a format test of the first and last variables; the value stays in the process
                     ("key": "E", "option": ENV.firstKey()),
                     "|",
+                    # live-provider-optin: a format test of the first and last variables; the value stays in the process
                     ("key": "E", "option": ENV.lastKey()),
                 ),
                 "output": ENV.firstValue()+"|"+ENV.lastValue(),

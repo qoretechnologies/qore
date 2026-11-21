@@ -117,6 +117,7 @@ class DbSqlUtilWhereOperatorsTest inherits QUnit::Test {
             }
             connstr = "sqlite3:@:memory:";
         } else {
+            # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             connstr = ENV{Drivers{label}};
             if (!connstr) {
                 skip_reasons{label} = sprintf("%s is not set", Drivers{label});

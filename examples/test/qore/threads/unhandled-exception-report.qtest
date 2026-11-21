@@ -63,7 +63,7 @@ class UnhandledExceptionReportTest inherits QUnit::Test {
     /** The names are taken from the keys of the environment, so that a value with a newline cannot give a wrong name
     */
     private static string getUnsetCommand() {
-        list<string> names = map quote($1), keys ENV, $1 =~ /^QORE_[A-Za-z0-9_]+$/ && !KeepVariables{$1};
+        list<string> names = map quote($1), keys ENV, $1 =~ /^QORE_[A-Za-z0-9_]+$/ && !KeepVariables{$1}; # live-provider-optin: the names of the QORE_ variables that the child unsets; no value is read
         return names ? "unset " + join(" ", names) + "; " : "";
     }
 
