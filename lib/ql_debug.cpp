@@ -3342,6 +3342,26 @@ static void ut_socket_closed_during_cpp_call(UnitTestCounters& c) {
 }
 #endif
 
+//! Tests that the network policy lookup on a native thread (no thread data, no Program) finds no policy (issue #6913)
+/** A C++ caller may run socket and policy checks on a thread that Qore does not know; the lookup's fail-closed
+    fallback must not look for a Program there
+*/
+static void ut_policy_lookup_on_native_thread(UnitTestCounters& c) {
+    bool returned = false;
+    bool found = true;
+    std::thread t([&] () {
+        QoreSandboxManager* sm = qore_socket_ref_policy_sandbox_manager();
+        found = static_cast<bool>(sm);
+        if (sm) {
+            sm->deref(nullptr);
+        }
+        returned = true;
+    });
+    t.join();
+    UT_ASSERT(c, returned, "the policy lookup returns on a native thread");
+    UT_ASSERT(c, !found, "no policy applies on a native thread");
+}
+
 //! Tests that a close racing with the release of a socket's descriptor never reaches the reused descriptor number
 /** The system gives the lowest free descriptor number to the next socket opened by any thread.  A close or
     prepareForClose() that read the number before a concurrent close released it, and used it afterwards, shut down
@@ -22815,6 +22835,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #endif
 #endif
     ut_socket_close_race_releases_descriptor_once(c);
+    ut_policy_lookup_on_native_thread(c);
 #ifndef _Q_WINDOWS
     ut_socket_closed_during_cpp_call(c);
 #endif

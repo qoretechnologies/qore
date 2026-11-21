@@ -285,27 +285,27 @@ QoreSandboxManager* qore_socket_ref_policy_sandbox_manager() {
         // barrier or an applied sandbox context never lowers the sandbox of the Program that is running (see
         // find_thread_sandbox_stack_ref_intern()), so a sandboxed Program whose policy cannot be resolved is denied
         // network access (issue #6913)
-        if (QoreProgram* pgm = getProgram()) {
-            // the Program's own manager and the policy manager of the code that created it, which it has unless that
-            // code ran under a system-policy capability
-            QoreSandboxManager* own;
-            QoreSandboxManager* creator;
-            qore_program_private::get(*pgm)->getSandboxManagerRefs(own, creator, true);
-            const bool sandboxed = own || creator;
-            if (own) {
-                own->deref(nullptr);
-            }
-            if (creator) {
-                creator->deref(nullptr);
-            }
-            // not while library code is initialized: the policy walk does not look at the Program that loads it, whose
-            // sandbox does not govern the initialization (see QoreModuleInitSandboxBarrierHelper)
-            if (sandboxed && !qore_module_init_library()) {
+        // the current Program, if any: a native thread has no thread data and no Program
+        QoreProgram* pgm = qore_thread_current_program_if_any();
+        // a sandbox manager of its own or of the code that created it (read without the lock); not while library code
+        // is initialized: the policy walk does not look at the Program that loads it, whose sandbox does not govern the
+        // initialization (see QoreModuleInitSandboxBarrierHelper)
+        if (pgm && qore_program_private::get(*pgm)->hasSandboxManager() && !qore_module_init_library()) {
+            // a manager set by another thread since the walk: the walk finds it now
+            QoreSandboxManagerHelper again(QoreSandboxManagerHelper::Policy);
+            if (again
 #ifdef DEBUG
-                assert(qore_socket_dbg_drop_policy && "a sandboxed Program has no network policy");
+                    && !qore_socket_dbg_drop_policy
 #endif
-                return qore_socket_ref_deny_all_sandbox_manager();
+                    ) {
+                QoreSandboxManager* sm = again.get();
+                sm->ref();
+                return sm;
             }
+#ifdef DEBUG
+            assert(qore_socket_dbg_drop_policy && "a sandboxed Program has no network policy");
+#endif
+            return qore_socket_ref_deny_all_sandbox_manager();
         }
         return nullptr;
     }
