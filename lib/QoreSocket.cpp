@@ -6987,6 +6987,17 @@ QoreDbgCaresQueryOptions qore_dbg_cares_set_query_options(const QoreDbgCaresQuer
     return prev;
 }
 
+//! the transport of the c-ares channels made from now on that ask the servers of qore_dbg_cares_set_servers(); under
+//! qore_dbg_cares_servers_lock
+static QoreDbgCaresLocalTransport qore_dbg_cares_local_transport;
+
+QoreDbgCaresLocalTransport qore_dbg_cares_set_local_transport(const QoreDbgCaresLocalTransport& transport) {
+    std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
+    QoreDbgCaresLocalTransport prev = qore_dbg_cares_local_transport;
+    qore_dbg_cares_local_transport = transport;
+    return prev;
+}
+
 //! guards @ref qore_dbg_cares_hosts_file
 static std::mutex qore_dbg_cares_hosts_file_lock;
 //! the hosts file of the name lookups started from now on; empty for the system's hosts file
@@ -7123,12 +7134,17 @@ static bool qore_hosts_file_has_address(const std::vector<QoreHostsFileAddress>&
 struct QoreCaresDebugOptionStorage {
     std::vector<std::string> domains;
     std::vector<char*> domain_ptrs;
+#ifdef DEBUG
+    //! the transport of the channel's UDP sockets (see qore_dbg_cares_set_local_transport())
+    QoreDbgCaresLocalTransport transport;
+#endif
 };
 
 //! Returns the DNS servers that dbg_cares_set_servers() set for new c-ares channels, if any
 /** With servers set, the channel is also given the query options of dbg_cares_set_query_options(): by default a
     timeout of a second and three tries, so that a lookup that a test makes does not depend on the options of the
-    host's resolver configuration, and the search domains and \c ndots option if the test set them.
+    host's resolver configuration, and the search domains and \c ndots option if the test set them; the transport of
+    qore_dbg_cares_set_local_transport(), if any, is returned in \a storage for qore_cares_debug_transport().
 
     @param options the options of the channel to make
     @param optmask the mask of the options set in \a options
@@ -7143,11 +7159,20 @@ static std::string qore_cares_debug_servers(struct ares_options& options, int& o
         std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
         servers = qore_dbg_cares_servers;
         opts = qore_dbg_cares_query_options;
+        if (!servers.empty()) {
+            storage.transport = qore_dbg_cares_local_transport;
+        }
     }
     if (!servers.empty()) {
         options.timeout = opts.timeout_ms;
         options.tries = opts.tries;
         optmask |= ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES;
+#ifdef ARES_OPT_MAXTIMEOUTMS
+        // c-ares (1.32 and later) caps the timeout of a query with its maximum timeout, 5 s by default, which would
+        // cut a longer timeout that a test sets (qore#7119)
+        options.maxtimeout = opts.timeout_ms > 5000 ? opts.timeout_ms : 5000;
+        optmask |= ARES_OPT_MAXTIMEOUTMS;
+#endif
         if (opts.domains_set) {
             storage.domains = std::move(opts.domains);
             for (std::string& d : storage.domains) {
@@ -7172,6 +7197,17 @@ static std::string qore_cares_debug_servers(struct ares_options& options, int& o
     return std::string();
 #endif
 }
+
+#if ARES_VERSION >= 0x012200
+//! Gives the socket functions of a channel the transport that qore_cares_debug_servers() returned, if any
+static void qore_cares_debug_transport(QoreCaresSockets& sockets, const QoreCaresDebugOptionStorage& storage) {
+#ifdef DEBUG
+    if (storage.transport.peer) {
+        sockets.setDbgLocalTransport(storage.transport.peer, storage.transport.arg);
+    }
+#endif
+}
+#endif
 
 //! Creates a c-ares channel; returns an ARES_* status
 /** c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel, so the environment
@@ -7286,7 +7322,40 @@ int QoreCaresSockets::install(ares_channel_t* channel) {
 
 #ifndef _Q_WINDOWS
 ares_socket_t QoreCaresSockets::asocket(int domain, int type, int protocol, void* user_data) {
-    int fd = ::socket(domain, type, protocol);
+    QoreCaresSockets* self = static_cast<QoreCaresSockets*>(user_data);
+    int fd;
+#ifdef DEBUG
+    // a UDP socket of a test's channel is one end of a socketpair (see setDbgLocalTransport())
+    if (self->dbg_local_peer && type == SOCK_DGRAM) {
+        int sv[2];
+        if (socketpair(AF_UNIX, SOCK_DGRAM, 0, sv)) {
+            return ARES_SOCKET_BAD;
+        }
+        // the end of the test is closed on exec too; this end is set up below
+        if (fcntl(sv[1], F_SETFD, FD_CLOEXEC) < 0) {
+            int err = errno;
+            ::close(sv[0]);
+            ::close(sv[1]);
+            errno = err;
+            return ARES_SOCKET_BAD;
+        }
+        try {
+            std::lock_guard<std::mutex> lg(self->lock);
+            self->dbg_local_addrs[sv[0]] = {{}, 0};
+        } catch (...) {
+            ::close(sv[0]);
+            ::close(sv[1]);
+            errno = ENOMEM;
+            return ARES_SOCKET_BAD;
+        }
+        // the other end belongs to the test from now on
+        self->dbg_local_peer(sv[1], self->dbg_local_peer_arg);
+        fd = sv[0];
+    } else
+#endif
+    {
+        fd = ::socket(domain, type, protocol);
+    }
     if (fd < 0) {
         return ARES_SOCKET_BAD;
     }
@@ -7294,6 +7363,9 @@ ares_socket_t QoreCaresSockets::asocket(int domain, int type, int protocol, void
     int fl = fcntl(fd, F_GETFL, 0);
     if (fl < 0 || fcntl(fd, F_SETFL, fl | O_NONBLOCK) < 0 || fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
         int err = errno;
+#ifdef DEBUG
+        self->dbgForgetLocal(fd);
+#endif
         ::close(fd);
         errno = err;
         return ARES_SOCKET_BAD;
@@ -7312,12 +7384,14 @@ ares_socket_t QoreCaresSockets::asocket(int domain, int type, int protocol, void
             return ARES_SOCKET_BAD;
         }
     }
-    QoreCaresSockets* self = static_cast<QoreCaresSockets*>(user_data);
     // nothing may be thrown into c-ares
     std::shared_ptr<QoreSharedDescriptor> owned;
     try {
         owned = qore_owned_descriptor_create(fd);
     } catch (...) {
+#ifdef DEBUG
+        self->dbgForgetLocal(fd);
+#endif
         ::close(fd);
         errno = ENOMEM;
         return ARES_SOCKET_BAD;
@@ -7326,6 +7400,9 @@ ares_socket_t QoreCaresSockets::asocket(int domain, int type, int protocol, void
         std::lock_guard<std::mutex> lg(self->lock);
         self->fds[fd] = owned;
     } catch (...) {
+#ifdef DEBUG
+        self->dbgForgetLocal(fd);
+#endif
         qore_owned_descriptor_release(owned);
         errno = ENOMEM;
         return ARES_SOCKET_BAD;
@@ -7346,6 +7423,9 @@ int QoreCaresSockets::aclose(ares_socket_t sock, void* user_data) {
                 owned = std::move(it->second);
                 self->fds.erase(it);
             }
+#ifdef DEBUG
+            self->dbg_local_addrs.erase(sock);
+#endif
         }
         if (!owned) {
             return ::close(sock);
@@ -7398,6 +7478,23 @@ int QoreCaresSockets::asetsockopt(ares_socket_t sock, ares_socket_opt_t opt, con
 
 int QoreCaresSockets::aconnect(ares_socket_t sock, const struct sockaddr* address, ares_socklen_t address_len,
         unsigned int flags, void* user_data) {
+#ifdef DEBUG
+    {
+        // a socketpair socket is connected already; the address is its peer's for c-ares
+        QoreCaresSockets* self = static_cast<QoreCaresSockets*>(user_data);
+        std::lock_guard<std::mutex> lg(self->lock);
+        auto it = self->dbg_local_addrs.find(sock);
+        if (it != self->dbg_local_addrs.end()) {
+            if (address_len > sizeof(struct sockaddr_storage)) {
+                errno = EINVAL;
+                return -1;
+            }
+            memcpy(&it->second.first, address, address_len);
+            it->second.second = address_len;
+            return 0;
+        }
+    }
+#endif
 #ifdef __APPLE__
     // TCP Fast Open (see asetsockopt()): the connection is made with the first data that c-ares sends
     if (flags & ARES_SOCKET_CONN_TCP_FASTOPEN) {
@@ -7413,11 +7510,31 @@ int QoreCaresSockets::aconnect(ares_socket_t sock, const struct sockaddr* addres
 
 ares_ssize_t QoreCaresSockets::arecvfrom(ares_socket_t sock, void* buffer, size_t length, int flags,
         struct sockaddr* address, ares_socklen_t* address_len, void* user_data) {
+#ifdef DEBUG
+    struct sockaddr_storage peer;
+    socklen_t peer_len;
+    if (static_cast<QoreCaresSockets*>(user_data)->getDbgLocalAddr(sock, peer, peer_len)) {
+        ares_ssize_t rc = ::recv(sock, buffer, length, flags);
+        if (rc >= 0 && address && address_len) {
+            memcpy(address, &peer, std::min<size_t>(peer_len, *address_len));
+            *address_len = peer_len;
+        }
+        return rc;
+    }
+#endif
     return ::recvfrom(sock, buffer, length, flags, address, address_len);
 }
 
 ares_ssize_t QoreCaresSockets::asendto(ares_socket_t sock, const void* buffer, size_t length, int flags,
         const struct sockaddr* address, ares_socklen_t address_len, void* user_data) {
+#ifdef DEBUG
+    struct sockaddr_storage peer;
+    socklen_t peer_len;
+    if (static_cast<QoreCaresSockets*>(user_data)->getDbgLocalAddr(sock, peer, peer_len)) {
+        // the socket is connected to its peer
+        return ::send(sock, buffer, length, flags);
+    }
+#endif
     if (address) {
         return ::sendto(sock, buffer, length, flags, address, address_len);
     }
@@ -7426,13 +7543,66 @@ ares_ssize_t QoreCaresSockets::asendto(ares_socket_t sock, const void* buffer, s
 
 int QoreCaresSockets::agetsockname(ares_socket_t sock, struct sockaddr* address, ares_socklen_t* address_len,
         void* user_data) {
+#ifdef DEBUG
+    struct sockaddr_storage peer;
+    socklen_t peer_len;
+    if (static_cast<QoreCaresSockets*>(user_data)->getDbgLocalAddr(sock, peer, peer_len)) {
+        // the loopback address of the peer's family, with no port
+        struct sockaddr_storage self = {};
+        socklen_t self_len;
+        if (peer.ss_family == AF_INET6) {
+            struct sockaddr_in6* a6 = reinterpret_cast<struct sockaddr_in6*>(&self);
+            a6->sin6_family = AF_INET6;
+            a6->sin6_addr = in6addr_loopback;
+            self_len = sizeof(struct sockaddr_in6);
+        } else {
+            struct sockaddr_in* a4 = reinterpret_cast<struct sockaddr_in*>(&self);
+            a4->sin_family = AF_INET;
+            a4->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            self_len = sizeof(struct sockaddr_in);
+        }
+        if (!address || !address_len) {
+            errno = EINVAL;
+            return -1;
+        }
+        memcpy(address, &self, std::min<size_t>(self_len, *address_len));
+        *address_len = self_len;
+        return 0;
+    }
+#endif
     return ::getsockname(sock, address, address_len);
 }
 
 int QoreCaresSockets::abind(ares_socket_t sock, unsigned int flags, const struct sockaddr* address,
         socklen_t address_len, void* user_data) {
+#ifdef DEBUG
+    struct sockaddr_storage peer;
+    socklen_t peer_len;
+    if (static_cast<QoreCaresSockets*>(user_data)->getDbgLocalAddr(sock, peer, peer_len)) {
+        // a socketpair socket has no address of its own to bind
+        return 0;
+    }
+#endif
     return ::bind(sock, address, address_len);
 }
+
+#ifdef DEBUG
+bool QoreCaresSockets::getDbgLocalAddr(int sock, struct sockaddr_storage& addr, socklen_t& len) {
+    std::lock_guard<std::mutex> lg(lock);
+    auto it = dbg_local_addrs.find(sock);
+    if (it == dbg_local_addrs.end()) {
+        return false;
+    }
+    addr = it->second.first;
+    len = it->second.second;
+    return true;
+}
+
+void QoreCaresSockets::dbgForgetLocal(int sock) {
+    std::lock_guard<std::mutex> lg(lock);
+    dbg_local_addrs.erase(sock);
+}
+#endif
 
 unsigned int QoreCaresSockets::aif_nametoindex(const char* ifname, void* user_data) {
     return if_nametoindex(ifname);
@@ -7709,6 +7879,7 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     }
 #if ARES_VERSION >= 0x012200
     // the channel's sockets stay open while an async I/O thread has them registered
+    qore_cares_debug_transport(sockets, debug_storage);
     rc = sockets.install(channel);
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_set_socket_functions_ex() failed: %s",
@@ -8600,6 +8771,7 @@ private:
         }
 #if ARES_VERSION >= 0x012200
         // the channel's sockets stay open while an async I/O thread has them registered
+        qore_cares_debug_transport(sockets, debug_storage);
         rc = sockets.install(channel);
         if (rc != ARES_SUCCESS) {
             xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_set_socket_functions_ex() failed: %s",
@@ -9178,6 +9350,7 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
     }
 #if ARES_VERSION >= 0x012200
     // the channel's sockets stay open while an async I/O thread has them registered
+    qore_cares_debug_transport(sockets, debug_storage);
     rc = sockets.install(channel);
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "ares_set_socket_functions_ex() failed: %s",
