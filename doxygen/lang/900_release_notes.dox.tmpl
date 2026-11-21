@@ -2575,6 +2575,10 @@
     - the text that the library appends to the description of an exception (such as the command of a failed
       @ref Qore::Program::issueModuleCmd() "module command", cut at its first end of line or 200 characters) is
       converted to the encoding of the description, where it was appended as its bytes (issue #6741)
+    - a @ref Qore::Socket "Socket" closed while a connection attempt was in progress (ex: a connect timeout) closed
+      the attempt's descriptor again when the connect operation was destroyed, closing any descriptor that had been
+      given the number meanwhile, such as an HTTP client's event notifier
+      (<a href="https://github.com/qoretechnologies/qore/issues/6962">issue 6962</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
