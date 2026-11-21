@@ -5576,11 +5576,14 @@ static QORE_INTERN_NOINLINE void qore_raise_module_programs_closed(ThreadData* t
 
 //! returns true if the value is a string equal to the given one
 static bool qore_value_is_string(const QoreValue& v, const char* str) {
-    return v.getType() == NT_STRING && !strcmp(v.get<const QoreStringNode>()->c_str(), str);
+    // the value can be an inline short string, which has no node (issue #7038)
+    QoreStringDataHelper sv(v);
+    return sv && !strcmp(sv.c_str(), str);
 }
 
 bool qore_module_entry_refusals_only(ExceptionSink* xsink) {
-    QoreException* e = xsink->getException();
+    // the ExceptionSink operations are in the library's ops class (#4380)
+    QoreException* e = qore_exception_sink_ops(xsink).getException();
     if (!e) {
         return false;
     }
