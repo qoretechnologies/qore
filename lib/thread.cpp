@@ -4586,7 +4586,15 @@ void qore_get_runtime_context(QoreRuntimeContext* rc) {
 }
 
 void end_signal_thread(ExceptionSink* xsink) {
-    thread_data.get()->tpd->del(xsink);
+    ThreadProgramData* tpd = thread_data.get()->tpd;
+    tpd->del(xsink);
+    // the signal thread runs the next handler with the same data (qore#7025)
+    tpd->reuseAfterDel();
+}
+
+bool q_thread_module_program_cache_enabled() {
+    ThreadData* td = thread_data.get();
+    return td && td->tpd && td->tpd->moduleProgramDataCacheEnabled();
 }
 
 void set_module_context(QoreModuleContext* qmc) {
