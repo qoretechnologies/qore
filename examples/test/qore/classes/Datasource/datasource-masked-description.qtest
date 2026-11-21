@@ -78,6 +78,30 @@ class ScriptedDatasource inherits AbstractDatasource {
     }
 }
 
+#! a datasource implemented in Qore that returns short string literals, which compiled code can return as values
+#! stored inline, without a string node
+class ShortLiteralDatasource inherits ScriptedDatasource {
+    constructor() : ScriptedDatasource(NOTHING, NOTHING, 1) {
+    }
+
+    *string getHostName() {
+%ifdef QoreDebug
+        # stored inline in the value in every execution mode
+        return dbg_make_short_string("h");
+%else
+        return "h";
+%endif
+    }
+
+    string getDriverName() {
+%ifdef QoreDebug
+        return dbg_make_short_string("pg");
+%else
+        return "pg";
+%endif
+    }
+}
+
 class DatasourceMaskedDescriptionTest inherits QUnit::Test {
     public {
         const User = "u_SECRET1";
@@ -147,11 +171,36 @@ class DatasourceMaskedDescriptionTest inherits QUnit::Test {
             ({"type": "", "db": Db}, "****:****/****@****"),
             ({}, "****:****/****@****"),
         );
+
+        #! a long driver name and host name: strings too long to be stored inline in a value
+        const LongDriver = "a_long_driver_name";
+        const LongHost = "a-long-host-name.example.com";
+
+        #! datasource hashes with short strings (which can be stored inline in a value, without a string node, as in
+        #! compiled code) and long strings, and their masked descriptions
+        const ShortLongHashes = (
+            # all short
+            ({"type": "pg", "db": Db, "host": "h", "port": "1"}, "pg:****/****@****%h:1"),
+            ({"type": "pg", "db": Db, "host": "h", "port": "65535"}, "pg:****/****@****%h:65535"),
+            ({"type": "pg", "db": Db, "host": "h", "port": "6553x"}, "pg:****/****@****%h"),
+            ({"type": "pg", "db": Db, "host": "h", "port": "65536"}, "pg:****/****@****%h"),
+            ({"type": "pg", "db": Db, "host": "h", "port": "0"}, "pg:****/****@****%h"),
+            ({"type": "pg", "db": Db, "host": "h", "port": ""}, "pg:****/****@****%h"),
+            # all long
+            ({"type": LongDriver, "db": Db, "host": LongHost, "port": 5432},
+                LongDriver + ":****/****@****%" + LongHost + ":5432"),
+            # mixed
+            ({"type": "pg", "db": Db, "host": LongHost, "port": "5432"}, "pg:****/****@****%" + LongHost + ":5432"),
+            ({"type": LongDriver, "db": Db, "host": "h", "port": "5432"}, LongDriver + ":****/****@****%h:5432"),
+            # a short driver name that is not valid
+            ({"type": "a/b", "db": Db, "host": "h"}, "****:****/****@****%h"),
+        );
     }
 
     constructor() : Test("DatasourceMaskedDescriptionTest", "1.0") {
         addTestCase("mask_datasource() with a string", \maskString());
         addTestCase("mask_datasource() with a hash", \maskHash());
+        addTestCase("mask_datasource() with short and long strings in a hash", \maskHashShortLong());
         addTestCase("Datasource::getMaskedDescription()", \datasourceDesc());
         addTestCase("DatasourcePool::getMaskedDescription()", \poolDesc());
         addTestCase("AbstractDatasource::getMaskedDescription()", \abstractDesc());
@@ -184,6 +233,25 @@ class DatasourceMaskedDescriptionTest inherits QUnit::Test {
             assertEq(l[1], desc, sprintf("mask_datasource(%y)", l[0]));
         }
         assertEq("oracle:****/****@****", mask_datasource(config: {"type": "oracle", "db": Db}));
+    }
+
+    maskHashShortLong() {
+        foreach list<auto> l in (ShortLongHashes) {
+            string desc = mask_datasource(l[0]);
+            checkNoSecrets(desc, sprintf("mask_datasource(%y)", l[0]));
+            assertEq(l[1], desc, sprintf("mask_datasource(%y)", l[0]));
+            # the same hash with values made at run time
+            hash<auto> h = map {$1.key: $1.value.typeCode() == NT_STRING ? sprintf("%s", $1.value) : $1.value},
+                l[0].pairIterator();
+            assertEq(l[1], mask_datasource(h), sprintf("mask_datasource(%y) (run time)", h));
+%ifdef QoreDebug
+            # the same hash with each short string stored inline in the value, as compiled code can store it, in
+            # every execution mode
+            h = map {$1.key: ($1.value.typeCode() == NT_STRING && $1.value.size() <= 6)
+                ? dbg_make_short_string($1.value) : $1.value}, l[0].pairIterator();
+            assertEq(l[1], mask_datasource(h), sprintf("mask_datasource(%y) (inline short strings)", h));
+%endif
+        }
     }
 
     datasourceDesc() {
@@ -223,6 +291,13 @@ class DatasourceMaskedDescriptionTest inherits QUnit::Test {
         assertEq("pgsql:****/****@****%h:5432", new ScriptedDatasource("pgsql", "h", 5432).getMaskedDescription());
         assertEq("pgsql:****/****@****", new ScriptedDatasource("pgsql", NOTHING, 5432).getMaskedDescription());
         assertEq("pgsql:****/****@****%h", new ScriptedDatasource("pgsql", "h", NOTHING).getMaskedDescription());
+        # short strings (which can be stored inline in a value, as in compiled code) and long strings
+        assertEq("pg:****/****@****%h:1", new ScriptedDatasource("pg", "h", 1).getMaskedDescription());
+        assertEq(LongDriver + ":****/****@****%" + LongHost + ":5432",
+            new ScriptedDatasource(LongDriver, LongHost, 5432).getMaskedDescription());
+        assertEq("pg:****/****@****%" + LongHost, new ScriptedDatasource("pg", LongHost).getMaskedDescription());
+        assertEq(LongDriver + ":****/****@****%h", new ScriptedDatasource(LongDriver, "h").getMaskedDescription());
+        assertEq("pg:****/****@****%h:1", new ShortLiteralDatasource().getMaskedDescription());
         # a driver name that is not valid is not shown
         string desc = new ScriptedDatasource(Creds, "h", 1).getMaskedDescription();
         checkNoSecrets(desc, "AbstractDatasource::getMaskedDescription()");

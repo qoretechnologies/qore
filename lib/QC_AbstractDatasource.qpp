@@ -596,12 +596,13 @@ string AbstractDatasource::getMaskedDescription() [flags=RET_VALUE_ONLY] {
     if (*xsink) {
         return QoreValue();
     }
-    // the methods are declared to return these types; a value of any other type is ignored
-    const char* driver_str = driver->getType() == NT_STRING ? driver->get<const QoreStringNode>()->c_str() : nullptr;
-    const char* host_str = host->getType() == NT_STRING ? host->get<const QoreStringNode>()->c_str() : nullptr;
+    // the methods are declared to return these types; a value of any other type is ignored; a string can be an
+    // inline short string, which has no QoreStringNode, so the helpers give the bytes of every representation
+    QoreStringDataHelper driver_str(*driver);
+    QoreStringDataHelper host_str(*host);
     int64 port_val = port->getType() == NT_INT ? port->getAsBigInt() : 0;
     QoreStringNodeHolder rv(new QoreStringNode);
-    q_ds_append_masked(**rv, driver_str, host_str,
+    q_ds_append_masked(**rv, driver_str.c_str(), host_str.c_str(),
         (port_val > 0 && port_val <= 65535) ? static_cast<int>(port_val) : 0);
     return rv.release();
 }
