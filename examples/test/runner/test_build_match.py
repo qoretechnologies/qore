@@ -208,11 +208,6 @@ class BuildMatchTest(unittest.TestCase):
         head = self.commit_change("lib/a.cpp", "int a = 2;\n", LATER)
         self.assert_refused(self.run_runner(), self.commit, "the tree is at " + head, "    lib/a.cpp")
 
-    def test_a_file_removed_after_the_build_is_refused(self):
-        (self.tree / "lib/b.cpp").unlink()
-        os.utime(self.tree / "lib", (LATER, LATER))
-        self.assert_refused(self.run_runner(), "    lib/b.cpp")
-
     def test_a_change_that_was_built_runs(self):
         # an uncommitted change and a commit made before the build: the build is newer than both
         (self.tree / "lib/a.cpp").write_text("int a = 3;\n")
@@ -327,10 +322,9 @@ class BuildMatchTest(unittest.TestCase):
         os.utime(self.build / "CMakeCache.txt", (LATER + 10, LATER + 10))
         self.assert_runs(self.run_runner())
 
-    def test_a_source_is_compared_with_its_object_file(self):
-        # a binary module's source and a test program's source that the build compiles: each is compared with its
-        # object file, which make writes again without linking libqore again
-        for source, obj in (("modules/m/src/m.cpp", "modules/m/CMakeFiles/m.dir/src/m.cpp.o"),
+    def test_a_source_is_compared_with_what_the_tests_use(self):
+        # a binary module's source is compared with the module's file, a test program's source with its object file
+        for source, obj in (("modules/m/src/m.cpp", "modules/m/m-api-1.0.qmod"),
                             ("examples/test/qore/x/y.cpp", "CMakeFiles/y-test.dir/examples/test/qore/x/y.cpp.o")):
             with self.subTest(source=source):
                 (self.tree / source).parent.mkdir(parents=True, exist_ok=True)
@@ -406,33 +400,80 @@ class BuildMatchTest(unittest.TestCase):
         os.utime(obj, (LATER + 10, LATER + 10))
         self.assert_runs(self.run_runner())
 
-    def test_a_removed_source_is_compared_with_libqore(self):
-        # a source that is removed and built without: the object file that the build leaves behind is not compared
-        obj = self.build / "CMakeFiles/libqore.dir/lib/b.cpp.o"
-        obj.parent.mkdir(parents=True)
-        obj.touch()
-        os.utime(obj, (BUILD_TIME, BUILD_TIME))
-        git(self.tree, "rm", "-q", "lib/b.cpp")
-        os.utime(self.tree / "lib", (LATER, LATER))
-        os.utime(self.build / "libqore.so", (LATER + 10, LATER + 10))
-        self.assert_runs(self.run_runner())
-        # not built since
-        os.utime(self.build / "libqore.so", (BUILD_TIME, BUILD_TIME))
-        self.assert_refused(self.run_runner(), "    lib/b.cpp")
-
-    def test_a_source_of_several_targets_is_compared_with_each_object(self):
-        # each target's object must be newer than the source, whichever the shell lists first
-        source = self.tree / "lib/a.cpp"
-        os.utime(source, (LATER, LATER))
-        os.utime(self.build / "libqore.so", (LATER + 10, LATER + 10))
-        for target, when in (("a-test.dir", LATER + 10), ("libqore.dir", BUILD_TIME)):
+    def test_objects_of_helper_targets_are_not_compared(self):
+        # a helper target that compiles libqore's sources once more (built once, and not by a normal build) keeps an
+        # old object: libqore's file is compared with libqore only
+        for target, when in (("qore-ir-phase0-smoke.dir", BUILD_TIME), ("libqore.dir", LATER + 10)):
             obj = self.build / "CMakeFiles" / target / "lib/a.cpp.o"
             obj.parent.mkdir(parents=True)
             obj.touch()
             os.utime(obj, (when, when))
         (self.tree / "lib/a.cpp").write_text("int a = 6;\n")
-        os.utime(source, (LATER, LATER))
+        os.utime(self.tree / "lib/a.cpp", (LATER, LATER))
+        os.utime(self.build / "libqore.so", (LATER + 10, LATER + 10))
+        self.assert_runs(self.run_runner())
+        os.utime(self.build / "libqore.so", (BUILD_TIME, BUILD_TIME))
         self.assert_refused(self.run_runner(), "    lib/a.cpp")
+
+    def test_removed_files_are_not_compared(self):
+        # files removed from libqore, qlib, a binary module and a test program, with what a build left of them (an
+        # object, a .qmod, a module directory) older than their directories, and an editor's file in lib/: none of
+        # their directories' times is a build's
+        (self.tree / "qlib/Gone.qm").write_text("# gone\n")
+        (self.tree / "modules/foo/src").mkdir(parents=True)
+        (self.tree / "modules/foo/src/foo.cpp").write_text("// foo\n")
+        (self.tree / "examples/test/foo").mkdir(parents=True)
+        (self.tree / "examples/test/foo/foo.cpp").write_text("int main() {}\n")
+        git(self.tree, "add", "-A")
+        git(self.tree, "commit", "-q", "-m", "more")
+        (self.build / "hash").write_text(git(self.tree, "rev-parse", "HEAD") + "\n")
+        for leftover in ("qlib-qmod/Gone.qmod", "modules/foo/foo-api-1.0.qmod",
+                         "CMakeFiles/libqore.dir/lib/b.cpp.o", "CMakeFiles/foo-test.dir/examples/test/foo/foo.cpp.o"):
+            (self.build / leftover).parent.mkdir(parents=True, exist_ok=True)
+            (self.build / leftover).touch()
+            os.utime(self.build / leftover, (BUILD_TIME, BUILD_TIME))
+        for path in ("qlib/Gone.qm", "lib/b.cpp", "modules/foo", "examples/test/foo/foo.cpp"):
+            git(self.tree, "rm", "-rq", path)
+        (self.tree / "lib/.a.cpp.swp").write_text("an editor's file\n")
+        for directory in ("qlib", "lib", "modules", "examples/test/foo"):
+            if (self.tree / directory).exists():
+                os.utime(self.tree / directory, (LATER, LATER))
+        self.assert_runs(self.run_runner())
+
+    def test_a_file_removed_from_a_module_in_qlib_is_compared_with_its_qmod(self):
+        # the module's other sources are still there: their directory is compared with the module's .qmod
+        sep = self.tree / "qlib/Sep"
+        sep.mkdir()
+        (sep / "X.qc").write_text("# x\n")
+        (sep / "Y.qc").write_text("# y\n")
+        git(self.tree, "add", "-A")
+        git(self.tree, "commit", "-q", "-m", "sep")
+        (self.build / "hash").write_text(git(self.tree, "rev-parse", "HEAD") + "\n")
+        qmod = self.build / "qlib-qmod/Sep.qmod"
+        qmod.touch()
+        os.utime(qmod, (BUILD_TIME, BUILD_TIME))
+        git(self.tree, "rm", "-q", "qlib/Sep/X.qc")
+        os.utime(sep, (LATER, LATER))
+        self.assert_refused(self.run_runner(), "    qlib/Sep/X.qc")
+        os.utime(qmod, (LATER + 10, LATER + 10))
+        self.assert_runs(self.run_runner())
+
+    def test_headers_of_example_modules_in_other_directories_are_compared(self):
+        # a header in include/ with the sources at the module's top, and a header at the top with the sources in src/
+        for header, obj in (("examples/test/mod/include/mod.h", "examples/test/mod/CMakeFiles/mod.dir/mod.cpp.o"),
+                            ("examples/test/mod2/mod2.h", "examples/test/mod2/CMakeFiles/mod2.dir/src/mod2.cpp.o")):
+            with self.subTest(header=header):
+                path = self.tree / header
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("// changed\n")
+                git(self.tree, "add", header)
+                os.utime(path, (LATER, LATER))
+                (self.build / obj).parent.mkdir(parents=True, exist_ok=True)
+                (self.build / obj).touch()
+                os.utime(self.build / obj, (BUILD_TIME, BUILD_TIME))
+                self.assert_refused(self.run_runner(), "    " + header)
+                os.utime(self.build / obj, (LATER + 10, LATER + 10))
+                self.assert_runs(self.run_runner())
 
     def test_the_check_leaves_the_tests_environment_as_it_is(self):
         # GIT_NO_LAZY_FETCH is for the check's git only: "VAR=value function" leaves it set and exported in bash
