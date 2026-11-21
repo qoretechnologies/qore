@@ -325,6 +325,10 @@ public:
         // the waiters are threads of the parent; the connections they held are given up when the pool is next used
         // (see forkCheckUnlocked())
         qore_condition_ops(static_cast<QoreCondition*>(this)).reinitAfterFork();
+#ifdef DEBUG
+        // a thread of the parent can wait on it in dbgWaitForWaiters()
+        qore_condition_ops(&dbg_waiter_cond).reinitAfterFork();
+#endif
         QoreThreadLock::reinitAfterFork();
         wait_count = 0;
     }
