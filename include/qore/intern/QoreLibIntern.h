@@ -40,6 +40,7 @@
 
 class MethodVariantBase;
 class RuntimeConfig;
+class Datasource;
 
 //#define _QORE_CYCLE_CHECK 1
 #ifdef _QORE_CYCLE_CHECK
@@ -1812,15 +1813,119 @@ DLLLOCAL QoreHashNode* statvfs_to_hash(const struct statvfs& statvfs);
 // only called in stage 1 parsing: true means node requires run-time evaluation
 //DLLLOCAL bool needsEval(AbstractQoreNode* n);
 
-//! gets the string value of the given key, if any; raises \a err if the value is not a string or contains a NUL
-/** @param secret if true, the value is a secret (ex: a password) and is not shown in the exception raised for a NUL
+//! gets the string value of the given key, if any, in the default encoding; raises \a err if the value is not a string
+//! or contains a NUL, and \c ENCODING-CONVERSION-ERROR if the default encoding cannot represent it
+/** The value is converted to the default encoding, in which datasources keep their connection values (see
+    q_ds_value_to_default(), which raises another exception of the conversion as it is)
+
+    @param secret if true, the value is a secret (ex: a password) and is not shown in the exception raised for a NUL
     character
 
-    @return true if the key has a string value with no NUL character, false if not, in which case an exception may
-    have been raised
+    @return true if the key has a string value with no NUL character that could be converted, false if not, in which
+    case an exception may have been raised
 */
 DLLLOCAL bool check_hash_key(const QoreHashNode* h, const char* key, const char* err, std::string& value,
         ExceptionSink* xsink, bool secret = false);
+
+//! converts a datasource value to the default encoding
+/** A datasource keeps its connection values (user name, password, database name, database encoding name and
+    hostname) as bytes in the default encoding: the C++ API takes them as C strings (ex:
+    Datasource::setPendingDBName()), returns them tagged with the default encoding (ex:
+    Datasource::getPendingDBName()), and drivers read them in it; a datasource string is parsed into strings in the
+    default encoding (parseDatasource()).  A value given in another encoding (ex: a UTF-8 string literal while the
+    default encoding is ISO-8859-1) is therefore converted before its bytes are used; a value that the default
+    encoding cannot represent raises \c ENCODING-CONVERSION-ERROR instead of being kept as bytes that its encoding tag
+    would misdescribe.  The exception does not show the value, which can be a password or a datasource string with a
+    password.  Another exception of the conversion (ex: \c THREAD-CANCELLED, where the conversion validates its input
+    and is a cancellation point) is raised as it is.
+
+    @param value set to \a str in the default encoding
+    @param str the value
+    @param what the description of the value for the exception (ex: \c "user name")
+    @param xsink for the exception
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+DLLLOCAL int q_ds_value_to_default(TempEncodingHelper& value, const QoreString* str, const char* what,
+        ExceptionSink* xsink);
+
+//! parses a datasource string given in any encoding and returns a hash of its component parts in the default encoding
+/** The string is converted to the default encoding (see q_ds_value_to_default()) and checked for a NUL character,
+    which raises \c DATASOURCE-PARSE-ERROR without showing the string, as it can contain a password; then it is parsed
+    with parseDatasource()
+
+    @return the hash of the component parts, or nullptr if an exception was raised
+*/
+DLLLOCAL QoreHashNode* q_parse_datasource_string(const QoreString& ds, ExceptionSink* xsink);
+
+//! the text that replaces the user name, the password and the database name of a datasource in messages (qore#6961)
+#define QORE_DS_MASK "****"
+
+//! returns true if the given string can be the name of a DBI driver (qore#6961)
+/** A DBI driver name has only ASCII letters, digits, \c '_' and \c '-', and is not empty; any other string, such as a
+    datasource string, which can contain a user name, a password and a database name, or a path, is never looked up
+    as a driver or loaded as a module, and is never shown in an exception
+*/
+DLLLOCAL bool q_dbi_valid_driver_name(const char* name);
+
+//! raises \a err for a DBI driver name that is not valid (see q_dbi_valid_driver_name()), without showing it
+/** @return -1
+*/
+DLLLOCAL int q_dbi_raise_invalid_driver_name(ExceptionSink* xsink, const char* err);
+
+//! appends the description of a datasource for a message, with its user name, password and database name masked
+/** The description has the form <tt>driver:****</tt><tt>/****</tt><tt>\@****[%host[:port]]</tt>, as in the database
+    test helpers (qore#6934): the user name, the password and the database name are always replaced with
+    \ref QORE_DS_MASK, whether they are set or not, so that a message shows none of them, and not whether they are set;
+    the driver name is shown only if it is a valid driver name (see q_dbi_valid_driver_name()), as otherwise it can be
+    a datasource string; the host and port are shown if set (qore#6961)
+
+    @param str the string to append the description to
+    @param driver the driver name, if any
+    @param host the host name, if any
+    @param port the port, if any
+*/
+DLLLOCAL void q_ds_append_masked(QoreString& str, const char* driver, const char* host, int port);
+
+//! appends the description of a datasource for a message, with its user name, password and database name masked
+/** See q_ds_append_masked(QoreString&, const char*, const char*, int); \a host_len is the byte length of \a host,
+    so that a host with a NUL character is not shown (qore#6988)
+*/
+DLLLOCAL void q_ds_append_masked(QoreString& str, const char* driver, const char* host, size_t host_len, int port);
+
+//! appends the description of a datasource for a message, with its user name, password and database name masked
+/** See q_ds_append_masked(QoreString&, const char*, const char*, int); the values in use of the datasource are read,
+    so the caller must be able to read them (as for Datasource::getUsernameStr())
+*/
+DLLLOCAL void q_ds_append_masked(QoreString& str, const Datasource& ds);
+
+//! appends the description of a datasource for a message with its pending host and port, read together (qore#6988)
+/** See q_ds_append_masked(QoreString&, const char*, const char*, int); the pending host and port are read in one
+    critical section, so that the description never pairs the host with a port set for another; never raises an
+    exception
+*/
+DLLLOCAL void q_ds_append_masked_pending(QoreString& str, const Datasource& ds);
+
+//! appends the description of a datasource string that cannot be parsed for a message, with no part that can contain a credential
+/** The string is described as <tt>driver:****</tt> if it starts with a valid driver name followed by \c ':', or as
+    \c "****" otherwise (qore#6961)
+*/
+DLLLOCAL void q_ds_append_masked_string(QoreString& str, const char* ds);
+
+//! appends the masked description of a datasource string for a message (qore#6988)
+/** The string is parsed as with parse_datasource(); the description of a string that can be parsed is made with
+    q_ds_append_masked(QoreString&, const char*, const char*, int) from its driver name, host and port, and that of a
+    string that cannot be parsed with q_ds_append_masked_string(); never raises an exception
+*/
+DLLLOCAL void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds);
+
+//! appends the masked description of a datasource hash for a message (qore#6988)
+/** The description is made with q_ds_append_masked(QoreString&, const char*, const char*, int) from the \c "type",
+    \c "host" and \c "port" keys of the hash (as in a datasource hash returned by parse_datasource()); a \c "type" or
+    \c "host" value that is not a string is ignored, as is a \c "port" value that is not an integer or a string with
+    an integer; never raises an exception
+*/
+DLLLOCAL void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h);
 
 //! checks that a secret string (a password, a datasource or URL string with a password) has no NUL character
 /** Like q_check_no_nul(const char*, size_t, const char*, const char*, const char*, ExceptionSink*), except that the

@@ -32,8 +32,10 @@
 #include <QC_Class.h>
 #include <QC_NormalMember.h>
 
-static int check_member(QoreObject* obj, const char* mname, const QoreClass* cls, ExceptionSink* xsink) {
-    if (!obj->validInstanceOf(*cls)) {
+static int check_member(const QoreReflectionCaller& caller, QoreObject* obj, const char* mname, const QoreClass* cls,
+        ExceptionSink* xsink) {
+    // also a class inherited with private:internal, as the caller may use it (issue #6644)
+    if (!caller.canUseObjectElementClass(*obj, *cls)) {
         xsink->raiseException("MEMBER-ERROR", "object is of class '%s' which is not compatible with member '%s' of class '%s'", obj->getClassName(), mname, cls->getName());
         return -1;
     }
@@ -90,7 +92,7 @@ auto NormalMember::getValue(object obj) [flags=RET_VALUE_ONLY] {
     }
 
     // the class ptr must be valid
-    if (check_member(obj, m->name.c_str(), m->cls, xsink)) {
+    if (check_member(caller, obj, m->name.c_str(), m->cls, xsink)) {
         return QoreValue();
     }
 
@@ -134,7 +136,7 @@ nothing NormalMember::setValue(object obj, auto val) {
         return QoreValue();
     }
 
-    if (check_member(obj, m->name.c_str(), m->cls, xsink)) {
+    if (check_member(caller, obj, m->name.c_str(), m->cls, xsink)) {
         return QoreValue();
     }
 

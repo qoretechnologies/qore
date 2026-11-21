@@ -42,6 +42,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreException.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreDir.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAOT.h"
@@ -293,7 +294,14 @@ struct QoreModuleLoadWarningFrame {
     int warning_mask;
     //! the frame of the module load in progress when this one started, if any
     QoreModuleLoadWarningFrame* parent;
+    //! the modules loaded from their source in this load because a module that their AOT module was compiled
+    //! against is missing: missing module -> the modules loaded from their source (qore#7004)
+    /** Reported in one warning when the load ends; see qore_warn_binary_module_source_fallback()
+    */
+    std::map<std::string, std::set<std::string>> missing_fallbacks = {};
 };
+
+static void qore_report_missing_module_fallbacks(QoreModuleLoadWarningFrame& frame);
 
 //! The innermost module load in progress in this thread that can receive the warnings of the module loader, if any
 static thread_local QoreModuleLoadWarningFrame* qore_module_load_warning_frame = nullptr;
@@ -318,6 +326,11 @@ public:
 
     DLLLOCAL ~QoreModuleLoadWarningFrameHelper() {
         assert(qore_module_load_warning_frame == &frame);
+        // the modules loaded from their source because a module is missing are reported once for the load
+        // (qore#7004)
+        if (!frame.missing_fallbacks.empty()) {
+            qore_report_missing_module_fallbacks(frame);
+        }
         qore_module_load_warning_frame = frame.parent;
     }
 
@@ -476,11 +489,145 @@ static void qore_report_module_load_warning(ExceptionSink& xsink, ExceptionSink*
     }
 }
 
+//! Returns the module whose absence made the binary module \a name fail to load, or an empty string
+/** The module is missing if it cannot be found (the \c LOAD-MODULE-ERROR of loadModuleIntern() for a feature that is
+    not builtin and that no module provides) or if an AOT module that was compiled against it could not load it (the
+    \c MODULE-LOAD-ERROR of the AOT runtime, whose argument is the module; see qore_aot_raise_init_error()).  The
+    other errors, which a missing module does not explain, are reported in a warning of their own (qore#7004).
+*/
+static std::string qore_binary_load_error_missing_module(ExceptionSink& binary_xsink, const char* name) {
+    QoreValue arg = binary_xsink.getExceptionArg();
+    if (arg.getType() != NT_STRING) {
+        return std::string();
+    }
+    std::string dep = arg.get<const QoreStringNode>()->c_str();
+    if (dep.empty() || dep == name) {
+        return std::string();
+    }
+    QoreStringValueHelper err(binary_xsink.getExceptionErr());
+    QoreStringValueHelper desc(binary_xsink.getExceptionDesc());
+    if (!strcmp(err->c_str(), "LOAD-MODULE-ERROR")) {
+        std::string prefix = "feature '" + dep + "' is not builtin and no module with this name could be found";
+        return strncmp(desc->c_str(), prefix.c_str(), prefix.size()) ? std::string() : dep;
+    }
+    if (!strcmp(err->c_str(), "MODULE-LOAD-ERROR")) {
+        std::string text = "requires module '" + dep + "', which could not be loaded";
+        return strstr(desc->c_str(), text.c_str()) ? dep : std::string();
+    }
+    return std::string();
+}
+
+//! Returns the frame that reports the warnings of the loader for a module load, or nullptr if there is none
+/** The frame is the one that decides where a warning of the module load goes (see qore_report_module_load_warning()):
+    \a issue is set to \c false if no warning is to be issued
+*/
+static QoreModuleLoadWarningFrame* qore_module_load_warning_report_frame(ExceptionSink* caller_wsink,
+        int warning_mask, bool& issue) {
+    issue = warning_mask;
+    if (!issue) {
+        return nullptr;
+    }
+    if (caller_wsink) {
+        // the frame of the module load made at run time with this warning sink
+        for (QoreModuleLoadWarningFrame* frame = qore_module_load_warning_frame; frame; frame = frame->parent) {
+            if (!frame->pgm && frame->wsink == caller_wsink) {
+                return frame;
+            }
+        }
+        return nullptr;
+    }
+    for (QoreModuleLoadWarningFrame* frame = qore_module_load_warning_frame; frame; frame = frame->parent) {
+        if (frame->pgm) {
+            if (frame->pgm->getParseOptions64() & PO_IN_MODULE) {
+                continue;
+            }
+            if (!qore_program_private::getParseWarningMask(*frame->pgm)) {
+                issue = false;
+                return nullptr;
+            }
+            return frame;
+        }
+        if (!frame->warning_mask) {
+            issue = false;
+            return nullptr;
+        }
+        return frame;
+    }
+    return nullptr;
+}
+
+//! Reports the modules loaded from their source in a module load because modules are missing, in one warning
+/** Reported where a warning of the module load goes (see qore_report_module_load_warning()), when the load ends; the
+    missing modules and the modules loaded from their source are listed in the order of their names (qore#7004)
+*/
+static void qore_report_missing_module_fallbacks(QoreModuleLoadWarningFrame& frame) {
+    size_t count = 0;
+    for (const auto& i : frame.missing_fallbacks) {
+        count += i.second.size();
+    }
+    // a copy: the modules are cleared before the warning is raised
+    std::string first = *frame.missing_fallbacks.begin()->second.begin();
+    SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("%zu AOT module%s %s loaded from %s source "
+        "because %s compiled against %s missing: ", count, count == 1 ? "" : "s", count == 1 ? "was" : "were",
+        count == 1 ? "its" : "their", count == 1 ? "the modules that it was" : "modules that they were",
+        frame.missing_fallbacks.size() == 1 ? "is" : "are"));
+    bool first_dep = true;
+    for (const auto& i : frame.missing_fallbacks) {
+        desc->sprintf("%s'%s' (", first_dep ? "" : ", ", i.first.c_str());
+        first_dep = false;
+        bool first_mod = true;
+        for (const std::string& mod : i.second) {
+            desc->sprintf("%s%s", first_mod ? "" : ", ", mod.c_str());
+            first_mod = false;
+        }
+        desc->concat(')');
+    }
+    desc->concat("; loading a module from its source is slower than loading its AOT module; install the missing "
+        "modules to load the AOT modules");
+    frame.missing_fallbacks.clear();
+
+    ExceptionSink* target = nullptr;
+    if (frame.pgm) {
+        target = qore_program_private::getSeparateParseWarningSink(*frame.pgm);
+    } else {
+        target = frame.wsink;
+    }
+    if (!target) {
+        printe("warning: %s\n", desc->c_str());
+        return;
+    }
+    // no allocation may happen between the release() calls; the argument evaluation order is unspecified
+    SimpleRefHolder<QoreStringNode> arg(new QoreStringNode(first.c_str()));
+    if (frame.pgm && frame.loc) {
+        qore_program_private::raiseModuleLoadWarning(*frame.pgm, *target, *frame.loc,
+            "BINARY-MODULE-SOURCE-FALLBACK", arg.release(), desc.release());
+    } else {
+        target->raiseExceptionArg("BINARY-MODULE-SOURCE-FALLBACK", arg.release(), desc.release());
+    }
+}
+
 //! Reports that a binary module failed to load and that its source module was loaded instead
-/** See qore_report_module_load_warning(); the warning is not reported with a warning mask of 0
+/** See qore_report_module_load_warning(); the warning is not reported with a warning mask of 0.
+
+    A binary module that failed to load because a module that it was compiled against is missing is reported with
+    the others of the same module load, in one warning when that load ends (qore#7004)
 */
 static void qore_warn_binary_module_source_fallback(ExceptionSink& xsink, ExceptionSink& wsink, int warning_mask,
         const char* name, const char* binary_path, const char* source_path, ExceptionSink& binary_xsink) {
+    ExceptionSink* caller_wsink = &xsink == &wsink ? nullptr : &wsink;
+    std::string missing = qore_binary_load_error_missing_module(binary_xsink, name);
+    if (!missing.empty()) {
+        bool issue;
+        QoreModuleLoadWarningFrame* frame = qore_module_load_warning_report_frame(caller_wsink, warning_mask, issue);
+        if (!issue) {
+            return;
+        }
+        if (frame) {
+            frame->missing_fallbacks[missing].insert(name);
+            return;
+        }
+    }
+
     QoreStringValueHelper err(binary_xsink.getExceptionErr());
     QoreStringValueHelper desc(binary_xsink.getExceptionDesc());
 
@@ -498,8 +645,8 @@ static void qore_warn_binary_module_source_fallback(ExceptionSink& xsink, Except
         warn_desc->sprintf(": %s", desc_str);
     }
 
-    qore_report_module_load_warning(xsink, &xsink == &wsink ? nullptr : &wsink, warning_mask, false,
-        "BINARY-MODULE-SOURCE-FALLBACK", name, warn_desc.release());
+    qore_report_module_load_warning(xsink, caller_wsink, warning_mask, false, "BINARY-MODULE-SOURCE-FALLBACK", name,
+        warn_desc.release());
 }
 
 //! Reports the failure of the source module loaded instead of a binary module that failed to load
@@ -6730,8 +6877,13 @@ void QoreModuleManager::delUser() {
                 continue;
             }
             qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
+            // the destructors of the module's data can cancel asynchronous I/O operations for the cleanup, whose
+            // onComplete() and references enter the Programs of other modules, also of those whose teardown barrier
+            // has passed: that work ends before the next module's Program is waited for (qore#6928)
+            qore_module_cleanup_drain_work();
         }
         qore_aot_clear_all_module_namespace_data(xsink);
+        qore_module_cleanup_drain_work();
 
         // break the cycles held up by opaque references ('@=') that user module programs own while all module
         // programs are still alive: such a cycle survives the namespace data cleared above, and an object that a
@@ -6747,6 +6899,7 @@ void QoreModuleManager::delUser() {
         }
         // AOT user modules are binary modules, deleted after all user modules in cleanup()
         qore_aot_clear_all_module_opaque_targets(xsink);
+        qore_module_cleanup_drain_work();
     }
 
     // Phase 2 - delete the user modules and the native binary modules in dependency order
@@ -6763,6 +6916,9 @@ void QoreModuleManager::delUser() {
     //   binary modules that AOT modules require
     strset_t left;
     while (true) {
+        // the work that the deletion of the last module handed over ends before the next module is deleted
+        // (qore#6928)
+        qore_module_cleanup_drain_work();
         if (deleteUnrequiredNativeModule()) {
             continue;
         }
@@ -6803,8 +6959,13 @@ void QoreModuleManager::delUser() {
         printd(5, "QoreModuleManager::delUser() breaking a dependency cycle at '%s'\n", i->first);
         deleteUserModule(i);
     }
+    // the work that the deletion of the last module handed over
+    qore_module_cleanup_drain_work();
 
 #ifdef DEBUG
+    // the work that the test hook still holds runs now, after the user modules have been deleted (qore#6928)
+    qore_dbg_release_held_module_cleanup_work("the user modules have been deleted", true);
+
     for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
         if (i->second->isUser() && left.find(i->first) == left.end()) {
             printd(0, "QoreModuleManager::delUser() '%s' %p not yet removed\n", i->second->getName(), i->second);
@@ -7412,23 +7573,49 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     mi->issueModuleCmd(&loc_builtin, cmd, xsink);
     // enrich exception description if present
     if (*xsink) {
-        // truncate command at first eol or at max 200 chars
-        qore_offset_t i = cmd.find('\n');
-        if (i == -1) {
-            i = cmd.find('\r');
-        }
-        if (((i == -1) && (cmd.size() > QORE_MAX_MODULE_ERROR_DESC)) || (i > QORE_MAX_MODULE_ERROR_DESC)) {
-            i = QORE_MAX_MODULE_ERROR_DESC;
-        }
-        if (i > 0) {
-            QoreString cmd_copy(&cmd, i);
-            cmd_copy.trim();
-            xsink->appendLastDescription(": module command error from command '%s...'", cmd_copy.c_str());
-        } else {
-            xsink->appendLastDescription(": module command error from command '%s'", cmd.c_str());
-        }
+        appendModuleCmdErrorDesc(*xsink, cmd);
     }
     return *xsink ? -1 : 0;
+}
+
+void QoreModuleManager::appendModuleCmdErrorDesc(ExceptionSink& xsink, const QoreString& cmd) {
+    // the command is appended as text, converted to the encoding of the description (qore#6741): it is taken in UTF-8,
+    // which every encoding converts to, up to its first end of line and at most QORE_MAX_MODULE_ERROR_DESC characters,
+    // so that it is never cut inside a character
+    ExceptionSink cmd_xsink;
+    TempEncodingHelper ucmd(cmd, QCS_UTF8, &cmd_xsink);
+    if (!ucmd) {
+        // a command that is not valid in its encoding is not appended
+        cmd_xsink.clear();
+        return;
+    }
+    qore_offset_t i = ucmd->find('\n');
+    if (i == -1) {
+        i = ucmd->find('\r');
+    }
+    QoreString text(": module command error from command '", QCS_UTF8);
+    if (i == 0) {
+        text.concat(ucmd->c_str(), ucmd->size());
+        text.concat('\'');
+    } else {
+        bool cut = i > 0;
+        QoreString part(ucmd->c_str(), cut ? static_cast<size_t>(i) : ucmd->size(), QCS_UTF8);
+        if (part.length() > QORE_MAX_MODULE_ERROR_DESC) {
+            std::unique_ptr<QoreString> prefix(part.substr(0, QORE_MAX_MODULE_ERROR_DESC, &cmd_xsink));
+            if (!prefix) {
+                cmd_xsink.clear();
+                return;
+            }
+            part.set(*prefix);
+            cut = true;
+        }
+        if (cut) {
+            part.trim();
+        }
+        text.concat(part.c_str(), part.size());
+        text.concat(cut ? "...'" : "'");
+    }
+    qore_exception_sink_ops(xsink).appendLastDescription(text);
 }
 
 int ModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd,

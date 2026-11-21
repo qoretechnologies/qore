@@ -60,14 +60,23 @@
     QoreModuleCommandContext (a module command handler judges the code that issues a command), and has no
     ModuleManager::registerAOTStaticModule(): a statically linked AOT module registers with the register function that
     qcc emits for it, with its metadata record; modules built with the 2.2 headers are refused; additive in 2.3
-    (no layout change for modules built with the earlier 2.3 headers): AbstractQoreProgramExternalDataEx (#6786) and
+    (no layout change for modules built with the earlier 2.3 headers): AbstractQoreProgramExternalDataEx (#6786)
+    with its feature macro _QORE_HAS_PROGRAM_EXTERNAL_DATA_EX (#6786), and
     qore_check_process_wide_registration() with its feature macro QORE_HAVE_CHECK_PROCESS_WIDE_REGISTRATION (#6743),
     QoreNumberNode::getDecimalString() (#6837), qore_get_caller_program_id() and qore_get_caller_program() with
-    their feature macro QORE_HAVE_CALLER_PROGRAM (#6852), and QoreHttpClientObject::setHttpFieldsAtTopLevel() and
-    getHttpFieldsAtTopLevel() (#6761);
+    their feature macro QORE_HAVE_CALLER_PROGRAM (#6852), QoreHttpClientObject::setHttpFieldsAtTopLevel() and
+    getHttpFieldsAtTopLevel() (#6761), QoreSandboxManager::setIsolationDomain(), getIsolationDomain() and
+    qore_caller_isolation_domain() with their feature macro QORE_HAVE_ISOLATION_DOMAINS (#6536; the state of the
+    isolation domain is in the private implementation, so the layout of QoreSandboxManager is unchanged), and
+    QoreObject::setInternalMemberValue() and QoreObject::getReferencedInternalMemberValue() (#6839);
     changed in 2.3 (never in a released module API): qore_type_get_code_param_types() and
-    qore_type_get_type_arguments() copy the types to a type_vec_t that the caller gives and return a bool, instead of
-    returning a pointer to internal storage (#6419)
+    qore_type_get_type_arguments() have forms that copy the types to a type_vec_t that the caller gives and return a
+    bool (#6419), with their feature macros _QORE_HAS_CODE_PARAM_TYPES_BY_REF and _QORE_HAS_TYPE_ARGUMENTS_BY_REF;
+    the earlier one-argument forms, which return a pointer to a vector that lives as long as the type (for a
+    parameterized hashdecl type: as long as the concrete hashdecl), are deprecated and still exported, so modules
+    built with the earlier 2.3 headers load and run (#6936); SocketPollOperationBase::getReferencedSocketObject() is
+    exported instead of inline, and the classes of qore/SocketPollOperation.h (SocketPollSocketOperationBase and its
+    subclasses) have the base class SocketPollOperationMembers, which keeps the socket and goal of their objects (#6839)
 */
 #define QORE_MODULE_API_MINOR 3
 

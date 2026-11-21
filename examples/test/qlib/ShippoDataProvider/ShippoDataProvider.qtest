@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -133,7 +134,7 @@ public class ShippoDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Shippo client for integration tests
     private setupConnection() {
-        *string apikey = m_options.apikey ?? ENV.SHIPPO_API_TOKEN;
+        *string apikey = LiveProvider::get("shippo", "SHIPPO_API_TOKEN", m_options.apikey);
         if (!apikey) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -k option or SHIPPO_API_TOKEN env var)\n");

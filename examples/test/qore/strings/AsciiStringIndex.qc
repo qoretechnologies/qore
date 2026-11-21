@@ -1,19 +1,16 @@
-#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# test-exec-mode: children - the native checks, the language checks and the counted loops run in child processes
-# test-platform: macos - threads that read one string at once publish its ASCII prefix cache with relaxed atomics
 
-%modern
-%no-child-restrictions
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires ../../TestInterpreter.qm
-%requires ../../ExecModeHarness.qm
-%exec-class AsciiStringIndexTest
+# The cases of the AsciiStringIndex-<n>.qtest tests: each runs one part of them, so that each takes a short time,
+# and together they run every case (see addPartCase())
+
 
 #! character offsets of ASCII text in UTF-8 strings (issue #6138)
-class AsciiStringIndexTest inherits QUnit::Test {
+class AsciiStringIndexBase inherits QUnit::Test {
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
         string binary = TestInterpreter::qore_interpreter();
         # QORE_BINARY can be the Debug/Release selector script; native tools belong beside the running interpreter
         # (a compiled test has none: then beside the interpreter that it runs)
@@ -28,11 +25,18 @@ class AsciiStringIndexTest inherits QUnit::Test {
         const ReadOffsets = (1000, 10000, 100000);
     }
 
-    constructor() : QUnit::Test("ASCII string index", "1.0", \ARGV) {
-        addTestCase("native character offsets after the mutators of the C++ API", \native());
-        addTestCase("character offsets after the mutators of the language in all execution modes", \modes());
-        addTestCase("indexing the characters of an ASCII string is linear in all execution modes", \scan());
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
+        addPartCase(1, "native character offsets after the mutators of the C++ API", \native());
+        addPartCase(2, "character offsets after the mutators of the language in all execution modes", \modes());
+        addPartCase(3, "indexing the characters of an ASCII string is linear in all execution modes", \scan());
         set_return_value(main());
+    }
+
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     private native() {

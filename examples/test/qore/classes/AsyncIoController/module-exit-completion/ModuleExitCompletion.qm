@@ -1,0 +1,200 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ModuleExitCompletion.qm keeps an operation that another thread submitted until the modules are deleted, and
+#! completes it then (qore#6685)
+
+/*  ModuleExitCompletion.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module ModuleExitCompletion {
+    version = "1.0";
+    desc = "completes an operation that another thread submitted while the modules are deleted";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    # the operation is created and submitted by the module's own code, so that it belongs to the module's Program,
+    # as an operation of a connection manager of a module does
+    init = sub () {
+        ModuleExitCompletion::Holder::held = ModuleExitCompletion::Holder::start();
+        # a Program that is not a module's creates the second operation with this module's class, so the operation
+        # belongs to it while its onComplete() is code of this module's Program (as an operation of a connection
+        # manager can belong to the Program of its client's code); it is deleted with this module's data
+        # (a Program created by module code inherits the module's classes)
+        ModuleExitCompletion::Holder::sp = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # the operation is created by the code of the other Program, so it belongs to it
+        ModuleExitCompletion::Holder::sp.parse("bool sub start() {
+    call_function(\"dbg_async_io_hold_step_results\", True);
+    on_exit call_function(\"dbg_async_io_hold_step_results\", False);
+    EventNotifier notifier();
+    Holder::notifiers += notifier;
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": notifier,
+        \"spop\": new CompletingOperation(),
+        \"owner\": Owner,
+        \"to\": -1s,
+    });
+    return call_function(\"dbg_async_io_wait_held_step_results\", 2, 20s);
+}
+
+# an operation of this Program, whose onComplete() is code of this Program, which can be entered while the modules are
+# deleted: its exception is reported
+class FailingOperation inherits AbstractPollOperation<auto> {
+    private {
+        bool done;
+    }
+    string getGoal() {
+        return \"done\";
+    }
+    string getState() {
+        return done ? \"done\" : \"pending\";
+    }
+    bool goalReached() {
+        return done;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+        done = True;
+        return NOTHING;
+    }
+    onComplete(hash<SocketPollResultInfo> result) {
+        throw \"TEST-ERROR\", \"an exception of a callback that runs while the modules are deleted\";
+    }
+}
+
+bool sub startFailing() {
+    call_function(\"dbg_async_io_hold_step_results\", True);
+    on_exit call_function(\"dbg_async_io_hold_step_results\", False);
+    EventNotifier notifier();
+    Holder::notifiers += notifier;
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": notifier,
+        \"spop\": new FailingOperation(),
+        \"owner\": Owner,
+        \"to\": -1s,
+    });
+    return call_function(\"dbg_async_io_wait_held_step_results\", 3, 20s);
+}", "nested");
+        ModuleExitCompletion::Holder::nested_held = ModuleExitCompletion::Holder::sp.callFunction("start");
+        ModuleExitCompletion::Holder::failing_held = ModuleExitCompletion::Holder::sp.callFunction("startFailing");
+        ModuleExitCompletion::Holder::timer_held = ModuleExitCompletion::Holder::startTimer();
+    };
+}
+
+#! the namespace of the module
+public namespace ModuleExitCompletion {
+#! the owner of the operation
+public const Owner = "module-exit-completion";
+
+#! an operation whose steps and onComplete() are module code, run on a callback worker; its first step ends it
+#! an object whose destructor is code of this module, released with the operation that holds it, which can be on a
+#! callback worker while the modules are deleted
+public class Resource {
+    destructor() {
+        # module code: it cannot run on another thread while the modules are deleted
+        printf("resource destroyed\n");
+        flush();
+    }
+}
+
+public class CompletingOperation inherits AbstractPollOperation<auto> {
+    private {
+        bool done;
+        Resource resource();
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return done ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    #! the step's result is held by the test hook until the cleanup of ModuleExitCleaner releases it
+    *hash<SocketPollInfo> continuePoll() {
+        done = True;
+        return NOTHING;
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        # module code: it cannot run while the modules are deleted, as it was submitted by another thread
+        printf("onComplete: canceled: %y\n", result.canceled);
+        flush();
+    }
+}
+
+#! completes the operation when the module cleanup deletes it, after it has closed the modules' Programs
+public class Holder {
+    public {
+        #! True if the result of the operation's first step is held
+        static bool held;
+        #! True if the result of the first step of the operation of the other Program is held
+        static bool nested_held;
+        #! True if the result of the first step of the other Program's failing operation is held
+        static bool failing_held;
+        #! True if the dispatch of the timer's callback is held
+        static bool timer_held;
+        #! the Program that is not a module's that creates the second operation
+        static *Program sp;
+        #! the event notifiers of the operations, also those of the other Program's
+        static list<EventNotifier> notifiers = ();
+    }
+
+    #! submits the operation and returns once the result of its first step is held
+    static bool start() {
+        return submitHeld(1);
+    }
+
+    #! submits an operation and returns once the results of the first steps of the given number of operations are
+    #! held
+    private static bool submitHeld(int held_count) {
+        call_function("dbg_async_io_hold_step_results", True);
+        # only the first step's result is held
+        on_exit call_function("dbg_async_io_hold_step_results", False);
+        EventNotifier notifier();
+        notifiers += notifier;
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new CompletingOperation(),
+            "owner": Owner,
+            "to": -1s,
+        });
+        return call_function("dbg_async_io_wait_held_step_results", held_count, 20s);
+    }
+
+    #! adds a timer whose callback, a closure of this module's Program, is held by the test hook when it is due
+    static bool startTimer() {
+        call_function("dbg_async_io_hold_timer_callbacks", True);
+        on_exit call_function("dbg_async_io_hold_timer_callbacks", False);
+        # the timer's user data is the callback, which the test hook holds (the global timer callback is not held)
+        AsyncIoController::addTimerDelay(1ms, sub () {
+            # module code: it cannot run while the modules are deleted, as no thread of the cleanup runs it
+            printf("timer callback\n");
+            flush();
+        });
+        return call_function("dbg_async_io_wait_held_timer_callbacks", 1, 20s);
+    }
+}
+}

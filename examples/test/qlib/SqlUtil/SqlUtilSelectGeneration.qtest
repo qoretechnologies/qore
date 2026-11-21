@@ -15,6 +15,7 @@
 %requires ./MysqlTestIsolation.qm
 %requires ./OracleTestIsolation.qm
 %requires ./MssqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %exec-class SqlUtilSelectGenerationTest
 
@@ -129,15 +130,22 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
 
     constructor() : Test("SqlUtilSelectGenerationTest", "1.0", \ARGV, MyOpts) {
         contexts = map new SelectGenerationContext($1), DbTestConnections::get(m_options.connstr);
-        # a run on PostgreSQL uses its own schema; this is set up before any connection is opened
-        map PgsqlRunSchema::setup($1.conn.connstr, "SqlUtilSelectGeneration"), contexts;
-        # on MySQL, Oracle and SQL Server, the run's own database or schema
-        foreach SelectGenerationContext ctx in (contexts) {
-            ctx.conn.connstr = MysqlRunDatabase::getConnectionString(ctx.conn.connstr, "SqlUtilSelectGen");
-            ctx.conn.connstr = OracleRunSchema::getConnectionString(ctx.conn.connstr, "SqlUtilSelectGen");
-            ctx.conn.connstr = MssqlRunDatabase::getConnectionString(ctx.conn.connstr, "SqlUtilSelectGen");
+        # a database that cannot be connected to fails a test case of its own, and no context is tested (qore#6934)
+        *string precondition = TestRun::guardSetup(sub () {
+            # a run on PostgreSQL uses its own schema; this is set up before any connection is opened
+            map PgsqlRunSchema::setup($1.conn.connstr, "SqlUtilSelectGeneration"), contexts;
+            # on MySQL, Oracle and SQL Server, the run's own database or schema
+            foreach SelectGenerationContext ctx in (contexts) {
+                ctx.conn.connstr = MysqlRunDatabase::getConnectionString(ctx.conn.connstr, "SqlUtilSelectGen");
+                ctx.conn.connstr = OracleRunSchema::getConnectionString(ctx.conn.connstr, "SqlUtilSelectGen");
+                ctx.conn.connstr = MssqlRunDatabase::getConnectionString(ctx.conn.connstr, "SqlUtilSelectGen");
+            }
+            map setUpContext($1), contexts;
+        });
+        if (precondition) {
+            contexts = ();
+            addTestCase("the database can be connected to", sub () { fail(precondition); });
         }
-        map setUpContext($1), contexts;
 
         if (!contexts) {
             addTestCase("select generation", sub () { testSkip("no DB connection; set QORE_DB_CONNSTR"); });

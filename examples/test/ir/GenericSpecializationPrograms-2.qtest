@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# A generic function shared by several Programs is specialized for each Program's type arguments: classes and
+# hashdecls of the same name in two live Programs, or in a later Program after an earlier one was destroyed, are
+# different types, so a call never uses the specialization made for another Program's type
+# (GenericSpecializationPrograms.qr, whose Programs run in every execution mode, in a qore process in every execution
+# mode and in AOT executables)
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%include GenericSpecializationPrograms.qc
+
+%exec-class GenericSpecializationProgramsPart2
+
+#! runs part 2 of 2 of the cases of GenericSpecializationProgramsBase: the AOT executables
+class GenericSpecializationProgramsPart2 inherits GenericSpecializationProgramsBase {
+    constructor() : GenericSpecializationProgramsBase("GenericSpecializationProgramsPart2", 2) {
+    }
+}

@@ -59,6 +59,28 @@ module HttpUtil {
     same way, and @ref HttpUtil::HttpAuthenticator "HttpAuthenticator", which answers Basic (RFC 7617) and Digest
     (RFC 7616) authentication challenges.
 
+    It also provides @ref HttpUtil::http_get_field() "http_get_field()", @ref HttpUtil::http_get_fields()
+    "http_get_fields()" and @ref HttpUtil::http_set_field() "http_set_field()", which read and write the fields of the
+    hash of an HTTP message (see @ref httputil_message_fields).
+
+    @section httputil_message_fields The Fields of an HTTP Message Hash
+
+    The hash of an HTTP message, such as the header hash of a request that @ref Qore::Socket::readHTTPHeader()
+    "Socket::readHTTPHeader()" returns or that a handler of the HttpServer module is given, has the keys that the
+    reader sets itself (\c method, \c path, \c http_version, \c status_code, \c body, ...; see
+    @ref HttpUtil::HttpReservedFieldNames "HttpReservedFieldNames") and gives the fields of the message, with
+    lower-case names, under its \c "headers" key.  The fields are also given at its top level (deprecated), except a
+    field whose name is a key of the message, unless that is turned off (ex: with
+    @ref Qore::Socket::setHttpFieldsAtTopLevel() "Socket::setHttpFieldsAtTopLevel()" or the \c http_fields_at_top_level
+    option of HttpServer and HTTPClient).
+
+    Code that reads a field of such a hash reads it with @ref HttpUtil::http_get_field() "http_get_field()", which
+    gives it from \c "headers" and, for a hash built by user code with the fields only at its top level, from there:
+
+    @code{.py}
+string ct = http_get_field(hdr, "content-type") ?? MimeTypeText;
+    @endcode
+
     @section httputilrelnotes Release Notes
 
     @subsection httputil_1_0 HttpUtil 1.0
@@ -67,6 +89,106 @@ module HttpUtil {
 
 #! Main namespace for shared HTTP utilities
 public namespace HttpUtil {
+
+#! The names of the keys that the readers of an HTTP message set in its hash themselves
+/** A header or trailer field with one of these names is given only under the \c "headers" or \c "trailers" key of
+    the message, never at its top level, so that a field cannot replace a key of the message (qore#6761, qore#6811);
+    see @ref httputil_message_fields
+*/
+public const HttpReservedFieldNames = {
+    "body": True,
+    "headers": True,
+    "trailers": True,
+    "status_code": True,
+    "status_message": True,
+    "http_version": True,
+    "method": True,
+    "path": True,
+};
+
+#! Returns the value of a field of the hash of an HTTP message
+/** @param msg the hash of the message, as a reader of HTTP messages gives it (ex: the header hash of a request given
+    to a handler of the HttpServer module), or a hash built by user code with the fields at its top level
+    @param name the name of the field in lower case
+
+    @return the value of the field from the \c "headers" key of \a msg if \a msg has one; otherwise (a hash built
+    by user code) from the top level of \a msg, unless \a name is a key of the message (see
+    @ref HttpReservedFieldNames), which is never a field there; as @ref http_get_fields(), the top level is never
+    read when \a msg has a \c "headers" key, so both give the same fields
+
+    @note a field with a name in @ref HttpReservedFieldNames (ex: a field named \c Method or \c Path) is given only
+    by the \c "headers" key of the message; \c msg.method and \c msg.path are the message's own
+
+    @see @ref httputil_message_fields
+*/
+public auto sub http_get_field(*hash<auto> msg, string name) {
+    if (msg.headers.typeCode() == NT_HASH) {
+        return msg.headers{name};
+    }
+    return HttpReservedFieldNames{name} ? NOTHING : msg{name};
+}
+
+#! Returns the fields of the hash of an HTTP message
+/** @param msg the hash of the message, as a reader of HTTP messages gives it, or a hash built by user code with the
+    fields at its top level
+
+    @return the \c "headers" key of \a msg if it is a hash, otherwise \a msg without the keys of the message (see
+    @ref HttpReservedFieldNames)
+
+    @see @ref httputil_message_fields
+*/
+public hash<auto> sub http_get_fields(*hash<auto> msg) {
+    if (msg.headers.typeCode() == NT_HASH) {
+        return msg.headers;
+    }
+    return msg ? msg - keys HttpReservedFieldNames : {};
+}
+
+#! Sets the value of a field in the hash of an HTTP message
+/** @param msg the hash of the message
+    @param name the name of the field in lower case
+    @param value the value of the field
+
+    If \a msg has a \c "headers" key, the field is set there, and at the top level of \a msg too if the fields of
+    the message are given there (deprecated: the field is already there, or another field of the message is), unless
+    \a name is a key of the message (see @ref HttpReservedFieldNames).  A hash built by user code without a
+    \c "headers" key gets the field at its top level, or under \c "headers" if \a name is a key of the message.
+    @ref http_get_field() then gives \a value for the field.
+
+    @see @ref httputil_message_fields
+*/
+public sub http_set_field(reference<hash<auto>> msg, string name, auto value) {
+    bool reserved = HttpReservedFieldNames{name} ?? False;
+    # the field is set in "auto!" locals, as the caller's hashes may be narrowed (ex: hash<string, string>)
+    hash<auto!> h = msg ?? {};
+    if (h.headers.typeCode() != NT_HASH) {
+        if (reserved) {
+            h.headers = {name: value};
+        } else {
+            h{name} = value;
+        }
+        msg = h;
+        return;
+    }
+    bool top_level = !reserved && (h.hasKey(name) || http_has_top_level_fields(h));
+    hash<auto!> fields = h.headers;
+    fields{name} = value;
+    h.headers = fields;
+    if (top_level) {
+        h{name} = value;
+    }
+    msg = h;
+}
+
+# Returns True if a field of the message given under "headers" is also given at the top level of the message
+bool sub http_has_top_level_fields(hash<auto> msg) {
+    foreach string key in (keys msg.headers) {
+        if (!HttpReservedFieldNames{key} && key !~ /^(:|_qore)/ && msg.hasKey(key)) {
+            return True;
+        }
+    }
+    return False;
+}
 
 #! Cookie representation (RFC 6265)
 /** Used for both parsing Set-Cookie headers (client side) and formatting

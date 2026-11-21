@@ -471,8 +471,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             registerNewConnectionIntern(cid, conn);
         }
 
-        if (hdr."last-event-id".val()) {
-            replayEventsSince(conn, hdr."last-event-id");
+        if (http_get_field(hdr, "last-event-id").val()) {
+            replayEventsSince(conn, http_get_field(hdr, "last-event-id"));
         }
 
         try {

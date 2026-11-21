@@ -192,7 +192,7 @@ class ForkThreadChurnTest inherits QUnit::Test {
         try {
             # the environment
             string name = sprintf("QORE_FORK_CHURN_%d_%d", getpid(), i);
-            if (setenv(name, "child") || getenv(name) != "child") {
+            if (setenv(name, "child") || getenv(name) != "child") { # live-provider-optin: a variable of the test itself
                 ++failed;
             }
             # character encodings

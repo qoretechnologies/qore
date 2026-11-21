@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires RestClientIo
 %requires QoreRagTypes
 %requires QoreRagUtils
@@ -16,6 +17,7 @@
 %requires MilvusRestClient
 %requires ChromaRestClient
 %requires WeaviateRestClient
+%requires ../SqlUtil/TestRunIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -112,7 +114,7 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
         if ((ENV.PGVECTOR_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL).val()) {
             addTestCase("pgvector", \pgvectorTest());
         }
-        if (ENV.MONGODB_URL.val()) {
+        if (LiveProvider::getService("mongodb", "MONGODB_URL").val()) {
             addTestCase("MongoDB", \mongoTest());
         }
         if (ENV.OPENSEARCH_URL.val()) {
@@ -194,7 +196,7 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
 
     milvusTest() {
         string name = "conformance_" + get_random_string(8).lwr();
-        string token = ENV.MILVUS_TOKEN ?? "root:Milvus";
+        string token = LiveProvider::get("milvus", "MILVUS_TOKEN") ?? "root:Milvus";
         RestClientIo::RestClientIo rest({"url": ENV.MILVUS_URL, "data": "json",
             "headers": {"Authorization": "Bearer " + token}});
         # Milvus reports errors in the response body with a 200 status
@@ -308,7 +310,7 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
 %ifdef NoPgsql
         testSkip("no pgsql module");
 %endif
-        Datasource ds((ENV.PGVECTOR_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL));
+        Datasource ds = TestRun::openOrFail(ENV.PGVECTOR_DB_CONNSTR ? "PGVECTOR_DB_CONNSTR" : "QORE_DB_CONNSTR_PGSQL");
         on_exit ds.close();
         # an extension is an object of the whole database, which a test does not create: concurrent PostgreSQL
         # tests set up their search_path with the extensions installed at their start; vector is installed by the
@@ -337,13 +339,14 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
             <QoreRagUtils::VectorStoreConfig>{
                 "backend": "mongo-atlas",
                 "collection": "qore_rag_conformance",
-                "url": ENV.MONGODB_URL,
+                "url": LiveProvider::getService("mongodb", "MONGODB_URL"),
                 "options": {"database": "qore_rag_test", "index_name": "unused"},
             });
         try {
             store.countByFilter();
         } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("MongoDB is not reachable at %y: %s", ENV.MONGODB_URL, ex.desc));
+            testSkip(sprintf("MongoDB is not reachable at %y: %s", LiveProvider::getService("mongodb", "MONGODB_URL"),
+                ex.desc));
         }
         string scope = "mongo-" + get_random_string(6);
         on_exit {

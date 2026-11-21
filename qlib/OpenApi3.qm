@@ -1538,10 +1538,12 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         auto body;
         # deserialize body according to Content-Type
         if (exists http_body) {
-            if (!headers.hasKey("content-type")) {
+            # the fields of a request received are read from its "headers" key (qore#6851)
+            auto ct_field = http_get_field(headers, "content-type");
+            if (!exists ct_field) {
                 throw "DESERIALIZATION-ERROR", "message includes body but is missing Content-Type header";
             }
-            string ct = headers."content-type";
+            string ct = ct_field;
             if (ct =~ /^multipart\/form-data/) {
                 hash<string, hash<FormDataMessageInfo>> h =
                     MultiPartFormDataMessage::parseMessage(ct, http_body.toString());
@@ -1643,7 +1645,7 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
             "hdr": hdr,
         ));
 
-        auto content = hdr."content-type" ?? hdr."Content-Type";
+        auto content = http_get_field(hdr, "content-type") ?? hdr."Content-Type";
         if (content.typeCode() == NT_LIST) {
             content = content[0];
         }
@@ -1654,7 +1656,8 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         if (exists response_body && content) {
             if (content =~ /^multipart\/form-data/) {
                 hash<string, hash<FormDataMessageInfo>> h =
-                    MultiPartFormDataMessage::parseMessage(hdr."content-type", response_body.toString());
+                    MultiPartFormDataMessage::parseMessage(http_get_field(hdr, "content-type"),
+                        response_body.toString());
                 rv.body = map {$1.key: $1.value.body}, h.pairIterator();
                 content = MimeTypeMultipartFormData;
             } else {
@@ -3745,8 +3748,10 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
             h.params = remove h.params{query_obj};
         }
 
-        # check header parameters
-        foreach string key in (keys headers) {
+        # check header parameters; the fields of a request received are under its "headers" key, and also at its
+        # top level if they are given there (deprecated; qore#6851)
+        bool msg_fields = headers.headers.typeCode() == NT_HASH;
+        foreach string key in (keys (msg_fields ? headers.headers : headers)) {
             # find URI parameter object
             *ParameterObject po = parameters{key} ?? real_pio.parameters{key};
             # extra headers are OK
@@ -3754,7 +3759,14 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
                 continue;
             }
 
-            po.check(serialize, True, path, method, key, \headers{key});
+            if (msg_fields) {
+                po.check(serialize, True, path, method, key, \headers.headers{key});
+                if (headers.hasKey(key) && !HttpUtil::HttpReservedFieldNames{key}) {
+                    headers{key} = headers.headers{key};
+                }
+            } else {
+                po.check(serialize, True, path, method, key, \headers{key});
+            }
         }
 
         # check body parameters
@@ -3839,7 +3851,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
 
         # check content-type
         if (exists body && mime_types) {
-            string content = headers."content-type" ?? headers."Content-Type";
+            string content = http_get_field(headers, "content-type") ?? headers."Content-Type";
             int pos = content.find(";");
             if (pos != -1)
                 content = content.substr(0, pos);
@@ -4049,8 +4061,9 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
                             h.params{ph.key} = val;
                         break;
                     case "header":
-                        if (!exists headers{ph.key})
-                            headers{ph.key} = val;
+                        # the fields of a request received are under its "headers" key (qore#6851)
+                        if (!exists http_get_field(headers, ph.key))
+                            http_set_field(\headers, ph.key, val);
                         break;
                     case "formData":
                         if (!exists body{ph.key})
@@ -4077,7 +4090,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
                                 ph.key);
                         break;
                     case "header":
-                        if (!exists headers{ph.key})
+                        if (!exists http_get_field(headers, ph.key))
                             error("SCHEMA-VALIDATION-ERROR", "request is missing required header parameter %y",
                                 ph.key);
                         break;

@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -40,7 +41,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("MongoDbDataProviderTest", "1.0") {
-        url = ENV.MONGODB_URL;
+        url = LiveProvider::getService("mongodb", "MONGODB_URL");
         int verbose = m_options.verbose ?? 0;
         setenv("QORE_MONGODB_VERBOSE", sprintf("%d", verbose));
         setenv("MONGOC_LOG_LEVEL", verbose > 2 ? "debug" : "warning");

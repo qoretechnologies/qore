@@ -648,6 +648,107 @@ constexpr __int128 LOG2_10_HIGH = 332192810;
 constexpr __int128 LOG2_10_UNIT = 100000000;
 }
 
+mpfr_prec_t qore_number_private::getDecimalRoundPrec(const mpfr_t x, q_mpfr_unary_nr_func_t func, int64 prec) {
+    assert(mpfr_regular_p(x));
+    assert(prec > 0);
+    QoreDecimalRounding mode = func == mpfr_ceil
+        ? QoreDecimalRounding::Ceil
+        : (func == mpfr_floor ? QoreDecimalRounding::Floor : QoreDecimalRounding::HalfAway);
+
+    const bool neg = mpfr_signbit(x);
+    // 2^(e - 1) <= |x| < 2^e
+    const __int128 e = mpfr_get_exp(x);
+    const __int128 k = prec;
+
+    // |x * 10^k| < 1/2 (as in roundDecimal()): the result is zero, or 10^-k
+    if (e * LOG2_10_UNIT + k * LOG2_10_HIGH <= -LOG2_10_UNIT) {
+        if ((mode == QoreDecimalRounding::Ceil && !neg) || (mode == QoreDecimalRounding::Floor && neg)) {
+            return getDecimalPrec(1, -prec);
+        }
+        return QORE_DEFAULT_PREC;
+    }
+
+    // a value whose magnitude is a power of 10 of more than QORE_MAX_PREC / 5 has the maximum precision, as has a
+    // nonzero result of it: a large value is its own result but for the digits after the decimal point
+    const __int128 max_magnitude = QORE_MAX_PREC / 5 + 2;
+    if ((e - 1) * LOG2_10_UNIT >= max_magnitude * LOG2_10_HIGH) {
+        return QORE_MAX_PREC;
+    }
+    if (e * LOG2_10_UNIT <= -max_magnitude * LOG2_10_HIGH) {
+        // a small value: |x * 10^k| >= 1 (2^(e - 1) * 10^k >= 1), so the result is not zero and has at most the
+        // magnitude of 10 |x|
+        if ((e - 1) * LOG2_10_UNIT + k * LOG2_10_LOW >= 0) {
+            return QORE_MAX_PREC;
+        }
+        // otherwise |x * 10^k| < 2, so the result is zero, 10^-k or 2 * 10^-k; |x * 10^k| >= 1/4 (else the result
+        // is zero, above), so 10^-k <= 4|x| and k > QORE_MAX_PREC / 5: a nonzero result has the maximum precision
+        if ((mode == QoreDecimalRounding::Ceil && !neg) || (mode == QoreDecimalRounding::Floor && neg)) {
+            return QORE_MAX_PREC;
+        }
+        // the result is zero if |x| < t * 10^-k, with t = 1/2 when rounded half away from zero and t = 1 when
+        // rounded toward zero (|x| is never t * 10^-k, which is not a binary number); 10^-k is bounded in intervals of
+        // increasing precision until |x| is on one side of the bound
+        const bool half = mode == QoreDecimalRounding::HalfAway;
+        QoreMpfrValue ax(mpfr_get_prec(x));
+        mpfr_abs(ax.v, x, MPFR_RNDN);
+        QoreMpfrValue kv(64);
+        mpfr_set_sj(kv.v, -prec, MPFR_RNDN);
+        for (mpfr_prec_t q = mpfr_get_prec(x) + 64;; q *= 2) {
+            QoreMpfrValue t_lo(q), t_hi(q);
+            mpfr_exp10(t_lo.v, kv.v, MPFR_RNDD);
+            mpfr_exp10(t_hi.v, kv.v, MPFR_RNDU);
+            if (half) {
+                mpfr_div_2ui(t_lo.v, t_lo.v, 1, MPFR_RNDN);
+                mpfr_div_2ui(t_hi.v, t_hi.v, 1, MPFR_RNDN);
+            }
+            if (mpfr_less_p(ax.v, t_lo.v)) {
+                return QORE_DEFAULT_PREC;
+            }
+            if (mpfr_greater_p(ax.v, t_hi.v)) {
+                return QORE_MAX_PREC;
+            }
+        }
+    }
+
+    // the result is n * 10^-kk exactly, with the integer n; when x * 10^k is an integer, x is its own result, and the
+    // decimal digits of x are those of x * 10^kk with the number of binary digits of x after the binary point; |e|
+    // is at most about 5500 here, so n has at most about 14000 decimal digits
+    __int128 kk = k;
+    const __int128 frac_bits = static_cast<__int128>(mpfr_min_prec(x)) - e;
+    if (k >= frac_bits) {
+        kk = frac_bits > 0 ? frac_bits : 0;
+    }
+    // x = z * 2^ze exactly
+    QoreMpz z;
+    mpfr_exp_t ze = mpfr_get_z_2exp(z.z, x);
+    QoreMpz num;
+    mpz_ui_pow_ui(num.z, 5, static_cast<unsigned long>(kk));
+    mpz_mul(num.z, num.z, z.z);
+    QoreMpz n;
+    __int128 shift = static_cast<__int128>(ze) + kk;
+    if (shift >= 0) {
+        mpz_mul_2exp(n.z, num.z, static_cast<mp_bitcnt_t>(shift));
+    } else {
+        QoreMpz den;
+        mpz_set_ui(den.z, 1);
+        mpz_mul_2exp(den.z, den.z, static_cast<mp_bitcnt_t>(-shift));
+        qore_mpz_div_round(n.z, num.z, den.z, mode);
+    }
+    if (!mpz_sgn(n.z)) {
+        return QORE_DEFAULT_PREC;
+    }
+    mpz_abs(n.z, n.z);
+    // the decimal digits of n, and its trailing zeros, which are not significant digits of the result
+    std::string str(mpz_sizeinbase(n.z, 10) + 2, '\0');
+    mpz_get_str(&str[0], 10, n.z);
+    int64_t len = static_cast<int64_t>(strlen(str.c_str()));
+    int64_t digits = len;
+    while (digits > 1 && str[digits - 1] == '0') {
+        --digits;
+    }
+    return getDecimalPrec(digits, len - 1 - static_cast<int64_t>(kk));
+}
+
 void qore_number_private::roundDecimal(mpfr_t rv, const mpfr_t x, q_mpfr_unary_nr_func_t func, int64 prec) {
     assert(mpfr_regular_p(x));
     assert(prec);

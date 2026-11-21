@@ -40,7 +40,7 @@ public class GrpcDetection {
         @return True if the Content-Type indicates gRPC (but not gRPC-Web)
     */
     static bool isGrpcRequest(hash<auto> hdr) {
-        string ct = hdr."content-type" ?? "";
+        string ct = http_get_field(hdr, "content-type") ?? "";
         return ct =~ /^application\/grpc/ && ct !~ /^application\/grpc-web/;
     }
 
@@ -49,7 +49,7 @@ public class GrpcDetection {
         @return True if the Content-Type indicates gRPC-Web
     */
     static bool isGrpcWebRequest(hash<auto> hdr) {
-        string ct = hdr."content-type" ?? "";
+        string ct = http_get_field(hdr, "content-type") ?? "";
         return ct =~ /^application\/grpc-web/;
     }
 
@@ -119,8 +119,8 @@ public class GrpcProtocolAdapter {
             AbstractConnectCodec codec) {
         # Parse gRPC timeout header
         *date deadline;
-        if (hdr."grpc-timeout".val()) {
-            *int timeout_ms = GrpcDetection::parseGrpcTimeout(hdr."grpc-timeout");
+        if (http_get_field(hdr, "grpc-timeout").val()) {
+            *int timeout_ms = GrpcDetection::parseGrpcTimeout(http_get_field(hdr, "grpc-timeout"));
             if (timeout_ms) {
                 deadline = now_us() + milliseconds(timeout_ms);
             }
@@ -129,7 +129,7 @@ public class GrpcProtocolAdapter {
         # Extract metadata
         hash<auto> metadata();
         map metadata{$1.key} = $1.value,
-            hdr.pairIterator(),
+            http_get_fields(hdr).pairIterator(),
             $1.key !~ /^:/ && $1.key != "content-type" && $1.key != "te"
                 && $1.key != "grpc-timeout";
 
@@ -213,7 +213,7 @@ public class GrpcProtocolAdapter {
         # Extract metadata
         hash<auto> metadata();
         map metadata{$1.key} = $1.value,
-            hdr.pairIterator(),
+            http_get_fields(hdr).pairIterator(),
             $1.key !~ /^:/ && $1.key != "content-type" && $1.key != "te";
 
         # Unframe the gRPC request, then call the handler; a request that cannot be decoded is answered with a gRPC

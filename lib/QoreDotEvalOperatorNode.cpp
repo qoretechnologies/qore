@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/CallReferenceNode.h"
 
@@ -77,7 +78,9 @@ template <bool Lexical>
 QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionSink* xsink) const {
     LexicalSemanticPolicy policy;
     if constexpr (Lexical) policy = getSemanticPolicy();
-    switch (base.getType()) {
+    // the type is read once (see the pseudo-method below)
+    qore_type_t bt = base.getType();
+    switch (bt) {
         case NT_WEAKREF: {
             // FIXME: inefficient
             return qore_dot_eval_weakref_call<Lexical>(m, policy, base, xsink);
@@ -88,12 +91,14 @@ QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionS
             const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), m->getName());
             if (ref) {
                 if constexpr (Lexical) {
-                    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invokeLexical(m->getArgs(), xsink,
+                    return qore_resolved_call_reference_node_ops(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)).invokeLexical(m->getArgs(), xsink,
                         policy);
                 } else {
                     return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
                 }
             }
+            // the type is known on this path, so it is not kept across the call above
+            bt = NT_WEAKREF_HASH;
             break;
         }
 
@@ -107,12 +112,14 @@ QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionS
             const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), m->getName());
             if (ref) {
                 if constexpr (Lexical) {
-                    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invokeLexical(m->getArgs(), xsink,
+                    return qore_resolved_call_reference_node_ops(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)).invokeLexical(m->getArgs(), xsink,
                         policy);
                 } else {
                     return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
                 }
             }
+            // the type is known on this path, so it is not kept across the call above
+            bt = NT_HASH;
             break;
         }
 
@@ -121,8 +128,11 @@ QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionS
     }
 
     // FIXME: inefficient
-    if (m->isPseudo()) {
-        return m->execPseudoWithPolicy<Lexical>(policy, base, xsink);
+    // the pseudo-method that the parse-time resolution bound is called only on a value of its class: a value of
+    // another type (the value of a builtin whose declared type is wrong) finds the method by name in the pseudo-class
+    // of its type below, as a value with no declared type does (qore#6813)
+    if (m->isPseudo() && (bt == NT_NOTHING || m->pseudoAcceptsType(bt))) {
+        return m->execPseudoWithPolicy<Lexical>(policy, base, bt, xsink);
     }
 
     // a named call of a method of an object resolved at run time by parameter name whose receiver is not an object
@@ -226,9 +236,18 @@ int qore_check_method_call_receiver(QoreValue base, const char* name, const Qore
     if (pseudo) {
         // as MethodCallNode::execPseudo(): no value is dispatched to the methods of the "<nothing>" class by name; the
         // method resolved at parse time is called otherwise
-        if (base.isNothing() && qc != QC_PSEUDONOTHING) {
-            return qore_class_private::get(*QC_PSEUDONOTHING)->runtimeFindPseudoMethod(base,
-                method ? method->getName() : name, xsink) ? 0 : -1;
+        qore_type_t t = base.getType();
+        if (t == NT_NOTHING) {
+            if (qc != QC_PSEUDONOTHING) {
+                return qore_class_private::get(*QC_PSEUDONOTHING)->runtimeFindPseudoMethod(base,
+                    method ? method->getName() : name, xsink) ? 0 : -1;
+            }
+            return 0;
+        }
+        // the call takes the method that it resolved only for a value of its class, and finds it by name otherwise
+        // (see qore_pseudo_class_accepts_type()), so the value is checked as the call will make it (qore#6813)
+        if (!qore_pseudo_class_accepts_type(qc, t)) {
+            return pseudo_classes_check_method(base, name, xsink);
         }
         return 0;
     }

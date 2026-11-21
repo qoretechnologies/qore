@@ -11,6 +11,7 @@
 %requires SqlUtil
 %requires PgsqlSqlUtilBase
 %requires ./PgsqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -76,8 +77,12 @@ class PgsqlProceduresTest inherits QUnit::Test {
 %ifdef NoJni
         unavailable.jdbc = "jni";
 %endif
+        # a database that cannot be connected to fails a test case of its own, and the cases of its driver skip
+        # (qore#6934)
+        *string precondition = TestRun::guardSetup(sub () {
         foreach hash<auto> i in ({"pgsql": "QORE_DB_CONNSTR_PGSQL", "jdbc": "QORE_DB_CONNSTR_JDBC_PGSQL"}
                 .pairIterator()) {
+            # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             *string connstr = ENV{i.value};
             if (!connstr.val()) {
                 continue;
@@ -90,6 +95,10 @@ class PgsqlProceduresTest inherits QUnit::Test {
             # the run's own schema
             PgsqlRunSchema::setup(connstr, "PgsqlProcedures");
             conns{i.key} = PgsqlRunSchema::getConnectionString(connstr);
+        }
+        });
+        if (precondition) {
+            addTestCase("the database can be connected to", sub () { fail(precondition); });
         }
 
         addTestCase("functions are not procedures", \functions());

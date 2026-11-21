@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaActions
+
+%include LazyModuleActions.qc
+
+%exec-class LazyModuleActionsPart2
+
+#! runs part 2 of 2 of the cases of LazyModuleActionsBase
+class LazyModuleActionsPart2 inherits LazyModuleActionsBase {
+    constructor() : LazyModuleActionsBase("LazyModuleActionsPart2", 2) {
+    }
+}

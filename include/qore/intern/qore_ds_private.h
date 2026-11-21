@@ -766,6 +766,17 @@ struct qore_ds_private : public QoreDbiForkObject {
         return v.get().*field;
     }
 
+    //! returns copies of the pending host name and port, read together in one leaf critical section on \c m
+    /** So that a description of the datasource never pairs a host with the port of another (qore#6988); see
+        getPendingValues()
+    */
+    DLLLOCAL void getPendingHostPort(std::string& host, int& port) const {
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::ConstView v(pending, al);
+        host = v.get().hostname;
+        port = v.get().port;
+    }
+
     //! returns the pending port; see getPendingValues()
     DLLLOCAL int getPendingPort() const {
         QoreDsLock al(m, QoreDsLock::Leaf);

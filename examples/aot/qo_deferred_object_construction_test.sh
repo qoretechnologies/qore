@@ -69,8 +69,8 @@ echo "=== Step 2: compile consumer with deferred source class ==="
 
 echo ""
 echo "=== Step 3: verify deferred constructor metadata ==="
-strings "${TMP}/qo/consumer.qo" | grep -q 'deferred-create-object'
-strings "${TMP}/qo/consumer.qo" | grep -qx 'object<Tx>'
+strings "${TMP}/qo/consumer.qo" | grep 'deferred-create-object' >/dev/null
+strings "${TMP}/qo/consumer.qo" | grep -x 'object<Tx>' >/dev/null
 
 echo ""
 echo "=== Step 4: link separate .qo files and run ==="

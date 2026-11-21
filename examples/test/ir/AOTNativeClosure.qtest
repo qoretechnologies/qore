@@ -242,7 +242,7 @@ string sub exercise() {
         described, typed_errors, nan_result, effect_state[0], concurrentFirstCalls());
 }
 
-if (getenv(\"QORE_TEST_AOT_CLOSURE_EH\")) {
+if (getenv(\"QORE_TEST_AOT_CLOSURE_EH\")) { # live-provider-optin: a variable that the test sets for the program it compiles
     int eh_marker = 0;
     throwThroughNativeClosure(\\eh_marker);
 } else {

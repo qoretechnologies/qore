@@ -859,7 +859,9 @@ static bool i18n_append_catalog_paths_option(std::vector<std::string>& paths, co
     }
     if (value.getType() == NT_STRING) {
         // a path with a NUL character would be cut at the NUL character
-        if (q_check_path(*value.get<const QoreStringNode>(), "I18N-CATALOG-ERROR", xsink)) {
+        // the value of an option can be an inline short string
+        QoreStringDataHelper path_str(value);
+        if (q_check_path(path_str.c_str(), path_str.size(), "I18N-CATALOG-ERROR", xsink)) {
             return false;
         }
         std::string path;

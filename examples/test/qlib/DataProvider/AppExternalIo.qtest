@@ -117,6 +117,7 @@ public class AppExternalIoTest inherits QUnit::Test {
 
     #! Isolates the test from an ambient provider index: by-name decisions read the index for apps not loaded
     globalSetUp() {
+        # live-provider-optin: saves and restores the provider index directory variable
         ambient_index_dir = getenv(ProviderIndexEnvVar);
         empty_index_dir = make_tmp_dir();
         ProviderIndexUtil::setEnvironmentVariable(empty_index_dir);
@@ -769,6 +770,7 @@ public class AppExternalIoTest inherits QUnit::Test {
             copy_file(develop_index + DirSep + file, dir + DirSep + file);
         }
         # ProviderIndexUtil reads the index directory from its own environment
+        # live-provider-optin: saves and restores the provider index directory variable
         *string prev_index_dir = getenv(ProviderIndexEnvVar);
         ProviderIndexUtil::setEnvironmentVariable(dir);
         on_exit if (prev_index_dir) {
@@ -790,13 +792,16 @@ public class AppExternalIoTest inherits QUnit::Test {
     #! Sets a process environment variable until restoreEnv() is called
     private setEnv(string var, *string value) {
         if (!saved_env.hasKey(var)) {
+            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             saved_env{var} = getenv(var);
         }
         if (exists value) {
             setenv(var, value);
+            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             ENV{var} = value;
         } else {
             unsetenv(var);
+            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             remove ENV{var};
         }
     }
@@ -806,9 +811,11 @@ public class AppExternalIoTest inherits QUnit::Test {
         foreach hash<auto> i in (saved_env.pairIterator()) {
             if (exists i.value) {
                 setenv(i.key, i.value);
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 ENV{i.key} = i.value;
             } else {
                 unsetenv(i.key);
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 remove ENV{i.key};
             }
         }

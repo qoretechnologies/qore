@@ -35,6 +35,7 @@
 #include "qore/intern/QC_TermIOS.h"
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/qore_qf_private.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #include <unistd.h>
 
@@ -70,7 +71,7 @@ QoreFile* QoreFileHelper::operator->() const {
 static void FILE_system_constructor(QoreObject* self, int fd, va_list args) {
     //printd(5, "FILE_system_constructor() self=%p, descriptor=%d\n", self, fd);
     File* f = new File(QCS_DEFAULT);
-    f->makeSpecial(fd);
+    qore_file_ops(f).makeSpecial(fd);
     self->setPrivate(CID_FILE, f);
 #ifdef _Q_WINDOWS
     // we have to set binary mode on stdin/stdout/stderr so that \r\n is not automatically
@@ -345,7 +346,7 @@ int File::open(string path, softint flags = O_RDONLY, softint mode = 0666, *stri
    }
 
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : f->getEncoding();
-   return f->openCheckAccess(xsink, path->getBuffer(), flags, mode, qe);
+   return qore_file_ops(f).openCheckAccess(xsink, path->getBuffer(), flags, mode, qe);
 }
 
 //! Opens a file in a particular mode; throws an exception on failure
@@ -1046,7 +1047,7 @@ nothing File::getTerminalAttributes(TermIOS[QoreTermIOS] termios) [flags=NAMED_A
    if (check_terminal_io(self, "File::getTerminalAttributes", xsink))
       return QoreValue();
 
-   f->getTerminalAttributes(*termios, xsink);
+   qore_file_ops(f).getTerminalAttributes(*termios, xsink);
    return QoreValue();
 #else
    return missing_method_error("File::getTerminalAttributes", "TERMIOS", xsink);
@@ -1077,7 +1078,7 @@ TermIOS File::getTerminalAttributes() {
       return QoreValue();
 
    ReferenceHolder<QoreTermIOS> holder(new QoreTermIOS, xsink);
-   f->getTerminalAttributes(*holder, xsink);
+   qore_file_ops(f).getTerminalAttributes(*holder, xsink);
    if (*xsink)
       return QoreValue();
    return new QoreObject(QC_TERMIOS, getProgram(), holder.release());
@@ -1129,7 +1130,7 @@ nothing File::setTerminalAttributes(softint action = TCSANOW, TermIOS[QoreTermIO
    if (check_terminal_io(self, "File::setTerminalAttributes", xsink))
       return QoreValue();
 
-   f->setTerminalAttributes(action, *termios, xsink);
+   qore_file_ops(f).setTerminalAttributes(action, *termios, xsink);
    return QoreValue();
 #else
    return missing_method_error("File::setTerminalAttributes", "TERMIOS", xsink);
@@ -1199,11 +1200,11 @@ static hash<PipeInfo> File::getPipe() {
 
     // the ends own their descriptors: close() and the destruction of the objects close them
     ReferenceHolder<File> read(new File(QCS_DEFAULT), xsink);
-    read->makeOwnedSpecial(pipefd[0]);
+    qore_file_ops(read).makeOwnedSpecial(pipefd[0]);
     ReferenceHolder<QoreObject> readobj(new QoreObject(QC_READONLYFILE, getProgram(), read.release()), xsink);
 
     ReferenceHolder<File> write(new File(QCS_DEFAULT), xsink);
-    write->makeOwnedSpecial(pipefd[1]);
+    qore_file_ops(write).makeOwnedSpecial(pipefd[1]);
     ReferenceHolder<QoreObject> writeobj(new QoreObject(QC_FILE, getProgram(), write.release()), xsink);
 
     rv->setKeyValue("read", readobj.release(), xsink);

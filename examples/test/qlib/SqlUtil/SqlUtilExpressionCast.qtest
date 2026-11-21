@@ -12,6 +12,7 @@
 %requires OracleSqlUtilBase
 %requires MysqlSqlUtil
 %requires XdbcFirebirdSqlUtilBase
+%requires ./TestRunIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -151,7 +152,7 @@ class SqlUtilExpressionCastTest inherits QUnit::Test {
 %ifdef NoPgsql
         testSkip("no pgsql module");
 %endif
-        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        Datasource ds = TestRun::openOrFail("QORE_DB_CONNSTR_PGSQL");
         on_exit ds.rollback();
         if (ds.getDriverName() != "pgsql") {
             testSkip("QORE_DB_CONNSTR_PGSQL is not a pgsql connection");

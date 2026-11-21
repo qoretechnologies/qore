@@ -296,6 +296,7 @@ private:
     @since Qore 3.0
 */
 class QoreNetworkSecurityManager : public AbstractPrivateData {
+    friend class qore_network_security_manager_ops;
 public:
     //! Creates a new network security manager with default deny policy
     DLLEXPORT QoreNetworkSecurityManager();
@@ -355,16 +356,10 @@ public:
     */
     DLLEXPORT void addAllowedPortRange(int low, int high, int proto = QSEC_NET_ALL);
 
-    //! Preset: Blocks all private/internal networks
-    /** Blocks the following ranges:
-        - 127.0.0.0/8 (localhost)
-        - 10.0.0.0/8 (RFC 1918 Class A)
-        - 172.16.0.0/12 (RFC 1918 Class B)
-        - 192.168.0.0/16 (RFC 1918 Class C)
-        - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
-        - ::1/128 (IPv6 localhost)
-        - fe80::/10 (IPv6 link-local)
-        - fc00::/7 (IPv6 unique local)
+    //! Preset: Blocks every address that is not a public unicast destination
+    /** Blocks every IPv4 and IPv6 range that is not a public unicast destination (see
+        SandboxManager::blockPrivateNetworks() in the language reference for the list); an IPv6 address that embeds an
+        IPv4 address is judged by the IPv4 address
 
         @note This is essential for SSRF prevention in web applications.
     */
@@ -377,11 +372,6 @@ public:
 
     //! Preset: Allows only HTTPS connections (port 443)
     DLLEXPORT void allowHTTPSOnly();
-
-    //! Returns true if a connection to the port with the protocol is allowed by the port rules
-    /** True also when no port rule is set, which allows every port
-    */
-    DLLLOCAL bool allowsPort(int port, int proto) const;
 
     //! Sets default policy for unlisted destinations
     /** @param allow If true, unlisted destinations are allowed; if false (default), denied
@@ -434,7 +424,9 @@ public:
         @return true if allowed, false if denied (exception raised)
 
         The rules are applied in this order:
-        - an IPv4-mapped IPv6 address (<tt>::%ffff:a.b.c.d</tt>) is checked as the IPv4 address it carries, and an
+        - an IPv6 address that embeds an IPv4 address (IPv4-mapped, IPv4-compatible, NAT64 64:%ff9b::/96, 6to4 or
+          Teredo) is checked as the IPv4 address it carries (a denied or allowed range also applies to the address as
+          given), and an
           unspecified destination address (\c 0.0.0.0 or <tt>::</tt>), which the system connects to the local host, is
           checked as the loopback address
         - a denied IP range containing the address denies the connection, also for an allowed host name, so a host
@@ -456,9 +448,10 @@ public:
 
         @return true if allowed, false if denied (exception raised)
 
-        Binding is controlled like a connection to the local address, without host names: an IPv4-mapped address is
-        checked as the IPv4 address it carries; a denied IP range containing the address denies the bind, unless
-        the address is a loopback address (\c 127.0.0.0/8 or <tt>::1</tt>), because a socket bound there can only be
+        Binding is controlled like a connection to the local address, without host names: an IPv6 address that embeds
+        an IPv4 address is checked as the IPv4 address it carries; a denied IP range containing the address denies the
+        bind, unless the address is a loopback address (\c 127.0.0.0/8 or <tt>::1</tt>, also as an IPv4-mapped
+        address, but not in another form that embeds it), because a socket bound there can only be
         reached from the local host, which is less than a bind on all interfaces exposes (denied ranges still deny
         connections to loopback addresses); a
         specific port outside the allowed ports for the protocol denies the bind (a system-assigned port, port 0, is
@@ -537,6 +530,7 @@ private:
     @since Qore 3.0
 */
 class QoreSandboxManager : public AbstractPrivateData {
+    friend class qore_sandbox_manager_ops;
 public:
     //! Creates a new sandbox manager with default settings
     DLLEXPORT QoreSandboxManager();
@@ -578,6 +572,25 @@ public:
 
     //! Gets the max threads limit
     DLLEXPORT int getMaxThreads() const;
+
+    //! Sets the isolation domain (tenant) of the sandbox; see SandboxManager::setIsolationDomain()
+    /** Only trusted code may set it, only once, and only before the manager governs code (a %Program uses it or it is
+        a part of a composite sandbox)
+
+        @param domain the domain; must not be empty
+        @param xsink for the exceptions: \c SANDBOX-ACCESS-ERROR (sandboxed caller) or \c SANDBOX-CONFIG-ERROR
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLEXPORT int setIsolationDomain(const char* domain, ExceptionSink* xsink);
+
+    //! Returns the isolation domain (tenant) of the sandbox, or an empty string if it has none
+    /** For a composite sandbox, the domain that its members with a domain have; if they have different domains, the
+        mixed value (see qore_isolation_domain_is_mixed()), which is no tenant's domain: such a sandbox belongs to no
+        tenant, and nothing that is kept for a tenant may be given to its code
+    */
+    DLLEXPORT std::string getIsolationDomain() const;
+
 
     //! Sets the wall-clock time limit of each call into the sandbox in milliseconds
     /** @param ms the limit in milliseconds; 0 (or a negative value) = unlimited
@@ -977,37 +990,10 @@ private:
     // reserves and releases thread slots for the workers of a ThreadPool created by a Program with this sandbox
     friend class ThreadPool;
 
-    //! Counts a new thread governed by this sandbox; raises THREAD-CREATION-FAILURE at the thread limit
-    /** @return 0 if the thread is counted, -1 if the limit has been reached (an exception is raised)
-    */
-    DLLLOCAL int acquireThreadSlot(ExceptionSink* xsink);
 
-    //! Counts a new thread like acquireThreadSlot() without waking the thread pools waiting for a slot
-    /** For a ThreadPool taking a slot with its lock held.  A composition that cannot take a slot of every member
-        releases the slots it took again; \a released is then set to true, and the caller must call
-        notifyThreadSlotReleased() once it has released its lock.
-    */
-    DLLLOCAL int acquireThreadSlotQuiet(ExceptionSink* xsink, bool& released);
 
-    //! Stops counting a thread counted with acquireThreadSlot() and wakes the thread pools waiting for a slot
-    /** Must not be called with the lock of a ThreadPool held; see releaseThreadSlotQuiet()
-    */
-    DLLLOCAL void releaseThreadSlot();
 
-    //! Stops counting a thread counted with acquireThreadSlot() without waking the thread pools waiting for a slot
-    /** For a ThreadPool releasing a slot with its lock held, which notifies the waiting pools once it has released
-        its lock
-    */
-    DLLLOCAL void releaseThreadSlotQuiet();
-
-    //! Wakes the thread pools waiting for a slot of this manager or of a member of this composition
-    /** Must not be called with the lock of a ThreadPool held
-
-        @param except a pool not to wake: the pool that released slots itself, which retries only when another
-        thread released one
-    */
-    DLLLOCAL void notifyThreadSlotReleased(const AbstractPrivateData* except = nullptr);
-};
+    };
 
 //! RAII helper that acquires a ref'd sandbox manager for the current running program
 /** Acquires a strong reference under lock to prevent use-after-free
@@ -1146,6 +1132,35 @@ DLLEXPORT bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::P
 */
 DLLEXPORT bool qore_caller_restricts_domain(int64 domain);
 
+//! Returns the isolation domain (the tenant) of the code that calls the library, or an empty string
+/** The domain of the sandbox that governs the calling code (see QoreSandboxManager::setIsolationDomain()), also when
+    that code calls the library through other library code; empty if no sandbox governs it or its sandbox has no
+    domain.  Library code that keeps process-wide state for its callers uses it to keep each tenant's entries apart.
+
+    The sandboxes of different tenants govern code together when one tenant's code calls code or an object of another
+    tenant: such code belongs to no tenant, and the function returns the mixed value (see
+    qore_isolation_domain_is_mixed()), for which the caller must refuse what it keeps for tenants.
+
+    @since %Qore 3.0
+*/
+DLLEXPORT std::string qore_caller_isolation_domain();
+
+//! Returns true if \a domain is the mixed isolation domain value: the sandboxes of different tenants govern the code
+/** Returned by qore_caller_isolation_domain() and QoreSandboxManager::getIsolationDomain() for code or a sandbox that
+    belongs to no tenant because the sandboxes of more than one tenant govern it; it is never a domain that
+    QoreSandboxManager::setIsolationDomain() can set (it starts with a NUL character), and nothing that is kept for a
+    tenant may be given for it.
+
+    @since %Qore 3.0
+*/
+static inline bool qore_isolation_domain_is_mixed(const std::string& domain) {
+    return !domain.empty() && domain[0] == '\0';
+}
+
+//! defined if QoreSandboxManager::setIsolationDomain(), QoreSandboxManager::getIsolationDomain() and
+//! qore_caller_isolation_domain() are available
+#define QORE_HAVE_ISOLATION_DOMAINS 1
+
 //! defined if qore_caller_restricts_domain() is available
 #define QORE_HAVE_CALLER_RESTRICTS_DOMAIN 1
 
@@ -1221,7 +1236,6 @@ DLLEXPORT QoreProgram* qore_get_caller_program();
     @since %Qore 3.0
 */
 #define _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY 1
-
 
 //! RAII barrier that stops a sandboxed CALLER's policy from being inherited
 /** Sandbox policy normally propagates across program boundaries: code in a Qore-language

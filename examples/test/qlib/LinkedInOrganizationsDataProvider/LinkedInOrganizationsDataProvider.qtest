@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires DataProvider
 %requires ConnectionProvider
 %requires Mime
@@ -1099,13 +1100,13 @@ public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
 
     #! Returns the connection named on the command line, or skips the test
     private *AbstractConnection getConnection() {
-        *string conn_name = m_options.conn ?? ENV.LINKEDIN_ORG_CONNECTION;
+        *string conn_name = LiveProvider::get("linkedin", "LINKEDIN_ORG_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             testSkip("no connection specified; use -c,--connection=ARG or set "
                 "LINKEDIN_ORG_CONNECTION");
             return;
         }
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("linkedin", "LINKEDIN_ORG_CONNECTION", m_options.conn);
         if (conn.getType() != "linkedindma") {
             # a connection still serving the TypeScript application reads as
             # "tsrest-linkedinorganizations" inside the platform and as "invalid" outside it, since that

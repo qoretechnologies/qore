@@ -37,16 +37,27 @@
 //! Abstract poll operation object returned by Socket polling methods
 /** This class implements the polling logic and the state machine behind it
 
-    It has two private members:
+    It has two \c private:internal members, which only this class reads and writes:
     - object sock: the socket object
     - string goal: the polling goal
+
+    A subclass gets the goal with getGoal() and the socket with the \c getSocket() method of the poll operations
+    that have one; a subclass of @ref Qore::PollPipeline "PollPipeline" sets the goal with
+    @ref Qore::PollPipeline::setGoal() "PollPipeline::setGoal()".  A member of the same name that a subclass declares
+    is a member of its own.  The operations of @ref Qore::SocketPollOperation "SocketPollOperation" objects (also
+    those of the synchronous @ref Qore::Socket "Socket" calls) keep the socket and the goal with the operation instead
+    of in these members, so that no member storage is allocated for them; the library accesses both forms with
+    \c qore_poll_op_set_member() and \c qore_poll_op_get_referenced_member().
 
     This class is only usable by internal classes; it is not directly usable by %Qore classes.
 
     @since %Qore 1.12
+
+    @note since %Qore 3.0 the members are \c private:internal; before, they were \c private, so a subclass could read
+    and write them, and they were shown with the object (qore#6839)
 */
 qclass SocketPollOperationBase<T> [
-    private_members=object sock,string goal,auto data_save;
+    internal_members=object sock,string goal;
     ns=Qore;
     arg=SocketPollOperationBase* poll;
     vparent=AbstractPollOperation<T>;
@@ -72,7 +83,7 @@ SocketPollOperationBase::destructor() {
 /** @return the goal set in the constructor
 */
 string SocketPollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state

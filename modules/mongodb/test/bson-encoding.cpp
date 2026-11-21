@@ -52,13 +52,14 @@ private:
 constexpr const char* utf8_text = "caf\xc3\xa9";
 constexpr const char* latin1_text = "caf\xe9";
 
-bool hasBytes(const QoreString* str, const char* bytes, const QoreEncoding* enc) {
-    return str && str->getEncoding() == enc && str->size() == std::strlen(bytes)
-        && !std::memcmp(str->c_str(), bytes, str->size());
+// the string is read in either representation: a value can hold a short string inline, with no QoreStringNode
+bool hasBytes(const QoreValue v, const char* bytes, const QoreEncoding* enc) {
+    QoreStringDataHelper str(v);
+    return str && str.getEncoding() == enc && str == bytes;
 }
 
-const QoreStringNode* getString(const QoreHashNode* h, const char* key) {
-    return h->getKeyValue(key).get<const QoreStringNode>();
+QoreValue getString(const QoreHashNode* h, const char* key) {
+    return h->getKeyValue(key);
 }
 
 // strings and keys read from BSON

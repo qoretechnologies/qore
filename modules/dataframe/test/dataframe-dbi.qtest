@@ -12,6 +12,7 @@
 %requires Util
 
 %requires dataframe
+%requires ../../../examples/test/qlib/SqlUtil/TestRunIsolation.qm
 
 %exec-class DataFrameDbiTest
 
@@ -48,11 +49,17 @@ class DataFrameDbiTest inherits QUnit::Test {
         }
     }
 
-    private verifyDriver(string label, Datasource ds) {
+    #! checks a driver with the datasource; @a connstr is the datasource string of its environment variable, if any
+    private verifyDriver(string label, Datasource ds, *string connstr) {
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
-            testSkip(label + " connection not available: " + ex.err + ": " + ex.desc);
+            # a database outage is not a reason to skip: the variable is set, so the test case fails with the
+            # variable, the masked datasource and the error (qore#6934)
+            if (connstr) {
+                TestRun::failUnreachable(connstr, ex);
+            }
+            testSkip(label + " connection not available: " + ex.err);
         }
 
         string table = sprintf("qdfdbi%d", getpid());
@@ -132,7 +139,7 @@ class DataFrameDbiTest inherits QUnit::Test {
         if (!connstr) {
             testSkip(label + " connection string not set");
         }
-        verifyDriver(label, getDatasource(label, connstr));
+        verifyDriver(label, getDatasource(label, connstr), connstr);
     }
 
     #! Returns a datasource for the datasource string; skips the test case if the module of its driver cannot be

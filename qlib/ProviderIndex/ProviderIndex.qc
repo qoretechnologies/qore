@@ -392,7 +392,7 @@ public class ProviderIndex inherits ProviderIndexUtil {
     }
 
     #! Returns a description with its unique keys replaced, and counts the work done
-    private static auto replaceUniqueKeys(auto description) {
+    private:internal static auto replaceUniqueKeys(auto description) {
         ProviderIndexUniqueKeys replacer();
         auto rv = replacer.replace(description);
         AutoLock al(unique_key_lock);
@@ -447,13 +447,13 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Returns the current cancellation generation
-    private static int getCancelGeneration() {
+    private:internal static int getCancelGeneration() {
         AutoLock al(worker_lock);
         return cancel_generation;
     }
 
     #! Returns True if builds of the given generation have been cancelled
-    private static bool isCancelled(int generation) {
+    private:internal static bool isCancelled(int generation) {
         AutoLock al(worker_lock);
         return cancel_generation != generation;
     }
@@ -644,7 +644,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         a missing expected identity is only recorded if its app or action has no other failure, which caused it,
         and a failure reported more than once is recorded once
     */
-    private static hash<string, list<hash<auto>>> getFailureMap(
+    private:internal static hash<string, list<hash<auto>>> getFailureMap(
             *list<hash<DataProviderDiscoveryFailureInfo>> unavailable, hash<string, string> module_names) {
         # app -> action ("" for the app itself) -> failures
         hash<string, hash<string, list<hash<auto>>>> identities = {};
@@ -689,7 +689,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
 
         @return the owner's module name, or @ref nothing if it is not known
     */
-    private static *string getFailureModule(*string module_context, hash<string, string> module_names) {
+    private:internal static *string getFailureModule(*string module_context, hash<string, string> module_names) {
         if (!module_context.val()) {
             return NOTHING;
         }
@@ -709,7 +709,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @return \c failed_apps: the number of apps whose own initialization failed, and \c failed_actions: the
         number of actions that failed
     */
-    private static hash<auto> getFailureSummary(*hash<string, list<hash<auto>>> failuremap) {
+    private:internal static hash<auto> getFailureSummary(*hash<string, list<hash<auto>>> failuremap) {
         int apps = 0;
         int actions = 0;
         foreach list<hash<auto>> failures in ((failuremap ?? {}).iterator()) {
@@ -730,7 +730,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
 
         @param failuremap the failures recorded in the index
     */
-    private static logFailures(*hash<string, list<hash<auto>>> failuremap) {
+    private:internal static logFailures(*hash<string, list<hash<auto>>> failuremap) {
         if (!failuremap) {
             return;
         }
@@ -764,7 +764,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
 
         @return the connection scheme registry revision of the snapshot
     */
-    private static int snapshotIndex(reference<hash<DataProviderIndexInfo>> index,
+    private:internal static int snapshotIndex(reference<hash<DataProviderIndexInfo>> index,
             DataProviderDiscoverySession discovery, *list<string> app_filter,
             reference<list<hash<auto>>> type_info_mismatches) {
         # Finish deferred registration, output-type resolution, and scheme loading before starting the authoritative
@@ -879,7 +879,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Resolves exact runtime ownership; never infers a module name from an artifact filename
-    private static string moduleDependency(string value, hash<string, string> module_names) {
+    private:internal static string moduleDependency(string value, hash<string, string> module_names) {
         if (exists module_names{value}) {
             return module_names{value};
         }
@@ -904,7 +904,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         description alone, and the index stores the table once (see ProviderIndexUtil).  The keys of the table do
         not depend on the process, so the same index is always written identically.
     */
-    private static *hash<string, hash<auto>> getSerializableAppActions(string app,
+    private:internal static *hash<string, hash<auto>> getSerializableAppActions(string app,
             DataProviderDiscoverySession discovery, reference<list<hash<auto>>> type_info_mismatches) {
         hash<string, hash<auto>> rv;
         # the option types of the app, described with one type table
@@ -965,7 +965,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
 
         @return the actions that are indexed
     */
-    private static *hash<string, hash<auto>> finishAppTypes(string app, *hash<string, hash<auto>> actions,
+    private:internal static *hash<string, hash<auto>> finishAppTypes(string app, *hash<string, hash<auto>> actions,
             ProviderIndexAppTypes types, DataProviderDiscoverySession discovery,
             reference<list<hash<auto>>> type_info_mismatches) {
         if (!actions) {
@@ -1031,7 +1031,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Returns the key of the first type that is not plain data that a description refers to, if any
-    private static *string getNotPlainType(hash<auto> info, hash<string, hash<DataTypeInfo>> table,
+    private:internal static *string getNotPlainType(hash<auto> info, hash<string, hash<DataTypeInfo>> table,
             hash<string, string> not_plain) {
         hash<string, bool> seen = {};
         list<string> todo = ();
@@ -1064,7 +1064,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @return the info of each registered factory, keyed by factory name; a factory that is not registered has
         no info
     */
-    private static hash<string, hash<auto>> getSerializableFactoryInfo(*list<string> factories,
+    private:internal static hash<string, hash<auto>> getSerializableFactoryInfo(*list<string> factories,
             DataProviderDiscoverySession discovery) {
         hash<string, bool> registered = map {$1: True}, DataProvider::listFactories();
         hash<string, hash<auto>> rv = {};
@@ -1094,7 +1094,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Return apps to include in the index
-    private static list<hash<DataProviderAppInfo>> getIndexApps(*list<string> apps) {
+    private:internal static list<hash<DataProviderAppInfo>> getIndexApps(*list<string> apps) {
         list<hash<DataProviderAppInfo>> all_apps = DataProviderActionCatalog::getAllApps();
         if (!apps) {
             return all_apps;
@@ -1117,7 +1117,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             added here, so that checkPlainData() does not walk it again; the types of the table are checked by
             finishAppTypes()
     */
-    private static *hash<auto> getSerializableActionOptions(hash<DataProviderActionInfo> action,
+    private:internal static *hash<auto> getSerializableActionOptions(hash<DataProviderActionInfo> action,
             ProviderIndexAppTypes types, reference<hash<string, bool>> plain) {
         hash<auto> rv;
         foreach hash<auto> i in (action.options.pairIterator()) {
@@ -1140,7 +1140,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @throw PROVIDER-INDEX-ERROR the value contains an object or a call reference, such as a type option set to
         a closure
     */
-    private static checkPlainData(auto value, string path, *hash<string, bool> plain) {
+    private:internal static checkPlainData(auto value, string path, *hash<string, bool> plain) {
         switch (value.typeCode()) {
             case NT_HASH:
                 foreach hash<auto> i in (value.pairIterator()) {
@@ -1167,7 +1167,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
 
     #! Returns @ref True if the given value contains only plain data that can be written to the index
     /** The test of checkPlainData(), without the path of each value, which only an error needs */
-    private static bool isPlainData(auto value) {
+    private:internal static bool isPlainData(auto value) {
         switch (value.typeCode()) {
             case NT_HASH:
                 foreach auto v in (value.iterator()) {
@@ -1207,7 +1207,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @return the descriptions that do not restore an equivalent type, by type identity: a hash with a \c path
         key giving the first differing key of the description, or an \c error key if the type cannot be restored
     */
-    private static hash<string, hash<auto>> checkAppTypes(hash<string, hash<DataTypeInfo>> roots,
+    private:internal static hash<string, hash<auto>> checkAppTypes(hash<string, hash<DataTypeInfo>> roots,
             hash<string, hash<DataTypeInfo>> table) {
         hash<string, hash<auto>> rv = {};
         if (!roots) {
@@ -1241,7 +1241,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
 
         @return the descriptions that do not restore an equivalent type, by type identity
     */
-    private static hash<string, hash<auto>> checkRestoredTypes(hash<string, hash<DataTypeInfo>> roots,
+    private:internal static hash<string, hash<auto>> checkRestoredTypes(hash<string, hash<DataTypeInfo>> roots,
             hash<string, hash<DataTypeInfo>> table, code<hash<string, AbstractDataProviderType>()> restore) {
         hash<string, hash<auto>> rv = {};
         hash<string, AbstractDataProviderType> restored;
@@ -1276,7 +1276,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
 
         @return the restored types, by type identity
     */
-    private static hash<string, AbstractDataProviderType> restoreAppTypes(hash<string, hash<DataTypeInfo>> roots,
+    private:internal static hash<string, AbstractDataProviderType> restoreAppTypes(hash<string, hash<DataTypeInfo>> roots,
             hash<string, hash<DataTypeInfo>> table) {
         # the types are the types of the fields of a hash type, which is restored with the type table
         HashDataType holder("ProviderIndexRestoreCheck");
@@ -1290,7 +1290,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Returns the path of the first difference between two type descriptions, ignoring unique keys
-    private static *string getTypeInfoDifference(auto a, auto b, string path) {
+    private:internal static *string getTypeInfoDifference(auto a, auto b, string path) {
         if (a.typeCode() == NT_HASH && b.typeCode() == NT_HASH) {
             foreach string key in (keys (a + b)) {
                 if (key == "unique_key") {
@@ -1318,7 +1318,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Get YAML-serializable data provider info
-    private static *hash<auto> getSerializableDataProviderInfo(*hash<auto> info) {
+    private:internal static *hash<auto> getSerializableDataProviderInfo(*hash<auto> info) {
         if (!info) {
             return;
         }
@@ -1357,7 +1357,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     }
 
     #! Get YAML-serializable data provider options
-    private static *hash<auto> getSerializableDataProviderOptions(*hash<auto> options) {
+    private:internal static *hash<auto> getSerializableDataProviderOptions(*hash<auto> options) {
         return map {$1.key: $1.value + {
             "type": (map $1.getBaseTypeName(), $1.value.type),
         }}, options.pairIterator();
@@ -1461,7 +1461,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     }
 
     #! Returns the worker's batch; the first call also prepares the worker process for it
-    private static hash<auto> getWorkerBatch(string batch_path) {
+    private:internal static hash<auto> getWorkerBatch(string batch_path) {
         if (worker_batch) {
             return worker_batch;
         }
@@ -1496,7 +1496,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
         @return the worker result, without its \c id
     */
-    private static hash<auto> indexWorkerBatch(hash<auto> batch) {
+    private:internal static hash<auto> indexWorkerBatch(hash<auto> batch) {
         *list<string> app_filter = batch.apps;
         *DataProviderDiscoverySession discovery = DataProviderActionCatalog::beginDiscovery((), app_filter);
         *DataProviderQualifiedDiscovery qualification;
@@ -1611,7 +1611,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
         @return the maps of the worker's index, except its actions, and a description of each app's metadata
     */
-    private static hash<auto> writeWorkerFragments(hash<DataProviderIndexInfo> index, hash<auto> batch) {
+    private:internal static hash<auto> writeWorkerFragments(hash<DataProviderIndexInfo> index, hash<auto> batch) {
         hash<auto> apps = {};
         foreach string app in (keys index.appinfomap) {
             *hash<auto> actions = index.actioninfomap{app};
@@ -1647,7 +1647,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     }
 
     #! Returns the given value with all objects and call references replaced by descriptions
-    private static auto toPlainData(auto value) {
+    private:internal static auto toPlainData(auto value) {
         switch (value.typeCode()) {
             case NT_HASH:
                 return map {$1.key: toPlainData($1.value)}, value.pairIterator();
@@ -1663,7 +1663,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     }
 
     #! Builds the index with worker processes
-    private static hash<auto> createDataProviderIndexWithWorkers(hash<DataProviderIndexInfo> index,
+    private:internal static hash<auto> createDataProviderIndexWithWorkers(hash<DataProviderIndexInfo> index,
             hash<ProviderIndexCreateOptions> opts, date start) {
 %ifdef NoProcess
         throw "PROVIDER-INDEX-WORKER-ERROR", "the process module 2.2 or later is required; index worker processes "
@@ -2058,7 +2058,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
         @throw PROVIDER-INDEX-WORKER-ERROR the fragment is corrupt or does not describe the action
     */
-    private static hash<auto> getFragmentAction(string staging_dir, string app, string action, hash<auto> fragment,
+    private:internal static hash<auto> getFragmentAction(string staging_dir, string app, string action, hash<auto> fragment,
             reference<hash<string, *hash<auto>>> fragment_actions) {
         if (!fragment_actions.hasKey(fragment.file)) {
             binary data = ReadOnlyFile::readBinaryFile(staging_dir + DirSep + fragment.file);
@@ -2080,7 +2080,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     /** The option type descriptions are compared as they describe their types, independently of the keys of the
         type tables they refer to
     */
-    private static *string getActionDifference(hash<auto> a, hash<auto> b) {
+    private:internal static *string getActionDifference(hash<auto> a, hash<auto> b) {
         if (*string rv = getTypeInfoDifference(a - "options", b - "options", "")) {
             return rv;
         }
@@ -2110,7 +2110,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         @return a description of the error, or @ref nothing if the worker reported a result, which can itself report
         discovery failures
     */
-    private static *string getWorkerRunError(hash<auto> run, int timeout_ms) {
+    private:internal static *string getWorkerRunError(hash<auto> run, int timeout_ms) {
         *hash<auto> result = run.result;
         if (*string error = run.error ?? result.error) {
             return error;
@@ -2128,7 +2128,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     }
 
     #! Returns the worker batches for a build
-    private static list<hash<auto>> planWorkerBatches(hash<ProviderIndexCreateOptions> opts) {
+    private:internal static list<hash<auto>> planWorkerBatches(hash<ProviderIndexCreateOptions> opts) {
         list<hash<auto>> batches = ();
         # as in a single-process build, registered factories are indexed only if environment modules are loaded
         bool collect_factories = opts.load_environment && getenv("QORE_DATA_PROVIDERS");
@@ -2178,7 +2178,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
 %ifndef NoProcess
     #! Runs one worker and returns the result of the run
-    private static hash<auto> runWorker(hash<auto> batch, list<string> command, string staging_dir, int timeout_ms,
+    private:internal static hash<auto> runWorker(hash<auto> batch, list<string> command, string staging_dir, int timeout_ms,
             int generation) {
         string base = staging_dir + DirSep + batch.id;
         batch += {
@@ -2243,7 +2243,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 %endif
 
     #! Returns the end of the given file for error reports
-    private static *string getFileTail(string path, int size = 8192) {
+    private:internal static *string getFileTail(string path, int size = 8192) {
         try {
             # the tail can start in the middle of a character, so it is read without a check of its encoding
             ReadOnlyFile f(path, NOTHING, ENCODING_ERRORS_KEEP);
@@ -2258,7 +2258,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     }
 
     #! Returns the default worker command: the current Qore interpreter running runIndexWorker()
-    private static list<string> getDefaultWorkerCommand() {
+    private:internal static list<string> getDefaultWorkerCommand() {
         *string qore;
 %ifndef NoProcess
         if (HAVE_PROCESS_GETEXECUTABLEPATH) {
@@ -2285,7 +2285,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         @return the previous values of the environment variables set, to be restored with
         restoreWorkerEnvironment()
     */
-    private static hash<string, *string> setWorkerEnvironment() {
+    private:internal static hash<string, *string> setWorkerEnvironment() {
         hash<string, *string> rv = {
             ProviderIndexBuildEnvVar: getenv(ProviderIndexBuildEnvVar),
         };
@@ -2303,7 +2303,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     }
 
     #! Restores the environment changed by setWorkerEnvironment()
-    private static restoreWorkerEnvironment(hash<string, *string> saved_env) {
+    private:internal static restoreWorkerEnvironment(hash<string, *string> saved_env) {
         foreach hash<auto> i in (saved_env.pairIterator()) {
             if (exists i.value) {
                 setenv(i.key, i.value);
@@ -2314,7 +2314,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     }
 
     #! Returns a map of the names, paths, and file names of all loaded modules to their names
-    private static hash<string, string> getModuleNames() {
+    private:internal static hash<string, string> getModuleNames() {
         hash<string, string> module_names;
         foreach hash<auto> mod in (get_module_hash().values()) {
             module_names{mod.name} = mod.name;
@@ -2329,7 +2329,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     }
 
     #! Removes the staging directory of a worker build
-    private static removeStagingDir(string dir) {
+    private:internal static removeStagingDir(string dir) {
         try {
             Dir d();
             d.chdir(dir);
@@ -2342,7 +2342,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     }
 
     #! Try to load and initialize TypeScriptActionInterface
-    private static tryLoadTypeScriptActionInterface(
+    private:internal static tryLoadTypeScriptActionInterface(
             DataProviderDiscoverySession discovery) {
         try {
             load_module("TypeScriptActionInterface");
@@ -2355,7 +2355,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     }
 
     #! Iterate all data provider factories and add them to the index
-    private static addDataProviderFactories(
+    private:internal static addDataProviderFactories(
             reference<hash<DataProviderIndexInfo>> index,
             DataProviderDiscoverySession discovery) {
          # Iterate all factories and add any new data providers

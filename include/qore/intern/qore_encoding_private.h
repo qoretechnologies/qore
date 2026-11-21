@@ -111,6 +111,16 @@ struct qore_encoding_private {
     */
     bool iconv_accepts_invalid = false;
 
+    //! true for a multi-byte encoding whose character functions are those of its definition
+    /** (the Shift_JIS forms, the encodings of the named multi-byte families of charset.cpp by any of their names, and
+        the built-in \c "WINDOWS-936"), not those of a family found by probing its conversions, which are an
+        approximation (ex: glibc's \c "T.61", whose diacritic prefixes make it look like a double-byte encoding, and
+        whose C1 control characters the family refuses), or those given to QoreEncodingManager::add() by a module;
+        the input of a conversion from such an encoding is checked with its character functions (see
+        IconvHelper::isStructuredMultiByte()) (qore#6796)
+    */
+    bool defined_multibyte = false;
+
     //! A tag unknown to iconv has the historical single-byte character semantics.
     bool opaque_single_byte = false;
 

@@ -1,19 +1,9 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in qcc executables and in children that run the AST
-# test-platform: macos - the AOT code generation and linking of qcc executables with outlined function-body helpers
 # Copyright 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
+# The cases of the AOTOutlineExceptionScopes-<n>.qtest tests: each compiles and runs a part of the scripts of this
+# directory, so that each takes a short time, and together they run every script (see addPartCase())
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../../ExecModeHarness.qm
-%requires ../../TestInterpreter.qm
-
-%exec-class AOTOutlineExceptionScopesTest
 
 #! qcc compiles the exception paths, catch blocks and handlers of functions outlined at low thresholds as the AST does
 /** Each script of this directory has functions whose try statements, catch blocks and \c on_exit, \c on_error and
@@ -33,12 +23,15 @@
     The test compiles each script at -O0 and -O3 with several region sizes and checks that the executables print what
     the AST prints.
 */
-class AOTOutlineExceptionScopesTest inherits QUnit::Test {
+class AOTOutlineExceptionScopesBase inherits QUnit::Test {
     public {
         #! the region sizes forced
         const Targets = (4, 8, 16, 32);
         #! the qcc optimization levels
         const OptLevels = ("-O0", "-O3");
+
+        #! the number of parts that the scripts are compiled in
+        const Parts = 3;
     }
 
     private {
@@ -46,9 +39,13 @@ class AOTOutlineExceptionScopesTest inherits QUnit::Test {
         string qcc_bin;
         #! the library path of the qcc compiles and of the executables
         string lib_env;
+
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
     }
 
-    constructor() : QUnit::Test("AOTOutlineExceptionScopesTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
@@ -57,14 +54,25 @@ class AOTOutlineExceptionScopesTest inherits QUnit::Test {
             qcc_bin = "qcc";
         }
         lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
-        addTestCase("exception scopes with the outliner's thresholds forced low", \testScripts());
+        addPartCase(1, "exception scopes with the outliner's thresholds forced low, part 1", \testScripts(), 1);
+        addPartCase(2, "exception scopes with the outliner's thresholds forced low, part 2", \testScripts(), 2);
+        addPartCase(3, "exception scopes with the outliner's thresholds forced low, part 3", \testScripts(), 3);
         set_return_value(main());
     }
 
-    testScripts() {
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! compiles and runs the scripts of part \a n: those whose index in the sorted list is n - 1 modulo Parts
+    testScripts(int n) {
         TmpDir dir("qore-aot-outline-exc-");
-        list<string> scripts = sort(glob(get_script_dir() + "/*.q") ?? ());
-        assertTrue(scripts.size() > 0, "the scripts are found");
+        list<string> all = sort(glob(get_script_dir() + "/*.q") ?? ());
+        assertTrue(all.size() > 0, "the scripts are found");
+        list<string> scripts = map all[$1], xrange(n - 1, all.size(), Parts);
+        assertTrue(scripts.size() > 0, sprintf("part %d has scripts", n));
         foreach string src in (scripts) {
             string name = basename(src);
             # a script can restrict the region sizes with a line "# outline-targets: <n> ...", for a configuration

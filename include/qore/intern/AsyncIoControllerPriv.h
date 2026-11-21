@@ -168,8 +168,9 @@ struct AsyncIoDeferredRelease {
     //! (QoreSandboxContext::module_cleanup_delegate): release() then runs with the delegation, wherever it runs (a
     //! callback worker, a synchronous caller, the thread that ends a debug hold), as releasing them can run the
     //! destructors of objects of module classes, which enter the Programs of the modules (see
-    //! qore_close_module_programs())
-    bool module_cleanup_delegate = false;
+    //! qore_close_module_programs()); counted until the references are released (QoreModuleCleanupWorkFlag), as the
+    //! module cleanup waits for their release (qore#6928)
+    QoreModuleCleanupWorkFlag module_cleanup_delegate;
 
     //! Returns True if no references are held
     DLLLOCAL bool empty() const {
@@ -359,6 +360,11 @@ public:
         //! For DT_ABORT: the task in native_task delivers the result after abort() (see
         //! AsyncIoControllerPriv::AbortThenDeliverTask) and calls onComplete() when it is run
         bool after_abort_on_complete = false;
+#ifdef DEBUG
+        //! Debug-only: the item was held by the dbg_async_io_hold_module_cleanup_work() test hook; the worker writes on
+        //! stderr when it has ended (qore#6928)
+        bool dbg_held_module_cleanup_work = false;
+#endif
     };
 
     //! Creates the dispatcher
@@ -524,6 +530,16 @@ public:
     */
     DLLLOCAL bool dbgWaitIdleWaiter(int timeout_ms);
 
+    //! Debug-only: waits until the given number of onComplete() items have been queued for the workers
+    /** Counted once the item is in the queue (or discarded by enqueue()), so a flush of the callbacks made after the
+        wait covers it; for tests that must wait for the completion of an operation that no Qore code of theirs can
+        see, such as one whose callbacks are skipped (qore#6685); an onComplete() run after the operation's abort()
+        (AbortThenDeliverTask) is not counted
+
+        @return true if the count was reached, false if it was not when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitOnCompleteQueued(int64_t count, int timeout_ms);
+
     //! Debug-only: the number of onComplete() calls dispatched so far
     DLLLOCAL int64_t dbgOnCompleteDispatched() const {
         return dbg_on_complete_dispatched.load(std::memory_order_acquire);
@@ -642,6 +658,10 @@ private:
     int dbg_idle_waiters = 0;
     //! Debug-only: signaled when a thread blocks in waitForIdle()
     QoreCondition dbg_idle_waiter_cond;
+    //! Debug-only: the number of onComplete() items queued (see dbgWaitOnCompleteQueued()); protected by m
+    int64_t dbg_on_complete_queued = 0;
+    //! Debug-only: signaled when an onComplete() item has been queued
+    QoreCondition dbg_on_complete_queued_cond;
 #endif
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
@@ -668,6 +688,15 @@ private:
 
     //! Enqueue a work item, starting a worker if needed
     DLLLOCAL void enqueue(AsyncWorkItem&& item);
+
+#ifdef DEBUG
+    //! Debug-only: holds @a item, taking it over, if the dbg_async_io_hold_module_cleanup_work() test hook holds the
+    //! onComplete() work items that the module cleanup hands over; returns true if it is held (qore#6928)
+    DLLLOCAL bool dbgHoldModuleCleanupWorkItem(AsyncWorkItem& item);
+
+    //! re-queues the items held
+    friend void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold);
+#endif
 
     //! Releases every reference held by a work item that will never be dispatched
     /** Must be called with the dispatcher lock NOT held: these derefs can run Qore
@@ -939,6 +968,10 @@ public:
 
     //! Debug-only: waits until a thread waits in a flush of the callbacks (see QoreCallDispatcher::dbgWaitIdleWaiter())
     DLLLOCAL bool dbgWaitFlushBlocked(int timeout_ms);
+
+    //! Debug-only: waits until the given number of onComplete() items have been queued since the dispatcher was
+    //! created (see QoreCallDispatcher::dbgWaitOnCompleteQueued())
+    DLLLOCAL bool dbgWaitOnCompleteQueued(int64_t count, int timeout_ms);
 #endif
 
     //! Wakes a socket operation by QoreObject identity
@@ -1246,8 +1279,10 @@ private:
         //! True if the thread that created the command is the module cleanup or runs work that it handed over
         /** An operation that the command cancels is then canceled for the cleanup: what the operation runs after
             that is part of the cleanup (see doCancelIntern() and qore_close_module_programs())
+            Counted until the command is destroyed, after it has been processed (QoreModuleCleanupWorkFlag): the module
+            cleanup waits for it, and for the work that it hands over in turn (qore#6928)
         */
-        bool module_cleanup_delegate = commandModuleCleanupDelegation();
+        QoreModuleCleanupWorkFlag module_cleanup_delegate{commandModuleCleanupDelegation()};
         std::string key;                //!< For Cancel / ContinuePollResult / SubmitOp: the cache key
         //! For Cancel: if set, only the operation of this object is canceled (another operation can have taken the key)
         /** Compared by address only; the canceling thread holds a reference to the object until the command has been
@@ -2347,6 +2382,14 @@ public:
         they are released
     */
     DLLLOCAL static void dbgHoldStepResults(bool hold);
+
+    //! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (qore#6928)
+    /** Called by the dbg_async_io_hold_module_cleanup_work() test hook: such an item (a canceled operation's
+        onComplete() with QoreSandboxContext::module_cleanup_delegate) is held instead of queued until the module
+        cleanup releases it (qore_dbg_release_held_module_cleanup_work()), so that a test can make it run as late as
+        the cleanup lets it
+    */
+    DLLLOCAL static void dbgHoldModuleCleanupWork(bool hold);
 
     //! Debug-only: waits until at least @p count step results are held; returns false if the wait timed out
     DLLLOCAL static bool dbgWaitHeldStepResults(size_t count, int64_t timeout_ms);

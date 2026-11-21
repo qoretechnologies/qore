@@ -65,7 +65,9 @@ public class SalesforceRestDataProviderEnvClientOptionsTest inherits QUnit::Test
         # options that change how the worker runs (QORE_TEST_OPTS)
         list<string> pass = ();
         foreach string var in (PassedEnv) {
+            # live-provider-optin: PassedEnv names the search path and qore's own directories, no credentials
             if (exists ENV{var}) {
+                # live-provider-optin: PassedEnv names the search path and qore's own directories, no credentials
                 pass += sprintf("%s=%s", var, quote(ENV{var}));
             }
         }

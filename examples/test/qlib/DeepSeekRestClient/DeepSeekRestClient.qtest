@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires json
 %requires QoreLlmTypes
 %requires QoreLlmUtils
@@ -79,7 +80,7 @@ public class DeepSeekRestClientTest inherits QUnit::Test {
             \restOptionsTest());
         addTestCase("automatic connection URL and app identity", \connectionConfigTest());
         addTestCase("sync and async pings verify authentication", \pingTest());
-        if (ENV.DEEPSEEK_LIVE) {
+        if (LiveProvider::get("deepseek", "DEEPSEEK_LIVE")) {
             addTestCase("live valid and invalid authentication", \livePingTest());
         }
         addTestCase("current models expose supported reasoning levels", \modelEfforts());
@@ -170,7 +171,8 @@ public class DeepSeekRestClientTest inherits QUnit::Test {
 
     private livePingTest() {
         DeepSeekRestClient::DeepSeekRestConnection conn("live", "live authentication",
-            DeepSeekRestClient::DeepSeekRestConnection::DefaultUrl, {}, {"apikey": ENV.DEEPSEEK_APIKEY});
+            DeepSeekRestClient::DeepSeekRestConnection::DefaultUrl, {}, {"apikey":
+                LiveProvider::get("deepseek", "DEEPSEEK_APIKEY")});
         assertTrue(conn.ping(True).ok);
         DeepSeekRestClient::DeepSeekRestConnection invalid("invalid", "negative authentication",
             DeepSeekRestClient::DeepSeekRestConnection::DefaultUrl, {}, {"apikey": "invalid-qore-audit-key"});

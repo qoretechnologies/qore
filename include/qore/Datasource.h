@@ -160,9 +160,15 @@ private:
 
     Two copies of connection values are kept in case the values are changed while a
     connection is in use.
+
+    Connection values (the user name, password, database name, database encoding name and hostname) are kept as bytes
+    in the default encoding: the setters (ex: setPendingDBName()) take them in it, and the getters return them in it
+    (ex: getDBNameStr(), getPendingDBName()); the Qore-language API converts a value given in another encoding to the
+    default encoding before setting it (since %Qore 3.0)
     @see DBIDriver
 */
 class Datasource {
+    friend class qore_datasource_ops;
     friend class QoreSQLStatement;
     friend struct qore_ds_private;
 
@@ -171,9 +177,6 @@ private:
 
     //! this function is not implemented; it is here as a private function in order to prohibit it from being used
     Datasource& operator=(const Datasource&) = delete;
-
-    //! this helper method shares code for exec() and execRaw() methods
-    DLLLOCAL QoreValue exec_internal(bool doBind, const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink);
 
 protected:
     //! frees all connection values
@@ -1112,14 +1115,7 @@ public:
     */
     DLLEXPORT int reportMutationStreamEnd(int64 consumed_bytes, bool ok, ExceptionSink* xsink);
 
-    //! returns the mutation observer context for this datasource or nullptr; internal only
-    DLLLOCAL SqlMutationContext* getMutationContext() const;
-
-    //! replaces the mutation observer context; takes ownership of the reference; internal only
-    DLLLOCAL void setMutationContext(SqlMutationContext* ctx, ExceptionSink* xsink);
-
-    //! returns the mutation observer context, creating it if necessary; internal only
-    DLLLOCAL SqlMutationContext* getOrCreateMutationContext();
-};
+    
+    };
 
 #endif // _QORE_DATASOURCE_H

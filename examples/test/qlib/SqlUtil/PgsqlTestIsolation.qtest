@@ -12,6 +12,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -43,7 +44,7 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
                 Datasource connstr_ds(connstr);
                 connstr_ds.open();
             } catch (hash<ExceptionInfo> ex) {
-                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+                skip_reason = TestRun::getConnectFailureReason("no DB connection", ex);
             }
         }
         addTestCase("a non-PostgreSQL connection has no run schema", \notPgsql());
@@ -70,7 +71,7 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
 
     private checkSkip() {
         if (skip_reason) {
-            testSkip(skip_reason);
+            TestRun::skipOrFail(skip_reason);
         }
     }
 
@@ -138,6 +139,7 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
         on_exit unlink(ready);
         string out = backquote(sprintf("PGSQL_TEST_ISOLATION_READY=%s %s -ne '%%requires %s\nprintf(\"%%s "
             "%%y\\n\", PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, \"ready\"), "
+            # live-provider-optin: a variable that the test sets for its child
             "getenv(\"PGSQL_TEST_ISOLATION_READY\"));' 2>&1", ready, shellQuote(getQoreExecutable()), module));
         (string schema, string env) = trim(out).split(" ");
         assertRegex("^qtest_ready_[a-z0-9]+_[0-9]+_[0-9]+$", schema);

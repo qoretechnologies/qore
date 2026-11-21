@@ -1243,6 +1243,7 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
     }
     // whether the session advertises extended CONNECT (RFC 9220); setupHttp3() runs after the session is created
     session->enable_connect_protocol_ = sock->h3_enable_connect_protocol.load(std::memory_order_acquire);
+    session->setMaxHeaderListSize(sock->getMaxHeaderSize());
     // Clear the temporary socket pointer; it was only needed during init
     session->clearSockPtr();
     return session;
@@ -1304,6 +1305,10 @@ const char* QuicSession::raiseSettingsWaitCloseError(ExceptionSink* xsink) const
             xsink->raiseException("HTTP3-IDLE-CLOSE", "QUIC connection closed by its idle timer before the "
                 "server's HTTP/3 SETTINGS were received; the request was not sent");
             return "HTTP3-IDLE-CLOSE";
+        case CloseReason::Unresponsive:
+            xsink->raiseException("HTTP3-PEER-UNRESPONSIVE", "QUIC connection closed: the server sent nothing "
+                "after a request before its HTTP/3 SETTINGS were received; the request was not sent");
+            return "HTTP3-PEER-UNRESPONSIVE";
         case CloseReason::PeerClose:
             xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the server before its HTTP/3 "
                 "SETTINGS were received; the request was not sent");
@@ -2117,6 +2122,9 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     }
     // RFC 9297: Enable HTTP/3 datagrams (SETTINGS_H3_DATAGRAM)
     h3_settings.h3_datagram = 1;
+    // the limit of the header section that this side accepts; nghttp3 does not enforce it, the header callbacks do
+    // (qore#6867)
+    h3_settings.max_field_section_size = max_header_list_size_.load(std::memory_order_relaxed);
 
     auto* mem = nghttp3_mem_default();
 
@@ -2268,6 +2276,10 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     // connections too)
     ERR_clear_error();
     int rv = ngtcp2_conn_read_pkt(conn_, &path, &pi, data, len, last_rx_ts_);
+    if (!rv) {
+        // the peer answered: its connection state is alive (see setPeerResponseTimeout())
+        peer_response_deadline_ = 0;
+    }
     if (rv != 0) {
         // Handle specific error codes
         if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
@@ -2399,6 +2411,10 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
         last_rx_ts_ = nowLocked();
         int rv = ngtcp2_conn_read_pkt(conn_, &packets[i].path, &pi,
                                        packets[i].data, packets[i].len, last_rx_ts_);
+        if (!rv) {
+            // the peer answered: its connection state is alive (see setPeerResponseTimeout())
+            peer_response_deadline_ = 0;
+        }
         if (rv != 0) {
             if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
                 // see readPacketLocked()
@@ -2722,7 +2738,23 @@ ngtcp2_tstamp QuicSession::getExpiryLocked() const {
     if (!conn_) {
         return UINT64_MAX;
     }
-    return ngtcp2_conn_get_expiry2(conn_);
+    ngtcp2_tstamp expiry = ngtcp2_conn_get_expiry2(conn_);
+    // the deadline for a packet from the peer after a request (see setPeerResponseTimeout())
+    if (peer_response_deadline_ && peer_response_deadline_ < expiry) {
+        expiry = peer_response_deadline_;
+    }
+    return expiry;
+}
+
+void QuicSession::setPeerResponseTimeout(uint64_t timeout_ns) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    peer_response_timeout_ns_ = std::min<uint64_t>(timeout_ns, local_idle_timeout_ns_);
+}
+
+void QuicSession::armPeerResponseDeadlineLocked() {
+    if (!is_server_ && peer_response_timeout_ns_ && !peer_response_deadline_) {
+        peer_response_deadline_ = nowLocked() + peer_response_timeout_ns_;
+    }
 }
 
 ngtcp2_tstamp QuicSession::getExpiry() const {
@@ -2734,6 +2766,18 @@ int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
     if (!conn_) {
         xsink->raiseException("QUIC-ERROR", "QUIC connection not initialized");
         return -1;
+    }
+
+    // a request was sent, and the peer has sent nothing since for the peer response timeout: it did not receive the
+    // request, and its connection state is gone (see setPeerResponseTimeout()); the connection is closed as by its
+    // idle timer, which it would otherwise wait for, with the cause recorded
+    if (peer_response_deadline_ && nowLocked() >= peer_response_deadline_) {
+        printd(5, "QuicSession::handleExpiryLocked(): no packet from the peer within %lld ms of a request (session "
+            "%lld)\n", (long long)(peer_response_timeout_ns_ / 1000000), (long long)session_id_);
+        peer_response_deadline_ = 0;
+        peer_unresponsive_.store(true, std::memory_order_release);
+        closeIdleLocked();
+        return 0;
     }
 
     int rv = ngtcp2_conn_handle_expiry(conn_, nowLocked());
@@ -2853,6 +2897,11 @@ bool QuicSession::refuseRequestOnClosedLocked(ExceptionSink* xsink) {
         case CloseReason::Idle:
             xsink->raiseException("HTTP3-IDLE-CLOSE", "QUIC connection closed by its idle timer before the "
                 "request was sent; the request was not sent");
+            break;
+        case CloseReason::Unresponsive:
+            xsink->raiseException("HTTP3-PEER-UNRESPONSIVE", "QUIC connection closed: the server did not "
+                "acknowledge an earlier request (its connection state is gone, ex: it restarted); the request was "
+                "not sent");
             break;
         case CloseReason::LocalClose:
             xsink->raiseException("HTTP3-LOCAL-CLOSE", "QUIC connection closed locally before the request was "
@@ -3095,6 +3144,7 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
     stream->method = method;
     stream->path = path;
     stream->state = QuicStreamState::Open;
+    armPeerResponseDeadlineLocked();
 
     // Signal that there's data to write
     pending_write_.store(true, std::memory_order_release);
@@ -3236,6 +3286,7 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
         stream->connect_protocol = *proto_val;
         stream->connect_tunnel_active = true;
     }
+    armPeerResponseDeadlineLocked();
 
     // Signal that there's data to write (headers)
     pending_write_.store(true, std::memory_order_release);
@@ -3708,6 +3759,20 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
     }
 
     return closed_.load(std::memory_order_acquire) ? -1 : 1;
+}
+
+int64_t QuicSession::streamAckedBytes(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streaming_body_data_.find(stream_id);
+    if (it == streaming_body_data_.end()) {
+        return -1;
+    }
+    int64_t acked = static_cast<int64_t>(it->second.acked_total);
+#ifdef DEBUG
+    // tests simulate a peer that takes the data of a held stream a little at a time
+    acked += qore_dbg_quic_simulated_stream_progress(stream_id);
+#endif
+    return acked;
 }
 
 int QuicSession::streamSendFlushed(int64_t stream_id) {
@@ -4704,7 +4769,7 @@ QuicSession::CloseReason QuicSession::getCloseReason() const {
     // Without this check, idle H3 client connections would leak their UDP socket
     // forever because the controller's isClosed()-driven close path never fires.
     if (idle_closed_.load(std::memory_order_acquire)) {
-        return CloseReason::Idle;
+        return peer_unresponsive_.load(std::memory_order_acquire) ? CloseReason::Unresponsive : CloseReason::Idle;
     }
     // a server connection dropped without CONNECTION_CLOSE (see dropped_) is a local teardown
     if (dropped_.load(std::memory_order_acquire)) {
@@ -4752,11 +4817,26 @@ void QuicSession::markClosed() {
     notifyDatagramData();
 }
 
+#ifdef DEBUG
+// see qore_quic_test_silent_server_close()
+static std::atomic<bool> quic_test_silent_server_close_flag{false};
+
+void qore_quic_test_silent_server_close(bool silent) {
+    quic_test_silent_server_close_flag.store(silent, std::memory_order_release);
+}
+#endif
+
 ssize_t QuicSession::writeConnectionClose(uint8_t* buf, size_t buflen) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (!conn_ || ngtcp2_conn_in_draining_period(conn_)) {
         return 0;
     }
+#ifdef DEBUG
+    // a test closes the server as a killed server process is: its client is not told
+    if (is_server_ && quic_test_silent_server_close_flag.load(std::memory_order_acquire)) {
+        return 0;
+    }
+#endif
 
     ngtcp2_path_storage ps;
     ngtcp2_path_storage_zero(&ps);
@@ -4930,6 +5010,12 @@ int QuicSession::submitShutdownNotice(ExceptionSink* xsink) {
     if (goaway_sent_.load(std::memory_order_acquire)) {
         return 0;
     }
+#ifdef DEBUG
+    // see writeConnectionClose()
+    if (is_server_ && quic_test_silent_server_close_flag.load(std::memory_order_acquire)) {
+        return 0;
+    }
+#endif
     int rv = nghttp3_conn_submit_shutdown_notice(h3_conn_);
     if (rv != 0) {
         xsink->raiseException("QUIC-HTTP3-ERROR", "failed to submit shutdown notice: %s",
@@ -5876,11 +5962,35 @@ int QuicSession::h3BeginHeadersCallback(nghttp3_conn* /* conn */, int64_t stream
                                          void* conn_user_data, void* /* stream_user_data */) {
     try {
         auto* session = static_cast<QuicSession*>(conn_user_data);
-        session->getOrCreateStream(stream_id);
+        session->getOrCreateStream(stream_id)->header_list_size = 0;
     } catch (...) {
         return NGHTTP3_ERR_CALLBACK_FAILURE;
     }
     return 0;
+}
+
+//! counts a header field against the limit of the header list, and rejects the stream when it is exceeded
+/** @return true if the field is not to be kept: the stream is rejected (qore#6867)
+*/
+bool QuicSession::h3CheckHeaderListSize(QuicSession* session, QuicStreamInfo& stream, int64_t stream_id,
+        size_t name_len, size_t value_len) {
+    if (stream.header_too_large) {
+        return true;
+    }
+    stream.header_list_size += name_len + value_len + 32;
+    size_t max_size = session->max_header_list_size_.load(std::memory_order_relaxed);
+    if (stream.header_list_size <= max_size) {
+        return false;
+    }
+    // fail closed: nothing more of the header list is kept; the rest of the header block is decoded and dropped, as
+    // nghttp3 cannot be told to stop a header block in the middle (an error returned from a callback ends the whole
+    // connection), and the stream ends with an error when the block ends (see h3EndHeadersCallback())
+    stream.header_too_large = true;
+    stream.headers.clear();
+    stream.trailers.clear();
+    stream.error_message = "the HTTP/3 header of stream " + std::to_string(stream_id)
+        + " exceeds the maximum size of " + std::to_string(max_size) + " bytes";
+    return true;
 }
 
 int QuicSession::h3RecvHeaderCallback(nghttp3_conn* /* conn */, int64_t stream_id,
@@ -5893,6 +6003,10 @@ int QuicSession::h3RecvHeaderCallback(nghttp3_conn* /* conn */, int64_t stream_i
 
         nghttp3_vec name_vec = nghttp3_rcbuf_get_buf(name);
         nghttp3_vec value_vec = nghttp3_rcbuf_get_buf(value);
+
+        if (h3CheckHeaderListSize(session, *stream, stream_id, name_vec.len, value_vec.len)) {
+            return 0;
+        }
 
         std::string name_str(reinterpret_cast<const char*>(name_vec.base), name_vec.len);
         std::string value_str(reinterpret_cast<const char*>(value_vec.base), value_vec.len);
@@ -5946,6 +6060,10 @@ int QuicSession::h3RecvTrailerCallback(nghttp3_conn* /* conn */, int64_t stream_
         nghttp3_vec name_vec = nghttp3_rcbuf_get_buf(name);
         nghttp3_vec value_vec = nghttp3_rcbuf_get_buf(value);
 
+        if (h3CheckHeaderListSize(session, *stream, stream_id, name_vec.len, value_vec.len)) {
+            return 0;
+        }
+
         std::string name_str(reinterpret_cast<const char*>(name_vec.base), name_vec.len);
         // trailers carry no pseudo-header fields (RFC 9114 section 4.1)
         if (!name_str.empty() && name_str[0] != ':') {
@@ -5964,6 +6082,22 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
     try {
         auto* session = static_cast<QuicSession*>(conn_user_data);
         auto* stream = session->getOrCreateStream(stream_id);
+        if (stream->header_too_large) {
+            // the header list was larger than the limit and was dropped (see h3CheckHeaderListSize()): the stream is
+            // reset, so that the request is not dispatched; a client's request ends with the error (qore#6867)
+            nghttp3_conn_shutdown_stream_read(session->h3_conn_, stream_id);
+            int rv = session->is_server_
+                ? ngtcp2_conn_shutdown_stream(session->conn_, 0, stream_id, NGHTTP3_H3_EXCESSIVE_LOAD)
+                : ngtcp2_conn_shutdown_stream_read(session->conn_, 0, stream_id, NGHTTP3_H3_EXCESSIVE_LOAD);
+            if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
+                printd(1, "h3EndHeadersCallback(): shutting down stream %lld failed: %s\n", (long long)stream_id,
+                    ngtcp2_strerror(rv));
+            }
+            if (!session->is_server_) {
+                session->markStreamComplete(stream_id);
+            }
+            return 0;
+        }
         stream->headers_complete = true;
         stream->headers_end_stream = (fin != 0);
         // record the response header for the event sink of the client that issued the request: the
@@ -6678,6 +6812,7 @@ int QuicSession::h3AckedStreamDataCallback(nghttp3_conn* /* conn */, int64_t str
     if (sit != session->streaming_body_data_.end()) {
         auto& sbd = sit->second;
         sbd.front_acked += datalen;
+        sbd.acked_total += datalen;
         bool released = false;
         while (!sbd.sent_bufs.empty() && sbd.front_acked >= sbd.sent_bufs.front().size()) {
             sbd.front_acked -= sbd.sent_bufs.front().size();

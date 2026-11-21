@@ -36,6 +36,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/qore_encoding_private.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cctype>
 #include <iconv.h>
@@ -789,7 +790,7 @@ std::string qore_get_http_accept_charset(const char* t) {
                 // a name or an alias of an encoding that Qore knows is given as it is, a label of a character set
                 // (see qore_find_untrusted_encoding()) as the name of its encoding, which the server converts with;
                 // a label that the program registered as a name of another encoding is a label (qore#6570)
-                best = QoreEncodingManager::find(cs.c_str()) == enc ? cs : std::string(enc->getCode());
+                best = qore_encoding_manager_ops::find(cs.c_str()) == enc ? cs : std::string(enc->getCode());
                 best_q = q;
             }
         }

@@ -826,13 +826,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param body_streaming if True, the request body is sent with
         @ref HttpClientStreamHandle::sendData() "sendData()" while the response is read (with chunked transfer encoding over HTTP/1.1)
         @param body request body (optional)
+        @param deadline_us a deadline for the start of the request on the monotonic clock, in microseconds, as returned
+        by @ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()", which applies if it is earlier than the end
+        of the \c request_timeout option: for a request that is part of a longer operation with a time limit of its own
+        (since HttpClientIo 1.0, qore#6850)
 
         @return the stream handle ready for reading
 
         @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
-        @throw HTTPCLIENT-TIMEOUT the request was not started within the \c request_timeout option, which bounds the
-        acquisition of the connection and the wait for it to become ready, over all attempts; no attempt starts once
-        it has run out.
+        @throw HTTPCLIENT-TIMEOUT the request was not started within the \c request_timeout option (or by
+        \a deadline_us), which bounds the acquisition of the connection and the wait for it to become ready, over all
+        attempts; no attempt starts once it has run out.
         A connection that was not established in that time is named with its target and the time waited (\c host,
         \c port and \c timeout_ms in the argument), and a timeout of a request that retried a connection error
         gives that error (\c last_attempt_error in the argument)
@@ -843,7 +847,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
-            *hash<auto> headers, bool body_streaming = False, *data body) {
+            *hash<auto> headers, bool body_streaming = False, *data body, *int deadline_us) {
         checkRequestBody(method, headers, body, body_streaming);
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
@@ -862,6 +866,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         *int request_deadline = opts.request_timeout > 0
             ? clock_get_monotonic_us() + opts.request_timeout * 1000
             : NOTHING;
+        # the caller's deadline, if earlier (qore#6850); the stream's timeout errors then state the time left
+        *timeout request_limit = opts.request_timeout;
+        if (deadline_us && (!request_deadline || deadline_us < request_deadline)) {
+            request_limit = max(0, deadline_us - clock_get_monotonic_us()) / 1000;
+            request_deadline = deadline_us;
+        }
         while (True) {
             HttpClientStreamHandle stream;
             try {
@@ -874,7 +884,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
                 rethrow;
             }
-            stream.setRequestDeadline(request_deadline, opts.request_timeout);
+            stream.setRequestDeadline(request_deadline, request_limit);
             try {
                 stream.startStreaming(method, path, headers, body_streaming, body);
                 return stream;
@@ -2045,16 +2055,32 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     #! Returns the description of a timeout of a request that retried a connection error before it
     /** The timeout of the request ended the attempt that followed: the error of the earlier attempt, which the
         timeout's description does not give, names the cause (qore#6849)
+
+        @param desc the description of the timeout
+        @param retried_error the error of the attempt before the one that the timeout ended
+
+        @return the description of the timeout with the error of the earlier attempt, as the requests of the
+        connection manager give it: <tt>"<desc>; the attempt before failed with <err>: <desc>"</tt>
+
+        @since HttpClientIo 1.0 (public for callers that retry connections themselves, qore#6850)
     */
-    private static string getRetriedTimeoutDesc(string desc, hash<ExceptionInfo> retried_error) {
+    static string getRetriedTimeoutDesc(string desc, hash<ExceptionInfo> retried_error) {
         return sprintf("%s; the attempt before failed with %s: %s", desc, retried_error.err, retried_error.desc);
     }
 
     #! Returns the argument of a timeout of a request that retried a connection error before it
     /** The argument of the timeout (a hash, or \c original_arg with any other value) with \c last_attempt_error:
         the \c err, \c desc and \c arg of the error of the earlier attempt (qore#6849)
+
+        @param arg the argument of the timeout
+        @param retried_error the error of the attempt before the one that the timeout ended
+
+        @return the argument of the timeout with \c last_attempt_error, as the requests of the connection manager give
+        it
+
+        @since HttpClientIo 1.0 (public for callers that retry connections themselves, qore#6850)
     */
-    private static hash<auto> getRetriedTimeoutArg(auto arg, hash<ExceptionInfo> retried_error) {
+    static hash<auto> getRetriedTimeoutArg(auto arg, hash<ExceptionInfo> retried_error) {
         # a copy that takes any key (the argument can be a typed hash); an argument that is not a hash is kept
         hash<auto> rv = {};
         if (arg.typeCode() == NT_HASH) {
@@ -4627,6 +4653,7 @@ printf("%d connection(s) migrated\n", migrated);
     private bool isHttp3ConnectionCloseError(string err) {
         return err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella, still emitted from some sites
             || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
+            || err == "HTTP3-PEER-UNRESPONSIVE"   # no packet from the peer after a request (qore#6930)
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR";
@@ -4658,6 +4685,7 @@ printf("%d connection(s) migrated\n", migrated);
             || err == "HTTP3-CONNECT-ERROR"
             || err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella; still emitted from some sites
             || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
+            || err == "HTTP3-PEER-UNRESPONSIVE"   # no packet from the peer after a request (qore#6930)
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR"
