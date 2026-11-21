@@ -270,6 +270,10 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - the stop notification of a listener (the \c stopc option of @ref HttpServer::HttpListenerOptionInfo
+      "HttpListenerOptionInfo") is now also called when the server is destroyed while the listener is stopping, where
+      it was skipped; an error that it raises is logged with the listener's logger
+      (<a href="https://github.com/qoretechnologies/qore/issues/6967">issue 6967</a>)
     - on the thread of a dedicated persistent connection, a request for another handler than the session's (after the
       session's handler ended its persistence while keeping the connection dedicated, or in the requests processed
       after a persistent session ended) runs with the thread context of its own handler: it does not see the user
@@ -7468,8 +7472,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # first to avoid a deadlock.
         if (serv) {
             serv.listenerStopped(self);
-            if (stopc) {
-                serv.callListenerStopCallback(stopc, name, socket_info);
+        }
+        # the stop notification is called here, not through the server: the server's notification above can let the
+        # destruction of the server end in another thread, which clears 'serv', and the notification was then not
+        # called (qore#6967)
+        if (stopc) {
+            try {
+                call_function(stopc, name);
+            } catch (hash<ExceptionInfo> ex) {
+                logError("error calling stop notification closure: %s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
             }
         }
 
