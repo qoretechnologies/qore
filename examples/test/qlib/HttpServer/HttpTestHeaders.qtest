@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../HttpTestHeaders.qm
+
+%exec-class HttpTestHeadersTest
+
+#! Tests the header comparison of the HTTP server tests (qore#7021): two responses sent in different seconds compare
+#! equal, with the date at the top level and in a nested hash of the fields
+class HttpTestHeadersTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpTestHeadersTest", "1.0", \ARGV) {
+        addTestCase("top-level date", \testTopLevel());
+        addTestCase("nested date", \testNested());
+        addTestCase("other values are compared", \testOtherValues());
+        addTestCase("names given", \testNames());
+        set_return_value(main());
+    }
+
+    #! the header hash of a response sent at the given second: the fields at the top level and, if \a nested, again
+    #! in a nested \c headers hash
+    private static hash<auto> response(string second, bool nested) {
+        hash<auto> fields = {
+            "x-powered-by": "Qore/3.0.0",
+            "content-type": "text/plain;charset=utf-8",
+            "date": "Sat, 21 Nov 2026 05:01:" + second + " GMT",
+            "connection": "Keep-Alive",
+            "content-length": "4",
+        };
+        hash<auto> rv = {"http_version": "1.1", "status_code": 200, "status_message": "OK"} + fields;
+        if (nested) {
+            rv.headers = fields;
+        }
+        return rv;
+    }
+
+    #! the differences of two header hashes compared as the tests did before qore#7021: without the top-level date
+    private static list<string> oldDiffs(hash<auto> a, hash<auto> b) {
+        return map $1, keys (a - ("date",)), a{$1} != b{$1};
+    }
+
+    #! the differences of two header hashes compared with HttpTestHeaders::stable()
+    private static list<string> newDiffs(hash<auto> a, hash<auto> b) {
+        hash<auto> sa = HttpTestHeaders::stable(a);
+        hash<auto> sb = HttpTestHeaders::stable(b);
+        list<string> rv = map $1, keys sa, sa{$1} != sb{$1};
+        if (sort(keys sa) != sort(keys sb)) {
+            rv += "<names>";
+        }
+        return rv;
+    }
+
+    testTopLevel() {
+        hash<auto> a = response("16", False);
+        hash<auto> b = response("17", False);
+        assertEq((), oldDiffs(a, b));
+        assertEq((), newDiffs(a, b));
+        assertFalse(HttpTestHeaders::stable(a).hasKey("date"));
+    }
+
+    testNested() {
+        hash<auto> a = response("16", True);
+        hash<auto> b = response("17", True);
+        # the date in the nested hash differs: the comparison without only the top-level date finds a difference
+        assertEq(("headers",), oldDiffs(a, b));
+        assertEq((), newDiffs(a, b));
+        assertFalse(HttpTestHeaders::stable(a).headers.hasKey("date"));
+        # whatever the case of the name
+        a.headers = a.headers - "date" + {"Date": "Sat, 21 Nov 2026 05:01:16 GMT"};
+        b.headers = b.headers - "date" + {"DATE": "Sat, 21 Nov 2026 05:01:17 GMT"};
+        assertEq((), newDiffs(a, b));
+        # the same responses in the same second are equal including the date
+        assertEq(response("16", True), response("16", True));
+    }
+
+    testOtherValues() {
+        hash<auto> a = response("16", True);
+        hash<auto> b = response("17", True);
+        b.headers.connection = "close";
+        assertEq(("headers",), newDiffs(a, b), "a nested value that differs");
+        b = response("17", True);
+        b."content-type" = "text/html";
+        assertEq(("content-type",), newDiffs(a, b), "a top-level value that differs");
+        b = response("17", True);
+        b.headers."x-extra" = "1";
+        assertEq(("headers",), newDiffs(a, b), "a nested field that only one has");
+        b = response("17", True);
+        b."x-extra" = "1";
+        assertEq(("<names>",), newDiffs(a, b), "a top-level field that only one has");
+    }
+
+    testNames() {
+        hash<auto> h = HttpTestHeaders::stable(response("16", True), ("date", "content-length"));
+        assertFalse(h.hasKey("content-length"));
+        assertFalse(h.headers.hasKey("content-length"));
+        assertFalse(h.headers.hasKey("date"));
+        assertEq("Keep-Alive", h.headers.connection);
+    }
+}

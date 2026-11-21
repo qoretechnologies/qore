@@ -11,6 +11,7 @@
 %requires HttpServer
 %requires HttpServerUtil
 %requires ../../TestCertificates.qm
+%requires ../../HttpTestHeaders.qm
 
 %exec-class HttpServerFastRoutesTest
 
@@ -258,8 +259,8 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq("same", fast.body);
         assertEq(normal.code, fast.code);
         # the headers are the same, apart from the date: names and values
-        hash<auto> nh = normal.hdr - ("date",);
-        hash<auto> fh = fast.hdr - ("date",);
+        hash<auto> nh = HttpTestHeaders::stable(normal.hdr);
+        hash<auto> fh = HttpTestHeaders::stable(fast.hdr);
         assertEq(sort(keys nh), sort(keys fh), "the same header names");
         foreach string name in (keys nh) {
             assertEq(nh{name}, fh{name}, "header " + name);
@@ -274,10 +275,11 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         hash<auto> fcl = request(cc2, "GET", "/fast", {"Connection": "close"});
         assertEq("same", ncl.body);
         assertEq("same", fcl.body);
-        assertEq(sort(keys (ncl.hdr - ("date",))), sort(keys (fcl.hdr - ("date",))),
-            "the same headers with Connection: close");
-        foreach string name in (keys (ncl.hdr - ("date",))) {
-            assertEq(ncl.hdr{name}, fcl.hdr{name}, "close, header " + name);
+        hash<auto> nclh = HttpTestHeaders::stable(ncl.hdr);
+        hash<auto> fclh = HttpTestHeaders::stable(fcl.hdr);
+        assertEq(sort(keys nclh), sort(keys fclh), "the same headers with Connection: close");
+        foreach string name in (keys nclh) {
+            assertEq(nclh{name}, fclh{name}, "close, header " + name);
         }
         assertEq("close", fcl.hdr.connection);
         assertTrue(fast.hdr."x-powered-by" =~ /^Qore\//, "the server's headers are added");
@@ -391,7 +393,8 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         hash<auto> b = request(c, "GET", "/fixed");
         assertEq("one", a.body);
         assertEq(b.code, a.code);
-        assertEq(sort(keys (b.hdr - ("date",))), sort(keys (a.hdr - ("date",))), "the same headers as a fixed response");
+        assertEq(sort(keys HttpTestHeaders::stable(b.hdr)), sort(keys HttpTestHeaders::stable(a.hdr)),
+            "the same headers as a fixed response");
         assertEq(b.hdr."content-type", a.hdr."content-type");
         assertEq(b.hdr.server, a.hdr.server);
 
@@ -966,21 +969,36 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq("same", fr.body);
         assertTrue(exists nr.hdr."alt-svc", "the listener advertises HTTP/3 to the handler's responses");
         assertEq(nr.hdr."alt-svc", fr.hdr."alt-svc", "and to the responses of a route");
-        assertEq(sort(keys (nr.hdr - ("date",))), sort(keys (fr.hdr - ("date",))), "the same header names");
-        foreach string name in (keys (nr.hdr - ("date",))) {
-            assertEq(nr.hdr{name}, fr.hdr{name}, "TLS header " + name);
+        hash<auto> nrh = HttpTestHeaders::stable(nr.hdr);
+        hash<auto> frh = HttpTestHeaders::stable(fr.hdr);
+        assertEq(sort(keys nrh), sort(keys frh), "the same header names");
+        foreach string name in (keys nrh) {
+            assertEq(nrh{name}, frh{name}, "TLS header " + name);
         }
         # a route that sets Alt-Svc itself keeps its own
         tls_hs.addFastRoute("/tls-own", {"public": True, "response": {"code": 200, "body": "x",
             "content_type": "text/plain", "hdr": {"Alt-Svc": "clear"}}});
         assertEq("clear", request(c5, "GET", "/tls-own").hdr."alt-svc", "a header of the route replaces the listener's");
 
-        # pipelined requests over TLS: both are answered, the first by the handler (the second is already received)
-        # and the second by the route
+        # pipelined requests over TLS in one send, so in one TLS record: the server decrypts both in one read, so the
+        # second is already buffered when the first is read; the first takes the normal path (the handler) and the
+        # second is answered by the route
         string req = "GET /tls HTTP/1.1\r\nHost: x\r\n\r\n";
+        int pipelined = tls_hs.getFastRouteInfo().fallbacks.pipelined ?? 0;
         c.send(req + req);
         assertEq("handler", readResponse(c).body);
         assertEq("fast", readResponse(c).body);
+        assertEq(pipelined + 1, tls_hs.getFastRouteInfo().fallbacks.pipelined,
+            "the first request found the second one buffered");
+
+        # the same requests in two sends, so in two TLS records: a read decrypts one record, so nothing is buffered
+        # after either request, whenever the second record arrives, and the route answers both
+        c.send(req);
+        c.send(req);
+        assertEq("fast", readResponse(c).body);
+        assertEq("fast", readResponse(c).body);
+        assertEq(pipelined + 1, tls_hs.getFastRouteInfo().fallbacks.pipelined,
+            "a request in a TLS record of its own does not find the next one buffered");
     }
 
     testHead() {
