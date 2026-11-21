@@ -10949,9 +10949,16 @@ void q_save_thread_local_data(int key, void* data, q_thread_local_destructor des
     ThreadData* td = thread_data.get();
     u_tld_map_t::iterator i = td->u_tld_map.lower_bound(key);
     if (i != td->u_tld_map.end() && i->first == key) {
-        if (i->second.destructor) {
-            i->second.destructor(i->second.data);
+        // the data saved before is replaced (a map insertion would keep it, freed, with its destructor), and its
+        // destructor runs after the new data is stored, so that it can use this API, also for this key; the moves
+        // cannot fail, so that the old data is not freed while the entry still holds it (qore#7075)
+        q_user_tld old(std::move(i->second));
+        i->second.data = data;
+        i->second.destructor = std::move(destructor);
+        if (old.destructor) {
+            old.destructor(old.data);
         }
+        return;
     }
     td->u_tld_map.insert(i, u_tld_map_t::value_type(key, {data, destructor}));
 }
@@ -10962,10 +10969,14 @@ void* q_swap_thread_local_data(int key, void* new_data, q_thread_local_destructo
     u_tld_map_t::iterator i = td->u_tld_map.lower_bound(key);
     if (i != td->u_tld_map.end() && i->first == key) {
         rv = i->second.data;
-        if (i->second.destructor && run_destructor) {
-            i->second.destructor(i->second.data);
+        // the destructor of the old data runs after the new data is stored, as in q_save_thread_local_data()
+        // (qore#7075)
+        q_user_tld old(std::move(i->second));
+        i->second.data = new_data;
+        i->second.destructor = std::move(destructor);
+        if (old.destructor && run_destructor) {
+            old.destructor(old.data);
         }
-        i->second = {new_data, destructor};
     } else {
         rv = nullptr;
         td->u_tld_map.insert(i, u_tld_map_t::value_type(key, {new_data, destructor}));
