@@ -27916,6 +27916,62 @@ static QoreValue f_dbg_make_program_flag_only(const QoreListNode* params, Runtim
     return QoreValue();
 }
 
+//! A counted string sentinel whose initializer copies the member descriptor and then resolves to a scalar.
+class DbgMemberInitializer : public QoreStringNode {
+public:
+    DbgMemberInitializer(QoreMemberInfo& source, std::optional<QoreMemberInfo>& child,
+            std::optional<QoreMemberInfo>& leaf, bool resolve)
+            : source(source), child(child), leaf(leaf), resolve(resolve) {
+    }
+
+    bool copies_saw_sentinel = false;
+
+private:
+    QoreMemberInfo& source;
+    std::optional<QoreMemberInfo>& child;
+    std::optional<QoreMemberInfo>& leaf;
+    const bool resolve;
+
+    int parseInit(QoreValue& value, QoreParseContext& parse_context) override {
+        child.emplace(source, nullptr);
+        {
+            QoreMemberInfo intermediate(*child, nullptr);
+            leaf.emplace(intermediate, nullptr);
+            copies_saw_sentinel = child->exp.getInternalNode() == this || leaf->exp.getInternalNode() == this;
+        }
+        value.discard(nullptr);
+        value = static_cast<int64>(42);
+        parse_context.typeInfo = bigIntTypeInfo;
+        return resolve ? 0 : -1;
+    }
+};
+
+//! Observes the initializer held by descriptors copied during parse initialization without using a recursive expression.
+static QoreValue f_dbg_inherited_member_initializer(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    // The sentinel outlives every descriptor, even if a copy still holds the original string.
+    ReferenceHolder<DbgMemberInitializer> sentinel(xsink);
+    QoreMemberInfo source(&loc_builtin, bigIntTypeInfo);
+    std::optional<QoreMemberInfo> child;
+    std::optional<QoreMemberInfo> leaf;
+    sentinel = new DbgMemberInitializer(source, child, leaf, HARD_QORE_VALUE_BOOL(params, 0));
+    source.exp = QoreValue(*sentinel).refSelf();
+    LocalVar selfid("self", objectTypeInfo);
+    int parse_result = source.parseInit("member", selfid);
+    auto finished = [](const QoreMemberInfo& member) {
+        return member.exp.getType() == NT_INT && member.exp.getAsBigInt() == 42
+            && member.getInitializerTypeInfo() == bigIntTypeInfo;
+    };
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("parsed", !parse_result, xsink);
+    result->setKeyValue("exposed", sentinel->copies_saw_sentinel, xsink);
+    result->setKeyValue("source", finished(source), xsink);
+    result->setKeyValue("child", child && finished(*child), xsink);
+    result->setKeyValue("leaf", leaf && finished(*leaf), xsink);
+    result->setKeyValue("copies_empty", child && leaf && child->exp.isNothing() && leaf->exp.isNothing(), xsink);
+    return result.release();
+}
+
 //! Returns the CPU time in nanoseconds used by the current call into a sandbox with a CPU time limit, or -1
 static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_sandbox_dbg_cpu_used();
@@ -28080,6 +28136,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_inherited_member_initializer", f_dbg_inherited_member_initializer, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "resolve");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_sandbox_budget_frames", f_dbg_sandbox_budget_frames, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
