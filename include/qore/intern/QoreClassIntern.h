@@ -4340,8 +4340,11 @@ public:
         // the class itself and the class that declares a private member, inline; the other contexts out of line, and
         // the class itself if sandboxed code declared it and it inherits private members of a class that trusted code
         // declared (qore#6843)
-        if (class_ctx == this ? !sandbox_private_members
-                : (info->access == Private && class_ctx == info->getClass())) {
+        if (class_ctx == this) {
+            if (__builtin_expect(!sandbox_private_members, 1)) {
+                return true;
+            }
+        } else if (info->access == Private && class_ctx == info->getClass()) {
             return true;
         }
         return runtimeCheckMemberAccessContext(info, class_ctx);

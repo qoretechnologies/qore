@@ -97,6 +97,10 @@ const ParseCases = (
         static f(Trusted h) { h.secret = \"x\"; } }",
     "member-bare": "class T inherits Trusted {
         string f() { return secret; } }",
+    "member-other-instance": "class T inherits Trusted {
+        static string f(T o) { return o.secret; } }",
+    "member-own-other-instance": "class T inherits Trusted { private { string own = \"own\"; }
+        static string f(T o) { return o.own; } }",
     "member-self": "class T inherits Trusted {
         string f() { return self.secret; } }",
     "method-typed": "class T inherits Trusted {
@@ -137,6 +141,10 @@ string tenant = "
 class T inherits Trusted, TrustedAbstract {
     private {
         string own = \"own\";
+    }
+
+    private:internal {
+        string iown = \"iown\";
     }
 
     private string impl() {
@@ -194,6 +202,28 @@ class T inherits Trusted, TrustedAbstract {
     auto inheritedPublic() { auto o = alias(self); string n = \"p\" + \"ub\"; return (self.pub, o.pub, self.(n)); }
     auto ownCallImpl() { return callImpl(); }
     auto ownCallHook() { return callHook(); }
+
+    # every combination of the inline member check (see qore_class_private::runtimeCheckMemberAccess()): the class
+    # of the object is this class (self or another instance) or a subclass of it; the member is declared private or
+    # private:internal by this class, private by the trusted class, or public by the trusted class; each typed (parsed),
+    # through a value without a type and with a computed name
+    auto rowsOwnPrivate(T o) {
+        auto a = alias(o); string n = \"o\" + \"wn\";
+        return (o.own, a.own, a.(n));
+    }
+    auto rowsOwnInternal(T o) {
+        auto a = alias(o); string n = \"i\" + \"own\";
+        return (o.iown, a.iown, a.(n));
+    }
+    auto rowsInheritedPublic(T o) {
+        auto a = alias(o); string n = \"p\" + \"ub\";
+        return (o.pub, a.pub, a.(n));
+    }
+    static auto rowsInheritedPrivateAlias(auto a) { return a.secret; }
+    static auto rowsInheritedPrivateComputed(auto a) { string n = \"sec\" + \"ret\"; return a.(n); }
+}
+
+class T2 inherits T {
 }
 
 auto sub run(string m, *list<auto> args) {
@@ -206,6 +236,19 @@ auto sub runSelf(string m) {
 
 T sub make() {
     return new T();
+}
+
+auto sub rows(string label, string m) {
+    T t();
+    switch (label) {
+        case \"self\": return call_object_method(t, m, t);
+        case \"other\": return call_object_method(t, m, new T());
+        case \"sub\": return call_object_method(t, m, new T2());
+    }
+}
+
+auto sub rowsStatic(string label, string m) {
+    return call_static_method(\"T\", m, label == \"sub\" ? new T2() : new T());
 }
 ";
 
@@ -234,6 +277,15 @@ foreach string m in (("selfAuto", "selfComputed", "selfWriteAuto", "selfHash", "
         "selfReflectionMethod", "selfReflectionConstant", "selfReflectionPublicConstant", "selfClosure", "ownMember", "inheritedPublic",
         "ownCallImpl", "ownCallHook")) {
     show(m, auto sub () { return p.callFunction("runSelf", m); });
+}
+
+foreach string label in (("self", "other", "sub")) {
+    foreach string m in (("rowsOwnPrivate", "rowsOwnInternal", "rowsInheritedPublic")) {
+        show("rows " + label + " " + m, auto sub () { return p.callFunction("rows", label, m); });
+    }
+    foreach string m in (("rowsInheritedPrivateAlias", "rowsInheritedPrivateComputed")) {
+        show("rows " + label + " " + m, auto sub () { return p.callFunction("rowsStatic", label, m); });
+    }
 }
 
 # trusted code uses the private declarations of the class on the objects of the subclass that sandboxed code declared

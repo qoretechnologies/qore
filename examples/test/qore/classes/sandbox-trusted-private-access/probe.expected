@@ -1,6 +1,8 @@
 member-typed: parse: PARSE-EXCEPTION: illegal access to private member 'secret' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
 member-write-typed: parse: PARSE-EXCEPTION: illegal access to private member 'secret' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
 member-bare: parse: PARSE-EXCEPTION: illegal access to private member 'secret' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+member-other-instance: parse: PARSE-EXCEPTION: illegal access to private member 'secret' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+member-own-other-instance: parse: OK
 member-self: parse: PARSE-EXCEPTION: illegal access to private member 'secret' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
 method-typed: parse: PARSE-EXCEPTION: illegal access to private method 'helper' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
 method-self: parse: PARSE-EXCEPTION: illegal access to private method 'helper' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
@@ -27,13 +29,13 @@ shared secret after: "secret"
 selfAuto: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
 selfComputed: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
 selfWriteAuto: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
-selfHash: OK ["pub", "own"]
+selfHash: OK ["pub", "own", "iown"]
 selfSlice: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
-selfIterate: OK ["pub", "own"]
+selfIterate: OK ["pub", "own", "iown"]
 selfFirstLast: OK ["pub", "own"]
 selfMethodAuto: METHOD-DOES-NOT-EXIST: no method T::helper() has been defined and no pseudo-method <object>::helper() is available (class lang: Qore)
 selfCallObjectMethod: METHOD-IS-PRIVATE: T::helper() is private and cannot be accessed externally
-selfKeys: OK ["pub", "own"]
+selfKeys: OK ["pub", "own", "iown"]
 selfReflectionMember: REFLECTION-ACCESS-ERROR: member 'Trusted::secret' is private and cannot be used from class 'T' by code that a sandbox governs or whose functional domains are restricted
 selfReflectionMethod: REFLECTION-ACCESS-ERROR: method 'Trusted::helper' is private and cannot be used from class 'T' by code that a sandbox governs or whose functional domains are restricted
 selfReflectionConstant: REFLECTION-ACCESS-ERROR: constant 'Trusted::PC' is private and cannot be used from class 'T' by code that a sandbox governs or whose functional domains are restricted
@@ -43,5 +45,20 @@ ownMember: OK ["own", "own", "own"]
 inheritedPublic: OK ["pub", "pub", "pub"]
 ownCallImpl: OK "tenant-impl:own"
 ownCallHook: OK "tenant-hook+trusted-hook"
+rows self rowsOwnPrivate: OK ["own", "own", "own"]
+rows self rowsOwnInternal: OK ["iown", "iown", "iown"]
+rows self rowsInheritedPublic: OK ["pub", "pub", "pub"]
+rows self rowsInheritedPrivateAlias: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
+rows self rowsInheritedPrivateComputed: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
+rows other rowsOwnPrivate: OK ["own", "own", "own"]
+rows other rowsOwnInternal: OK ["iown", "iown", "iown"]
+rows other rowsInheritedPublic: OK ["pub", "pub", "pub"]
+rows other rowsInheritedPrivateAlias: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
+rows other rowsInheritedPrivateComputed: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
+rows sub rowsOwnPrivate: OK ["own", "own", "own"]
+rows sub rowsOwnInternal: OK ["iown", "iown", "iown"]
+rows sub rowsInheritedPublic: OK ["pub", "pub", "pub"]
+rows sub rowsInheritedPrivateAlias: PRIVATE-MEMBER: 'secret' is a private member of class 'T2'
+rows sub rowsInheritedPrivateComputed: PRIVATE-MEMBER: 'secret' is a private member of class 'T2'
 trusted-on-tenant: OK ["secret", "secret", "tenant-impl:own"]
 trusted-sub: OK "secret:helper:shelper:svar:pc"
