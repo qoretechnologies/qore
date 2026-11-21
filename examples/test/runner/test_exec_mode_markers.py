@@ -333,10 +333,12 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   without an execution mode
         # - aot-standalone-format-floor (#6699, batch AM v49): its checks run qcc executables in child processes started
         #   without an execution mode
+        # - aot-cross-module-caller-mask (#7101): its checks run in child processes that set their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
+                                 "examples/test/qore/security/aot-cross-module-caller-mask.qtest",
                                  "examples/test/qore/misc/aot-dependency-domains/aot-dependency-domains.qtest",
                                  "examples/test/ir/AOTFusedFoldVerify.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",

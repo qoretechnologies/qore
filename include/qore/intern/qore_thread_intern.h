@@ -403,6 +403,16 @@ DLLLOCAL void* set_runtime_call_site(const QoreProgramLocation* loc, const QoreP
 //! Restores the call site after a call; see set_runtime_call_site()
 DLLLOCAL void restore_runtime_call_site(void* thread_data, const QoreProgramLocation* prev);
 
+//! Sets the Program of the caller for the next frame pushed on the current thread; returns the previous one
+/** For a call that enters the callee's Program before the callee pushes the frame of the call itself (a native
+    cross-module call, qore_rt_enter_cross_module_call()): the frame records \a pgm as the Program of its caller instead
+    of the current Program, and clears it (qore#7101); restore it with restore_runtime_call_site_program() after the
+    call
+*/
+DLLLOCAL QoreProgram* set_runtime_call_site_program(QoreProgram* pgm);
+//! Restores the Program of the caller for the next frame; see set_runtime_call_site_program()
+DLLLOCAL void restore_runtime_call_site_program(QoreProgram* prev);
+
 //! Clears the call site for the helper's lifetime if requested, and restores it afterwards
 /** For code that runs other code between a call site and the frame that takes it, such as the member initializers
     of an object that are evaluated before the frame of its constructor is created: only the calls that the code
