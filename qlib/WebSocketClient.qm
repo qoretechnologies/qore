@@ -8582,9 +8582,34 @@ public class WebSocketClientHcioPollOp {
     }
 
     #! Marks the adapter as started — enables on_poll_complete delivery
+    /** The frames that arrived before the start (with the handshake) are delivered as later frames are: a
+        notification is made for them on a worker of the async I/O controller, so that their delivery does not wait for
+        the client's initial drain, which the connecting thread makes only after other work (issue #7123); whichever of
+        the two runs first delivers them, as both drain the queue with @ref process_mutex held.  No notification is
+        made when no frame arrived (issue #6154).
+    */
     start() {
         started = True;
         rescheduleHeartbeatTimer();
+        if (!msg_queue.empty()) {
+            # the task references the operation, so that it stays valid until the task has run; a connection that
+            # was torn down meanwhile is closed, and notifyIo() then only discards its frames
+            WebSocketClientHcioPollOp op = self;
+            try {
+                Qore::AsyncIoController::submitTask(task: sub () {
+                    try {
+                        op.notifyIo();
+                    } catch (hash<ExceptionInfo> ex) {
+                        # the operation was deleted explicitly meanwhile: its client tore the connection down
+                        if (ex.err != "OBJECT-ALREADY-DELETED") {
+                            rethrow;
+                        }
+                    }
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                # the controller is stopping: the client's initial drain delivers the frames
+            }
+        }
     }
 
     #! Drains any frames already dispatched before the adapter was fully wired up
