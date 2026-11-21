@@ -2706,6 +2706,13 @@
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
+    - the namespaces, functions and enums of a namespace are enumerated by the \c reflection module
+      (@ref Qore::Reflection::Namespace::getNamespaces() "Namespace::getNamespaces()",
+      @ref Qore::Reflection::Namespace::getFunctions() "Namespace::getFunctions()",
+      @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()") in the order in which they were declared;
+      before, the order depended on how often the namespace had been copied, so a program compiled with \c qcc
+      returned another one than the interpreter
+      (<a href="https://github.com/qoretechnologies/qore/issues/7171">issue 7171</a>)
     - a call reference obtained by a class-scoped method name for an object applies the access rule of a method call
       on the object, where code of a subclass could get a reference to a parent class's private method through an
       object of another subclass (<a href="https://github.com/qoretechnologies/qore/issues/6806">issue 6806</a>)
