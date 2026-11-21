@@ -18687,10 +18687,10 @@ static QoreValue f_dbg_async_io_hold_module_cleanup_work(const QoreListNode* par
 static QoreValue f_dbg_async_io_wait_held_module_cleanup_work(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     int64_t count = get_param_value(params, 0).getAsBigInt();
-    QoreValue cls = get_param_value(params, 2);
+    // the class name can be an inline short string, which has no node (issue #7038)
+    QoreStringDataHelper cls(get_param_value(params, 2));
     return AsyncIoControllerPriv::dbgWaitHeldModuleCleanupWork(count < 0 ? 0 : static_cast<size_t>(count),
-        cls.getType() == NT_STRING ? cls.get<const QoreStringNode>()->c_str() : nullptr,
-        get_param_value(params, 1).getAsBigInt());
+        cls ? cls.c_str() : nullptr, get_param_value(params, 1).getAsBigInt());
 }
 
 //! Debug-only: the held test-hook work that the module cleanup's drain releases (qore#7027); see
