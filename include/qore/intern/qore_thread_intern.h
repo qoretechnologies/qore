@@ -1217,9 +1217,6 @@ private:
 */
 DLLLOCAL int qore_find_caller_program(QoreProgram*& pgm, qore_program_id_t& id);
 
-//! Returns true if the current thread runs a trusted build (SandboxManager::createTrustedBuildCall())
-DLLLOCAL bool qore_thread_in_trusted_build();
-
 //! The caller Program of the code that submits work that runs later on another thread (qore#6852)
 /** Captured where a thread is started (the \c background operator, q_start_thread()) or a task is submitted (a
     ThreadPool task), and applied where the work starts with QoreCallerProgramScope, so that the caller Program of the
