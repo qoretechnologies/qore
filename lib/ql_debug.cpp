@@ -7662,6 +7662,227 @@ public:
         }
     }
 
+    //! Makes a target on ::1 with the given port that gets no answer, as makeSilentTarget() does on 127.0.0.1
+    static bool makeSilentTarget6(UnitTestCounters& c, std::vector<int>& fds, in_port_t port, const std::string& when) {
+        int lfd = ::socket(AF_INET6, SOCK_STREAM, 0);
+        UT_ASSERT(c, lfd >= 0, ("the IPv6 connect close target socket is created" + when).c_str());
+        if (lfd < 0) {
+            return false;
+        }
+        fds.push_back(lfd);
+        int on = 1;
+        setsockopt(lfd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on));
+        struct sockaddr_in6 sa6 = {};
+        sa6.sin6_family = AF_INET6;
+        sa6.sin6_addr = in6addr_loopback;
+        sa6.sin6_port = port;
+        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6));
+        UT_ASSERT(c, ok, ("the IPv6 connect close target is bound to the port of the IPv4 one" + when).c_str());
+        if (!ok) {
+            return false;
+        }
+#ifdef __linux__
+        UT_ASSERT(c, !::listen(lfd, 0), ("the IPv6 connect close target listens" + when).c_str());
+        bool full = false;
+        for (int i = 0; i < 16 && !full; ++i) {
+            int cfd = ::socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0);
+            if (cfd < 0) {
+                break;
+            }
+            fds.push_back(cfd);
+            if (!::connect(cfd, reinterpret_cast<struct sockaddr*>(&sa6), sizeof(sa6))) {
+                continue;
+            }
+            if (errno != EINPROGRESS) {
+                break;
+            }
+            struct pollfd pfd = {cfd, POLLOUT, 0};
+            full = !::poll(&pfd, 1, 500);
+        }
+        UT_ASSERT(c, full, ("the accept queue of the IPv6 connect close target is full" + when).c_str());
+        if (!full) {
+            return false;
+        }
+#endif
+        return true;
+    }
+
+    //! A connection with two attempts in progress, both registered in an event loop, closed by another thread,
+    //! closes each attempt's descriptor once (qore#6962)
+    /** A name that resolves to ::1 and 127.0.0.1 (a hosts file of the test's own, dbg_cares_set_hosts_file()) gives a
+        happy-eyeballs connection two attempts, which the I/O thread of an async I/O controller registers, the
+        socket's descriptor and an extra one; neither target answers.  The socket is closed by the test's thread
+        while both are registered; once the connection has ended, a descriptor is opened with each attempt's number
+        if it is free, and the operation is destroyed: those descriptors must still be open.
+    */
+    static void runConnectCloseTwoAttempts(UnitTestCounters& c) {
+        const std::string when = " (two attempts, registered)";
+        ExceptionSink xsink;
+        std::vector<int> fds;
+        struct FdCloser {
+            std::vector<int>& fds;
+            ~FdCloser() {
+                for (int fd : fds) {
+                    ::close(fd);
+                }
+            }
+        } fd_closer{fds};
+        struct sockaddr_in sa = {};
+        if (!makeSilentTarget(c, fds, sa, when) || !makeSilentTarget6(c, fds, sa.sin_port, when)) {
+            return;
+        }
+        int sp[2];
+        bool ok = !::socketpair(AF_UNIX, SOCK_STREAM, 0, sp);
+        UT_ASSERT(c, ok, ("the socket pair is created" + when).c_str());
+        if (!ok) {
+            return;
+        }
+        fds.push_back(sp[0]);
+        fds.push_back(sp[1]);
+
+        // a name of the test's own with both loopback addresses
+        const char* tmp = getenv("TMPDIR");
+        std::string hosts = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-he-two-hosts-" + std::to_string(getpid());
+        {
+            FILE* f = fopen(hosts.c_str(), "w");
+            UT_ASSERT(c, f != nullptr, ("the hosts file is written" + when).c_str());
+            if (!f) {
+                return;
+            }
+            fprintf(f, "::1 qore-he-two-attempts\n127.0.0.1 qore-he-two-attempts\n");
+            fclose(f);
+        }
+        struct HostsRestorer {
+            std::string prev, path;
+            ~HostsRestorer() {
+                qore_dbg_cares_set_hosts_file(prev);
+                ::unlink(path.c_str());
+            }
+        } hosts_restorer{qore_dbg_cares_set_hosts_file(hosts), hosts};
+        std::string target = "qore-he-two-attempts:" + std::to_string(ntohs(sa.sin_port));
+
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct RegLog {
+            std::mutex l;
+            std::condition_variable cond;
+            std::vector<int> registered;
+        } rlog;
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink};
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->io_threads[0]->loop->dbgSetBeforeRegister([&rlog](int fd) {
+            std::lock_guard<std::mutex> g(rlog.l);
+            rlog.registered.push_back(fd);
+            rlog.cond.notify_all();
+        });
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, ("the controller starts" + when).c_str());
+        if (!ready || xsink) {
+            return;
+        }
+        const int notifier_fd = ctrl->io_threads[0]->notifier->fd();
+
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        sock->ref();
+        SocketConnectPollOperation* op = new SocketConnectPollOperation(&xsink, false, target.c_str(), sock, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        UT_ASSERT(c, !xsink, ("the connect operation is created" + when).c_str());
+        if (xsink) {
+            return;
+        }
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("connect"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("connect-close-two-attempts-unit-test"), &xsink);
+        info->setKeyValue("to", 2000, &xsink);
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the connection is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+
+        // both attempts are registered: the socket's descriptor and the extra one of the second attempt
+        std::vector<int> attempt_fds;
+        {
+            std::unique_lock<std::mutex> g(rlog.l);
+            rlog.cond.wait_for(g, std::chrono::seconds(10), [&]() {
+                attempt_fds.clear();
+                for (int fd : rlog.registered) {
+                    if (fd != notifier_fd && std::find(attempt_fds.begin(), attempt_fds.end(), fd)
+                            == attempt_fds.end()) {
+                        attempt_fds.push_back(fd);
+                    }
+                }
+                return attempt_fds.size() >= 2;
+            });
+        }
+        UT_ASSERT(c, attempt_fds.size() >= 2, ("the I/O thread registers both attempts" + when).c_str());
+        if (attempt_fds.size() < 2) {
+            return;
+        }
+#ifdef __linux__
+        for (int fd : attempt_fds) {
+            bool registered = false;
+            for (int i = 0; i < 1000 && !(registered = epollHasFd(fd)); ++i) {
+                usleep(10000);
+            }
+            UT_ASSERT(c, registered, ("an attempt's descriptor is registered in the event loop" + when).c_str());
+        }
+#endif
+        // another thread closes the socket while both attempts are registered
+        sock->close();
+
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
+        UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH,
+            ("the closed connection ends" + when).c_str());
+        xsink.clear();
+        result.release().discard(&xsink);
+        queue = nullptr;
+        queue_obj = nullptr;
+        // a descriptor takes each attempt's number that is free now; the operation is then destroyed
+        std::vector<int> probes;
+        for (int fd : attempt_fds) {
+            if (fcntl(fd, F_GETFD) == -1) {
+                int p = fcntl(sp[0], F_DUPFD_CLOEXEC, fd);
+                if (p >= 0) {
+                    fds.push_back(p);
+                    probes.push_back(p);
+                }
+            }
+        }
+        op_obj = nullptr;
+        sock->close();
+        for (int p : probes) {
+            UT_ASSERT(c, fcntl(p, F_GETFD) != -1,
+                ("a descriptor given an attempt's number is still open after the operation is destroyed" + when)
+                .c_str());
+        }
+        xsink.clear();
+    }
+
     //! replaceDescriptor() with the generation read with the number replaces only the descriptor that was read
     /** A contract test (qore#7003), not a reproduction: no path of the library can give a socket a new descriptor
         between the read of its descriptor and its replacement, as the paths that give a socket a descriptor run with
@@ -23279,6 +23500,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_DESTROY, true);
     AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_POLL_AFTER, true);
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c);
+    AsyncIoDescriptorHoldTest::runConnectCloseTwoAttempts(c);
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
