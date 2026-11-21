@@ -4023,6 +4023,7 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
         timer_callback_po.reset();
         for (auto& [id, tinfo] : timer_info_map) {
             tinfo.udata.discard(xsink);
+            tinfo.cancel_cb.discard(xsink);
         }
         timer_info_map.clear();
         delete this;
@@ -4031,6 +4032,9 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
 
 int AsyncIoControllerPriv::submitTask(ResolvedCallReferenceNode* task, ResolvedCallReferenceNode* cancel,
         ExceptionSink* xsink) {
+    // the references that this method takes over are released if the task is not submitted
+    ReferenceHolder<ResolvedCallReferenceNode> task_holder(task, xsink);
+    ReferenceHolder<ResolvedCallReferenceNode> cancel_holder(cancel, xsink);
     if (checkForked("submitTask", xsink)) {
         return -1;
     }
@@ -4061,8 +4065,9 @@ int AsyncIoControllerPriv::submitTask(ResolvedCallReferenceNode* task, ResolvedC
     }
     // Safe to use tp outside the lock: stopThreadPool() is only called from deref() when
     // ROdereference() returns true (last reference), so no concurrent submitTask() is possible
-    // a task that the module cleanup or its work submits is waited for by the cleanup (qore#7027)
-    return tp->submit(task, cancel, xsink, true);
+    // a task that the module cleanup or its work submits is waited for by the cleanup (qore#7027); the pool takes
+    // over the references
+    return tp->submit(task_holder.release(), cancel_holder.release(), xsink, true);
 }
 
 void AsyncIoControllerPriv::stopThreadPool(ExceptionSink* xsink) {
@@ -5821,7 +5826,7 @@ size_t AsyncIoControllerPriv::cancelModuleCleanupUncounted(bool deadline, std::v
         qore_dbg_module_cleanup_drain_point(QDMCDP_AFTER_TIMER_SCAN);
 #endif
         for (int64_t id : timer_ids) {
-            if (cancelTimer(id, xsink)) {
+            if (cancelTimerForModuleCleanup(id, xsink)) {
                 ++canceled;
             }
         }
@@ -6873,6 +6878,7 @@ void AsyncIoControllerPriv::clearCrossModuleRefs(ExceptionSink* xsink) {
     }
     for (auto& [id, tinfo] : stolen_timers) {
         tinfo.udata.discard(xsink);
+        tinfo.cancel_cb.discard(xsink);
     }
 }
 
@@ -6905,20 +6911,20 @@ QoreObject* AsyncIoControllerPriv::getLogger() const {
 }
 
 int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue udata,
-        ExceptionSink* xsink, const std::string& owner) {
+        ExceptionSink* xsink, const std::string& owner, ResolvedCallReferenceNode* cancel) {
     // an absolute deadline in microseconds since the epoch, compared with the system clock
-    return addTimerIntern(deadline->getEpochMicrosecondsUTC(), false, "addTimer", udata, xsink, owner);
+    return addTimerIntern(deadline->getEpochMicrosecondsUTC(), false, "addTimer", udata, xsink, owner, cancel);
 }
 
 int64_t AsyncIoControllerPriv::addTimerDelay(int64_t delay_us, QoreValue udata, ExceptionSink* xsink,
-        const std::string& owner) {
+        const std::string& owner, ResolvedCallReferenceNode* cancel) {
     // the deadline is taken now, on the monotonic clock, so that a step of the system clock does not move it
     return addTimerIntern(q_get_monotonic_us() + (delay_us > 0 ? delay_us : 0), true, "addTimerDelay", udata, xsink,
-        owner);
+        owner, cancel);
 }
 
 int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotonic, const char* method,
-        QoreValue udata, ExceptionSink* xsink, const std::string& owner) {
+        QoreValue udata, ExceptionSink* xsink, const std::string& owner, ResolvedCallReferenceNode* cancel) {
     if (checkForked(method, xsink)) {
         return -1;
     }
@@ -6970,6 +6976,9 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
         // the old thread to finish, causing the timer to fire with no callback
         TimerInfo tinfo;
         tinfo.udata = udata.refSelf();
+        if (cancel) {
+            tinfo.cancel_cb = cancel->refRefSelf();
+        }
         tinfo.owner = owner;
         // the sandbox of the code that adds the timer governs its callback
         tinfo.sandbox_ctx = std::move(sandbox_ctx);
@@ -6994,6 +7003,7 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
     }
     bool found = false;
     QoreValue discard_udata;
+    QoreValue discard_cancel;
     // the timer's options, released after the lock, as their references to Programs can be the last ones (qore#6208)
     AsyncIoRuntimeOptions discard_po;
     // module code running for an application with restrictions can cancel only the timers added for it
@@ -7014,6 +7024,8 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
 
         // Always remove from timer_info_map immediately (so a second cancel returns False)
         discard_udata = it->second.udata;
+        // the owner cancels the timer itself: its cancel callback is not run (see TimerInfo::cancel_cb)
+        discard_cancel = it->second.cancel_cb;
         discard_po = std::move(it->second.runtime_po);
         timer_info_map.erase(it);
 
@@ -7034,8 +7046,62 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
     }
 
     discard_udata.discard(xsink);
+    discard_cancel.discard(xsink);
 
     return found;
+}
+
+bool AsyncIoControllerPriv::cancelTimerForModuleCleanup(int64_t id, ExceptionSink* xsink) {
+    QoreValue discard_udata;
+    QoreValue cancel_cb;
+    AsyncIoSandboxContext ctx;
+    std::string owner;
+    AsyncIoRuntimeOptions po;
+    {
+        AutoLocker al(m);
+        auto it = timer_info_map.find(id);
+        if (it == timer_info_map.end()) {
+            return false;
+        }
+        discard_udata = it->second.udata;
+        cancel_cb = it->second.cancel_cb;
+        ctx = std::move(it->second.sandbox_ctx);
+        owner = std::move(it->second.owner);
+        po = std::move(it->second.runtime_po);
+        timer_info_map.erase(it);
+
+        IoThreadContext& target = getThreadForTimer(id);
+        if (readsCommands(target)) {
+            Command cmd;
+            cmd.cmd = IoCommand::CancelTimer;
+            cmd.timer_id = id;
+            cmd.timer_deadline_us = 0;
+            target.cmdq.push(std::move(cmd));
+            ++submit_seq;
+            ++target.submit_seq;
+            target.notifier->notify();
+        }
+    }
+    discard_udata.discard(xsink);
+    if (!cancel_cb.hasNode()) {
+        return true;
+    }
+    // the owner is told that its timer will not fire: the cancel callback runs as the work of an operation that the
+    // cleanup canceled, which it counts and waits for, and which cannot start new asynchronous work (qore#7116)
+    try {
+        ctx = std::make_shared<const QoreSandboxContext>(ctx.get(), QoreSandboxContext::ModuleCleanupWork::Canceled);
+    } catch (std::bad_alloc&) {
+        // the callback runs with the timer's own context: it is counted when it is queued (enqueue())
+    }
+    ensureCallDispatcher();
+    try {
+        call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(cancel_cb.get<ResolvedCallReferenceNode>(),
+            nullptr, owner, std::move(ctx), std::move(po));
+    } catch (std::bad_alloc&) {
+        // the callback is not run: its reference is released
+        cancel_cb.discard(xsink);
+    }
+    return true;
 }
 
 void AsyncIoControllerPriv::setTimerCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
@@ -8601,6 +8667,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             AsyncIoRuntimeOptions runtime_po;
         };
         std::vector<TimerEvent> timer_events;
+        //! the cancel callbacks of the timers that fired, released after the lock (qore#7116)
+        std::vector<AsyncIoDeferredRelease> fired_cancel_refs;
         ResolvedCallReferenceNode* cb_snapshot = nullptr;
         // the options of the code that set the timer callback, taken with it
         AsyncIoRuntimeOptions cb_snapshot_po;
@@ -8684,6 +8752,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         int64_t tid_val = poll_events[i].timer_id;
                         auto it = timer_info_map.find(tid_val);
                         if (it != timer_info_map.end()) {
+                            if (it->second.cancel_cb.hasNode()) {
+                                // the timer fires: its cancel callback is not run (see TimerInfo::cancel_cb), and it
+                                // is released off the I/O thread below
+                                AsyncIoDeferredRelease cancel_refs;
+                                cancel_refs.udata = it->second.cancel_cb;
+                                cancel_refs.setModuleCleanup(it->second.sandbox_ctx);
+                                it->second.cancel_cb = QoreValue();
+                                fired_cancel_refs.push_back(cancel_refs);
+                            }
                             timer_events.push_back({tid_val, it->second.udata, it->second.owner,
                                 std::move(it->second.sandbox_ctx), std::move(it->second.runtime_po)});
                             timer_info_map.erase(it);
@@ -8697,6 +8774,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 }
             }
         }
+
+        for (auto& refs : fired_cancel_refs) {
+            releaseOffIoThread(refs, xsink);
+        }
+        fired_cancel_refs.clear();
 
         // Deliver timer events outside lock — dispatch to worker threads
         {
@@ -8892,6 +8974,14 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             refs.setModuleCleanup(tinfo.sandbox_ctx);
             tinfo.udata = QoreValue();
             exit_timer_refs.push_back(refs);
+            if (tinfo.cancel_cb.hasNode()) {
+                // the controller stops: the cancel callback is not run (see TimerInfo::cancel_cb)
+                AsyncIoDeferredRelease cancel_refs;
+                cancel_refs.udata = tinfo.cancel_cb;
+                cancel_refs.setModuleCleanup(tinfo.sandbox_ctx);
+                tinfo.cancel_cb = QoreValue();
+                exit_timer_refs.push_back(cancel_refs);
+            }
             exit_timer_pos.push_back(std::move(tinfo.runtime_po));
         }
         timer_info_map.clear();

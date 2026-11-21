@@ -524,9 +524,20 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             task_cnt.dec();
         };
         try {
+            # the timer's cancel callback balances the count when the module cleanup cancels the timer at the end of
+            # the process, as its callback never runs then (qore#7116)
             cache{name}.timer_id = controller.addTimerDelay(delay, sub () {
-                controller.submitTask(task, cancel_cb);
-            });
+                try {
+                    controller.submitTask(task, cancel_cb);
+                } catch (hash<ExceptionInfo> ex) {
+                    # at the end of the process, the module cleanup can refuse the task, whose cancel callback has
+                    # balanced the count then (qore#7116)
+                    if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                        rethrow;
+                    }
+                }
+            # (no owner: the timer's callback is not tracked per owner, as before)
+            }, "", cancel_cb);
         } catch (hash<ExceptionInfo> ex) {
             task_cnt.dec();
             # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
