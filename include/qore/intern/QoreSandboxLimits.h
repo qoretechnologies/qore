@@ -425,6 +425,12 @@ public:
     */
     DLLLOCAL int64 findStackLimit(size_t limit) const;
 
+    //! Returns true if a call of the thread into a sandbox has a stack size limit, applied or not
+    /** A destructor of an object released at the stack limit does not get the slice of the stack guard in such a
+        call (destructor_stack_floor, qore#6861): the sandbox's limit is never extended
+    */
+    DLLLOCAL bool hasStackBudget() const;
+
     //! Returns the innermost budget with a CPU-time limit, or nullptr if there is none
     DLLLOCAL const QoreSandboxCallBudget* findCPUBudget() const;
 
@@ -436,6 +442,12 @@ public:
     //! Returns true if the current call's stack limit cannot be enforced, so its stack was closed
     DLLLOCAL bool isStackLost() const {
         return lost_stack_closed;
+    }
+
+    //! Returns true if the current call has a stack limit that cannot be enforced, whether its stack could be closed
+    //! or not (a call that starts past the thread's limit cannot close it)
+    DLLLOCAL bool isStackLimitLost() const {
+        return lost_owner && (lost_kinds & QSB_LIMIT_STACK);
     }
 
     //! Raises the exception for a budget returned by findExpired(): \c SANDBOX-TIMEOUT, or \c SANDBOX-ERROR naming

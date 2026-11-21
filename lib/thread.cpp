@@ -988,6 +988,9 @@ public:
     size_t stack_limit;
     //! the thread's q_thread_stack_limit_tls, once bound (see bindStackLimitTls())
     std::atomic<size_t>* stack_limit_tls = nullptr;
+    //! the limit that the floor of a destructor at the stack limit replaced, and the floor (qore#6861)
+    size_t destructor_floor_old_limit = 0;
+    size_t destructor_floor_limit = 0;
     // this thread's stack size for error reporting
     size_t stack_size;
     // the primary thread only: where its stack starts (the highest address of a stack that grows down) and its full
@@ -3041,6 +3044,41 @@ size_t linux_get_stack_start_pos() {
 }
 #endif
 
+#if QORE_DESTRUCTOR_STACK_SLICE > 0
+// sets the floor for a destructor whose stack check failed (see destructor_stack_floor, qore#6861) and returns true if
+// the stack position is above it; called by the failing stack checks only, so that a destructor costs nothing more
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD bool destructor_stack_floor(ThreadData* td, size_t pos, size_t reserve) {
+    // only while a destructor runs, and once: the destructors that it runs share the floor
+    unsigned depth = q_object_destructor_depth();
+    if (!depth || q_destructor_floor_depth() || !td->stack_limit) {
+        return false;
+    }
+    // a sandbox's stack is never extended: not in a call into a sandbox with a stack size limit, whatever the
+    // object, whether its limit is the limit in force or not (a deferred deletion's elided stack moves the limit, and
+    // a call that starts with less stack left than its limit does not apply it), nor where a sandbox's stack is closed
+    if (td->sandbox_budgets.isStackLost() || td->sandbox_budgets.isStackLimitLost()
+        || td->sandbox_budgets.hasStackBudget()) {
+        return false;
+    }
+    size_t old_limit = td->stack_limit;
+#ifdef STACK_DIRECTION_DOWN
+    size_t floor = old_limit > QORE_DESTRUCTOR_STACK_SLICE ? old_limit - QORE_DESTRUCTOR_STACK_SLICE : 1;
+#else
+    size_t floor = old_limit < SIZE_MAX - QORE_DESTRUCTOR_STACK_SLICE ? old_limit + QORE_DESTRUCTOR_STACK_SLICE
+        : SIZE_MAX;
+#endif
+    td->destructor_floor_old_limit = old_limit;
+    td->destructor_floor_limit = floor;
+    td->setStackLimit(floor);
+    q_set_destructor_floor_depth(depth);
+#ifdef STACK_DIRECTION_DOWN
+    return floor <= pos && pos - floor >= reserve;
+#else
+    return floor >= pos && floor - pos >= reserve;
+#endif
+}
+#endif
+
 static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #ifdef IA64_64
     //printd(5, "check_stack() bsp current: %p limit: %p\n", get_rse_bsp(), td->rse_limit);
@@ -3064,6 +3102,12 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
     if (td->stack_limit > pos) {
 #else
     if (td->stack_limit < pos) {
+#endif
+#if QORE_DESTRUCTOR_STACK_SLICE > 0
+        // a destructor runs on a slice of the stack guard (qore#6861)
+        if (destructor_stack_floor(td, pos, 0)) {
+            return 0;
+        }
 #endif
         // a sandbox call can have tightened the limit (see qore_sandbox_tighten_stack()), or closed the stack
         // because its limits cannot be enforced, or because the code of another tenant was entered in a trusted
@@ -3109,6 +3153,12 @@ int check_stack_reserve(ExceptionSink* xsink, size_t reserve) {
 #endif
         return 0;
     }
+#if QORE_DESTRUCTOR_STACK_SLICE > 0
+    // a destructor runs on a slice of the stack guard (qore#6861)
+    if (destructor_stack_floor(td, pos, reserve)) {
+        return 0;
+    }
+#endif
     // the frame does not fit: raised as check_stack_intern() raises it for the limit
     if (td->sandbox_budgets.isIsolationRefused()) {
         td->sandbox_budgets.raiseIsolation(xsink, "call");
@@ -3186,6 +3236,18 @@ bool q_thread_stack_smaller_than_default() {
     return td->stack_size < q_thread_get_stack_size();
 #else
     return false;
+#endif
+}
+
+void q_destructor_stack_floor_leave() {
+#if defined(QORE_MANAGE_STACK) && QORE_DESTRUCTOR_STACK_SLICE > 0
+    ThreadData* td = thread_data.get();
+    // the helpers that move the limit restore it in the reverse order; a limit set for the thread itself while the
+    // destructor ran (enforcePrimaryStackSize()) is kept
+    if (td->stack_limit == td->destructor_floor_limit) {
+        td->setStackLimit(td->destructor_floor_old_limit);
+    }
+    td->destructor_floor_old_limit = td->destructor_floor_limit = 0;
 #endif
 }
 

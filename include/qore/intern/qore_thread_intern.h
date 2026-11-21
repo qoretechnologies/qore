@@ -63,6 +63,13 @@ class RuntimeConfig;
 #define QORE_STACK_GUARD (1024 * 8)
 #endif // QORE_STACK_GUARD
 
+#ifndef QORE_DESTRUCTOR_STACK_SLICE
+// the part of the stack guard that a destructor can use when it runs at the stack limit (see destructor_stack_floor);
+// none where it has not been measured: such a destructor fails with STACK-LIMIT-EXCEEDED, chained to the exception
+// being raised
+#define QORE_DESTRUCTOR_STACK_SLICE 0
+#endif
+
 class Operator;
 class Context;
 class CVNode;
@@ -3882,6 +3889,37 @@ private:
     size_t old_limit = 0;
     bool shifted = false;
 };
+
+//! @defgroup destructor_stack_floor Destructors at the stack limit (qore#6861)
+/** A destructor can run with too little stack left for it: that of an object released in the frames that unwind from
+    a STACK-LIMIT-EXCEEDED exception, for example.  Its stack check would fail, and the destructor would not run, so
+    that a file, lock or connection that it closes would stay open.
+
+    When a stack check fails while a destructor runs (RObject::DestructorRunHelper), the limit is moved down by
+    QORE_DESTRUCTOR_STACK_SLICE bytes (the floor) and the check is made again: the destructor, every call that it makes
+    and the destructors of the objects that it releases check the stack against the floor, until the destructor that
+    was running when the floor was set returns, which restores the limit.  A destructor that recurses without end
+    raises STACK-LIMIT-EXCEEDED at the floor, and once the slice is used up, a destructor fails as it did without it.
+    The rest of the guard, below the floor, remains for raising the exception and the native frames of the functions
+    called.  Nothing is done until a check fails, so that a destructor costs nothing more.
+
+    The limit is never moved in a call into a sandbox with a stack size limit, whatever the object (also one of
+    trusted code, whose destructor runs within the sandbox's limit), or where a sandbox's stack is closed: a sandbox's
+    stack is never extended.
+*/
+//@{
+//! Returns the number of destructors running in this thread; see RObject::DestructorRunHelper
+DLLLOCAL unsigned q_object_destructor_depth();
+
+//! Returns the number of destructors running when the floor was set in this thread, or 0 if it is not set
+DLLLOCAL unsigned q_destructor_floor_depth();
+
+//! Sets the number of destructors running when the floor was set in this thread (0: not set)
+DLLLOCAL void q_set_destructor_floor_depth(unsigned depth);
+
+//! Restores the stack limit that the floor replaced; called when the destructor that set it returns
+DLLLOCAL void q_destructor_stack_floor_leave();
+//@}
 
 class ParseCodeInfoHelper {
 private:

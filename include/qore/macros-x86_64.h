@@ -40,6 +40,11 @@
 // module loading, etc.), so 80KB provides ~28KB margin for check_stack to detect
 // overflow before hitting the OS guard page.
 #define QORE_STACK_GUARD (80 * 1024)
+// the part of the stack guard that the destructor of an object released at the stack limit can use (qore#6861):
+// measured: the call path of a destructor needs up to 6.5 KB (IR/JIT debug build; AST 3.1 KB, AOT 2.6 KB), so the
+// destructor has about 25 KB for its body and the objects that it releases, and 48 KB of the guard remain for raising
+// STACK-LIMIT-EXCEEDED and the native frames of the functions that it calls
+#define QORE_DESTRUCTOR_STACK_SLICE (32 * 1024)
 
 #ifdef __GNUC__
 #define HAVE_CHECK_STACK_POS
