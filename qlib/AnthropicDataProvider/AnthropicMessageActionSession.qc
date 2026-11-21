@@ -132,7 +132,8 @@ public class AnthropicMessageActionSession inherits DataProvider::Observer {
     private hash<auto> handleCreate(*hash<auto> args) {
         AnthropicMessageCreateDataProvider create
             = cast<AnthropicMessageCreateDataProvider>(messages.getChildProvider("create"));
-        if (context_store) {
+        # the store is passed on only to an object that the caller may change (issue 7035)
+        if (context_store && SandboxManager::isObjectOwnedByCaller(create)) {
             create.setConversationContextStore(context_store);
         }
         # the logger is passed on only to an object that the caller may change (issue 6842)
@@ -147,7 +148,8 @@ public class AnthropicMessageActionSession inherits DataProvider::Observer {
     private hash<auto> handleStart(*hash<auto> args) {
         if (!stream) {
             stream = cast<AnthropicMessageStreamDataProvider>(messages.getChildProvider("stream"));
-            if (context_store) {
+            # the store is passed on only to an object that the caller may change (issue 7035)
+            if (context_store && SandboxManager::isObjectOwnedByCaller(stream)) {
                 stream.setConversationContextStore(context_store);
             }
             # the logger is passed on only to an object that the caller may change (issue 6842)

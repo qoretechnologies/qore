@@ -111,7 +111,8 @@ public class OpenAiResponseActionSession inherits DataProvider::Observer {
     private hash<auto> handleCreate(*hash<auto> args) {
         OpenAiResponseCreateDataProvider create
             = cast<OpenAiResponseCreateDataProvider>(responses.getChildProvider("create"));
-        if (context_store) {
+        # the store is passed on only to an object that the caller may change (issue 7035)
+        if (context_store && SandboxManager::isObjectOwnedByCaller(create)) {
             create.setConversationContextStore(context_store);
         }
         # the logger is passed on only to an object that the caller may change (issue 6842)
@@ -126,7 +127,8 @@ public class OpenAiResponseActionSession inherits DataProvider::Observer {
     private hash<auto> handleStart(*hash<auto> args) {
         if (!stream) {
             stream = cast<OpenAiResponseStreamDataProvider>(responses.getChildProvider("stream"));
-            if (context_store) {
+            # the store is passed on only to an object that the caller may change (issue 7035)
+            if (context_store && SandboxManager::isObjectOwnedByCaller(stream)) {
                 stream.setConversationContextStore(context_store);
             }
             # the logger is passed on only to an object that the caller may change (issue 6842)

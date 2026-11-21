@@ -143,9 +143,17 @@ public class DpqlActionSession {
     }
 
     #! Sets the logger
+    /**
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change
+        the logger of an object that its sandbox did not create (see
+        @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()")
+    */
     setLogger(*LoggerInterface l) {
+        # the state can be shared with other owners (issue 7035)
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
         logger = l;
-        if (provider) {
+        # the logger is passed on only to an object that the caller may change (issue 7035)
+        if (provider && SandboxManager::isObjectOwnedByCaller(provider)) {
             provider.setLogger(l);
         }
     }

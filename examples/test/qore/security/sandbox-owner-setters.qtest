@@ -1,0 +1,164 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The setters of state that other code relies on refuse a caller whose sandbox did not create the object (issue
+# #7035): under tenant isolation, a tenant cannot change the logger of the HTTP server's async socket I/O controller
+# or of a DPQL action session, or the conversation context store of an AI data provider, of an object that the host
+# or another tenant created, and the reflection API does not give it the non-public members of such an object; the
+# owner, code-safety sandboxes and trusted code are not affected.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires DataProvider
+%requires RestClientIo
+%requires OpenAiDataProvider
+
+%exec-class SandboxOwnerSettersTest
+
+#! the code of the tenants
+const TenantSource = "%modern
+%requires Logger
+%requires reflection
+
+#! changes the state of the object with the given setter; returns \"ok\" or the exception code
+string sub set(string setter, object obj) {
+    try {
+        switch (setter) {
+            case \"logger\": obj.setLogger(new Logger::Logger(\"tenant\")); break;
+            case \"context-store\":
+                obj.setConversationContextStore(new OpenAiDataProvider::OpenAiConversationContextStoreCallbacks(
+                    *hash<auto> sub (string id) { return; }, sub (string id, hash<auto> h) {}));
+                break;
+            default: throw \"UNKNOWN-SETTER\", setter;
+        }
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! a subclass that reads the non-public logger member of a LoggerWrapper with the reflection API
+class LSub inherits Logger::LoggerWrapper {
+    static string reflect(Logger::LoggerWrapper w) {
+        try {
+            auto v = Reflection::Class::forName(\"Logger::LoggerWrapper\").getMember(\"logger\").getValue(w);
+            return v ? \"logger\" : \"nothing\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+string sub reflect(Logger::LoggerWrapper w) {
+    return LSub::reflect(w);
+}
+
+Logger::LoggerWrapper sub make_wrapper() {
+    return new Logger::LoggerWrapper(new Logger::Logger(\"own\"));
+}
+
+object sub make_dpql() {
+    return new DataProvider::DpqlActionSession();
+}
+
+object sub make_ai() {
+    return new OpenAiDataProvider::OpenAiResponseCreateDataProvider(
+        new RestClientIo::RestClientIo({\"url\": \"http://localhost:1\"}));
+}
+";
+
+class SandboxOwnerSettersTest inherits QUnit::Test {
+    public {
+        #! the exception of a refused change
+        const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+    }
+
+    private {
+        AsyncSocketIoController io_ctrl;
+    }
+
+    constructor() : QUnit::Test("sandbox owner setters", "1.0", \ARGV) {
+        addTestCase("tenants and the host", \ownerTest());
+        addTestCase("code safety and trusted code", \trustedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        io_ctrl = new AsyncSocketIoController(False);
+    }
+
+    globalTearDown() {
+        io_ctrl.stop();
+    }
+
+    #! creates a tenant
+    private static Program tenant(*int level) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        if (exists level) {
+            sm.setEnforcementLevel(level);
+        }
+        p.setSandboxManager(sm);
+        p.loadModule("DataProvider");
+        p.loadModule("RestClientIo");
+        p.loadModule("OpenAiDataProvider");
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    #! the host's objects
+    private hash<string, object> hostObjects() {
+        return {
+            "controller": new HttpAsyncSocketIoController(io_ctrl, new Logger("host")),
+            "dpql": new DpqlActionSession(),
+            "ai": new OpenAiResponseCreateDataProvider(new RestClientIo({"url": "http://localhost:1"})),
+        };
+    }
+
+    ownerTest() {
+        Program a = tenant();
+        Program b = tenant();
+        hash<string, object> host = hostObjects();
+
+        assertEq(Err, a.callFunction("set", "logger", host.controller), "the host's async socket I/O controller");
+        assertEq(Err, a.callFunction("set", "logger", host.dpql), "the host's DPQL action session");
+        assertEq(Err, a.callFunction("set", "context-store", host.ai), "the host's AI data provider");
+        assertEq(Err, a.callFunction("set", "logger", b.callFunction("make_dpql")), "B's DPQL action session");
+        assertEq(Err, a.callFunction("set", "context-store", b.callFunction("make_ai")), "B's AI data provider");
+
+        # the tenant's own objects
+        assertEq("ok", a.callFunction("set", "logger", a.callFunction("make_dpql")), "A's DPQL action session");
+        assertEq("ok", a.callFunction("set", "context-store", a.callFunction("make_ai")), "A's AI data provider");
+
+        # the reflection API
+        assertEq(Err, a.callFunction("reflect", new LoggerWrapper(new Logger("host"))),
+            "A reads the host's object with reflection");
+        assertEq("logger", a.callFunction("reflect", a.callFunction("make_wrapper")),
+            "A reads its own object with reflection");
+    }
+
+    trustedTest() {
+        hash<string, object> host = hostObjects();
+        Program safe = tenant(QSEL_CODE_SAFETY);
+        assertEq("ok", safe.callFunction("set", "logger", host.controller), "code safety: the controller");
+        assertEq("ok", safe.callFunction("set", "logger", host.dpql), "code safety: the DPQL action session");
+        assertEq("ok", safe.callFunction("set", "context-store", host.ai), "code safety: the AI data provider");
+        assertEq("logger", safe.callFunction("reflect", new LoggerWrapper(new Logger("host"))),
+            "code safety: reflection");
+
+        # trusted code changes any object
+        Program a = tenant();
+        DpqlActionSession dpql = a.callFunction("make_dpql");
+        dpql.setLogger(new Logger("host"));
+        host.controller.setLogger(new Logger("host"));
+        assertTrue(True, "trusted code changes the loggers");
+    }
+}

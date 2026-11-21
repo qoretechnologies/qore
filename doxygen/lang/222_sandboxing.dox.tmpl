@@ -598,6 +598,10 @@ authenticate();
     @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()", and the code that
     passes a logger on to another object as a side effect of an operation leaves it out when
     @ref Qore::SandboxManager::isObjectOwnedByCaller() "SandboxManager::isObjectOwnedByCaller()" returns @ref False.
+    The other setters of the standard modules of state that other code relies on decide in the same way: the logger
+    setters of \c HttpServerAsyncIo::HttpAsyncSocketIoController and of \c DataProvider::DpqlActionSession, the
+    conversation context store setters of the AI data providers and the setters of the connection manager of the
+    REST clients; reading a non-public member of an object with the reflection API also requires its owner.
     Trusted code changes any object.
 
     @since %Qore 3.0

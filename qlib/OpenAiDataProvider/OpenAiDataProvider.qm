@@ -574,6 +574,9 @@ module OpenAiDataProvider {
 /** @page openaidataprovider_relnotes Release Notes
 
     @section openaidataprovider_v1_7 OpenAiDataProvider v1.7
+    - code that is sandboxed or acts for sandboxed code can change the conversation context store of a provider only
+      if its sandbox created the provider, under tenant isolation, and an action session passes its store on only to
+      a provider that the caller owns (<a href="https://github.com/qoretechnologies/qore/issues/7035">issue 7035</a>)
     - the \c multipart/form-data boundary of a file upload is random; it was made from the current time
       (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
     - a failed request is not retried while

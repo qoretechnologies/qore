@@ -277,9 +277,15 @@ public class HttpAsyncSocketIoController {
 
         @param new_logger the new logger to use (NOTHING disables logging)
 
+        @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change
+        the logger of an object that its sandbox did not create (see
+        @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()")
+
         @since Qore 3.0.0
     */
     setLogger(*LoggerInterface new_logger) {
+        # the state can be shared with other owners (issue 7035)
+        SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
         logger = new_logger;
     }
 
