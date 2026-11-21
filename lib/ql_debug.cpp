@@ -56,6 +56,7 @@
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QuicSession.h"
 
+#include <bit>
 #include <map>
 #include <memory>
 #include "qore/intern/QC_Counter.h"
@@ -21766,6 +21767,34 @@ static void ut_variant_takes_call_arity(UnitTestCounters& c) {
     UT_ASSERT(c, qore_variant_takes_call_arity(255, 0, true), "many arguments for a variant with extra args");
 }
 
+// the size helper of the JIT runtime (JITRuntime.cpp)
+extern "C" uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSink* xsink);
+
+//! qore#7062: qore_fast_any_size() returns the length in characters of a string in both representations
+/** The caller of the helper gives strings to qore_fast_length() and qore_fast_strlen() first, so this is the only
+    check that an inline short string reaching it gets its length instead of 0
+*/
+static void ut_fast_any_size_short_string(UnitTestCounters& c) {
+    auto any_size = [] (QoreValue v, ExceptionSink& xsink) -> int64 {
+        return std::bit_cast<QoreValue>(qore_fast_any_size(std::bit_cast<uint64_t>(v), &xsink)).getAsBigInt();
+    };
+    ExceptionSink xsink;
+    // "\xc3\xa9\xc3\xa9" is two characters in four bytes
+    QoreValue short_value = QoreValue::makeStringValue("\xc3\xa9\xc3\xa9");
+    UT_ASSERT(c, short_value.isShortString(), "a 4-byte string is stored inline");
+    UT_ASSERT_EQ(c, 2, (int)any_size(short_value, xsink), "the size of an inline short string is its length");
+    UT_ASSERT(c, !xsink.isException(), "the size of an inline short string raises no exception");
+    QoreValue empty = QoreValue::makeStringValue("");
+    UT_ASSERT_EQ(c, 0, (int)any_size(empty, xsink), "the size of an empty string is 0");
+    // the same characters in a node: "\xc3\xa9\xc3\xa9\xc3\xa9a" is four characters in seven bytes
+    SimpleRefHolder<QoreStringNode> node(new QoreStringNode("\xc3\xa9\xc3\xa9\xc3\xa9a", QCS_UTF8));
+    QoreValue node_value(*node);
+    UT_ASSERT(c, !node_value.isShortString(), "a 7-byte string is not stored inline");
+    UT_ASSERT_EQ(c, 4, (int)any_size(node_value, xsink), "the size of a string node is its length");
+    UT_ASSERT(c, !xsink.isException(), "the size of a string node raises no exception");
+    xsink.clear();
+}
+
 static void ut_old_background_self_call_helper(UnitTestCounters& c) {
     auto is_rebuild_error = [] (ExceptionSink& xsink) -> bool {
         if (!xsink.isException()) {
@@ -22048,6 +22077,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
     ut_variant_takes_call_arity(c);
+    ut_fast_any_size_short_string(c);
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
