@@ -13,6 +13,7 @@
 %requires HttpServer
 %requires HttpClientIo
 %requires ../../TestCertificates.qm
+%requires ../../HttpTestHeaders.qm
 
 %exec-class HttpServerFastRoutesHttp3Test
 
@@ -84,7 +85,7 @@ class HttpServerFastRoutesHttp3Test inherits QUnit::Test {
     }
 
     private static hash<auto> stable(hash<auto> hdr) {
-        return hdr - ("date",);
+        return HttpTestHeaders::stable(hdr);
     }
 
     testBasic() {
@@ -133,7 +134,7 @@ class HttpServerFastRoutesHttp3Test inherits QUnit::Test {
         assertEq(normal.status_code, fast.status_code);
         assertEq(sort(keys stable(normal.headers)), sort(keys stable(fast.headers)), "the same header names");
         foreach string name in (keys stable(normal.headers)) {
-            assertEq(normal.headers{name}, stable(fast.headers){name}, "header " + name);
+            assertEq(stable(normal.headers){name}, stable(fast.headers){name}, "header " + name);
         }
         assertTrue(exists fast.headers.date, "the response has a date header");
         assertTrue(fast.headers."x-powered-by" =~ /^Qore\//, "the server's headers are added");
