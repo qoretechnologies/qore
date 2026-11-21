@@ -3175,6 +3175,33 @@ printf("%d connection(s) migrated\n", migrated);
         return desc;
     }
 
+    #! Internal: returns the error of a race candidate, or a stand-in for a candidate that settled without one
+    /** A candidate that is no longer connecting has an error: when it has none, the connection left the connecting
+        state without recording why (issue #6970), which is a defect of the connection.  It is reported with the
+        reason "closed without an error", and in a debug build it is also an assertion failure
+        (\c ASSERTION-ERROR), so that the defect is not hidden; a test that makes a candidate report no error with
+        the debug hook dbg_http3_client_hide_error() is exempt.
+
+        @param conn the candidate
+        @param err the candidate's error, if it has one
+        @param what the name of the protocol, for the assertion
+        @param code the error code of the stand-in
+
+        @return the candidate's error, or the stand-in if it settled without one; NOTHING if it is still connecting
+    */
+    private static *hash<auto> heSettledLegError(HttpClientConnection conn, *hash<auto> err, string what,
+            string code) {
+        if (err || !heSettled(conn)) {
+            return err;
+        }
+        @debug {
+            if (!(what == "H3" && call_function("dbg_http3_client_error_hidden"))) {
+                @assert(False);
+            }
+        }
+        return {"err": code, "desc": "closed without an error"};
+    }
+
     #! Internal: builds and throws the happy-eyeballs connect error, closing every candidate
     /** Exact behavior of the synchronous race's terminal error path: collect the
         underlying poll-op errors of the candidates, close them, and throw a
@@ -3218,6 +3245,14 @@ printf("%d connection(s) migrated\n", migrated);
         *hash<auto> h3_err = h3conn.getPollOperation().getError();
         *hash<auto> h2_err = h2conn.getPollOperation().getError();
         *hash<auto> h1_err = h1conn ? h1conn.getPollOperation().getError() : NOTHING;
+        # a leg that is no longer connecting has an error: one that settled without it (closed before it
+        # connected, for example) is reported as such, instead of being left out of the description as if it was
+        # still pending (issue #6970); read before the legs are closed, which settles them
+        h3_err = heSettledLegError(h3conn, h3_err, "H3", "HTTP3-CLOSED");
+        h2_err = heSettledLegError(h2conn, h2_err, "H2", "HTTP2-CLOSED");
+        if (h1conn) {
+            h1_err = heSettledLegError(h1conn, h1_err, "H1", "HTTP1-CLOSED");
+        }
         heCloseLegs(h3conn, h2conn, h1conn);
 
         # a sandbox denial or a refused certificate is never retried and never hidden behind another protocol's
