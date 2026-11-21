@@ -44,6 +44,9 @@ variables:
   MEMCACHED_URL: 'memcached://memcached:11211'
   REDIS_URL: 'redis://redis:6379'
   MONGODB_URL: 'mongodb://mongodb:27017'
+  # live calls of the provider tests (examples/test/LiveProviderTest.qm, qore#6964): only the public demo environment
+  # of Mews, whose tests use its published demo tokens; no other service is called, and no job has a provider key
+  QORE_TEST_LIVE_PROVIDERS: mews
   QORE_TEST_OPTS: '-penable-debug'
   QORE_EXCLUDE_PERF_TESTS: "1"
   # A test job fails when a native module of its image has no build for the module API of the qore under test, as its

@@ -43,7 +43,7 @@ module LiveProviderTest {
     @ref LiveProviderTest::LiveProvider "LiveProvider", which gives them only when:
     - \c QORE_TEST_LIVE_PROVIDERS is \c "1" or \c "all" (every service), or a comma-separated list of service ids
       that has the test's one (ex: <tt>QORE_TEST_LIVE_PROVIDERS=mistral,openai</tt>); it is unset by default, and
-      CI never sets it
+      CI sets it only to \c "mews" (the public demo environment of Mews, whose tests need no key)
     - and the credential variables are set
 
     A test that cannot have its credentials skips its live test cases with a reason that names the opt-in
