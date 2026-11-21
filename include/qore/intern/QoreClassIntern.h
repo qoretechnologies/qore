@@ -1523,6 +1523,15 @@ public:
         return is_local;
     }
 
+    //! returns true if the class that declares the member declares it private or private:internal (qore#6843)
+    /** The access of a member imported from a base class is the maximum of its declared access and the access of the
+        inheritance; this is the declared access alone, which decides whether code of a class that sandboxed code
+        declared can use the member (see qore_class_private::sandboxDeniesPrivateAccess())
+    */
+    DLLLOCAL bool declaredNonPublic() const {
+        return is_local ? access > Public : decl_non_public;
+    }
+
     // returns the class where the member was declared
     DLLLOCAL const qore_class_private* getClass() const {
         return decl_cls;
@@ -1672,7 +1681,10 @@ private:
     // local flag
     bool is_local,
         // transient flag
-        is_transient = false;
+        is_transient = false,
+        // the member is not public in the class that declares it, for a member imported from a base class (see
+        // declaredNonPublic())
+        decl_non_public = false;
 
     /**
         @param old the old object
@@ -3417,6 +3429,20 @@ public:
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
 
+    //! true if sandboxed code declared the class: it was sandboxed code when the class was committed (qore#6843)
+    /** Its code has no private access to the members and methods that a class that trusted code declared declares
+        (see sandboxDeniesPrivateAccess()); set in parseCommit(), copied with the class
+    */
+    bool sandbox_ctx = false;
+
+    //! true if sandbox_ctx is set and the class inherits a member that a class that trusted code declared declares
+    //! private or private:internal (qore#6843)
+    /** Read by the inline member access check for the code of the class on its own objects
+        (runtimeCheckMemberAccess()), which then checks the member out of line; set in parseCommit(), copied with the
+        class
+    */
+    bool sandbox_private_members = false;
+
     //! true while the wrapper that created the class (cls) holds the reference to the values in var_refs that it
     //! took with the class; see takeWrapperVarRef()
     bool cls_var_ref = true;
@@ -4113,6 +4139,13 @@ public:
             parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
             return -1;
         }
+        // a class that sandboxed code declared cannot use the private members of a class that trusted code declared
+        // (qore#6843)
+        if ((access > Public) && !parseHasMemberGate() && omi->declaredNonPublic()
+                && parseCheckSandboxPrivateAccess(loc, omi->getClass(), parse_get_class_priv(), "member", mem)) {
+            memberTypeInfo = nullptr;
+            return -1;
+        }
         // a member that this class reaches only through a base class that one of its base classes inherits with
         // private:internal (access Inaccessible) cannot be used in this class, only by the classes of that path
         // (issue #6669)
@@ -4164,6 +4197,13 @@ public:
         if (omi && access == Inaccessible) {
             parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
                 "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
+            memberTypeInfo = nullptr;
+            return -1;
+        }
+        // a class that sandboxed code declared cannot use the private members of a class that trusted code declared
+        // (qore#6843)
+        if (omi && access > Public && omi->declaredNonPublic()
+                && parseCheckSandboxPrivateAccess(loc, omi->getClass(), parse_get_class_priv(), "member", mem)) {
             memberTypeInfo = nullptr;
             return -1;
         }
@@ -4297,8 +4337,11 @@ public:
         if (!class_ctx) {
             return false;
         }
-        // the class itself and the class that declares a private member, inline; the other contexts out of line
-        if (class_ctx == this || (info->access == Private && class_ctx == info->getClass())) {
+        // the class itself and the class that declares a private member, inline; the other contexts out of line, and
+        // the class itself if sandboxed code declared it and it inherits private members of a class that trusted code
+        // declared (qore#6843)
+        if (class_ctx == this ? !sandbox_private_members
+                : (info->access == Private && class_ctx == info->getClass())) {
             return true;
         }
         return runtimeCheckMemberAccessContext(info, class_ctx);
@@ -4610,7 +4653,10 @@ public:
         // check for accessibility to private constants
         if (found && (access > Public)) {
             qore_class_private* class_ctx = parse_get_class_priv();
-            if ((access >= Internal && class_ctx != this) || !parseCheckPrivateClassAccess(class_ctx)) {
+            // a class that sandboxed code declared cannot use the private constants of a class that trusted code
+            // declared (qore#6843)
+            if ((access >= Internal && class_ctx != this) || !parseCheckPrivateClassAccess(class_ctx)
+                    || sandboxDeniesPrivateAccess(this, class_ctx)) {
                 rv.clear();
                 cTypeInfo = nullptr;
                 found = false;
@@ -4639,7 +4685,10 @@ public:
     DLLLOCAL QoreVarInfo* parseFindLocalStaticVar(const char* vname) const {
         QoreVarInfo* vi = vars.find(vname);
 
-        if (vi && (vi->access > Public) && !parseCheckPrivateClassAccess())
+        // a class that sandboxed code declared cannot use the private static variables of a class that trusted code
+        // declared (qore#6843)
+        if (vi && (vi->access > Public) && (!parseCheckPrivateClassAccess()
+                || sandboxDeniesPrivateAccess(this, parse_get_class_priv())))
             vi = nullptr;
 
         return vi;
@@ -4677,8 +4726,11 @@ public:
 
                 // return null and stop searching in this class if we should verify access, and the var is not accessible:
                 // an internal member is accessible only in its own class, not in subclasses
+                // a class that sandboxed code declared cannot use the private static variables of a class that
+                // trusted code declared (qore#6843)
                 if (check && (access > Public)
-                    && ((access >= Internal && parse_get_class_priv() != this) || !parseCheckPrivateClassAccess())) {
+                    && ((access >= Internal && parse_get_class_priv() != this) || !parseCheckPrivateClassAccess()
+                        || (va > Public && sandboxDeniesPrivateAccess(this, parse_get_class_priv())))) {
                     stop = true;
                     return nullptr;
                 }
@@ -4940,6 +4992,45 @@ public:
         inlined in the callers, such as execDestructor() (qore#6732).
     */
     DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxedCode() const;
+
+    //! Returns true if sandboxed code declared the class (qore#6843)
+    /** For a committed class, the state of its Program when it was committed (sandbox_ctx); for a class being parsed,
+        the state of its Program now (isSandboxedCode()); a builtin class is trusted
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxDeclared() const;
+
+    //! Returns true if the code of \a class_ctx cannot use the private declarations of \a decl (qore#6843)
+    /** A class that sandboxed code declared has no private access to the members, methods and static variables that
+        a class that trusted code declared declares, on any object: for it they are as if they were
+        \c private:internal.  The code of the class's own declarations, and the code of another class that sandboxed
+        code declared, is not affected.
+
+        @param decl the class that declares the member, method or static variable
+        @param class_ctx the class context of the access
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE static bool sandboxDeniesPrivateAccess(const qore_class_private* decl,
+            const qore_class_private* class_ctx);
+
+    //! Raises a parse error if the parse class context cannot use the private member, method or static variable
+    //! \a what of class \a decl (qore#6843); returns -1 if an error was raised, 0 if not
+    DLLLOCAL static int parseCheckSandboxPrivateAccess(const QoreProgramLocation* loc, const qore_class_private* decl,
+            const qore_class_private* class_ctx, const char* kind, const char* what);
+
+    //! Raises a parse error if the parse class context cannot call the private method \a m that a parse-time lookup
+    //! found (qore#6843); returns -1 if an error was raised, 0 if not
+    /** An abstract method is looked up at run time, which checks the implementation called.
+
+        @param loc the location of the call
+        @param m the method found
+        @param class_ctx the class context of the call
+        @param base_call true if \a m is called on the object of the code (a call of a method of the class or of a
+        base class); then a normal method that the class context declares itself, which overrides \a m, can call it
+    */
+    DLLLOCAL static int parseCheckSandboxMethodAccess(const QoreProgramLocation* loc, const QoreMethod* m,
+            const qore_class_private* class_ctx, bool base_call);
+
+    //! Sets sandbox_ctx and sandbox_private_members when the class is committed (qore#6843)
+    DLLLOCAL void initSandboxAccess();
 
     //! Returns a reference to the source Program of the class, or nullptr if it has released the class or is deleted
     /** spgm is cleared under dataLock() in deleteClassData() before the Program can be freed, so the Program read
@@ -5349,10 +5440,17 @@ public:
     DLLLOCAL const QoreMethod* doRuntimeMethodAccess(const QoreMethod* m, ClassAccess& access, ClassAccess ma, const qore_class_private* class_ctx) const {
         assert(m);
 
-        if (ma >= Internal && (!class_ctx || !equal(*class_ctx)))
-            m = nullptr;
-        else if (access < ma)
-            access = ma;
+        if (ma > Public) {
+            // a private method of a class that trusted code declared is private:internal for the code of a class
+            // that sandboxed code declared (qore#6843)
+            if (ma >= Internal ? (!class_ctx || !equal(*class_ctx))
+                    : (class_ctx && class_ctx->sandbox_ctx && sandboxDeniesPrivateAccess(this, class_ctx))) {
+                return nullptr;
+            }
+            if (access < ma) {
+                access = ma;
+            }
+        }
 
         return m;
     }

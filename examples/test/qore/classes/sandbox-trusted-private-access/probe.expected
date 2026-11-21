@@ -1,0 +1,47 @@
+member-typed: parse: PARSE-EXCEPTION: illegal access to private member 'secret' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+member-write-typed: parse: PARSE-EXCEPTION: illegal access to private member 'secret' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+member-bare: parse: PARSE-EXCEPTION: illegal access to private member 'secret' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+member-self: parse: PARSE-EXCEPTION: illegal access to private member 'secret' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+method-typed: parse: PARSE-EXCEPTION: illegal access to private method 'helper' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+method-self: parse: PARSE-EXCEPTION: illegal access to private method 'helper' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+method-self-dot: parse: PARSE-EXCEPTION: illegal access to private method 'helper' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+method-base-not-overridden: parse: PARSE-EXCEPTION: illegal access to private method 'helper' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+static-method: parse: PARSE-EXCEPTION: illegal access to private method 'shelper' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+static-var: parse: PARSE-EXCEPTION: cannot find any namespace or class 'Trusted' in 'Trusted::svar' providing a constant or static class variable 'svar'
+constant-bare: parse: PARSE-EXCEPTION: cannot resolve bareword 'PC' to any reachable object
+constant-scoped: parse: PARSE-EXCEPTION: cannot find any namespace or class 'Trusted' in 'Trusted::PC' providing a constant or static class variable 'PC'
+constant-public: parse: OK
+method-ref-typed: parse: PARSE-EXCEPTION: illegal access to private method 'helper' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+method-ref-self: parse: PARSE-EXCEPTION: illegal access to private method 'helper' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+static-method-ref: parse: PARSE-EXCEPTION: illegal access to private method 'shelper' of class 'Trusted' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+memberAuto: PRIVATE-MEMBER: 'secret' is a private member of class 'Trusted'
+memberWriteAuto: PRIVATE-MEMBER: 'secret' is a private member of class 'Trusted'
+memberComputed: PRIVATE-MEMBER: 'secret' is a private member of class 'Trusted'
+methodAuto: METHOD-IS-PRIVATE: Trusted::helper() is private and cannot be accessed externally
+callObjectMethod: METHOD-IS-PRIVATE: Trusted::helper() is private and cannot be accessed externally
+callObjectMethodArgs: METHOD-IS-PRIVATE: Trusted::helper() is private and cannot be accessed externally
+closureMember: PRIVATE-MEMBER: 'secret' is a private member of class 'Trusted'
+hashOf: OK ["pub"]
+keysOf: OK ["pub"]
+shared secret after: "secret"
+selfAuto: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
+selfComputed: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
+selfWriteAuto: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
+selfHash: OK ["pub", "own"]
+selfSlice: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
+selfIterate: OK ["pub", "own"]
+selfFirstLast: OK ["pub", "own"]
+selfMethodAuto: METHOD-DOES-NOT-EXIST: no method T::helper() has been defined and no pseudo-method <object>::helper() is available (class lang: Qore)
+selfCallObjectMethod: METHOD-IS-PRIVATE: T::helper() is private and cannot be accessed externally
+selfKeys: OK ["pub", "own"]
+selfReflectionMember: REFLECTION-ACCESS-ERROR: member 'Trusted::secret' is private and cannot be used from class 'T' by code that a sandbox governs or whose functional domains are restricted
+selfReflectionMethod: REFLECTION-ACCESS-ERROR: method 'Trusted::helper' is private and cannot be used from class 'T' by code that a sandbox governs or whose functional domains are restricted
+selfReflectionConstant: REFLECTION-ACCESS-ERROR: constant 'Trusted::PC' is private and cannot be used from class 'T' by code that a sandbox governs or whose functional domains are restricted
+selfReflectionPublicConstant: OK "pubc"
+selfClosure: PRIVATE-MEMBER: 'secret' is a private member of class 'T'
+ownMember: OK ["own", "own", "own"]
+inheritedPublic: OK ["pub", "pub", "pub"]
+ownCallImpl: OK "tenant-impl:own"
+ownCallHook: OK "tenant-hook+trusted-hook"
+trusted-on-tenant: OK ["secret", "secret", "tenant-impl:own"]
+trusted-sub: OK "secret:helper:shelper:svar:pc"

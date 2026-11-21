@@ -1021,7 +1021,9 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
         // a class context other than the object's class sees only the members that it can use: not the private members
         // of another class that it does not inherit (issue #6760), nor those that the object's class inherits through a
         // class inherited with private:internal outside its line (issue #6640)
-        if (class_ctx == theclass_priv) {
+        // all the members only in the object's class, unless sandboxed code declared it and it inherits private
+        // members of a class that trusted code declared, which it cannot use (qore#6843)
+        if (class_ctx == theclass_priv && !theclass_priv->sandbox_private_members) {
             h = data->copy();
         } else {
             // the members that the class context can use on the object: not those that the object's class inherits
@@ -1422,8 +1424,9 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHash
     qore_hash_private* hp = qore_hash_private::get(*hash);
     if (class_ctx) {
         // all the members only in the object's class: another class context gets the members that it can use (issue
-        // #6760)
-        if (class_ctx == qore_class_private::get(*theclass)) {
+        // #6760); not if sandboxed code declared the class and it inherits private members of a class that trusted
+        // code declared, which it cannot use (qore#6843)
+        if (class_ctx == qore_class_private::get(*theclass) && !class_ctx->sandbox_private_members) {
             if constexpr (Lexical) {
                 hp->merge(*qore_hash_private::get(*data), sdh, xsink, policy);
             } else {

@@ -415,8 +415,9 @@ public:
         }
 
         // all the members only in the object's class: another class context sees the members that it can use (issue
-        // #6760)
-        if (class_ctx == qore_class_private::get(*theclass)) {
+        // #6760); not if sandboxed code declared the class and it inherits private members of a class that trusted
+        // code declared, which it cannot use (qore#6843)
+        if (class_ctx == qore_class_private::get(*theclass) && !class_ctx->sandbox_private_members) {
             const char* str = data->getFirstKey();
             //printd(5, "qore_object_private::firstKey() got %p (%s)\n", str, str ? str : "<null>");
             return !str ? nullptr : new QoreStringNode(str);
@@ -448,8 +449,8 @@ public:
             return nullptr;
         }
 
-        // all the members only in the object's class (issue #6760)
-        if (class_ctx == qore_class_private::get(*theclass)) {
+        // all the members only in the object's class (issue #6760), as in firstKey() (qore#6843)
+        if (class_ctx == qore_class_private::get(*theclass) && !class_ctx->sandbox_private_members) {
             const char* str = data->getLastKey();
             return !str ? nullptr : new QoreStringNode(str);
         }
