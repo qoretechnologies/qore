@@ -427,6 +427,10 @@ Content-Length: 16
 /** @page resthandler_relnotes RestHandler Release Notes
 
     @section rh_1_6_8 RestHandler v1.6.8
+    - added @ref RestHandler::AbstractRestStreamRequestHandler::getContext() "AbstractRestStreamRequestHandler::getContext()"
+      and @ref RestHandler::AbstractRestStreamRequestHandler::getArgs() "getArgs()" for subclasses, which cannot use
+      the private members of the class when sandboxed code declares them; the context is a copy with the request
+      metadata only (issue #6843)
     - the exception that a REST method raises is given to the client without its location in the server's code or
       its call stack unless debugging is enabled (see @ref restexceptions; issue #6780)
     - fixed logging sensitive data: request arguments dispatched to subclasses were logged without masking, and the
@@ -579,7 +583,17 @@ public namespace RestHandler {
         - send(): this is called if no message body is returned by getResponseHeaderMessage(); each time this method returns data, the data is sent in a response chunk; when this method returns @ref nothing, then no more data is sent.  Subclasses should re-implement sendImpl() which is called by this method
     */
     public class AbstractRestStreamRequestHandler {
-        public {}
+        public {
+            #! The keys that the REST handler adds to the request context that getContext() gives (see
+            #! @ref rest_context_argument)
+            /** With the keys of @ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys";
+                an allowlist: other keys are not given
+
+                @since RestHandler 1.6.8
+            */
+            const RestContextKeys = ("aih", "arg_path", "body", "orig_method", "orig-request-body",
+                "rest_action_method", "rest_api_path", "rest_method");
+        }
 
         private {
             #! call context hash
@@ -608,6 +622,35 @@ public namespace RestHandler {
         constructor(hash<auto> cx, *hash<auto> ah) {
             self.cx = cx;
             self.ah = ah;
+        }
+
+        #! Returns a copy of the call context with the request metadata only
+        /** For subclasses, which cannot use the private members of this class when sandboxed code declares them.  The
+            context of the server holds objects of the server, its listener and the process, which are not given:
+            only the keys in @ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys"
+            (with the keys of its \c "header-info" hash in
+            @ref HttpServer::AbstractStreamRequest::HeaderInfoKeys "AbstractStreamRequest::HeaderInfoKeys") and in
+            @ref RestContextKeys
+
+            @return a copy of the call context with the keys in the lists that it has
+
+            @since RestHandler 1.6.8
+        */
+        hash<auto> getContext() {
+            hash<auto> rv = HttpServer::AbstractStreamRequest::filterContext(cx);
+            foreach string key in (RestContextKeys) {
+                if (cx.hasKey(key)) {
+                    rv{key} = cx{key};
+                }
+            }
+            return rv;
+        }
+
+        #! Returns any URI arguments of the request
+        /** @since RestHandler 1.6.8
+        */
+        *hash<auto> getArgs() {
+            return ah;
         }
 
         #! this method returns the response message description hash by calling getResponseHeaderMessageImpl()

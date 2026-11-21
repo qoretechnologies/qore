@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires FtpPoller
 %requires DataProvider
+%requires RestHandler
 %requires FsUtil
 %requires Util
 
@@ -20,6 +21,7 @@ const Opts = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPS
     p.setSandboxManager(new SandboxManager());
     p.loadModule("FtpPoller");
     p.loadModule("DataProvider");
+    p.loadModule("RestHandler");
     try {
         p.parse(code, label);
         return p;
@@ -39,6 +41,9 @@ const ParseCases = (
     "ftppoller-fatal-member": PollerHead + "    bool f() { fatal = True; return fatal; } }",
     "observable-map-member": "class MyObservable inherits DataProvider::Observable {
         int f() { return observer_map.size(); } }",
+    "rest-stream-cx-member": "class MyRestStream inherits RestHandler::AbstractRestStreamRequestHandler {
+        constructor(hash<auto> cx) : RestHandler::AbstractRestStreamRequestHandler(cx) {}
+        hash<auto> f() { return cx; } }",
 );
 
 foreach hash<auto> i in (ParseCases.pairIterator()) {
@@ -78,6 +83,35 @@ auto sub run_observable() {
     return o.useObservers();
 }
 
+class MyRestStream inherits RestHandler::AbstractRestStreamRequestHandler {
+    constructor(hash<auto> cx, *hash<auto> ah) : RestHandler::AbstractRestStreamRequestHandler(cx, ah) {
+    }
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {'code': 200};
+    }
+    private nothing recvImpl(hash<auto> v) {
+    }
+    private auto sendImpl() {
+    }
+    hash<auto> useContext() {
+        hash<auto> cx = getContext();
+        hash<auto> rv = {
+            'context keys': sort(keys cx),
+            'header-info keys': sort(keys cx.'header-info'),
+            'args': getArgs(),
+        };
+        # a copy: changing it changes nothing in the handler
+        cx.orig_path = 'changed';
+        rv.copy = getContext().orig_path == '/r';
+        return rv;
+    }
+}
+
+auto sub run_rest_stream(hash<auto> cx) {
+    MyRestStream r(cx, {'a': 1});
+    return r.useContext();
+}
+
 auto sub run_poller(Qore::FtpClient f) {
     MyPoller p(f);
     return p.useFatal();
@@ -105,3 +139,16 @@ ftp.connect();
 on_exit ftp.disconnect();
 show("ftppoller fatal flag", auto sub () { return p.callFunction("run_poller", ftp); });
 show("observable observers", auto sub () { return p.callFunction("run_observable"); });
+# a call context as the server and the REST handler set it, with objects of the server
+hash<auto> rest_cx = {
+    "id": 1,
+    "orig_path": "/r",
+    "hdr": {"method": "POST"},
+    "header-info": {"headers-raw": {"Host": "x"}, "sock": new Socket(), "session_id": 1},
+    "async_ctrl": new Mutex(),
+    "sock_key": "io-1",
+    "logger": new Mutex(),
+    "rest_method": "Get",
+    "rest_api_path": "r",
+};
+show("rest stream context", auto sub () { return p.callFunction("run_rest_stream", rest_cx); });
