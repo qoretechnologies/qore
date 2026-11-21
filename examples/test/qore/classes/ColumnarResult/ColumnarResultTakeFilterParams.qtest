@@ -35,6 +35,17 @@ class ColumnarResultTakeFilterParamsTest inherits QUnit::Test {
 
         #! row mask for filter()
         const FilterMask = (True, True, False, True, True);
+
+        #! precision and scale of the decimal128 columns whose storage take() and filter() copy (qore#6220)
+        /** a scale-0 column of precision 18 or less is an int64 column, so has none here
+        */
+        const CopyParams = (
+            (1, 1), (5, 5), (10, 2), (18, 9), (19, 0), (19, 4), (20, 0), (28, 6), (38, 0), (38, 10), (38, 37),
+            (38, 38),
+        );
+
+        #! row count of the copy tests: more than 100 (the cancellation checks) and not a multiple of 8 (the bitmap)
+        const CopyRows = 261;
     }
 
     constructor() : QUnit::Test("ColumnarResultTakeFilterParams", "1.0", \ARGV) {
@@ -47,6 +58,8 @@ class ColumnarResultTakeFilterParamsTest inherits QUnit::Test {
         addTestCase("chained operations", \chainedOperations());
         addTestCase("temporal columns", \temporalColumns());
         addTestCase("other column types", \otherColumnTypes());
+        addTestCase("decimal128 storage copy", \decimalStorageCopy());
+        addTestCase("decimal128 storage copy of views", \decimalStorageCopyViews());
         set_return_value(main());
     }
 
@@ -202,6 +215,140 @@ class ColumnarResultTakeFilterParamsTest inherits QUnit::Test {
             assertEq(source{col}.fullType(), filtered_columns{col}.fullType(), "filter type " + col);
             assertEq((select listOf(source{col}), FilterMask[$#]), listOf(filtered_columns{col}), "filter " + col);
         }
+    }
+
+    #! take() and filter() copy the storage of decimal128 elements (qore#6220)
+    /** the values, the nulls and the schema of the result are those of the selected rows, for columns of several
+        precisions and scales, with negative values and values of the maximum precision, with and without nulls
+    */
+    private decimalStorageCopy() {
+        foreach list<int> pc in (CopyParams) {
+            foreach bool nullable in ((True, False)) {
+                string label = sprintf("decimal(%d,%d)%s", pc[0], pc[1], nullable ? " nullable" : "");
+                ColumnarResult result = makeCopyResult(pc[0], pc[1], nullable);
+                checkCopies(result, label);
+            }
+        }
+    }
+
+    #! take() and filter() of a slice, a view with an offset that is not a multiple of 8 (qore#6220)
+    private decimalStorageCopyViews() {
+        foreach list<int> pc in (CopyParams) {
+            foreach bool nullable in ((True, False)) {
+                string label = sprintf("decimal(%d,%d)%s slice", pc[0], pc[1], nullable ? " nullable" : "");
+                ColumnarResult result = makeCopyResult(pc[0], pc[1], nullable).slice(3, CopyRows - 10);
+                checkCopies(result, label);
+                # a take() of a take(), and a filter() of a filter()
+                checkCopies(result.take(range(result.numRows() - 1, 0)), label + " reversed");
+                checkCopies(result.filter(map ($# % 5) != 2, xrange(result.numRows())), label + " filtered");
+            }
+        }
+    }
+
+    #! checks take() and filter() of the decimal128 column of a result with the selections of the copy tests
+    private checkCopies(ColumnarResult result, string label) {
+        list<auto> source = result.getColumn("n").toList();
+        int rows = source.size();
+        assertEq("decimal128", result.schemaV2()[0].kind, label + " kind");
+
+        # take(): all rows, none, reversed, repeated and scattered, the first and the last
+        hash<string, list<int>> takes = {
+            "all": (rows ? range(0, rows - 1) : ()),
+            "none": (),
+            "reversed": (rows ? range(rows - 1, 0) : ()),
+            "scattered": (map ($1 * 37) % rows, xrange(rows * 2)),
+            "ends": (rows - 1, 0, rows - 1),
+        };
+        foreach hash<auto> i in (takes.pairIterator()) {
+            ColumnarResult taken = result.take(i.value);
+            assertCopy(result, taken, (map source[$1], i.value), label + " take " + i.key);
+        }
+
+        # filter(): all rows, none, every third row, the non-null rows and the null rows
+        hash<string, list<bool>> filters = {
+            "all": (map True, xrange(rows)),
+            "none": (map False, xrange(rows)),
+            "every third": (map !($1 % 3), xrange(rows)),
+            "non-null": (map exists $1, source),
+            "null": (map !exists $1, source),
+        };
+        foreach hash<auto> i in (filters.pairIterator()) {
+            list<auto> expected = select source, i.value[$#];
+            assertCopy(result, result.filter(i.value), expected, label + " filter " + i.key);
+            assertCopy(result, result.filter(new buffer<bool>(cast<list<bool>>(i.value))), expected,
+                label + " filter bool buffer " + i.key);
+        }
+        # a nullable bool buffer mask, whose null elements do not select the row
+        list<auto> mask = map ($1 % 4) == 3 ? NOTHING : ($1 % 4) != 1, xrange(rows);
+        assertCopy(result, result.filter(new buffer<*bool>(cast<list<*bool>>(mask))), (select source, mask[$#]),
+            label + " filter nullable bool buffer");
+        # the null masks of the column
+        assertCopy(result, result.filter(result.nullMask("n", True)), (select source, exists $1),
+            label + " filter null mask");
+    }
+
+    private assertCopy(ColumnarResult source, ColumnarResult result, list<auto> expected, string label) {
+        assertEq(source.schemaV2(), result.schemaV2(), label + " schema");
+        hash<auto> columns = result.toColumnHash();
+        assertEq(source.toColumnHash().n.fullType(), columns.n.fullType(), label + " type");
+        list<auto> values = columns.n.toList();
+        assertEq(expected, values, label + " values");
+        assertEq((map exists $1 ? $1.toString() : NOTHING, expected),
+            (map exists $1 ? $1.toString() : NOTHING, values), label + " strings");
+        assertEq((map !exists $1, expected), (map !exists $1, values), label + " nulls");
+        if (source.schemaV2()[0].nullable) {
+            assertEq((map !exists $1, expected), result.nullMask("n").toList(), label + " null mask");
+        }
+        # the result survives serialization with the same values
+        assertEq(values, roundTrip(result).getColumn("n").toList(), label + " serialized values");
+    }
+
+    #! Returns a result of CopyRows rows whose column "n" is a decimal128 column of the given precision and scale
+    /** the values are negative and positive, of the maximum precision and of fewer digits, and zero; every seventh
+        row is null in a nullable column
+    */
+    private ColumnarResult makeCopyResult(int precision, int scale, bool nullable) {
+        list<auto> values = ();
+        for (int i = 0; i < CopyRows; ++i) {
+            if (nullable && (i % 7) == 1) {
+                values += NOTHING;
+                continue;
+            }
+            string digits;
+            if (!(i % 11)) {
+                # the maximum precision; a number rounds a long run of nines in its decimal fraction
+                digits = scale ? strmul("9876543219", 4).substr(0, precision) : strmul("9", precision);
+            } else if (!(i % 13)) {
+                digits = "0";
+            } else {
+                # a value of 1 .. precision digits
+                int len = (i % precision) + 1;
+                digits = strmul("1234567890", len / 10 + 1).substr(i % 10, len);
+                if (digits.size() < len) {
+                    digits += strmul("7", len - digits.size());
+                }
+            }
+            values += number(decimalString(digits, scale, (i % 3) == 0));
+        }
+        ColumnarResult rv = ColumnarResult::fromColumnHash({"n": values}, {"n": {
+            "native_type": "numeric", "precision": precision, "scale": scale, "nullable": nullable,
+        }});
+        assertEq(nullable ? "buffer<*decimal128>" : "buffer<decimal128>", rv.toColumnHash().n.fullType());
+        return rv;
+    }
+
+    #! Returns the decimal string of the given digits with the given scale, for number()
+    private static string decimalString(string digits, int scale, bool negative) {
+        if (scale) {
+            while (digits.size() <= scale) {
+                digits = "0" + digits;
+            }
+            digits = digits.substr(0, digits.size() - scale) + "." + digits.substr(digits.size() - scale);
+            # trailing zeros give the number, whose binary precision follows the length of the string, the
+            # precision to hold the decimal fraction exactly
+            digits += strmul("0", 40);
+        }
+        return negative ? "-" + digits : digits;
     }
 
     private ColumnarResult makeDecimalResult(hash<auto> c) {

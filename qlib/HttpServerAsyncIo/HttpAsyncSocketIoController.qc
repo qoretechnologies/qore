@@ -1742,6 +1742,10 @@ public class HttpAsyncSocketIoController {
     #! Returns the total number of operations in all I/O controller caches (useful for testing cleanup)
     /** This method returns the sum of cache sizes across all I/O threads. A non-zero value
         after connections are closed indicates a cache leak (poll operations not properly cancelled).
+
+        @throw PERMISSION-DENIED code that is sandboxed or acts for sandboxed code cannot call this method, which
+        counts the operations of every caller of the process-wide controller (see
+        @ref sandbox_process_wide_registries)
     */
     int getTotalCacheSize() {
         return controller.getCacheSize();

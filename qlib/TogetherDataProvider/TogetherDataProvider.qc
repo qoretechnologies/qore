@@ -35,9 +35,13 @@ public class TogetherDataProvider inherits TogetherDataProviderCommon {
         };
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
+    }
 
+    private {
         const DefaultChildMap = {
             "chat-completion":
                 Class::forName("TogetherDataProvider::TogetherChatCompletionDataProvider"),
@@ -66,8 +70,12 @@ public class TogetherDataProvider inherits TogetherDataProviderCommon {
     /** @param pathname the new child identifier
         @param cls the provider class, accepting a REST client in its constructor
         @throw TOGETHER-CHILD-ERROR the identifier is already registered
+        @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
     static registerChild(string pathname, Reflection::Class cls) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("register a child data provider");
         AutoLock al(child_lock);
         if (childMap{pathname} || TogetherSchema::findActionSet(pathname)) {
             throw "TOGETHER-CHILD-ERROR", sprintf("child %y already registered", pathname);

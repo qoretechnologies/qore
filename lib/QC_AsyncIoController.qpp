@@ -587,10 +587,21 @@ static bool AsyncIoController::running() {
 }
 
 //! Returns the number of cached operations on the global singleton
-/** @return the number of active operations in the cache
+/** @return the number of active operations in the cache, which counts the operations of every caller in the process
+
+    @throw PERMISSION-DENIED code that is sandboxed or acts for sandboxed code cannot call this method, which counts
+    the operations of every caller in the process (see @ref sandbox_process_wide_registries)
+
     @since %Qore 3.0
 */
 static int AsyncIoController::getCacheSize() {
+    // the operations of every caller of the process-wide controller: not disclosed to sandboxed code (issue #6836)
+    if (qore_caller_is_sandboxed()) {
+        xsink->raiseException("PERMISSION-DENIED", "code that is sandboxed or acts for sandboxed code cannot read the "
+            "number of operations of the global async I/O controller, which counts the operations of every caller in "
+            "the process");
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -603,9 +614,18 @@ static int AsyncIoController::getCacheSize() {
 
 //! Sets the autostop flag on the global singleton
 /** @param auto_stop if @ref True "True", the I/O thread will exit when all operations complete
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the autostop
+    flag, which is process-wide (see @ref sandbox_process_wide_registries)
+
     @since %Qore 3.0
 */
 static nothing AsyncIoController::setAutostop(bool auto_stop = True) [flags=NAMED_ARGS] {
+    // the controller is process-wide: refused to sandboxed code (issue #6836)
+    if (qore_check_process_wide_registration("change the autostop flag of the global async I/O controller",
+            xsink)) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -618,6 +638,10 @@ static nothing AsyncIoController::setAutostop(bool auto_stop = True) [flags=NAME
 
 //! Returns the autostop flag from the global singleton
 /** @return @ref True "True" if autostop is enabled
+
+    @note any code can read the flag, also code that is sandboxed or acts for sandboxed code: it is a setting that only
+    trusted code can change (see @ref setAutostop()) and holds no data of any caller
+
     @since %Qore 3.0
 */
 static bool AsyncIoController::getAutostop() {
@@ -664,8 +688,11 @@ static hash<auto> AsyncIoController::getInfo() {
 /** @param logger a @ref Qore::LoggerInterfaceBase "LoggerInterfaceBase" object for logging,
     or @ref nothing "NOTHING" to disable per-controller logging
 
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set or clear the
+    logger, which is process-wide (see @ref sandbox_process_wide_registries)
+
     @note an \c HttpServer sets its logger here while it runs and gives back the logger it replaced when it stops,
-    unless the logger has been replaced since
+    unless the logger has been replaced since; a server that sandboxed code creates does not
 
     @note an exception raised by the code of a timer (@ref addTimer(), @ref addTimerDelay()), by the timer callback
     (@ref setTimerCallback()) or by a callback of an operation that the controller runs (a completion, frame or stream
@@ -679,6 +706,10 @@ static hash<auto> AsyncIoController::getInfo() {
     @since %Qore 3.0
 */
 static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=NAMED_ARGS] {
+    // the controller is process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("set the logger of the global async I/O controller", xsink)) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -690,7 +721,9 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=
 }
 
 //! Returns the logger of the global singleton
-/** @return the logger set with @ref setLogger(), or @ref nothing "NOTHING" if none is set
+/** @return the logger set with @ref setLogger(), or @ref nothing "NOTHING" if none is set or if the caller is code
+    that is sandboxed or acts for sandboxed code, which does not get the logger of the process (see
+    @ref sandbox_process_wide_registries)
 
     @par Example:
     @code{.py}
@@ -702,6 +735,10 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=
     @since %Qore 3.0
 */
 static *LoggerInterfaceBase AsyncIoController::getLogger() {
+    // the logger is process-wide and configured by the host: not handed to sandboxed code (issue #6836)
+    if (qore_caller_is_sandboxed()) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -945,6 +982,9 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CON
     @param callback a callback that accepts a @ref TimerEventInfo hash argument, or
         @ref nothing to disable timer event delivery for non-callable \c user_data
 
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set or clear the timer
+    callback, which is process-wide (see @ref sandbox_process_wide_registries)
+
     @note an exception that the callback raises is logged at the error level by the controller's logger
     (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
     without a logger, it is reported as an unhandled exception on the standard error output
@@ -952,6 +992,10 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CON
     @since %Qore 3.0
 */
 static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,PROCESS,THREAD_CONTROL;flags=NAMED_ARGS] {
+    // the controller is process-wide: refused to sandboxed code (issue #6743)
+    if (qore_check_process_wide_registration("set the timer callback of the global async I/O controller", xsink)) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -1011,10 +1055,18 @@ static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing
     @param max_workers the maximum number of workers; 0 = auto (hardware_concurrency() * 4,
     capped at 512, fallback 4)
 
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the maximum
+    number of callback workers, which is process-wide (see @ref sandbox_process_wide_registries)
+
     @since %Qore 3.0
 */
 static nothing AsyncIoController::setMaxCallbackWorkers(int max_workers = 0)
         [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
+    // the controller is process-wide: refused to sandboxed code (issue #6836)
+    if (qore_check_process_wide_registration("change the maximum number of callback workers of the global async I/O "
+            "controller", xsink)) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -1039,10 +1091,17 @@ static nothing AsyncIoController::setMaxCallbackWorkers(int max_workers = 0)
 
     @throw ASYNC-IO-ERROR the controller is running; the thread count can only be changed while the controller is
     stopped, for example before its first operation is submitted
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the number of
+    I/O threads, which is process-wide (see @ref sandbox_process_wide_registries)
 
     @since %Qore 3.0
 */
 static nothing AsyncIoController::setMaxIoThreads(int max_threads = 0) [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
+    // the controller is process-wide: refused to sandboxed code (issue #6836)
+    if (qore_check_process_wide_registration("change the number of I/O threads of the global async I/O controller",
+            xsink)) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {

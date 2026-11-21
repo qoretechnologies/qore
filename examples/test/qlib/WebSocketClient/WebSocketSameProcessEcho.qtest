@@ -265,10 +265,13 @@ class WebSocketSameProcessEchoTest inherits Test {
                 }
             }
         };
+        # HTTP/3 is required: in "auto" mode HTTP/2 starts 100 ms after HTTP/3 and the first connection wins, which
+        # can be HTTP/2 where the QUIC handshake is slower (a debug build on arm64)
         WebSocketClient wsc(cb, {
             "url": sprintf("wss://localhost:%d", ctx.linfo.port),
             "logger": ctx.logger,
             "http_version": "auto",
+            "http3_mode": "required",
             "ssl_verify_cert": False,
         });
         on_exit {
@@ -276,7 +279,7 @@ class WebSocketSameProcessEchoTest inherits Test {
             delete wsc;
         }
         wsc.connect();
-        assertTrue(wsc.isHttp3(), "auto WebSocket should negotiate HTTP/3");
+        assertTrue(wsc.isHttp3(), "the WebSocket connects over HTTP/3, which it requires");
 
         wsc.send("ECHO-CB");
         int rc = c.waitForZero(5s);

@@ -35,18 +35,12 @@
 StringRegexSplitIterator::StringRegexSplitIterator(const QoreStringNode* s, const QoreRegex* re,
         bool with_sep, ExceptionSink* xsink)
         : regex(nullptr), with_separator(with_sep) {
-    // Convert subject to UTF-8 if necessary (matches QoreRegex::extractWithPattern's
-    // TempEncodingHelper pattern); yielded views are views over this UTF-8 copy.
     if (s && s->getEncoding() != QCS_UTF8) {
-        QoreString tmp(s->c_str(), s->size(), s->getEncoding());
-        QoreString* conv = tmp.convertEncoding(QCS_UTF8, xsink);
-        if (*xsink) {
-            subject = nullptr;
+        original = s->stringRefSelf();
+        subject = s->convertEncoding(QCS_UTF8, xsink);
+        if (!subject) {
             return;
         }
-        // Wrap the converted buffer in a QoreStringNode we own.
-        subject = new QoreStringNode(conv->giveBuffer(), conv->size(), conv->size() + 1, QCS_UTF8);
-        delete conv;
     } else {
         subject = const_cast<QoreStringNode*>(s);
         if (subject) {
@@ -62,7 +56,8 @@ StringRegexSplitIterator::StringRegexSplitIterator(const QoreStringNode* s, cons
 }
 
 StringRegexSplitIterator::StringRegexSplitIterator(const StringRegexSplitIterator& old, ExceptionSink* xsink)
-        : subject(old.subject), regex(old.regex), with_separator(old.with_separator),
+        : subject(old.subject), original(old.original ? old.original->stringRefSelf() : nullptr),
+          regex(old.regex), with_separator(old.with_separator),
           // Subject is the same memory as `old`'s; if `old` already validated it,
           // we can skip the first-call rescan in the new iterator too.
           utf_validated(old.utf_validated) {
@@ -102,7 +97,7 @@ bool StringRegexSplitIterator::next(ExceptionSink* xsink) {
     // If offset is past end, we're done.  Note: unlike byte-split, a regex
     // match at the very end produces a trailing empty piece by the else
     // branch below in the previous iteration and sets exhausted.
-    if (offset > src_len) {
+    if (search_offset > src_len) {
         exhausted = true;
         m_valid = false;
         return false;
@@ -110,7 +105,7 @@ bool StringRegexSplitIterator::next(ExceptionSink* xsink) {
 
     int rc = qore_pcre2_match(regex->getPattern(),
         reinterpret_cast<PCRE2_SPTR8>(subject->c_str()),
-        src_len, offset,
+        src_len, search_offset,
         utf_validated ? PCRE2_NO_UTF_CHECK : 0,
         md);
 
@@ -141,25 +136,11 @@ bool StringRegexSplitIterator::next(ExceptionSink* xsink) {
     size_t match_start = ovector[0];
     size_t match_end = ovector[1];
 
-    // Guard against zero-width match at `offset` — would otherwise infinite-loop.
-    // Matches PCRE2's usual "advance by 1" recovery for the next iteration.
-    if (match_end == offset) {
-        piece_off = offset;
-        piece_len = 0;
-        if (with_separator) {
-            // No separator to attach (zero-width); yield the empty piece and move on.
-        }
-        offset = (match_end < src_len) ? match_end + 1 : src_len + 1;
-        if (offset > src_len) {
-            exhausted = true;
-        }
-        m_valid = true;
-        return true;
-    }
-
     piece_off = offset;
     piece_len = (with_separator ? match_end : match_start) - offset;
     offset = match_end;
+    search_offset = match_start == match_end ? qore_regex_after_empty_match(subject->c_str(), src_len, match_end)
+                                              : match_end;
     m_valid = true;
     return true;
 }
@@ -169,10 +150,17 @@ QoreValue StringRegexSplitIterator::getValue(ExceptionSink* xsink) {
         xsink->raiseException("INVALID-ITERATOR", "the iterator is not pointing at a valid element");
         return QoreValue();
     }
+    if (original) {
+        if (!piece_off && piece_len == subject->size()) {
+            return QoreValue(original->stringRefSelf());
+        }
+        return QoreValue(qore_regex_capture(subject->c_str() + piece_off, piece_len, original->getEncoding(), xsink));
+    }
     return QoreValue(QoreStringNode::makeView(subject, piece_off, piece_len));
 }
 
 void StringRegexSplitIterator::reset() {
+    search_offset = 0;
     offset = 0;
     piece_off = 0;
     piece_len = 0;
@@ -184,15 +172,14 @@ const QoreTypeInfo* StringRegexSplitIterator::getElementType() const {
     return stringTypeInfo;
 }
 
-//! Lazy iterator over a string split by a regular expression, yielding zero-copy views.
+//! Lazy iterator over a string split by a regular expression.
 /** Each call to next() runs one PCRE2 match from the current offset; getValue()
-    returns a zero-copy @ref Qore::StringSplitIterator "StringSplitIterator"-style
-    view into the (UTF-8) subject.  Semantics match the eager
+    returns the current piece in the original subject's encoding.  Semantics match the eager
     @ref <string>::splitRegex / @ref <string>::splitLinesRegex variants.
 
     Primary wins over the eager variant:
       - early termination in @ref select / @ref foldl
-      - O(1) memory: no intermediate list is built
+      - no intermediate list is built
       - streaming over very large inputs
 
     Eager variants still win on pure throughput when every piece is consumed
@@ -253,7 +240,7 @@ bool StringRegexSplitIterator::next() {
     return i->next(xsink);
 }
 
-//! Returns the current piece as a zero-copy view onto the (UTF-8) subject.
+//! Returns the current piece in the subject's encoding.
 /** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called
     from any thread other than the thread that created the object

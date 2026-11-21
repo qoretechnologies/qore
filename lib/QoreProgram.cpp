@@ -1017,7 +1017,7 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 }
 
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
-        QoreProgram* p_pgm, const QoreParseOptions* p_parse_options)
+        QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
@@ -1050,8 +1050,8 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     constructed = true;
     // the parent's external data is copied here rather than from setParent(), so that a module's
     // copy hook runs against a complete Program, as AbstractQoreProgramExternalData::copy()
-    // documents
-    copyExternalData();
+    // documents; a failure is reported in xsink, and the caller deletes the Program (issue #6786)
+    copyExternalData(xsink);
     // a Program that code that is not trusted creates has no host: none of its defines was set by one (its parse
     // option defines included); the library modules that it loads have their own platform defines
     if (qore_caller_is_untrusted()) {
@@ -1059,6 +1059,13 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
             source_defines.insert(i.first);
         }
     }
+}
+
+void qore_program_private::deleteFailedChild(QoreProgram* pgm, ExceptionSink* xsink) {
+    assert(pgm->priv->extmap.empty());
+    ExceptionSink del_xsink;
+    pgm->waitForTerminationAndDeref(&del_xsink);
+    xsink->assimilate(del_xsink);
 }
 
 void qore_program_private::markSandboxedParse() {
@@ -2426,9 +2433,9 @@ unsigned qore_program_private_base::getOwnExtDataCopies() const {
     return rc;
 }
 
-void qore_program_private_base::copyExternalData() {
+int qore_program_private_base::copyExternalData(ExceptionSink* xsink) {
     if (!ext_parent) {
-        return;
+        return 0;
     }
     QoreProgram* p_pgm = ext_parent;
     ext_parent = nullptr;
@@ -2443,7 +2450,7 @@ void qore_program_private_base::copyExternalData() {
     {
         AutoLocker al(parent->plock);
         if (parent->extmap.empty()) {
-            return;
+            return 0;
         }
         parent_data.assign(parent->extmap.begin(), parent->extmap.end());
         ++parent->ext_copy_count;
@@ -2463,20 +2470,52 @@ void qore_program_private_base::copyExternalData() {
         ext_data_copy_frames = frame.prev;
     });
 
+    // the errors of the module callbacks; the caller's sink may hold exceptions already (issue #6786)
+    ExceptionSink copy_xsink;
     for (auto& i : parent_data) {
         // External data whose state belongs to the parent alone returns nullptr rather than a copy (the AOT
         // script data does: a child Program runs its own AOT load).  Storing that null would crash the
         // init() loop below, and again when the child's teardown calls doDeref() on it.
-        AbstractQoreProgramExternalData* copy = i.second->copy(pgm);
+        AbstractQoreProgramExternalData* copy = qore_ext_data_copy(i.second, pgm, &copy_xsink);
+        if (copy_xsink) {
+            // a copy made with the exception was released already
+            assert(!copy);
+            break;
+        }
         if (copy) {
             // the Program is registered already, so other threads can look up its external data
             AutoLocker al(plock);
             extmap.insert(extmap_t::value_type(i.first, copy));
         }
     }
-    for (auto& i : extmap) {
-        i.second->init();
+    if (!copy_xsink) {
+        for (auto& i : extmap) {
+            qore_ext_data_init(i.second, &copy_xsink);
+            if (copy_xsink) {
+                break;
+            }
+        }
+        if (!copy_xsink) {
+            return 0;
+        }
     }
+
+    // a copy or an init() failed: the child Program is not created (fail-closed: it must not run without the data of
+    // a module, issue #6786); the copies already made are released, whether init() ran on them or not
+    extmap_t copies;
+    {
+        AutoLocker al(plock);
+        copies = extmap;
+        extmap.clear();
+    }
+    for (auto& i : copies) {
+        qore_ext_data_deref(i.second, &copy_xsink);
+    }
+    if (xsink) {
+        xsink->assimilate(copy_xsink);
+    }
+    // otherwise the destructor of copy_xsink reports the exceptions as unhandled
+    return -1;
 }
 
 int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guard, bool nested) {
@@ -2520,7 +2559,15 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     // delete pending changes to namespaces: only what the failed parse added is removed, also without
     // PO_ALLOW_REPARSE, as the namespaces hold what the Program had before the parse, including the classes and
     // other symbols inherited from its parent when it was created, which a new parse must still find
-    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
+    {
+        // the declarations that the rollback removes name each other's types without references: they are destroyed
+        // together, as a deleted Program's are, and the tombstones of those that derived types name are made while
+        // all of them are alive (issue #6419)
+        std::vector<QoreTypeOwner*> owners;
+        qore_root_ns_private::get(*RootNS)->getRollbackTypeOwners(owners);
+        QoreTypeOwnerBatch type_owner_batch(owners);
+        qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
+    }
 
     // delete pending statements
     sb.parseRollback();
@@ -2607,6 +2654,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // qore_class_private::getSourceProgramForCall()); the Program stays allocated until this function returns
     QoreProgramTeardownScope teardown_scope(pgm);
 
+    // the exit hooks enter the Program: a parse state that keeps threads out of it is discarded first if no thread
+    // runs in it, otherwise once its threads have ended, below (qore#6795)
+    discardPendingParse(xsink, true);
+
     // the exit hooks that the Program registered can stop the threads waited for below
     qore_run_exit_hooks(pgm);
 
@@ -2654,6 +2705,13 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
                 need_cleanup = true;
             }
         }
+        // the objects of the Program's own classes that its constants hold, if anything else holds them, are deleted
+        // below, once only this thread can run code in the Program: the code can hold one of them past this point (a
+        // constant's value folded into it), and the release of the code comes after the Program has been closed to
+        // every thread (#6791)
+        if (*l) {
+            collectOwnedConstantObjects(**l);
+        }
     }
 
     if (leave) {
@@ -2696,6 +2754,14 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     }
 
     if (clr) {
+        // only this thread can run code in the Program now, and its code is intact (#6791)
+        deleteOwnedConstantObjects(xsink);
+    }
+
+    if (clr) {
+        // the destructors run below enter the Program, which a parse state left until now would refuse (qore#6795)
+        discardPendingParse(xsink, false);
+
         // purge thread resources before clearing pgm
         purge_pgm_thread_resources(pgm, xsink);
 
@@ -2833,6 +2899,111 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // clear program location
         //update_runtime_location(&loc_builtin);
     }
+}
+
+namespace {
+//! collects the objects of the Program's own classes in a value of a cleared constant, also in its lists and hashes
+class QoreOwnedConstantObjectCollector {
+public:
+    DLLLOCAL QoreOwnedConstantObjectCollector(const QoreProgram* pgm, std::vector<QoreObject*>& objs)
+            : pgm(pgm), objs(objs) {
+    }
+
+    DLLLOCAL void visit(QoreValue v) {
+        switch (v.getType()) {
+            case NT_OBJECT: {
+                QoreObject* o = v.get<QoreObject>();
+                // an object that only the constant holds is deleted when the list is released, also while the
+                // Program can run code
+                if (o->reference_count() > 1 && o->isValid()
+                        && qore_class_private::get(*o->getClass())->ownedByProgram(pgm)
+                        && seen.insert(o).second) {
+                    o->ref();
+                    objs.push_back(o);
+                }
+                break;
+            }
+            case NT_LIST: {
+                const QoreListNode* l = v.get<const QoreListNode>();
+                if (!seen.insert(l).second) {
+                    break;
+                }
+                ConstListIterator i(l);
+                while (i.next()) {
+                    visit(i.getValue());
+                }
+                break;
+            }
+            case NT_HASH: {
+                const QoreHashNode* h = v.get<const QoreHashNode>();
+                if (!seen.insert(h).second) {
+                    break;
+                }
+                ConstHashIterator i(h);
+                while (i.next()) {
+                    visit(i.get());
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+private:
+    const QoreProgram* pgm;
+    std::vector<QoreObject*>& objs;
+    //! the containers and objects visited, which constant values can share
+    std::unordered_set<const void*> seen;
+};
+}
+
+void qore_program_private::collectOwnedConstantObjects(const QoreListNode& l) {
+    QoreOwnedConstantObjectCollector c(pgm, owned_constant_objects);
+    ConstListIterator i(&l);
+    while (i.next()) {
+        c.visit(i.getValue());
+    }
+}
+
+void qore_program_private::deleteOwnedConstantObjects(ExceptionSink* xsink) {
+    std::vector<QoreObject*> objs;
+    objs.swap(owned_constant_objects);
+    for (QoreObject* o : objs) {
+        // another holder can have released it meanwhile, or deleted it
+        if (o->isValid()) {
+            o->doDelete(xsink);
+        }
+        o->deref(xsink);
+    }
+}
+
+void qore_program_private::discardPendingParse(ExceptionSink* xsink, bool idle_only) {
+    // the usual case: the Program is not in the parse state; nothing is left to discard once the Program has been
+    // cleared (RootNS is deleted then)
+    if (!parsing_in_progress || !RootNS) {
+        return;
+    }
+    // the code that the rollback runs, such as the destructors of pending values, runs under the parse lock, as for
+    // Program::parseRollback(); the lock is not waited for: a thread that holds it parses the Program
+    ExceptionSink lock_xsink;
+    ProgramRuntimeParseContextHelper pch(&lock_xsink, pgm, true);
+    if (lock_xsink) {
+        lock_xsink.clear();
+        return;
+    }
+    {
+        AutoLocker al(plock);
+        // a parse count above one: the current thread held the parse lock already, and parses the Program
+        if (!parsing_in_progress || parse_count > 1 || (idle_only && thread_count)) {
+            return;
+        }
+    }
+    internParseRollback(xsink);
+    // without PO_ALLOW_REPARSE, the rollback leaves the state set (the Program cannot be parsed again); the code run
+    // by the deletion of the Program can enter it now
+    AutoLocker al(plock);
+    parsing_in_progress = false;
 }
 
 // Helper function to eagerly compile all user-defined functions to IR/JIT when --exec-mode is specified.
@@ -3833,14 +4004,16 @@ void qore_program_private::del(ExceptionSink* xsink) {
         AutoLocker al(plock);
         waitForExternalDataCopiesIntern();
     }
-    for (auto& i : extmap) {
-        try {
-            i.second->doDeref();
-        } catch (AbstractException& e) {
-            e.convert(xsink);
+    // each data is released, also when the release of another one raises an exception (issue #6786); a module's
+    // callback is always given a sink
+    if (!extmap.empty()) {
+        ExceptionSink local_xsink;
+        ExceptionSink* deref_xsink = xsink ? xsink : &local_xsink;
+        for (auto& i : extmap) {
+            qore_ext_data_deref(i.second, deref_xsink);
         }
+        extmap.clear();
     }
-    extmap.clear();
 
     // the Program object released the Program after it had stopped reporting its code (clearScanHolder()), unless the
     // data of the Program is deleted while the object still holds it (a Program cleared at the end of the process by
@@ -3887,6 +4060,9 @@ void qore_program_private::del(ExceptionSink* xsink) {
         ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
         qore_root_ns_private::clearConstants(*RootNS, **l);
         ns_const = true;
+        // see waitForTerminationAndClear() (#6791)
+        collectOwnedConstantObjects(**l);
+        deleteOwnedConstantObjects(xsink);
         //printd(5, "qore_program_private::del() this: %p cleared constants\n", this);
     }
 
@@ -4638,8 +4814,8 @@ QoreProgram::QoreProgram(int64 po) : QoreProgram(QoreParseOptions(po)) {
 }
 
 QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, const char* ecn,
-        const QoreParseOptions* parent_po)
-        : priv(new qore_program_private(this, po, pgm, parent_po)) {
+        const QoreParseOptions* parent_po, ExceptionSink* xsink)
+        : priv(new qore_program_private(this, po, pgm, parent_po, xsink)) {
     printd(QPP_DBG_LVL, "QoreProgram::QoreProgram(), this: %p, pgm: %p, priv: %p, pgmid: " QLLD "\n", this, pgm, priv,
         (int64)priv->getProgramId());
     priv->exec_class = ec;
@@ -5798,7 +5974,8 @@ QoreValue qore_parse_get_define_value(const QoreProgramLocation* loc, const char
         arg.trim_single_trailing(c);
         arg.trim_single_leading(c);
         size_t len = arg.strlen();
-        return new QoreStringNode(arg.giveBuffer(), len, len + 1, QCS_DEFAULT);
+        const QoreEncoding* encoding = arg.getEncoding();
+        return new QoreStringNode(arg.giveBuffer(), len, len + 1, encoding);
     }
 
     const char* p = arg.getBuffer();
@@ -6043,6 +6220,90 @@ AbstractQoreProgramExternalData::~AbstractQoreProgramExternalData() {
 }
 
 void AbstractQoreProgramExternalData::init() {
+}
+
+AbstractQoreProgramExternalDataEx::~AbstractQoreProgramExternalDataEx() {
+}
+
+void AbstractQoreProgramExternalDataEx::init(ExceptionSink* xsink) {
+}
+
+AbstractQoreProgramExternalData* AbstractQoreProgramExternalDataEx::copy(QoreProgram* pgm) const {
+    ExceptionSink xsink;
+    AbstractQoreProgramExternalData* rv = qore_ext_data_copy(this, pgm, &xsink);
+    // the destructor of the sink reports the exception as unhandled
+    return rv;
+}
+
+void AbstractQoreProgramExternalDataEx::init() {
+    ExceptionSink xsink;
+    init(&xsink);
+}
+
+void AbstractQoreProgramExternalDataEx::doDeref() {
+    ExceptionSink xsink;
+    doDeref(&xsink);
+}
+
+namespace {
+// converts a C++ exception that a legacy callback of AbstractQoreProgramExternalData let escape (issue #6786)
+void ext_data_convert_std_exception(const char* func, const std::exception& e, ExceptionSink* xsink) {
+    xsink->raiseException("PROGRAM-EXTERNAL-DATA-ERROR", "AbstractQoreProgramExternalData::%s() threw a C++ "
+        "exception: %s", func, e.what());
+}
+}
+
+AbstractQoreProgramExternalData* qore_ext_data_copy(const AbstractQoreProgramExternalData* data, QoreProgram* pgm,
+        ExceptionSink* xsink) {
+    assert(!*xsink);
+    AbstractQoreProgramExternalData* rv;
+    if (const AbstractQoreProgramExternalDataEx* ex = dynamic_cast<const AbstractQoreProgramExternalDataEx*>(data)) {
+        rv = ex->copy(pgm, xsink);
+    } else {
+        try {
+            rv = data->copy(pgm);
+        } catch (AbstractException& e) {
+            e.convert(xsink);
+            return nullptr;
+        } catch (std::exception& e) {
+            ext_data_convert_std_exception("copy", e, xsink);
+            return nullptr;
+        }
+    }
+    // a copy returned together with an exception is released at once: the copy failed
+    if (rv && *xsink) {
+        qore_ext_data_deref(rv, xsink);
+        return nullptr;
+    }
+    return rv;
+}
+
+void qore_ext_data_init(AbstractQoreProgramExternalData* data, ExceptionSink* xsink) {
+    if (AbstractQoreProgramExternalDataEx* ex = dynamic_cast<AbstractQoreProgramExternalDataEx*>(data)) {
+        ex->init(xsink);
+        return;
+    }
+    try {
+        data->init();
+    } catch (AbstractException& e) {
+        e.convert(xsink);
+    } catch (std::exception& e) {
+        ext_data_convert_std_exception("init", e, xsink);
+    }
+}
+
+void qore_ext_data_deref(AbstractQoreProgramExternalData* data, ExceptionSink* xsink) {
+    if (AbstractQoreProgramExternalDataEx* ex = dynamic_cast<AbstractQoreProgramExternalDataEx*>(data)) {
+        ex->doDeref(xsink);
+        return;
+    }
+    try {
+        data->doDeref();
+    } catch (AbstractException& e) {
+        e.convert(xsink);
+    } catch (std::exception& e) {
+        ext_data_convert_std_exception("doDeref", e, xsink);
+    }
 }
 
 int get_warning_code(const char* str) {
@@ -7147,9 +7408,10 @@ public:
     }
 
     void child() noexcept override {
-        // the objects are created again in place: the waiters and the holder are gone with their threads
+        // the condition is created again in place: the waiters are gone with their threads; the mutex is held by this
+        // thread since prepare(): released, so that ThreadSanitizer sees the release (issue #6817)
         new (&exit_hook_cond) std::condition_variable();
-        new (&exit_hook_lock) std::mutex();
+        exit_hook_lock.unlock();
         system_threads_starting = 0;
     }
 };
@@ -7205,15 +7467,13 @@ void qore_run_exit_hook(QoreExitHook& hook) {
 }
 
 int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSink* xsink) {
-    // a hook runs, at the end of the process, with its Program's access and without a sandbox: sandboxed code
-    // cannot register one
-    {
-        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
-        if (policy) {
-            xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered by code that a sandbox "
-                "governs");
-            return -1;
-        }
+    // a hook runs, at the end of the process, with its Program's access and without a sandbox: the exit hooks are
+    // process-wide, so code that is sandboxed or acts for sandboxed code cannot register one, also through a policy
+    // barrier (as qore_check_process_wide_registration() decides, with the exception documented for this API)
+    if (qore_caller_is_sandboxed()) {
+        xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered by code that is sandboxed or acts "
+            "for sandboxed code: the exit hooks are process-wide");
+        return -1;
     }
     QoreProgram* pgm = getProgram();
     assert(pgm);

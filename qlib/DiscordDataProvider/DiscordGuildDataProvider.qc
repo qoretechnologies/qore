@@ -50,6 +50,12 @@ public class DiscordGuildDataProvider inherits DiscordDataProviderBase {
         });
     }
 
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
+        static hash<string, Reflection::Class> childMap = DefaultChildMap;
+    }
+
     private {
         #! The guild info
         hash<auto> guild;
@@ -61,7 +67,6 @@ public class DiscordGuildDataProvider inherits DiscordDataProviderBase {
             "get": Class::forName("DiscordDataProvider::DiscordGuildGetDataProvider"),
         };
 
-        static hash<string, Reflection::Class> childMap = DefaultChildMap;
     }
 
     #! Creates the object from constructor options
@@ -94,7 +99,12 @@ public class DiscordGuildDataProvider inherits DiscordDataProviderBase {
     }
 
     #! Register a new child data provider for Discord guilds
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     static registerChild(string pathname, Reflection::Class cls) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("register a child data provider");
         if (childMap{pathname}) {
             throw "DISCORD-GUILD-CHILD-ERROR", sprintf("child %y already registered", pathname);
         }
@@ -132,7 +142,12 @@ public class DiscordGuildDataProvider inherits DiscordDataProviderBase {
     }
 
     #! Deregister the named child data provider
+    /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
+            registry, which is process-wide (see @ref sandbox_process_wide_registries)
+    */
     private static deregisterChild(string pathname) {
+        # the registry is process-wide: sandboxed code cannot change it (qore#6744)
+        SandboxManager::checkProcessWideRegistration("register a child data provider");
         if (!DefaultChildMap{pathname}) {
             remove childMap{pathname};
         }

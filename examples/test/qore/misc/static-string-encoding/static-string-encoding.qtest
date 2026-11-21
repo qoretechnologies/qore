@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes with a default encoding of their own, each in the execution mode it sets
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class StaticStringEncodingTest
+
+#! Tests the static strings of the library in a process whose default encoding is not UTF-8 (issue #6722)
+/** A static QoreString took the default encoding of the time of its initialization, which depends on the order of
+    the initialization of the translation units, and which is not the default encoding of the process when it is set
+    with --charset or QORE_CHARSET: the header of a serialized stream did not match the header that deserialization
+    expects ("expecting 'QS', got 'QS'"), and the strings that describe values (True, <NULL>, <EMPTY HASH>, ...) were
+    appended to a description in another encoding.  Each check runs in a child process with each default encoding,
+    in the default execution mode and in each execution mode.
+*/
+class StaticStringEncodingTest inherits QUnit::Test {
+    private {
+        #! the script that each child runs
+        const Script = "%modern
+# Exercise formatted output in the process charset even when the source literals are UTF-8.
+string sub fmt(string format) {
+    return convert_encoding(format, get_default_encoding());
+}
+string sub check(auto v) {
+    return sprintf(fmt(\"%y\"), Serializable::deserialize(Serializable::serialize(v)));
+}
+printf(fmt(\"serialize: %s\\n\"), check(42));
+printf(fmt(\"serialize: %s\\n\"), check({\"a\": (1, \"x\", True, NULL, 1.5)}));
+printf(fmt(\"serialize: %s\\n\"), check(binary_to_string(<e9>, \"ISO-8859-1\")));
+binary b = Serializable::serialize(1);
+printf(fmt(\"header: %s\\n\"), (map sprintf(fmt(\"%02x\"), get_byte(b, $1)), xrange(7)).join(\"\"));
+printf(fmt(\"values: %y %n %y %n %y %y\\n\"), True, False, NULL, NOTHING, {}, ());
+printf(fmt(\"list: %N\\n\"), (True, NULL, NOTHING, {}, ()));
+printf(fmt(\"hash: %y\\n\"), {\"a\": (True, NULL, NOTHING, {}, ())});
+printf(fmt(\"default: %s\\n\"), get_default_encoding());
+";
+
+        #! the lines that each child prints, without its default encoding
+        const Expected = (
+            "serialize: 42",
+            "serialize: {a: [1, \"x\", True, <NULL>, 1.5]}",
+            "serialize: \"é\"",
+            "header: 515300312e3200",
+            "values: True False <NULL> <NOTHING> {} []",
+            "list: list: (5 elements)",
+            "  [0]=True",
+            "  [1]=<NULL>",
+            "  [2]=<NOTHING>",
+            "  [3]=<EMPTY HASH>",
+            "  [4]=<EMPTY LIST>",
+            "hash: {a: [True, <NULL>, null, {}, []]}",
+        );
+
+        #! the default encodings of the child processes
+        const Encodings = ("ISO-8859-1", "UTF-8");
+    }
+
+    constructor() : QUnit::Test("StaticStringEncodingTest", "1.0", \ARGV) {
+        addTestCase("static strings in each default encoding", \staticStringTest());
+        set_return_value(main());
+    }
+
+    staticStringTest() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        TmpDir tmp("qore-static-string-encoding-");
+        string script = tmp.path + DirSep + "check.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Script);
+        f.close();
+        foreach string encoding in (Encodings) {
+            foreach *string mode in ((NOTHING,) + ExecModeHarness::ExecModes) {
+                # the default encoding is given with the environment and with the option
+                foreach string how in (("env", "option")) {
+                    string opts = mode ? "--exec-mode=" + mode : "";
+                    string cmd = how == "env"
+                        ? sprintf("QORE_CHARSET=%s %s %s %s", encoding, qore_bin, opts, script)
+                        : sprintf("%s --charset=%s %s %s", qore_bin, encoding, opts, script);
+                    hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd);
+                    string label = sprintf("%s (%s, %s)", encoding, how, mode ?? "default mode");
+                    if (m_options.verbose > 1) {
+                        printf("%s: rc %d\n%s", label, r.rc, r.out);
+                    }
+                    assertEq(0, r.rc, label + ": " + r.out);
+                    list<string> lines = select r.stdout.split("\n"), $1.val();
+                    # the printed text is in the child's default encoding
+                    lines = map convert_encoding(force_encoding($1, encoding), "UTF-8"), lines;
+                    assertEq(Expected, lines[0..Expected.size() - 1], label);
+                    assertEq("default: " + encoding, lines.last(), label);
+                }
+            }
+        }
+    }
+}

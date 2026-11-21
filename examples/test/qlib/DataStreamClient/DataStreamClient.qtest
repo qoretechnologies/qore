@@ -213,6 +213,14 @@ class DataStreamErrorHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that returns a 500 error with the location of the exception, as a server with debugging enabled does
+class DataStreamErrorLocationHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, make_yaml({"err": "DS-ERROR", "desc": "simulated server error", "file": "x.q",
+            "line": 10, "endline": 10, "lang": "Qore"}), {"Content-Type": MimeTypeYaml});
+    }
+}
+
 class ErrorHandler inherits AbstractHttpRequestHandler {
     private {
         *string m_data;
@@ -249,6 +257,7 @@ class DataStreamClientTest inherits QUnit::Test {
         addTestCase("error handling", \testErrorHandling());
         addTestCase("datastream keep-alive", \testDataStreamKeepAlive());
         addTestCase("datastream error recovery", \testDataStreamErrorRecovery());
+        addTestCase("server-side error messages", \testServerErrorMessage());
         addTestCase("DS v1 protocol verification", \testDSv1ProtocolVerification());
         addTestCase("DS v1 explicit mode", \testDSv1ExplicitMode());
         addTestCase("DS v1 empty stream", \testDSv1EmptyStream());
@@ -269,6 +278,7 @@ class DataStreamClientTest inherits QUnit::Test {
         m_http.setHandler("/api", "/api", MimeTypeText, new ErrorHandler(MimeTypeText));
         m_http.setHandler("/yaml", "/yaml", MimeTypeYaml, new YamlHandler(MimeTypeYaml));
         m_http.setHandler("/ds-echo", "/ds-echo", MimeTypeYaml, new DataStreamEchoHandler());
+        m_http.setHandler("/ds-error-loc", "/ds-error-loc", MimeTypeYaml, new DataStreamErrorLocationHandler());
         m_http.setHandler("/ds-error", "/ds-error", MimeTypeYaml, new DataStreamErrorHandler());
         m_http.setHandler("/released", "/released", NOTHING, new ReleasedDataStreamServer());
         port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
@@ -474,6 +484,17 @@ class DataStreamClientTest inherits QUnit::Test {
         if (m_options.verbose > 1) {
             printf("DataStream keep-alive: 4 operations on same connection OK\n");
         }
+    }
+
+    #! the location of a server-side error is given only when the server gives it (with debugging enabled,
+    #! qore#6780)
+    testServerErrorMessage() {
+        DataStreamClient client({"url": "http://localhost:" + port, "timeout": 30000}, True);
+        hash<auto> info;
+        assertThrows("DS-ERROR", "^server-side error: simulated server error \\(REST URL", \client.get(),
+            ("/ds-error", NOTHING, \info));
+        assertThrows("DS-ERROR", "^server-side error: x\\.q:10 \\(Qore\\): simulated server error \\(REST URL",
+            \client.get(), ("/ds-error-loc", NOTHING, \info));
     }
 
     testDataStreamErrorRecovery() {

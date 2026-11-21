@@ -2,6 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
 
+# test-platform: macos - qcc native executable linking and deferred debugger IR loading
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -31,6 +32,10 @@ class AOTFinalClosureInternalMethodTest inherits QUnit::Test {
         addTestCase("AST calls the methods", \astReference());
         addTestCase("compiled modes match AST", \sourceModes());
         addTestCase("qcc executables match AST", \compiled());
+        addTestCase("method families in native initializers and debug IR", \imageFamilies());
+        addTestCase("a closure calls a class declared in a transitive qmod", \compiledModuleOwner());
+        addTestCase("dot target records", \records());
+        addTestCase("AO reader refuses v50", \previousFormat());
         set_return_value(main());
     }
 
@@ -39,7 +44,9 @@ class AOTFinalClosureInternalMethodTest inherits QUnit::Test {
         foreach string line in ("fi 1", "r2=[2, 3]", "r3=5", 'r4={a: 5}', 'r5="6"', "r6=7", "r7=8", "r8=9", "r9=10",
                 "r10=11", "r11=12", "r12=13", "r13=14", "GP::fp 1", "NI::fi 1", "NP::fp 1", "GU::fu 1",
                 "GS::f normal 1", "GS::sf static 2", "GO::ov int 1", "GO::ov string two", "IP::pm 3", "IC::sh 4",
-                "IP::pi 1", "IP::sh 2", "IQ::v 5", "IS::v 6", "KC::x normal 1", "KC::x normal 2") {
+                "IP::pi 1", "IP::sh 2", "IQ::v 5", "IS::v 6", "KC::x normal 1", "KC::x normal 2",
+                "twins: instance instance static static", "late: instance int instance string static",
+                "init: instance instance static", "private: instance static static") {
             assertTrue((select lines, $1 == line).size() > 0, line);
         }
     }
@@ -61,6 +68,65 @@ class AOTFinalClosureInternalMethodTest inherits QUnit::Test {
             run((qcc_bin, level, "-o", exe, probe));
             assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
         }
+    }
+
+    imageFamilies() {
+        string script = get_script_dir() + "/AOTFinalClosureInternalMethod/MethodFamilyImage.q";
+        string expected = "init: instance int | static int\n"
+            "direct instance: instance int | instance string\ndirect static: static int | static string\n"
+            "invoke instance: instance int | instance string | INSTANCE-PICK\n"
+            "invoke static: static int | static string | STATIC-PICK\nderived internal\nstepped=True\n";
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1",
+                qore_bin, "-b", "--exec-mode=" + mode, script)), mode + " with debugger");
+        }
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-aot-debug-method-family-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-g", "-o", exe, script));
+            assertEq(expected, run((exe, "-b")), level);
+        }
+    }
+
+    compiledModuleOwner() {
+        string src = get_script_dir() + "/AOTFinalClosureInternalMethod/qmod";
+        TmpDir images("qore-aot-closure-qmods-");
+        string modpath = "QORE_MODULE_DIR=" + images.path;
+        foreach string name in ("RangePalette", "RangeBridge", "RangeConsumer") {
+            run((modpath, qcc_bin, "-O3", "-m", "-o", images.path + "/" + name + ".qmod", src + "/" + name + ".qm"));
+        }
+        string script = get_script_dir() + "/AOTFinalClosureInternalMethod/LoadRangeConsumer.q";
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            assertEq("okwarning:ok\n", run((modpath, "QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1",
+                "QORE_JIT_THRESHOLD=1", qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, script)), mode);
+        }
+
+        # A new provider with only a static method cannot satisfy the recorded instance call.
+        TmpDir replacement("qore-aot-static-provider-");
+        string provider = replacement.path + "/RangePalette.qm";
+        {
+            File file();
+            file.open2(provider, O_CREAT | O_TRUNC | O_WRONLY);
+            string text = ReadOnlyFile::readTextFile(src + "/RangePalette.qm");
+            text =~ s/string warning/static string warning/;
+            file.write(text);
+        }
+        run((modpath, qcc_bin, "-O3", "-m", "-o", images.path + "/RangePalette.qmod", provider));
+        run((modpath, qore_bin, "-b", script),
+            "cannot resolve DOT_EVAL_TARGET declaration @qore-module:RangePalette\nRangePalette::Palette::warning");
+    }
+
+    records() {
+        assertEq("dot target records passed\n", run((dirname(qore_bin) + "/qore-aot-dot-target-test", "records")));
+    }
+
+    previousFormat() {
+        string out = run((dirname(qore_bin) + "/qore-aot-dot-target-test", "floor"));
+        if (out == "waiting for AO format v51\n") {
+            testSkip("the AO v51 reader floor has not landed");
+            return;
+        }
+        assertEq("v50 refused as obsolete\n", out);
     }
 
     private string getAst() {
@@ -88,10 +154,15 @@ class AOTFinalClosureInternalMethodTest inherits QUnit::Test {
     }
 
     #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
-    private string run(list<string> args) {
+    private string run(list<string> args, *string expected_error) {
         string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
             + (map quote($1), args).join(" ");
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (exists expected_error) {
+            assertTrue(r.rc != 0, r.out);
+            assertTrue(r.out.contains(expected_error), r.out);
+            return r.out;
+        }
         if (r.mode) {
             ExecModeHarness::check_native(r);
         }

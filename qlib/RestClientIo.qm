@@ -7133,7 +7133,8 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                         *string content_type = RestClient::getSingleHeaderValue(resp.headers."content-type");
                         # a binary text body is decoded by the rules shared by all HTTP clients
                         if (resp_body && resp_body.typeCode() == NT_BINARY) {
-                            resp_body = decode_http_body(content_type, resp_body, rcio.getAssumedEncoding());
+                            resp_body = decode_http_body(content_type, resp_body, rcio.getAssumedEncoding(),
+                                "latin1");
                         }
                         on_error {
                             conn.authFailure();

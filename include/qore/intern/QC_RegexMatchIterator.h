@@ -60,7 +60,7 @@ public:
     DLLLOCAL QoreValue getGroupOffset(int64 index, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue getGroupLength(int64 index, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue getGroups(ExceptionSink* xsink) const;
-    DLLLOCAL QoreValue getNamedGroup(const char* name, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue getNamedGroup(const QoreString& name, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue getNamedGroups(ExceptionSink* xsink) const;
 
     DLLLOCAL bool valid() const {
@@ -81,9 +81,9 @@ private:
     DLLLOCAL bool checkValid(ExceptionSink* xsink) const;
     DLLLOCAL QoreValue getCapture(int capture, ExceptionSink* xsink) const;
     DLLLOCAL int namedCapture(const char* name, ExceptionSink* xsink) const;
-    DLLLOCAL size_t advanceCodepoint(size_t byte_offset) const;
 
     QoreStringNode* subject = nullptr;
+    const QoreEncoding* result_encoding = QCS_UTF8;
     QoreRegex* regex = nullptr;
     pcre2_match_data* md = nullptr;
 

@@ -44,7 +44,14 @@ NAME = re.compile(r"^(register|deregister|unregister|tryRegister|set[A-Z]\w*(Loo
                   r"registerOrReplace|remove(Type|Scheme|Handler|Codec|Factory|App|Cached|Schema|Resolver|Lookup|"
                   r"Catalog|Listener)|clear|add\w*ToCache$|\w*_register_|\w*_unregister_)")
 CHECK = re.compile(r"isSandboxed\(\)|checkRegistration\(|checkSharedRegistration\(|checkChildRegistration\(|"
-                   r"mayRegisterShared\(|checkChange\(|checkNotGoverned\(|checkNotSandboxed\(")
+                   r"mayRegisterShared\(|checkChange\(|checkNotGoverned\(|checkNotSandboxed\(|"
+                   r"checkProcessWideRegistration\(|isProcessWideRegistrationAllowed\(")
+
+#! the child data provider registries: a child class that one caller registers is created for every caller that
+#! browses the provider, with that caller's connection, so these mutators must refuse sandboxed callers themselves
+#! and cannot be listed (qore#6744); the base class's method only raises UNSUPPORTED-ERROR
+CHILD_REGISTRY = re.compile(r"::(register|deregister)Child$")
+CHILD_REGISTRY_BASE = {("qlib/DataProvider/AbstractDataProvider.qc", "AbstractDataProvider::registerChild")}
 CLASS = re.compile(r"^\s*((?:public|final|abstract|\s)*)class\s+([A-Za-z_]\w*)\b")
 STATIC = re.compile(r"^\s*((?:public|private(?::\w+)?|static|synchronized|abstract|\s)*)\bstatic\b\s*((?:public|"
                     r"private(?::\w+)?|synchronized|\s)*)(?:[\w:<>*,\s]+?\s+)?([A-Za-z_]\w*)\s*\([^;]*$")
@@ -126,6 +133,15 @@ class SharedRegistryChecksTest(unittest.TestCase):
         unchecked = ["%s %s" % k for k, checked in sorted(scan().items()) if not checked and k not in listed]
         self.assertEqual([], unchecked, "mutators of process-wide registries that refuse no sandboxed caller and that "
                          "%s does not list with a category (see this test's description)" % LIST.name)
+
+    def test_child_registries_are_checked(self):
+        found = scan()
+        sites = {k: v for k, v in found.items() if CHILD_REGISTRY.search(k[1]) and k not in CHILD_REGISTRY_BASE}
+        self.assertGreater(len(sites), 30, "the scan finds the child data provider registries")
+        unchecked = ["%s %s" % k for k, checked in sorted(sites.items()) if not checked]
+        self.assertEqual([], unchecked, "child data provider registries that do not refuse sandboxed callers")
+        listed = ["%s %s" % k for k in sorted(read_list()) if CHILD_REGISTRY.search(k[1])]
+        self.assertEqual([], listed, "child data provider registries cannot be listed in %s" % LIST.name)
 
     def test_list_is_current(self):
         listed = read_list()

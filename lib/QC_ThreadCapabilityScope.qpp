@@ -251,6 +251,88 @@ static ThreadCapabilityScope ThreadCapabilityScope::independent() {
     return new QoreObject(QC_THREADCAPABILITYSCOPE, getProgram(), new QoreThreadCapabilityScope(level, gen));
 }
 
+//! Runs a call with capabilities added to the current thread's set, and restores the set when the call returns or throws
+/** A call-bound scope: unlike a scope object, it may be used by code that no sandbox governs also while sandboxed code
+    is further up the thread's stack (for example a host that runs the code of one interface for another, or that is
+    called back by an object that sandboxed code created), as the set cannot outlive the call: it is in effect only
+    while \a call runs, and the outer set is restored before control returns to the calling code.
+
+    @param capabilities the capabilities by name; each value is the code that implements it; they are added to the
+    current capabilities, replacing those of the same name
+    @param call the code to run with the capabilities in effect
+    @param ... the arguments to pass to \a call
+
+    @return the return value of \a call
+
+    @par Example:
+    @code{.py}
+auto rv = ThreadCapabilityScope::call({"start_thread": \host_start_thread()}, \svc.run(), arg);
+    @endcode
+
+    @throw THREAD-CAPABILITY-ERROR the calling code is sandboxed (its Program, or the Program running on the thread,
+    has a sandbox manager or was created by sandboxed code), may not control threads, or does not call this method
+    directly (it is called by another builtin such as @ref Qore::call_static_method() "call_static_method()"; a call
+    reference to the method is judged by the code that calls it); a value of \a capabilities is refused as by the
+    constructor: it is not callable, or it is code whose own Program does not allow thread control, is sandboxed, or
+    has been deleted
+
+    @note
+    - only the code that calls this method is judged, not its callers: the set is bound to the call, and is no longer
+      in effect when control returns to the code further up the stack; a host function that sandboxed code can call
+      and that uses this method runs its code with the capabilities, as for a scope object that runs sandboxed code:
+      module code in the call can take guards that stay usable after it (a guard still runs only code that no
+      sandbox governs); the code that \a call runs, which can be sandboxed code, is governed by its own sandbox as
+      always: it cannot see the capabilities (see
+      @ref Qore::get_thread_capability() "get_thread_capability()") and cannot set a scope, while the module
+      code that it calls sees them
+    - the capabilities' code must pass the same checks as for the constructor
+    - the threads that a capability starts while \a call runs, and later for the objects that take it while \a call
+      runs, are attributed by the capability as for a scope object
+
+    @since %Qore 3.0
+*/
+static auto ThreadCapabilityScope::call(hash<auto> capabilities, code call, ...) {
+    if (runtime_check_parse_option(PO_NO_THREAD_CONTROL)) {
+        xsink->raiseException("THREAD-CAPABILITY-ERROR", "ThreadCapabilityScope::call(): the calling code may not "
+            "control threads");
+        return QoreValue();
+    }
+    if (const char* reason = thread_capability_call_refusal("ThreadCapabilityScope::call")) {
+        xsink->raiseException("THREAD-CAPABILITY-ERROR", "ThreadCapabilityScope::call(): %s, which cannot set the "
+            "capabilities of a thread", reason);
+        return QoreValue();
+    }
+    ConstHashIterator i(capabilities);
+    while (i.next()) {
+        if (thread_capability_check_code(i.get(), i.getKey(), "the code", xsink)) {
+            return QoreValue();
+        }
+    }
+    size_t level;
+    uint64_t gen;
+    if (thread_push_capability_scope(capabilities, false, level, gen, xsink)) {
+        return QoreValue();
+    }
+    // the outer set is restored however the call ends: the scope cannot outlive the call
+    class ScopeLeaver {
+    public:
+        ScopeLeaver(size_t level, uint64_t gen, ExceptionSink* xsink) : level(level), gen(gen),
+                xsink(xsink) {
+        }
+        ~ScopeLeaver() {
+            ExceptionSink xsink2;
+            thread_pop_capability_scope(level, gen, &xsink2);
+            xsink->assimilate(xsink2);
+        }
+    private:
+        size_t level;
+        uint64_t gen;
+        ExceptionSink* xsink;
+    } leaver(level, gen, xsink);
+    ReferenceHolder<QoreListNode> call_args(args->size() > 2 ? args->copyListFrom(2) : nullptr, xsink);
+    return call->execValue(*call_args, xsink);
+}
+
 //! Throws an exception; objects of this class cannot be copied
 /**
     @throw THREAD-CAPABILITY-SCOPE-COPY-ERROR objects of this class cannot be copied

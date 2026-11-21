@@ -110,7 +110,7 @@ X5 x();
 X6 x6();
 Y5 y();
 
-# calls from a sibling parent class: refused as by a typed call
+# calls from a sibling parent class: the private method is not called; B2 calls its own method of the name (qore#6759)
 check("sibling untyped", any sub () { return x.call(x); });
 check("sibling untyped private:hierarchy", any sub () { return x.callh(x); });
 check("sibling untyped private:internal", any sub () { return x.calli(x); });

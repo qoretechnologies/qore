@@ -38,13 +38,18 @@ public class DeepgramDataProvider inherits DeepgramDataProviderCommon {
         });
     }
 
-    private {
+    private:internal {
+        #! the process-wide registry of child data providers; private:internal, so that only this class
+        #! changes it (qore#6744)
         static hash<string, Reflection::Class> childMap = {
             "transcribe-file":
                 Class::forName("DeepgramDataProvider::DeepgramTranscribeFileDataProvider"),
             "synthesize-speech":
                 Class::forName("DeepgramDataProvider::DeepgramSynthesizeSpeechDataProvider"),
         };
+    }
+
+    private {
     }
 
     constructor(RestClientIo::RestClientIo rest) : DeepgramDataProviderCommon(rest) {}

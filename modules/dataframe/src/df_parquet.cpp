@@ -747,13 +747,42 @@ static bool qoreParquetStatsMayMatchDate32(const std::shared_ptr<parquet::Statis
     return qoreParquetTypedStatsMayMatch<parquet::Int32Type>(stats, filter, static_cast<int32_t>(days));
 }
 
-static bool qoreParquetDecimalFilterValue(QoreValue value, int32_t scale, arrow::Decimal128& out) {
+//! sets the decimal string of a value for a decimal128 column with the given precision and scale
+/** A number is converted with its exact decimal value when it has one that fits the column, and otherwise with its
+    display string (QoreNumberNode::getDecimalString(); issue #6837)
+
+    @return 0 for no error, -1 for an error (raised in \a xsink)
+*/
+static int qoreDecimalValueString(QoreValue value, int32_t precision, int32_t scale, std::string& out,
+        ExceptionSink* xsink) {
+    if (value.getType() == NT_NUMBER) {
+        QoreString str;
+        if (value.get<const QoreNumberNode>()->getDecimalString(str, precision, scale, xsink)) {
+            return -1;
+        }
+        out = dataFrameStdString(&str);
+        return 0;
+    }
     QoreStringValueHelper str(value);
+    out = dataFrameStdString(*str);
+    return 0;
+}
+
+static bool qoreParquetDecimalFilterValue(QoreValue value, int32_t column_precision, int32_t scale,
+        arrow::Decimal128& out) {
+    std::string str;
+    {
+        ExceptionSink xsink;
+        if (qoreDecimalValueString(value, column_precision, scale, str, &xsink)) {
+            xsink.clear();
+            return false;
+        }
+    }
     arrow::Decimal128 dec_val;
     int32_t precision = 0;
     int32_t value_scale = 0;
     // the whole string is parsed, so a value with a NUL character is not a decimal number
-    auto status = arrow::Decimal128::FromString(dataFrameStdString(*str), &dec_val, &precision, &value_scale);
+    auto status = arrow::Decimal128::FromString(str, &dec_val, &precision, &value_scale);
     if (!status.ok()) {
         return false;
     }
@@ -833,7 +862,7 @@ static bool qoreParquetStatsMayMatchDecimal(const parquet::ColumnDescriptor* col
 
     auto dec_type = std::static_pointer_cast<const parquet::DecimalLogicalType>(logical_type);
     arrow::Decimal128 value;
-    if (!qoreParquetDecimalFilterValue(filter.value, dec_type->scale(), value)) {
+    if (!qoreParquetDecimalFilterValue(filter.value, dec_type->precision(), dec_type->scale(), value)) {
         return true;
     }
 
@@ -2214,16 +2243,18 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         }
         case arrow::Type::DECIMAL128: {
             auto dec_type = std::static_pointer_cast<arrow::Decimal128Type>(type);
-            QoreStringValueHelper str(val);
+            std::string str;
+            if (qoreDecimalValueString(val, dec_type->precision(), dec_type->scale(), str, xsink)) {
+                return false;
+            }
             arrow::Decimal128 dec_val;
             int32_t out_precision = 0;
             int32_t out_scale = 0;
             // the whole string is parsed, so a value with a NUL character is not a decimal number
-            auto parse_status = arrow::Decimal128::FromString(dataFrameStdString(*str), &dec_val, &out_precision,
-                &out_scale);
+            auto parse_status = arrow::Decimal128::FromString(str, &dec_val, &out_precision, &out_scale);
             if (!parse_status.ok()) {
                 xsink->raiseException("DATAFRAME-IO-ERROR",
-                    "failed to parse decimal128 value '%s': %s", str->c_str(), parse_status.ToString().c_str());
+                    "failed to parse decimal128 value '%s': %s", str.c_str(), parse_status.ToString().c_str());
                 return false;
             }
             if (out_scale != dec_type->scale()) {

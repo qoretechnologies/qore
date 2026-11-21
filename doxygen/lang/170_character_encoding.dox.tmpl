@@ -4,7 +4,18 @@
 
     @section character_encoding_overview Overview
 
-    The %Qore language is character-encoding aware. All strings are assumed to have the default character encoding, unless the program explicitly specified another encoding for certain objects and operations. Every %Qore string has a character encoding ID attached to it, so, when another encoding is required, the %Qore language will attempt to do an encoding translation.
+    Every %Qore string carries a character encoding. When an operation requires another encoding, %Qore attempts to
+    convert the string.
+
+    %Qore reads source files, including <tt>%include</tt> files and source modules, and standard input as UTF-8.
+    Filenames written in <tt>%include</tt> directives retain their UTF-8 spelling during lookup.
+    An invalid UTF-8 sequence raises a parse error identifying the source and line. The \c --charset option,
+    \c QORE_CHARSET and the locale select the default string and I/O encoding at run time. To migrate a legacy
+    Latin-1 source file, use <tt>iconv -f ISO-8859-1 -t UTF-8 legacy.q > converted.q</tt>.
+
+    A source string passed to a Program or Expression is decoded from its own encoding into UTF-8 for parsing.
+    String literals in the parsed source use UTF-8. Compiled executables and modules preserve the encoding of string
+    constants across process charsets.
 
     %Qore uses the operating system's \c iconv library functions to perform any encoding conversions.  The encodings
     available depend on the \c iconv library %Qore is built with and on how it is installed: for example, Apple's
@@ -298,7 +309,8 @@ while (i.next()) {
     conversion instead, which uses the display width of the argument.
 
     @ref qore_regex "Regular expression" operators and functions convert UTF-16 strings to \c UTF-8 before
-    matching, so any strings they return are tagged with \c UTF-8 and not with the source encoding.
+    matching. Captures, split pieces and substitution results use the subject's encoding. Match offsets and
+    lengths count bytes in the UTF-8 representation used for matching.
 
     Conversions of UTF-16 strings to numbers, booleans and dates (ex: \c int(), \c float(), \c number(),
     \c boolean(), @ref Qore::parse_boolean() "parse_boolean()", \c date(), the \c softint, \c softfloat,

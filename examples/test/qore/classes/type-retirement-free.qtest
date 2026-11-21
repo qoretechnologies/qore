@@ -1,0 +1,322 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - quiescent waits in queues, conditions, counters, joins, sleep, socket and FIFO I/O
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class TypeRetirementFreeTest
+
+#! A user class of the test Program, a type argument of generic_wait()
+class Bar {
+}
+
+#! A generic function of the test Program: a call of it with a list of a user class runs with type arguments
+sub generic_wait<T>(list<T> l, Queue q) {
+    q.get();
+}
+
+#! The freeing of the retired declarations of a deleted Program (issue #6419, design/derived-type-retirement.md)
+/** A class, a hashdecl and an enum of a deleted Program that derived types name (list<Foo>, list<hash<HD>>,
+    list<E> held by values) are retired, the derived types are repointed to their tombstones, and the declarations
+    are freed once every thread has passed a quiescent point since: a thread blocked in a builtin's wait made for the
+    program (Queue::get(), Condition::wait(), Counter::waitForZero(), WaitGroup::wait(), thread_join(), usleep(),
+    socket and file I/O) does not hold them back, a thread that runs Qore code does until it reaches such a wait or
+    leaves Qore code, and so does a thread blocked in such a wait inside a generic call with type arguments, whose
+    frame holds types read through derived types.  The debug hooks report the bookkeeping, free what can be freed with
+    the calling thread quiescent, and wait until a thread has entered a wait.
+*/
+class TypeRetirementFreeTest inherits QUnit::Test {
+    public {
+        const Opts = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION;
+
+        const Src = "class Foo {} hashdecl HD { int a = 1; } enum E { A = 1 }
+list<auto> sub mk() { list<Foo> a = (); list<hash<HD>> b = (); list<E> c = (); return (a, b, c); }";
+
+        #! the timeout of a wait for a thread to enter a wait; reached only if the test fails
+        const WaitTimeout = 120000;
+    }
+
+    constructor() : QUnit::Test("TypeRetirementFreeTest", "1.0", \ARGV) {
+        addTestCase("a deleted Program's declarations are freed after the grace period", \freedAfterGrace());
+        addTestCase("a thread blocked in a quiescent wait does not hold back the free", \quiescentWaits());
+        addTestCase("a thread in Qore code holds back the free until a quiescent wait", \runningThreadBlocks());
+        addTestCase("a thread in Qore code holds back the free until it exits", \exitingThreadBlocks());
+        addTestCase("a wait inside a generic call with type arguments is not quiescent", \genericFrameBlocks());
+        addTestCase("reloads of the same source add no tombstones", \reloadsAddNoTombstones());
+        set_return_value(main());
+    }
+
+    freedAfterGrace() {
+        checkDebug();
+        hash<auto> before = info();
+        list<auto> kept = retire();
+        hash<auto> after = info();
+        assertGe(before."pending declarations" + 3, after."pending declarations", "the declarations are retired");
+        assertGe(1, after."tombstone classes");
+        assertGe(1, after."tombstone hashdecls");
+        assertGe(1, after."tombstone enums");
+        # this thread runs Qore code since before the retirement: nothing is freed while it does
+        assertEq(before."freed declarations", after."freed declarations");
+        assertGe(3, free(), "the declarations are freed with this thread quiescent");
+        hash<auto> freed = info();
+        assertEq(0, freed."pending declarations", "nothing retired is left: " + sprintf("%y", freed));
+        # the values of the derived types still work: their types name the tombstones
+        assertEq(("list<object<Foo>>", "list<hash<HD>>", "list<enum<E>>"), (map $1.fullType(), kept));
+    }
+
+    quiescentWaits() {
+        checkDebug();
+        # each thread blocks in a wait until it is released; the release is done also when an assertion fails
+        Queue q();
+        Mutex m();
+        Condition c();
+        Counter cnt(1);
+        WaitGroup wg();
+        wg.add(1);
+        Queue join_gate();
+        bool cond_released;
+
+        list<int> tids;
+        tids += background q.get();
+        tids += background waitCondition(m, c, \cond_released);
+        tids += background cnt.waitForZero();
+        tids += background wg.wait();
+        int joined = background join_gate.get();
+        tids += joined;
+        tids += background thread_join(joined);
+        int sleeper = background sleepUntilCancelled();
+        tids += sleeper;
+
+        # a socket receive and a FIFO read
+        Socket server();
+        server.bindINET("127.0.0.1", "0", False, AF_INET);
+        server.listen();
+        int port = server.getSocketInfo().port;
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        Socket accepted = server.accept();
+        tids += background recvOne(client);
+
+        TmpDir tmp("type-retirement-free-");
+        string fifo = tmp.path + DirSep + "fifo";
+        assertEq(0, mkfifo(fifo));
+        File rf();
+        rf.open2(fifo, O_RDWR);
+        tids += background readOne(rf);
+
+        on_exit {
+            q.push(1);
+            m.lock();
+            cond_released = True;
+            c.broadcast();
+            m.unlock();
+            cnt.dec();
+            wg.done();
+            join_gate.push(1);
+            cancel_thread(sleeper);
+            accepted.send("x");
+            File wf();
+            wf.open2(fifo, O_WRONLY);
+            wf.write("x");
+            map thread_join($1), tids;
+        }
+
+        # every thread is in its wait: the queue, the condition and the counter waits, the wait group, the join, the
+        # sleep, the socket and the FIFO waits
+        foreach int tid in (tids) {
+            assertTrue(call_function("dbg_type_wait_entered", tid, 1, WaitTimeout), sprintf("thread %d waits (%y)",
+                tid, tids));
+        }
+
+        int freed_before = info()."freed declarations";
+        list<auto> kept = retire();
+        hash<auto> blockers = map {$1.tid.toString(): $1.epoch}, call_function("dbg_type_retirement_blockers");
+        foreach int tid in (tids) {
+            assertFalse(exists blockers{tid}, "a thread in a quiescent wait is no blocker: " + sprintf("%y", blockers));
+        }
+        assertGe(3, free(), "the threads in quiescent waits do not hold back the free");
+        assertGe(freed_before + 3, info()."freed declarations");
+        assertEq(0, info()."pending declarations");
+        remove kept;
+    }
+
+    runningThreadBlocks() {
+        checkDebug();
+        Queue started();
+        Queue gate();
+        Mutex m();
+        m.lock();
+        bool locked = True;
+        # the thread runs Qore code: it waits for the mutex, which is not a quiescent wait, then in a queue
+        int tid = background runThenWait(started, m, gate);
+        on_exit {
+            if (locked) {
+                m.unlock();
+            }
+            gate.push(1);
+            thread_join(tid);
+        }
+        started.get();
+
+        list<auto> kept = retire();
+        assertEq(0, free(), "a thread in Qore code since before the retirement holds it back");
+        hash<auto> blockers = map {$1.tid.toString(): $1.epoch}, call_function("dbg_type_retirement_blockers");
+        assertTrue(exists blockers{tid}, "the thread is a blocker: " + sprintf("%y", blockers));
+        assertGt(0, info()."pending declarations");
+
+        # the thread goes on to a quiescent wait
+        m.unlock();
+        locked = False;
+        assertTrue(call_function("dbg_type_wait_entered", tid, 1, WaitTimeout));
+        assertGe(3, free(), sprintf("the thread in a quiescent wait no longer holds it back: %y %y",
+            call_function("dbg_type_retirement_blockers"), info()));
+        assertEq(0, info()."pending declarations");
+        remove kept;
+    }
+
+    exitingThreadBlocks() {
+        checkDebug();
+        Queue started();
+        Mutex m();
+        m.lock();
+        bool locked = True;
+        int tid = background runThenExit(started, m);
+        on_exit {
+            if (locked) {
+                m.unlock();
+            }
+            thread_join(tid);
+        }
+        started.get();
+
+        int freed_before = info()."freed declarations";
+        list<auto> kept = retire();
+        assertEq(0, free(), "a thread in Qore code since before the retirement holds it back");
+
+        # the thread leaves Qore code; it frees the declarations as it does, or the call below frees them
+        m.unlock();
+        locked = False;
+        thread_join(tid);
+        free();
+        assertGe(freed_before + 3, info()."freed declarations");
+        assertEq(0, info()."pending declarations");
+        remove kept;
+    }
+
+    genericFrameBlocks() {
+        checkDebug();
+        Queue in_generic();
+        Queue outside();
+        int tid = background genericThenWait(in_generic, outside);
+        on_exit {
+            in_generic.push(1);
+            outside.push(1);
+            thread_join(tid);
+        }
+        # the thread waits in a queue inside a generic call with a user class as its type argument
+        assertTrue(call_function("dbg_type_wait_entered", tid, 1, WaitTimeout));
+
+        list<auto> kept = retire();
+        assertEq(0, free(), "a wait inside a generic call with type arguments is not quiescent");
+        hash<auto> blockers = map {$1.tid.toString(): $1.epoch}, call_function("dbg_type_retirement_blockers");
+        assertTrue(exists blockers{tid}, "the thread in the generic call is a blocker: " + sprintf("%y", blockers));
+
+        # the thread returns from the generic call and waits outside it
+        in_generic.push(1);
+        assertTrue(call_function("dbg_type_wait_entered", tid, 2, WaitTimeout));
+        assertGe(3, free(), "a wait outside the generic call is quiescent");
+        assertEq(0, info()."pending declarations");
+        remove kept;
+    }
+
+    reloadsAddNoTombstones() {
+        checkDebug();
+        # the first reload makes the tombstones of the source's declarations (if earlier tests have not)
+        list<auto> kept = retire();
+        free();
+        hash<auto> first = info();
+        for (int i = 0; i < 5; ++i) {
+            kept += retire();
+            assertGe(3, free());
+            hash<auto> now = info();
+            assertEq(first."tombstone classes", now."tombstone classes", "reload " + i);
+            assertEq(first."tombstone hashdecls", now."tombstone hashdecls", "reload " + i);
+            assertEq(first."tombstone enums", now."tombstone enums", "reload " + i);
+            assertEq(0, now."pending declarations", "reload " + i);
+        }
+        remove kept;
+    }
+
+    #! creates a Program whose declarations derived types name, and deletes it; returns the values typed with them
+    static list<auto> retire() {
+        Program p(Opts);
+        p.parse(Src, "retired");
+        list<auto> rv = p.callFunction("mk");
+        delete p;
+        return rv;
+    }
+
+    #! frees what can be freed; the queued background JIT compiles of specializations are done first, as each one
+    #! holds back what is retired after it was queued
+    static int free() {
+        call_function("dbg_wait_bg_compile_idle");
+        return call_function("dbg_type_retirement_free");
+    }
+
+    static hash<auto> info() {
+        return call_function("dbg_type_retirement_info");
+    }
+
+    checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug functions require a debug build");
+        }
+    }
+
+    static waitCondition(Mutex m, Condition c, reference<bool> released) {
+        m.lock();
+        on_exit m.unlock();
+        while (!released) {
+            c.wait(m);
+        }
+    }
+
+    static sleepUntilCancelled() {
+        try {
+            usleep(3600s);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    static recvOne(Socket s) {
+        s.recv(1);
+    }
+
+    static readOne(File f) {
+        f.read(1, 3600s);
+    }
+
+    static runThenWait(Queue started, Mutex m, Queue gate) {
+        started.push(1);
+        m.lock();
+        m.unlock();
+        gate.get();
+    }
+
+    static runThenExit(Queue started, Mutex m) {
+        started.push(1);
+        m.lock();
+        m.unlock();
+    }
+
+    static genericThenWait(Queue in_generic, Queue outside) {
+        list<Bar> l = ();
+        generic_wait(l, in_generic);
+        outside.get();
+    }
+}

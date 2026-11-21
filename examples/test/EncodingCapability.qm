@@ -1,0 +1,146 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file EncodingCapability.qm probes what the iconv library of the platform can do with an encoding
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module EncodingCapability {
+    version = "1.0";
+    desc = "probes what the iconv library of the platform can do with an encoding";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** The encodings that Qore converts with depend on the iconv library it is built with: glibc's has nearly all of
+    them, Apple's libiconv on macOS most, and musl's (Alpine) far fewer:
+    - musl has no UTF-7, ISO-2022-KR, ISO-2022-CN, HZ, JOHAB or EBCDIC (IBM037, IBM1140, IBM930, IBM939) at all
+    - musl can decode EUC-KR, GBK, GB18030 and Big5 but not encode them
+
+    A test that needs an encoding asks these functions what it needs, separately for encoding (text to the encoding)
+    and decoding (the encoding to text), and skips with the reason they give only when the platform lacks it; only a
+    conversion that iconv cannot make (\c ENCODING-CONVERSION-ERROR) is a capability that the platform lacks: any
+    other error is raised, so that a test does not hide a failure of Qore.  An encoding that every platform has
+    (ISO-2022-JP, Shift_JIS, EUC-JP, the Unicode forms, the ISO-8859 and Windows single-byte sets) needs no probe.
+
+    Qore learns the character properties of an encoding that it has no built-in support for (its character widths,
+    whether it is ASCII-compatible) by converting sample text to it; with an iconv that can only decode such an
+    encoding, Qore cannot learn them, so a test of the characters of such text needs encoding_cannot_encode() too.
+*/
+public namespace EncodingCapability {
+#! returns why the iconv library cannot encode the text in the encoding, or nothing if it can
+/** @param enc the encoding
+    @param text the text to encode (a character of the encoding that the test uses)
+
+    @return the reason, which names the encoding and the error, or nothing if the text is encoded
+*/
+public *string sub encoding_cannot_encode(string enc, string text = "A") {
+    try {
+        if (convert_encoding(text, enc).empty() && text) {
+            return sprintf("the iconv library of the platform cannot encode %y in %s: it gives no bytes", text, enc);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        # only a conversion that iconv cannot make is a capability that the platform lacks; any other error is a
+        # failure of Qore, which the test must not hide
+        if (ex.err != "ENCODING-CONVERSION-ERROR") {
+            rethrow;
+        }
+        return sprintf("the iconv library of the platform cannot encode %s: %s: %s", enc, ex.err, ex.desc);
+    }
+}
+
+#! returns why the iconv library cannot decode the bytes in the encoding to the expected text, or nothing if it can
+/** @param enc the encoding
+    @param bytes the bytes in the encoding
+    @param expected the text that the bytes are
+
+    @return the reason, which names the encoding and the error, or nothing if the bytes are decoded to the text
+*/
+public *string sub encoding_cannot_decode(string enc, binary bytes, string expected) {
+    try {
+        string text = convert_encoding(binary_to_string(bytes, enc), "UTF-8");
+        if (text != expected) {
+            return sprintf("the iconv library of the platform decodes %y in %s as %y, not %y", bytes, enc, text,
+                expected);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "ENCODING-CONVERSION-ERROR") {
+            rethrow;
+        }
+        return sprintf("the iconv library of the platform cannot decode %s: %s: %s", enc, ex.err, ex.desc);
+    }
+}
+
+#! returns why Qore does not know the characters of the text of the encoding, or nothing if it does
+/** Qore learns the character properties of an encoding that it has no built-in support for by encoding sample text
+    to it; if the iconv library can only decode the encoding (EUC-KR, GBK, GB18030 and Big5 with musl), Qore handles
+    its text as single-byte text (issue #6812), so a test of the characters of such text (their lengths, the
+    character boundaries that a parser or reader finds) cannot run.
+
+    @param enc the encoding
+    @param text a character of the encoding that the test uses
+
+    @return the reason, or nothing if the iconv library can encode the text
+*/
+public *string sub encoding_characters_unknown(string enc, string text) {
+    *string reason = encoding_cannot_encode(enc, text);
+    if (reason) {
+        return sprintf("%s; Qore learns the characters of an encoding by encoding sample text to it, so it handles "
+            "the text of %s as single-byte text (issue #6812)", reason, enc);
+    }
+}
+
+#! returns why a test of invalid bytes in the encoding cannot run, if the iconv library decodes them without an error
+/** The validity of text in an encoding that Qore has no built-in support for is taken from iconv; the iconv of some
+    platforms (musl's) decodes some invalid sequences, such as a Shift_JIS lead byte followed by a byte that is not a
+    trail byte, without an error.
+
+    @param enc the encoding
+    @param bytes the invalid bytes in the encoding
+
+    @return the reason, which names the encoding, the bytes and what iconv decodes them to, or nothing if iconv
+    refuses the bytes
+*/
+public *string sub encoding_decodes_invalid(string enc, binary bytes) {
+    try {
+        binary b = binary(convert_encoding(binary_to_string(bytes, enc), "UTF-8"));
+        return sprintf("the iconv library of the platform decodes the invalid %s bytes %s to %s", enc, bytes.toHex(),
+            b.toHex());
+    } catch (hash<ExceptionInfo> ex) {
+    }
+}
+
+#! returns why the iconv library cannot encode the text in the encoding and decode it back unchanged, or nothing
+/** @param enc the encoding
+    @param text the text (characters of the encoding that the test uses)
+
+    @return the reason, which names the encoding and the error, or nothing if the text is encoded and decoded back
+*/
+public *string sub encoding_cannot_convert(string enc, string text = "A") {
+    *string reason = encoding_cannot_encode(enc, text);
+    if (reason) {
+        return reason;
+    }
+    return encoding_cannot_decode(enc, binary(convert_encoding(text, enc)), text);
+}
+}

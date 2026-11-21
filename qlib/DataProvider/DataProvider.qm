@@ -1750,6 +1750,17 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - added optional processing-locality and billing-model metadata to apps and actions: the \c processing
+      (@ref DataProvider::DataProviderProcessingInfo "DataProviderProcessingInfo") and \c billing
+      (@ref DataProvider::DataProviderBillingInfo "DataProviderBillingInfo") fields of
+      @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo" and the action info, whose enumerated values
+      (@ref DataProvider::DataProviderProcessingLocalityValues "DataProviderProcessingLocalityValues",
+      @ref DataProvider::DataProviderBillingModelValues "DataProviderBillingModelValues",
+      @ref DataProvider::DataProviderBillingUnitValues "DataProviderBillingUnitValues") are checked at registration;
+      @ref DataProvider::DataProviderActionCatalog::getActionProcessing() "DataProviderActionCatalog::getActionProcessing()"
+      and @ref DataProvider::DataProviderActionCatalog::getActionBilling() "getActionBilling()" return an action's
+      values over its app's, field by field; rate amounts are not part of the metadata
+      (<a href="https://github.com/qoretechnologies/qore/issues/6736">issue 6736</a>)
     - added @ref DataProvider::EncodingErrorsOptionInfo "EncodingErrorsOptionInfo", the \c encoding_errors option
       of the data providers that read text (see @ref encoding_errors)
       (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)

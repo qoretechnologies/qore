@@ -6038,6 +6038,40 @@ const QoreEnumDecl& QoreNamespaceEnumIterator::get() const {
     return *priv->get();
 }
 
+void qore_ns_private::getRollbackTypeOwners(std::vector<QoreTypeOwner*>& owners) {
+    for (const std::string& name : pending_class_names) {
+        QoreClass* qc = classList.find(name.c_str());
+        qore_class_private* priv = qc ? qore_class_private::get(*qc) : nullptr;
+        if (priv && !priv->type_owner.isTypeOwnerSystem()) {
+            owners.push_back(&priv->type_owner);
+        }
+    }
+    for (const std::string& name : pending_hashdecl_names) {
+        if (TypedHashDecl* hd = hashDeclList.find(name.c_str())) {
+            typed_hash_decl_private* priv = typed_hash_decl_private::get(*hd);
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    for (const std::string& name : pending_enum_names) {
+        if (QoreEnumDecl* ed = enumList.find(name.c_str())) {
+            qore_enum_decl_private* priv = qore_enum_decl_private::get(*ed);
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    std::set<std::string> added(pending_ns_names.begin(), pending_ns_names.end());
+    for (auto& i : nsl.nsmap) {
+        if (added.count(i.first)) {
+            qore_ns_private::get(*i.second)->getTypeOwners(owners);
+        } else {
+            qore_ns_private::get(*i.second)->getRollbackTypeOwners(owners);
+        }
+    }
+}
+
 void qore_ns_private::getTypeOwners(std::vector<QoreTypeOwner*>& owners) {
     {
         ClassListIterator i(classList);

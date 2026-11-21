@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ProgramDeletePendingParseTest
+
+#! Deleting a Program that has code pending (qore#6795)
+/** A Program with code pending (Program::parsePending() without a commit or a rollback) refuses every thread to enter
+    it.  The code that runs when it is deleted enters it: the destructors of the objects in its object cache and in its
+    variables, and its exit hooks.  The deletion discards the pending parse first, so that this code runs and the
+    deletion raises no \c PROGRAM-ERROR.
+*/
+public class ProgramDeletePendingParseTest inherits QUnit::Test {
+    public {
+        #! committed code: a class whose destructor calls a callback, a global variable and an exit hook
+        const Code = "
+class C {
+    private {
+        code cb;
+    }
+    constructor(code cb) {
+        self.cb = cb;
+    }
+    destructor() {
+        cb('destructor');
+    }
+}
+our *C c;
+C sub mk(code cb) {
+    return new C(cb);
+}
+sub set_var(code cb) {
+    c = new C(cb);
+}
+sub reg_hook(code cb) {
+    register_exit_hook(sub () { cb('hook'); });
+}
+";
+
+        #! pending code: declarations and a top-level statement
+        const Pending = "
+class P {
+    destructor() {
+        throw 'PENDING-CODE-RAN';
+    }
+}
+our P pv = new P();
+int sub pending_func() {
+    return 1;
+}
+throw 'PENDING-CODE-RAN';
+";
+    }
+
+    constructor() : QUnit::Test("ProgramDeletePendingParseTest", "1.0", \ARGV) {
+        addTestCase("saved object", \savedObject());
+        addTestCase("global variable", \globalVar());
+        addTestCase("exit hook", \exitHook());
+        addTestCase("pending code only", \pendingOnly());
+        addTestCase("rolled back", \rolledBack());
+        set_return_value(main());
+    }
+
+    #! returns a Program with the committed code
+    private Program getProgram() {
+        Program p(PO_ALLOW_REPARSE | PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(Code, "code");
+        return p;
+    }
+
+    #! deletes the Program with code pending; returns the error raised, or "OK"
+    private string deleteWithPending(Program p) {
+        p.parsePending(Pending, "pending");
+        try {
+            delete p;
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
+    savedObject() {
+        list<string> calls;
+        code cb = sub (string what) { calls += what; };
+        Program p = getProgram();
+        object o = p.callFunction("mk", cb);
+        p.saveObject(o);
+        remove o;
+        assertEq("OK", deleteWithPending(p));
+        assertEq(("destructor",), calls);
+    }
+
+    globalVar() {
+        list<string> calls;
+        code cb = sub (string what) { calls += what; };
+        Program p = getProgram();
+        p.callFunction("set_var", cb);
+        assertEq("OK", deleteWithPending(p));
+        assertEq(("destructor",), calls);
+    }
+
+    exitHook() {
+        list<string> calls;
+        code cb = sub (string what) { calls += what; };
+        Program p = getProgram();
+        p.callFunction("reg_hook", cb);
+        p.callFunction("set_var", cb);
+        assertEq("OK", deleteWithPending(p));
+        assertEq(("hook", "destructor"), calls);
+    }
+
+    pendingOnly() {
+        Program p = getProgram();
+        assertEq("OK", deleteWithPending(p));
+    }
+
+    #! a Program whose pending code was rolled back is deleted as before
+    rolledBack() {
+        list<string> calls;
+        code cb = sub (string what) { calls += what; };
+        Program p = getProgram();
+        p.callFunction("set_var", cb);
+        p.parsePending(Pending, "pending");
+        p.parseRollback();
+        assertEq(1, p.callFunction("mk", cb) ? 1 : 0);
+        delete p;
+        assertEq(("destructor", "destructor"), calls);
+    }
+}

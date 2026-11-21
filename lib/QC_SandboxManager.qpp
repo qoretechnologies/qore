@@ -1462,6 +1462,70 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     return static_cast<bool>(governing);
 }
 
+//! Refuses a change to a process-wide registry of callbacks, hooks, handlers or listeners by sandboxed code
+/** A registry that a module keeps for the whole process (in a static class member or a module variable) is shared by
+    the code of every %Program: a module from the module path is loaded once per process, and what its registry holds
+    runs or is used later for every caller, also for the code of other sandboxes and for trusted code.  Such a
+    registry calls this method before it registers, replaces or removes an entry, so that code that is sandboxed or
+    acts for sandboxed code cannot change it (see @ref sandbox_process_wide_registries):
+    - the code of a sandboxed %Program, or of a %Program that sandboxed code created, and code that such a %Program
+      calls
+    - code that a sandbox governs, also through a policy barrier or a system-policy capability (as isSandboxed()
+      sees it)
+
+    Trusted code is not refused, nor is the initialization of library code (a module from the module path), whatever
+    code loads the module first.  The check fails closed: a change is refused if the governing sandbox cannot be
+    resolved.
+
+    It reveals only whether the calling code is sandboxed, so it is not restricted itself.  C++ code uses
+    \c qore_check_process_wide_registration().
+
+    @param what what the caller tried to do, for the exception (ex: \c "register a codec")
+
+    @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code tried to change a process-wide
+    registry
+
+    @par Example:
+    @code{.py}
+static registerCallback(string name, code callback) {
+    SandboxManager::checkProcessWideRegistration("register a callback");
+    AutoLock al(lck);
+    callbacks{name} = callback;
+}
+    @endcode
+
+    @see
+    - isProcessWideRegistrationAllowed()
+    - isSandboxed()
+
+    @since %Qore 3.0
+*/
+static nothing SandboxManager::checkProcessWideRegistration(string what) {
+    TempEncodingHelper str(what, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    qore_check_process_wide_registration(str->c_str(), xsink);
+}
+
+//! Returns @ref True if the current thread's code may change a process-wide registry
+/** Decides as checkProcessWideRegistration() does, without raising an exception: trusted infrastructure uses it to
+    leave out a process-wide registration that is a side effect of an operation it performs for a sandboxed caller,
+    such as a server setting its logger on a process-wide controller, instead of refusing the operation.
+
+    It reveals only whether the calling code is sandboxed, so it is not restricted itself.
+
+    @return @ref True if the code may change a process-wide registry, @ref False if it is sandboxed or acts for
+    sandboxed code
+
+    @see checkProcessWideRegistration()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isProcessWideRegistrationAllowed() [flags=RET_VALUE_ONLY] {
+    return !qore_caller_is_sandboxed();
+}
+
 //! Returns @ref True if the code that calls into the library is restricted from any of the given functional domains
 /** A module is a capability: its code runs with its own %Program's options, whatever the restrictions of the code
     that calls it.  Library code that performs an operation of a functional domain on behalf of its caller, such as

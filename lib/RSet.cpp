@@ -1421,6 +1421,14 @@ bool RObject::deferScanToPinnedMember() {
     return deferred;
 }
 
+bool RObject::hasInValidSet(const RObject& o) {
+    // the rsection keeps this object's set in place, and so alive, while it is read (#6792)
+    QoreSafeRSectionReadLocker sl(rml);
+    sl.acquireRSection();
+    RSet* rs = rset.load(std::memory_order_relaxed);
+    return rs && rs == o.rset.load(std::memory_order_acquire) && rs->active() && !rs->isStale();
+}
+
 RObject* RSet::findPinnedMember(RObject* exclude) {
     QoreAutoRWReadLocker al(rwl);
     if (!valid) {

@@ -36,6 +36,8 @@
 %exec-class AlignRenameTableTest
 
 #! getAlignSql() with a description of another table name gives the SQL that renames the table (issue #6721)
+#! and a table_map, sequence_map, function_map or type_map entry whose target exists does not rename the source
+#! (issue #6729)
 /** getAlignSqlUnlocked(), which holds the lock of the table, called getRenameSql(), which takes it again: the
     alignment raised LOCK-ERROR ("called Mutex::lock() twice"); the comment of the table was then read under the new
     name (PostgreSQL: an error, MySQL and SQL Server: wrong comment SQL), a table renamed with
@@ -279,5 +281,128 @@ class AlignRenameTableTest inherits QUnit::Test {
         # the schema is aligned
         assertEq((), (new Database(ds)).getDatabase().getAlignSql(schema - "table_map"),
             db + ": nothing is left to align");
+        checkMapTargetExists(ds, db);
+    }
+
+    #! the foreign constraints that reference an existing table_map target are checked as for any table (issue #6729)
+    private checkMapTargetForeignConstraints(Datasource ds, string db) {
+        on_exit dropTables(ds, ("art_c", "art_b", "art_a"));
+        dropTables(ds, ("art_c", "art_b", "art_a"));
+        ds.exec("create table art_a (id int)");
+        ds.exec("create table art_b (id int not null, k int not null, constraint art_b_uk unique (k))");
+        ds.exec("create table art_c (id int, k int, constraint art_c_fk foreign key (k) references art_b (k))");
+        ds.commit();
+        # the template of art_b moves its unique key, which the foreign constraint of art_c references
+        hash<auto!> schema = {
+            "tables": {
+                "art_b": {
+                    "columns": {"id": {"qore_type": Type::Int, "notnull": True},
+                        "k": {"qore_type": Type::Int, "notnull": True}},
+                    "unique_constraints": {"art_b_uk2": {"columns": ("id", "k")}},
+                },
+                "art_c": {
+                    "columns": {"id": {"qore_type": Type::Int}, "k": {"qore_type": Type::Int}},
+                    "foreign_constraints": {"art_c_fk": {"columns": ("k",), "table": "art_b",
+                        "target_columns": ("k",)}},
+                },
+            },
+        };
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", \(new Database(ds)).getDatabase().getAlignSql(), schema,
+            db + ": without table_map");
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", \(new Database(ds)).getDatabase().getAlignSql(),
+            schema + {"table_map": {"art_a": "art_b"}}, db + ": with a table_map entry whose target exists");
+    }
+
+    #! a function_map or type_map entry whose target exists does not rename the source (issue #6729)
+    private checkPgsqlMapTargetExists(Datasource ds) {
+        on_exit {
+            ds.rollback();
+            foreach string sql in (("drop function art_fa()", "drop function art_fb()", "drop type art_ta",
+                    "drop type art_tb")) {
+                try {
+                    ds.exec(sql);
+                    ds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    ds.rollback();
+                }
+            }
+        }
+        foreach string n in (("art_fa", "art_fb")) {
+            ds.exec("create function " + n + "() returns int language sql as 'select 1'");
+        }
+        ds.exec("create type art_ta as (a int)");
+        ds.exec("create type art_tb as (b int)");
+        ds.commit();
+        AbstractDatabase adb = (new Database(ds)).getDatabase();
+        assertEq((), adb.getAlignSql({"function_map": {"art_fa": "art_fb"}}), "pgsql: no function rename");
+        adb = (new Database(ds)).getDatabase();
+        assertEq((), adb.getAlignSql({"type_map": {"art_ta": "art_tb"}}), "pgsql: no type rename");
+        # the source is renamed to a target that does not exist
+        ds.exec("drop function art_fb()");
+        ds.exec("drop type art_tb");
+        ds.commit();
+        adb = (new Database(ds)).getDatabase();
+        assertEq(1, adb.getAlignSql({"function_map": {"art_fa": "art_fb"}}).size(), "pgsql: the function is renamed");
+        adb = (new Database(ds)).getDatabase();
+        assertEq(1, adb.getAlignSql({"type_map": {"art_ta": "art_tb"}}).size(), "pgsql: the type is renamed");
+    }
+
+    #! a table_map or sequence_map entry whose target exists does not rename the source (issue #6729)
+    private checkMapTargetExists(Datasource ds, string db) {
+        dropTables(ds, ("art_c", "art_a", "art_b"));
+        on_exit dropTables(ds, ("art_a", "art_b"));
+        map ds.exec($1), getDescription(ds, "art_a").getCreateSql();
+        map ds.exec($1), getDescription(ds, "art_b").getCreateSql();
+        ds.commit();
+        # the target is aligned as described; the source is left as it is
+        hash<auto!> desc = {"columns": {"id": {"qore_type": Type::Int}, "x": {"qore_type": Type::Int}}};
+        AbstractDatabase adb = (new Database(ds)).getDatabase();
+        list<auto> sql = adb.getAlignSql({"table_map": {"art_a": "art_b"}, "tables": {"art_b": desc}});
+        assertEq((), (select sql, $1.lwr() =~ /(\bsp_|\b)rename\b/), db + ": no rename: " + sprintf("%y", sql));
+        map ds.exec($1), sql;
+        ds.commit();
+        assertTrue((new Table(ds, "art_a")).checkExistence(), db + ": the source table is left");
+        assertTrue((new Table(ds, "art_b")).describe().hasKey("x"), db + ": the target is aligned");
+        # without a description of the target
+        adb = (new Database(ds)).getDatabase();
+        assertEq((), adb.getAlignSql({"table_map": {"art_a": "art_b"}}), db + ": no rename without a description");
+
+        if (db != "sqlite") {
+            checkMapTargetForeignConstraints(ds, db);
+        }
+
+        if (!adb.supportsSequences()) {
+            return;
+        }
+        on_exit {
+            ds.rollback();
+            foreach string n in (("art_sa", "art_sb")) {
+                try {
+                    ds.exec("drop sequence " + n);
+                    ds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    ds.rollback();
+                }
+            }
+        }
+        map ds.exec($1), adb.getAlignSql({"sequences": {"art_sa": {}, "art_sb": {}}});
+        ds.commit();
+        adb = (new Database(ds)).getDatabase();
+        sql = adb.getAlignSql({"sequence_map": {"art_sa": "art_sb"}, "sequences": {"art_sb": {"increment": 5}}});
+        assertEq((), (select sql, $1.lwr() =~ /(\bsp_|\b)rename\b/),
+            db + ": no sequence rename: " + sprintf("%y", sql));
+        # the existing target is aligned as described
+        assertEq(1, (select sql, $1.lwr() =~ /art_sb.*increment/s).size(),
+            db + ": the target sequence is aligned: " + sprintf("%y", sql));
+        if (db == "pgsql") {
+            checkPgsqlMapTargetExists(ds);
+        }
+        # a source sequence is renamed to a target that does not exist
+        ds.exec("drop sequence art_sb");
+        ds.commit();
+        adb = (new Database(ds)).getDatabase();
+        sql = adb.getAlignSql({"sequence_map": {"art_sa": "art_sb"}, "sequences": {"art_sb": {}}});
+        assertEq(1, (select sql, $1.lwr() =~ /(\bsp_|\b)rename\b/).size(),
+            db + ": the sequence is renamed: " + sprintf("%y", sql));
     }
 }

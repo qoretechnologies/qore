@@ -4560,7 +4560,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         QoreModuleMaskAddedClearHelper mask_added_clear(userModule->getProgram());
 
         // issue #3212: warning sink
-        userModule->getProgram()->parsePending(moduleCode.c_str(), path, &xsink, &xsink, warning_mask);
+        qore_program_private::get(*userModule->getProgram())->parsePending(moduleCode, modulePath.c_str(), &xsink,
+            &xsink, warning_mask);
         if (xsink) {
             xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
             return nullptr;
@@ -4583,7 +4584,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             filePath += file->c_str();
 
             std::string fileCode = QoreDir::get_file_content(filePath);
-            userModule->getProgram()->parsePending(fileCode.c_str(), filePath.c_str(), &xsink, &xsink,
+            qore_program_private::get(*userModule->getProgram())->parsePending(fileCode, filePath.c_str(), &xsink, &xsink,
                 file_warning_mask);
             if (xsink) {
                 xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
@@ -6149,6 +6150,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen, owner, owner_pgm_id)) {
         return nullptr;
     }
+    // the reference to the sandbox that checkShadowingLoad() returns is handed over to the load frame below; it is
+    // released if the load is refused before
+    ReferenceHolder<QoreSandboxManager> owner_holder(owner, nullptr);
     if (!trusted && !qore_caller_may_load_native_code()) {
         // native code is trusted code: no sandbox governs it, so code that is not trusted cannot have the process map
         // native code that it chose (qore#6776); a compiled module with its source next to it is loaded as a source
@@ -6158,8 +6162,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
             "the module path (see the trust model of native code in the sandboxing documentation)", path);
         return nullptr;
     }
-    // recorded on the module when it is registered
-    QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
+    // recorded on the module when it is registered; takes over the reference of owner
+    QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner_holder.release(), owner_pgm_id);
     // library code loaded by code that is not trusted does not resolve its dependencies through the module paths of
     // that code; checked before the barrier is set
     if (trusted && path_pgm && !qore_program_private::get(*path_pgm)->library_module && qore_caller_is_untrusted()) {

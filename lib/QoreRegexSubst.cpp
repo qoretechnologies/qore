@@ -39,7 +39,8 @@
 #include <strings.h>
 
 // constructor used when parsing
-QoreRegexSubst::QoreRegexSubst() : QoreRegexBase(new QoreString), newstr(new QoreString) {
+QoreRegexSubst::QoreRegexSubst()
+        : QoreRegexBase(new QoreString(QCS_UTF8)), newstr(new QoreString(QCS_UTF8)) {
     //printd(5, "QoreRegexSubst::QoreRegexSubst() this=%p\n", this);
 }
 
@@ -195,7 +196,7 @@ static void concat_case_char(ExceptionSink& xsink, QoreString* cstr, char ch,
 
 // static function
 int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* ovector, int olen, const char* ptr,
-        size_t len, const char* target, int rc) {
+        size_t len, const char* target, int rc, const QoreEncoding* result_encoding) {
     CaseMode case_mode = CM_NONE;
     bool next_upper = false;
     bool next_lower = false;
@@ -209,14 +210,31 @@ int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* o
         if (*ptr == '\\') {
             ++ptr;
             if (end - ptr >= 3 && isoctaldigit(*ptr) && isoctaldigit(*(ptr + 1)) && isoctaldigit(*(ptr + 2))) {
-                int val = (*ptr - 48) * 64 + (*(ptr + 1) - 48) * 8 + (*(ptr + 2) - 48);
-                if (val > 255) {
-                    xsink.raiseException("REGEX-OCTAL-ERROR", "octal constant \\%c%c%c is too large "
-                        "(decimal %d; must be < 256)", *ptr, *(ptr + 1), *(ptr + 2), val);
+                // Consecutive octal escapes are bytes in the result encoding. One character can span several.
+                QoreString bytes(result_encoding);
+                do {
+                    unsigned val = (*ptr - '0') * 64 + (ptr[1] - '0') * 8 + (ptr[2] - '0');
+                    if (val > 255) {
+                        xsink.raiseException("REGEX-OCTAL-ERROR", "octal constant \\%c%c%c is too large "
+                            "(decimal %u; must be < 256)", *ptr, ptr[1], ptr[2], val);
+                        return -1;
+                    }
+                    bytes.concat(static_cast<char>(val));
+                    ptr += 3;
+                    if (end - ptr < 4 || *ptr != '\\' || !isoctaldigit(ptr[1]) || !isoctaldigit(ptr[2])
+                            || !isoctaldigit(ptr[3])) {
+                        break;
+                    }
+                    if (!(iterations++ % 100) && qore_check_cancel(&xsink, "regular expression replacement")) {
+                        return -1;
+                    }
+                    ++ptr;
+                } while (true);
+                TempEncodingHelper utf8(&bytes, QCS_UTF8, &xsink);
+                if (xsink) {
                     return -1;
                 }
-                concat_case_char(xsink, cstr, static_cast<char>(val), case_mode, next_upper, next_lower);
-                ptr += 3;
+                concat_case(xsink, cstr, utf8->c_str(), utf8->size(), case_mode, next_upper, next_lower);
             } else if (*(ptr) == '\\' || *(ptr) == '$') {
                 concat_case_char(xsink, cstr, *(ptr++), case_mode, next_upper, next_lower);
             } else if (*ptr == 'a') {
@@ -287,7 +305,15 @@ int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* o
                     case_mode, next_upper, next_lower);
             }
         } else {
-            concat_case_char(xsink, cstr, *(ptr++), case_mode, next_upper, next_lower);
+            size_t char_len = 1;
+            if (static_cast<unsigned char>(*ptr) >= 0x80 && (case_mode != CM_NONE || next_upper || next_lower)) {
+                char_len = q_get_char_len(QCS_UTF8, ptr, end - ptr, &xsink);
+                if (xsink) {
+                    return -1;
+                }
+            }
+            concat_case(xsink, cstr, ptr, char_len, case_mode, next_upper, next_lower);
+            ptr += char_len;
         }
         if (xsink) {
             return -1;
@@ -304,10 +330,14 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
     if (*xsink) {
         return nullptr;
     }
+    const char* subject = t->c_str();
+    const size_t subject_len = t->size();
+    const QoreEncoding* subject_encoding = t.is_temp() ? target->getEncoding() : QCS_UTF8;
 
-    SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode);
+    SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode(nullptr, QCS_UTF8));
 
-    const char* ptr = t->c_str();
+    TempEncodingHelper replacement;
+    const char* ptr = subject;
     // detect infinite recursion (empty pattern matches)
     PCRE2_SIZE last_match = PCRE2_UNSET;
 
@@ -324,13 +354,13 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
             return nullptr;
         }
 
-        PCRE2_SIZE offset = ptr - t->c_str();
-        if (offset >= t->size()) {
+        PCRE2_SIZE offset = ptr - subject;
+        if (offset >= subject_len) {
             break;
         }
-        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(subject), subject_len, offset,
             match_options, md);
-        //int rc = pcre_exec(p, 0, t->c_str(), t->strlen(), offset, 0, ovector, SUBST_OVECSIZE);
+        //int rc = pcre_exec(p, 0, subject, t->strlen(), offset, 0, ovector, SUBST_OVECSIZE);
 
         //printd(5, "QoreRegexSubst::exec() prec_exec() rc: %d ovector[0]: %d\n", rc, ovector[0]);
         // rc == 0 means the ovector was not large enough, which cannot happen when it is allocated
@@ -364,15 +394,19 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
             tstr->concat(ptr, ovector[0] - offset);
         }
 
-        if (concat(*xsink, *tstr, ovector, SUBST_LASTELEM, nstr ? nstr->c_str() : "", nstr ? nstr->size() : 0,
-                t->c_str(), rc)) {
+        // The replacement and captured bytes share PCRE2's UTF-8 working encoding.
+        if (nstr && !replacement && !replacement.set(nstr, QCS_UTF8, xsink)) {
+            return nullptr;
+        }
+        if (concat(*xsink, *tstr, ovector, SUBST_LASTELEM, replacement ? replacement->c_str() : "",
+                replacement ? replacement->size() : 0, subject, rc, subject_encoding)) {
             assert(*xsink);
             return nullptr;
         }
 
-        //printd(5, "QoreRegexSubst::exec() '%s' =~ s/?/%s/%s offset=%d, 0=%d, 1=%d ('%s')\n", t->c_str(), nstr->c_str(), global ? "g" : "", offset, ovector[0], ovector[1], tstr->c_str());
+        //printd(5, "QoreRegexSubst::exec() '%s' =~ s/?/%s/%s offset=%d, 0=%d, 1=%d ('%s')\n", subject, nstr->c_str(), global ? "g" : "", offset, ovector[0], ovector[1], tstr->c_str());
 
-        ptr = t->c_str() + ovector[1];
+        ptr = subject + ovector[1];
         // A byte-matching pattern such as \C can end inside a UTF-8 character. In that case,
         // retain PCRE2's offset validation (and BADUTFOFFSET error) on the next match.
         match_options = (static_cast<unsigned char>(*ptr) & 0xc0) == 0x80 ? 0 : PCRE2_NO_UTF_CHECK;
@@ -383,10 +417,14 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
     }
 
     //printd(5, "QoreRegexSubst::exec() *ptr=%d ('%s') tstr='%s'\n", *ptr, ptr, tstr->c_str());
-    tstr->concat(ptr, t->size() - static_cast<size_t>(ptr - t->c_str()));
+    if (last_match == PCRE2_UNSET) {
+        // Preserve the exact input bytes, including redundant shift sequences in a stateful encoding.
+        return new QoreStringNode(*target);
+    }
+    tstr->concat(ptr, subject_len - static_cast<size_t>(ptr - subject));
 
     //printd(5, "QoreRegexSubst::exec() this=%p: returning '%s'\n", this, tstr->c_str());
-    return tstr.release();
+    return qore_regex_subject_result(tstr.release(), subject_encoding, xsink);
 }
 
 // called for run-time evaluation of parse-time-created objects
@@ -400,6 +438,9 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
     if (*xsink) {
         return nullptr;
     }
+    const char* subject = t->c_str();
+    const size_t subject_len = t->size();
+    const QoreEncoding* subject_encoding = t.is_temp() ? target->getEncoding() : QCS_UTF8;
 
     // get named capture group info
     uint32_t namecount = 0;
@@ -411,8 +452,8 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
         pcre2_pattern_info(p, PCRE2_INFO_NAMETABLE, &nametable);
     }
 
-    SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode);
-    const char* ptr = t->c_str();
+    SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode(nullptr, QCS_UTF8));
+    const char* ptr = subject;
     PCRE2_SIZE last_match = (PCRE2_SIZE)-1;
 
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(p, nullptr);
@@ -428,11 +469,11 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
             return nullptr;
         }
 
-        PCRE2_SIZE offset = ptr - t->c_str();
-        if (offset >= t->size()) {
+        PCRE2_SIZE offset = ptr - subject;
+        if (offset >= subject_len) {
             break;
         }
-        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+        int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(subject), subject_len, offset,
             match_options, md);
         if (rc < 1) {
             // a subject that is not valid UTF-8 is not given back unchanged as if nothing matched (qore#6553)
@@ -468,8 +509,8 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
             return nullptr;
         }
 
-        match_info->setKeyValue("match", new QoreStringNode(t->c_str() + ovector[0],
-            ovector[1] - ovector[0]), xsink);
+        match_info->setKeyValue("match", qore_regex_capture(subject + ovector[0],
+            ovector[1] - ovector[0], subject_encoding, xsink), xsink);
         match_info->setKeyValue("offset", static_cast<int64>(ovector[0]), xsink);
         match_info->setKeyValue("length", static_cast<int64>(ovector[1] - ovector[0]), xsink);
 
@@ -481,8 +522,8 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
                 if (ovector[pos] == (PCRE2_SIZE)-1) {
                     groups->push(QoreValue(), xsink);
                 } else {
-                    groups->push(new QoreStringNode(t->c_str() + ovector[pos],
-                        ovector[pos + 1] - ovector[pos]), xsink);
+                    groups->push(qore_regex_capture(subject + ovector[pos],
+                        ovector[pos + 1] - ovector[pos], subject_encoding, xsink), xsink);
                 }
             }
             match_info->setKeyValue("groups", groups.release(), xsink);
@@ -496,10 +537,13 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
                 int n = (tabptr[0] << 8) | tabptr[1];
                 const char* name = reinterpret_cast<const char*>(tabptr + 2);
                 if (n < rc && ovector[2 * n] != (PCRE2_SIZE)-1) {
-                    named->setKeyValue(name, new QoreStringNode(t->c_str() + ovector[2 * n],
-                        ovector[2 * n + 1] - ovector[2 * n]), xsink);
+                    qore_regex_set_named_capture(**named, name, qore_regex_capture(subject + ovector[2 * n],
+                        ovector[2 * n + 1] - ovector[2 * n], subject_encoding, xsink), xsink);
                 } else {
-                    named->setKeyValue(name, QoreValue(), xsink);
+                    qore_regex_set_named_capture(**named, name, QoreValue(), xsink);
+                }
+                if (*xsink) {
+                    return nullptr;
                 }
                 tabptr += name_entry_size;
             }
@@ -520,9 +564,12 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
 
         // use the callback's return value as the replacement
         QoreStringValueHelper replacement(*rv);
-        tstr->concat(replacement->c_str(), replacement->size());
+        tstr->concat(*replacement, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
 
-        ptr = t->c_str() + ovector[1];
+        ptr = subject + ovector[1];
         // as in exec(): a byte-matching pattern such as \C can end inside a UTF-8 character, where the next match keeps
         // PCRE2's offset validation
         match_options = (static_cast<unsigned char>(*ptr) & 0xc0) == 0x80 ? 0 : PCRE2_NO_UTF_CHECK;
@@ -532,9 +579,13 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
         }
     }
 
-    tstr->concat(ptr, t->size() - static_cast<size_t>(ptr - t->c_str()));
+    if (last_match == PCRE2_UNSET) {
+        // Preserve the exact input bytes, including redundant shift sequences in a stateful encoding.
+        return new QoreStringNode(*target);
+    }
+    tstr->concat(ptr, subject_len - static_cast<size_t>(ptr - subject));
 
-    return tstr.release();
+    return qore_regex_subject_result(tstr.release(), subject_encoding, xsink);
 }
 
 void QoreRegexSubst::setGlobal() {

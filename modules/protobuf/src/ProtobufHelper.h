@@ -54,7 +54,17 @@ public:
     DLLLOCAL static bool hashToMessage(const QoreHashNode* hash,
         google::protobuf::Message* msg, ExceptionSink* xsink);
 
+    //! Returns the hash key of an extension field: its full name in square brackets
+    DLLLOCAL static std::string extensionKey(const google::protobuf::FieldDescriptor* field);
+
+    //! Returns an extension field that is set in the message or in a message nested in it, if any
+    DLLLOCAL static const google::protobuf::FieldDescriptor* findSetExtension(const google::protobuf::Message& msg);
+
 private:
+    //! Returns the extension field of the message type for a hash key (\c "[full.name]" or \c "full.name"), if any
+    DLLLOCAL static const google::protobuf::FieldDescriptor* findExtension(const google::protobuf::Descriptor* desc,
+        const char* key);
+
     DLLLOCAL static QoreValue fieldToQore(const google::protobuf::Message& msg,
         const google::protobuf::FieldDescriptor* field,
         const google::protobuf::Reflection* ref, const char* where, ExceptionSink* xsink);

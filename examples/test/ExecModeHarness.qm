@@ -65,6 +65,14 @@ module ExecModeHarness {
 
     The trace is removed from the output; any other output on stderr follows the output on stdout.
 
+    The warnings of the module loader (see ModeRunResult::loader_warnings) are not the command's output, and a run
+    with them passes, as when the tests run with other binary modules than the build that compiled its AOT modules,
+    except for an AOT module of the build that is out of date because one of its Qore sources has changed since it
+    was compiled (see check_loader_warnings()): the run then loaded that module's source, which native execution
+    compiles in the run, on the threads that call its code, so that a run that bounds the time of its requests can
+    fail, and it does not test the build's module (qore#6731); run(), run_any() and run_ir_tier() then fail at once,
+    naming the AOT modules to rebuild.
+
     run() runs a command with an execution mode, checks it and returns its output; run_any() does the same for any
     command and checks only commands with an execution mode; run_ir_tier() runs tiered execution on the IR tier;
     run_command(), check_native() and check_ir_tier() serve harnesses that inspect the result or the trace
@@ -176,6 +184,45 @@ public bool sub is_native_compilation(string line) {
 }
 
 #! returns the execution mode given with \c --exec-mode in a command, if any
+#! returns the Qore source named by a module loader warning of an AOT module that is out of date, if it names one
+/** @param warning a module loader warning (see is_loader_warning())
+
+    @return the Qore source (a \c .qm, \c .qc, \c .ql or \c .q file) that has changed since the AOT module was
+    compiled, or @ref nothing if the warning is about another change, such as a binary module that the AOT module was
+    compiled against, or not about an AOT module that is out of date
+*/
+public *string sub get_changed_qore_source(string warning) {
+    *list<*string> m = (warning =~ x/ is out of date: its source '(.*)' has changed since it was compiled/);
+    if (m && m[0] =~ /\.(qm|qc|ql|q)$/) {
+        return m[0];
+    }
+}
+
+#! checks that no AOT module of the run was out of date because one of its Qore sources has changed
+/** The module loader loads the source of an AOT module of the build that is out of date in its place, with a warning
+    (see ModeRunResult::loader_warnings).  When a Qore source of the module has changed, as after an edit of a
+    \c qlib module whose AOT module was not rebuilt, the run does not test the build's module, and native execution
+    compiles the source in the run, on the threads that call its code: the first call of a function through a
+    module's server and client code then lasts as long as the compilation of the whole path, and a run that bounds
+    the time of its requests can fail under load (qore#6731).  Other warnings, such as for an AOT module whose
+    binary modules have changed, as when the tests run with other binary modules than the build that compiled it,
+    are about the environment, and the run passes.
+
+    @param r the result of the run
+
+    @throw EXEC-MODE-HARNESS-ERROR the run loaded the source of a module whose AOT module is out of date because one
+    of its Qore sources has changed; the message names the AOT modules to rebuild
+*/
+public sub check_loader_warnings(hash<ModeRunResult> r) {
+    list<string> stale = select r.loader_warnings, get_changed_qore_source($1);
+    if (stale) {
+        throw "EXEC-MODE-HARNESS-ERROR", sprintf("the run loaded the source of %d module%s in place of its AOT "
+            "module, which is out of date: one of its Qore sources has changed since it was compiled; rebuild the "
+            "AOT module%s (cmake --build <build> --target <Module>-qmod) and run the test again:\n%s",
+            stale.size(), stale.size() == 1 ? "" : "s", stale.size() == 1 ? "" : "s", stale.join("\n"));
+    }
+}
+
 /** @return the execution mode, or nothing if the command has no \c --exec-mode option, as when it runs a compiled
     executable or uses the default execution mode
 
@@ -295,11 +342,13 @@ public sub check_ir_tier(hash<ModeRunResult> r) {
 
     @return the output on stdout followed by the output on stderr that is not part of the trace
 
-    @throw EXEC-MODE-HARNESS-ERROR the command has no <tt>--exec-mode=tiered</tt> option
+    @throw EXEC-MODE-HARNESS-ERROR the command has no <tt>--exec-mode=tiered</tt> option, or loaded the source of a
+    module whose AOT module is out of date (see check_loader_warnings())
     @throw EXEC-MODE-NATIVE-ERROR, EXEC-MODE-IR-ERROR see check_ir_tier()
 */
 public string sub run_ir_tier(string command) {
     hash<ModeRunResult> r = run_command(command, NOTHING, IRTierEnv);
+    check_loader_warnings(r);
     check_ir_tier(r);
     return r.out;
 }
@@ -311,11 +360,13 @@ public string sub run_ir_tier(string command) {
 
     @return the output on stdout followed by the output on stderr that is not part of the trace
 
-    @throw EXEC-MODE-HARNESS-ERROR the command has no or more than one \c --exec-mode option
+    @throw EXEC-MODE-HARNESS-ERROR the command has no or more than one \c --exec-mode option, or loaded the
+    source of a module whose AOT module is out of date (see check_loader_warnings())
     @throw EXEC-MODE-NATIVE-ERROR see check_native()
 */
 public string sub run(string command, *NativeCheck check) {
     hash<ModeRunResult> r = run_command(command);
+    check_loader_warnings(r);
     check_native(r, check);
     return r.out;
 }
@@ -330,10 +381,13 @@ public string sub run(string command, *NativeCheck check) {
 
     @return the output on stdout followed by the output on stderr that is not part of the trace
 
+    @throw EXEC-MODE-HARNESS-ERROR the command loaded the source of a module whose AOT module is out of date (see
+    check_loader_warnings())
     @throw EXEC-MODE-NATIVE-ERROR see check_native()
 */
 public string sub run_any(string command, *NativeCheck check) {
     hash<ModeRunResult> r = run_command(command);
+    check_loader_warnings(r);
     if (r.mode) {
         check_native(r, check);
     }
