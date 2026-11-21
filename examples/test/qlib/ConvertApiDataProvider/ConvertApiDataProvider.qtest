@@ -941,9 +941,9 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
                 handler.rate_limited = 0;
                 handler.retry_after = "1";
             }
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             provider.getChildProviderEx("compress-pdf").doRequest({"url": "https://example.com/a.pdf"});
-            assertTrue(now_us() - start < 15s);
+            assertTrue(microseconds(clock_get_monotonic_us()) - start < 15s);
             assertEq(2, handler.requests.size());
             assertEq(("convert/pdf/to/compress", "convert/pdf/to/compress"), (map $1.path, handler.requests));
         }

@@ -346,11 +346,11 @@ public class CohereRestClientTest inherits QUnit::Test {
     #! Drives the public polling API using socket readiness, with a single bounded deadline
     private drivePing(AbstractPollOperation op) {
         on_exit op.abort();
-        date deadline = now_us() + 15s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 15s;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> info = op.continuePoll();
             if (info) {
-                timeout remaining = deadline - now_us();
+                timeout remaining = deadline - microseconds(clock_get_monotonic_us());
                 assertTrue(remaining > 0, "ping completes before deadline");
                 assertTrue(exists Socket::poll((info,), remaining), "ping socket becomes ready");
             }

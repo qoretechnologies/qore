@@ -661,8 +661,8 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
 
         # Wait up to WatchEventTimeoutSec seconds for the observer to fire for our new order
         bool matched;
-        date deadline = now_us() + seconds(WatchEventTimeoutSec);
-        while (now_us() < deadline) {
+        date deadline = microseconds(clock_get_monotonic_us()) + seconds(WatchEventTimeoutSec);
+        while (microseconds(clock_get_monotonic_us()) < deadline) {
             *hash<auto> ev;
             try {
                 ev = eq.get(1s);

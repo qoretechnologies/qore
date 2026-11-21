@@ -646,8 +646,8 @@ class HttpClientIoTest inherits QUnit::Test {
         # TEST-NET-1 is reserved and unrouted, so neither candidate can settle and the race stays in
         # flight for as long as this test needs it
         # drive the non-blocking acquisition just enough to start the race
-        date start = now_us();
-        while (!mgr.getRaceCount() && (now_us() - start) < 10s) {
+        int start = clock_get_monotonic_us();
+        while (!mgr.getRaceCount() && (microseconds(clock_get_monotonic_us() - start)) < 10s) {
             try {
                 *HttpClientIo::HttpClientConnection conn_out;
                 mgr.acquireConnectionAsync("https://192.0.2.1:443", \conn_out);
@@ -1119,7 +1119,7 @@ class HttpClientIoTest inherits QUnit::Test {
 
         AbstractPollOperation poll_op = sock.startPollHttp2ClientMultiplex();
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         date timeout = 10s;
         while (True) {
             string state = poll_op.getState();
@@ -1130,7 +1130,7 @@ class HttpClientIoTest inherits QUnit::Test {
                 testSkip("HTTP/2 connection closed during establishment");
                 return;
             }
-            if (now_us() - start > timeout) {
+            if (microseconds(clock_get_monotonic_us() - start) > timeout) {
                 testSkip("HTTP/2 connection establishment timed out");
                 return;
             }
@@ -1968,9 +1968,9 @@ class HttpClientIoTest inherits QUnit::Test {
         # Every acquireConnectionAsync() call must return promptly without
         # parking the calling thread (the whole point of V2): time each call.
         *HttpClientIo::HttpClientConnection cout;
-        date c0 = now_us();
+        int c0 = clock_get_monotonic_us();
         *EventNotifier n = mgr.acquireConnectionAsync(mSslUrl, \cout);
-        assertTrue(now_us() - c0 < 3s,
+        assertTrue(microseconds(clock_get_monotonic_us() - c0) < 3s,
             "initial acquireConnectionAsync did not block the caller");
         int iters = 0;
         while (n) {
@@ -1978,9 +1978,9 @@ class HttpClientIoTest inherits QUnit::Test {
             mgr.getController().waitForNotifier(n, 15s, 45s);
             n.acknowledge();
             delete n;
-            date c1 = now_us();
+            int c1 = clock_get_monotonic_us();
             n = mgr.acquireConnectionAsync(mSslUrl, \cout);
-            assertTrue(now_us() - c1 < 3s,
+            assertTrue(microseconds(clock_get_monotonic_us() - c1) < 3s,
                 "acquireConnectionAsync re-entry did not block the caller");
         }
         assertTrue(cout.isReady() && inlist(cout.getProtocol(), ("h2", "h3")),
@@ -2169,8 +2169,8 @@ class HttpClientIoTest inherits QUnit::Test {
 
         # Read all data from the streaming response
         string received = "";
-        date end_time = now_us() + 30s;
-        while (now_us() < end_time) {
+        int end_time = clock_get_monotonic_us() + 30000000;
+        while (clock_get_monotonic_us() < end_time) {
             auto data = h2stream.readData(5s);
             if (!exists data) {
                 continue;
@@ -2225,8 +2225,8 @@ class HttpClientIoTest inherits QUnit::Test {
         h2stream.writesDone();
 
         # startStreaming and read to completion so we don't leave an orphaned stream
-        date end_time = now_us() + 10s;
-        while (now_us() < end_time && !h2stream.isDone()) {
+        int end_time = clock_get_monotonic_us() + 10000000;
+        while (clock_get_monotonic_us() < end_time && !h2stream.isDone()) {
             auto data = h2stream.readData(1s);
             if (exists data && data.typeCode() == NT_HASH && data.end_stream) {
                 break;
@@ -3153,8 +3153,8 @@ class HttpClientIoTest inherits QUnit::Test {
             }
 
             # Read the server's response and end_stream marker
-            date end_time = now_us() + 10s;
-            while (now_us() < end_time) {
+            int end_time = clock_get_monotonic_us() + 10000000;
+            while (clock_get_monotonic_us() < end_time) {
                 auto data = h2stream.readData(5s);
                 if (!exists data) {
                     continue;
@@ -3203,9 +3203,9 @@ class HttpClientIoTest inherits QUnit::Test {
         h2stream.sendData(binary(), True);
 
         # Read all echoed data until end_stream
-        date end_time = now_us() + 10s;
+        int end_time = clock_get_monotonic_us() + 10000000;
         bool got_end_stream = False;
-        while (now_us() < end_time) {
+        while (clock_get_monotonic_us() < end_time) {
             auto rdata = h2stream.readData(5s);
             if (!exists rdata) {
                 continue;
@@ -3277,8 +3277,8 @@ class HttpClientIoTest inherits QUnit::Test {
         # Drain the response
         binary received_body = binary();
         bool got_end_stream = False;
-        date deadline = now_us() + 10s;
-        while (now_us() < deadline) {
+        int deadline = clock_get_monotonic_us() + 10000000;
+        while (clock_get_monotonic_us() < deadline) {
             auto rdata = h1stream.readData(2s);
             if (!exists rdata) {
                 continue;
@@ -3368,8 +3368,8 @@ class HttpClientIoTest inherits QUnit::Test {
 
         # Drain to end_stream
         bool got_end_stream = False;
-        date deadline = now_us() + 10s;
-        while (now_us() < deadline) {
+        int deadline = clock_get_monotonic_us() + 10000000;
+        while (clock_get_monotonic_us() < deadline) {
             auto rdata = h1stream.readData(1s);
             if (!exists rdata) {
                 continue;
@@ -3389,8 +3389,8 @@ class HttpClientIoTest inherits QUnit::Test {
     private *binary readBodyUntil(HttpClientIo::Http1ClientStreamHandle h1stream,
             binary needle, timeout total) {
         binary acc = binary();
-        date deadline = now_us() + total;
-        while (now_us() < deadline) {
+        int deadline = clock_get_monotonic_us() + total * 1000;
+        while (clock_get_monotonic_us() < deadline) {
             auto rdata = h1stream.readData(500ms);
             if (!exists rdata) {
                 continue;
@@ -3488,8 +3488,8 @@ class HttpClientIoTest inherits QUnit::Test {
         # Read all body data — same pattern as H2 streaming tests
         # readData() returns: binary (body), hash with end_stream (done), NOTHING (timeout)
         binary received = binary();
-        date end_time = now_us() + 30s;
-        while (now_us() < end_time) {
+        int end_time = clock_get_monotonic_us() + 30000000;
+        while (clock_get_monotonic_us() < end_time) {
             auto data = h3stream.readData(5s);
             if (!exists data) {
                 continue;  # timeout, retry
@@ -3545,8 +3545,8 @@ class HttpClientIoTest inherits QUnit::Test {
 
         # Read response — server echoes the body
         binary received = binary();
-        date end_time = now_us() + 30s;
-        while (now_us() < end_time) {
+        int end_time = clock_get_monotonic_us() + 30000000;
+        while (clock_get_monotonic_us() < end_time) {
             auto data = h3stream.readData(5s);
             if (!exists data) {
                 continue;  # timeout, retry
@@ -3599,8 +3599,8 @@ class HttpClientIoTest inherits QUnit::Test {
             "sendData should reject response-only streaming requests");
         h3stream.writesDone();
 
-        date end_time = now_us() + 10s;
-        while (now_us() < end_time && !h3stream.isDone()) {
+        int end_time = clock_get_monotonic_us() + 10000000;
+        while (clock_get_monotonic_us() < end_time && !h3stream.isDone()) {
             auto data = h3stream.readData(1s);
             if (exists data && data.typeCode() == NT_HASH && data.end_stream) {
                 break;

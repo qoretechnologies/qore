@@ -1738,9 +1738,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(0, gate_rc, "shutdown: handler entered read loop");
 
         # Measure shutdown time
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         server.stop();
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us()) - start;
         int elapsed_ms = int(elapsed) * 1000 / 1000000;
 
         # Shutdown should be fast (< 5s), not 30s
@@ -1981,18 +1981,18 @@ l50Xb2GWQesIt9k5jF5IOw==
             string key = sprintf("s%d", idx);
             background sub () {
                 on_exit done.dec();
-                date start = now_us();
+                int start_us = clock_get_monotonic_us();
                 try {
                     hash<auto> resp = mgr.request(url, "POST", "/slow",
                         {"Content-Type": "application/octet-stream"},
                         binary(sprintf("payload-%d", idx)));
                     AutoLock al(results_lock);
                     results{key} = {"ok": True, "status": resp.status_code,
-                                     "elapsed_us": (now_us() - start).durationMilliseconds()};
+                                     "elapsed_us": (clock_get_monotonic_us() - start_us) / 1000};
                 } catch (hash<ExceptionInfo> ex) {
                     AutoLock al(results_lock);
                     results{key} = {"err": ex.err, "desc": ex.desc,
-                                     "elapsed_us": (now_us() - start).durationMilliseconds()};
+                                     "elapsed_us": (clock_get_monotonic_us() - start_us) / 1000};
                 }
             }();
         }
@@ -2010,7 +2010,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Now simulate server crash by stopping the server.  Release the
         # blocked handler threads first so server shutdown doesn't wait on
         # them — we're measuring client-side cleanup, not handler blocking.
-        date crash_time = now_us();
+        date crash_time = microseconds(clock_get_monotonic_us());
         slow_handler.signalStop();
         delete server;
 
@@ -2026,7 +2026,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         #   (a) every client terminates (success or error) within the bound
         #   (b) cleanup is fast — not bounded by per-stream request timeouts
         int done_rc = done.waitForZero(20s);
-        int total_elapsed_ms = (now_us() - crash_time).durationMilliseconds();
+        int total_elapsed_ms = (microseconds(clock_get_monotonic_us()) - crash_time).durationMilliseconds();
 
         hash<string, hash<auto>> result_snapshot = {};
         {
@@ -2285,8 +2285,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         h3stream.writesDone();
 
         binary received = binary();
-        date end_time = now_us() + 30s;
-        while (now_us() < end_time) {
+        date end_time = microseconds(clock_get_monotonic_us()) + 30s;
+        while (microseconds(clock_get_monotonic_us()) < end_time) {
             auto data = h3stream.readData(5s);
             if (!exists data) {
                 continue;
@@ -2351,8 +2351,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         h3stream.writesDone();
 
         binary received = binary();
-        date end_time = now_us() + 30s;
-        while (now_us() < end_time) {
+        date end_time = microseconds(clock_get_monotonic_us()) + 30s;
+        while (microseconds(clock_get_monotonic_us()) < end_time) {
             auto data = h3stream.readData(5s);
             if (!exists data) {
                 continue;

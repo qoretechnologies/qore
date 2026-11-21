@@ -258,8 +258,8 @@ l50Xb2GWQesIt9k5jF5IOw==
     #! Read all available stream data until the stream is closed or timeout
     private binary readAllStreamData(HTTPClient client, int stream_id, timeout max_wait = 10s) {
         binary result = binary();
-        date deadline = now_us() + max_wait;
-        while (now_us() < deadline) {
+        int deadline = clock_get_monotonic_us() + max_wait * 1000;
+        while (clock_get_monotonic_us() < deadline) {
             *binary chunk = client.readHttp3StreamData(stream_id, 2000);
             if (chunk) {
                 result += chunk;
@@ -432,7 +432,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         int block_size = 64;
         binary all_sent = binary();
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         for (int i = 0; i < num_blocks; i++) {
             binary chunk = binary(strmul(chr(65 + (i % 26)), block_size));
             all_sent += chunk;
@@ -442,7 +442,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Read all echoed data
         binary all_received = readAllStreamData(client, stream_id, 30s);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertEq(num_blocks * block_size, all_received.size(),
             "throughput: all data echoed");

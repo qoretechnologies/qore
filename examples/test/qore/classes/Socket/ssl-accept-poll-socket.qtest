@@ -82,7 +82,7 @@ class SslAcceptPollSocketTest inherits QUnit::Test {
         client.connect("localhost:" + port, 5s);
 
         # Drive the poll operation until we see the SSL handshake state
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         bool found_ssl_state = False;
         bool poll_socket_is_client = False;
 
@@ -121,7 +121,7 @@ class SslAcceptPollSocketTest inherits QUnit::Test {
             Socket::poll(poll_list, 100);
 
             # Timeout check
-            if ((now_us() - start) > MaxTime * 1000) {
+            if ((microseconds(clock_get_monotonic_us()) - start) > MaxTime * 1000) {
                 break;
             }
         }

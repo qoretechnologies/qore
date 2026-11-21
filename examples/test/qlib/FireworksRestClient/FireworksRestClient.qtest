@@ -229,11 +229,11 @@ public class FireworksRestClientTest inherits QUnit::Test {
     #! Uses socket readiness to drive the connection's asynchronous ping without timing sleeps
     private drivePing(AbstractPollOperation op) {
         on_exit op.abort();
-        date deadline = now_us() + 15s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 15s;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> info = op.continuePoll();
             if (info) {
-                timeout remaining = deadline - now_us();
+                timeout remaining = deadline - microseconds(clock_get_monotonic_us());
                 assertTrue(remaining > 0, "ping deadline");
                 assertTrue(exists Socket::poll((info,), remaining), "socket becomes ready");
             }

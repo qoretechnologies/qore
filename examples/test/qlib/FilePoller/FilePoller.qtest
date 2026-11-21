@@ -404,14 +404,14 @@ class MyObserver inherits Observer {
     }
 
     wait() {
-        date start = now_us();
+        int start = clock_get_monotonic_us();
 
         m.lock();
         on_exit m.unlock();
 
         while (h.size() != 3) {
             cond.wait(m, 1s);
-            if ((now_us() - start) > 5s) {
+            if ((microseconds(clock_get_monotonic_us() - start)) > 5s) {
                 throw "ERROR", "no files in timeout";
             }
         }

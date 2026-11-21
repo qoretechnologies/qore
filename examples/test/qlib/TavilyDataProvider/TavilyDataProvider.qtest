@@ -289,7 +289,7 @@ public class TavilyDataProviderTest inherits QUnit::Test {
         AbstractDataProvider gr = prov.getChildProviderEx("get-research");
         # a task that has not finished is not an error: the status says so and the caller asks again
         hash<auto> report;
-        date timeout = now_us() + 5m;
+        date timeout = microseconds(clock_get_monotonic_us()) + 5m;
         while (True) {
             report = gr.doRequest({"request_id": task.request_id});
             assertTrue(inlist(report.status, ("pending", "in_progress", "completed", "failed")),
@@ -297,7 +297,7 @@ public class TavilyDataProviderTest inherits QUnit::Test {
             if (report.status == "completed" || report.status == "failed") {
                 break;
             }
-            if (now_us() > timeout) {
+            if (microseconds(clock_get_monotonic_us()) > timeout) {
                 throw "TAVILY-RESEARCH-TIMEOUT", sprintf("task %y was still %y after 5m",
                     task.request_id, report.status);
             }

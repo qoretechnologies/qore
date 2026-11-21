@@ -135,14 +135,14 @@ const KeyPem = TestCertificates::KeyPem;
             h1.acceptAllCertificates(True);
 
             list<float> latencies = ();
-            date total_start = now_us();
+            date total_start = microseconds(clock_get_monotonic_us());
             for (int i = 0; i < iterations; ++i) {
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 h1.send("", "GET", "/", NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
                 latencies += lat;
             }
-            float total = (now_us() - total_start).durationMicroseconds() / 1000.0;
+            float total = (microseconds(clock_get_monotonic_us()) - total_start).durationMicroseconds() / 1000.0;
 
             printf("  HTTP/1.1:\n");
             printLatencyStats(latencies);
@@ -161,14 +161,14 @@ const KeyPem = TestCertificates::KeyPem;
             h2.acceptAllCertificates(True);
 
             list<float> latencies = ();
-            date total_start = now_us();
+            date total_start = microseconds(clock_get_monotonic_us());
             for (int i = 0; i < iterations; ++i) {
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 h2.send("", "GET", "/", NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
                 latencies += lat;
             }
-            float total = (now_us() - total_start).durationMicroseconds() / 1000.0;
+            float total = (microseconds(clock_get_monotonic_us()) - total_start).durationMicroseconds() / 1000.0;
 
             printf("  HTTP/2:\n");
             printLatencyStats(latencies);
@@ -190,7 +190,7 @@ const KeyPem = TestCertificates::KeyPem;
         list<float> h1_new = ();
         for (int i = 0; i < connect_iterations; ++i) {
             try {
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 HTTPClient h1({
                     "url": server_url,
                     "http_version": "1.1",
@@ -198,7 +198,7 @@ const KeyPem = TestCertificates::KeyPem;
                 });
                 h1.acceptAllCertificates(True);
                 h1.send("", "GET", "/", NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
                 h1_new += lat;
             } catch () {}
         }
@@ -207,7 +207,7 @@ const KeyPem = TestCertificates::KeyPem;
         list<float> h2_new = ();
         for (int i = 0; i < connect_iterations; ++i) {
             try {
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 HTTPClient h2({
                     "url": server_url,
                     "http_version": "2.0",
@@ -215,7 +215,7 @@ const KeyPem = TestCertificates::KeyPem;
                 });
                 h2.acceptAllCertificates(True);
                 h2.send("", "GET", "/", NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
                 h2_new += lat;
             } catch () {}
         }
@@ -240,9 +240,9 @@ const KeyPem = TestCertificates::KeyPem;
 
             list<float> h1_reuse = ();
             for (int i = 0; i < connect_iterations; ++i) {
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 h1.send("", "GET", "/", NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
                 h1_reuse += lat;
             }
             printf("  Reused connection (%d iterations):\n", connect_iterations);
@@ -260,9 +260,9 @@ const KeyPem = TestCertificates::KeyPem;
 
             list<float> h2_reuse = ();
             for (int i = 0; i < connect_iterations; ++i) {
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 h2.send("", "GET", "/", NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
                 h2_reuse += lat;
             }
             printf("    HTTP/2:   Avg %.2f ms\n", listAvg(h2_reuse));
@@ -277,7 +277,7 @@ const KeyPem = TestCertificates::KeyPem;
 
         # HTTP/1.1 - multiple connections
         try {
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             Counter cnt(concurrent);
             list<float> latencies = ();
             Mutex m();
@@ -292,9 +292,9 @@ const KeyPem = TestCertificates::KeyPem;
                             "timeout": 30s,
                         });
                         h1.acceptAllCertificates(True);
-                        date req_start = now_us();
+                        date req_start = microseconds(clock_get_monotonic_us());
                         h1.send("", "GET", "/", NOTHING, True);
-                        float lat = (now_us() - req_start).durationMicroseconds() / 1000.0;
+                        float lat = (clock_get_monotonic_us() - req_start.durationMicroseconds()) / 1000.0;
                         m.lock();
                         on_exit m.unlock();
                         latencies += lat;
@@ -302,7 +302,7 @@ const KeyPem = TestCertificates::KeyPem;
                 }();
             }
             cnt.waitForZero();
-            float total = (now_us() - start).durationMicroseconds() / 1000.0;
+            float total = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
 
             printf("  HTTP/1.1 (%d separate connections):\n", concurrent);
             printLatencyStats(latencies);
@@ -321,7 +321,7 @@ const KeyPem = TestCertificates::KeyPem;
             h2.acceptAllCertificates(True);
             h2.send("", "GET", "/", NOTHING, True);  # Establish connection
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             Counter cnt(concurrent);
             list<float> latencies = ();
             Mutex m();
@@ -330,9 +330,9 @@ const KeyPem = TestCertificates::KeyPem;
                 background sub() {
                     on_exit cnt.dec();
                     try {
-                        date req_start = now_us();
+                        date req_start = microseconds(clock_get_monotonic_us());
                         h2.send("", "GET", "/", NOTHING, True);
-                        float lat = (now_us() - req_start).durationMicroseconds() / 1000.0;
+                        float lat = (clock_get_monotonic_us() - req_start.durationMicroseconds()) / 1000.0;
                         m.lock();
                         on_exit m.unlock();
                         latencies += lat;
@@ -340,7 +340,7 @@ const KeyPem = TestCertificates::KeyPem;
                 }();
             }
             cnt.waitForZero();
-            float total = (now_us() - start).durationMicroseconds() / 1000.0;
+            float total = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
 
             printf("  HTTP/2 (single connection, multiplexed):\n");
             printLatencyStats(latencies);
@@ -371,9 +371,9 @@ const KeyPem = TestCertificates::KeyPem;
 
             list<float> latencies = ();
             for (int i = 0; i < download_iterations; ++i) {
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 hash<auto> resp = h1.send("", "GET", "/bytes/" + body_size, NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
                 latencies += lat;
             }
 
@@ -396,9 +396,9 @@ const KeyPem = TestCertificates::KeyPem;
 
             list<float> latencies = ();
             for (int i = 0; i < download_iterations; ++i) {
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 hash<auto> resp = h2.send("", "GET", "/bytes/" + body_size, NOTHING, True);
-                float lat = (now_us() - start).durationMicroseconds() / 1000.0;
+                float lat = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
                 latencies += lat;
             }
 
@@ -423,7 +423,7 @@ const KeyPem = TestCertificates::KeyPem;
 
         # HTTP/1.1 - multiple connections, each making sequential requests
         try {
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             Counter cnt(num_connections);
             int success_count = 0;
             Mutex m();
@@ -448,7 +448,7 @@ const KeyPem = TestCertificates::KeyPem;
                 }();
             }
             cnt.waitForZero();
-            float total = (now_us() - start).durationMicroseconds() / 1000.0;
+            float total = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
             float rps = success_count * 1000.0 / total;
 
             printf("  HTTP/1.1 (%d connections):\n", num_connections);
@@ -460,7 +460,7 @@ const KeyPem = TestCertificates::KeyPem;
         # HTTP/2 - multiple separate connections, each making sequential requests
         # This is the scenario where async send frees handler threads to serve other connections
         try {
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             Counter cnt(num_connections);
             int success_count = 0;
             Mutex m();
@@ -485,7 +485,7 @@ const KeyPem = TestCertificates::KeyPem;
                 }();
             }
             cnt.waitForZero();
-            float total = (now_us() - start).durationMicroseconds() / 1000.0;
+            float total = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
             float rps = success_count * 1000.0 / total;
 
             printf("  HTTP/2 (%d separate connections):\n", num_connections);

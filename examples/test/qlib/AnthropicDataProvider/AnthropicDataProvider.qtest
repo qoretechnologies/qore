@@ -208,12 +208,12 @@ class StreamObserver inherits Observer {
     }
 
     wait(int count) {
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         m.lock();
         on_exit m.unlock();
         while (events.lsize() < count) {
             cond.wait(m, 1s);
-            if ((now_us() - start) > 5s) {
+            if ((microseconds(clock_get_monotonic_us()) - start) > 5s) {
                 throw "ERROR", "no stream events in timeout";
             }
         }

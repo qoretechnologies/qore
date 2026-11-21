@@ -153,7 +153,7 @@ class FakeHaltianHandler inherits AbstractHttpRequestHandler {
                 # answer the concurrent requests together, so that they all need a new token at the same time
                 int request_number = ++waiting;
                 cond.broadcast();
-                date deadline = now_us() + 10s;
+                int deadline = clock_get_monotonic_us() + 10000000;
                 while (waiting < wait_for || (delay_rejections && request_number > 1 && !retries)) {
                     waitForRequest(deadline);
                 }
@@ -167,7 +167,7 @@ class FakeHaltianHandler inherits AbstractHttpRequestHandler {
         if (delay_rejections && waiting) {
             ++retries;
             cond.broadcast();
-            date deadline = now_us() + 10s;
+            int deadline = clock_get_monotonic_us() + 10000000;
             while (retries < wait_for) {
                 waitForRequest(deadline);
             }
@@ -206,8 +206,8 @@ class FakeHaltianHandler inherits AbstractHttpRequestHandler {
     }
 
     #! Waits for another request without leaving the test blocked if a request fails
-    private waitForRequest(date deadline) {
-        date remaining = deadline - now_us();
+    private waitForRequest(int deadline) {
+        date remaining = microseconds(deadline - clock_get_monotonic_us());
         if (remaining <= 0) {
             throw "TEST-TIMEOUT", "timed out waiting for concurrent API requests";
         }

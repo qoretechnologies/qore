@@ -272,7 +272,7 @@ http {
 
     #! Compute elapsed milliseconds from a start timestamp
     private float elapsedMs(date start) {
-        return (now_us() - start).durationMicroseconds() / 1000.0;
+        return (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / 1000.0;
     }
 
     private list<int> threadCounts() {
@@ -329,12 +329,12 @@ http {
         # Run N sequential requests; verify each response
         int count = 50;
         list<float> latencies();
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         for (int i = 0; i < count; ++i) {
             RestClient rc = cast<RestClient>(pool.acquire());
             on_exit pool.release();
 
-            date req_start = now_us();
+            date req_start = microseconds(clock_get_monotonic_us());
             hash<auto> resp = rc.get("/api/echo?seq=" + string(i));
             latencies += elapsedMs(req_start);
 
@@ -361,12 +361,12 @@ http {
 
         int count = 50;
         list<float> latencies();
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         for (int i = 0; i < count; ++i) {
             RestClientIo::RestClientIo rc = pool.acquire();
             on_exit pool.release();
 
-            date req_start = now_us();
+            date req_start = microseconds(clock_get_monotonic_us());
             hash<RestClient::RestResponseInfo> resp = rc.restGet("/api/echo?seq=" + string(i));
             latencies += elapsedMs(req_start);
 
@@ -401,7 +401,7 @@ http {
         int success_count = 0;
         int error_count = 0;
 
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         for (int t = 0; t < thread_count; ++t) {
             background sub () {
                 on_exit done.dec();
@@ -456,7 +456,7 @@ http {
         int success_count = 0;
         int error_count = 0;
 
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         for (int t = 0; t < thread_count; ++t) {
             background sub () {
                 on_exit done.dec();
@@ -514,7 +514,7 @@ http {
             Mutex mtx();
             int success_count = 0;
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             for (int t = 0; t < threads; ++t) {
                 background sub () {
                     on_exit done.dec();
@@ -572,7 +572,7 @@ http {
             Mutex mtx();
             int success_count = 0;
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             for (int t = 0; t < threads; ++t) {
                 background sub () {
                     on_exit done.dec();
@@ -639,7 +639,7 @@ http {
             Mutex mtx();
             int success_count = 0;
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             for (int t = 0; t < threads; ++t) {
                 background sub () {
                     on_exit done.dec();
@@ -711,7 +711,7 @@ http {
             int success_count = 0;
             hash<string, int> errors();
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             for (int t = 0; t < threads; ++t) {
                 background sub () {
                     on_exit done.dec();
@@ -778,7 +778,7 @@ http {
             Mutex mtx();
             int success_count = 0;
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             for (int t = 0; t < threads; ++t) {
                 background sub () {
                     on_exit done.dec();
@@ -836,7 +836,7 @@ http {
             Mutex mtx();
             int success_count = 0;
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             for (int t = 0; t < threads; ++t) {
                 background sub () {
                     on_exit done.dec();
@@ -896,7 +896,7 @@ http {
             Mutex mtx();
             blocking_success = 0;
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             for (int t = 0; t < threads; ++t) {
                 background sub () {
                     on_exit done.dec();
@@ -932,7 +932,7 @@ http {
             Mutex mtx();
             async_h2_success = 0;
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             for (int t = 0; t < threads; ++t) {
                 background sub () {
                     on_exit done.dec();
@@ -968,7 +968,7 @@ http {
             Mutex mtx();
             blocking_h3_success = 0;
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             for (int t = 0; t < threads; ++t) {
                 background sub () {
                     on_exit done.dec();
@@ -1004,7 +1004,7 @@ http {
             Mutex mtx();
             async_h3_success = 0;
 
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             for (int t = 0; t < threads; ++t) {
                 background sub () {
                     on_exit done.dec();

@@ -1237,9 +1237,9 @@ class HttpServerAsyncHttp2Test inherits QUnit::Test {
 
                 try {
                     RestClient rc = getClient(timeout_ms);
-                    date start = now_us();
+                    int start = clock_get_monotonic_us();
                     hash<auto> resp = rc.get("/slow/500");  # 500ms delay
-                    date elapsed = now_us() - start;
+                    date elapsed = microseconds(clock_get_monotonic_us() - start);
                     m.lock();
                     on_exit m.unlock();
                     results += {
@@ -1273,9 +1273,9 @@ class HttpServerAsyncHttp2Test inherits QUnit::Test {
 
                 try {
                     RestClient rc = getClient(timeout_ms);
-                    date start = now_us();
+                    int start = clock_get_monotonic_us();
                     hash<auto> resp = rc.get("/simple");
-                    date elapsed = now_us() - start;
+                    date elapsed = microseconds(clock_get_monotonic_us() - start);
                     m.lock();
                     on_exit m.unlock();
                     results += {

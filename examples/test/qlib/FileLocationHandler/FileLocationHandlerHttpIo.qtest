@@ -632,13 +632,13 @@ public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
 
     #! Drives a poll operation on this thread until it completes and returns its output
     static auto runPoller(AbstractPollOperation op) {
-        date deadline = now_us() + 30s;
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(30s);
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
             if (op.goalReached()) {
                 break;
             }
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (deadline - clock_get_monotonic_us()) / 1000;
             if (remaining <= 0) {
                 op.abort();
                 throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());

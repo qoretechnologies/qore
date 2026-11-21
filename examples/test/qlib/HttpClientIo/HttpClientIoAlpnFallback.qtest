@@ -400,9 +400,9 @@ class HttpClientIoAlpnFallbackTest inherits QUnit::Test {
         if (use_async) {
             *HttpClientIo::HttpClientConnection conn;
             *EventNotifier n = mgr.acquireConnectionAsync(mH2Url, \conn);
-            date deadline = now_us() + 5s;
+            int deadline = clock_get_monotonic_us() + 5000000;
             while (n) {
-                assertTrue(now_us() < deadline, "asynchronous race completes within its deadline");
+                assertTrue(clock_get_monotonic_us() < deadline, "asynchronous race completes within its deadline");
                 mgr.getController().waitForNotifier(n, 5s, 5s);
                 n.acknowledge();
                 delete n;

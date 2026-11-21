@@ -1014,9 +1014,9 @@ sub typed_mongodb_provider(MongoDbDataProvider::MongoDbCollectionDataProvider pr
         assertEq(1.0, created.ok, "the vector search index was created");
 
         # Atlas builds the index asynchronously; it cannot be queried until it says so
-        date timeout = now_us() + 8m;
+        date timeout = microseconds(clock_get_monotonic_us()) + 8m;
         bool queryable = False;
-        while (now_us() < timeout) {
+        while (microseconds(clock_get_monotonic_us()) < timeout) {
             list<hash<auto>> pipeline = ({"$listSearchIndexes": {}},);
             list<hash<auto>> idx = coll.aggregate(pipeline).toList();
             if (idx && idx[0].queryable) {

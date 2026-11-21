@@ -116,9 +116,9 @@ class MailParseBench {
             *float last;
             foreach int n in (sizes) {
                 string msg = Cases{name}(n);
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 new MailMessage::Message(msg);
-                float s = (now_us() - start).durationSecondsFloat();
+                float s = (microseconds(clock_get_monotonic_us()) - start).durationSecondsFloat();
                 printf("%-22s n=%-7d %9d bytes %8.3f s%s\n", name, n, msg.size(), s,
                     exists last ? sprintf("  x%.2f", s / last) : "");
                 last = s;
@@ -141,11 +141,11 @@ class MailParseBench {
         foreach hash<auto> i in (inputs.pairIterator()) {
             *float best;
             for (int r = 0; r < 3; ++r) {
-                date start = now_us();
+                date start = microseconds(clock_get_monotonic_us());
                 for (int k = 0; k < repeat; ++k) {
                     i.value();
                 }
-                float us = (now_us() - start).durationMicroseconds() / float(repeat);
+                float us = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds() / float(repeat);
                 if (!exists best || us < best) {
                     best = us;
                 }
