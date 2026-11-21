@@ -155,12 +155,17 @@ untyped: untyped
 sandboxed untyped: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
 ";
 
-        #! expected output of the issue's reproduction: the module code runs and the sandbox refuses the connection
-        #! the repro's lockdown Program is restricted from the network, so the HttpClientIo connection manager that
-        #! Util::get_file_from_url() creates refuses it (qore#6981); the manager's members, whose initializers use the
-        #! builtins of issue #5556 (RWLock), are initialized before its constructor makes the check
+        #! expected output of the issue's reproduction in a lockdown Program: it is restricted from the network, so the
+        #! HttpClientIo connection manager that Util::get_file_from_url() creates refuses it (qore#6981); the manager's
+        #! members, whose initializers use the builtins of issue #5556 (RWLock), are initialized before its constructor
+        #! makes the check
         const ExpectedReproOutput = "PERMISSION-DENIED: the calling code may not create an HTTP client connection "
             "manager, as it is restricted from the NETWORK functional domain\n";
+
+        #! expected output of the reproduction in a lockdown Program that may use the network: the module code runs
+        #! past the manager's constructor, through the connection's code, and the sandbox refuses the connection
+        const ExpectedReproNetworkOutput = "NETWORK-ACCESS-DENIED: Connection to 127.0.0.1 denied by security policy "
+            "(private/blocked network)\n";
     }
 
     constructor() : QUnit::Test("AOTModuleBuiltinAccessTest", "1.0", \ARGV) {
@@ -686,8 +691,8 @@ foreach string prefix in (\"\", \"sandboxed \") {
 ";
     }
 
-    #! the reproduction from issue #5556
-    private string reproScript() {
+    #! the reproduction from issue #5556, with the parse options given for the restricted Program
+    private string reproScript(string po) {
         return "%modern
 %requires Util
 %requires HttpClientIo
@@ -695,7 +700,7 @@ foreach string prefix in (\"\", \"sandboxed \") {
 Program p(PO_NEW_STYLE);
 p.loadModule(\"Util\");
 p.loadModule(\"HttpClientIo\");
-p.setParseOptions(PO_LOCKDOWN);
+p.setParseOptions(" + po + ");
 SandboxManager m();
 m.blockPrivateNetworks();
 p.setSandboxManager(m);
@@ -805,11 +810,16 @@ printf(\"%s\\n\", get_module_hash().FileLocationHandler.filename ?? \"not loaded
         compileModule(qlib_dir + "/Util.qm", dir + "/Util.qmod", compile_path);
         compileModule(qlib_dir + "/HttpClientIo/HttpClientIo.qm", dir + "/HttpClientIo.qmod", compile_path);
 
-        string script_path = writeFile(tmp.path + "/repro.q", reproScript());
+        string script_path = writeFile(tmp.path + "/repro.q", reproScript("PO_LOCKDOWN"));
+        # the module code also runs past the connection manager's constructor when the Program may use the network
+        string network_path = writeFile(tmp.path + "/repro-network.q", reproScript("PO_LOCKDOWN & ~PO_NO_NETWORK"));
         foreach string mode in (ExecModeHarness::ExecModes) {
             hash<ExecModeHarness::ModeRunResult> r = runScript(modulePath(dir), script_path, mode);
             assertEq(ExpectedReproOutput, r.out, "AOT Util and HttpClientIo: " + mode);
             assertEq((), r.loader_warnings, "AOT Util and HttpClientIo: loader warnings: " + mode);
+            r = runScript(modulePath(dir), network_path, mode);
+            assertEq(ExpectedReproNetworkOutput, r.out, "AOT Util and HttpClientIo, network: " + mode);
+            assertEq((), r.loader_warnings, "AOT Util and HttpClientIo, network: loader warnings: " + mode);
         }
     }
 
