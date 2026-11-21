@@ -134,26 +134,71 @@ static bool qore_get_http_header_value(const QoreValue& v, std::string& out) {
     return true;
 }
 
-void qore_get_http_header_pairs(const QoreHashNode* headers, qore_http_header_pairs_t& out) {
-    if (!headers) {
-        return;
-    }
-    ConstHashIterator hi(headers);
-    while (hi.next()) {
-        const QoreValue v = hi.get();
-        std::string value;
-        if (v.getType() == NT_LIST) {
-            // a header with several values is one field per value; the values are never combined
-            ConstListIterator li(v.get<const QoreListNode>());
-            while (li.next()) {
-                if (qore_get_http_header_value(li.getValue(), value)) {
-                    out.emplace_back(hi.getKey(), std::move(value));
-                }
+static void qore_append_http_header(const char* key, QoreValue value, qore_http_header_pairs_t& out,
+        bool strings_only = false) {
+    auto append = [&](QoreValue v) {
+        if (strings_only) {
+            if (v.getType() == NT_STRING) {
+                // Protocol controls are passed to nghttp2 as C strings.
+                out.emplace_back(key, QoreStringDataHelper(v).c_str());
             }
-        } else if (qore_get_http_header_value(v, value)) {
-            out.emplace_back(hi.getKey(), std::move(value));
+            return;
+        }
+        std::string field;
+        if (qore_get_http_header_value(v, field)) {
+            out.emplace_back(key, std::move(field));
+        }
+    };
+    if (value.getType() == NT_LIST) {
+        ConstListIterator li(value.get<const QoreListNode>());
+        while (li.next()) {
+            append(li.getValue());
+        }
+    } else {
+        append(value);
+    }
+}
+
+void qore_get_http_header_pairs(const QoreHashNode* headers, qore_http_header_pairs_t& out) {
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            qore_append_http_header(hi.getKey(), hi.get(), out);
         }
     }
+}
+
+int qore_get_http2_request_headers(const QoreHashNode* headers, std::string& method, std::string& path,
+        qore_http_header_pairs_t& out, ExceptionSink* xsink) {
+    if (!headers) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
+        return -1;
+    }
+
+    out.reserve(headers->size() + 4);
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        // Pseudo-headers are protocol controls and retain their string-only semantics.
+        size_t first = out.size();
+        qore_append_http_header(key, hi.get(), out, key[0] == ':');
+        if (key[0] == ':') {
+            std::string* control = !strcmp(key, ":method") ? &method : (!strcmp(key, ":path") ? &path : nullptr);
+            if (control) {
+                for (size_t i = first; i < out.size(); ++i) {
+                    if (!out[i].second.empty()) {
+                        *control = out[i].second;
+                    }
+                }
+            }
+        }
+    }
+    if (method.empty() || path.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request '%s' header is missing or empty",
+            method.empty() ? ":method" : ":path");
+        return -1;
+    }
+    return 0;
 }
 
 static bool qore_http_is_ows(char c) {
@@ -3287,7 +3332,7 @@ public:
     DLLLOCAL QoreSocketControllerHttp2EnqueuePollOperation(QoreSocket* sock, const QoreHashNode* headers,
             const void* body_ptr, size_t body_len, bool streaming, ExceptionSink* xsink)
             : sock(sock), action(Action::Request), streaming(streaming) {
-        parseRequestHeaders(headers, xsink);
+        qore_get_http2_request_headers(headers, method, path, request_headers, xsink);
         if (body_ptr && body_len) {
             body = new BinaryNode;
             body->append(body_ptr, body_len);
@@ -3399,55 +3444,6 @@ public:
 private:
     DLLLOCAL static void setHeaders(qore_http_header_pairs_t& out, const QoreHashNode* headers) {
         qore_get_http_header_pairs(headers, out);
-    }
-
-    DLLLOCAL void parseRequestHeaders(const QoreHashNode* headers, ExceptionSink* xsink) {
-        if (!headers) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
-            return;
-        }
-
-        request_headers.reserve(headers->size() + 4);
-        auto append = [&](const std::string& key, const char* sval) {
-            if (key == ":method") {
-                if (sval && *sval) {
-                    method = sval;
-                }
-            } else if (key == ":path") {
-                if (sval && *sval) {
-                    path = sval;
-                }
-            }
-            request_headers.emplace_back(key, sval ? sval : "");
-        };
-
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            const char* key = hi.getKey();
-            QoreValue val = hi.get();
-            std::string skey(key);
-            // note: header values can be held in inline short string storage (ex: "GET"), which has
-            // no QoreStringNode, so the data helper must be used to read the bytes
-            if (val.getType() == NT_STRING) {
-                append(skey, QoreStringDataHelper(val).c_str());
-            } else if (val.getType() == NT_LIST) {
-                const QoreListNode* l = val.get<const QoreListNode>();
-                for (size_t i = 0; i < l->size(); ++i) {
-                    QoreValue elem = l->retrieveEntry(i);
-                    if (elem.getType() == NT_STRING) {
-                        append(skey, QoreStringDataHelper(elem).c_str());
-                    }
-                }
-            }
-        }
-
-        if (method.empty()) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
-            return;
-        }
-        if (path.empty()) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
-        }
     }
 
     QoreSocket* sock;
