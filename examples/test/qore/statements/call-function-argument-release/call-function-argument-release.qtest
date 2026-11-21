@@ -14,6 +14,8 @@
 %exec-class CallFunctionArgumentReleaseTest
 
 #! Argument cleanup errors release the call result before locals and handlers (#6093)
+#! call_function() gives its arguments to the call, which releases its parameters in reverse order when it raises, as a
+#! direct call does (qore#6052)
 class CallFunctionArgumentReleaseTest inherits QUnit::Test {
     public {
         const Expected = "ref_return: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"~z\", \"caught:DT\"] live=0
@@ -25,7 +27,7 @@ handlers: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"exit\", \"error\", \"~z\", \"c
 assigned: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"~z\", \"caught:DT\"] live=0
 discarded: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"~z\", \"caught:DT\"] live=0
 result_raises: [\"dthrow\", \"~tt\", \"dthrow\", \"~v\", \"~q\", \"~z\", \"caught:DT\", \"next:RESULT\"] live=0
-call_raises: [\"~v\", \"~t\", \"~q\", \"~z\", \"caught:CALL\"] live=0
+call_raises: [\"~t\", \"~v\", \"~q\", \"~z\", \"caught:CALL\"] live=0
 direct_control: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"~z\", \"caught:DT\"] live=0
 statement_control: [\"dthrow\", \"~tt\", \"~q\", \"~z\", \"~v\", \"caught:DT\"] live=0
 success_control: [\"~t\", \"~q\", \"~z\", \"got\", \"~v\"] live=0
@@ -38,7 +40,7 @@ handlers: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"exit\", \"error\", \"~z\", \"c
 assigned: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"~z\", \"caught:DT\"] live=0
 discarded: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"~z\", \"caught:DT\"] live=0
 result_raises: [\"dthrow\", \"~tt\", \"dthrow\", \"~v\", \"~q\", \"~z\", \"caught:DT\", \"next:RESULT\"] live=0
-call_raises: [\"~v\", \"~t\", \"~q\", \"~z\", \"caught:CALL\"] live=0
+call_raises: [\"~t\", \"~v\", \"~q\", \"~z\", \"caught:CALL\"] live=0
 direct_control: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"~z\", \"caught:DT\"] live=0
 statement_control: [\"dthrow\", \"~tt\", \"~q\", \"~z\", \"~v\", \"caught:DT\"] live=0
 success_control: [\"~t\", \"~q\", \"~z\", \"got\", \"~v\"] live=0
@@ -51,7 +53,7 @@ handlers: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"exit\", \"error\", \"~z\", \"c
 assigned: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"~z\", \"caught:DT\"] live=0
 discarded: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"~z\", \"caught:DT\"] live=0
 result_raises: [\"dthrow\", \"~tt\", \"dthrow\", \"~v\", \"~q\", \"~z\", \"caught:DT\", \"next:RESULT\"] live=0
-call_raises: [\"~v\", \"~t\", \"~q\", \"~z\", \"caught:CALL\"] live=0
+call_raises: [\"~t\", \"~v\", \"~q\", \"~z\", \"caught:CALL\"] live=0
 direct_control: [\"dthrow\", \"~tt\", \"~v\", \"~q\", \"~z\", \"caught:DT\"] live=0
 statement_control: [\"dthrow\", \"~tt\", \"~q\", \"~z\", \"~v\", \"caught:DT\"] live=0
 success_control: [\"~t\", \"~q\", \"~z\", \"got\", \"~v\"] live=0
