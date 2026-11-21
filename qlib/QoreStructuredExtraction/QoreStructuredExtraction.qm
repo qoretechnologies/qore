@@ -87,12 +87,12 @@ if (result.valid) {
     \c THREAD_CONTROL @ref function_domains "functional domain" in its module header, so when it is loaded from the
     module path, it starts its threads also for a @ref Qore::Program "Program" with
     @ref Qore::PO_NO_THREAD_CONTROL set; the threads run under the caller's sandbox, whose thread limit bounds them.
+    Loading the module source outside the module path requires thread control at parse time.
 
     - \c start_thread: an optional @ref closure "closure" or @ref call_reference "call reference" that accepts a
       zero-arg code reference and returns the integer thread ID of the new thread; without it, the \c start_thread
       capability that a host sets for the code it runs (@ref Qore::Thread::ThreadCapabilityScope
-      "ThreadCapabilityScope") is used, and otherwise the @ref background operator; it is required with
-      @ref Qore::PO_NO_THREAD_CONTROL only when the module is loaded by its path, where the declaration does not apply
+      "ThreadCapabilityScope") is used, and otherwise the @ref background operator
 
     When \c batch_parallel is 1, no threads are started and the option is ignored.
 

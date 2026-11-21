@@ -1,0 +1,358 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires HttpClientIo
+
+%exec-class HttpClientIoCallerDomainsTest
+
+#! Tests that the connections and poll operations of HttpClientIo refuse a caller restricted from their domains
+#! (qore#6981)
+/** The public connection classes (Http1ClientConnection, Http2ClientConnection, Http3ClientConnection) and poll
+    operations (Http1ClientPollOperation, Http2ClientPollOperation, Http3ClientPollOperation) connect to the host that
+    they are given and read the CA certificate locations that they are given: code restricted from \c NETWORK cannot
+    create one, nor code restricted from \c FILESYSTEM one with CA locations; the refusal is made at run time
+    (\c PERMISSION-DENIED).  A connection manager that the host creates
+    and lends to restricted code still creates its connections, with an exemption that only the module's code can
+    grant and that covers one creation:
+    - a class that restricted code declares with the name and signature of the module's exemption class grants none
+    - code that runs while a lent manager creates a connection (its logger, created by the restricted code) cannot use
+      the exemption, and none is left after the creation, also when it fails with an exception
+    - the exemption is kept by TID, which Qore reuses after it has assigned every TID: a thread that gets the TID of a
+      thread whose lent manager created a connection is not exempt
+*/
+class HttpClientIoCallerDomainsTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the creation of each connection class (given the port "port" and the CA file "ca")
+        const Connections = {
+            "Http1ClientConnection": "create_object(\"HttpClientIo::Http1ClientConnection\", "
+                "parse_url(\"http://127.0.0.1:\" + port), 2s, NOTHING, 1, NOTHING, False, NOTHING, NOTHING, NOTHING, "
+                "ca)",
+            "Http2ClientConnection": "create_object(\"HttpClientIo::Http2ClientConnection\", "
+                "parse_url(\"http://127.0.0.1:\" + port), 2s, NOTHING, 10, NOTHING, False, NOTHING, NOTHING, NOTHING, "
+                "ca)",
+            "Http3ClientConnection": "create_object(\"HttpClientIo::Http3ClientConnection\", "
+                "parse_url(\"https://127.0.0.1:\" + port), 2s, NOTHING, 10, NOTHING, False, NOTHING, NOTHING, ca)",
+        };
+
+        #! the creation of each poll operation (given the port "port", a connection "conn" and the CA file "ca")
+        const PollOperations = {
+            "Http1ClientPollOperation": "create_object(\"HttpClientIo::Http1ClientPollOperation\", "
+                "parse_url(\"http://127.0.0.1:\" + port), 2s, NOTHING, NOTHING, False, NOTHING, conn, NOTHING, "
+                "NOTHING, ca)",
+            "Http2ClientPollOperation": "create_object(\"HttpClientIo::Http2ClientPollOperation\", "
+                "parse_url(\"http://127.0.0.1:\" + port), 2s, NOTHING, NOTHING, False, NOTHING, conn, NOTHING, "
+                "NOTHING, ca)",
+            "Http3ClientPollOperation": "create_object(\"HttpClientIo::Http3ClientPollOperation\", "
+                "parse_url(\"https://127.0.0.1:\" + port), 2s, NOTHING, NOTHING, False, NOTHING, NOTHING, conn, ca)",
+        };
+
+        #! a copy of the module's exemption class, which restricted code declares
+        const LookAlike = "class HttpClientCallerExemption {
+    private:internal {
+        object token = new Mutex();
+        string tid = string(gettid());
+        static hash<string, object> active = {};
+        static Mutex lock();
+    }
+    constructor() {
+        AutoLock al(lock);
+        active{tid} = token;
+    }
+    destructor() {
+        AutoLock al(lock);
+        if (active{tid} === token) {
+            remove active{tid};
+        }
+    }
+    static check(*string ssl_ca_file, *string ssl_ca_path) {
+        if (HttpClientCallerExemption::take()) {
+            return;
+        }
+        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            throw \"PERMISSION-DENIED\", \"\";
+        }
+        if ((ssl_ca_file || ssl_ca_path) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+            throw \"PERMISSION-DENIED\", \"\";
+        }
+    }
+    private:internal static bool take() {
+        AutoLock al(lock);
+        return exists remove active{string(gettid())};
+    }
+}
+";
+    }
+
+    private {
+        #! a listener that no connection of the restricted code may reach
+        Socket listener();
+        int port;
+        #! a CA file and directory
+        TmpDir tmp("qore-httpclientio-caller-domains-");
+        string ca_file;
+    }
+
+    constructor() : QUnit::Test("HttpClientIoCallerDomains", "1.0", \ARGV) {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        ca_file = tmp.path + "/ca.pem";
+        File f();
+        f.open2(ca_file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("not a certificate\n");
+
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("connections and poll operations, " + m, sub () { testNetwork(m); });
+            addTestCase("a connection manager that restricted code creates, " + m, sub () { testManager(m); });
+            addTestCase("CA locations, " + m, sub () { testFilesystem(m); });
+            addTestCase("a look-alike exemption class, " + m, sub () { testLookAlike(m); });
+            addTestCase("callbacks of a lent manager, " + m, sub () { testCallbacks(m); });
+            addTestCase("a reused TID, " + m, sub () { testReusedTid(m); });
+        }
+        set_return_value(main());
+    }
+
+    #! code restricted from the network can create neither a connection nor a poll operation
+    private testNetwork(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        string code = "%modern\n%requires HttpClientIo\n";
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            code += sprintf("string sub %s(int port, *string ca) { try { object c = %s; "
+                "c.getPollOperation().continuePoll(); return \"created\"; } catch (hash<ExceptionInfo> ex) { "
+                "return ex.err; } }\n", i.key, i.value);
+        }
+        foreach hash<auto> i in (PollOperations.pairIterator()) {
+            code += sprintf("string sub %s(int port, object conn, *string ca) { try { object o = %s; "
+                "o.continuePoll(); return \"created\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n",
+                i.key, i.value);
+        }
+        p.parse(code, "network");
+
+        foreach string cls in (keys Connections) {
+            assertEq("PERMISSION-DENIED", p.callFunction(cls, port), sprintf("%s, %s", cls, mode));
+        }
+        # the connections that the host creates and lends: the restricted code cannot create poll operations to any
+        # host with them
+        hash<string, HttpClientConnection> conns = {
+            "Http1ClientPollOperation": new Http1ClientConnection(parse_url("http://127.0.0.1:" + port), 2s),
+            "Http2ClientPollOperation": new Http2ClientConnection(parse_url("http://127.0.0.1:" + port), 2s),
+            "Http3ClientPollOperation": new Http3ClientConnection(parse_url("https://127.0.0.1:" + port), 2s),
+        };
+        on_exit {
+            map $1.close(0), conns.iterator();
+        }
+        foreach string cls in (keys PollOperations) {
+            assertEq("PERMISSION-DENIED", p.callFunction(cls, port, conns{cls}), sprintf("%s, %s", cls, mode));
+        }
+        # no connection was made
+        assertEq(NOTHING, listener.accept(0), "no connection, " + mode);
+
+        # unrestricted code still creates them (to a port where nothing listens)
+        Program u(PO_NEW_STYLE);
+        u.setExecMode(Modes{mode});
+        u.parse(code, "unrestricted");
+        int free_port = get_free_port();
+        foreach string cls in (keys Connections) {
+            assertEq("created", u.callFunction(cls, free_port), sprintf("%s, unrestricted, %s", cls, mode));
+        }
+    }
+
+    #! code restricted from the network cannot create a connection manager, which creates its connections with the
+    #! exemption of its own creations, nor can code restricted from the file system create one with CA locations
+    private testManager(string mode) {
+        string code = "%modern\n%requires HttpClientIo\n"
+            "class M inherits HttpClientConnectionManager {\n"
+            "    constructor(*hash<HttpClientConnectionManagerOptions> opts) : HttpClientConnectionManager(opts) {}\n"
+            "}\n"
+            "string sub make(string how, int port, *string ca) {\n"
+            "    try {\n"
+            "        *hash<HttpClientConnectionManagerOptions> opts = ca ? <HttpClientConnectionManagerOptions>{"
+            "\"ssl_ca_file\": ca} : NOTHING;\n"
+            "        object m;\n"
+            "        switch (how) {\n"
+            "            case \"new\": m = new HttpClientConnectionManager(opts); break;\n"
+            "            case \"create_object\": m = create_object(\"HttpClientIo::HttpClientConnectionManager\", opts); "
+            "break;\n"
+            "            case \"subclass\": m = new M(opts); break;\n"
+            "        }\n"
+            "        m.request(\"http://127.0.0.1:\" + port, \"GET\", \"/\", NOTHING, NOTHING, 2s);\n"
+            "        return \"created\";\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
+            "}\n";
+        list<string> hows = ("new", "create_object", "subclass");
+
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse(code, "manager");
+        foreach string how in (hows) {
+            assertEq("PERMISSION-DENIED", p.callFunction("make", how, port), sprintf("network, %s, %s", how, mode));
+        }
+        # no connection was made
+        assertEq(NOTHING, listener.accept(0), "no connection, " + mode);
+
+        Program f(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        f.setExecMode(Modes{mode});
+        f.parse(code, "manager");
+        int free_port = get_free_port();
+        foreach string how in (hows) {
+            assertEq("PERMISSION-DENIED", f.callFunction("make", how, free_port, ca_file),
+                sprintf("CA file, %s, %s", how, mode));
+            # without CA locations, the manager is created; the request fails as nothing listens on the port
+            assertNeq("PERMISSION-DENIED", f.callFunction("make", how, free_port),
+                sprintf("no CA file, %s, %s", how, mode));
+        }
+
+        # unrestricted code creates one
+        Program u(PO_NEW_STYLE);
+        u.setExecMode(Modes{mode});
+        u.parse(code, "manager");
+        foreach string how in (hows) {
+            assertNeq("PERMISSION-DENIED", u.callFunction("make", how, free_port, ca_file),
+                sprintf("unrestricted, %s, %s", how, mode));
+        }
+    }
+
+    #! code restricted from the file system can give no CA locations
+    private testFilesystem(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.setExecMode(Modes{mode});
+        string code = "%modern\n%requires HttpClientIo\n"
+            "string sub request(object mgr, int port) { try { mgr.request(sprintf(\"https://127.0.0.1:%d\", port), "
+            "\"GET\", \"/\"); return \"called\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n";
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            code += sprintf("string sub %s(int port, *string ca) { try { object c = %s; c.close(0); "
+                "return \"created\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n", i.key, i.value);
+        }
+        p.parse(code, "filesystem");
+
+        # the connections that are created connect to a port where nothing listens
+        int free_port = get_free_port();
+        foreach string cls in (keys Connections) {
+            assertEq("PERMISSION-DENIED", p.callFunction(cls, free_port, ca_file), sprintf("%s CA file, %s", cls,
+                mode));
+            assertEq("created", p.callFunction(cls, free_port), sprintf("%s without CA, %s", cls, mode));
+        }
+
+        # a manager with a CA file that the host creates and lends connects for the restricted code
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "ssl_ca_file": ca_file,
+        });
+        on_exit mgr.closeAll();
+        string rv = p.callFunction("request", mgr, free_port);
+        assertTrue(rv != "PERMISSION-DENIED" && rv != "INVALID-FUNCTION-ACCESS", rv + ", lent manager, " + mode);
+    }
+
+    #! a class that restricted code declares with the name and signature of the exemption class grants none
+    private testLookAlike(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse("%modern\n%requires HttpClientIo\n" + LookAlike
+            + sprintf("string sub t(int port, *string ca) { try { HttpClientCallerExemption e(); object c = %s; "
+                "c.getPollOperation().continuePoll(); return \"created\"; } catch (hash<ExceptionInfo> ex) { "
+                "return ex.err; } }\n", Connections.Http1ClientConnection), "look-alike");
+        assertEq("PERMISSION-DENIED", p.callFunction("t", port), "look-alike, " + mode);
+        assertEq(NOTHING, listener.accept(0), "no connection, " + mode);
+    }
+
+    #! a thread that gets the TID of a thread whose lent manager created a connection is not exempt
+    private testReusedTid(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse(sprintf("%%modern\n%%requires HttpClientIo\n"
+            "string sub connect(int port) { try { object c = %s; c.getPollOperation().continuePoll(); "
+            "return \"created\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            "string sub request(object mgr, int target) { try { mgr.request(sprintf(\"http://127.0.0.1:%%d\", "
+            "target), \"GET\", \"/\"); return \"called\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n",
+            regex_subst(Connections.Http1ClientConnection, ", ca\\)$", ")")), "reused tid");
+
+        # a thread on which a lent manager creates a connection for the restricted code (to a port where nothing
+        # listens)
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        int target = get_free_port();
+        string rv;
+        int exempt_tid = background sub () { rv = p.callFunction("request", mgr, target); }();
+        thread_join(exempt_tid);
+        assertTrue(rv != "PERMISSION-DENIED" && rv != "INVALID-FUNCTION-ACCESS", rv + ", lent manager, " + mode);
+
+        # threads are started one after the other until one gets its TID: TIDs are assigned in order, and a TID is
+        # assigned again once every TID has been assigned, so it is reached before twice as many threads as there are
+        # TIDs have been started
+        *string reused;
+        int started;
+        while (!exists reused && started < 0x4000) {
+            int tid = background sub () {
+                if (gettid() == exempt_tid) {
+                    reused = p.callFunction("connect", port);
+                }
+            }();
+            ++started;
+            thread_join(tid);
+        }
+        assertEq("PERMISSION-DENIED", reused, sprintf("the thread with the reused TID %d (after %d threads), %s",
+            exempt_tid, started, mode));
+        assertEq(NOTHING, listener.accept(0), "no connection, " + mode);
+    }
+
+    #! code that runs while a lent manager creates a connection cannot use its exemption, and none is left after it
+    private testCallbacks(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse(sprintf("%%modern\n%%requires Logger\n%%requires HttpClientIo\n"
+            "list<string> attempts;\n"
+            "int port;\n"
+            "string sub connect() { try { object c = %s; c.getPollOperation().continuePoll(); return \"created\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            "class TL inherits Logger::Logger {\n"
+            "    private { bool fail; }\n"
+            "    constructor(bool fail) { self.fail = fail; }\n"
+            "    log(int level, string message, ...) {\n"
+            "        attempts += connect();\n"
+            "        if (fail && message =~ /creating/) { throw \"LOGGER-ERROR\", \"the logger fails\"; }\n"
+            "    }\n"
+            "}\n"
+            "object sub logger(int p, bool fail) { port = p; return new TL(fail); }\n"
+            "list<string> sub attempts() { return remove attempts ?? (); }\n"
+            "string sub request(object mgr, int target) { try { mgr.request(sprintf(\"http://127.0.0.1:%%d\", "
+            "target), \"GET\", \"/\"); return \"called\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n",
+            regex_subst(Connections.Http1ClientConnection, ", ca\\)$", ")")), "callbacks");
+
+        # the manager's target: a port where nothing listens
+        int target = get_free_port();
+        foreach bool fail in ((False, True)) {
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+                "logger": p.callFunction("logger", port, fail),
+            });
+            on_exit mgr.closeAll();
+            string rv = p.callFunction("request", mgr, target);
+            assertTrue(rv != "PERMISSION-DENIED" && rv != "INVALID-FUNCTION-ACCESS",
+                sprintf("%s, lent manager, fail: %y, %s", rv, fail, mode));
+            if (fail) {
+                assertEq("LOGGER-ERROR", rv, "the creation fails, " + mode);
+            }
+            list<string> attempts = p.callFunction("attempts");
+            assertTrue(attempts.size() > 0, sprintf("the logger ran, fail: %y, %s", fail, mode));
+            list<string> denied = map "PERMISSION-DENIED", attempts;
+            assertEq(denied, attempts, sprintf("callbacks, fail: %y, %s", fail, mode));
+            # no exemption is left on the thread
+            assertEq("PERMISSION-DENIED", p.callFunction("connect"), sprintf("after, fail: %y, %s", fail, mode));
+            assertEq(NOTHING, listener.accept(0), sprintf("no connection, fail: %y, %s", fail, mode));
+        }
+    }
+}

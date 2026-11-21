@@ -482,8 +482,11 @@ public class DataProvider {
         #! Global options
         static int options = 0;
 
-        #! Global logger
-        static *LoggerInterface logger;
+        #! The hooks that the host gives modules, by module (setModuleHostHooks())
+        static hash<string, hash<auto>> module_host_hooks;
+
+        #! Serializes access to the module host hooks
+        static Mutex module_host_hooks_lock();
     }
 
     #! Sets or clears the global logger
@@ -492,21 +495,93 @@ public class DataProvider {
         @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller: it would change what the module does for other
         tenants and for trusted code
 
+        @note the messages that the module produces for any caller, also for sandboxed code, go to this logger
+
         @since DataProvider 3.0
     */
     static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("set the global logger");
-        DataProvider::logger = logger;
+        DataProviderGlobalLogger::logger = logger;
+    }
+
+    #! Sets the hooks that the host gives a module, before the module is loaded
+    /** A module that runs code for sandboxed callers can need host code to do it: for example module-v8 runs a tenant's
+        TypeScript actions with the tenant context, the token store and the egress meter that the host supplies
+        (TypeScriptActionInterface::TenantActionRunner).  The host can load such a module lazily, in whichever thread
+        first asks for one of its apps, schemes or factories, so it cannot always pass its hooks to the module itself
+        after loading it; it sets them here, at startup, and the module reads them in its own initialization
+        (getModuleHostHooks()).
+
+        The hooks are set once per module: a second set raises an error, so code that runs later cannot replace them.
+        Set them at startup before any user code is loaded, not only before the module: until they are set, any code
+        that is neither sandboxed nor denied @ref Qore::PO_NO_PROCESS_CONTROL "process control" could take the module's
+        slot first.  Give closures or call references, not objects: the registry keeps what it is given, and an object
+        is shared by reference, so code holding it could change what the module calls.  The hooks are host code,
+        created by the trusted code that sets them, and run as such.  Without hooks a module that needs them refuses
+        the calls of sandboxed callers.
+
+        @param module the name of the module the hooks are for
+        @param hooks the hooks; the module documents their keys and signatures
+
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller: it would change what the module does for other
+        tenants and for trusted code
+        @throw MODULE-HOST-HOOKS-ERROR hooks are set already for the module
+
+        @par Example:
+        @code{.py}
+DataProvider::setModuleHostHooks("TypeScriptActionInterface", {
+    "tenant_context_resolver": \Host::resolveTenantContext(),
+});
+        @endcode
+
+        @since DataProvider 3.12
+    */
+    static setModuleHostHooks(string module, hash<auto> hooks) [dom=PROCESS_CONTROL] {
+        # process-wide: the hooks decide what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("set a module's host hooks");
+        AutoLock al(module_host_hooks_lock);
+        if (exists module_host_hooks{module}) {
+            throw "MODULE-HOST-HOOKS-ERROR", sprintf("the host hooks of module %y are set already", module);
+        }
+        module_host_hooks{module} = hooks;
+    }
+
+    #! Returns the hooks that the host gives a module, if any (setModuleHostHooks())
+    /** For a module's own trusted code, typically its initialization; code that a sandbox governs cannot read them.
+
+        @param module the name of the module
+
+        @return the hooks the host set for the module, or @ref nothing if it set none
+
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller
+
+        @since DataProvider 3.12
+    */
+    static *hash<auto> getModuleHostHooks(string module) [dom=PROCESS_CONTROL] {
+        DataProvider::checkNotSandboxed("read a module's host hooks");
+        AutoLock al(module_host_hooks_lock);
+        return module_host_hooks{module};
     }
 
     #! Returns the global data provider logger
-    /** @return the global data provider logger
+    /** The logger is process-wide and set by trusted code: code that is sandboxed or acts for sandboxed code does not
+        get the logger object, as if no logger were set, so that it cannot change the host's logger or use it
+        directly (see @ref sandbox_process_wide_registries); the messages that the module produces while it serves
+        such code still go to the logger
+
+        @return the global data provider logger, or @ref nothing "NOTHING" if none is set or if the caller is code that
+        is sandboxed or acts for sandboxed code
 
         @since DataProvider 3.0
+        @since DataProvider 3.12 sandboxed code does not get the logger
     */
     static *LoggerInterface getGlobalLogger() {
-        return logger;
+        # the logger is process-wide and configured by the host: not handed to sandboxed code (qore#6746)
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            return;
+        }
+        return DataProviderGlobalLogger::logger;
     }
 
     #! Adds the given global data provider options
@@ -2421,6 +2496,18 @@ if (action.data_provider_info) {
     }
 }
 
+#! The process-wide logger of the DataProvider module (not public: only the module's own code uses it)
+/** Set by trusted code with DataProvider::setGlobalLogger(); the module's own code logs the messages that it produces
+    for every caller here, also when it serves sandboxed code, so that they reach the logger that the host configured,
+    while DataProvider::getGlobalLogger() does not hand the logger to sandboxed code (qore#6746)
+*/
+class DataProviderGlobalLogger {
+    public {
+        #! the logger, if any
+        static *LoggerInterface logger;
+    }
+}
+
 #! Loads modules for the lookups of the DataProvider module (not public: only the module's own code uses it)
 /** The public APIs that load every known factory module declare the \c PROCESS_CONTROL domain
     (DataProvider::registerKnownFactories()); a lookup that loads them for its caller, as DataProvider::getFactory()
@@ -2460,7 +2547,8 @@ class DataProviderModuleLoader {
 
     #! Try to load the given module; see DataProvider::tryLoad()
     static bool tryLoad(string module_str, *bool init, *bool rethrow_exception) {
-        *LoggerInterface logger = DataProvider::getGlobalLogger();
+        # read directly: the messages of the module go to the host's logger also for sandboxed callers
+        *LoggerInterface logger = DataProviderGlobalLogger::logger;
         try {
             if (logger) {
                 logger.info("DataProvider loading module: %y", module_str);

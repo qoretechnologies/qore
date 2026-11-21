@@ -48,6 +48,7 @@
 #include "qore/intern/RSection.h"
 #include "qore/intern/RSet.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #define OS_OK            0
 #define OS_DELETED      -1
@@ -59,15 +60,11 @@
 
 class LValueHelper;
 
-class lthash {
-public:
-    DLLLOCAL bool operator()(char* s1, char* s2) const {
-        return memcmp(s1, s2, SH_SIZE) < 0;
-    }
-};
-
-// per-class internal data
-typedef std::map<char*, QoreHashNode*, lthash> cdmap_t;
+//! the private:internal members of an object, per class, keyed by the class ID of the class that declares them
+/** The class ID is the identity of the class: the copies of a class imported into other Programs share it, and a class
+    with the same name and signature as another one (whose signature hash is the same) has its own (qore#7036)
+*/
+typedef std::map<qore_classid_t, QoreHashNode*> cdmap_t;
 
 /*
   Qore internal class data is stored against the object with this data structure
@@ -369,12 +366,16 @@ public:
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
             LexicalSemanticPolicy policy);
 
+    //! merges the members of the object that the current class context can use into \a hash
+    /** @param lock false if this thread holds the object's lock for writing already (the lvalue of the merge is a
+        member of this object; qore#7107)
+    */
     DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy) const;
+            LexicalSemanticPolicy policy, bool lock = true) const;
 
     template <bool Lexical>
     DLLLOCAL void mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy) const;
+            LexicalSemanticPolicy policy, bool lock) const;
 
     DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
 
@@ -480,11 +481,24 @@ public:
         return theclass_priv->runtimeCheckMemberAccess(info, class_ctx) ? QOA_OK : QOA_PRIV_ERROR;
     }
 
+    //! raises OBJECT-ALREADY-DELETED and returns true if the object is deleted
+    /** takes the object's read lock unless \a vl holds the object's lock: the lvalue is then a member of the object
+        itself, whose lock this thread holds for writing
+    */
+    DLLLOCAL bool raiseIfDeleted(const AutoVLock& vl, ExceptionSink* xsink) const {
+        QoreSafeVarRWReadLocker sl(rml, qore_auto_vlock_ops(&vl).getRWL() != &rml);
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+            return true;
+        }
+        return false;
+    }
+
     // must be called in the object read lock
     DLLLOCAL const QoreHashNode* getInternalData(const qore_class_private* class_ctx) const {
         if (!cdmap)
             return nullptr;
-        cdmap_t::const_iterator i = cdmap->find(class_ctx->getHash());
+        cdmap_t::const_iterator i = cdmap->find(class_ctx->classID);
         return i != cdmap->end() ? i->second : nullptr;
     }
 
@@ -492,7 +506,7 @@ public:
     DLLLOCAL QoreHashNode* getInternalData(const qore_class_private* class_ctx) {
         if (!cdmap)
             return nullptr;
-        cdmap_t::iterator i = cdmap->find(class_ctx->getHash());
+        cdmap_t::iterator i = cdmap->find(class_ctx->classID);
         return i != cdmap->end() ? i->second : nullptr;
     }
 
@@ -752,7 +766,12 @@ public:
         return true;
     }
 
-    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const;
+    //! merges the members of the object that the current class context can use into \a hash
+    /** @param lock false if this thread holds the object's lock for writing already (the lvalue of the merge is a
+        member of this object; qore#7107)
+    */
+    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            bool lock = true) const;
 
     DLLLOCAL bool checkData(qore_classid_t key) {
         if (!privateData) {
@@ -1021,9 +1040,9 @@ private:
 
 public:
     DLLLOCAL qore_object_lock_handoff_helper(qore_object_private* n_pobj, AutoVLock& n_vl) : pobj(n_pobj), vl(n_vl) {
-        if (pobj->obj == vl.getObject()) {
-            assert(vl.getRWL() == &pobj->rml);
-            vl.clear();
+        if (pobj->obj == qore_auto_vlock_ops(vl).getObject()) {
+            assert(qore_auto_vlock_ops(vl).getRWL() == &pobj->rml);
+            qore_auto_vlock_ops(vl).clear();
             return;
         }
 
@@ -1047,7 +1066,7 @@ public:
     }
 
     DLLLOCAL void stayLocked() {
-        vl.set(pobj->obj, &pobj->rml);
+        qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
         pobj = nullptr;
     }
 };

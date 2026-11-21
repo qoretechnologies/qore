@@ -41,7 +41,7 @@ class MysqlTestIsolationTest inherits QUnit::Test {
                 Datasource connstr_ds(connstr);
                 connstr_ds.open();
             } catch (hash<ExceptionInfo> ex) {
-                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+                skip_reason = TestRun::getConnectFailureReason("no DB connection", ex);
             }
         }
         addTestCase("a non-MySQL connection has no run database", \notMysql());
@@ -64,7 +64,7 @@ class MysqlTestIsolationTest inherits QUnit::Test {
 
     private checkSkip() {
         if (skip_reason) {
-            testSkip(skip_reason);
+            TestRun::skipOrFail(skip_reason);
         }
     }
 

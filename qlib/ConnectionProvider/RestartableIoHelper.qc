@@ -111,6 +111,8 @@ public class RestartableIoHelper inherits LoggerWrapper {
 
     #! Returns the logger interface for logging
     private *LoggerInterface getLogger() {
+        # no logger for sandboxed callers, which do not get the process-wide logger (qore#6746): their recovery
+        # messages are not logged
         return DataProvider::getGlobalLogger();
     }
 }

@@ -138,7 +138,7 @@ public class OutputFormatEnforcer inherits AbstractGuardrailRule {
     }
 
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
-        date start = now_us();
+        int start_us = clock_get_monotonic_us();
         list<hash<GuardrailViolation>> violations = ();
 
         # Check max length
@@ -189,7 +189,7 @@ public class OutputFormatEnforcer inherits AbstractGuardrailRule {
             }
         }
 
-        int elapsed_ms = (now_us() - start).durationMicroseconds() / 1000;
+        int elapsed_ms = getElapsedMs(start_us);
 
         if (violations) {
             return <GuardrailResult>{

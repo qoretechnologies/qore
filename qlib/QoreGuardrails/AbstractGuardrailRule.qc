@@ -250,8 +250,8 @@ public class AbstractGuardrailRule {
     }
 
     #! Calculates elapsed milliseconds since start
-    private int getElapsedMs(date start) {
-        return (now_us() - start).durationMicroseconds() / 1000;
+    private int getElapsedMs(int start_us) {
+        return (clock_get_monotonic_us() - start_us) / 1000;
     }
 }
 

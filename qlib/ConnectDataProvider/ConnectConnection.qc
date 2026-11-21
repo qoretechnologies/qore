@@ -39,6 +39,11 @@ auto provider = conn.getDataProvider();
     @endcode
 */
 public class ConnectConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection scheme definition
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ConnectDataProvider",

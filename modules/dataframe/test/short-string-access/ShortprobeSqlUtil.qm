@@ -1,0 +1,62 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The SqlUtil driver module of the "shortprobe" driver of the probes of short-string-access.qtest: an SQLite table
+# whose SQL names of tables and columns are strings that a value holds inline (with no QoreStringNode) when they are
+# 6 bytes or fewer, as a driver module written in Qore can return them.  In a debug build, the names are made inline
+# in every execution mode with dbg_make_short_string(); otherwise they come from a constant hash, which qcc-compiled
+# code holds inline.
+
+%modern
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+
+module ShortprobeSqlUtil {
+    version = "1.0";
+    desc = "SqlUtil driver module of the short string probes of the dataframe module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ShortprobeSqlUtil {
+    #! the SQL names of the probes
+    const Names = {
+        "t": "t",
+        "a": "a",
+        "\"in\"": "\"in\"",
+        "\"by\"": "\"by\"",
+    };
+
+    #! returns the SQL name as an inline string where it can be one
+    string sub short_name(string name) {
+        if (!Names{name}) {
+            return name;
+        }
+%ifdef QoreDebug
+        return dbg_make_short_string(name);
+%else
+        return Names{name};
+%endif
+    }
+
+    #! an SQLite table whose SQL names of tables and columns can be inline strings
+    public class ShortprobeTable inherits Sqlite3SqlUtil::Sqlite3Table {
+        constructor(AbstractDatasource ds, string name, *hash<auto> opts) : Sqlite3Table(ds, name, opts) {
+        }
+
+        string getColumnSqlName(string col) {
+            return short_name(Sqlite3Table::getColumnSqlName(col));
+        }
+    }
+
+    #! returns a ShortprobeTable object for the arguments
+    public ShortprobeTable sub get_table(AbstractDatasource nds, string nname, *hash<auto> opts) {
+        return new ShortprobeTable(nds, nname, opts);
+    }
+
+    #! returns a Sqlite3Database object for the arguments
+    public Sqlite3Database sub get_database(AbstractDatasource nds, *hash<auto> opts) {
+        return new Sqlite3Database(nds, opts);
+    }
+}

@@ -20,12 +20,12 @@
           "message": "已建立新檔案"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.short_desc": {
-          "source": "A file is created in a server directory",
-          "message": "檔案已在伺服器目錄中建立"
+          "source": "The handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "處理常式必須移動、重新命名或刪除檔案，否則下次輪詢時會再次傳送該檔案。"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.desc": {
-          "source": "React to files created in a server directory",
-          "message": "對在伺服器目錄中建立的檔案做出反應"
+          "source": "The handler must move, rename or delete the file, or it will be delivered again on the next poll. Move it outside the watched directory or rename it so that it no longer matches the file mask.",
+          "message": "處理常式必須移動、重新命名或刪除檔案，否則下次輪詢時會再次傳送該檔案。 請將檔案移出監看的目錄，或將其重新命名，使檔名不再符合比對模式。"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.display_name": {
           "source": "Polling Mask",

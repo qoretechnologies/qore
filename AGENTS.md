@@ -29,7 +29,9 @@
   symlink to the AOT-compiled `build/qlib-qmod/` output and is preferred over the `.qm`/`.qc`
   sources, so source edits are silently ignored until the qmod is rebuilt — even with `qlib`
   prepended to the module path. Symptom: the edited code simply never runs (no error). The same
-  applies to `build-debug/` when testing the debug build.
+  applies to `build-debug/` when testing the debug build. The links are shared by the builds of the
+  tree and lead to the build built last, but a qore of another build loads its own build's module
+  in their place, or the source if its build has none (`design/aot-linked-module-sources.md`).
 
 ## Coding Style & Naming Conventions
 - C++ code uses 4-space indentation and braces on the same line; follow nearby file style.

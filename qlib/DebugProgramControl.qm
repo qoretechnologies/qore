@@ -122,7 +122,9 @@ module DebugProgramControl {
       @ref DebugProgramControl::DebugProgramControl::isTerminating() "isTerminating()": a debugged program ends, and its
       threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O; a thread
       that stops at the end of its code (\c exit) or when it leaves the program (\c detach) is resumed by the client,
-      as for any thread that ends, also when it stopped there before the program was ended
+      as for any thread that ends, also when it stopped there before the program was ended; the \c program//create
+      command returns when the thread that runs the program has entered its code, so that a program can be ended as
+      soon as it has been created
     - the condition and the expressions of the log message of a breakpoint are parsed with the variables of its
       statements when they are set, and refused with \c BREAKPOINT-CONDITION-ERROR if they cannot be parsed; expressions
       are evaluated also with the top-level local variables of the program, which have global scope
@@ -257,7 +259,10 @@ public namespace DebugProgramControl {
             hash<string, bool> terminatingPrograms = {};
             #! the threads that have ended the code of a program, by program ID and TID; see threadEnds()
             hash<string, hash<string, bool>> endedThreads = {};
-            #! serializes the access to startedPrograms, terminatingPrograms and endedThreads
+            #! the programs created by the \c program//create command whose thread has not yet entered their code, by
+            #! program ID; see launchProgram()
+            hash<string, Counter> launchingPrograms = {};
+            #! serializes the access to startedPrograms, terminatingPrograms, endedThreads and launchingPrograms
             Mutex startedLock();
 
             #! the steps of threads into a call of their statement, by TID; see startStepInto() and checkStepInto()
@@ -563,10 +568,57 @@ public namespace DebugProgramControl {
             return pgm;
         }
 
+        #! Runs a program that the debugger created in a new thread and returns the TID of the thread
+        /** It returns when the thread has entered the code of the program (its \c attach interrupt, where the thread
+            of a launched program stops), or when the program is no longer debugged, as when its run has ended without
+            entering its code: from then on the thread is one of the threads of the program, which terminateProgram()
+            ends.  A thread that has not entered the code of the program is not one of its threads, so it could not be
+            ended: when the debugging of the program ended before the thread entered its code, as when an IDE ended its
+            session right after launching the program, the thread ran the program without the debugger, which could
+            no longer end it (qore#7114).
+
+            @param pgm the program to run
+
+            @return the TID of the thread that runs the program
+        */
+        private int launchProgram(Program pgm) {
+            string pgm_id = string(pgm.getProgram().getProgramId());
+            Counter started(1);
+            DebugProgramControl::withLock(startedLock, sub () { launchingPrograms{pgm_id} = started; });
+            on_error programEntered(pgm_id);
+            int tid = background runAndDetach(pgm);
+            waitForProgramEntry(started);
+            return tid;
+        }
+
+        #! Waits until the thread of a program started by launchProgram() has entered its code
+        /** @param started reaches zero when the thread has entered the code of the program or when the program is no
+            longer debugged, at the latest when its run ends (see runAndDetach())
+        */
+        private waitForProgramEntry(Counter started) {
+            started.waitForZero();
+        }
+
+        #! Ends the wait of launchProgram() for the thread of a program to enter its code
+        /** Called when the thread enters the code of the program and when the program is removed from debugging
+
+            @param pgm_id the ID of the program
+        */
+        private:internal programEntered(softstring pgm_id) {
+            DebugProgramControl::withLock(startedLock, sub () {
+                *Counter c = remove launchingPrograms{pgm_id};
+                if (c) {
+                    c.dec();
+                }
+            });
+        }
+
         #! run and remove program from debugging
         private *int runAndDetach(Program pgm) {
             ProgramControl pc = pgm.getProgram();
             # I would be called in Program::destructor() but this is more transparent
+            # a run that ends without entering the code of the program, as of a program without statements, ends the
+            # wait of launchProgram() here
             on_exit removeProgram(pc);
             try {
                 return pgm.run();
@@ -926,7 +978,7 @@ public namespace DebugProgramControl {
                             case 'create':
                                 Program pgm = createProgram(receiveData.filename, NOTHING, receiveData.args);
                                 ProgramControl p = pgm.getProgram();
-                                result{string(p.getProgramId())} = getProgramInfo(p, True, ((background runAndDetach(pgm)), ));
+                                result{string(p.getProgramId())} = getProgramInfo(p, True, (launchProgram(pgm),));
                                 break;
                             case 'add':
                                 {
@@ -2415,6 +2467,8 @@ public namespace DebugProgramControl {
                 remove terminatingPrograms{program.getProgramId()};
                 remove endedThreads{program.getProgramId()};
             });
+            # a program that is no longer debugged ends the wait of launchProgram()
+            programEntered(program.getProgramId());
             # the lock of the debugged Programs is released before evalLock is taken, which evaluateExpression() holds
             # while it takes that lock
             DebugProgramControl::withLock(evalLock, sub () { remove evalPrograms{program.getProgramId()}; });
@@ -3121,6 +3175,9 @@ public namespace DebugProgramControl {
         }
 
         onAttach(ProgramControl pgm, reference rs, reference runToStatementId) {
+            # the thread of a program created by launchProgram() has entered its code; it is now one of the threads of
+            # the program, which terminateProgram() ends
+            programEntered(pgm.getProgramId());
             handleInterrupt("attach", pgm, \rs, \runToStatementId);
         }
 

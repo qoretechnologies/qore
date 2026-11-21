@@ -628,9 +628,34 @@ DLLEXPORT bool qore_type_is_typed_code(const QoreTypeInfo* ti);
 DLLEXPORT const QoreTypeInfo* qore_type_get_code_return_type(const QoreTypeInfo* ti);
 
 //! copies the parameter types of a typed code type to \a params; returns false if the type is not a typed code type
-/** @since %Qore 3.0
+/** @since %Qore 3.0; the macro _QORE_HAS_CODE_PARAM_TYPES_BY_REF is defined for this form (issue #6936)
 */
 DLLEXPORT bool qore_type_get_code_param_types(const QoreTypeInfo* ti, type_vec_t& params);
+
+//! defined for qore_type_get_code_param_types(const QoreTypeInfo*, type_vec_t&) (issue #6936)
+/** The earlier module API 2.3 headers declared only the deprecated
+    qore_type_get_code_param_types(const QoreTypeInfo*), which the library still exports
+
+    @since %Qore 3.0
+*/
+#define _QORE_HAS_CODE_PARAM_TYPES_BY_REF 1
+
+//! returns a pointer to the parameter types of a typed code type, or nullptr if not a typed code type
+/** @param ti the type
+
+    @return a pointer to a vector of the parameter types that lives as long as the type, or nullptr if the type is not a
+    typed code type; do not delete or modify it
+
+    @note when a declaration that a parameter type is the type of is freed (a class, hashdecl or enum of a deleted
+    Program), the library repoints the element to the declaration's tombstone first, as it does in the type itself;
+    a caller that reads an element while that happens in another thread reads either pointer
+
+    @deprecated use qore_type_get_code_param_types(const QoreTypeInfo*, type_vec_t&) instead, which copies the types;
+    kept for the binary compatibility of modules built with the earlier module API 2.3 headers (issue #6936)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT const type_vec_t* qore_type_get_code_param_types(const QoreTypeInfo* ti);
 
 //! returns true if a typed code type accepts variable arguments
 /** @since %Qore 3.0
@@ -644,9 +669,34 @@ DLLEXPORT bool qore_type_is_parameterized(const QoreTypeInfo* ti);
 
 //! copies the type arguments of a parameterized class or hashdecl type to \a args; returns false if the type is not
 //! parameterized
-/** @since %Qore 3.0
+/** @since %Qore 3.0; the macro _QORE_HAS_TYPE_ARGUMENTS_BY_REF is defined for this form (issue #6936)
  */
 DLLEXPORT bool qore_type_get_type_arguments(const QoreTypeInfo* ti, type_vec_t& args);
+
+//! defined for qore_type_get_type_arguments(const QoreTypeInfo*, type_vec_t&) (issue #6936)
+/** The earlier module API 2.3 headers declared only the deprecated qore_type_get_type_arguments(const QoreTypeInfo*),
+    which the library still exports
+
+    @since %Qore 3.0
+*/
+#define _QORE_HAS_TYPE_ARGUMENTS_BY_REF 1
+
+//! returns a pointer to the type arguments of a parameterized class or hashdecl type, or nullptr if not parameterized
+/** @param ti the type
+
+    @return a pointer to a vector of the type arguments, or nullptr if the type is not parameterized; do not delete or
+    modify it.  For a parameterized class type, the vector lives as long as the type; when a declaration that a type
+    argument is the type of is freed (a class, hashdecl or enum of a deleted Program), the library repoints the element
+    to the declaration's tombstone first, as it does in the type itself, and a caller that reads an element while that
+    happens in another thread reads either pointer.  For a parameterized hashdecl type, it is the vector of the
+    concrete hashdecl, which lives as long as the hashdecl.
+
+    @deprecated use qore_type_get_type_arguments(const QoreTypeInfo*, type_vec_t&) instead, which copies the types;
+    kept for the binary compatibility of modules built with the earlier module API 2.3 headers (issue #6936)
+
+    @since %Qore 3.0
+ */
+DLLEXPORT const type_vec_t* qore_type_get_type_arguments(const QoreTypeInfo* ti);
 
 //! returns true if the type is a symbolic type parameter
 /** @since %Qore 3.0
@@ -860,6 +910,22 @@ public:
     */
     DLLEXPORT int checkClassElementAccess(const QoreClass* cls, ClassAccess access, const char* kind,
             const char* name, ExceptionSink* xsink) const;
+
+    //! Returns true if an element (a method or a member) of a class can be used on an object through reflection
+    /** The object must be valid and have \a cls in its class hierarchy.  An element of a class that the object's
+        class reaches only through a class inherited with \c private:internal below the object's own class is
+        reachable as the language makes it reachable: for callers to which the language's member access applies
+        (appliesMemberAccess()), only from the class context of the class on that \c private:internal path (the
+        class that inherits \a cls with \c private:internal, or a class between it and \a cls); other callers may
+        use every element of the object's hierarchy, as they may use every element whatever its access (issue
+        #6644)
+
+        @param obj the object
+        @param cls the class that declares the element
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool canUseObjectElementClass(const QoreObject& obj, const QoreClass& cls) const;
 
     //! Returns true if the export boundary of a user module limits the caller's reflection on a target Program
     /** It applies to callers to which the language's member access applies (appliesMemberAccess()), for a target

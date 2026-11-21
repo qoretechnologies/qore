@@ -1,0 +1,43 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module of caller-program.qtest whose initialization records its caller Program (qore#7077): library code (a trusted module directory) that a tenant loads first
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+module CallerInitTenant {
+    version = "1.0";
+    desc = "caller Program of a module's initialization";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        CallerInitTenant::init_ran = True;
+        CallerInitTenant::init_caller = SandboxManager::getCallerProgramId();
+        CallerInitTenant::init_thread_caller = CallerInitTenant::in_thread();
+    };
+}
+
+public namespace CallerInitTenant {
+#! the caller Program of the module's initialization and of a thread that it started
+#! set when the initialization ran
+our *bool init_ran;
+our *int init_caller;
+our *int init_thread_caller;
+
+#! returns the caller Program in a thread that this module code starts (called by the initialization)
+public *int sub in_thread() {
+    Queue q();
+    background sub () { q.push(SandboxManager::getCallerProgramId()); }();
+    return q.get();
+}
+
+#! returns them with the caller Program of this call
+public hash<auto> sub get() {
+    return {"ran": init_ran, "init": init_caller, "thread": init_thread_caller,
+        "call": SandboxManager::getCallerProgramId()};
+}
+}

@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# fixture of child-program-module-mark.qtest: a module that a restricted Program loads first
+
+%modern
+
+module ChildPgmMarkRestricted {
+    version = "1.0";
+    desc = "fixture of child-program-module-mark.qtest: a module that a restricted Program loads first";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ChildPgmMarkRestricted {
+    #! returns the parse options of a Program that the module's code creates, and of the module's own Program
+    public hash<auto> sub child_marks() {
+        Program p();
+        return {
+            "child_in_module": boolean(p.getParseOptions() & PO_IN_MODULE),
+            "module_in_module": boolean(get_parse_options() & PO_IN_MODULE),
+            "module_no_child": boolean(get_parse_options() & PO_NO_CHILD_PO_RESTRICTIONS),
+        };
+    }
+}

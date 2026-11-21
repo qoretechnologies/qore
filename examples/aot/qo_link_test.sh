@@ -40,7 +40,7 @@ echo "=== Step 3: qcc link-mode (no hand-written main.cpp, no g++) ==="
 echo ""
 echo "=== Step 4: inspect emitted glue ==="
 wc -l "${TMP}/app.main.cpp"
-grep -E "qore_[a-z_]+_script_register|qore_run_callable" "${TMP}/app.main.cpp" | head -5
+grep -E "qore_[a-z_]+_script_register|qore_run_callable" "${TMP}/app.main.cpp" | sed -n 1,5p
 
 echo ""
 echo "=== Step 5: run standalone binary ==="

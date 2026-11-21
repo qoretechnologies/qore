@@ -1,0 +1,41 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# connection provider module of NamedConnectionCreation.qtest
+
+%requires qore >= 2.0
+%modern
+%requires ConnectionProvider
+%requires(reexport) DataProvider
+%requires RestClient
+
+module NamedConnectionTestProvider {
+    version = "1.0";
+    desc = "connection provider of NamedConnectionCreation.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+const Url = "http://127.0.0.1:1";
+
+#! gives the connection with the given name
+/** - \c net: a REST connection
+    - \c allowed, \c denied: REST connections to the URLs in the \c NCC_ALLOWED_URL and \c NCC_DENIED_URL environment
+      variables
+*/
+public ConnectionProvider::AbstractConnection sub get_mod_connection(string name) {
+    switch (name) {
+        case "net":
+            return new RestConnection(name, "named", Url, {"monitor": False});
+
+        # the targets of the sandbox case, which the test gives in the environment
+        case "allowed":
+        case "denied":
+            return new RestConnection(name, "named", getenv("NCC_" + name.upr() + "_URL"), {"monitor": False},
+                {"connect_timeout": 5000, "timeout": 5000});
+    }
+    throw "CONNECTION-ERROR", sprintf("unknown connection %y", name);
+}
+
+public *hash<string, ConnectionProvider::AbstractConnection> sub get_mod_connections() {
+}

@@ -74,6 +74,10 @@ module WebUtil {
     @section webutil_relnotes Release Notes
 
     @subsection webutil_v1_8_1 WebUtil v1.8.1
+    - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
+      built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
+      option \c http_fields_at_top_level set to @ref False
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - fixed @ref WebUtil::FileHandler "FileHandler" to serve files when the response headers of a subclass's
       \c getResponseHeadersForFile() have values that all have the same type, such as a literal
       <tt>{"X-Debug": True}</tt>; adding the file's headers raised \c RUNTIME-TYPE-ERROR, so the file was answered
@@ -1350,14 +1354,17 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         # a subclass's Vary fields (for example Origin), including the wildcard form.
         addAcceptEncodingVary(\respHdr);
 
+        # the Range field of the request (qore#6851)
+        auto range_field = http_get_field(hdr, "range");
         if (cx.hasKey("identity-acceptable") && !cx."identity-acceptable") {
-            remove hdr.range;
+            remove range_field;
         }
 
         # Range requests use the identity representation. Evaluate preconditions before Range,
         # and ignore Range when If-Range does not strongly match that representation.
-        if (hdr.range && enable_range && hdr."if-range") {
-            string if_range = hdr."if-range";
+        auto if_range_field = range_field && enable_range ? http_get_field(hdr, "if-range") : NOTHING;
+        if (if_range_field) {
+            string if_range = if_range_field;
             bool matches = False;
             if (if_range =~ /^"/) {
                 matches = etag && if_range == etag;
@@ -1367,15 +1374,15 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
                     <= gmtime(if_range_date).getEpochSeconds();
             }
             if (!matches) {
-                remove hdr.range;
+                remove range_field;
             }
         }
-        if (hdr.range && enable_range) {
+        if (range_field && enable_range) {
             *hash<HttpResponseInfo> not_modified = checkConditionalRequest(hdr, stat_hash, etag, respHdr);
             if (not_modified) {
                 return not_modified;
             }
-            *hash<auto> range = parseRangeHeader(hdr.range, stat_hash.size);
+            *hash<auto> range = parseRangeHeader(range_field, stat_hash.size);
             if (range) {
                 return serveRangeRequest(path, stat_hash, range, respHdr);
             }
@@ -1560,8 +1567,8 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
     private *hash<HttpResponseInfo> checkConditionalRequest(hash<auto> hdr, hash<StatInfo> stat_hash,
             *string etag, *hash<auto> response_hdr) {
         # If-None-Match takes precedence (RFC 7232 Section 6)
-        if (hdr."if-none-match") {
-            string inm = trim(hdr."if-none-match");
+        if (auto if_none_match = http_get_field(hdr, "if-none-match")) {
+            string inm = trim(if_none_match);
             if (inm == "*") {
                 return make304Response(etag, stat_hash.mtime, response_hdr);
             }
@@ -1577,8 +1584,9 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         }
 
         # fall back to If-Modified-Since
-        if (hdr."if-modified-since" && enable_last_modified) {
-            *date ims = parseHttpDate(hdr."if-modified-since");
+        auto if_modified_since = enable_last_modified ? http_get_field(hdr, "if-modified-since") : NOTHING;
+        if (if_modified_since) {
+            *date ims = parseHttpDate(if_modified_since);
             if (ims) {
                 # compare at second resolution (HTTP dates don't have sub-second precision)
                 if (gmtime(stat_hash.mtime).getEpochSeconds()

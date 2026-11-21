@@ -20,12 +20,12 @@
           "message": "Nuovo file creato"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.short_desc": {
-          "source": "A file is created in a server directory",
-          "message": "Un file viene creato in una directory del server"
+          "source": "The handler must move, rename or delete the file, or it will be delivered again on the next poll.",
+          "message": "Il gestore dell’evento deve spostare, rinominare o eliminare il file, altrimenti il file verrà consegnato di nuovo al controllo successivo."
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.desc": {
-          "source": "React to files created in a server directory",
-          "message": "Reagisci ai file creati in una directory del server"
+          "source": "The handler must move, rename or delete the file, or it will be delivered again on the next poll. Move it outside the watched directory or rename it so that it no longer matches the file mask.",
+          "message": "Il gestore dell’evento deve spostare, rinominare o eliminare il file, altrimenti il file verrà consegnato di nuovo al controllo successivo. Spostarlo fuori dalla directory monitorata oppure rinominarlo in modo che il nome non corrisponda più al filtro."
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.display_name": {
           "source": "Polling Mask",

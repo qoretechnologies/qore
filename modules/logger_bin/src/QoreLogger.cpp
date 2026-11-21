@@ -50,13 +50,13 @@ QoreStringNode* QoreLogger::getName() const {
 
 //! Returns the parent logger, if any
 QoreValue QoreLogger::getParent(ExceptionSink* xsink) {
-    return self->getReferencedMemberNoMethod("parent", xsink);
+    return self->getReferencedMemberNoMethod("parent", QC_LOGGER, xsink);
 }
 
 //! Returns the logging level object
 QoreValue QoreLogger::getLevel(ExceptionSink* xsink, bool effective) {
     if (!effective) {
-        return self->getReferencedMemberNoMethod("currentLevel", xsink);
+        return self->getReferencedMemberNoMethod("currentLevel", QC_LOGGER, xsink);
     }
 
     ReferenceHolder<QoreLogger> lholder(xsink);
@@ -64,7 +64,7 @@ QoreValue QoreLogger::getLevel(ExceptionSink* xsink, bool effective) {
     QoreLogger* l = this;
     ValueHolder rv(xsink);
     while (true) {
-        rv = l->self->getReferencedMemberNoMethod("currentLevel", xsink);
+        rv = l->self->getReferencedMemberNoMethod("currentLevel", QC_LOGGER, xsink);
         if (*xsink) {
             return QoreValue();
         }
@@ -128,7 +128,7 @@ QoreValue QoreLogger::decLevel(ExceptionSink* xsink) {
         }
         setLevelIntern(xsink, lvl, l);
     }
-    return self->getReferencedMemberNoMethod("currentLevel", xsink);
+    return self->getReferencedMemberNoMethod("currentLevel", QC_LOGGER, xsink);
 }
 
 //! Increment logger level
@@ -148,7 +148,7 @@ QoreValue QoreLogger::incLevel(ExceptionSink* xsink) {
         }
         setLevelIntern(xsink, lvl, l);
     }
-    return self->getReferencedMemberNoMethod("currentLevel", xsink);
+    return self->getReferencedMemberNoMethod("currentLevel", QC_LOGGER, xsink);
 }
 
 //! Sets the additivity flag; when additivity is active, events are passed to parent loggers.
@@ -308,7 +308,7 @@ void QoreLogger::logEvent(ExceptionSink* xsink, const QoreObject* event, QoreLog
         // Forward the event upstream if additivity is turned on
         p->logEvent(xsink, event, e);
     } else {
-        ValueHolder pv(self->getReferencedMemberNoMethod("parent", xsink), xsink);
+        ValueHolder pv(self->getReferencedMemberNoMethod("parent", QC_LOGGER, xsink), xsink);
         if (!pv) {
             return;
         }
@@ -369,7 +369,7 @@ void QoreLogger::setParentIntern(ExceptionSink* xsink, ReferenceHolder<QoreObjec
         this->parent->deref(xsink);
     }
     this->parent = p.release();
-    self->setValue("parent", holder.release(), xsink);
+    self->setInternalMemberValue("parent", QC_LOGGER, holder.release(), xsink);
 }
 
 void QoreLogger::setLevelIntern(ExceptionSink* xsink, QoreObject* level) {
@@ -390,7 +390,7 @@ void QoreLogger::setLevelIntern(ExceptionSink* xsink, ReferenceHolder<QoreObject
         currentLevel->deref(xsink);
     }
     currentLevel = l.release();
-    self->setValue("currentLevel", level.release(), xsink);
+    self->setInternalMemberValue("currentLevel", QC_LOGGER, level.release(), xsink);
 }
 
 QoreObject* QoreLogger::newEventObject(QoreLoggerEvent* ev, ExceptionSink* xsink) {

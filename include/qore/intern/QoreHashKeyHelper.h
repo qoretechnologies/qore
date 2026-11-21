@@ -105,6 +105,7 @@ public:
         } else if (n.isPointer()) {
             const AbstractQoreNode* node = n.getInternalNode();
             if (node && node->getType() == NT_STRING) {
+                // note: safe; the node of the value, read under n.isPointer() above
                 const QoreStringNode* str = static_cast<const QoreStringNode*>(node);
                 if (usableAsIs(*str, xsink)) {
                     key = str->c_str();

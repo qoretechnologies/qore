@@ -1297,7 +1297,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     */
     private *hash<auto> validateModernHeaders(hash<auto> cx, hash<auto> hdr, string method,
             *hash<auto> params, string version) {
-        *string hdr_version = hdr{McpProtocolVersionHeaderLwr};
+        *string hdr_version = http_get_field(hdr, McpProtocolVersionHeaderLwr);
         if (!hdr_version.val()) {
             return {"message": sprintf("required header %y is missing", McpProtocolVersionHeader)};
         }
@@ -1307,7 +1307,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 MCP_MetaProtocolVersion, version)};
         }
 
-        *string hdr_method = hdr{McpMethodHeaderLwr};
+        *string hdr_method = http_get_field(hdr, McpMethodHeaderLwr);
         if (!hdr_method.val()) {
             return {"message": sprintf("required header %y is missing", McpMethodHeader)};
         }
@@ -1317,7 +1317,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         }
 
         *string name = mcp_name_header_value(method, params);
-        *string hdr_name = hdr{McpNameHeaderLwr};
+        *string hdr_name = http_get_field(hdr, McpNameHeaderLwr);
         if (exists name) {
             if (!exists hdr_name) {
                 return {"message": sprintf("required header %y is missing for method %y",
@@ -1343,7 +1343,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             *hash<auto> params) {
         # gather the Mcp-Param-* headers actually present on the request
         hash<string, string> present = {};
-        foreach hash<auto> i in (hdr.pairIterator()) {
+        foreach hash<auto> i in (http_get_fields(hdr).pairIterator()) {
             if (i.key.typeCode() == NT_STRING && i.value.typeCode() == NT_STRING
                 && i.key.equalPartial(McpParamHeaderPrefixLwr)
                 && i.key.size() > McpParamHeaderPrefixLwr.size()) {
@@ -1485,7 +1485,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         # Track whether this is an SSE client (session from query param) vs streamable (session from header)
         bool sse_session = False;
         if (((cx.hdr.method == "GET") || (cx.hdr.method == "POST") || (cx.hdr.method == "DELETE"))
-            && (session = hdr{McpSessionHeaderLwr}).val()) {
+            && (session = http_get_field(hdr, McpSessionHeaderLwr)).val()) {
             AutoReadLock al(rwl);
             if (!smap{session}) {
                 return AbstractHttpRequestHandler::makeResponse(404, "Session %y is invalid", session);
@@ -1645,7 +1645,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     }
 
     string getSessionId(hash<auto> hdr) {
-        if ((*string s = hdr{McpSessionHeaderLwr}).val()) {
+        if ((*string s = http_get_field(hdr, McpSessionHeaderLwr)).val()) {
             # update last activity for existing session
             AutoWriteLock al(rwl);
             if (smap{s}) {
@@ -1842,7 +1842,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     }
 
     private static bool clientAcceptsSse(hash<auto> hdr) {
-        *string astr = hdr.accept;
+        *string astr = http_get_field(hdr, "accept");
         hash<auto> aih;
         if (!astr.val()) {
             # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If no Accept header field is present, then

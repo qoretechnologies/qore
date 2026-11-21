@@ -11,6 +11,7 @@
 %requires MssqlSqlUtilBase
 %requires FreetdsSqlUtil
 %requires ./MssqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module freetds
 %define NO_FREETDS
@@ -65,7 +66,7 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+            TestRun::failOrSkipConnect("no DB connection", ex);
         }
         ds.close();
     }

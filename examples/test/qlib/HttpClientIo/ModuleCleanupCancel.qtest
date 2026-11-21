@@ -35,6 +35,14 @@
     cancels it has its cancel deferred until the step's result arrives, which the worker that made the step sends;
     the step cases (ModuleCleanupCancel/step-client.qr and CleanupCancelStep.qm) hold that result with a test hook
     of a debug build, so that the cleanup cancels the operation in its step.
+
+    The cleanup cancels the connection on an I/O thread, and the operation's onComplete() runs on a callback worker
+    later, with the references of the operation, whose release runs the manager's destructor: under load that was
+    after the HttpClientIo module's Program had passed its teardown barrier and been deleted, and "PROGRAM-ERROR: the
+    Program accessed has already been deleted" was printed (qore#6928).  The cleanup now waits for the work that it
+    hands over before it goes on with the next module.  The hold cases (ModuleCleanupCancel/hold-client.qr) hold that
+    onComplete() with a test hook of a debug build until the cleanup releases it, which it does when it waits for it,
+    and else only after the user modules have been deleted.
 */
 
 %modern
@@ -95,6 +103,19 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             addTestCase(sprintf("%s: an operation that the module cleanup cancels in its step ends without an error",
                 mode), sub () { runStepCase(m); });
         }
+        foreach string mode in (ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("%s: the process ends when the module cleanup creates the asynchronous I/O "
+                "controller", mode), sub () { runFirstSubmitCase(m); });
+        }
+        foreach string mode in (ExecModes) {
+            foreach string protocol in (Protocols) {
+                string m = mode;
+                string p = protocol;
+                addTestCase(sprintf("%s: %s: the work that the module cleanup hands over ends before a module's Program "
+                    "is deleted", mode, protocol), sub () { runHoldCase(m, p); });
+            }
+        }
         on_exit {
             delete server;
         }
@@ -142,6 +163,44 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertRegex("(^|\n)abort\n", out, "abort() runs in the module cleanup: " + out);
         assertRegex("(^|\n)onComplete: canceled: True\n", out, "onComplete() runs in the module cleanup: " + out);
         assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
+        assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
+    }
+
+    #! the onComplete() of the connection that the cleanup cancels is held until the cleanup releases it, so that it
+    #! runs as late as the cleanup lets it: the cleanup must wait for it before it waits for the threads of a module's
+    #! Program and deletes it, and it must not run after the HttpClientIo module's Program has been deleted (qore#6928)
+    private runHoldCase(string mode, string protocol) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the work is held with a test hook of a debug build");
+        }
+        string url = sprintf("https://127.0.0.1:%d", protocol == "h3" ? quic_port : tls_port);
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s %s 2>&1", shellQuote(module_dir),
+            shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep
+            + "hold-client.qr"), shellQuote(url), protocol), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)status: 200\n", out, "the request succeeds: " + out);
+        # the work is held, the cleanup releases it when it waits for it, and it runs and ends before the user
+        # modules have been deleted
+        assertRegex("(?s)(^|\n)held module cleanup work: [1-9][0-9]* released \\(the module cleanup waits for its "
+            "work\\)\n.*held module cleanup work: an item ran and ended\n.*held module cleanup work: the hold ends "
+            "\\(the user modules have been deleted\\)\n", out, "the cleanup waits for the work held: " + out);
+        assertNRegex("PROGRAM-ERROR", out, "no module Program is refused at the end of the process: " + out);
+        assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
+    }
+
+    #! a destructor that the module cleanup runs submits the first asynchronous I/O operation of the process, so the
+    #! cleanup creates the asynchronous I/O controller, whose I/O threads' command queues keep a placeholder command:
+    #! it is not work of the cleanup, which waited for it forever (qore#6928); with several I/O threads, as the first
+    #! drain of an I/O thread's queue frees its placeholder
+    private runFirstSubmitCase(string mode) {
+        int status;
+        string out = backquote(sprintf("QORE_IO_THREADS=4 QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
+            + "ModuleCleanupCancel" + DirSep + "first-submit-client.qr")), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)started\n", out, "the module is loaded: " + out);
+        assertRegex("(^|\n)submitted\n", out, "the destructor submits the operation: " + out);
         assertNRegex("unhandled exception", out, "nothing is reported at the end of the process: " + out);
     }
 

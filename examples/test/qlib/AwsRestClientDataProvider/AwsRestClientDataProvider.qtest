@@ -5,6 +5,7 @@
 %allow-injection
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../LiveProviderTest.qm
 %requires Util
 %requires QUnit
 %requires Logger

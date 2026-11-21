@@ -209,6 +209,7 @@ class QoreString;
 /** there will always only be one of these, therefore all members and methods are static
  */
 class QoreEncodingManager {
+    friend class qore_encoding_manager_ops;
 private:
    // the private implementation of the registration of encodings (qore#6826)
    friend class qore_encoding_manager_private;
@@ -218,7 +219,6 @@ private:
    DLLLOCAL static QoreThreadLock mutex;
 
    DLLLOCAL static const QoreEncoding* addUnlocked(const char* n_code, const char* n_desc = 0, unsigned char n_minwidth = 1, unsigned char n_maxwidth = 1, mbcs_length_t l = 0, mbcs_end_t e = 0, mbcs_pos_t p = 0, mbcs_charlen_t c = 0,  mbcs_get_unicode_t gu = 0, bool n_ascii_compat = true);
-   DLLLOCAL static const QoreEncoding* findUnlocked(const char* name);
 
 public:
    //! returns the lock of the encoding maps, for the fork handlers (internal)
@@ -239,9 +239,6 @@ public:
    */
    DLLEXPORT static const QoreEncoding* findCreate(const char* name);
 
-   //! finds an encoding if it exists (also looks up against alias names); returns nullptr if it does not
-   DLLLOCAL static const QoreEncoding* find(const char* name);
-
    //! finds an encoding if it exists (also looks up against alias names) and creates a new one if it doesn't
    /** @since %Qore 3.0 a name with a NUL character is the name of an encoding that %Qore does not know: the whole
        name, with every control character escaped as <tt>\\xNN</tt> and every backslash doubled (ex:
@@ -258,7 +255,6 @@ public:
    //! adds a new encoding to the list
    DLLEXPORT static const QoreEncoding* add(const char* code, const char* desc = 0, unsigned char maxwidth = 1, mbcs_length_t l = 0, mbcs_end_t e = 0, mbcs_pos_t p = 0, mbcs_charlen_t = 0);
 
-   DLLLOCAL static void init(const char* def);
    DLLLOCAL QoreEncodingManager();
    DLLLOCAL ~QoreEncodingManager();
 };

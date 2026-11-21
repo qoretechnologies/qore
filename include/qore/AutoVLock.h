@@ -78,6 +78,7 @@ private:
 /** This object is used for lock handover management and automatically releasing the last lock.
  */
 class AutoVLock {
+    friend class qore_auto_vlock_ops;
     // Internal lvalue handoff preserves pending notifications until the operation has finished.
     friend class LValueLockHandoffHelper;
 private:
@@ -120,26 +121,10 @@ public:
     //! manually releases the lock currently held
     DLLEXPORT void del();
 
-    //! sets the current lock
-    DLLLOCAL void set(QoreVarRWLock* n_rwl);
+    
 
-    //! sets the current object (for dereference) and lock
-    DLLLOCAL void set(QoreObject* n_o, QoreVarRWLock* n_rwl);
+    
 
-    //! gets the current read-write lock
-    DLLLOCAL QoreVarRWLock* getRWL() const;
-
-    //! gets the current object
-    DLLLOCAL QoreObject* getObject() const;
-
-    //! leaves the lock locked and the object referenced and clears the object and lock pointers
-    DLLLOCAL void clear();
-
-    //! adds an object member notification entry, internal-only
-    /** @param o the object to add
-         @param member the member that was changed (must be in QCS_DEFAULT encoding)
-    */
-    DLLLOCAL void addMemberNotification(QoreObject* o, const char* member);
-};
+    };
 
 #endif

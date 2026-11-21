@@ -1,0 +1,184 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HttpServer max_header_size (qore#6867): a request whose HTTP/1.x header, or whose chunked body's trailer section, is
+    larger than the limit is answered with 431 (Request Header Fields Too Large) and the connection is closed, whether
+    the header is one long line, many small lines or never ends.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+
+%exec-class HttpServerHeaderSizeLimitTest
+
+#! Echo handler: returns the request body
+class HeaderLimitEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, body ?? "no-body", {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerHeaderSizeLimitTest inherits QUnit::Test {
+    private {
+        #! the limit of the server with the option set
+        const Limit = 4096;
+
+        #! the default limit
+        const DefaultLimit = 65536;
+
+        #! the server with the limit set with the \c max_header_size option
+        HttpServer mServer;
+        int mPort;
+
+        #! the server with the default limit
+        HttpServer mDefaultServer;
+        int mDefaultPort;
+    }
+
+    constructor() : Test("HttpServerHeaderSizeLimitTest", "1.0") {
+        addTestCase("header at the limit", \headerAtLimitTest());
+        addTestCase("header over the limit", \headerOverLimitTest());
+        addTestCase("header of many small lines", \headerManyLinesTest());
+        addTestCase("header that never ends", \headerFloodTest());
+        addTestCase("second request of a connection", \keepAliveTest());
+        addTestCase("chunked body trailer", \trailerTest());
+        addTestCase("default limit", \defaultLimitTest());
+        addTestCase("invalid option", \invalidOptionTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("header-size-test", LoggerLevel::getLevelInfo());
+        mServer = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "max_header_size": Limit});
+        mServer.setDefaultHandler("echo", new HeaderLimitEchoHandler());
+        mPort = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        mDefaultServer = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        mDefaultServer.setDefaultHandler("echo", new HeaderLimitEchoHandler());
+        mDefaultPort = mDefaultServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        mServer.stop();
+        mDefaultServer.stop();
+    }
+
+    #! a request of the given total size in bytes, in one header field
+    private static string makeRequest(int size) {
+        string head = "GET /x HTTP/1.1\r\nHost: localhost\r\nX-Pad: ";
+        string tail = "\r\n\r\n";
+        return head + strmul("a", size - head.size() - tail.size()) + tail;
+    }
+
+    #! sends the data in the background, ignoring errors (the server may close the connection before it is all sent),
+    #! and returns the HTTP status of the response, or -1 if there is none
+    private int exchange(int port, string data) {
+        Socket sock();
+        sock.connect("localhost:" + port, 10s);
+        on_exit sock.close();
+        background sub () {
+            try {
+                sock.send(data, 10s);
+            } catch () {
+            }
+        }();
+        try {
+            hash<auto> hdr = sock.readHTTPHeader(10s);
+            return hdr.status_code;
+        } catch () {
+            return -1;
+        }
+    }
+
+    headerAtLimitTest() {
+        assertEq(200, exchange(mPort, makeRequest(Limit)));
+    }
+
+    headerOverLimitTest() {
+        assertEq(431, exchange(mPort, makeRequest(Limit + 1)));
+        assertEq(431, exchange(mPort, makeRequest(Limit * 16)));
+    }
+
+    headerManyLinesTest() {
+        string req = "GET /x HTTP/1.1\r\nHost: localhost\r\n" + strmul("X-A: aaaaaaaaaaaaaaaaaaaaaaaa\r\n", 2000)
+            + "\r\n";
+        assertEq(431, exchange(mPort, req));
+    }
+
+    headerFloodTest() {
+        # a header that never ends: no empty line, much more than the limit
+        string flood = "GET /x HTTP/1.1\r\nHost: localhost\r\nX-A: " + strmul("a", 1024 * 1024);
+        assertEq(431, exchange(mPort, flood));
+        string lines = "GET /x HTTP/1.1\r\nHost: localhost\r\n" + strmul("X-A: a\r\n", 200000);
+        assertEq(431, exchange(mPort, lines));
+    }
+
+    keepAliveTest() {
+        # the second request of a connection is over the limit
+        Socket sock();
+        sock.connect("localhost:" + mPort, 10s);
+        on_exit sock.close();
+        sock.send("GET /x HTTP/1.1\r\nHost: localhost\r\n\r\n", 10s);
+        hash<auto> hdr = sock.readHTTPHeader(10s);
+        assertEq(200, hdr.status_code);
+        sock.recv(hdr."content-length".toInt(), 10s);
+        background sub () {
+            try {
+                sock.send(makeRequest(Limit * 4), 10s);
+            } catch () {
+            }
+        }();
+        assertEq(431, sock.readHTTPHeader(10s).status_code);
+    }
+
+    trailerTest() {
+        string trailer = strmul("X-T: tttttttttttttttttttttttttttttttt\r\n", 1000);
+        string req = "POST /x HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n"
+            + trailer + "\r\n";
+        assertEq(431, exchange(mPort, req));
+
+        # a small trailer is accepted
+        string ok = "POST /x HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n"
+            "X-T: t\r\n\r\n";
+        assertEq(200, exchange(mPort, ok));
+    }
+
+    defaultLimitTest() {
+        assertEq(200, exchange(mDefaultPort, makeRequest(DefaultLimit)));
+        assertEq(431, exchange(mDefaultPort, makeRequest(DefaultLimit + 1)));
+    }
+
+    invalidOptionTest() {
+        assertThrows("HTTP-SERVER-INIT-ERROR", sub () {
+            new HttpServer(<HttpServerOptionInfo>{"max_header_size": -1});
+        });
+    }
+}

@@ -42,6 +42,7 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 static std::string qore_aot_deferred_object_type_class_path(const QoreTypeInfo* typeInfo) {
     if (!qore_type_info_is_aot_deferred(typeInfo)
@@ -250,7 +251,7 @@ QoreValue VarRefNode::evalValue(RuntimeConfig& rc, bool& needs_deref, ExceptionS
 QoreValue VarRefNode::followReference(QoreValue v, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) {
     ReferenceNode* r = reinterpret_cast<ReferenceNode*>(v.getInternalNode());
     bool nd = true;
-    QoreValue nv = r->eval(rc, nd, xsink);
+    QoreValue nv = qore_abstract_node_ops(r).eval(rc, nd, xsink);
     if (needs_deref) {
         discard(v.getInternalNode(), xsink);
     }

@@ -39,7 +39,7 @@ public class Marker {
 
     #! Registers the shutdown handler if the marker environment variable is set
     static init() {
-        if (!ENV{MarkerEnvVar}.val()) {
+        if (!ENV{MarkerEnvVar}.val()) { # live-provider-optin: MarkerEnvVar, the marker file that the test sets
             return;
         }
         DataProvider::registerShutdownHandler("qdp-shutdown-marker", \Marker::writeMarker());
@@ -47,7 +47,7 @@ public class Marker {
 
     #! Writes the marker file
     static writeMarker() {
-        string path = ENV{MarkerEnvVar};
+        string path = ENV{MarkerEnvVar}; # live-provider-optin: MarkerEnvVar, the marker file that the test sets
         File f();
         f.open2(path: path, flags: O_CREAT | O_TRUNC | O_WRONLY, mode: 0644);
         f.write("shutdown\n");

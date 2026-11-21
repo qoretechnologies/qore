@@ -1,0 +1,182 @@
+own read: "secret"
+own write: "changed"
+own call: "helper"
+own iread: "isecret"
+own iwrite: "ichanged"
+own icall: "ihelper"
+own dynamic: "secret"
+own idynamic: "isecret"
+own keys: ["secret", "isecret"]
+own first: "secret"
+own last: "secret"
+own slice: {secret: "secret", isecret: "isecret"}
+own iterator: []
+own method: METHOD-IS-PRIVATE
+own imethod: METHOD-DOES-NOT-EXIST
+own callable: True
+own reference: "helper"
+sub read: "secret"
+sub write: "changed"
+sub call: "helper"
+sub iread: null
+sub icall: METHOD-DOES-NOT-EXIST
+import read: "secret"
+import write: "changed"
+import call: "helper"
+import iread: "isecret"
+import iwrite: "ichanged"
+import icall: "ihelper"
+import dynamic: "secret"
+import idynamic: "isecret"
+import keys: ["secret", "isecret"]
+import first: "secret"
+import last: "secret"
+import slice: {secret: "secret", isecret: "isecret"}
+import iterator: []
+import method: METHOD-IS-PRIVATE
+import imethod: METHOD-DOES-NOT-EXIST
+import callable: True
+import reference: "helper"
+import-object read: "secret"
+import-object write: "changed"
+import-object call: "helper"
+import-object iread: "isecret"
+import-object iwrite: "ichanged"
+import-object icall: "ihelper"
+import-object dynamic: "secret"
+import-object idynamic: "isecret"
+import-object keys: ["secret", "isecret"]
+import-object first: "secret"
+import-object last: "secret"
+import-object slice: {secret: "secret", isecret: "isecret"}
+import-object iterator: []
+import-object method: METHOD-IS-PRIVATE
+import-object imethod: METHOD-DOES-NOT-EXIST
+import-object callable: True
+import-object reference: "helper"
+injection read: "secret"
+injection write: "changed"
+injection call: "helper"
+injection iread: null
+injection icall: METHOD-DOES-NOT-EXIST
+injection-object read: "secret"
+injection-object write: "changed"
+injection-object call: "helper"
+injection-object iread: "isecret"
+injection-object iwrite: "ichanged"
+injection-object icall: "ihelper"
+injection-object dynamic: "secret"
+injection-object idynamic: "isecret"
+injection-object keys: ["secret", "isecret"]
+injection-object first: "secret"
+injection-object last: "secret"
+injection-object slice: {secret: "secret", isecret: "isecret"}
+injection-object iterator: []
+injection-object method: METHOD-IS-PRIVATE
+injection-object imethod: METHOD-DOES-NOT-EXIST
+injection-object callable: True
+injection-object reference: "helper"
+namespace read: PRIVATE-MEMBER
+namespace write: PRIVATE-MEMBER
+namespace call: METHOD-IS-PRIVATE
+namespace iread: PRIVATE-MEMBER
+namespace iwrite: PRIVATE-MEMBER
+namespace icall: METHOD-DOES-NOT-EXIST
+namespace dynamic: PRIVATE-MEMBER
+namespace idynamic: PRIVATE-MEMBER
+namespace keys: []
+namespace first: null
+namespace last: null
+namespace slice: PRIVATE-MEMBER
+namespace iterator: []
+namespace method: METHOD-IS-PRIVATE
+namespace imethod: METHOD-DOES-NOT-EXIST
+namespace callable: False
+namespace reference: ILLEGAL-CALL-REFERENCE
+program read: PRIVATE-MEMBER
+program write: PRIVATE-MEMBER
+program call: METHOD-IS-PRIVATE
+program iread: PRIVATE-MEMBER
+program iwrite: PRIVATE-MEMBER
+program icall: METHOD-DOES-NOT-EXIST
+program dynamic: PRIVATE-MEMBER
+program idynamic: PRIVATE-MEMBER
+program keys: []
+program first: null
+program last: null
+program slice: PRIVATE-MEMBER
+program iterator: []
+program method: METHOD-IS-PRIVATE
+program imethod: METHOD-DOES-NOT-EXIST
+program callable: False
+program reference: ILLEGAL-CALL-REFERENCE
+sandbox read: PRIVATE-MEMBER
+sandbox write: PRIVATE-MEMBER
+sandbox call: METHOD-IS-PRIVATE
+sandbox iread: PRIVATE-MEMBER
+sandbox iwrite: PRIVATE-MEMBER
+sandbox icall: METHOD-DOES-NOT-EXIST
+sandbox dynamic: PRIVATE-MEMBER
+sandbox idynamic: PRIVATE-MEMBER
+sandbox keys: []
+sandbox first: null
+sandbox last: null
+sandbox slice: PRIVATE-MEMBER
+sandbox iterator: []
+sandbox method: METHOD-IS-PRIVATE
+sandbox imethod: METHOD-DOES-NOT-EXIST
+sandbox callable: False
+sandbox reference: ILLEGAL-CALL-REFERENCE
+static method: PARSE-EXCEPTION
+static variable: PARSE-EXCEPTION
+static constant: PARSE-EXCEPTION
+reflection program read: METHOD-ERROR
+reflection program iread: METHOD-ERROR
+reflection program call: METHOD-ERROR
+reflection sandbox read: REFLECTION-ACCESS-ERROR
+reflection sandbox iread: REFLECTION-ACCESS-ERROR
+reflection sandbox call: REFLECTION-ACCESS-ERROR
+bound program ref_qualified bare: CALL-REFERENCE-ERROR
+bound program method_qualified bare: METHOD-DOES-NOT-EXIST
+bound program reflect_bound bare: METHOD-ERROR
+bound program ref_qualified barewrite: CALL-REFERENCE-ERROR
+bound program method_qualified barewrite: METHOD-DOES-NOT-EXIST
+bound program reflect_bound barewrite: METHOD-ERROR
+bound program ref_qualified bareicall: CALL-REFERENCE-ERROR
+bound program method_qualified bareicall: METHOD-DOES-NOT-EXIST
+bound program reflect_bound bareicall: METHOD-ERROR
+bound program ref_qualified bareiwrite: CALL-REFERENCE-ERROR
+bound program method_qualified bareiwrite: METHOD-DOES-NOT-EXIST
+bound program reflect_bound bareiwrite: METHOD-ERROR
+own-bound program ref_unqualified: "helper"
+bound sandbox ref_qualified bare: CALL-REFERENCE-ERROR
+bound sandbox method_qualified bare: METHOD-DOES-NOT-EXIST
+bound sandbox reflect_bound bare: REFLECTION-ACCESS-ERROR
+bound sandbox ref_qualified barewrite: CALL-REFERENCE-ERROR
+bound sandbox method_qualified barewrite: METHOD-DOES-NOT-EXIST
+bound sandbox reflect_bound barewrite: REFLECTION-ACCESS-ERROR
+bound sandbox ref_qualified bareicall: CALL-REFERENCE-ERROR
+bound sandbox method_qualified bareicall: METHOD-DOES-NOT-EXIST
+bound sandbox reflect_bound bareicall: REFLECTION-ACCESS-ERROR
+bound sandbox ref_qualified bareiwrite: CALL-REFERENCE-ERROR
+bound sandbox method_qualified bareiwrite: METHOD-DOES-NOT-EXIST
+bound sandbox reflect_bound bareiwrite: REFLECTION-ACCESS-ERROR
+own-bound sandbox ref_unqualified: "helper"
+bound qualified call: PARSE-EXCEPTION
+stream subclass read: "False/False"
+stream namespace read: PRIVATE-MEMBER
+stream program read: PRIVATE-MEMBER
+stream sandbox read: PRIVATE-MEMBER
+stream namespace write: PRIVATE-MEMBER
+stream program write: PRIVATE-MEMBER
+stream sandbox write: PRIVATE-MEMBER
+stream namespace keys: "[]"
+stream program keys: "[]"
+stream sandbox keys: "[]"
+view namespace read: PRIVATE-MEMBER
+view program read: PRIVATE-MEMBER
+view sandbox read: PRIVATE-MEMBER
+view namespace write: PRIVATE-MEMBER
+view program write: PRIVATE-MEMBER
+view sandbox write: PRIVATE-MEMBER
+view listener: iso-8859-1

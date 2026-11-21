@@ -9,6 +9,7 @@
 
 # a run on PostgreSQL has its own schema
 %requires ./PgsqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %exec-class SqlUtilWhereAliasColumnTest
 
@@ -88,7 +89,7 @@ class SqlUtilWhereAliasColumnTest inherits QUnit::Test {
         if (*Datasource ds = dsh{label}) {
             return new Table(ds, "items");
         }
-        testSkip(skip_reasons{label} ?? sprintf("no %s connection", label));
+        TestRun::skipOrFail(skip_reasons{label} ?? sprintf("no %s connection", label));
     }
 
     testJoin(string label) {

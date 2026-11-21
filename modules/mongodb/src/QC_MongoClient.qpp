@@ -74,11 +74,15 @@ MongoClient client("mongodb://host1:27017,host2:27017/?replicaSet=rs0");
     @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow a file named by the
     \c tlsCAFile or \c tlsCertificateKeyFile option of the URI to be read
     @throw SANDBOX-PATH-ERROR the sandbox of the calling program cannot resolve the path of such a file
+    @throw NETWORK-ACCESS-DENIED a sandbox governs the calling program, and the URI selects an authentication
+    mechanism for which the driver connects to other hosts by itself (see @ref mongodbsandbox)
 
     @note The files named by the \c tlsCAFile and \c tlsCertificateKeyFile options are read when the client is
     created and for each connection, on behalf of the calling program, so its filesystem sandbox applies each time; a
     connection of sandboxed code with a file the sandbox does not allow fails with a \c MONGODB-CLIENT-ERROR (or
     another operation error) whose description contains \c FILESYSTEM-ACCESS-DENIED
+    - The sandbox of the program that creates the client governs its connections, as does the sandbox of the
+      program that uses it; see @ref mongodbsandbox
 */
 MongoClient::constructor(string uri) {
     // the driver takes UTF-8 text

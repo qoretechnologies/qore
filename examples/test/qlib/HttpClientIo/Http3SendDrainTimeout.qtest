@@ -28,6 +28,13 @@
     the request timeout.  The client's own stream is held back from the transport with a debug hook, as when the
     server grants no credit: the second large send waits for the request timeout (5 s) and raises; without the fix it
     raised only after the 10 s, with another message.
+
+    The request timeout bounds the time the buffer makes no progress, not the total wait (issue #6968): a large
+    request that a slow or loaded peer takes made the wait exceed it while the peer was taking the data, and failed.
+    A debug hook simulates a peer that acknowledges a little of the stream's data during the first period of the
+    wait (by the reads of the acknowledged byte count, with no clock involved): the send goes on into a second
+    period and raises only after it, at least twice the timeout after it started; without the fix it raised at the
+    end of the first period.
 */
 
 %modern
@@ -46,6 +53,9 @@
 #! larger than the staged data's limit (1 MiB)
 const Size = 3 * 1024 * 1024;
 
+#! the request timeout of the case that simulates a peer taking the data, in milliseconds: the period of the wait
+const PeriodMs = 3000;
+
 #! a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
@@ -60,15 +70,18 @@ class Http3SendDrainTimeoutTest inherits QUnit::Test {
     constructor() : QUnit::Test("Http3SendDrainTimeout", "1.0") {
         addTestCase("HTTP/3: a send that waits for a full send buffer is bounded by the request timeout",
             \testDrainTimeout());
+        addTestCase("HTTP/3: a send that waits for a full send buffer that the peer is draining is not cut off by "
+            "the request timeout", \testDrainProgress());
+        addTestCase("HTTP/3: the acknowledged byte count of a client stream", \testAckedBytes());
         set_return_value(main());
     }
 
-    testDrainTimeout() {
+    #! The server, the connection manager and the streaming request of a test case
+    private hash<auto> startRequest(timeout request_timeout) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("the library is not built with debugging");
         }
         HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
-        on_exit server.stop();
         server.setDefaultHandler("body", new BodyHandler());
         int port = server.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
@@ -84,19 +97,29 @@ class Http3SendDrainTimeoutTest inherits QUnit::Test {
             "accept_all_certs": True,
             # the send waits for the stream's send buffer at most the request timeout, which also bounds the QUIC
             # handshake: long enough for a loaded host
-            "request_timeout": 5s,
+            "request_timeout": request_timeout,
             "connect_timeout": HangGuard,
         });
-        on_exit delete mgr;
         HttpClientStreamHandle stream = mgr.acquireStream(sprintf("https://127.0.0.1:%d/", port));
-        on_exit {
-            try {
-                stream.cancel();
-            } catch () {
-            }
-        }
         stream.startStreaming("POST", "/", {"Content-Type": "application/octet-stream"}, True);
         assertEq("h3", stream.getConnection().getProtocol(), "the request uses HTTP/3");
+        return {"server": server, "mgr": mgr, "stream": stream};
+    }
+
+    #! Ends the request, the connection manager and the server of a test case
+    private endRequest(hash<auto> ctx) {
+        try {
+            ctx.stream.cancel();
+        } catch () {
+        }
+        delete ctx.mgr;
+        ctx.server.stop();
+    }
+
+    testDrainTimeout() {
+        hash<auto> ctx = startRequest(5s);
+        on_exit endRequest(ctx);
+        HttpClientStreamHandle stream = ctx.stream;
         # the client's staged data for the stream is held back from the transport, as when the server grants no
         # credit
         call_function("dbg_quic_hold_stream_data", cast<Http3ClientConnection>(stream.getConnection()).getSessionId(),
@@ -106,5 +129,53 @@ class Http3SendDrainTimeoutTest inherits QUnit::Test {
         stream.sendData(binary(strmul("a", Size)));
         assertThrows("HTTP3-FLOW-CONTROL", "did not drain within 5000 ms", \stream.sendData(),
             binary(strmul("b", Size)));
+    }
+
+    testAckedBytes() {
+        # no QUIC session, no stream data record
+        Socket plain();
+        assertEq(-1, plain.getQuicClientStreamAckedBytes(0), "no session");
+        assertThrows("QUIC-ERROR", "invalid stream_id", \plain.getQuicClientStreamAckedBytes(), -1);
+
+        hash<auto> ctx = startRequest(5s);
+        on_exit endRequest(ctx);
+        HttpClientStreamHandle stream = ctx.stream;
+        Socket sock = cast<Http3ClientConnection>(stream.getConnection()).getSocket();
+        int sid = stream.getStreamId();
+        assertEq(-1, sock.getQuicClientStreamAckedBytes(sid + 4000), "a stream without a data record");
+        # the data held back is not acknowledged
+        call_function("dbg_quic_hold_stream_data", cast<Http3ClientConnection>(stream.getConnection()).getSessionId(),
+            sid);
+        on_exit call_function("dbg_quic_release_stream_data");
+        stream.sendData(binary(strmul("a", Size)));
+        assertEq(0, sock.getQuicClientStreamAckedBytes(sid), "nothing acknowledged while the data is held");
+        # once released, the peer acknowledges all of it, and the count never decreases afterwards
+        call_function("dbg_quic_release_stream_data");
+        assertEq(0, sock.waitForQuicClientStreamFlushed(sid, HangGuard), "the data was acknowledged");
+        int acked = sock.getQuicClientStreamAckedBytes(sid);
+        assertTrue(acked >= Size, sprintf("all %d bytes were acknowledged (%d)", Size, acked));
+        assertEq(acked, sock.getQuicClientStreamAckedBytes(sid), "the count does not change without more data");
+    }
+
+    testDrainProgress() {
+        hash<auto> ctx = startRequest(PeriodMs);
+        on_exit endRequest(ctx);
+        HttpClientStreamHandle stream = ctx.stream;
+        call_function("dbg_quic_hold_stream_data", cast<Http3ClientConnection>(stream.getConnection()).getSessionId(),
+            stream.getStreamId());
+        on_exit call_function("dbg_quic_release_stream_data");
+        on_exit call_function("dbg_quic_simulate_stream_progress", stream.getStreamId(), 0);
+        stream.sendData(binary(strmul("a", Size)));
+        # the peer acknowledges data in the first period of the wait (the read at its start and the read at its end),
+        # and nothing in the second
+        call_function("dbg_quic_simulate_stream_progress", stream.getStreamId(), 2);
+        int start = clock_get_monotonic_us();
+        assertThrows("HTTP3-FLOW-CONTROL", "peer acknowledged no data", \stream.sendData(),
+            binary(strmul("b", Size)));
+        # the wait went on after the first period: a total deadline raised at its end (the lower bound is the
+        # assertion; a loaded host only takes longer)
+        int elapsed_ms = (clock_get_monotonic_us() - start) / 1000;
+        assertTrue(elapsed_ms >= PeriodMs * 3 / 2, sprintf("the send was not cut off at the end of the first period "
+            "(raised after %d ms)", elapsed_ms));
     }
 }

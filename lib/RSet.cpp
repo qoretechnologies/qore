@@ -754,11 +754,20 @@ namespace {
 // deletion is deferred
 constexpr unsigned QORE_OBJECT_DELETE_RECURSION_DEPTH = 16;
 
-// the nesting depth of the deletions in progress in this thread since the innermost deletion loop, if any
-thread_local unsigned object_delete_depth = 0;
+//! The deletion state of a thread, in one thread-local object, so that a function that reads several of its members
+//! computes the address of the thread's data once
+struct ObjectDeleteState {
+    //! the nesting depth of the deletions in progress in this thread since the innermost deletion loop, if any
+    unsigned delete_depth = 0;
+    //! the number of destructors running in this thread; see RObject::DestructorRunHelper
+    unsigned destructor_depth = 0;
+    //! the number of destructors running in this thread when a stack check that failed in a destructor moved the
+    //! stack limit to the floor of the slice of the stack guard, or 0 (destructor_stack_floor, qore#6861)
+    unsigned floor_depth = 0;
+};
 
-// the number of destructors running in this thread; see RObject::DestructorRunHelper
-thread_local unsigned object_destructor_depth = 0;
+// constant-initialized, so that its reads need no TLS initialization guard
+constinit thread_local ObjectDeleteState object_delete_state;
 
 //! An object or closure-bound variable whose deletion is deferred to a deletion loop
 struct DeferredObjectDelete {
@@ -789,26 +798,40 @@ thread_local ObjectDeleteLoop* object_delete_loop = nullptr;
 
 class ObjectDeleteDepthHelper {
 public:
-    ObjectDeleteDepthHelper() {
-        ++object_delete_depth;
+    ObjectDeleteDepthHelper() : state(object_delete_state) {
+        ++state.delete_depth;
+    }
+
+    //! for a caller that has the thread's state already
+    explicit ObjectDeleteDepthHelper(ObjectDeleteState& state) : state(state) {
+        ++state.delete_depth;
     }
 
     ~ObjectDeleteDepthHelper() {
-        --object_delete_depth;
+        --state.delete_depth;
     }
+
+private:
+    ObjectDeleteState& state;
 };
 
 class ObjectDeleteLoopHelper {
 public:
+    // while a destructor runs on the slice of the stack guard, the depth has an offset that makes every deletion
+    // deferred (see set_destructor_floor_depth()); the depth is saved without it and restored with the offset in force
+    // then, as the floor can be set while the loop runs (by a stack check of the loop's own code) and remain set after
+    // it, and the loop's own deletions are not recursive either while it is set
     explicit ObjectDeleteLoopHelper(ObjectDeleteLoop* loop) : old_loop(object_delete_loop),
-            old_depth(object_delete_depth) {
+            old_depth(object_delete_state.delete_depth
+                - (object_delete_state.floor_depth ? QORE_OBJECT_DELETE_RECURSION_DEPTH : 0)) {
         object_delete_loop = loop;
-        object_delete_depth = 0;
+        object_delete_state.delete_depth = object_delete_state.floor_depth ? QORE_OBJECT_DELETE_RECURSION_DEPTH : 0;
     }
 
     ~ObjectDeleteLoopHelper() {
         object_delete_loop = old_loop;
-        object_delete_depth = old_depth;
+        object_delete_state.delete_depth = old_depth
+            + (object_delete_state.floor_depth ? QORE_OBJECT_DELETE_RECURSION_DEPTH : 0);
     }
 
 private:
@@ -817,18 +840,62 @@ private:
 };
 }
 
-RObject::DestructorRunHelper::DestructorRunHelper() {
-    ++object_destructor_depth;
+unsigned q_object_destructor_depth() {
+    return object_delete_state.destructor_depth;
+}
+
+unsigned q_destructor_floor_depth() {
+    return object_delete_state.floor_depth;
+}
+
+// sets the number of destructors running when the floor was set (0: not set)
+static void set_destructor_floor_depth(ObjectDeleteState& state, unsigned depth) {
+    // while a destructor runs on the slice of the stack guard (destructor_stack_floor, qore#6861), no object is
+    // deleted recursively: the deletions that its release makes could recurse into the rest of the guard, which is
+    // kept for raising STACK-LIMIT-EXCEEDED and the native frames of the functions called, and exhaust it; the
+    // deletions are deferred to a deletion loop, which makes them one after the other
+    if (depth && !state.floor_depth) {
+        state.delete_depth += QORE_OBJECT_DELETE_RECURSION_DEPTH;
+    } else if (!depth && state.floor_depth) {
+        assert(state.delete_depth >= QORE_OBJECT_DELETE_RECURSION_DEPTH);
+        state.delete_depth -= QORE_OBJECT_DELETE_RECURSION_DEPTH;
+    }
+    state.floor_depth = depth;
+}
+
+void q_set_destructor_floor_depth(unsigned depth) {
+    set_destructor_floor_depth(object_delete_state, depth);
+}
+
+RObject::DestructorRunHelper::DestructorRunHelper() : state(&object_delete_state) {
+    ++static_cast<ObjectDeleteState*>(state)->destructor_depth;
+}
+
+// restores the stack limit that the floor replaced (qore#6861); out of line, so that the end of a destructor computes
+// the address of the thread's deletion state once
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void destructor_floor_leave(ObjectDeleteState& state) {
+    q_destructor_stack_floor_leave();
+    set_destructor_floor_depth(state, 0);
 }
 
 RObject::DestructorRunHelper::~DestructorRunHelper() {
-    assert(object_destructor_depth);
-    --object_destructor_depth;
+    ObjectDeleteState& s = *static_cast<ObjectDeleteState*>(state);
+    assert(s.destructor_depth);
+    unsigned depth = s.destructor_depth--;
+    // the destructor that was running when the floor was set returns: the stack limit is restored (qore#6861)
+    if (__builtin_expect(s.floor_depth == depth, 0)) {
+        destructor_floor_leave(s);
+    }
 }
 
+
 void RObject::deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& cleanup) {
-    if (object_delete_depth < QORE_OBJECT_DELETE_RECURSION_DEPTH) {
-        ObjectDeleteDepthHelper dh;
+    // while a destructor runs on the slice of the stack guard, the depth is beyond the maximum: see
+    // q_set_destructor_floor_depth()
+    ObjectDeleteState& state = object_delete_state;
+    if (state.delete_depth < QORE_OBJECT_DELETE_RECURSION_DEPTH) {
+        // the depth of the thread's state, which is not looked up again
+        ObjectDeleteDepthHelper dh(state);
         deleteNow(xsink);
         return;
     }
@@ -839,7 +906,7 @@ void RObject::deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& cleanup) {
         // which the stack bounds: the stack it uses is accounted for.  Otherwise it releases data, which is what the
         // deferral makes iterative: the object is deleted as deep as the one the loop is deleting
         size_t elided = object_delete_loop->elided;
-        if (object_destructor_depth > object_delete_loop->destructor_depth) {
+        if (object_delete_state.destructor_depth > object_delete_loop->destructor_depth) {
             elided += QoreElidedStackHelper::getStackUsedSince(object_delete_loop->pos);
         }
         object_delete_loop->stack.back().push_back(DeferredObjectDelete{this, elided, {}});
@@ -874,7 +941,7 @@ void RObject::deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& cleanup) {
         QoreElidedStackHelper esh(d.elided);
         loop.elided = d.elided;
         loop.pos = QoreElidedStackHelper::getStackPos();
-        loop.destructor_depth = object_destructor_depth;
+        loop.destructor_depth = object_delete_state.destructor_depth;
         {
             ObjectDeleteDepthHelper dh;
             d.obj->deleteNow(xsink);

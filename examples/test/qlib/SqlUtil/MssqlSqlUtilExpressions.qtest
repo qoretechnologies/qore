@@ -12,6 +12,7 @@
 %requires FreetdsSqlUtil
 %requires QUnit
 %requires ./MssqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module freetds
 %define NoFreetds
@@ -67,6 +68,12 @@ class MssqlExpressionTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             if (m_options.verbose) {
                 printf("%s: %s\n", ex.err, ex.desc);
+            }
+            # without a datasource, the tests skip; one whose database cannot be connected to fails a test
+            # case of its own (qore#6934)
+            string reason = TestRun::getConnectFailureReason("no DB connection", ex);
+            if (reason =~ /^precondition failure: /) {
+                addTestCase("the database can be connected to", sub () { fail(reason); });
             }
         }
 

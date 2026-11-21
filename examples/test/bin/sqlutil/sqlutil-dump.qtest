@@ -11,6 +11,7 @@
 # a run on PostgreSQL has its own schema
 %requires ../../qlib/SqlUtil/PgsqlTestIsolation.qm
 %requires ../../TestInterpreter.qm
+%requires ../../qlib/SqlUtil/TestRunIsolation.qm
 
 %exec-class SqlutilDumpTest
 
@@ -217,7 +218,7 @@ class SqlutilDumpTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             # the driver's module cannot be loaded or the database cannot be reached, as the other PostgreSQL tests
             # skip (see PgsqlRunSchema::setup())
-            testSkip(sprintf("cannot use QORE_DB_CONNSTR_PGSQL: %s: %s", ex.err, ex.desc));
+            TestRun::failOrSkipConnect("cannot use QORE_DB_CONNSTR_PGSQL", ex);
         }
         if (ds.getDriverName() != "pgsql") {
             testSkip(sprintf("the connection uses driver %y, not \"pgsql\"", ds.getDriverName()));

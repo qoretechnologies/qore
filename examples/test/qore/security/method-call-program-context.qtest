@@ -1,0 +1,347 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT module dylibs compiled with qcc, call stack frames of native code, child qore processes
+# test-exec-mode: children - every check runs in child processes that set their own --exec-mode
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class MethodCallProgramContextTest
+
+#! Tests the Program context of the code of a method that a script calls in each execution mode (qore#7079)
+/** The body of a method of a library module's class runs in the module's Program, and the calls that it makes are
+    made from that Program: their frames record it as their caller's Program (Program::getCallerCapabilityMask()),
+    and the code runs with the module's runtime parse options and Program state, while the caller walk
+    (SandboxManager::isCallerRestricted()) still finds the restrictions of the script that called the method.  The
+    library module is in a directory of the module path of the child process (\c QORE_MODULE_DIR), from source and as
+    an AOT module compiled with the in-tree qcc; the child runs in each execution mode, so that the IR interpreter and
+    native code call the method on their fast paths.
+
+    A frame of a call that the IR interpreter runs inline records the Program of the code that makes the call, as
+    any other call frame: restricted code that calls a library function that checks the capabilities of its caller
+    is the caller, also when unrestricted code called the restricted code; and the library code that the methods of a
+    restricted module call is called by restricted code, also when unrestricted code called the methods.
+*/
+class MethodCallProgramContextTest inherits QUnit::Test {
+    public {
+        #! a library class whose methods report the context of their code
+        const LibModule = "%modern
+module ProgCtxProbe {
+    version = \"1.0\";
+    desc = \"method call Program context probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    init = sub () { ::ModuleState = 42; };
+}
+
+#! module state, which the methods read in the module's Program
+our int ModuleState;
+
+#! thread-local module state, which the methods update in the thread's data of the module's Program
+thread_local int TlCount;
+
+public namespace ProgCtxProbe {
+#! returns the parse options of the Program of the code that called this function
+public int sub callerMask() {
+    return Program::getCallerCapabilityMask(1);
+}
+
+public class Holder {
+    #! the context of the call: what the caller's frame records, the module's options and state, the caller's
+    #! restrictions
+    private hash<auto> report() {
+        return {
+            \"frame-restricted\": boolean(Program::getCallerCapabilityMask(1) & PO_NO_PROCESS_CONTROL),
+            \"options-restricted\": boolean(get_parse_options() & PO_NO_PROCESS_CONTROL),
+            \"caller-restricted\": SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL),
+            \"script\": get_script_path(),
+            \"state\": ::ModuleState,
+            \"thread-local\": ++::TlCount,
+        };
+    }
+
+    #! a normal method of the class makes the call
+    hash<auto> direct() {
+        return report();
+    }
+
+    #! a static method of the class makes the call on an object
+    static hash<auto> viaStatic(Holder h) {
+        return h.report();
+    }
+
+    #! a closure that a method of the class created makes the call
+    hash<auto> viaClosure() {
+        code c = hash<auto> sub () { return report(); };
+        return c();
+    }
+
+    #! returns the parse options of the Program of the code that called this method
+    static int callerMask() {
+        return Program::getCallerCapabilityMask(1);
+    }
+}
+}
+";
+
+        #! a module whose code is restricted with PO_NO_PROCESS_CONTROL and calls library code
+        /** The library module is loaded before the option is set, so its Program has no restrictions of its own
+        */
+        const RestrictedModule = "%modern
+%requires ProgCtxProbe
+%no-process-control
+
+module RestrictedCaller {
+    version = \"1.0\";
+    desc = \"method call Program context probe, restricted caller\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace RestrictedCaller {
+public class R {
+    #! calls a static method of the library
+    int viaStatic() {
+        return ProgCtxProbe::Holder::callerMask();
+    }
+
+    #! calls a function of the library through a call reference
+    int viaCallRef() {
+        code c = \\ProgCtxProbe::callerMask();
+        return c();
+    }
+}
+}
+";
+
+        #! unrestricted code calls the methods of the restricted module, which call library code
+        const RestrictedModuleChild = "%modern
+%requires ProgCtxProbe
+%requires RestrictedCaller
+
+RestrictedCaller::R r();
+# repeated, so that the calls are made on the paths of the code that has been run often
+int static_restricted;
+int callref_restricted;
+for (int i = 0; i < 20; ++i) {
+    static_restricted += (r.viaStatic() & PO_NO_PROCESS_CONTROL) ? 1 : 0;
+    callref_restricted += (r.viaCallRef() & PO_NO_PROCESS_CONTROL) ? 1 : 0;
+}
+printf(\"restricted-module-static=%y\\n\", static_restricted == 20);
+printf(\"restricted-module-callref=%y\\n\", callref_restricted == 20);
+";
+
+        #! the code that calls the methods: it returns the context that their code reports
+        const Calls = "hash<string, bool> sub results() {
+    ProgCtxProbe::Holder h();
+    hash<auto> r = {
+        \"direct\": h.direct(),
+        \"static\": ProgCtxProbe::Holder::viaStatic(h),
+        \"closure\": h.viaClosure(),
+    };
+    hash<string, bool> rv;
+    int n = 0;
+    foreach hash<auto> i in (r.pairIterator()) {
+        rv{i.key + \"-frame-restricted\"} = i.value.\"frame-restricted\";
+        rv{i.key + \"-options-restricted\"} = i.value.\"options-restricted\";
+        rv{i.key + \"-caller-restricted\"} = i.value.\"caller-restricted\";
+        rv{i.key + \"-script-is-caller\"} = i.value.script == get_script_path();
+        rv{i.key + \"-script-is-module\"} = i.value.script == r.\"static\".script;
+        rv{i.key + \"-state\"} = i.value.state == 42;
+        # the calls were made in this order in this thread
+        rv{i.key + \"-thread-local\"} = i.value.\"thread-local\" == ++n;
+    }
+    return rv;
+}
+";
+
+        #! a script that calls the methods itself
+        const Child = "%modern
+%requires ProgCtxProbe
+
+" + Calls + "
+map printf(\"%s=%y\\n\", $1.key, $1.value), results().pairIterator();
+";
+
+        #! a script that calls the methods in a Program that is restricted with PO_NO_PROCESS_CONTROL
+        /** The module is loaded by the unrestricted script, so its Program has no restrictions of its own
+        */
+        const RestrictedChild = "%modern
+%requires ProgCtxProbe
+
+Program t(PO_NO_PROCESS_CONTROL | PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+t.setScriptPath(\"/tenant/calls.q\");
+t.loadModule(\"ProgCtxProbe\");
+t.parse(ReadOnlyFile::readTextFile(ENV.PROBE_CALLS), \"tenant\");
+map printf(\"%s=%y\\n\", $1.key, $1.value), t.callFunction(\"results\").pairIterator();
+";
+
+        #! unrestricted code calls the methods of an object of restricted code, which calls library code
+        const Host = "%modern
+%requires ProgCtxProbe
+
+Program t(PO_NO_PROCESS_CONTROL | PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+t.loadModule(\"ProgCtxProbe\");
+t.parse(\"
+class T {
+    int viaFunction() {
+        return ProgCtxProbe::callerMask();
+    }
+    int viaStatic() {
+        return ProgCtxProbe::Holder::callerMask();
+    }
+}
+T sub make() {
+    return new T();
+}
+\", \"tenant\");
+object o = t.callFunction(\"make\");
+# repeated, so that the calls are made on the paths of the code that has been run often
+int function_restricted;
+int static_restricted;
+for (int i = 0; i < 20; ++i) {
+    function_restricted += (o.viaFunction() & PO_NO_PROCESS_CONTROL) ? 1 : 0;
+    static_restricted += (o.viaStatic() & PO_NO_PROCESS_CONTROL) ? 1 : 0;
+}
+printf(\"tenant-function-restricted=%y\\n\", function_restricted == 20);
+printf(\"tenant-static-restricted=%y\\n\", static_restricted == 20);
+";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+
+        const CallNames = ("direct", "static", "closure");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+        string env;
+        TmpDir tmp("qore-method-call-program-context-");
+    }
+
+    constructor() : QUnit::Test("method call Program context", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR_ONLY=1", libqore_dir,
+            libqore_dir, libqore_dir);
+        mkdir(tmp.path + DirSep + "source");
+        mkdir(tmp.path + DirSep + "aot");
+        write(tmp.path + DirSep + "source" + DirSep + "ProgCtxProbe.qm", LibModule);
+        write(tmp.path + DirSep + "source" + DirSep + "RestrictedCaller.qm", RestrictedModule);
+        write(tmp.path + DirSep + "calls.q", Calls);
+        write(tmp.path + DirSep + "child.q", Child);
+        write(tmp.path + DirSep + "child-restricted.q", RestrictedChild);
+        write(tmp.path + DirSep + "host.q", Host);
+        write(tmp.path + DirSep + "restricted-module.q", RestrictedModuleChild);
+
+        foreach string mode in (Modes) {
+            string m = mode;
+            addTestCase("library module from source, " + m, sub () { checkAll("source", m); });
+        }
+        foreach string mode in (Modes) {
+            string m = mode;
+            addTestCase("AOT library module, " + m, sub () { aotTest(m); });
+        }
+        set_return_value(main());
+    }
+
+    #! Compiles the AOT module once, and checks the children in the given mode with it
+    private aotTest(string mode) {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        # the restricted module requires the library module, which is compiled first
+        foreach hash<auto> i in ({"ProgCtxProbe": LibModule, "RestrictedCaller": RestrictedModule}.pairIterator()) {
+            string qmod = tmp.path + DirSep + "aot" + DirSep + i.key + ".qmod";
+            if (is_file(qmod)) {
+                continue;
+            }
+            string src = tmp.path + DirSep + i.key + ".qm";
+            write(src, i.value);
+            string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s --module -o %s %s 2>&1", env,
+                tmp.path + DirSep + "aot", qcc_bin, qmod, src));
+            assertTrue(is_file(qmod), out);
+        }
+        checkAll("aot", mode);
+    }
+
+    #! Runs the children with the library module in the given directory in the given mode and checks their results
+    private checkAll(string dir, string mode) {
+        foreach bool restricted in ((False, True)) {
+            hash<auto> got = run(dir, mode, restricted ? "child-restricted.q" : "child.q");
+            hash<auto> expected;
+            foreach string call in (CallNames) {
+                expected += {
+                    # the call made in the method's code is made from the module's Program
+                    call + "-frame-restricted": False,
+                    # the method's code runs with the module's options
+                    call + "-options-restricted": False,
+                    # the caller walk finds the restrictions of the script that called the method
+                    call + "-caller-restricted": restricted,
+                    # the method's code runs in the module's Program
+                    call + "-script-is-caller": False,
+                    call + "-script-is-module": True,
+                    call + "-state": True,
+                    # the method's code updates the thread's data of the module's Program
+                    call + "-thread-local": True,
+                };
+            }
+            assertEq(expected, got, sprintf("%s, %s, restricted: %y", dir, mode, restricted));
+        }
+        hash<auto> got = run(dir, mode, "host.q");
+        assertEq({"tenant-function-restricted": True, "tenant-static-restricted": True}, got,
+            sprintf("%s, %s, host", dir, mode));
+        # the library code called by the restricted module's code is called by restricted code
+        got = run(dir, mode, "restricted-module.q");
+        assertEq({"restricted-module-static": True, "restricted-module-callref": True}, got,
+            sprintf("%s, %s, restricted module", dir, mode));
+    }
+
+    #! Runs a child script and returns its results
+    private hash<auto> run(string dir, string mode, string script) {
+        string output = tmp.path + DirSep + "output.txt";
+        string cmd = sprintf("%s QORE_MODULE_DIR='%s' PROBE_CALLS='%s' '%s' --exec-mode=%s '%s' > '%s' 2>&1", env,
+            tmp.path + DirSep + dir, tmp.path + DirSep + "calls.q", qore_bin, mode, tmp.path + DirSep + script,
+            output);
+        int rc = system(cmd);
+        string out = ReadOnlyFile::readTextFile(output);
+        assertEq(0, rc, sprintf("%s, %s, %s: %s", dir, mode, script, out));
+        hash<auto> got;
+        foreach string line in (out.split("\n")) {
+            *list<*string> l = (line =~ x/^([a-z-]+)=(True|False)$/);
+            if (l) {
+                got{l[0]} = l[1] == "True";
+            }
+        }
+        if (!got) {
+            got."output" = out;
+        }
+        return got;
+    }
+
+    #! Writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+        f.close();
+    }
+}
