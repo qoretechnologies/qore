@@ -875,9 +875,11 @@ static int q_ds_hash_port(const QoreHashNode* h) {
             return (port > 0 && port <= 65535) ? static_cast<int>(port) : 0;
         }
         case NT_STRING: {
-            const QoreStringNode* str = v.get<const QoreStringNode>();
-            const char* p = str->c_str();
-            if (!*p || str->size() > 5) {
+            // the value can be an inline short string, which has no QoreStringNode
+            QoreStringDataHelper str(v);
+            assert(str);
+            const char* p = str.c_str();
+            if (!*p || str.size() > 5) {
                 return 0;
             }
             int port = 0;
@@ -894,18 +896,16 @@ static int q_ds_hash_port(const QoreHashNode* h) {
     }
 }
 
-// returns the string value of the given key of a datasource hash, or nullptr if it has none
-static const char* q_ds_hash_str(const QoreHashNode* h, const char* key) {
-    QoreValue v = h->getKeyValue(key);
-    return v.getType() == NT_STRING ? v.get<const QoreStringNode>()->c_str() : nullptr;
-}
-
 void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h) {
     if (!h) {
         q_ds_append_masked(str, nullptr, nullptr, 0);
         return;
     }
-    q_ds_append_masked(str, q_ds_hash_str(h, "type"), q_ds_hash_str(h, "host"), q_ds_hash_port(h));
+    // the values can be inline short strings, which have no QoreStringNode; the helpers hold their bytes, and a
+    // value that is not a string gives nullptr
+    QoreStringDataHelper type(h->getKeyValue("type"));
+    QoreStringDataHelper host(h->getKeyValue("host"));
+    q_ds_append_masked(str, type.c_str(), host.c_str(), q_ds_hash_port(h));
 }
 
 void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds) {
