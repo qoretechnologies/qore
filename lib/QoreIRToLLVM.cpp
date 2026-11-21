@@ -33444,16 +33444,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(decref_fn, {old_val, xsink_arg});
                 registerInvokeCleanupAlloca(cleanup);
             };
-            if (qore_assignment_mode_converts_value(vinst->mode)) {
-                auto weak_fn = module.getOrInsertFunction(
-                        qore_assignment_mode_value_helper(vinst->mode),
-                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {val_boxed, xsink_arg});
-                track_owned_value_cleanup(weak_boxed, "weak_var_cleanup");
-                clear_consumed_operand_cleanup(inst->operands[0].id);
-                val_boxed = weak_boxed;
-            }
-            if (aot_mode) {
+            // a weak or opaque store gives the variable the value assigned and the mode: the type of the value is
+            // checked before the weak or opaque reference is made, as the AST interpreter does (qore#6979); a
+            // thread-local variable is stored with the helper of a global
+            const bool converts = qore_assignment_mode_converts_value(vinst->mode);
+            llvm::Value* mode_arg = llvm::ConstantInt::get(i32_type, static_cast<int32_t>(vinst->mode));
+            if (converts && aot_mode) {
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getGlobalSlot(
+                        reinterpret_cast<const void*>(vinst->var));
+                auto ft = llvm::FunctionType::get(void_type,
+                        {ptr_type, i32_type, i64_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_store_global_mode_aot", ft);
+                auto helper_throwing = module.getOrInsertFunction("qore_rt_store_global_mode_aot_throwing", ft);
+                emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), val_boxed, mode_arg, xsink_arg},
+                        module, llvm_func, inst);
+            } else if (converts) {
+                llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(vinst->var));
+                llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                auto ft = llvm::FunctionType::get(void_type, {ptr_type, i64_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_store_global_mode", ft);
+                auto helper_throwing = module.getOrInsertFunction("qore_rt_store_global_mode_throwing", ft);
+                emitMaybeInvoke(helper, helper_throwing, {var_as_ptr, val_boxed, mode_arg, xsink_arg},
+                        module, llvm_func, inst);
+            } else if (aot_mode) {
                 const char* helper_name = vinst->mode != AssignmentMode::Normal
                         ? ((inst->opcode == QoreIROpcode::StoreGlobal)
                             ? "qore_rt_store_global_aot" : "qore_rt_store_thread_local_aot")
@@ -33503,6 +33518,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         module, llvm_func, inst);
             }
             emitExceptionCheck(module, llvm_func, inst);
+            if (converts) {
+                // the value of the assignment is a weak or opaque reference of its own, owned by the frame
+                if (inst->result.isValid()) {
+                    auto weak_fn = module.getOrInsertFunction(
+                            qore_assignment_mode_value_helper(vinst->mode),
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                    llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {val_boxed, xsink_arg});
+                    track_owned_value_cleanup(weak_boxed, "weak_var_cleanup");
+                    val_boxed = weak_boxed;
+                }
+                clear_consumed_operand_cleanup(inst->operands[0].id);
+            }
             if (inst->result.isValid()) {
                 values[inst->result.id] = val_boxed;
                 nanboxed_values.insert(inst->result.id);
@@ -33619,6 +33646,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            // a weak or opaque store gives the variable the value assigned and the mode: the type of the value is
+            // checked before the weak or opaque reference is made, as the AST interpreter does (qore#6979)
+            const bool converts = qore_assignment_mode_converts_value(linst->mode);
             auto clear_cleanup_alloca = [&](llvm::Value* cleanup) {
                 if (!cleanup) {
                     return;
@@ -33660,17 +33690,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             };
             {
                 auto key = reinterpret_cast<const void*>(linst->local);
-                if (qore_assignment_mode_converts_value(linst->mode)) {
-                    auto weak_fn = module.getOrInsertFunction(
-                            qore_assignment_mode_value_helper(linst->mode),
-                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                    llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {val_boxed, xsink_arg});
-                    llvm::AllocaInst* weak_cleanup = track_owned_value_cleanup(
-                            weak_boxed, "weak_closure_cleanup");
-                    local_cleanup_allocas[key].push_back(weak_cleanup);
-                    clear_consumed_operand_cleanup(inst->operands[0].id);
-                    val_boxed = weak_boxed;
-                } else {
+                // a weak or opaque store is given the value assigned (see below)
+                if (!converts) {
                     // Track the input value's cleanup alloca for this closure variable
                     // so UninstantiateLocal can release it at block scope exit.
                     // Without this, the original object ref in the invoke result alloca
@@ -33688,6 +33709,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
             }
+            llvm::Value* mode_arg = llvm::ConstantInt::get(i32_type, static_cast<int32_t>(linst->mode));
             if (aot_mode) {
                 const void* key = reinterpret_cast<const void*>(linst->local);
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
@@ -33703,19 +33725,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(inst_helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot)});
                 }
-                auto sc_ft = llvm::FunctionType::get(void_type,
-                        {ptr_type, i32_type, i64_type, ptr_type}, false);
-                const char* helper_name = linst->mode != AssignmentMode::Normal ? "qore_rt_store_closure_aot"
-                        : "qore_rt_store_closure_eval_weak_aot";
-                const char* helper_throwing_name = linst->mode != AssignmentMode::Normal
-                        ? "qore_rt_store_closure_aot_throwing"
-                        : "qore_rt_store_closure_eval_weak_aot_throwing";
-                auto helper = module.getOrInsertFunction(qore_store_helper_name(helper_name, linst->foreach_assignment), sc_ft);
-                auto helper_throwing = module.getOrInsertFunction(qore_store_helper_name(helper_throwing_name, linst->foreach_assignment), sc_ft);
-                emitMaybeInvoke(helper, helper_throwing,
-                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
-                         val_boxed, xsink_arg},
-                        module, llvm_func, inst);
+                if (converts) {
+                    auto mode_ft = llvm::FunctionType::get(void_type,
+                            {ptr_type, i32_type, i64_type, i32_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction("qore_rt_store_closure_mode_aot", mode_ft);
+                    auto helper_throwing = module.getOrInsertFunction("qore_rt_store_closure_mode_aot_throwing",
+                            mode_ft);
+                    emitMaybeInvoke(helper, helper_throwing,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), val_boxed, mode_arg, xsink_arg},
+                            module, llvm_func, inst);
+                } else {
+                    auto sc_ft = llvm::FunctionType::get(void_type,
+                            {ptr_type, i32_type, i64_type, ptr_type}, false);
+                    const char* helper_name = linst->mode != AssignmentMode::Normal ? "qore_rt_store_closure_aot"
+                            : "qore_rt_store_closure_eval_weak_aot";
+                    const char* helper_throwing_name = linst->mode != AssignmentMode::Normal
+                            ? "qore_rt_store_closure_aot_throwing"
+                            : "qore_rt_store_closure_eval_weak_aot_throwing";
+                    auto helper = module.getOrInsertFunction(
+                            qore_store_helper_name(helper_name, linst->foreach_assignment), sc_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            qore_store_helper_name(helper_throwing_name, linst->foreach_assignment), sc_ft);
+                    emitMaybeInvoke(helper, helper_throwing,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                             val_boxed, xsink_arg},
+                            module, llvm_func, inst);
+                }
             } else {
                 llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(linst->local));
@@ -33730,20 +33765,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::FunctionType::get(void_type, {ptr_type}, false));
                     builder->CreateCall(instantiate, {var_as_ptr});
                 }
-                auto al_ft = llvm::FunctionType::get(void_type,
-                        {ptr_type, i64_type, ptr_type}, false);
-                const char* helper_name = linst->mode != AssignmentMode::Normal ? "qore_rt_assign_local"
-                        : "qore_rt_assign_local_eval_weak";
-                const char* helper_throwing_name = linst->mode != AssignmentMode::Normal
-                        ? "qore_rt_assign_local_throwing"
-                        : "qore_rt_assign_local_eval_weak_throwing";
-                auto helper = module.getOrInsertFunction(qore_store_helper_name(helper_name, linst->foreach_assignment), al_ft);
-                auto helper_throwing = module.getOrInsertFunction(qore_store_helper_name(helper_throwing_name, linst->foreach_assignment), al_ft);
-                emitMaybeInvoke(helper, helper_throwing,
-                        {var_as_ptr, val_boxed, xsink_arg},
-                        module, llvm_func, inst);
+                if (converts) {
+                    auto mode_ft = llvm::FunctionType::get(void_type, {ptr_type, i64_type, i32_type, ptr_type},
+                            false);
+                    auto helper = module.getOrInsertFunction("qore_rt_assign_local_mode", mode_ft);
+                    auto helper_throwing = module.getOrInsertFunction("qore_rt_assign_local_mode_throwing", mode_ft);
+                    emitMaybeInvoke(helper, helper_throwing, {var_as_ptr, val_boxed, mode_arg, xsink_arg},
+                            module, llvm_func, inst);
+                } else {
+                    auto al_ft = llvm::FunctionType::get(void_type,
+                            {ptr_type, i64_type, ptr_type}, false);
+                    const char* helper_name = linst->mode != AssignmentMode::Normal ? "qore_rt_assign_local"
+                            : "qore_rt_assign_local_eval_weak";
+                    const char* helper_throwing_name = linst->mode != AssignmentMode::Normal
+                            ? "qore_rt_assign_local_throwing"
+                            : "qore_rt_assign_local_eval_weak_throwing";
+                    auto helper = module.getOrInsertFunction(
+                            qore_store_helper_name(helper_name, linst->foreach_assignment), al_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            qore_store_helper_name(helper_throwing_name, linst->foreach_assignment), al_ft);
+                    emitMaybeInvoke(helper, helper_throwing,
+                            {var_as_ptr, val_boxed, xsink_arg},
+                            module, llvm_func, inst);
+                }
             }
             emitExceptionCheck(module, llvm_func, inst);
+            if (converts) {
+                // the value of the assignment is a weak or opaque reference of its own, owned by the frame and
+                // released at the end of the variable's scope
+                if (inst->result.isValid()) {
+                    auto weak_fn = module.getOrInsertFunction(
+                            qore_assignment_mode_value_helper(linst->mode),
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                    llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {val_boxed, xsink_arg});
+                    llvm::AllocaInst* weak_cleanup = track_owned_value_cleanup(weak_boxed, "weak_closure_cleanup");
+                    local_cleanup_allocas[reinterpret_cast<const void*>(linst->local)].push_back(weak_cleanup);
+                    val_boxed = weak_boxed;
+                }
+                clear_consumed_operand_cleanup(inst->operands[0].id);
+            }
             if (inst->result.isValid()) {
                 values[inst->result.id] = val_boxed;
                 nanboxed_values.insert(inst->result.id);

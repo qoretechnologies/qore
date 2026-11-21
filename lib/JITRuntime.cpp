@@ -231,6 +231,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float) },
     { "qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local) },
     { "qore_rt_assign_local", reinterpret_cast<void*>(&qore_rt_assign_local) },
+    { "qore_rt_assign_local_mode", reinterpret_cast<void*>(&qore_rt_assign_local_mode) },
     { "qore_rt_assign_local_no_coerce", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce) },
     { "qore_rt_assign_local_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_throwing) },
     { "qore_rt_assign_local_no_coerce_throwing",
@@ -271,6 +272,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_ternary_op", reinterpret_cast<void*>(&qore_rt_ternary_op) },
     { "qore_rt_load_global", reinterpret_cast<void*>(&qore_rt_load_global) },
     { "qore_rt_store_global", reinterpret_cast<void*>(&qore_rt_store_global) },
+    { "qore_rt_store_global_mode", reinterpret_cast<void*>(&qore_rt_store_global_mode) },
     { "qore_rt_load_closure", reinterpret_cast<void*>(&qore_rt_load_closure) },
     { "qore_rt_store_closure", reinterpret_cast<void*>(&qore_rt_store_closure) },
     { "qore_rt_add_assign_local_int", reinterpret_cast<void*>(&qore_rt_add_assign_local_int) },
@@ -526,10 +528,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_global_aot", reinterpret_cast<void*>(&qore_rt_load_global_aot) },
     { "qore_rt_load_global_int_aot", reinterpret_cast<void*>(&qore_rt_load_global_int_aot) },
     { "qore_rt_store_global_aot", reinterpret_cast<void*>(&qore_rt_store_global_aot) },
+    { "qore_rt_store_global_mode_aot", reinterpret_cast<void*>(&qore_rt_store_global_mode_aot) },
     { "qore_rt_load_thread_local_aot", reinterpret_cast<void*>(&qore_rt_load_thread_local_aot) },
     { "qore_rt_store_thread_local_aot", reinterpret_cast<void*>(&qore_rt_store_thread_local_aot) },
     { "qore_rt_load_closure_aot", reinterpret_cast<void*>(&qore_rt_load_closure_aot) },
     { "qore_rt_store_closure_aot", reinterpret_cast<void*>(&qore_rt_store_closure_aot) },
+    { "qore_rt_store_closure_mode_aot", reinterpret_cast<void*>(&qore_rt_store_closure_mode_aot) },
     { "qore_rt_add_assign_local_int_aot", reinterpret_cast<void*>(&qore_rt_add_assign_local_int_aot) },
     { "qore_rt_increment_closure_int_aot", reinterpret_cast<void*>(&qore_rt_increment_closure_int_aot) },
     { "qore_rt_invoke_expr_aot", reinterpret_cast<void*>(&qore_rt_invoke_expr_aot) },
@@ -2491,12 +2495,22 @@ static QoreValue qore_rt_get_borrowed_list_element(const QoreListNode* l, size_t
     return qore_rt_get_weak_reference_target(l->retrieveEntry(i));
 }
 
+//! Returns the mode of a weak or opaque store helper (see qore_rt_assign_local_mode())
+static AssignmentMode qore_rt_store_mode(int32_t mode) {
+    AssignmentMode m = static_cast<AssignmentMode>(mode);
+    assert(m == AssignmentMode::Weak || m == AssignmentMode::Opaque);
+    return m;
+}
+
 //! Assigns a value to a local on the runtime stack
 /** @param desc the description of the lvalue in a type error of the assignment's own type check: "<lvalue>", or
     "<foreach lvalue assignment>" for the variable of a foreach loop, as the AST interpreter describes them
+    @param mode the mode of the assignment: a weak or opaque assignment is given the value assigned, whose type is
+    checked before the weak or opaque reference is made, as the AST interpreter does (qore#6979)
 */
 static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSink* xsink,
-        bool check_types, bool normalize_weak_refs, const char* desc = "<lvalue>") {
+        bool check_types, bool normalize_weak_refs, const char* desc = "<lvalue>",
+        AssignmentMode mode = AssignmentMode::Normal) {
     if (!var || *xsink) {
         return;
     }
@@ -2514,11 +2528,12 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
     }
     // refSelf before assign — assign takes ownership of the reference
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
-    helper.assign(stored, desc, check_types);
+    helper.assign(stored, desc, check_types, mode);
 }
 
 static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
-        ExceptionSink* xsink, bool normalize_weak_refs, const char* desc = "<lvalue>") {
+        ExceptionSink* xsink, bool normalize_weak_refs, const char* desc = "<lvalue>",
+        AssignmentMode mode = AssignmentMode::Normal) {
     if (!cvv || *xsink) {
         return;
     }
@@ -2535,7 +2550,7 @@ static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
         return;
     }
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
-    helper.assign(stored, desc, true);
+    helper.assign(stored, desc, true, mode);
 }
 
 // Variant of qore_rt_assign_local_impl() that TRANSFERS ownership of value's
@@ -2577,6 +2592,11 @@ extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, Ex
 extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak(LocalVar* var, uint64_t value,
         ExceptionSink* xsink) {
     qore_rt_assign_local_impl(var, value, xsink, true, true);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_mode(LocalVar* var, uint64_t value, int32_t mode,
+        ExceptionSink* xsink) {
+    qore_rt_assign_local_impl(var, value, xsink, true, false, "<lvalue>", qore_rt_store_mode(mode));
 }
 
 //! Coerces a value as an assignment to an lvalue of the given type does; see qore_rt_coerce_value()
@@ -4175,7 +4195,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_global(Var* var, ExceptionSink* xsink
 }
 
 static void qore_rt_store_global_impl(Var* var, uint64_t value, ExceptionSink* xsink,
-        bool normalize_weak_refs) {
+        bool normalize_weak_refs, AssignmentMode mode = AssignmentMode::Normal) {
     if (!var) {
         return;
     }
@@ -4203,11 +4223,15 @@ static void qore_rt_store_global_impl(Var* var, uint64_t value, ExceptionSink* x
             return;
         }
     }
-    helper.assign(stored);
+    helper.assign(stored, "<lvalue>", true, mode);
 }
 
 extern "C" DLLEXPORT void qore_rt_store_global(Var* var, uint64_t value, ExceptionSink* xsink) {
     qore_rt_store_global_impl(var, value, xsink, false);
+}
+
+extern "C" DLLEXPORT void qore_rt_store_global_mode(Var* var, uint64_t value, int32_t mode, ExceptionSink* xsink) {
+    qore_rt_store_global_impl(var, value, xsink, false, qore_rt_store_mode(mode));
 }
 
 extern "C" DLLEXPORT void qore_rt_store_global_eval_weak(Var* var, uint64_t value,
@@ -16592,6 +16616,11 @@ extern "C" DLLEXPORT void qore_rt_store_global_eval_weak_aot(QoreAOTContext* ctx
     qore_rt_store_global_eval_weak(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), val, xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_store_global_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        int32_t mode, ExceptionSink* xsink) {
+    qore_rt_store_global_mode(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), val, mode, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_thread_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     return qore_rt_load_thread_local(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), xsink);
 }
@@ -16630,6 +16659,20 @@ extern "C" DLLEXPORT void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t
         }
     }
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_store_closure_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        int32_t mode, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    static constinit QoreEnvFlag disable_direct_store_env("QORE_DISABLE_AOT_DIRECT_CLOSURE_STORE");
+    const bool disable_direct_store = disable_direct_store_env.get();
+    if (!disable_direct_store) {
+        if (ClosureVarValue* cvv = thread_resolve_runtime_closure_var(ctx->locals[idx])) {
+            qore_rt_assign_closure_impl(cvv, val, xsink, false, "<lvalue>", qore_rt_store_mode(mode));
+            return;
+        }
+    }
+    qore_rt_assign_local_mode(ctx->locals[idx], val, mode, xsink);
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_add_assign_local_int_aot(
@@ -16917,6 +16960,43 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_closure_aot
 extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     qore_rt_store_closure_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+// --- The store helpers of weak and opaque assignments to closure, global and thread-local variables ---
+// Each is given the value assigned and the mode of the assignment: the type of the value is checked before the
+// weak or opaque reference that the variable holds is made, as the AST interpreter does (LValueHelper::assign();
+// qore#6979).  A thread-local variable is stored with the helpers of a global, as by qore_rt_store_thread_local().
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_mode_throwing(
+        LocalVar* var, uint64_t value, int32_t mode, ExceptionSink* xsink) {
+    qore_rt_assign_local_mode(var, value, mode, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_global_mode_throwing(
+        Var* var, uint64_t value, int32_t mode, ExceptionSink* xsink) {
+    qore_rt_store_global_mode(var, value, mode, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_mode_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode, ExceptionSink* xsink) {
+    qore_rt_store_closure_mode_aot(ctx, idx, val, mode, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_global_mode_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode, ExceptionSink* xsink) {
+    qore_rt_store_global_mode_aot(ctx, idx, val, mode, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
