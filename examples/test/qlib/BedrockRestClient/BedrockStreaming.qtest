@@ -345,7 +345,8 @@ class BedrockStreamingTest inherits QUnit::Test {
     }
 
     private BedrockRestClientIo liveClient() {
-        string region = ENV.AWS_REGION ?? ENV.AWS_DEFAULT_REGION ?? "us-east-1";
+        string region = LiveProvider::get("aws", "AWS_REGION") ?? LiveProvider::get("aws", "AWS_DEFAULT_REGION") ??
+            "us-east-1";
         return new BedrockRestClientIo({"url": "https://bedrock-runtime." + region + ".amazonaws.com",
             "aws_region": region, "http_version": "2.0"});
     }

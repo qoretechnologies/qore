@@ -19,10 +19,10 @@
 public class Pop3ClientTest inherits QUnit::Test {
     private {
         # Environment variables for live testing (e.g., against GreenMail Docker container)
-        *string pop3Host = ENV.POP3_TEST_HOST;
-        *string pop3Port = ENV.POP3_TEST_PORT;
-        *string smtpHost = ENV.SMTP_TEST_HOST;
-        *string smtpPort = ENV.SMTP_TEST_PORT;
+        *string pop3Host = LiveProvider::get("pop3", "POP3_TEST_HOST");
+        *string pop3Port = LiveProvider::get("pop3", "POP3_TEST_PORT");
+        *string smtpHost = LiveProvider::get("pop3", "SMTP_TEST_HOST");
+        *string smtpPort = LiveProvider::get("pop3", "SMTP_TEST_PORT");
         *string testUser = LiveProvider::get("pop3", "POP3_TEST_USER");
         *string testPass = LiveProvider::get("pop3", "POP3_TEST_PASS");
     }

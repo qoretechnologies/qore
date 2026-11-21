@@ -21,7 +21,7 @@ class AssemblyAiLiveTest inherits QUnit::Test {
     }
     constructor() : Test("AssemblyAI live API", "1.0", \ARGV, MyOpts) {
         connection_name = LiveProvider::get("assemblyai", "ASSEMBLYAI_CONNECTION", m_options.connection);
-        audio_file = m_options.audio ?? ENV.ASSEMBLYAI_TEST_AUDIO;
+        audio_file = m_options.audio ?? LiveProvider::get("assemblyai", "ASSEMBLYAI_TEST_AUDIO");
         if (LiveProvider::get("assemblyai", "ASSEMBLYAI_APIKEY")) {
             client = new AssemblyAiRestClientIo({"apikey":
                 LiveProvider::get("assemblyai", "ASSEMBLYAI_APIKEY"), "timeout": 3m});

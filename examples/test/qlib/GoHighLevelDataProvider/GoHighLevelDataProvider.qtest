@@ -169,7 +169,7 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
 
         # Token mode - use a pre-obtained Bearer token directly
         *string token = LiveProvider::get("gohighlevel", "GHL_TOKEN", m_options.token);
-        *string location_id = m_options.location_id ?? ENV.GHL_LOCATION_ID;
+        *string location_id = m_options.location_id ?? LiveProvider::get("gohighlevel", "GHL_LOCATION_ID");
 
         if (token) {
             if (!location_id) {

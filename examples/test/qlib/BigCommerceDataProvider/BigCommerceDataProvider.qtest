@@ -176,7 +176,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             return;
         }
 
-        *string store_hash = m_options.store_hash ?? ENV.BIGCOMMERCE_STORE_HASH;
+        *string store_hash = m_options.store_hash ?? LiveProvider::get("bigcommerce", "BIGCOMMERCE_STORE_HASH");
         *string access_token = LiveProvider::get("bigcommerce", "BIGCOMMERCE_ACCESS_TOKEN", m_options.token);
         *string client_id = LiveProvider::get("bigcommerce", "BIGCOMMERCE_CLIENT_ID", m_options.oauth2_client_id);
         *string client_secret = LiveProvider::get("bigcommerce", "BIGCOMMERCE_CLIENT_SECRET",

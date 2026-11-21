@@ -113,7 +113,7 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
         }
 
         *string apikey = LiveProvider::get("insightly", "INSIGHTLY_API_KEY", m_options.apikey);
-        *string pod = m_options.pod ?? ENV.INSIGHTLY_POD;
+        *string pod = m_options.pod ?? LiveProvider::get("insightly", "INSIGHTLY_POD");
         if (apikey) {
             hash<auto> opts = {
                 "apikey": apikey,

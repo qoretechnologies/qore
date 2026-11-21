@@ -136,7 +136,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         }
 
         hash<auto> opts;
-        opts.url = m_options.dyn_url ?? ENV.CDS_URL;
+        opts.url = m_options.dyn_url ?? LiveProvider::get("cds", "CDS_URL");
         if (!opts.url) {
             return;
         }
@@ -169,7 +169,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         }
 
         hash<auto> opts;
-        opts.url = m_options.bc_url ?? ENV.BC_URL;
+        opts.url = m_options.bc_url ?? LiveProvider::get("businesscentral", "BC_URL");
         if (!opts.url) {
             return;
         }
@@ -183,7 +183,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             return;
         }
         opts.tenant = LiveProvider::get("businesscentral", "BC_TENANT", m_options.bc_tenant);
-        opts.instance_type = m_options.bc_instance_type ?? ENV.BC_INSTANCE_TYPE;
+        opts.instance_type = m_options.bc_instance_type ?? LiveProvider::get("businesscentral", "BC_INSTANCE_TYPE");
         if (m_options.timeout) {
             opts.connect_timeout = m_options.timeout;
         }

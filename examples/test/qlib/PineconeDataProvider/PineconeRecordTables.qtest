@@ -67,7 +67,7 @@ class PineconeTablesTest inherits QUnit::Test {
         addTestCase("document projection, full-record fetches and writes", \documentTest());
         addTestCase("scope and identity-specific control-plane writes", \scopeTest());
         addTestCase("dynamic metadata filter language", \filterTest());
-        if (ENV.PINECONE_TABLE_PHASE && LiveProvider::get("pinecone", "PINECONE_APIKEY")) {
+        if (LiveProvider::get("pinecone", "PINECONE_TABLE_PHASE") && LiveProvider::get("pinecone", "PINECONE_APIKEY")) {
             addTestCase("live: indexes, namespaces, vectors and documents", \liveTest());
         }
         set_return_value(main());
@@ -257,12 +257,13 @@ class PineconeTablesTest inherits QUnit::Test {
     # observation, with no sleeps or retries. PINECONE_TABLE_STATE names the fixture JSON file;
     # it contains only owned index names, never credentials. The cleanup stage is also explicit.
     private liveTest() {
-        string phase = ENV.PINECONE_TABLE_PHASE;
+        string phase = LiveProvider::get("pinecone", "PINECONE_TABLE_PHASE");
         assertTrue(inlist(phase, ("prepare", "read", "updated", "deleted", "cleaned", "cleanup")));
-        assertTrue(ENV.PINECONE_TABLE_STATE.val());
+        assertTrue(LiveProvider::get("pinecone", "PINECONE_TABLE_STATE").val());
         PineconeDataProvider p(new PineconeRestClientIo({"apikey": LiveProvider::get("pinecone", "PINECONE_APIKEY")}));
         AbstractDataProvider indexes = p.getChildProviderPath("tables/indexes");
-        hash<auto!> state = phase == "prepare" ? {} : parse_json(File::readTextFile(ENV.PINECONE_TABLE_STATE));
+        hash<auto!> state = phase == "prepare" ? {} : parse_json(File::readTextFile(
+            LiveProvider::get("pinecone", "PINECONE_TABLE_STATE")));
         list<string> created = state.created ?? ();
         code<nothing()> cleanup = sub () {
             foreach string name in (created) {
@@ -303,7 +304,7 @@ class PineconeTablesTest inherits QUnit::Test {
             }
             state.created = created;
             File output();
-            output.open2(ENV.PINECONE_TABLE_STATE, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            output.open2(LiveProvider::get("pinecone", "PINECONE_TABLE_STATE"), O_WRONLY | O_CREAT | O_TRUNC, 0600);
             output.write(make_json(state));
             output.close();
         }

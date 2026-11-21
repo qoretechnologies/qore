@@ -61,7 +61,8 @@ class MistralLiveTest inherits QUnit::Test {
         assertTrue(models.data.size() > 0);
         auto model = call("get-model", {"model_id": "mistral-small-latest"});
         assertEq("mistral-small-latest", model.id);
-        auto chat = call("chat-completion", {"model": ENV.MISTRAL_TEST_CHAT_MODEL ?? "open-mistral-nemo",
+        auto chat = call("chat-completion", {"model": LiveProvider::get("mistral", "MISTRAL_TEST_CHAT_MODEL") ??
+            "open-mistral-nemo",
             "messages": ({"role": "user", "content": "Say hello in one word."},), "max_tokens": 16});
         assertTrue(chat.choices[0].message.content.val());
         assertEq(NT_DATE, chat.created.typeCode());
@@ -148,10 +149,10 @@ class MistralLiveTest inherits QUnit::Test {
         assertTrue(call("list-libraries").data.size() > 0);
         auto documents = call("list-library-documents", {"library_id": id});
         assertEq(0, documents.data.size());
-        if (ENV.MISTRAL_TEST_PDF) {
+        if (LiveProvider::get("mistral", "MISTRAL_TEST_PDF")) {
             auto document = call("upload-library-document", {"library_id": id,
                 "file": {"name": "invoice.pdf", "mime_type": "application/pdf",
-                    "content": File::readBinaryFile(ENV.MISTRAL_TEST_PDF)}});
+                    "content": File::readBinaryFile(LiveProvider::get("mistral", "MISTRAL_TEST_PDF"))}});
             assertTrue(document.id.val());
             assertEq(document.id, call("get-library-document", {"library_id": id, "document_id": document.id}).id);
             call("delete-library-document", {"library_id": id, "document_id": document.id});
@@ -187,15 +188,15 @@ class MistralLiveTest inherits QUnit::Test {
         assertTrue(call("list-batch-jobs", {"page_size": 2}).data.size() > 0);
     }
     private mediaTest() {
-        if (!ENV.MISTRAL_TEST_PDF || !ENV.MISTRAL_TEST_AUDIO) {
+        if (!LiveProvider::get("mistral", "MISTRAL_TEST_PDF") || !LiveProvider::get("mistral", "MISTRAL_TEST_AUDIO")) {
             testSkip("set MISTRAL_TEST_PDF and MISTRAL_TEST_AUDIO for OCR and transcription");
         }
         auto ocr = call("ocr", {"document": {"type": "document_url", "document_url": "data:application/pdf;base64,"
-            + make_base64_string(File::readBinaryFile(ENV.MISTRAL_TEST_PDF))}});
+            + make_base64_string(File::readBinaryFile(LiveProvider::get("mistral", "MISTRAL_TEST_PDF")))}});
         assertTrue(ocr.pages.size() > 0);
         assertTrue(ocr.pages[0].markdown.val());
         auto text = call("transcribe-audio", {"file": {"name": "invoice.wav", "mime_type": "audio/wav",
-            "content": File::readBinaryFile(ENV.MISTRAL_TEST_AUDIO)}, "language": "en"});
+            "content": File::readBinaryFile(LiveProvider::get("mistral", "MISTRAL_TEST_AUDIO"))}, "language": "en"});
         assertTrue(text.text.val());
     }
     private speechTest() {

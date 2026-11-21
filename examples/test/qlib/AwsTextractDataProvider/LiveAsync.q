@@ -5,12 +5,14 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires ../../LiveProviderTest.qm
 %requires AwsTextractDataProvider
-if (!ENV.AWS_TEXTRACT_TEST_BUCKET) {
-    throw "LIVE-FIXTURE-ERROR", "AWS_TEXTRACT_TEST_BUCKET must name a task-owned synthetic fixture bucket";
+if (!LiveProvider::get("aws", "AWS_TEXTRACT_TEST_BUCKET")) {
+    throw "LIVE-FIXTURE-ERROR", "QORE_TEST_LIVE_PROVIDERS=aws and AWS_TEXTRACT_TEST_BUCKET (a task-owned synthetic "
+        "fixture bucket) must be set";
 }
 AwsTextractDataProvider::AwsTextractDataProvider provider({});
 hash<auto> started = provider.getChildProvider("start-document-text-detection").doRequest({
-    "DocumentLocation": {"S3Object": {"Bucket": ENV.AWS_TEXTRACT_TEST_BUCKET, "Name": "synthetic-invoice.pdf"}},
+    "DocumentLocation": {"S3Object": {"Bucket": LiveProvider::get("aws", "AWS_TEXTRACT_TEST_BUCKET"),
+        "Name": "synthetic-invoice.pdf"}},
 });
 if (!started.JobId.val()) { throw "LIVE-FIXTURE-ERROR", "start action did not return JobId"; }
 hash<auto> request = hash({"JobId": started.JobId, "MaxResults": 2});

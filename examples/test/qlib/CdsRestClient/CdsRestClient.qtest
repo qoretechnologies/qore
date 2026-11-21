@@ -118,7 +118,7 @@ class CdsTest inherits QUnit::Test {
             rc = conn.get(False);
             return;
         }
-        cdsopts.url = m_options.url ?? ENV.CDS_URL;
+        cdsopts.url = m_options.url ?? LiveProvider::get("cds", "CDS_URL");
         if (!cdsopts.url) {
             error("missing --url or --connection options, CDS_URL or CDS_CONNECTION environment variables");
         }

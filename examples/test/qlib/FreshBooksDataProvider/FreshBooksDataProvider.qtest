@@ -220,7 +220,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         *string client_id = LiveProvider::get("freshbooks", "FRESHBOOKS_CLIENT_ID", m_options.client_id);
         *string client_secret = LiveProvider::get("freshbooks", "FRESHBOOKS_CLIENT_SECRET", m_options.client_secret);
         *string account_id = LiveProvider::get("freshbooks", "FRESHBOOKS_ACCOUNT_ID", m_options.account_id);
-        *string business_id = m_options.business_id ?? ENV.FRESHBOOKS_BUSINESS_ID;
+        *string business_id = m_options.business_id ?? LiveProvider::get("freshbooks", "FRESHBOOKS_BUSINESS_ID");
 
         if (!account_id || !business_id) {
             if (m_options.verbose) {

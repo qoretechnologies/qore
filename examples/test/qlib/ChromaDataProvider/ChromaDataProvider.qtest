@@ -139,7 +139,7 @@ public class ChromaDataProviderTest inherits QUnit::Test {
         with embeddings.
     */
     private liveChromaTest() {
-        *string coll_id = ENV.CHROMA_COLLECTION_ID;
+        *string coll_id = LiveProvider::get("chroma", "CHROMA_COLLECTION_ID");
         if (!coll_id.val()) {
             testSkip("CHROMA_COLLECTION_ID env var must name an existing "
                 "Chroma collection UUID");
@@ -156,7 +156,7 @@ public class ChromaDataProviderTest inherits QUnit::Test {
         # Use a small 5-dim vector by default; users can override the
         # dimension by setting CHROMA_QUERY_DIM if their collection's
         # embedder requires a different size.
-        int dim = (ENV.CHROMA_QUERY_DIM ?? "5").toInt();
+        int dim = (LiveProvider::get("chroma", "CHROMA_QUERY_DIM") ?? "5").toInt();
         list<float> vec = map 0.1, xrange(dim);
         auto resp = q.doRequest({
             "collection_id": coll_id,

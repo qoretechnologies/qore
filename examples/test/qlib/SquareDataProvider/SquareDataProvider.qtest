@@ -189,7 +189,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         *string token = LiveProvider::get("square", "SQUARE_ACCESS_TOKEN", m_options.token);
         *string client_id = LiveProvider::get("square", "SQUARE_CLIENT_ID", m_options.client_id);
         *string client_secret = LiveProvider::get("square", "SQUARE_CLIENT_SECRET", m_options.client_secret);
-        locationId = m_options.location_id ?? ENV.SQUARE_LOCATION_ID;
+        locationId = m_options.location_id ?? LiveProvider::get("square", "SQUARE_LOCATION_ID");
 
         if (!token && (!client_id || !client_secret)) {
             if (m_options.verbose) {
@@ -207,8 +207,8 @@ public class SquareDataProviderTest inherits QUnit::Test {
         }
 
         # Determine URL
-        *string url = m_options.url ?? ENV.SQUARE_URL;
-        if (!url && (m_options.sandbox || ENV.SQUARE_SANDBOX)) {
+        *string url = m_options.url ?? LiveProvider::get("square", "SQUARE_URL");
+        if (!url && (m_options.sandbox || LiveProvider::get("square", "SQUARE_SANDBOX"))) {
             url = "https://connect.squareupsandbox.com/v2";
         }
 

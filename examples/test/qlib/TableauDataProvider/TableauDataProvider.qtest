@@ -214,10 +214,10 @@ public class TableauDataProviderTest inherits QUnit::Test {
             return;
         }
 
-        *string subdomain = m_options.subdomain ?? ENV.TABLEAU_SUBDOMAIN;
+        *string subdomain = m_options.subdomain ?? LiveProvider::get("tableau", "TABLEAU_SUBDOMAIN");
         *string token_name = LiveProvider::get("tableau", "TABLEAU_TOKEN_NAME", m_options.token_name);
         *string token_secret = LiveProvider::get("tableau", "TABLEAU_TOKEN_SECRET", m_options.token_secret);
-        *string content_url = m_options.content_url ?? ENV.TABLEAU_CONTENT_URL;
+        *string content_url = m_options.content_url ?? LiveProvider::get("tableau", "TABLEAU_CONTENT_URL");
 
         if (!subdomain || !token_name || !token_secret) {
             if (m_options.verbose) {

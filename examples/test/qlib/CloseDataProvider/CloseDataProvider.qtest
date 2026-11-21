@@ -782,7 +782,7 @@ public class CloseDataProviderTest inherits QUnit::Test {
         try {
             hash<auto> smsMsg = sms.getChildProvider("create").doRequest({
                 "lead_id": testLeadId,
-                "local_phone": ENV.CLOSE_TEST_PHONE ?? "+15550001111",
+                "local_phone": LiveProvider::get("close", "CLOSE_TEST_PHONE") ?? "+15550001111",
                 "text": "Qore test SMS message",
                 "status": "draft",
             });

@@ -151,7 +151,7 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
         if (LiveProvider::get("deepseek", "DEEPSEEK_APIKEY")) {
             addTestCase("live model and balance lookup", \liveAccountTest());
         }
-        if (ENV.DEEPSEEK_INFERENCE) {
+        if (LiveProvider::get("deepseek", "DEEPSEEK_INFERENCE")) {
             addTestCase("live chat, Responses, FIM, and image file lifecycle", \liveApiTest());
             addTestCase("live JSON, reasoning, and strict tools", \liveAdvancedTest());
             addTestCase("live empty Responses JSON Schema", \liveEmptySchemaTest());

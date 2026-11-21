@@ -222,7 +222,7 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
     #! Sets up the Zoho Inventory client for integration tests
     private setupConnection() {
         # Organization ID is always required for actions (passed per-action, not from connection)
-        organizationId = m_options.org_id ?? ENV.ZOHOINVENTORY_ORGANIZATION_ID;
+        organizationId = m_options.org_id ?? LiveProvider::get("zohoinventory", "ZOHOINVENTORY_ORGANIZATION_ID");
 
         # Try to use a connection from Qorus if specified
         *string conn_name = LiveProvider::get("zohoinventory", "ZOHOINVENTORY_CONNECTION", m_options.conn);
@@ -257,8 +257,9 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
                 printf("Using token-only mode (no OAuth2 refresh)\n");
             }
             hash<auto> opts = {
-                "subdomain": m_options.subdomain ?? ENV.ZOHOINVENTORY_SUBDOMAIN ?? "zoho",
-                "domain": m_options.domain ?? ENV.ZOHOINVENTORY_DOMAIN ?? ".com",
+                "subdomain": m_options.subdomain ?? LiveProvider::get("zohoinventory", "ZOHOINVENTORY_SUBDOMAIN") ??
+                    "zoho",
+                "domain": m_options.domain ?? LiveProvider::get("zohoinventory", "ZOHOINVENTORY_DOMAIN") ?? ".com",
                 "token": token,
             };
             client = new ZohoInventoryRestClient::ZohoInventoryRestClientIo(opts);
@@ -291,8 +292,8 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
             "oauth2_refresh_token": refresh_token,
             # NOTE: organization_id is intentionally NOT set here to match real Qorus behavior
             # where it's selected per-action, not from the connection
-            "subdomain": m_options.subdomain ?? ENV.ZOHOINVENTORY_SUBDOMAIN ?? "zoho",
-            "domain": m_options.domain ?? ENV.ZOHOINVENTORY_DOMAIN ?? ".com",
+            "subdomain": m_options.subdomain ?? LiveProvider::get("zohoinventory", "ZOHOINVENTORY_SUBDOMAIN") ?? "zoho",
+            "domain": m_options.domain ?? LiveProvider::get("zohoinventory", "ZOHOINVENTORY_DOMAIN") ?? ".com",
         };
         if (token) {
             opts.token = token;

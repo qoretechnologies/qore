@@ -116,7 +116,7 @@ public class WeaviateDataProviderTest inherits QUnit::Test {
         Cost: Free (self-hostable).
     */
     private liveWeaviateTest() {
-        *string class_name = ENV.WEAVIATE_CLASS;
+        *string class_name = LiveProvider::get("weaviate", "WEAVIATE_CLASS");
         if (!class_name.val()) {
             testSkip("WEAVIATE_CLASS env var must name an existing Weaviate "
                 "class");

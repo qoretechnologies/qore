@@ -220,7 +220,7 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
     #! Sets up the Zoho Books client for integration tests
     private setupConnection() {
         # Organization ID is always required for actions (passed per-action, not from connection)
-        organizationId = m_options.org_id ?? ENV.ZOHOBOOKS_ORGANIZATION_ID;
+        organizationId = m_options.org_id ?? LiveProvider::get("zohobooks", "ZOHOBOOKS_ORGANIZATION_ID");
 
         # Try to use a connection from Qorus if specified
         *string conn_name = LiveProvider::get("zohobooks", "ZOHOBOOKS_CONNECTION", m_options.conn);
@@ -252,8 +252,8 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
                 printf("Using token-only mode (no OAuth2 refresh)\n");
             }
             hash<auto> opts = {
-                "subdomain": m_options.subdomain ?? ENV.ZOHOBOOKS_SUBDOMAIN ?? "zoho",
-                "domain": m_options.domain ?? ENV.ZOHOBOOKS_DOMAIN ?? ".com",
+                "subdomain": m_options.subdomain ?? LiveProvider::get("zohobooks", "ZOHOBOOKS_SUBDOMAIN") ?? "zoho",
+                "domain": m_options.domain ?? LiveProvider::get("zohobooks", "ZOHOBOOKS_DOMAIN") ?? ".com",
                 "token": token,
             };
             client = new ZohoBooksRestClient::ZohoBooksRestClientIo(opts);
@@ -286,8 +286,8 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
             "oauth2_refresh_token": refresh_token,
             # NOTE: organization_id is intentionally NOT set here to match real Qorus behavior
             # where it's selected per-action, not from the connection
-            "subdomain": m_options.subdomain ?? ENV.ZOHOBOOKS_SUBDOMAIN ?? "zoho",
-            "domain": m_options.domain ?? ENV.ZOHOBOOKS_DOMAIN ?? ".com",
+            "subdomain": m_options.subdomain ?? LiveProvider::get("zohobooks", "ZOHOBOOKS_SUBDOMAIN") ?? "zoho",
+            "domain": m_options.domain ?? LiveProvider::get("zohobooks", "ZOHOBOOKS_DOMAIN") ?? ".com",
         };
         if (token) {
             opts.token = token;

@@ -156,10 +156,10 @@ public class TogetherDataProviderTest inherits QUnit::Test {
         if (LiveProvider::get("together", "TOGETHERAI_LIVE")) {
             addTestCase("live read-only listings and dropdowns", \liveReadOnlyTest());
         }
-        if (ENV.TOGETHERAI_PAID_TESTS) {
+        if (LiveProvider::get("together", "TOGETHERAI_PAID_TESTS")) {
             addTestCase("live bounded chat, embedding, and rerank requests", \livePaidTest());
         }
-        if (ENV.TOGETHERAI_FILE_TESTS) {
+        if (LiveProvider::get("together", "TOGETHERAI_FILE_TESTS")) {
             addTestCase("live temporary file upload, metadata, download, and deletion", \liveFileTest());
         }
         set_return_value(main());
@@ -579,22 +579,22 @@ public class TogetherDataProviderTest inherits QUnit::Test {
     private livePaidTest() {
         TogetherDataProvider::TogetherDataProvider root = liveRoot();
         # Models are explicitly chosen after reviewing live availability and pricing.
-        assertTrue(ENV.TOGETHERAI_CHAT_MODEL.val());
+        assertTrue(LiveProvider::get("together", "TOGETHERAI_CHAT_MODEL").val());
         auto chat = root.getChildProvider("chat-completion").doRequest({
-            "model": ENV.TOGETHERAI_CHAT_MODEL,
+            "model": LiveProvider::get("together", "TOGETHERAI_CHAT_MODEL"),
             "messages": ({"role": "user", "content": "Say hi."},), "max_tokens": 8,
         });
         assertTrue(chat.choices[0].message.content.val());
         assertTrue(chat.usage.completion_tokens <= 8);
-        if (ENV.TOGETHERAI_EMBED_MODEL) {
+        if (LiveProvider::get("together", "TOGETHERAI_EMBED_MODEL")) {
             auto embedding = root.getChildProvider("create-embeddings").doRequest({
-                "model": ENV.TOGETHERAI_EMBED_MODEL, "input": "Invoice paid",
+                "model": LiveProvider::get("together", "TOGETHERAI_EMBED_MODEL"), "input": "Invoice paid",
             });
             assertTrue(embedding.data[0].embedding.size() > 0);
         }
-        if (ENV.TOGETHERAI_RERANK_MODEL) {
+        if (LiveProvider::get("together", "TOGETHERAI_RERANK_MODEL")) {
             auto ranked = root.getChildProvider("rerank").doRequest({
-                "model": ENV.TOGETHERAI_RERANK_MODEL, "query": "invoice",
+                "model": LiveProvider::get("together", "TOGETHERAI_RERANK_MODEL"), "query": "invoice",
                 "documents": ("Invoice paid", "Sunny day"), "top_n": 1,
             });
             assertEq(0, ranked.results[0].index);

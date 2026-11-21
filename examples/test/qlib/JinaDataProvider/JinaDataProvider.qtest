@@ -120,13 +120,13 @@ public class JinaDataProviderTest inherits QUnit::Test {
             addTestCase("live Reader, Search, Segmenter, and vision", \liveContentTest());
             addTestCase("live batch submission and status", \liveBatchTest());
         }
-        if (ENV.JINA_TEST_CLASSIFIERS) {
+        if (LiveProvider::get("jina", "JINA_TEST_CLASSIFIERS")) {
             addTestCase("live classifier lifecycle", \liveClassifierTest());
         }
-        if (ENV.JINA_TEST_DEEPSEARCH) {
+        if (LiveProvider::get("jina", "JINA_TEST_DEEPSEARCH")) {
             addTestCase("live DeepSearch", \liveDeepSearchTest());
         }
-        if (ENV.JINA_BATCH_ID) {
+        if (LiveProvider::get("jina", "JINA_BATCH_ID")) {
             addTestCase("live completed batch downloads", \liveBatchDownloadTest());
         }
         set_return_value(main());
@@ -498,7 +498,7 @@ public class JinaDataProviderTest inherits QUnit::Test {
         hash<auto> status = p.getChildProvider("get-batch").doRequest({"batch_id": batch.batch_id});
         assertEq(batch.batch_id, status.batch_id);
         assertTrue(!!status.status);
-        if (!ENV.JINA_KEEP_BATCH) {
+        if (!LiveProvider::get("jina", "JINA_KEEP_BATCH")) {
             if (status.status == "pending" || status.status == "processing") {
                 try {
                     hash<auto> cancelled = p.getChildProvider("cancel-batch").doRequest({"batch_id": batch.batch_id});
@@ -519,7 +519,8 @@ public class JinaDataProviderTest inherits QUnit::Test {
 
     private liveBatchDownloadTest() {
         AbstractDataProvider p = liveProvider();
-        hash<auto> result = p.getChildProvider("download-batch-output").doRequest({"batch_id": ENV.JINA_BATCH_ID});
+        hash<auto> result = p.getChildProvider("download-batch-output").doRequest({"batch_id":
+            LiveProvider::get("jina", "JINA_BATCH_ID")});
         assertEq("qore-5432", result.records[0].custom_id);
         assertEq(32, result.records[0].response.body.data[0].embedding.lsize());
     }

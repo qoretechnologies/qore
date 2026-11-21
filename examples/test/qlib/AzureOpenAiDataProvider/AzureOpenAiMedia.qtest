@@ -35,14 +35,16 @@ class AzureOpenAiMediaTest inherits QUnit::Test {
     }
 
     private AbstractDataProvider getProvider(*string deployment) {
-        if (!ENV.AZURE_MEDIA_ENDPOINT.val() || !LiveProvider::get("azure", "AZURE_MEDIA_API_KEY").val()
+        if (!LiveProvider::get("azure", "AZURE_MEDIA_ENDPOINT").val() || !
+            LiveProvider::get("azure", "AZURE_MEDIA_API_KEY").val()
             || !deployment.val()) {
             testSkip(LiveProvider::enabled("azure")
                 ? "configure AZURE_MEDIA_ENDPOINT, AZURE_MEDIA_API_KEY, and this test's deployment"
                 : LiveProvider::skipReason("azure", "AZURE_MEDIA_API_KEY"));
         }
         if (!provider) {
-            AzureOpenAiRestConnection conn({"name": "azure-media-test", "url": ENV.AZURE_MEDIA_ENDPOINT,
+            AzureOpenAiRestConnection conn({"name": "azure-media-test", "url":
+                LiveProvider::get("azure", "AZURE_MEDIA_ENDPOINT"),
                 "opts": {"api_key": LiveProvider::get("azure", "AZURE_MEDIA_API_KEY"), "timeout": 180000}});
             provider = conn.getDataProvider();
         }
@@ -70,7 +72,7 @@ class AzureOpenAiMediaTest inherits QUnit::Test {
 
     private hash<auto> audioFile() {
         if (!wav) {
-            wav = request("create-speech", {"model": ENV.AZURE_MEDIA_SPEECH_DEPLOYMENT,
+            wav = request("create-speech", {"model": LiveProvider::get("azure", "AZURE_MEDIA_SPEECH_DEPLOYMENT"),
                 "input": "The blue box is on the table.", "voice": "alloy", "response_format": "wav"});
             assertEq("RIFF", wav.substr(0, 4).toString());
         }
@@ -79,7 +81,7 @@ class AzureOpenAiMediaTest inherits QUnit::Test {
 
     private speechFormats() {
         foreach string format in ("mp3", "opus", "aac", "flac", "wav", "pcm") {
-            auto audio = request("create-speech", {"model": ENV.AZURE_MEDIA_SPEECH_DEPLOYMENT,
+            auto audio = request("create-speech", {"model": LiveProvider::get("azure", "AZURE_MEDIA_SPEECH_DEPLOYMENT"),
                 "input": "The blue box is on the table.", "voice": "alloy", "response_format": format});
             assertEq(NT_BINARY, audio.typeCode(), format);
             assertTrue(audio.size() > 40, format);
@@ -95,11 +97,13 @@ class AzureOpenAiMediaTest inherits QUnit::Test {
     }
 
     private whisperFormats() {
-        getProvider(ENV.AZURE_MEDIA_WHISPER_DEPLOYMENT);
-        list<string> formats = split(",", ENV.AZURE_MEDIA_TRANSCRIPTION_FORMATS ?? "verbose_json,text");
+        getProvider(LiveProvider::get("azure", "AZURE_MEDIA_WHISPER_DEPLOYMENT"));
+        list<string> formats = split(",", LiveProvider::get("azure", "AZURE_MEDIA_TRANSCRIPTION_FORMATS") ??
+            "verbose_json,text");
         assertTrue(formats.size() > 0 && formats.size() <= 2, "select at most two Whisper formats per run");
         foreach string format in (formats) {
-            hash<auto> input = {"model": ENV.AZURE_MEDIA_WHISPER_DEPLOYMENT, "file": audioFile(),
+            hash<auto> input = {"model":
+                LiveProvider::get("azure", "AZURE_MEDIA_WHISPER_DEPLOYMENT"), "file": audioFile(),
                 "response_format": format, "temperature": 0};
             if (format == "verbose_json") {
                 input.timestamp_granularities = ("word", "segment");
@@ -117,26 +121,29 @@ class AzureOpenAiMediaTest inherits QUnit::Test {
     }
 
     private gptTranscription() {
-        getProvider(ENV.AZURE_MEDIA_TRANSCRIBE_DEPLOYMENT);
-        auto result = request("create-transcription", {"model": ENV.AZURE_MEDIA_TRANSCRIBE_DEPLOYMENT,
+        getProvider(LiveProvider::get("azure", "AZURE_MEDIA_TRANSCRIBE_DEPLOYMENT"));
+        auto result = request("create-transcription", {"model":
+            LiveProvider::get("azure", "AZURE_MEDIA_TRANSCRIBE_DEPLOYMENT"),
             "file": audioFile(), "response_format": "json"});
         assertTrue(result.text.lwr().find("blue box") >= 0);
     }
 
     private translation() {
-        getProvider(ENV.AZURE_MEDIA_WHISPER_DEPLOYMENT);
-        auto result = request("create-translation", {"model": ENV.AZURE_MEDIA_WHISPER_DEPLOYMENT,
+        getProvider(LiveProvider::get("azure", "AZURE_MEDIA_WHISPER_DEPLOYMENT"));
+        auto result = request("create-translation", {"model":
+            LiveProvider::get("azure", "AZURE_MEDIA_WHISPER_DEPLOYMENT"),
             "file": audioFile(), "response_format": "json", "temperature": 0});
         assertTrue(result.text.lwr().find("blue box") >= 0);
     }
 
     private imageEdits() {
-        getProvider(ENV.AZURE_MEDIA_IMAGE_DEPLOYMENT);
+        getProvider(LiveProvider::get("azure", "AZURE_MEDIA_IMAGE_DEPLOYMENT"));
         hash<auto> file = {"name": "blue-square.png", "mime_type": "image/png",
             "content": File::readBinaryFile(get_script_dir() + "/media-test.png")};
         foreach int count in (1, 2) {
             list<hash<auto>> files = count == 1 ? (file,) : (file, file + {"name": "reference.png"});
-            auto result = request("create-image-edit", {"model": ENV.AZURE_MEDIA_IMAGE_DEPLOYMENT,
+            auto result = request("create-image-edit", {"model":
+                LiveProvider::get("azure", "AZURE_MEDIA_IMAGE_DEPLOYMENT"),
                 "image": files, "prompt": "Change the blue square to red. Keep the plain white background.",
                 "n": 1, "size": "1024x1024", "quality": "low", "output_format": "png"});
             assertEq(1, result.data.size());
@@ -146,10 +153,11 @@ class AzureOpenAiMediaTest inherits QUnit::Test {
     }
 
     private invalidAudio() {
-        AbstractDataProvider root = getProvider(ENV.AZURE_MEDIA_TRANSCRIBE_DEPLOYMENT);
+        AbstractDataProvider root = getProvider(LiveProvider::get("azure", "AZURE_MEDIA_TRANSCRIBE_DEPLOYMENT"));
         *hash<ExceptionInfo> failure;
         try {
-            root.getChildProvider("create-transcription").doRequest({"model": ENV.AZURE_MEDIA_TRANSCRIBE_DEPLOYMENT,
+            root.getChildProvider("create-transcription").doRequest({"model":
+                LiveProvider::get("azure", "AZURE_MEDIA_TRANSCRIBE_DEPLOYMENT"),
                 "file": {"name": "invalid.wav", "content": binary("not an audio file"), "mime_type": "audio/wav"}});
         } catch (hash<ExceptionInfo> ex) {
             failure = ex;

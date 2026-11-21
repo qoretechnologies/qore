@@ -442,8 +442,8 @@ public class BedrockTest inherits QUnit::Test {
     private missingRegionTest() {
         BedrockTest::checkJson(self);
         # snapshot env; ensure no region is leaking in
-        *string saved_r = getenv("AWS_REGION");
-        *string saved_dr = getenv("AWS_DEFAULT_REGION");
+        *string saved_r = LiveProvider::get("aws", "AWS_REGION");
+        *string saved_dr = LiveProvider::get("aws", "AWS_DEFAULT_REGION");
         unsetenv("AWS_REGION");
         unsetenv("AWS_DEFAULT_REGION");
         on_exit {
@@ -539,7 +539,7 @@ public class BedrockTest inherits QUnit::Test {
     }
 
     private liveConnectionPingTest() {
-        string region = getenv("AWS_REGION") ?? getenv("AWS_DEFAULT_REGION")
+        string region = LiveProvider::get("aws", "AWS_REGION") ?? LiveProvider::get("aws", "AWS_DEFAULT_REGION")
             ?? "us-east-1";
         BedrockRestClient::BedrockRestConnection valid("bedrock-live",
             "Bedrock live connection", NOTHING, {}, {"aws_region": region});

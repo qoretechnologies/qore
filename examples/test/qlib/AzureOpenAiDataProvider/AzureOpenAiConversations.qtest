@@ -67,13 +67,14 @@ class AzureOpenAiConversationsTest inherits QUnit::Test {
     }
 
     private lifecycleTest() {
-        if (!ENV.AZURE_FOUNDRY_ENDPOINT.val() || !LiveProvider::get("azure", "AZURE_FOUNDRY_ACCESS_TOKEN").val()) {
+        if (!LiveProvider::get("azure", "AZURE_FOUNDRY_ENDPOINT").val() || !
+            LiveProvider::get("azure", "AZURE_FOUNDRY_ACCESS_TOKEN").val()) {
             testSkip(LiveProvider::enabled("azure") ?
                 "configure AZURE_FOUNDRY_ENDPOINT and AZURE_FOUNDRY_ACCESS_TOKEN for a Foundry project"
                     : LiveProvider::skipReason("azure", "AZURE_FOUNDRY_ACCESS_TOKEN"));
         }
         FoundryTestState state();
-        FoundryTestClient rest({"url": ENV.AZURE_FOUNDRY_ENDPOINT, "data": "json",
+        FoundryTestClient rest({"url": LiveProvider::get("azure", "AZURE_FOUNDRY_ENDPOINT"), "data": "json",
             "headers": {"authorization": "Bearer " + LiveProvider::get("azure", "AZURE_FOUNDRY_ACCESS_TOKEN")}}, state);
         provider = new AzureOpenAiDataProvider::AzureOpenAiDataProvider(rest);
         bool deleted = False;

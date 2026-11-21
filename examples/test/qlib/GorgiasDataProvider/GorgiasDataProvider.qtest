@@ -99,7 +99,7 @@ public class GorgiasDataProviderTest inherits QUnit::Test {
         }
         # Allow direct token + subdomain for testing without Qorus
         *string token = LiveProvider::get("gorgias", "GORGIAS_TOKEN");
-        *string subdomain = ENV.GORGIAS_SUBDOMAIN;
+        *string subdomain = LiveProvider::get("gorgias", "GORGIAS_SUBDOMAIN");
         if (token && subdomain) {
             client = new GorgiasRestClient::GorgiasRestClientIo({
                 "subdomain": subdomain,

@@ -237,11 +237,11 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         *string client_id = LiveProvider::get("zohoinvoice", "ZOHOINVOICE_CLIENT_ID", m_options.client_id);
         *string client_secret = LiveProvider::get("zohoinvoice", "ZOHOINVOICE_CLIENT_SECRET", m_options.client_secret);
         *string refresh_token = LiveProvider::get("zohoinvoice", "ZOHOINVOICE_REFRESH_TOKEN", m_options.refresh_token);
-        *string org_id = m_options.org_id ?? ENV.ZOHOINVOICE_ORGANIZATION_ID;
+        *string org_id = m_options.org_id ?? LiveProvider::get("zohoinvoice", "ZOHOINVOICE_ORGANIZATION_ID");
 
         hash<auto> opts = {
-            "subdomain": m_options.subdomain ?? ENV.ZOHOINVOICE_SUBDOMAIN ?? "zoho",
-            "domain": m_options.domain ?? ENV.ZOHOINVOICE_DOMAIN ?? ".com",
+            "subdomain": m_options.subdomain ?? LiveProvider::get("zohoinvoice", "ZOHOINVOICE_SUBDOMAIN") ?? "zoho",
+            "domain": m_options.domain ?? LiveProvider::get("zohoinvoice", "ZOHOINVOICE_DOMAIN") ?? ".com",
         };
 
         # Add organization_id if provided (optional)

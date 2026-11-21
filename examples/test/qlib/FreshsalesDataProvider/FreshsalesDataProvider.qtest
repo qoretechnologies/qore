@@ -107,7 +107,7 @@ public class FreshsalesDataProviderTest inherits QUnit::Test {
         }
 
         *string apikey = LiveProvider::get("freshsales", "FRESHSALES_API_KEY", m_options.apikey);
-        *string domain = m_options.domain ?? ENV.FRESHSALES_DOMAIN;
+        *string domain = m_options.domain ?? LiveProvider::get("freshsales", "FRESHSALES_DOMAIN");
         if (apikey && domain) {
             client = new FreshsalesRestClient::FreshsalesRestClientIo({
                 "apikey": apikey,

@@ -100,7 +100,7 @@ class ServiceNowTest inherits QUnit::Test {
             rc = conn.get();
             rc.setLogger(logger);
         } else {
-            snopts.url = m_options.url ?? ENV.SERVICENOW_URL;
+            snopts.url = m_options.url ?? LiveProvider::get("servicenow", "SERVICENOW_URL");
             if (!snopts.url)
                 error("missing --url option or SERVICENOW_URL environment variable");
             if (m_options.client_id || LiveProvider::get("servicenow", "SERVICENOW_CLIENT_ID")

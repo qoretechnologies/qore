@@ -478,7 +478,8 @@ public class FireworksDataProviderTest inherits QUnit::Test {
 
     private liveChatTest() {
         AbstractDataProvider root = getLiveRoot();
-        string chat_model = ENV.FIREWORKS_TEST_CHAT_MODEL ?? "accounts/fireworks/models/gpt-oss-120b";
+        string chat_model = LiveProvider::get("fireworks", "FIREWORKS_TEST_CHAT_MODEL") ??
+            "accounts/fireworks/models/gpt-oss-120b";
         auto chat = root.getChildProvider("chat-completion").doRequest({
             "model": chat_model,
             "messages": ({"role": "user", "content": "Say hi."},),
@@ -494,7 +495,8 @@ public class FireworksDataProviderTest inherits QUnit::Test {
     private liveEmbedTest() {
         AbstractDataProvider root = getLiveRoot();
         auto embedded = root.getChildProvider("create-embeddings").doRequest({
-            "model": ENV.FIREWORKS_TEST_EMBED_MODEL ?? "accounts/fireworks/models/qwen3-embedding-8b",
+            "model": LiveProvider::get("fireworks", "FIREWORKS_TEST_EMBED_MODEL") ??
+                "accounts/fireworks/models/qwen3-embedding-8b",
             "input": "invoice", "dimensions": 32,
         });
         assertEq(32, embedded.data[0].embedding.size());
@@ -505,7 +507,8 @@ public class FireworksDataProviderTest inherits QUnit::Test {
     private liveRerankTest() {
         AbstractDataProvider root = getLiveRoot();
         auto ranked = root.getChildProvider("rerank").doRequest({
-            "model": ENV.FIREWORKS_TEST_RERANK_MODEL ?? "accounts/fireworks/models/qwen3-reranker-8b",
+            "model": LiveProvider::get("fireworks", "FIREWORKS_TEST_RERANK_MODEL") ??
+                "accounts/fireworks/models/qwen3-reranker-8b",
             "query": "refund", "documents": ("Refunds accepted", "Blue sky"), "top_n": 1,
         });
         assertEq(1, ranked.data.size());

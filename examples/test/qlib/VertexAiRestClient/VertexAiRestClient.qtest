@@ -564,18 +564,20 @@ public class VertexAiTest inherits QUnit::Test {
         us-central1), VERTEX_MODEL (default gemini-2.5-flash).
     */
     private liveStreamTest() {
-        *string sa = ENV.VERTEX_SA_JSON;
+        *string sa = LiveProvider::get("google", "VERTEX_SA_JSON");
         if (!sa.val()) {
-            testSkip("set VERTEX_SA_JSON to a service-account key file to run the live Vertex AI streaming test");
+            testSkip(LiveProvider::enabled("google")
+                ? "set VERTEX_SA_JSON to a service-account key file to run the live Vertex AI streaming test"
+                : LiveProvider::skipReason("google", "VERTEX_SA_JSON"));
         }
         hash<auto> sa_info = parse_json(ReadOnlyFile::readTextFile(sa));
         GcpAuth::clearTokenCache();
         QoreLlmUtils::LlmBackend backend(<QoreLlmUtils::LlmBackendConfig>{
             "mode": "vertex-ai",
-            "model": ENV.VERTEX_MODEL ?? "gemini-2.5-flash",
+            "model": LiveProvider::get("google", "VERTEX_MODEL") ?? "gemini-2.5-flash",
             "provider_options": {
-                "gcp_project_id": ENV.VERTEX_PROJECT ?? sa_info.project_id,
-                "gcp_region": ENV.VERTEX_REGION ?? "us-central1",
+                "gcp_project_id": LiveProvider::get("google", "VERTEX_PROJECT") ?? sa_info.project_id,
+                "gcp_region": LiveProvider::get("google", "VERTEX_REGION") ?? "us-central1",
                 "gcp_sa_json_path": sa,
             },
         });
@@ -643,8 +645,8 @@ public class VertexAiTest inherits QUnit::Test {
             "mode": "vertex-ai",
             "model": "qore-test-no-such-model",
             "provider_options": {
-                "gcp_project_id": ENV.VERTEX_PROJECT ?? sa_info.project_id,
-                "gcp_region": ENV.VERTEX_REGION ?? "us-central1",
+                "gcp_project_id": LiveProvider::get("google", "VERTEX_PROJECT") ?? sa_info.project_id,
+                "gcp_region": LiveProvider::get("google", "VERTEX_REGION") ?? "us-central1",
                 "gcp_sa_json_path": sa,
             },
         });

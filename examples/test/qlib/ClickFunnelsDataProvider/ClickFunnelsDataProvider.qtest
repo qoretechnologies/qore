@@ -107,8 +107,8 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
 
         # Try environment variables
         *string apikey = LiveProvider::get("clickfunnels", "CLICKFUNNELS_TOKEN", m_options.apikey);
-        *string team = m_options.team ?? ENV.CLICKFUNNELS_TEAM;
-        workspace_id_opt = m_options.workspace_id ?? ENV.CLICKFUNNELS_WORKSPACE_ID;
+        *string team = m_options.team ?? LiveProvider::get("clickfunnels", "CLICKFUNNELS_TEAM");
+        workspace_id_opt = m_options.workspace_id ?? LiveProvider::get("clickfunnels", "CLICKFUNNELS_WORKSPACE_ID");
 
         if (apikey && team) {
             client = new ClickFunnelsRestClient::ClickFunnelsRestClientIo({

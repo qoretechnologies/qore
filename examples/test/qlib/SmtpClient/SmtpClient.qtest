@@ -26,8 +26,8 @@ public class SmtpClientTest inherits QUnit::Test {
         const OptionColumn = 22;
 
         # Environment variables for live testing
-        *string smtpHost = ENV.SMTP_TEST_HOST;
-        *string smtpPort = ENV.SMTP_TEST_PORT;
+        *string smtpHost = LiveProvider::get("smtp", "SMTP_TEST_HOST");
+        *string smtpPort = LiveProvider::get("smtp", "SMTP_TEST_PORT");
         *string testUser = LiveProvider::get("smtp", "SMTP_TEST_USER");
         *string testPass = LiveProvider::get("smtp", "SMTP_TEST_PASS");
     }

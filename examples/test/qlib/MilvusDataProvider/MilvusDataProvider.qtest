@@ -115,7 +115,7 @@ public class MilvusDataProviderTest inherits QUnit::Test {
         Cost: Free (self-hostable).
     */
     private liveMilvusTest() {
-        *string coll_name = ENV.MILVUS_COLLECTION;
+        *string coll_name = LiveProvider::get("milvus", "MILVUS_COLLECTION");
         if (!coll_name.val()) {
             testSkip("MILVUS_COLLECTION env var must name an existing "
                 "Milvus collection");

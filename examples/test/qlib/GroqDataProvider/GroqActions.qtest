@@ -443,7 +443,7 @@ class GroqActionsTest inherits QUnit::Test {
         GroqDataProvider root(cast<RestClientIo::RestClientIo>(conn.getAsync()));
         auto models = root.getChildProvider("list-models").doRequest();
         assertTrue(models."data".size() > 0);
-        string model = ENV.GROQ_CHAT_MODEL ?? "openai/gpt-oss-20b";
+        string model = LiveProvider::get("groq", "GROQ_CHAT_MODEL") ?? "openai/gpt-oss-20b";
         auto info = root.getChildProvider("get-model").doRequest({"model": model});
         assertEq(model, info.id);
         assertTrue(info.context_window > 0);
@@ -456,7 +456,7 @@ class GroqActionsTest inherits QUnit::Test {
             "reasoning": {"effort": "low"}, "max_output_tokens": 128});
         assertTrue(response.output.size() > 0);
         assertTrue(response.usage.total_tokens > 0);
-        if (ENV.GROQ_TOOL_TESTS) {
+        if (LiveProvider::get("groq", "GROQ_TOOL_TESTS")) {
             auto tool_response = root.getChildProvider("create-response").doRequest({
                 "model": model, "input": "Look up order 123 using the lookup_order function.",
                 "reasoning": {"effort": "low"}, "max_output_tokens": 256,
@@ -480,7 +480,7 @@ class GroqActionsTest inherits QUnit::Test {
             assertEq("84ed23cd635ab778a70bafac777a24a83119f845a7e34c407bf25a16c67c6403", trim(executions[0].output));
             assertTrue(code_response.usage.total_tokens > 0);
         }
-        if (ENV.GROQ_FILE_TESTS) {
+        if (LiveProvider::get("groq", "GROQ_FILE_TESTS")) {
             assertTrue(root.getChildProvider("list-files").doRequest()."data".typeCode() == NT_LIST);
             assertTrue(root.getChildProvider("list-batches").doRequest()."data".typeCode() == NT_LIST);
             string jsonl = make_json({"custom_id": "qore-groq-audit", "method": "POST", "url": "/v1/chat/completions",
@@ -493,7 +493,7 @@ class GroqActionsTest inherits QUnit::Test {
             assertEq("qore-groq-audit.jsonl", root.getChildProvider("get-file").doRequest({"file_id": file.id}).filename);
             assertEq(binary(jsonl), root.getChildProvider("download-file").doRequest({"file_id": file.id}));
         }
-        if (ENV.GROQ_RESTRICTED_PLAN_TESTS) {
+        if (LiveProvider::get("groq", "GROQ_RESTRICTED_PLAN_TESTS")) {
             foreach string action in ("list-files", "list-batches", "list-fine-tunings") {
                 *hash<ExceptionInfo> error;
                 try {
@@ -507,12 +507,12 @@ class GroqActionsTest inherits QUnit::Test {
                 assertEq("not_available_for_plan", error.arg.body.error.code);
             }
         }
-        if (ENV.GROQ_SPEECH_TESTS) {
+        if (LiveProvider::get("groq", "GROQ_SPEECH_TESTS")) {
             binary audio = root.getChildProvider("generate-speech").doRequest({"model": "canopylabs/orpheus-v1-english",
                 "input": "Your order has shipped.", "voice": "troy", "response_format": "wav"});
             assertTrue(audio.size() > 44);
         }
-        if (ENV.GROQ_AUDIO_TESTS) {
+        if (LiveProvider::get("groq", "GROQ_AUDIO_TESTS")) {
             binary audio = File::readBinaryFile(get_script_dir() + "/order.wav");
             foreach string action in ("transcribe-audio", "translate-audio") {
                 auto result = root.getChildProvider(action).doRequest({"model": "whisper-large-v3",

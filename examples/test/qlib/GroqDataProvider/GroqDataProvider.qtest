@@ -350,7 +350,7 @@ public class GroqDataProviderTest inherits QUnit::Test {
         assertTrue(vals.size() > 0,
             "Groq models exposed as reference data");
 
-        string model = ENV.GROQ_CHAT_MODEL ?? "openai/gpt-oss-20b";
+        string model = LiveProvider::get("groq", "GROQ_CHAT_MODEL") ?? "openai/gpt-oss-20b";
         auto resp = chat.doRequest({
             "model": model,
             "messages": ({"role": "user", "content": "Reply with just OK."},),

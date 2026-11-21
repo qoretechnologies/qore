@@ -156,7 +156,7 @@ public class AwsTextractRestClientTest inherits QUnit::Test {
     }
 
     private environmentTest() {
-        *string region = getenv("AWS_REGION");
+        *string region = LiveProvider::get("aws", "AWS_REGION");
         on_exit region == NOTHING ? unsetenv("AWS_REGION") : setenv("AWS_REGION", region);
         setenv("AWS_REGION", "eu-central-1");
         assertEq("https://textract.eu-central-1.amazonaws.com", applyTextractDefaults({}).url);

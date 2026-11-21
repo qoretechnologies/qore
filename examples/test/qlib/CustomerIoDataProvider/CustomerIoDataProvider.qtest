@@ -171,7 +171,7 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
         *string site_id = LiveProvider::get("customerio", "CUSTOMERIO_SITE_ID", m_options.siteid);
         *string tracking_api_key = LiveProvider::get("customerio", "CUSTOMERIO_TRACKING_API_KEY",
             m_options.trackingapikey);
-        *string region = m_options.region ?? ENV.CUSTOMERIO_REGION ?? "us";
+        *string region = m_options.region ?? LiveProvider::get("customerio", "CUSTOMERIO_REGION") ?? "us";
         if (!app_api_key || !site_id || !tracking_api_key) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -a/-s/-t options or CUSTOMERIO_APP_API_KEY/"
