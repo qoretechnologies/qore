@@ -118,7 +118,7 @@ class PerfObserver inherits Observer {
             *string ts_str = (data_.data =~ x/^ts:(\d+)/)[0];
             if (ts_str) {
                 int sent_us = ts_str.toInt();
-                int now_us_val = (now_us() - 1970-01-01).durationMicroseconds();
+                int now_us_val = clock_get_monotonic_us();
                 float lat = (now_us_val - sent_us) / 1000.0;
                 if (lat >= 0) {
                     latencies += lat;
@@ -289,7 +289,7 @@ class SsePerfTest inherits QUnit::Test {
         for (int i = 0; i < event_count; ++i) {
             srv.sse.sendAll(<SseMessageInfo>{
                 "event": "perf",
-                "data": sprintf("ts:%d:msg-%d", (now_us() - 1970-01-01).durationMicroseconds(), i),
+                "data": sprintf("ts:%d:msg-%d", clock_get_monotonic_us(), i),
                 "id": i + 1,
             });
         }

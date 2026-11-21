@@ -312,7 +312,7 @@ class RecordingSseObserver inherits DataProvider::Observer {
 
     bool waitForEvent(string event_id, timeout t = SseTestTimeout) {
         AutoLock al(m);
-        int end_us = clock_get_monotonic_us() + t.durationMicroseconds();
+        int end_us = clock_get_monotonic_us() + t * 1000;
         while (True) {
             foreach hash<auto> evt in (events) {
                 if (evt.event_id == event_id) {

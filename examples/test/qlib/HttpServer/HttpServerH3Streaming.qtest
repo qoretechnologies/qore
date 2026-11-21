@@ -1741,7 +1741,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         date start = microseconds(clock_get_monotonic_us());
         server.stop();
         date elapsed = microseconds(clock_get_monotonic_us()) - start;
-        int elapsed_ms = int(elapsed) * 1000 / 1000000;
+        int elapsed_ms = elapsed.durationMilliseconds();
 
         # Shutdown should be fast (< 5s), not 30s
         assertTrue(elapsed_ms < 5000,

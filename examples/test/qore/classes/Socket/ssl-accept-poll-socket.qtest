@@ -121,7 +121,7 @@ class SslAcceptPollSocketTest inherits QUnit::Test {
             Socket::poll(poll_list, 100);
 
             # Timeout check
-            if ((microseconds(clock_get_monotonic_us()) - start) > MaxTime * 1000) {
+            if ((microseconds(clock_get_monotonic_us()) - start) > milliseconds(MaxTime)) {
                 break;
             }
         }
