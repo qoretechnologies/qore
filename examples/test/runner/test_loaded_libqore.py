@@ -5,15 +5,20 @@ On macOS the dynamic loader ignores LD_LIBRARY_PATH, which run_tests.sh sets: a 
 directories recorded in it (LC_RPATH), and a program that qcc compiles records the directory of the libqore that qcc
 loaded.  DYLD_LIBRARY_PATH would not help, as macOS removes it from the environment of a protected program such as
 /bin/sh, whose children then do not get it.  So run_tests.sh refuses a run with a build whose qore, or the qcc that the
-tests use, loads a libqore other than the build's (the loader reports it with DYLD_PRINT_LIBRARIES): a build
-directory copied from another tree, or QCC naming the qcc of another build or installation.
+tests use, loads a libqore other than the build's (the loader reports it with DYLD_PRINT_LIBRARIES), or cannot be
+checked (not a Mach-O program, or no libqore reported): a build directory copied from another tree, QCC naming the qcc
+of another build or installation, or the qcc in the PATH that the tests take when the build has none.  On every
+platform it refuses a QORE_LIBDIR that is not the directory of the build's libqore: qcc links the programs that it
+compiles with the libqore there and records that directory in them.
 
 It also leaves QORE_BIN out of the environment of the tests: TestInterpreter.qm takes the interpreter from it before
 QORE_BINARY, so one left in a developer's environment would run another qore, with its own libqore, in their child
 processes.
 
 The macOS cases run the qore of the build in QORE_TEST_BUILD_DIR, or in build/ in this tree, and are skipped without
-one; the case of QORE_BIN uses a stand-in for qore.  The runner tested is QORE_RUN_TESTS_SH if set (to show that a
+one; they allow a build that does not match the tree (QORE_TEST_ALLOW_BUILD_MISMATCH, #6897), which their stand-in
+builds are not, so that only the check of the libqore decides.  The cases of QORE_BIN and QORE_LIBDIR use a stand-in for
+qore.  The runner tested is QORE_RUN_TESTS_SH if set (to show that a
 case fails with an older run_tests.sh), else the one in this tree.
 
 Copyright (C) 2026 Qore Technologies, s.r.o.
@@ -56,6 +61,35 @@ def make_copy(source, target, rpath_to=None):
         subprocess.run(["codesign", "-f", "-s", "-", str(target)], check=True, capture_output=True)
 
 
+class QoreLibdirTest(unittest.TestCase):
+    """QORE_LIBDIR must be the directory of the build's libqore"""
+
+    def run_tree(self, libdir):
+        with tempfile.TemporaryDirectory(prefix="qore-runner-libqore-") as directory:
+            tree = RunnerTree(directory)
+            marker = tree.root / "marker"
+            tree.add_test("marker.qtest", f"""\
+                open({str(marker)!r}, "w").write("ran")
+                """)
+            other = tree.root / "installed/lib"
+            other.mkdir(parents=True)
+            result = tree.run(QORE_LIBDIR=str(libdir(tree, other)))
+            result.ran = marker.exists()
+            return result
+
+    def test_another_qore_libdir_is_refused(self):
+        result = self.run_tree(lambda tree, other: other)
+        self.assertNotEqual(0, result.returncode, result.output)
+        self.assertIn("is not the directory of the libqore of the run", result.output)
+        self.assertFalse(result.ran, result.output)
+
+    def test_the_build_libdir_runs(self):
+        # the directory of the libqore of the run, by another path
+        result = self.run_tree(lambda tree, other: tree.root / "installed/../bin")
+        self.assertEqual(0, result.returncode, result.output)
+        self.assertTrue(result.ran, result.output)
+
+
 class QoreBinTest(unittest.TestCase):
     """The tests do not get QORE_BIN"""
 
@@ -85,7 +119,7 @@ class LoadedLibqoreTest(unittest.TestCase):
             tree.add_test("marker.qtest", QORE_MARKER_TEST)
             marker = tree.root / "marker"
             variables = setup(tree)
-            result = tree.run(MARKER=str(marker), **variables)
+            result = tree.run(MARKER=str(marker), QORE_TEST_ALLOW_BUILD_MISMATCH="1", **variables)
             result.ran = marker.exists()
             return result
 
@@ -131,6 +165,37 @@ class LoadedLibqoreTest(unittest.TestCase):
             make_copy(BUILD_DIR / "qcc", decoy / "qcc", decoy)
             return {"QCC": str(decoy / "qcc")}
         self.assert_refused(self.run_tree(setup), "the qcc that the tests use")
+
+    @unittest.skipUnless(HAVE_QCC and HAVE_TOOLS, f"no qcc in {BUILD_DIR}, or no install_name_tool and codesign")
+    def test_a_build_without_qcc_and_another_qcc_in_the_path_is_refused(self):
+        """The tests of a build without qcc that look for qcc themselves take the one in the PATH (a decoy)"""
+        def setup(tree):
+            build = tree.root / "build-without-qcc"
+            build.mkdir()
+            (build / "qore").symlink_to(BUILD_DIR / "qore")
+            (build / LIBQORE.name).symlink_to(LIBQORE.resolve())
+            (build / "CMakeCache.txt").write_text("# a build directory\n")
+            decoy = tree.root / "decoy"
+            decoy.mkdir()
+            real = LIBQORE.resolve()
+            make_copy(real, decoy / real.name)
+            make_copy(BUILD_DIR / "qcc", decoy / "qcc", decoy)
+            return {"QORE_BINARY": str(build / "qore"), "LIBQORE_BINARY": str(build / LIBQORE.name),
+                    "PATH": str(decoy) + ":" + tree.env()["PATH"]}
+        self.assert_refused(self.run_tree(setup), "the qcc that the tests use")
+
+    @unittest.skipUnless(HAVE_QCC, f"no qcc in {BUILD_DIR}")
+    def test_a_qcc_script_is_refused(self):
+        """A script cannot be asked which libqore it loads: one that runs another qcc would not be seen"""
+        def setup(tree):
+            script = tree.root / "qcc-wrapper"
+            script.write_text(f"#!/bin/sh\nexec '{BUILD_DIR / 'qcc'}' \"$@\"\n")
+            script.chmod(0o755)
+            return {"QCC": str(script)}
+        result = self.run_tree(setup)
+        self.assertNotEqual(0, result.returncode, result.output)
+        self.assertIn("is not a Mach-O program", result.output)
+        self.assertFalse(result.ran, result.output)
 
 
 if __name__ == "__main__":

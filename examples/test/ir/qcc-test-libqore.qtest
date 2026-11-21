@@ -110,9 +110,12 @@ class QccTestLibqoreTest inherits QUnit::Test {
     }
 
     #! compiles the probe program with the given qcc; returns the executable
+    /** Without QORE_LIBDIR, which qcc would take libqore from instead of the one that it loaded
+    */
     private string compile(string qcc, string name) {
         string exe = tmp.path + "/" + name;
-        hash<auto> r = run(sprintf("%s -o %s %s", shellQuote(qcc), shellQuote(exe), shellQuote(program)));
+        hash<auto> r = run(sprintf("env -u QORE_LIBDIR %s -o %s %s", shellQuote(qcc), shellQuote(exe),
+            shellQuote(program)));
         if (r.status) {
             throw "COMPILE-ERROR", sprintf("%s: %s", qcc, r.out);
         }
@@ -127,7 +130,7 @@ class QccTestLibqoreTest inherits QUnit::Test {
         list<string> paths;
         if (darwin) {
             r = run(sprintf("DYLD_PRINT_LIBRARIES=1 %s %s", env, shellQuote(exe)));
-            paths = (r.out =~ x/^dyld\S* <[^>]*> (\/.*\/libqore\.[^\/]*dylib)$/mg) ?? ();
+            paths = (r.out =~ x/^dyld\S* (?:<[^>]*> )?(\/.*\/libqore\.[^\/]*dylib)$/mg) ?? ();
         } else {
             r = run(sprintf("%s %s", env, shellQuote(exe)));
             paths = (r.out =~ x/ (\/\S*\/libqore\.so[^\/\s]*)$/mg) ?? ();
