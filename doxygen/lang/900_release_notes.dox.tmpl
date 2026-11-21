@@ -601,6 +601,13 @@
     <tt><b>thread_local</b></tt> variables (\c DESTRUCTOR-ERROR): a destructor giving a variable a value whose
     destructor gave it a value again kept the worker releasing values for ever (see @ref thread_local_lifetime)
 
+    @par A Submission Under a Key in Use Is Refused Unless replace_existing Is True
+    @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()" and
+    @ref Qore::AsyncIoController::exec() "AsyncIoController::exec()" leave an operation that holds the key as it is
+    when \c replace_existing is @ref False "False" or not given, from any thread, and refuse the new submission (an
+    \c ASYNC-IO-ERROR, raised or in a canceled result); a caller that relied on the implicit cancel of the operation
+    under the key passes \c True.
+
     @par Final Methods Hold for the Whole Class Hierarchy
     A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
     arguments or with a parent class listed before the final method's class that declares or inherits its name;
