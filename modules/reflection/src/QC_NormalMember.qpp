@@ -141,6 +141,10 @@ nothing NormalMember::setValue(object obj, auto val) {
     if (check_member(obj, m->name.c_str(), m->cls, xsink)) {
         return QoreValue();
     }
+    // a non-public member of an object only for the code that owns the object (qore#6842)
+    if (m->getAccess() > Public && qore_check_caller_owns_object(*obj, "change a non-public member of", xsink)) {
+        return QoreValue();
+    }
 
     // setMemberValue consumes the reference; the caller retains ownership of val
     // (it is a Qore-level arg), so pass a refSelf'd copy.

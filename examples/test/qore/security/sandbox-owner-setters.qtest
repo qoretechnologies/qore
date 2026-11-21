@@ -47,6 +47,16 @@ string sub set(string setter, object obj) {
 
 #! a subclass that reads the non-public logger member of a LoggerWrapper with the reflection API
 class LSub inherits Logger::LoggerWrapper {
+    static string reflectWrite(Logger::LoggerWrapper w) {
+        try {
+            Reflection::NormalMember m = Reflection::Class::forName(\"Logger::LoggerWrapper\").getMember(\"logger\");
+            m.setValue(w, new Logger::Logger(\"tenant\"));
+            return \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
     static string reflect(Logger::LoggerWrapper w) {
         try {
             auto v = Reflection::Class::forName(\"Logger::LoggerWrapper\").getMember(\"logger\").getValue(w);
@@ -59,6 +69,11 @@ class LSub inherits Logger::LoggerWrapper {
 
 string sub reflect(Logger::LoggerWrapper w) {
     return LSub::reflect(w);
+}
+
+#! writes the non-public logger member of a LoggerWrapper with the reflection API
+string sub reflect_write(Logger::LoggerWrapper w) {
+    return LSub::reflectWrite(w);
 }
 
 Logger::LoggerWrapper sub make_wrapper() {
@@ -88,6 +103,7 @@ class SandboxOwnerSettersTest inherits QUnit::Test {
     constructor() : QUnit::Test("sandbox owner setters", "1.0", \ARGV) {
         addTestCase("tenants and the host", \ownerTest());
         addTestCase("code safety and trusted code", \trustedTest());
+        addTestCase("reflection writes", \reflectionWriteTest());
         set_return_value(main());
     }
 
@@ -143,6 +159,20 @@ class SandboxOwnerSettersTest inherits QUnit::Test {
             "A reads the host's object with reflection");
         assertEq("logger", a.callFunction("reflect", a.callFunction("make_wrapper")),
             "A reads its own object with reflection");
+    }
+
+    #! the reflection API writes a non-public member of an object only for code that owns the object
+    reflectionWriteTest() {
+        # an object of the tenant's Program that it created before it was sandboxed: its sandbox did not create it
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("DataProvider");
+        p.loadModule("RestClientIo");
+        p.loadModule("OpenAiDataProvider");
+        p.parse(TenantSource, "tenant");
+        LoggerWrapper pre = p.callFunction("make_wrapper");
+        p.setSandboxManager(new SandboxManager());
+        assertEq(Err, p.callFunction("reflect_write", pre), "an object that the sandbox did not create");
+        assertEq("ok", p.callFunction("reflect_write", p.callFunction("make_wrapper")), "the tenant's own object");
     }
 
     trustedTest() {
