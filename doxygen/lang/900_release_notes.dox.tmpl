@@ -2527,6 +2527,10 @@
       the attempt's descriptor again when the connect operation was destroyed, closing any descriptor that had been
       given the number meanwhile, such as an HTTP client's event notifier
       (<a href="https://github.com/qoretechnologies/qore/issues/6962">issue 6962</a>)
+    - a connection attempt of a @ref Qore::Socket "Socket" closed while the attempt was in progress could still use
+      the descriptor's number after the socket had closed it; the close ends the connection being established at once
+      and the number stays reserved until the connect operation ends
+      (<a href="https://github.com/qoretechnologies/qore/issues/7003">issue 7003</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0

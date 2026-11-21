@@ -682,6 +682,12 @@ struct QoreSharedDescriptor {
     int fd;
     //! set when the descriptor is given up while it is used: the last reference closes it
     bool close_on_release = false;
+    //! set while the connection attempt that the socket adopted the descriptor from holds it (qore#6962)
+    /** Set and cleared with the socket's @ref qore_socket_private::close_m held: a close of the socket then makes the
+        descriptor inert instead of leaving the connection open until the attempt releases it (see
+        qore_socket_private::releaseAttemptHold())
+    */
+    bool attempt_hold = false;
 
     DLLLOCAL explicit QoreSharedDescriptor(int fd) : fd(fd) {
     }
@@ -691,6 +697,14 @@ struct QoreSharedDescriptor {
     QoreSharedDescriptor(const QoreSharedDescriptor&) = delete;
     QoreSharedDescriptor& operator=(const QoreSharedDescriptor&) = delete;
 };
+
+#ifdef DEBUG
+//! Debug builds: if true, no inert socket can be made for a descriptor that a connection attempt holds when the socket
+//! is closed (see qore_socket_private::makeInertLocked()), as when the process has no free descriptor
+DLLLOCAL extern std::atomic<bool> qore_dbg_inert_socket_fails;
+//! Debug builds: the number of closes of a descriptor held by a connection attempt that could not make it inert
+DLLLOCAL extern std::atomic<unsigned> qore_dbg_inert_socket_fallbacks;
+#endif
 
 //! Makes an owned descriptor: a descriptor that its owner can give up while an async I/O thread has it registered
 /** The descriptors that an operation gives the async I/O controller as extra fds of its poll info, such as the
@@ -1076,12 +1090,15 @@ private:
             hold it (see qore_owned_descriptor_create())
         */
         std::shared_ptr<QoreSharedDescriptor> owned;
-        //! true once the socket has taken the attempt's descriptor over: the socket closes it (qore#6962)
-        /** The attempt keeps the number to check the connection; once the socket has closed its descriptor (a connect
-            timeout, or a close by its owner) the number can belong to another descriptor of the process, so it is
-            never closed nor polled by the attempt, whatever the socket's descriptor is then
+        //! the attempt's hold of its descriptor once the socket has taken it over (qore#6962); null otherwise
+        /** Taken with the socket's @ref qore_socket_private::close_m held when the socket adopts the descriptor
+            (qore_socket_private::setDescriptor(), qore_socket_private::replaceDescriptor()).  The attempt keeps the
+            number to check the connection; a close of the socket (a connect timeout, or a close by its owner) while
+            the attempt has the hold leaves the descriptor open and marks it to be closed by its last reference, so
+            the number cannot be given to another descriptor while the attempt can still use it.  The attempt never
+            closes such a descriptor itself, nor polls it as an extra fd: it gives it up by releasing the hold.
         */
-        bool socket_owned = false;
+        std::shared_ptr<QoreSharedDescriptor> sock_hold;
 
         DLLLOCAL ConnAttempt() = default;
         DLLLOCAL ConnAttempt(ConnAttempt&&) = default;
@@ -2655,11 +2672,14 @@ public:
         @param close_old set to true if the caller must close @a old_fd, false if the last I/O call or event loop
         registration that still uses it closes it (see DescriptorHold)
 
+        @param adopt the owned descriptor of @a new_fd, if any (see setDescriptor()), which is reset
+        @param hold set to a hold of @a new_fd when the socket adopts @a adopt (see setDescriptor())
+
         @return true if @a old_fd was replaced by @a new_fd; false if the socket no longer has @a old_fd, because a
         concurrent close released it, in which case the caller keeps @a new_fd and must not close @a old_fd
     */
     DLLLOCAL bool replaceDescriptor(int old_fd, int new_fd, bool& close_old,
-            std::shared_ptr<SharedDescriptor>* adopt = nullptr) {
+            std::shared_ptr<SharedDescriptor>* adopt = nullptr, std::shared_ptr<SharedDescriptor>* hold = nullptr) {
         CloseLockHelper cl(*this);
         if (sock != old_fd || old_fd == QORE_INVALID_SOCKET) {
             return false;
@@ -2675,6 +2695,10 @@ public:
         // an owned descriptor that becomes the socket's is taken over under close_m, so its holds count as uses
         if (adopt && *adopt) {
             shared_fd = qore_owned_descriptor_adopt(*adopt);
+            if (hold) {
+                *hold = shared_fd;
+                shared_fd->attempt_hold = true;
+            }
         }
         // any sync I/O helper mid-wait returns QSE_NOT_OPEN instead of using the old descriptor
         ++fd_generation;
@@ -2690,11 +2714,21 @@ public:
         @param fd the descriptor
         @param adopt the owned descriptor (see qore_owned_descriptor_create()), which is reset
         @param nonblocking true if the descriptor is non-blocking (created with create_nonblocking_socket())
+        @param hold set to a hold of the adopted descriptor, taken with @ref close_m held, if @a adopt is set: while
+        the caller has it, a close of the socket makes the descriptor inert, keeping its number, and the release of
+        the last reference closes it (see close_and_reset_locked()), so the number cannot be given to another
+        descriptor while the caller has it; the caller never closes the descriptor itself, and releases the hold
+        with releaseAttemptHold()
     */
-    DLLLOCAL void setDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt, bool nonblocking) {
+    DLLLOCAL void setDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt, bool nonblocking,
+            std::shared_ptr<SharedDescriptor>* hold = nullptr) {
         CloseLockHelper cl(*this);
         sock = fd;
         shared_fd = adopt ? qore_owned_descriptor_adopt(adopt) : nullptr;
+        if (hold && shared_fd) {
+            *hold = shared_fd;
+            shared_fd->attempt_hold = true;
+        }
         ++fd_generation;
         fd_nonblocking.store(nonblocking, std::memory_order_relaxed);
     }
@@ -2727,8 +2761,55 @@ public:
         bind_reservations.clear();
     }
 
+#ifndef _Q_WINDOWS
+    //! Replaces the descriptor with an inert one that keeps its number: a socket that is not connected
+    /** The connection of the descriptor, also one that is being established, is closed when no system call uses it
+        any more; I/O on the number fails as on a socket that is not connected.  Nothing happens if no inert socket
+        can be made: the descriptor is then only shut down.
+    */
+    DLLLOCAL static void makeInertLocked(int fd) {
+        int inert;
+#ifdef DEBUG
+        if (qore_dbg_inert_socket_fails.load(std::memory_order_relaxed)) {
+            inert = -1;
+            errno = EMFILE;
+        } else
+#endif
+        inert = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        if (inert < 0) {
+            // the descriptor is only shut down; the attempt's hold still keeps its number
+#ifdef DEBUG
+            qore_dbg_inert_socket_fallbacks.fetch_add(1, std::memory_order_relaxed);
+            printd(1, "qore_socket_private::makeInertLocked() fd %d: no inert socket: %s; the descriptor is only shut "
+                "down\n", fd, strerror(errno));
+#endif
+            return;
+        }
+        while (::dup2(inert, fd) < 0 && errno == EINTR) {
+        }
+        ::close(inert);
+    }
+#endif
+
+    //! Releases the hold that a connection attempt took of the descriptor that the socket adopted from it
+    /** Taken with setDescriptor() or replaceDescriptor(); released with @ref close_m held, so a close of the socket
+        either sees the attempt's hold and makes the descriptor inert, or does not and closes it itself, and the
+        release closes it if the socket has closed it while the attempt held it
+
+        @param hold the hold, which is reset; nothing happens if it is null
+    */
+    DLLLOCAL void releaseAttemptHold(std::shared_ptr<SharedDescriptor>& hold) {
+        if (!hold) {
+            return;
+        }
+        CloseLockHelper cl(*this);
+        hold->attempt_hold = false;
+        hold.reset();
+    }
+
     //! Closes the descriptor and resets the connection state; @ref close_m must be held
-    /** If an I/O call uses the descriptor, the last I/O call using it closes it; see @ref SharedDescriptor
+    /** If an I/O call uses the descriptor, the last I/O call using it closes it; see @ref SharedDescriptor.  If a
+        connection attempt holds it, the descriptor is made inert first (see makeInertLocked())
     */
     DLLLOCAL int close_and_reset_locked() {
         assert(sock != QORE_INVALID_SOCKET);
@@ -2736,6 +2817,14 @@ public:
         int rc = 0;
         if (shared_fd && shared_fd->fd == sock && shared_fd.use_count() > 1) {
             shared_fd->close_on_release = true;
+#ifndef _Q_WINDOWS
+            // a connection attempt in progress holds the descriptor (qore#6962): the shutdown does not stop a
+            // connection that is being established, so the connection is closed now and the number is kept by an
+            // inert descriptor until the attempt releases it
+            if (shared_fd->attempt_hold) {
+                makeInertLocked(sock);
+            }
+#endif
         } else {
             while (true) {
 #ifdef _Q_WINDOWS
@@ -4927,6 +5016,13 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_no_immediate_check;
     loopback connection has only after connect() has returned (see SocketConnectInetHappyEyeballsPollState::continuePoll())
 */
 DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_check;
+
+//! Debug builds: if set, called by a happy-eyeballs connect step right before it checks its attempts
+/** For the C++ unit tests of a close of the socket by another thread while the step runs (it holds the lock of the
+    connect operation, not the socket's @ref qore_socket_private::close_m): see
+    SocketConnectInetHappyEyeballsPollState::continuePoll()
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_check_attempts;
 
 #ifndef _Q_WINDOWS
 //! Debug builds: if not 0, the connect checked fails with this error after its pending error was read as 0
