@@ -258,6 +258,10 @@ DLLEXPORT int qore_get_library_init_options();
 */
 DLLEXPORT int qore_set_library_cleanup_options(int options);
 
+//! defined for qore_set_module_cleanup_timeout(), qore_get_module_cleanup_timeout() and
+//! QORE_DEFAULT_MODULE_CLEANUP_TIMEOUT_MS (#7027)
+#define _QORE_HAS_MODULE_CLEANUP_TIMEOUT 1
+
 //! the default deadline of the module cleanup at the end of the process, in milliseconds
 #define QORE_DEFAULT_MODULE_CLEANUP_TIMEOUT_MS 5000
 
