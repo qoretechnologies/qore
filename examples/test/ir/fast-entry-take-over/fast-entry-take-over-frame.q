@@ -2,23 +2,21 @@
 %allow-weak-references
 # a temporary given to a callee whose parameter takes it over and whose frame is larger than the stack guard allows,
 # in a recursion that ends when the stack has no room for that frame: the thunk that checks the stack for the frame
-# (QoreIRFrameCheck) releases the reference that the call handed over to the entry, so no object made outlives the
-# recursion (issue #6105)
+# (QoreIRFrameCheck) releases the reference that the call handed over to the entry, so no object given to the
+# recursion outlives it (issue #6105)
 
-const Ring = 16;
+#! the number of objects made before the recursion starts, more than its depth in every mode
+const Pool = 200000;
 
-# weak references to the last objects made, which are those given to the calls that end the recursion
+#! the objects that the recursion gives to its calls, taken out of the list as it goes: a call's temporary is the
+#! only reference to its object
+our list<auto> pool = ();
+#! weak references to the objects of the pool, which do not keep them alive
 our list<auto> weaks = ();
-our int made = 0;
+#! the depth that the recursion reached
+our int maxd = 0;
 
 class T {
-}
-
-#! makes an object and keeps a weak reference to it, which does not keep it alive
-T sub mk() {
-    T t();
-    weaks[made++ % Ring] := t;
-    return t;
 }
 
 #! accepts only an object that exists
@@ -38,16 +36,24 @@ bool sub alive(auto w) {
     }
 }
 
-#! runs the recursion and prints its exception and the number of the last objects made that still exist
+#! runs the recursion and prints its exception and the number of the objects given at its deepest calls that still
+#! exist once it has unwound and the pool is released
+/** the objects are made before the recursion, so that the stack overflows in the entry of the callee (or in the thunk
+    of its frame) and not in the construction of an object
+*/
 sub run(string name, code c) {
-    weaks = ();
-    made = 0;
+    for (int i = 0; i < Pool; ++i) {
+        pool[i] = new T();
+        weaks[i] := pool[i];
+    }
     try {
         c();
     } catch (hash<ExceptionInfo> ex) {
         printf("%s: %s\n", name, ex.err);
     }
-    printf("%s: %d alive\n", name, (select weaks, alive($1)).size());
+    pool = ();
+    printf("%s: %d alive\n", name, (select xrange(max(0, maxd - 8), min(Pool - 1, maxd + 8)),
+        alive(weaks[$1])).size());
 }
 
 hashdecl HD {
@@ -661,9 +667,315 @@ int sub big(list<auto> l, int n) {
     return h.size();
 }
 
+#! the recursion, whose own frame is large too: each level takes a step of the stack larger than the frames of the
+#! helpers that big() calls, so that the stack has no room left for big()'s frame (its thunk's check fails) before a
+#! helper of big()'s body finds the stack exhausted
 int sub r(int d) {
-    big((0, mk()), d);
-    return r(d + 1);
+    hash<auto> h = {
+        "p0": cast<hash<HD>>({"a": d + 0}),
+        "p1": cast<hash<HD>>({"a": d + 1}),
+        "p2": cast<hash<HD>>({"a": d + 2}),
+        "p3": cast<hash<HD>>({"a": d + 3}),
+        "p4": cast<hash<HD>>({"a": d + 4}),
+        "p5": cast<hash<HD>>({"a": d + 5}),
+        "p6": cast<hash<HD>>({"a": d + 6}),
+        "p7": cast<hash<HD>>({"a": d + 7}),
+        "p8": cast<hash<HD>>({"a": d + 8}),
+        "p9": cast<hash<HD>>({"a": d + 9}),
+        "p10": cast<hash<HD>>({"a": d + 10}),
+        "p11": cast<hash<HD>>({"a": d + 11}),
+        "p12": cast<hash<HD>>({"a": d + 12}),
+        "p13": cast<hash<HD>>({"a": d + 13}),
+        "p14": cast<hash<HD>>({"a": d + 14}),
+        "p15": cast<hash<HD>>({"a": d + 15}),
+        "p16": cast<hash<HD>>({"a": d + 16}),
+        "p17": cast<hash<HD>>({"a": d + 17}),
+        "p18": cast<hash<HD>>({"a": d + 18}),
+        "p19": cast<hash<HD>>({"a": d + 19}),
+        "p20": cast<hash<HD>>({"a": d + 20}),
+        "p21": cast<hash<HD>>({"a": d + 21}),
+        "p22": cast<hash<HD>>({"a": d + 22}),
+        "p23": cast<hash<HD>>({"a": d + 23}),
+        "p24": cast<hash<HD>>({"a": d + 24}),
+        "p25": cast<hash<HD>>({"a": d + 25}),
+        "p26": cast<hash<HD>>({"a": d + 26}),
+        "p27": cast<hash<HD>>({"a": d + 27}),
+        "p28": cast<hash<HD>>({"a": d + 28}),
+        "p29": cast<hash<HD>>({"a": d + 29}),
+        "p30": cast<hash<HD>>({"a": d + 30}),
+        "p31": cast<hash<HD>>({"a": d + 31}),
+        "p32": cast<hash<HD>>({"a": d + 32}),
+        "p33": cast<hash<HD>>({"a": d + 33}),
+        "p34": cast<hash<HD>>({"a": d + 34}),
+        "p35": cast<hash<HD>>({"a": d + 35}),
+        "p36": cast<hash<HD>>({"a": d + 36}),
+        "p37": cast<hash<HD>>({"a": d + 37}),
+        "p38": cast<hash<HD>>({"a": d + 38}),
+        "p39": cast<hash<HD>>({"a": d + 39}),
+        "p40": cast<hash<HD>>({"a": d + 40}),
+        "p41": cast<hash<HD>>({"a": d + 41}),
+        "p42": cast<hash<HD>>({"a": d + 42}),
+        "p43": cast<hash<HD>>({"a": d + 43}),
+        "p44": cast<hash<HD>>({"a": d + 44}),
+        "p45": cast<hash<HD>>({"a": d + 45}),
+        "p46": cast<hash<HD>>({"a": d + 46}),
+        "p47": cast<hash<HD>>({"a": d + 47}),
+        "p48": cast<hash<HD>>({"a": d + 48}),
+        "p49": cast<hash<HD>>({"a": d + 49}),
+        "p50": cast<hash<HD>>({"a": d + 50}),
+        "p51": cast<hash<HD>>({"a": d + 51}),
+        "p52": cast<hash<HD>>({"a": d + 52}),
+        "p53": cast<hash<HD>>({"a": d + 53}),
+        "p54": cast<hash<HD>>({"a": d + 54}),
+        "p55": cast<hash<HD>>({"a": d + 55}),
+        "p56": cast<hash<HD>>({"a": d + 56}),
+        "p57": cast<hash<HD>>({"a": d + 57}),
+        "p58": cast<hash<HD>>({"a": d + 58}),
+        "p59": cast<hash<HD>>({"a": d + 59}),
+        "p60": cast<hash<HD>>({"a": d + 60}),
+        "p61": cast<hash<HD>>({"a": d + 61}),
+        "p62": cast<hash<HD>>({"a": d + 62}),
+        "p63": cast<hash<HD>>({"a": d + 63}),
+        "p64": cast<hash<HD>>({"a": d + 64}),
+        "p65": cast<hash<HD>>({"a": d + 65}),
+        "p66": cast<hash<HD>>({"a": d + 66}),
+        "p67": cast<hash<HD>>({"a": d + 67}),
+        "p68": cast<hash<HD>>({"a": d + 68}),
+        "p69": cast<hash<HD>>({"a": d + 69}),
+        "p70": cast<hash<HD>>({"a": d + 70}),
+        "p71": cast<hash<HD>>({"a": d + 71}),
+        "p72": cast<hash<HD>>({"a": d + 72}),
+        "p73": cast<hash<HD>>({"a": d + 73}),
+        "p74": cast<hash<HD>>({"a": d + 74}),
+        "p75": cast<hash<HD>>({"a": d + 75}),
+        "p76": cast<hash<HD>>({"a": d + 76}),
+        "p77": cast<hash<HD>>({"a": d + 77}),
+        "p78": cast<hash<HD>>({"a": d + 78}),
+        "p79": cast<hash<HD>>({"a": d + 79}),
+        "p80": cast<hash<HD>>({"a": d + 80}),
+        "p81": cast<hash<HD>>({"a": d + 81}),
+        "p82": cast<hash<HD>>({"a": d + 82}),
+        "p83": cast<hash<HD>>({"a": d + 83}),
+        "p84": cast<hash<HD>>({"a": d + 84}),
+        "p85": cast<hash<HD>>({"a": d + 85}),
+        "p86": cast<hash<HD>>({"a": d + 86}),
+        "p87": cast<hash<HD>>({"a": d + 87}),
+        "p88": cast<hash<HD>>({"a": d + 88}),
+        "p89": cast<hash<HD>>({"a": d + 89}),
+        "p90": cast<hash<HD>>({"a": d + 90}),
+        "p91": cast<hash<HD>>({"a": d + 91}),
+        "p92": cast<hash<HD>>({"a": d + 92}),
+        "p93": cast<hash<HD>>({"a": d + 93}),
+        "p94": cast<hash<HD>>({"a": d + 94}),
+        "p95": cast<hash<HD>>({"a": d + 95}),
+        "p96": cast<hash<HD>>({"a": d + 96}),
+        "p97": cast<hash<HD>>({"a": d + 97}),
+        "p98": cast<hash<HD>>({"a": d + 98}),
+        "p99": cast<hash<HD>>({"a": d + 99}),
+        "p100": cast<hash<HD>>({"a": d + 100}),
+        "p101": cast<hash<HD>>({"a": d + 101}),
+        "p102": cast<hash<HD>>({"a": d + 102}),
+        "p103": cast<hash<HD>>({"a": d + 103}),
+        "p104": cast<hash<HD>>({"a": d + 104}),
+        "p105": cast<hash<HD>>({"a": d + 105}),
+        "p106": cast<hash<HD>>({"a": d + 106}),
+        "p107": cast<hash<HD>>({"a": d + 107}),
+        "p108": cast<hash<HD>>({"a": d + 108}),
+        "p109": cast<hash<HD>>({"a": d + 109}),
+        "p110": cast<hash<HD>>({"a": d + 110}),
+        "p111": cast<hash<HD>>({"a": d + 111}),
+        "p112": cast<hash<HD>>({"a": d + 112}),
+        "p113": cast<hash<HD>>({"a": d + 113}),
+        "p114": cast<hash<HD>>({"a": d + 114}),
+        "p115": cast<hash<HD>>({"a": d + 115}),
+        "p116": cast<hash<HD>>({"a": d + 116}),
+        "p117": cast<hash<HD>>({"a": d + 117}),
+        "p118": cast<hash<HD>>({"a": d + 118}),
+        "p119": cast<hash<HD>>({"a": d + 119}),
+        "p120": cast<hash<HD>>({"a": d + 120}),
+        "p121": cast<hash<HD>>({"a": d + 121}),
+        "p122": cast<hash<HD>>({"a": d + 122}),
+        "p123": cast<hash<HD>>({"a": d + 123}),
+        "p124": cast<hash<HD>>({"a": d + 124}),
+        "p125": cast<hash<HD>>({"a": d + 125}),
+        "p126": cast<hash<HD>>({"a": d + 126}),
+        "p127": cast<hash<HD>>({"a": d + 127}),
+        "p128": cast<hash<HD>>({"a": d + 128}),
+        "p129": cast<hash<HD>>({"a": d + 129}),
+        "p130": cast<hash<HD>>({"a": d + 130}),
+        "p131": cast<hash<HD>>({"a": d + 131}),
+        "p132": cast<hash<HD>>({"a": d + 132}),
+        "p133": cast<hash<HD>>({"a": d + 133}),
+        "p134": cast<hash<HD>>({"a": d + 134}),
+        "p135": cast<hash<HD>>({"a": d + 135}),
+        "p136": cast<hash<HD>>({"a": d + 136}),
+        "p137": cast<hash<HD>>({"a": d + 137}),
+        "p138": cast<hash<HD>>({"a": d + 138}),
+        "p139": cast<hash<HD>>({"a": d + 139}),
+        "p140": cast<hash<HD>>({"a": d + 140}),
+        "p141": cast<hash<HD>>({"a": d + 141}),
+        "p142": cast<hash<HD>>({"a": d + 142}),
+        "p143": cast<hash<HD>>({"a": d + 143}),
+        "p144": cast<hash<HD>>({"a": d + 144}),
+        "p145": cast<hash<HD>>({"a": d + 145}),
+        "p146": cast<hash<HD>>({"a": d + 146}),
+        "p147": cast<hash<HD>>({"a": d + 147}),
+        "p148": cast<hash<HD>>({"a": d + 148}),
+        "p149": cast<hash<HD>>({"a": d + 149}),
+        "p150": cast<hash<HD>>({"a": d + 150}),
+        "p151": cast<hash<HD>>({"a": d + 151}),
+        "p152": cast<hash<HD>>({"a": d + 152}),
+        "p153": cast<hash<HD>>({"a": d + 153}),
+        "p154": cast<hash<HD>>({"a": d + 154}),
+        "p155": cast<hash<HD>>({"a": d + 155}),
+        "p156": cast<hash<HD>>({"a": d + 156}),
+        "p157": cast<hash<HD>>({"a": d + 157}),
+        "p158": cast<hash<HD>>({"a": d + 158}),
+        "p159": cast<hash<HD>>({"a": d + 159}),
+        "p160": cast<hash<HD>>({"a": d + 160}),
+        "p161": cast<hash<HD>>({"a": d + 161}),
+        "p162": cast<hash<HD>>({"a": d + 162}),
+        "p163": cast<hash<HD>>({"a": d + 163}),
+        "p164": cast<hash<HD>>({"a": d + 164}),
+        "p165": cast<hash<HD>>({"a": d + 165}),
+        "p166": cast<hash<HD>>({"a": d + 166}),
+        "p167": cast<hash<HD>>({"a": d + 167}),
+        "p168": cast<hash<HD>>({"a": d + 168}),
+        "p169": cast<hash<HD>>({"a": d + 169}),
+        "p170": cast<hash<HD>>({"a": d + 170}),
+        "p171": cast<hash<HD>>({"a": d + 171}),
+        "p172": cast<hash<HD>>({"a": d + 172}),
+        "p173": cast<hash<HD>>({"a": d + 173}),
+        "p174": cast<hash<HD>>({"a": d + 174}),
+        "p175": cast<hash<HD>>({"a": d + 175}),
+        "p176": cast<hash<HD>>({"a": d + 176}),
+        "p177": cast<hash<HD>>({"a": d + 177}),
+        "p178": cast<hash<HD>>({"a": d + 178}),
+        "p179": cast<hash<HD>>({"a": d + 179}),
+        "p180": cast<hash<HD>>({"a": d + 180}),
+        "p181": cast<hash<HD>>({"a": d + 181}),
+        "p182": cast<hash<HD>>({"a": d + 182}),
+        "p183": cast<hash<HD>>({"a": d + 183}),
+        "p184": cast<hash<HD>>({"a": d + 184}),
+        "p185": cast<hash<HD>>({"a": d + 185}),
+        "p186": cast<hash<HD>>({"a": d + 186}),
+        "p187": cast<hash<HD>>({"a": d + 187}),
+        "p188": cast<hash<HD>>({"a": d + 188}),
+        "p189": cast<hash<HD>>({"a": d + 189}),
+        "p190": cast<hash<HD>>({"a": d + 190}),
+        "p191": cast<hash<HD>>({"a": d + 191}),
+        "p192": cast<hash<HD>>({"a": d + 192}),
+        "p193": cast<hash<HD>>({"a": d + 193}),
+        "p194": cast<hash<HD>>({"a": d + 194}),
+        "p195": cast<hash<HD>>({"a": d + 195}),
+        "p196": cast<hash<HD>>({"a": d + 196}),
+        "p197": cast<hash<HD>>({"a": d + 197}),
+        "p198": cast<hash<HD>>({"a": d + 198}),
+        "p199": cast<hash<HD>>({"a": d + 199}),
+        "p200": cast<hash<HD>>({"a": d + 200}),
+        "p201": cast<hash<HD>>({"a": d + 201}),
+        "p202": cast<hash<HD>>({"a": d + 202}),
+        "p203": cast<hash<HD>>({"a": d + 203}),
+        "p204": cast<hash<HD>>({"a": d + 204}),
+        "p205": cast<hash<HD>>({"a": d + 205}),
+        "p206": cast<hash<HD>>({"a": d + 206}),
+        "p207": cast<hash<HD>>({"a": d + 207}),
+        "p208": cast<hash<HD>>({"a": d + 208}),
+        "p209": cast<hash<HD>>({"a": d + 209}),
+        "p210": cast<hash<HD>>({"a": d + 210}),
+        "p211": cast<hash<HD>>({"a": d + 211}),
+        "p212": cast<hash<HD>>({"a": d + 212}),
+        "p213": cast<hash<HD>>({"a": d + 213}),
+        "p214": cast<hash<HD>>({"a": d + 214}),
+        "p215": cast<hash<HD>>({"a": d + 215}),
+        "p216": cast<hash<HD>>({"a": d + 216}),
+        "p217": cast<hash<HD>>({"a": d + 217}),
+        "p218": cast<hash<HD>>({"a": d + 218}),
+        "p219": cast<hash<HD>>({"a": d + 219}),
+        "p220": cast<hash<HD>>({"a": d + 220}),
+        "p221": cast<hash<HD>>({"a": d + 221}),
+        "p222": cast<hash<HD>>({"a": d + 222}),
+        "p223": cast<hash<HD>>({"a": d + 223}),
+        "p224": cast<hash<HD>>({"a": d + 224}),
+        "p225": cast<hash<HD>>({"a": d + 225}),
+        "p226": cast<hash<HD>>({"a": d + 226}),
+        "p227": cast<hash<HD>>({"a": d + 227}),
+        "p228": cast<hash<HD>>({"a": d + 228}),
+        "p229": cast<hash<HD>>({"a": d + 229}),
+        "p230": cast<hash<HD>>({"a": d + 230}),
+        "p231": cast<hash<HD>>({"a": d + 231}),
+        "p232": cast<hash<HD>>({"a": d + 232}),
+        "p233": cast<hash<HD>>({"a": d + 233}),
+        "p234": cast<hash<HD>>({"a": d + 234}),
+        "p235": cast<hash<HD>>({"a": d + 235}),
+        "p236": cast<hash<HD>>({"a": d + 236}),
+        "p237": cast<hash<HD>>({"a": d + 237}),
+        "p238": cast<hash<HD>>({"a": d + 238}),
+        "p239": cast<hash<HD>>({"a": d + 239}),
+        "p240": cast<hash<HD>>({"a": d + 240}),
+        "p241": cast<hash<HD>>({"a": d + 241}),
+        "p242": cast<hash<HD>>({"a": d + 242}),
+        "p243": cast<hash<HD>>({"a": d + 243}),
+        "p244": cast<hash<HD>>({"a": d + 244}),
+        "p245": cast<hash<HD>>({"a": d + 245}),
+        "p246": cast<hash<HD>>({"a": d + 246}),
+        "p247": cast<hash<HD>>({"a": d + 247}),
+        "p248": cast<hash<HD>>({"a": d + 248}),
+        "p249": cast<hash<HD>>({"a": d + 249}),
+        "p250": cast<hash<HD>>({"a": d + 250}),
+        "p251": cast<hash<HD>>({"a": d + 251}),
+        "p252": cast<hash<HD>>({"a": d + 252}),
+        "p253": cast<hash<HD>>({"a": d + 253}),
+        "p254": cast<hash<HD>>({"a": d + 254}),
+        "p255": cast<hash<HD>>({"a": d + 255}),
+        "p256": cast<hash<HD>>({"a": d + 256}),
+        "p257": cast<hash<HD>>({"a": d + 257}),
+        "p258": cast<hash<HD>>({"a": d + 258}),
+        "p259": cast<hash<HD>>({"a": d + 259}),
+        "p260": cast<hash<HD>>({"a": d + 260}),
+        "p261": cast<hash<HD>>({"a": d + 261}),
+        "p262": cast<hash<HD>>({"a": d + 262}),
+        "p263": cast<hash<HD>>({"a": d + 263}),
+        "p264": cast<hash<HD>>({"a": d + 264}),
+        "p265": cast<hash<HD>>({"a": d + 265}),
+        "p266": cast<hash<HD>>({"a": d + 266}),
+        "p267": cast<hash<HD>>({"a": d + 267}),
+        "p268": cast<hash<HD>>({"a": d + 268}),
+        "p269": cast<hash<HD>>({"a": d + 269}),
+        "p270": cast<hash<HD>>({"a": d + 270}),
+        "p271": cast<hash<HD>>({"a": d + 271}),
+        "p272": cast<hash<HD>>({"a": d + 272}),
+        "p273": cast<hash<HD>>({"a": d + 273}),
+        "p274": cast<hash<HD>>({"a": d + 274}),
+        "p275": cast<hash<HD>>({"a": d + 275}),
+        "p276": cast<hash<HD>>({"a": d + 276}),
+        "p277": cast<hash<HD>>({"a": d + 277}),
+        "p278": cast<hash<HD>>({"a": d + 278}),
+        "p279": cast<hash<HD>>({"a": d + 279}),
+        "p280": cast<hash<HD>>({"a": d + 280}),
+        "p281": cast<hash<HD>>({"a": d + 281}),
+        "p282": cast<hash<HD>>({"a": d + 282}),
+        "p283": cast<hash<HD>>({"a": d + 283}),
+        "p284": cast<hash<HD>>({"a": d + 284}),
+        "p285": cast<hash<HD>>({"a": d + 285}),
+        "p286": cast<hash<HD>>({"a": d + 286}),
+        "p287": cast<hash<HD>>({"a": d + 287}),
+        "p288": cast<hash<HD>>({"a": d + 288}),
+        "p289": cast<hash<HD>>({"a": d + 289}),
+        "p290": cast<hash<HD>>({"a": d + 290}),
+        "p291": cast<hash<HD>>({"a": d + 291}),
+        "p292": cast<hash<HD>>({"a": d + 292}),
+        "p293": cast<hash<HD>>({"a": d + 293}),
+        "p294": cast<hash<HD>>({"a": d + 294}),
+        "p295": cast<hash<HD>>({"a": d + 295}),
+        "p296": cast<hash<HD>>({"a": d + 296}),
+        "p297": cast<hash<HD>>({"a": d + 297}),
+        "p298": cast<hash<HD>>({"a": d + 298}),
+        "p299": cast<hash<HD>>({"a": d + 299})
+    };
+    maxd = d;
+    big((0, remove pool[d]), d);
+    return r(d + 1) + h.size();
 }
 
 run("big", sub () { r(0); });
