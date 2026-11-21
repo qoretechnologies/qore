@@ -219,6 +219,8 @@ class FastEntryTakeOverTest inherits QUnit::Test {
             "C::s() and c.m() inside try hand over their temporaries");
         assertTrue(ir =~ /call [^@\n]*@"?Owner__consume_[^ ("]*\.own\.10"?\(/,
             "the method that reads self runs with an owning parameter");
+        assertTrue(ir =~ /call [^@\n]*@"?FinalOwner__consume_[^ ("]*\.own\.1"?\(/,
+            "a method of a final class runs with the explicit receiver");
         assertTrue(ir =~ /^declare extern_weak [^@\n]*@qore_rt_try_enter_native_method_v1\(/m
             && ir =~ /^declare extern_weak [^@\n]*@qore_rt_leave_native_method_v1\(/m,
             "eager loaders can reach the version check on an older runtime");

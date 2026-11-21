@@ -13401,8 +13401,20 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         can_use_fast_entry = llvm::ConstantInt::getFalse(ctx);
     }
     llvm::AllocaInst* method_context = nullptr;
-    if (callee_info.guarded_method_entry) {
-        assert(take_over);
+    if (take_over && callee_info.guarded_method_entry && (object_base || !callee_info.implicit_self_method)) {
+        auto try_enter = module.getOrInsertFunction("qore_rt_try_enter_native_method_v1",
+            llvm::FunctionType::get(i32_type, {ptr_type, ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false));
+        auto leave = module.getOrInsertFunction("qore_rt_leave_native_method_v1",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+        // Eager binding on an older runtime must still reach the AOT version check. The helpers
+        // are a pair: a runtime that cannot enter and restore the context keeps the ordinary binder.
+        auto* enter_fn = llvm::cast<llvm::Function>(try_enter.getCallee());
+        auto* leave_fn = llvm::cast<llvm::Function>(leave.getCallee());
+        enter_fn->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
+        leave_fn->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
+        llvm::Value* available = builder->CreateAnd(builder->CreateIsNotNull(enter_fn),
+            builder->CreateIsNotNull(leave_fn));
+        can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, available);
         llvm::BasicBlock* enter = llvm::BasicBlock::Create(ctx, "aot_method_context", llvm_func);
         builder->CreateCondBr(can_use_fast_entry, enter, fallback_bb);
         builder->SetInsertPoint(enter);
@@ -13414,11 +13426,6 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             native_method_context_storage->setAlignment(llvm::Align(QORE_RT_NATIVE_METHOD_STATE_ALIGN));
         }
         method_context = native_method_context_storage;
-        auto try_enter = module.getOrInsertFunction("qore_rt_try_enter_native_method_v1",
-            llvm::FunctionType::get(i32_type, {ptr_type, ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false));
-        // Let an older runtime map the executable even with eager symbol binding. It checks the
-        // embedded image version before executing any code that uses the v1 method context.
-        llvm::cast<llvm::Function>(try_enter.getCallee())->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
         llvm::Value* expected = module.getOrInsertFunction(callee_info.name,
             llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false)).getCallee();
         llvm::Value* entered = builder->CreateCall(try_enter, {method_context, aot_ctx_arg,
@@ -13485,7 +13492,6 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     if (method_context) {
         auto leave = module.getOrInsertFunction("qore_rt_leave_native_method_v1",
             llvm::FunctionType::get(void_type, {ptr_type}, false));
-        llvm::cast<llvm::Function>(leave.getCallee())->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
         builder->CreateCall(leave, {method_context});
     }
     if (cross_module) {

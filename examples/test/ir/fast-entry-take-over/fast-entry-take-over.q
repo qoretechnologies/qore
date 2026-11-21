@@ -101,6 +101,15 @@ class Owner {
     }
 }
 
+final class FinalOwner {
+    private { string tag = "final"; }
+
+    string consume(list<auto> values) {
+        values = ();
+        return tag;
+    }
+}
+
 class OtherOwner inherits Owner {
     constructor() : Owner("other") {}
     string consume(list<auto> values, bool fail) {
@@ -242,8 +251,17 @@ try {
     log("catch " + ex.err);
 }
 
+sub call_final(FinalOwner owner) {
+    try {
+        printf("%s returned\n", owner.consume((0, new T("final method"))));
+    } catch (hash<ExceptionInfo> ex) {
+        printf("unexpected: %s\n", ex.err);
+    }
+}
+
 Invoker invoker();
 Owner owner("owner");
 invoker.call(owner, False);
 invoker.call(owner, True);
 invoker.call(new OtherOwner(), False);
+call_final(new FinalOwner());

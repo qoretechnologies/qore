@@ -17162,7 +17162,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>> context_candidates;
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>
         effect_only_candidates;
-    std::unordered_set<const AbstractQoreFunctionVariant*> exact_class_only_methods;
+    // Local fast entries can require their method context even when the method is final.
+    std::unordered_map<const AbstractQoreFunctionVariant*, bool> method_requires_exact_class;
 
     // Walk functions
     size_t func_i = 0;
@@ -17460,9 +17461,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
                     info.param_kinds = std::move(param_kinds);
                     info.param_rejects_nothing = std::move(param_rejects_nothing);
                     aot_batch_callee_map[variant] = std::move(info);
-                    if (!isAOTNonOverridableMethodTarget(qc, variant)) {
-                        exact_class_only_methods.insert(variant);
-                    }
+                    method_requires_exact_class.emplace(variant, !isAOTNonOverridableMethodTarget(qc, variant));
                     context_candidates.emplace_back(variant,
                         std::unique_ptr<QoreIRFunction>(ir_func));
                     ir_func = nullptr;
@@ -17615,7 +17614,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
     }
     resolveAOTBatchContextIndependentFastEntries(context_candidates, aot_batch_callee_map);
     size_t exact_method_i = 0;
-    for (const auto* variant : exact_class_only_methods) {
+    for (const auto& [variant, needs_exact_class] : method_requires_exact_class) {
         if (exact_method_i++ && !(exact_method_i % 100)
                 && qore_check_cancel(nullptr,
                     "AOT speculative method fast-entry pruning")) {
@@ -17624,10 +17623,12 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
         auto info = aot_batch_callee_map.find(variant);
         if (info != aot_batch_callee_map.end()
                 && !info->second.context_independent_fast_entry) {
-            // Only an owning call that enters the selected method context may use this entry.
-            // Keep it out of ordinary, inherited-self, summary and cross-module fast calls.
+            // An explicit receiver can differ from the caller's self even when the method is final.
             info->second.guarded_method_entry = true;
-            info->second.approach_b_eligible = false;
+            if (needs_exact_class) {
+                // Ordinary implicit-self and summary calls cannot speculate on an overridable target.
+                info->second.approach_b_eligible = false;
+            }
         }
     }
     if (!finalizeAOTBatchFastEntrySymbols(module, aot_batch_callee_map)

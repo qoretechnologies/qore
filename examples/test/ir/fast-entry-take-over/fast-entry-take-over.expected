@@ -122,3 +122,5 @@ dtor method
 owner caught by invoker
 dtor method
 override returned to invoker
+dtor final method
+final returned
