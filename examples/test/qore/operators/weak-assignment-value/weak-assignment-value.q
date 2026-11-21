@@ -211,8 +211,115 @@ sub temporaries() {
     printf("map closure: %y\n", (map desc(ct := new C()) + ":" + (destroyed - before), (1, 2)));
 }
 
+#! an object whose members are assigned through lvalue paths
+class M {
+    public {
+        *object m;
+        float f;
+        hash h;
+    }
+
+    #! assigns members of self
+    run() {
+        int before = destroyed;
+        printf("self member temp: %s destroyed=%d\n", desc(m := new C()), destroyed - before);
+        C c();
+        auto v = (m := c);
+        remove c;
+        printf("self member value: %s\n", desc(v));
+        remove v;
+        printf("self member receiver: %s\n", (m := new C()).n());
+        auto vf = (f := 1);
+        printf("self member float: %y %s\n", vf, vf.type());
+        hash<string, int> th = {"a": 1};
+        printf("self member strip: %y\n", (h := th));
+    }
+}
+
+hashdecl WeakHolder {
+    *object o;
+}
+
+#! weak assignments through lvalue paths: members, hash keys, list elements, a softlist variable (qore#7122)
+sub paths() {
+    new M().run();
+    M o();
+    int before = destroyed;
+    printf("member temp: %s destroyed=%d\n", desc(o.m := new C()), destroyed - before);
+    C c();
+    auto v = (o.m := c);
+    remove c;
+    printf("member value: %s\n", desc(v));
+    remove v;
+    printf("member receiver: %s\n", (o.m := new C()).n());
+
+    hash<auto> h;
+    before = destroyed;
+    printf("hash key temp: %s destroyed=%d\n", desc(h.k := new C()), destroyed - before);
+    C c2();
+    auto v2 = (h.k := c2);
+    remove c2;
+    printf("hash key value: %s\n", desc(v2));
+    remove v2;
+
+    hash<WeakHolder> wh();
+    before = destroyed;
+    printf("hashdecl key temp: %s destroyed=%d\n", desc(wh.o := new C()), destroyed - before);
+    C c5();
+    auto v6 = (wh.o := c5);
+    remove c5;
+    printf("hashdecl key value: %s\n", desc(v6));
+    remove v6;
+
+    # an opaque assignment through a path: its value owns its target, as the member does
+    M om();
+    C c6();
+    auto v7 = (om.m @= c6);
+    remove c6;
+    remove om;
+    printf("opaque member value: %s\n", desc(v7));
+    M om2();
+    hash<string, int> oth = {"a": 1};
+    printf("opaque member strip: %y\n", (om2.h @= oth));
+
+    list<auto!> l = (NOTHING,);
+    before = destroyed;
+    printf("list element temp: %s destroyed=%d\n", desc(l[0] := new C()), destroyed - before);
+    C c3();
+    auto v3 = (l[0] := c3);
+    remove c3;
+    printf("list element value: %s\n", desc(v3));
+    remove v3;
+
+    softlist<auto> sl;
+    auto v4 = (sl := 1);
+    printf("softlist value: %y %s sl=%y\n", v4, v4.fullType(), sl);
+    remove v4;
+    # (native code keeps the list of a plain local softlist variable after the statement: issue #7142)
+    softlist<auto> csl;
+    code fsl = auto sub () { return csl; };
+    auto v5 = (csl := 1);
+    printf("closure softlist value: %y %s\n", v5, v5.fullType());
+    remove v5;
+    printf("closure softlist released: csl=%y\n", fsl());
+
+    # the release of the member's previous value raises an exception: the object assigned is destroyed when its last
+    # reference is released
+    o.m = new Raise();
+    before = destroyed;
+    C c4();
+    try {
+        printf("member value: %s\n", (o.m := c4).n());
+    } catch (hash<ExceptionInfo> ex) {
+        printf("member store: %s\n", ex.err);
+    }
+    remove c4;
+    printf("member store: destroyed=%d\n", destroyed - before);
+}
+
 values();
 conversions();
+paths();
 store_errors();
 temporaries();
 printf("done destroyed=%d\n", destroyed);

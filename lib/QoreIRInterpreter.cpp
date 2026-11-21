@@ -20107,8 +20107,11 @@ load_local_done:
                 // Handing it over keeps a dereference with no real reference from happening once the value is
                 // linked into the graph, which would make a scan that its constructor deferred.
                 QoreValue val = getIRValue(values, path_inst->operands[0]);
-                // the value's reference belongs to val_holder below if it is consumed
-                bool consume = consumeLValueOperand(path_inst->operands[0], val);
+                // the value's reference belongs to val_holder below if it is consumed; a weak store does not consume
+                // its operand: a temporary lives until the end of the statement, so that the weak reference
+                // designates it until then (qore#7122)
+                bool consume = path_inst->mode != AssignmentMode::Weak
+                    && consumeLValueOperand(path_inst->operands[0], val);
                 ValueHolder val_holder(consume ? val : val.refSelf(), xsink);
                 QoreValue assign_val = val;
                 ValueHolder eval_holder(xsink);
@@ -20141,6 +20144,11 @@ load_local_done:
                         assignment_failed = true;
                     } else if (path_inst->result.isValid()) {
                         res = lvh.getReferencedValue();
+                        // the value of a weak or opaque assignment is the value assigned, converted to the lvalue's
+                        // type, read while the helper keeps a container that the conversion copied (qore#7122)
+                        if (path_inst->mode == AssignmentMode::Weak || path_inst->mode == AssignmentMode::Opaque) {
+                            evaluateOwnedWeakReferenceResult(res, xsink);
+                        }
                     }
                 }
                 // lvh is now destructed — object lock released

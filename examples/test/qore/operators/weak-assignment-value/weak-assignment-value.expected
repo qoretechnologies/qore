@@ -17,6 +17,27 @@ plain strip: {a: 1} hash ph={a: 1}
 closure strip: {a: 1} hash ch={a: 1}
 strip released: ph={} ch={}
 global strip: {a: 1} thread_local strip: {a: 1}
+self member temp: C destroyed=0
+self member value: C
+self member receiver: C
+self member float: 1.0 float
+self member strip: {a: 1}
+member temp: C destroyed=0
+member value: C
+member receiver: C
+hash key temp: C destroyed=0
+hash key value: C
+hashdecl key temp: C destroyed=0
+hashdecl key value: C
+opaque member value: C
+opaque member strip: {a: 1}
+list element temp: C destroyed=0
+list element value: C
+softlist value: [1] list<auto> sl=[1]
+closure softlist value: [1] list<auto>
+closure softlist released: csl=[]
+member store: DESTRUCTOR-ERROR
+member store: destroyed=1
 plain: DESTRUCTOR-ERROR
 plain: destroyed=1
 closure: DESTRUCTOR-ERROR
@@ -40,4 +61,4 @@ closure receiver: C
 thread_local receiver: C
 map plain: ["C:0", "C:1"]
 map closure: ["C:0", "C:1"]
-done destroyed=28
+done destroyed=42

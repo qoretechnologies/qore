@@ -2092,6 +2092,9 @@ uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext* ctx, int32_t idx, ui
 //! LValuePath runtime helpers — navigate structured lvalue path and execute operation
 uint64_t qore_rt_self_member_assign(const char* member_name, uint64_t rhs_bits,
     int32_t mode_raw, ExceptionSink* xsink);
+//! Makes a weak or opaque assignment to a member of self; returns the converted value (qore#7122)
+uint64_t qore_rt_self_member_assign_mode(const char* member_name, uint64_t rhs_bits,
+    int32_t mode_raw, ExceptionSink* xsink);
 uint64_t qore_rt_self_member_compound(const char* member_name, int32_t compound_op,
     uint64_t rhs_bits, ExceptionSink* xsink);
 //! Applies ++ or -- (\a unary_op, an LVUnaryOp) to a member of the current object; \a ref_rv is 0 if the value of a
@@ -2099,6 +2102,9 @@ uint64_t qore_rt_self_member_compound(const char* member_name, int32_t compound_
 uint64_t qore_rt_self_member_update(const char* member_name, int32_t unary_op, int32_t ref_rv,
     ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_assign(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+//! Makes a weak or opaque assignment to an lvalue path; returns the converted value (qore#7122)
+uint64_t qore_rt_lv_path_assign_mode(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_assign_consume(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink);
@@ -2119,6 +2125,8 @@ uint64_t qore_rt_lv_path_binary_mut_consume(QoreIRLValuePathInstruction* inst, u
 uint64_t qore_rt_lv_path_ternary(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t a_bits, uint64_t b_bits, uint64_t c_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_assign_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_assign_mode_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_assign_consume_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink);

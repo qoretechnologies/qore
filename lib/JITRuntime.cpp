@@ -592,11 +592,13 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lvalue_binary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_binary_aot) },
     { "qore_rt_lvalue_ternary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_ternary_aot) },
     { "qore_rt_self_member_assign", reinterpret_cast<void*>(&qore_rt_self_member_assign) },
+    { "qore_rt_self_member_assign_mode", reinterpret_cast<void*>(&qore_rt_self_member_assign_mode) },
     { "qore_rt_self_member_assign_consume", reinterpret_cast<void*>(&qore_rt_self_member_assign_consume) },
     { "qore_rt_self_member_compound", reinterpret_cast<void*>(&qore_rt_self_member_compound) },
     { "qore_rt_self_member_compound_consume", reinterpret_cast<void*>(&qore_rt_self_member_compound_consume) },
     { "qore_rt_self_member_update", reinterpret_cast<void*>(&qore_rt_self_member_update) },
     { "qore_rt_lv_path_assign", reinterpret_cast<void*>(&qore_rt_lv_path_assign) },
+    { "qore_rt_lv_path_assign_mode", reinterpret_cast<void*>(&qore_rt_lv_path_assign_mode) },
     { "qore_rt_lv_path_assign_consume", reinterpret_cast<void*>(&qore_rt_lv_path_assign_consume) },
     { "qore_rt_lv_path_compound", reinterpret_cast<void*>(&qore_rt_lv_path_compound) },
     { "qore_rt_lv_path_compound_consume", reinterpret_cast<void*>(&qore_rt_lv_path_compound_consume) },
@@ -605,6 +607,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lv_path_binary_mut_consume", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_consume) },
     { "qore_rt_lv_path_ternary", reinterpret_cast<void*>(&qore_rt_lv_path_ternary) },
     { "qore_rt_lv_path_assign_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_aot) },
+    { "qore_rt_lv_path_assign_mode_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_mode_aot) },
     { "qore_rt_lv_path_assign_consume_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_consume_aot) },
     { "qore_rt_lv_path_compound_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_aot) },
     { "qore_rt_lv_path_compound_consume_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_consume_aot) },
@@ -17634,7 +17637,20 @@ static int patchLVPath(IRLVPath& path,
     return 0;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
+//! Returns the value of a weak or opaque assignment to an lvalue path, with a reference for the caller
+/** The value assigned, converted to the lvalue's type, with a weak reference replaced by its target, read while the
+    helper keeps a container that the conversion copied (qore#7122; see qore_rt_store_converted_value())
+*/
+static uint64_t qore_rt_path_assign_result(LValueHelper& lvh, ExceptionSink* xsink) {
+    return toBits(qore_rt_store_converted_value(lvh, xsink));
+}
+
+//! Assigns to an lvalue path, borrowing the value; see qore_rt_lv_path_assign() and qore_rt_lv_path_assign_mode()
+/** @tparam Converts true for a weak or opaque assignment, whose value is the converted value (see
+    qore_rt_path_assign_result()); a template parameter, so that the other assignments keep their code (qore#7122)
+*/
+template <bool Converts>
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_lv_path_assign_impl(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
     if (*xsink) {
@@ -17665,7 +17681,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     if (lvh.assign(assign_val.refSelf(), "<lvalue>", true, inst->mode)) {
         return toBits(QoreValue());
     }
+    if constexpr (Converts) {
+        return qore_rt_path_assign_result(lvh, xsink);
+    }
     return toBits(lvh.getReferencedValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    return qore_rt_lv_path_assign_impl<false>(inst, dyn_vals, rhs_bits, xsink);
+}
+
+//! Makes a weak or opaque assignment to an lvalue path, borrowing the value; returns the value of the assignment,
+//! the converted value, with a reference for the caller (qore#7122)
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_mode(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    return qore_rt_lv_path_assign_impl<true>(inst, dyn_vals, rhs_bits, xsink);
 }
 
 //! Assigns a value that the caller hands over to an lvalue; see qore_rt_lv_path_assign_consume()
@@ -17748,7 +17781,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign_consume(const char* mem
         "<self member assign>", xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
+//! Assigns to a member of self, borrowing the value; see qore_rt_self_member_assign() and
+//! qore_rt_self_member_assign_mode()
+/** @tparam Converts true for a weak or opaque assignment, whose value is the converted value (see
+    qore_rt_path_assign_result()); a template parameter, so that the other assignments keep their code (qore#7122)
+*/
+template <bool Converts>
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_self_member_assign_impl(
         const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
         ExceptionSink* xsink) {
     // mode_raw is an AssignmentMode, not a boolean: Normal/Weak are 0/1, so code emitted before
@@ -17775,7 +17814,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
             || lvh.assign(assign_val.refSelf(), "<self member assign>", true, mode)) {
         return toBits(QoreValue());
     }
+    if constexpr (Converts) {
+        return qore_rt_path_assign_result(lvh, xsink);
+    }
     return toBits(lvh.getReferencedValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
+        const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
+        ExceptionSink* xsink) {
+    return qore_rt_self_member_assign_impl<false>(member_name, rhs_bits, mode_raw, xsink);
+}
+
+//! Makes a weak or opaque assignment to a member of self, borrowing the value; returns the value of the
+//! assignment, the converted value, with a reference for the caller (qore#7122)
+extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign_mode(
+        const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
+        ExceptionSink* xsink) {
+    return qore_rt_self_member_assign_impl<true>(member_name, rhs_bits, mode_raw, xsink);
 }
 
 // documented in QoreIRInterpreter.h
@@ -19293,6 +19349,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_aot(
     return qore_rt_lv_path_assign(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_mode_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath assign: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
+    return qore_rt_lv_path_assign_mode(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_consume_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink) {
@@ -19653,6 +19721,39 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_ternary_
         uint64_t a_bits, uint64_t b_bits, uint64_t c_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_ternary_aot(ctx, slot, dyn_vals, a_bits,
             b_bits, c_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_mode_throwing(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_assign_mode(inst, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_mode_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_assign_mode_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_assign_mode_throwing(
+        const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_self_member_assign_mode(member_name, rhs_bits, mode_raw, xsink);
     if (xsink && *xsink) {
         fromBits(result).discard(xsink);
         throw QoreJITException();

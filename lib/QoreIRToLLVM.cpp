@@ -40514,7 +40514,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto* rhs_val = getVal(rhs_id, error);
                     if (!rhs_val) { return false; }
                     llvm::Value* rhs_boxed = boxValue(rhs_val, rhs_id);
-                    bool consume = consume_rhs(rhs_id);
+                    // a weak or opaque store does not consume its operand: a temporary lives until the end of the
+                    // statement, so that the weak reference designates it until then, and its own helpers ("_mode")
+                    // give the converted value, so that the other stores keep theirs (qore#7122)
+                    const bool converts = qore_assignment_mode_converts_value(path_inst->mode);
+                    bool consume = !converts && consume_rhs(rhs_id);
                     // the result of a statement-form assignment is invalid: the helper returns no reference
                     int32_t flags = inst->result.isValid() ? 0 : QORE_RT_ASSIGN_RESULT_UNUSED;
                     if (direct_self_mutation) {
@@ -40536,10 +40540,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         } else {
                             auto ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, i64_type, i32_type, ptr_type}, false);
-                            auto fn = module.getOrInsertFunction(
-                                "qore_rt_self_member_assign", ft);
-                            auto fn_throwing = module.getOrInsertFunction(
-                                "qore_rt_self_member_assign_throwing", ft);
+                            auto fn = module.getOrInsertFunction(converts
+                                ? "qore_rt_self_member_assign_mode" : "qore_rt_self_member_assign", ft);
+                            auto fn_throwing = module.getOrInsertFunction(converts
+                                ? "qore_rt_self_member_assign_mode_throwing" : "qore_rt_self_member_assign_throwing",
+                                ft);
                             result_val = emitMaybeInvoke(fn, fn_throwing,
                                 {direct_member_ptr, rhs_boxed, mode_val, xsink_arg},
                                 module, llvm_func, inst);
@@ -40558,9 +40563,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         } else {
                             auto ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false);
-                            auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign_aot", ft);
-                            auto fn_throwing = module.getOrInsertFunction(
-                                "qore_rt_lv_path_assign_aot_throwing", ft);
+                            auto fn = module.getOrInsertFunction(converts
+                                ? "qore_rt_lv_path_assign_mode_aot" : "qore_rt_lv_path_assign_aot", ft);
+                            auto fn_throwing = module.getOrInsertFunction(converts
+                                ? "qore_rt_lv_path_assign_mode_aot_throwing" : "qore_rt_lv_path_assign_aot_throwing",
+                                ft);
                             result_val = emitMaybeInvoke(fn, fn_throwing,
                                 {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
                                  dyn_array, rhs_boxed, xsink_arg},
@@ -40580,9 +40587,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         } else {
                             auto ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, i64_type, ptr_type}, false);
-                            auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign", ft);
-                            auto fn_throwing = module.getOrInsertFunction(
-                                "qore_rt_lv_path_assign_throwing", ft);
+                            auto fn = module.getOrInsertFunction(converts
+                                ? "qore_rt_lv_path_assign_mode" : "qore_rt_lv_path_assign", ft);
+                            auto fn_throwing = module.getOrInsertFunction(converts
+                                ? "qore_rt_lv_path_assign_mode_throwing" : "qore_rt_lv_path_assign_throwing", ft);
                             result_val = emitMaybeInvoke(fn, fn_throwing,
                                 {inst_ptr_val, dyn_array, rhs_boxed, xsink_arg},
                                 module, llvm_func, inst);

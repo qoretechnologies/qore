@@ -16,7 +16,8 @@
 
 %exec-class WeakAssignmentValueTest
 
-#! the value of a weak assignment, and the lifetime of the temporary that it is given (qore#7084, qore#7085)
+#! the value of a weak assignment, and the lifetime of the temporary that it is given
+#! (qore#7084, qore#7085, qore#7122)
 /** The value of a weak assignment (\c :=) is the value assigned, converted to the variable's type: a variable, a
     container or a call that is given the value holds it, as in the AST interpreter. Native code (JIT and qcc
     executables) gave the consumer the weak reference that the variable holds, or, for a local, a value that it read as
@@ -26,6 +27,10 @@
     destroyed object for the rest of the statement (qore#7085); so does a copy that the variable's type makes of a
     container, which the AST interpreter released at once. Every mode must print the output of the AST; the JIT is also
     run with its functions compiled synchronously, as otherwise they can run in the IR interpreter.
+
+    The same holds for the lvalues assigned through an lvalue path (members, hash and hashdecl keys, list elements, a
+    softlist variable), where the IR interpreter and native code released the temporary and gave the weak reference
+    (qore#7122).
 
     The program is in \c weak-assignment-value/.
 */
