@@ -103,6 +103,9 @@ public:
     //! true if Socket::accept() and Socket::acceptSSL() resolve the peer's hostname for the accepted socket's
     //! \c source_host member (see Socket::setSourceHostLookup())
     std::atomic<bool> source_host_lookup{false};
+    // A connection can supply TLS objects for use without exporting them in an HTTP client's configuration.
+    bool opaque_cert = false;
+    bool opaque_key = false;
     int async_io_count = 0;
     int async_sequence_owner_tid[3] = {-1, -1, -1};
     int async_sequence_count[3] = {0, 0, 0};

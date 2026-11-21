@@ -29,13 +29,98 @@ class TlsPeer inherits AbstractHttpRequestHandler {
 class RestConnectionTlsTest inherits QUnit::Test {
     constructor() : Test("REST connection TLS file ownership", "1.0") {
         addTestCase("configured credentials", \credentials());
+        addTestCase("local credential bindings", \localBindings());
+        addTestCase("synchronous caller file policy", \syncFilePolicy());
         set_return_value(main());
     }
 
-    private static writePem(string path, string value) {
+    private static writeFixture(string path, data value) {
         File f();
         f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
         f.write(value);
+    }
+
+    localBindings() {
+        TmpDir tmp("rest-tls-bindings-");
+        string cert = tmp.path + DirSep + "cert.der";
+        string key = tmp.path + DirSep + "key.der";
+        writeFixture(cert, new SSLCertificate(TestCertificates::CertPem).getDER());
+        writeFixture(key, new SSLPrivateKey(TestCertificates::KeyPem).getDER());
+        Program reader(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        reader.parse("%requires RestClient\nobject sub acquire(object c) { return c.getAsync(False); }"
+            "class RestrictedRest inherits RestConnection { constructor(string u, hash<auto> o)"
+            " : RestConnection(\"r\", \"r\", u, {}, o) {} }"
+            "object sub create(string u, hash<auto> o) { return new RestrictedRest(u, o); }", "client");
+
+        string url = "rests://localhost";
+        hash<auto> opts = {"ssl_cert_path": "cert.der", "ssl_key_path": "file://" + key};
+        string cwd = getcwd();
+        RestConnection c;
+        {
+            assertEq(0, chdir(tmp.path));
+            on_exit chdir(cwd);
+            c = new RestConnection("local", "", url, {}, opts);
+        }
+        # DER flags belong to the client options assembled by a connection.
+        c.real_opts.ssl_cert_der = True;
+        c.real_opts.ssl_key_der = True;
+        assertTrue(reader.callFunction("acquire", c) instanceof RestClientIo);
+        assertTrue(reader.callFunction("acquire", c.copy()) instanceof RestClientIo);
+        assertThrows("PERMISSION-DENIED", \reader.callFunction(),
+            ("acquire", reader.callFunction("create", url, opts)));
+        string endpoint = c.real_url;
+        c.real_url = "https://other.invalid";
+        assertThrows("PERMISSION-DENIED", \reader.callFunction(), ("acquire", c));
+        c.real_url = endpoint;
+
+        Program sandbox(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        sandbox.parse("object sub acquire(object c) { return c.getAsync(False); }"
+            "object sub sync_client(object c) { return c.get(False); }", "sandbox-client");
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        sandbox.setSandboxManager(manager);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("acquire", c));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("sync_client", c));
+
+        # An empty substitution expands to an empty prefix in every module Program.
+        foreach string loc in (cert + "{max_file_len=1}", tmp.path + "/literal-$-name", "${}" + cert,
+                "example+test://cert") {
+            RestConnection expression("expr", "", url, {}, {"ssl_cert_path": loc});
+            assertThrows("PERMISSION-DENIED", \reader.callFunction(), ("acquire", expression), loc);
+        }
+        RestConnection clipped("limit", "", url, {}, {"ssl_cert_path": cert + "{max_file_len=1}"});
+        clipped.real_opts.ssl_cert_der = True;
+        assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", \clipped.getAsync(), False);
+    }
+
+    syncFilePolicy() {
+        TmpDir tmp("rest-sync-policy-");
+        RestConnection c("sync", "", "rests://localhost", {}, {});
+        Program reader(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        reader.parse("object sub acquire(object c, *hash<auto> opts) { return c.get(False, opts); }"
+            "hash<auto> sub wire(object c) { hash<SerializationInfo> s = Serializable::serializeToData(c);"
+            " return s._index{s._data._index}._class_data.\"Qore::HTTPClient\"; }", "sync-client");
+        assertTrue(reader.callFunction("acquire", c) instanceof RestClient);
+        HTTPClient ordinary({"ssl_cert_data": TestCertificates::CertPem, "ssl_key_data": TestCertificates::KeyPem});
+        HTTPClient opaque({}, new SSLCertificate(TestCertificates::CertPem), new SSLPrivateKey(TestCertificates::KeyPem));
+        HTTPClient mixed({"ssl_key_data": TestCertificates::KeyPem}, new SSLCertificate(TestCertificates::CertPem),
+            NOTHING);
+        assertFalse(mixed.getHttpConfig().hasKey("ssl_cert_data"));
+        assertTrue(mixed.getHttpConfig().hasKey("ssl_key_data"));
+        foreach string field in ("ssl_cert_data", "ssl_key_data") {
+            assertTrue(reader.callFunction("wire", ordinary).hasKey(field));
+            assertFalse(reader.callFunction("wire", opaque).hasKey(field));
+        }
+        foreach string option in ("ssl_cert_path", "ssl_key_path") {
+            # A policy refusal must precede file I/O, including for a filename that does not exist.
+            string missing = tmp.path + DirSep + option;
+            hash<auto> overrides();
+            overrides{option} = missing;
+            assertThrows("PERMISSION-DENIED", \reader.callFunction(), ("acquire", c, overrides));
+            c.real_opts{option} = missing;
+            assertThrows("PERMISSION-DENIED", \reader.callFunction(), ("acquire", c));
+            remove c.real_opts{option};
+        }
     }
 
     credentials() {
@@ -59,9 +144,9 @@ class RestConnectionTlsTest inherits QUnit::Test {
             {"ssl_cert_path": cert, "ssl_key_path": key, "ssl_verify_cert": False});
         TestStore::rest_tls = conn;
         on_exit remove TestStore::rest_tls;
-        writePem(cert, TestCertificates::CertPem);
-        writePem(key, TestCertificates::KeyPem);
-        writePem(other, TestCertificates::CertPem);
+        writeFixture(cert, TestCertificates::CertPem);
+        writeFixture(key, TestCertificates::KeyPem);
+        writeFixture(other, TestCertificates::CertPem);
         Program providers(PO_NO_CHILD_PO_RESTRICTIONS | PO_NEW_STYLE);
         providers.setGlobalVarValue("ENV", ENV + {"QORE_CONNECTION_PROVIDERS":
             get_script_dir() + "FileLocationTestConnectionProvider.qm"});
@@ -72,6 +157,29 @@ class RestConnectionTlsTest inherits QUnit::Test {
             "{\"ssl_cert_path\": c, \"ssl_key_path\": k}); }\n"
             "object sub client(object c, *hash<auto> opts) { return c.getAsync(True, opts); }\n"
             "string sub read(string loc) { return FileLocationHandler::getTextFileFromLocation(loc); }", "reader");
+        Program sync(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        sync.parse("%requires RestClient\n"
+            "hash<auto> sub check(object c) { object client = c.get(False);"
+            " hash<auto> config = client.getHttpConfig(); hash<auto> saved = client.getConstructorOptions();"
+            " hash<SerializationInfo> state = Serializable::serializeToData(client);"
+            " hash<auto> wire = state._index{state._data._index}._class_data.\"Qore::HTTPClient\";"
+            " return {\"body\": client.restGet(\"/content\").body,"
+            " \"wire_cert\": wire.hasKey(\"ssl_cert_data\"), \"wire_key\": wire.hasKey(\"ssl_key_data\"),"
+            " \"exports_cert\": config.hasKey(\"ssl_cert_data\") || saved.hasKey(\"ssl_cert_data\"),"
+            " \"exports_key\": config.hasKey(\"ssl_key_data\") || saved.hasKey(\"ssl_key_data\"),"
+            " \"cert_path\": saved.ssl_cert_path, \"key_path\": saved.ssl_key_path}; }", "sync-check");
+        hash<auto> result = sync.callFunction("check", conn);
+        assertEq("authenticated", result.body);
+        assertFalse(result.exports_cert);
+        assertFalse(result.exports_key);
+        assertFalse(result.wire_cert);
+        assertFalse(result.wire_key);
+        assertEq(cert, result.cert_path);
+        assertEq(key, result.key_path);
+        RestClient supplied({"url": conn.real_url, "ssl_cert_path": cert, "ssl_key_path": key}, True);
+        assertTrue(supplied.getHttpConfig().hasKey("ssl_cert_data"));
+        assertTrue(supplied.getHttpConfig().hasKey("ssl_key_data"));
+        assertEq(key, supplied.getConstructorOptions().ssl_key_path);
         string loc = "conn://rest-tls/content";
         assertEq("authenticated", restricted.callFunction("read", loc));
         assertThrows("PERMISSION-DENIED", \restricted.callFunction(), ("read", cert));
@@ -91,9 +199,9 @@ class RestConnectionTlsTest inherits QUnit::Test {
         conn.real_opts.ssl_key_path = key;
         assertThrows("LOCATION-ERROR", "unsupported read option.*ssl_cert_path", \restricted.callFunction(),
             ("read", loc + "{ssl_cert_path=" + other + "}"));
-        writePem(cert, "");
+        writeFixture(cert, "");
         assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", \restricted.callFunction(), ("read", loc));
-        writePem(cert, TestCertificates::CertPem);
+        writeFixture(cert, TestCertificates::CertPem);
         assertEq("authenticated", restricted.callFunction("read", loc));
     }
 }

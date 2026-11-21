@@ -1889,10 +1889,10 @@ struct qore_httpclient_priv {
         if (!http_fields_at_top_level.load(std::memory_order_relaxed)) {
             h->setKeyValueIntern("http_fields_at_top_level", false);
         }
-        if (priv.cert) {
+        if (priv.cert && !priv.opaque_cert) {
             h->setKeyValueIntern("ssl_cert_data", priv.cert->getDER(nullptr));
         }
-        if (priv.pk) {
+        if (priv.pk && !priv.opaque_key) {
             h->setKeyValueIntern("ssl_key_data", priv.pk->getDER(nullptr));
         }
         if (sock.ssl_verify_mode == SSL_VERIFY_PEER) {
@@ -3953,7 +3953,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         qore_socket_private::get(*priv->socket)->setAssumedEncoding(!val->empty() ? val->c_str() : nullptr);
     }
 
-    n = opts->getKeyValue("ssl_cert_data");
+    n = priv->opaque_cert ? QoreValue() : opts->getKeyValue("ssl_cert_data");
     if (n) {
         SimpleRefHolder<QoreSSLCertificate> cert;
         if (n.getType() == NT_BINARY) {
@@ -3976,7 +3976,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         assert(!priv->cert);
         priv->cert = cert.release();
     } else {
-        n = opts->getKeyValue("ssl_cert_path");
+        n = priv->opaque_cert ? QoreValue() : opts->getKeyValue("ssl_cert_path");
         if (!n.isNothing()) {
             if (n.getType() != NT_STRING) {
                 xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting string filename as value for the "
@@ -3987,7 +3987,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
                 return -1;
             }
-            if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
+            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_cert_path\" option = \"%s\" "
                     "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
                 return -1;
@@ -4028,7 +4028,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         key_password = key_password_storage.c_str();
     }
 
-    n = opts->getKeyValue("ssl_key_data");
+    n = priv->opaque_key ? QoreValue() : opts->getKeyValue("ssl_key_data");
     if (n) {
         SimpleRefHolder<QoreSSLPrivateKey> pk;
         if (n.getType() == NT_BINARY) {
@@ -4052,7 +4052,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         assert(!priv->pk);
         priv->pk = pk.release();
     } else {
-        n = opts->getKeyValue("ssl_key_path");
+        n = priv->opaque_key ? QoreValue() : opts->getKeyValue("ssl_key_path");
         if (!n.isNothing()) {
             if (n.getType() != NT_STRING) {
                 xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting string filename as value for the "
@@ -4063,7 +4063,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
                 return -1;
             }
-            if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
+            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_key_path\" option = \"%s\" "
                     "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
                 return -1;

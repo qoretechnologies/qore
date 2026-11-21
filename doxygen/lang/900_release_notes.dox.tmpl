@@ -1160,6 +1160,10 @@
     take the access of their whole path, not of its last edge (see @ref multiple_path_inheritance; issue #6498).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+
+    @par TLS credentials for HTTP clients
+    @ref Qore::HTTPClient::constructor() "HTTPClient" accepts a client certificate and private key for TLS use
+    while omitting those credentials from configuration exports and serialization.
     @par An encoding_errors Option for Text Readers
     The file and stream readers and the line iterators take an \c encoding_errors option (\c "raise", \c "latin1"
     or \c "keep") that sets what text read that is not valid in its encoding gives (see @ref encoding_errors;

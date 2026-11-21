@@ -1706,6 +1706,21 @@ RestClient rest({"url": "http://localhost:8001/rest"});
     constructor(*hash<auto> opts, *softbool do_not_connect)
             : HTTPClient(getRestClientHttpClientConstructorOptions(opts)
                 + ((opts.url || !opts.validator) ? NOTHING : {"url": opts.validator.getTargetUrl()})) {
+        initRestClient(opts, do_not_connect);
+    }
+
+    #! Creates a client using the connection's parsed TLS credentials
+    /** The original file locations remain in getConstructorOptions(). The separately supplied credentials are
+        used for TLS and omitted from getHttpConfig() and serialization.
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect, hash<RestConnectionTlsCredentials> credentials)
+            : HTTPClient(getRestClientHttpClientConstructorOptions(opts)
+                + ((opts.url || !opts.validator) ? NOTHING : {"url": opts.validator.getTargetUrl()}),
+                credentials.cert, credentials.key) {
+        initRestClient(opts, do_not_connect);
+    }
+
+    private:internal initRestClient(*hash<auto> opts, *softbool do_not_connect) {
         # the setting that the HTTPClient constructor applied; RestClient reads the fields of a response at its top
         # level (issue #6869)
         if (!getHttpFieldsAtTopLevel()) {
@@ -5302,6 +5317,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     */
     constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
             : HttpBasedConnection(name, description, url, attributes, AbstractRestConnection::processOptions(name, options)) {
+        bindConfiguredTlsFiles(options);
         setupRest();
     }
 
@@ -5324,6 +5340,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr) : HttpBasedConnection(config, attr) {
+        bindConfiguredTlsFiles(config.opts);
         setupRest();
     }
 
@@ -5557,8 +5574,10 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         client returned by \c getAsync()
 
         A connection created by trusted code can use its own local TLS credential files when the caller is
-        restricted from \c FILESYSTEM. Each new client reads the configured files again. Replacing a path in
-        \c real_opts uses the caller's normal access policy.
+        restricted from \c FILESYSTEM. The active sandbox's filesystem policy still applies. Each new client
+        reads the configured files again. A changed endpoint or path uses the caller's normal access policy.
+        Locations with substitutions or options (including \c max_file_len) use FileLocationHandler's normal
+        permission checks and option processing.
 
         @note The \c FileLocationHandler module is loaded dynamically; it is a leaf utility that sits below this
         module, so declaring a dependency on it here would invert the dependency graph
@@ -5853,18 +5872,18 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
 
     private:internal {
         # A reader captures its location at construction and never accepts a filename to open.
-        transient *code<*data(string, bool)> cert_reader;
-        transient *code<*data(string, bool)> key_reader;
+        transient *code<*data(string, string, bool)> cert_reader;
+        transient *code<*data(string, string, bool)> key_reader;
     }
 
-    private:internal static *code<*data(string, bool)> bindTlsFile(*string location) {
+    private:internal static *code<*data(string, string, bool)> bindTlsFile(*string location, string endpoint) {
         if (!location.val() || SandboxManager::isCallerRestricted(DOM_FILESYSTEM) || SandboxManager::isRestricted()) {
             return;
         }
         string path = location;
         if (path.startsWith("file://")) {
             splice path, 0, 7;
-        } else if (path =~ /^\w+:\/\//) {
+        } else if (path =~ /^[A-Za-z][A-Za-z0-9+.\-]*:\/\//) {
             return;
         }
         # Options and substitutions belong to the location handler. Only plain local filenames can be bound.
@@ -5874,19 +5893,27 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         if (!absolute_path(path)) {
             path = getcwd() + DirSep + path;
         }
-        return *data sub (string requested, bool der) {
-            if (requested == location) {
+        return *data sub (string requested, string url, bool der) {
+            if (requested == location && url == endpoint) {
                 return der ? ReadOnlyFile::readBinaryFile(path) : ReadOnlyFile::readTextFile(path);
             }
         };
+    }
+
+    private:internal bindConfiguredTlsFiles(*hash<auto> configured) {
+        # Option validation may expand an environment variable. Only a literal selected at construction can bind.
+        if (configured.ssl_cert_path == opts.ssl_cert_path) {
+            cert_reader = bindTlsFile(opts.ssl_cert_path, real_url);
+        }
+        if (configured.ssl_key_path == opts.ssl_key_path) {
+            key_reader = bindTlsFile(opts.ssl_key_path, real_url);
+        }
     }
 
     #! Common REST client initialization
     /** @since RestClient 2.2.0
     */
     private setupRest() {
-        cert_reader = bindTlsFile(opts.ssl_cert_path);
-        key_reader = bindTlsFile(opts.ssl_key_path);
         real_opts = {"url": real_url} + opts;
         if (urlh.username.val() && !opts.username) {
             real_opts.username = urlh.username;
@@ -6247,6 +6274,23 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         features{RCF_OAUTH2_AUTH} = True;
     }
 
+    private:internal hash<RestConnectionTlsCredentials> readBoundCredentials(hash<auto> opts, *hash<auto> rtopts) {
+        hash<RestConnectionTlsCredentials> credentials();
+        if (cert_reader && opts.ssl_cert_path.val() && !exists opts.ssl_cert_data && !exists rtopts.ssl_cert_path) {
+            *data cert = cert_reader(opts.ssl_cert_path, opts.url, opts.ssl_cert_der ?? False);
+            if (exists cert) {
+                credentials.cert = new SSLCertificate(cert);
+            }
+        }
+        if (key_reader && opts.ssl_key_path.val() && !exists opts.ssl_key_data && !exists rtopts.ssl_key_path) {
+            *data key = key_reader(opts.ssl_key_path, opts.url, opts.ssl_key_der ?? False);
+            if (exists key) {
+                credentials.key = new SSLPrivateKey(key, opts.ssl_key_password);
+            }
+        }
+        return credentials;
+    }
+
     #! returns a @ref RestClient::RestClient "RestClient" object
     /** @param connect if @ref True "True", then the connection is returned already connected
         @param rtopts supports the following runtime option in getImpl():
@@ -6257,7 +6301,22 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @return a @ref RestClient::RestClient "RestClient" object
     */
     private object getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new RestClient(getConnectionOptions(rtopts), !connect);
+        hash<auto> opts = getConnectionOptions(rtopts);
+        if (!exists opts.ssl_cert_path && !exists opts.ssl_key_path
+                && !exists rtopts.ssl_cert_path && !exists rtopts.ssl_key_path) {
+            return new RestClient(opts, !connect);
+        }
+        hash<RestConnectionTlsCredentials> credentials = readBoundCredentials(opts, rtopts);
+        if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)
+                && (exists rtopts.ssl_cert_path || exists rtopts.ssl_key_path
+                    || (exists opts.ssl_cert_path && !exists opts.ssl_cert_data && !credentials.cert)
+                    || (exists opts.ssl_key_path && !exists opts.ssl_key_data && !credentials.key))) {
+            throw "PERMISSION-DENIED", "caller cannot select TLS credential files";
+        }
+        if (credentials.cert || credentials.key) {
+            return new RestClient(opts, !connect, credentials);
+        }
+        return new RestClient(opts, !connect);
     }
 
     #! Returns an async-I/O-capable REST client supporting HTTP/1.x, HTTP/2, and HTTP/3
@@ -6282,19 +6341,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         # RestClientIo supports the same options, including the URL encoding options
         hash<auto> opts = getConnectionOptions(rtopts);
         if ((cert_reader || key_reader) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
-            hash<RestConnectionTlsCredentials> credentials();
-            if (cert_reader && opts.ssl_cert_path.val() && !exists opts.ssl_cert_data && !exists rtopts.ssl_cert_path) {
-                *data cert = cert_reader(opts.ssl_cert_path, opts.ssl_cert_der ?? False);
-                if (exists cert) {
-                    credentials.cert = new SSLCertificate(cert);
-                }
-            }
-            if (key_reader && opts.ssl_key_path.val() && !exists opts.ssl_key_data && !exists rtopts.ssl_key_path) {
-                *data key = key_reader(opts.ssl_key_path, opts.ssl_key_der ?? False);
-                if (exists key) {
-                    credentials.key = new SSLPrivateKey(key, opts.ssl_key_password);
-                }
-            }
+            hash<RestConnectionTlsCredentials> credentials = readBoundCredentials(opts, rtopts);
             if (credentials.cert || credentials.key) {
                 return create_object("RestClientIo::RestClientIo", opts, NOTHING, credentials);
             }

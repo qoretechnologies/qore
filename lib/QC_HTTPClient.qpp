@@ -35,6 +35,7 @@
 #include "qore/QoreSSLPrivateKey.h"
 
 #include "qore/intern/QC_HTTPClient.h"
+#include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Serializable.h"
@@ -672,6 +673,32 @@ HTTPClient httpclient();
  */
 HTTPClient::constructor() {
     self->setPrivate(CID_HTTPCLIENT, new QoreHttpClientObject);
+}
+
+//! Creates an HTTP client with TLS credentials supplied for use by this client
+/** @param options ordinary HTTP client constructor options
+    @param certificate when present, supplies the TLS certificate in place of the certificate options
+    @param private_key when present, supplies the TLS private key in place of the key options
+
+    A credential supplied as an object here is omitted from getHttpConfig() and from serialization.
+    A deserialized client must be supplied that credential again to use it.
+    @since %Qore 3.0
+*/
+HTTPClient::constructor(hash<auto> options, *SSLCertificate[QoreSSLCertificate] certificate,
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
+    my_socket_priv* socket = my_socket_priv::getPriv(**client);
+    if (certificate) {
+        client->setCertificate(certificate.release());
+        socket->opaque_cert = true;
+    }
+    if (private_key) {
+        client->setPrivateKey(private_key.release());
+        socket->opaque_key = true;
+    }
+    if (!client->setOptions(options, xsink)) {
+        self->setPrivate(CID_HTTPCLIENT, client.release());
+    }
 }
 
 //! Copying objects of this class is not supported, an exception will be thrown
@@ -4187,7 +4214,10 @@ bool HTTPClient::getPreEncodedUrls() [flags=CONSTANT] {
 }
 
 //! Returns the configuration of the HTTP client
-/** @return the configuration of the HTTP client
+/** TLS credentials passed separately as objects at construction are omitted from this configuration and from
+    serialization. Credentials passed through the options hash retain their ordinary export behavior.
+
+    @return the configuration of the HTTP client
 
     @since %Qore 2.0
 */
