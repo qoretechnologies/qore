@@ -311,6 +311,37 @@ DLLLOCAL inline bool async_io_module_cleanup_delegate(const std::shared_ptr<cons
 */
 DLLLOCAL AsyncIoSandboxContext capture_async_io_sandbox_context();
 
+//! The operations that the calling code may cancel or flush by key or owner (qore#7010)
+/** Code that is sandboxed acts only on the operations of the application it runs for (see
+    AsyncIoControllerPriv::callerAppId()); trusted code acts on any operation
+*/
+struct AioAppRestriction {
+    //! true if the calling code is restricted to the operations of \a app_id
+    bool restricted = false;
+    //! the application whose operations the calling code may act on, if \a restricted
+    qore_program_id_t app_id = 0;
+};
+
+//! the application that the code of a callback of an operation runs for (qore#7010)
+DLLLOCAL extern thread_local qore_program_id_t aio_callback_app_id;
+DLLLOCAL extern thread_local bool aio_callback_app_set;
+
+//! Sets the application that the code of a callback of an operation runs for while it exists (qore#7010)
+/** The callback (the operation's step, completion, abort, stream data or result, or a timer's code) runs on a
+    worker thread for the application that the operation was submitted for (see AsyncIoControllerPriv::callerAppId()):
+    an operation that it submits belongs to that application, also when no Program of the application is on the
+    thread's stack
+*/
+class AioCallbackAppScope {
+public:
+    DLLLOCAL explicit AioCallbackAppScope(qore_program_id_t app_id);
+    DLLLOCAL ~AioCallbackAppScope();
+
+private:
+    qore_program_id_t old_id;
+    bool old_set;
+};
+
 class QoreCallDispatcher {
 public:
     //! Dispatch type for async work items
@@ -343,6 +374,8 @@ public:
         int thread_idx = -1;
         QoreProgram* pgm = nullptr;          //!< Program reference to prevent premature deletion
         std::string owner;                   //!< Owner identifier for per-owner flush (empty if untracked)
+        //! the application that the item's operation (or timer) is for: its code runs for it (qore#7010)
+        qore_program_id_t app_pgm_id = 0;
         AsyncIoDeferredRelease* release = nullptr; //!< For DT_RELEASE: owned references to release (or nullptr)
         AsyncIoNativeTask* native_task = nullptr; //!< For DT_NATIVE_TASK: owned task (or nullptr)
         bool sent = false;                   //!< For DT_STREAM_SEND_RESULT_NOTIFY: the transmission result
@@ -381,7 +414,8 @@ public:
     */
     DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj,
         const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
-        AsyncIoNativeTask* after_abort = nullptr, bool after_abort_on_complete = false);
+        AsyncIoNativeTask* after_abort = nullptr, bool after_abort_on_complete = false,
+        qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch an onComplete(result) call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -389,7 +423,8 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashNode* result,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch a code callback asynchronously (for timer events)
     /** @param callback the callback code (referenced — ownership transferred)
@@ -399,7 +434,7 @@ public:
     */
     DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
         const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
-        AsyncIoRuntimeOptions runtime_po = AsyncIoRuntimeOptions());
+        AsyncIoRuntimeOptions runtime_po = AsyncIoRuntimeOptions(), qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -416,7 +451,7 @@ public:
     DLLLOCAL void dispatchContinuePollAsync(QoreObject* spop_obj,
         AsyncIoControllerPriv* controller, const std::string& key, uint64_t op_id, int thread_idx,
         const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
-        bool read_state = false);
+        bool read_state = false, qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch onStreamData(stream_key) asynchronously (fire-and-forget)
     /** Called by the I/O thread after stream data arrives.
@@ -428,7 +463,8 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchStreamDataAsync(QoreObject* spop_obj, const std::string& stream_key,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch onStreamSendResult(stream_key, sent) asynchronously (fire-and-forget)
     /** Called by the I/O thread with the transmission result of a response whose stream is watched by an HTTP/2
@@ -440,7 +476,8 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchStreamSendResultAsync(QoreObject* spop_obj, const std::string& stream_key, bool sent,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        qore_program_id_t app_pgm_id = 0);
 
     //! Dispatch onPollComplete() asynchronously (fire-and-forget)
     /** Called by the I/O thread after WebSocketClientPollOperationBase::continuePoll()
@@ -451,7 +488,8 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchPollCompleteAsync(QoreObject* spop_obj,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        qore_program_id_t app_pgm_id = 0);
 
     //! Runs a native task on a callback worker (fire-and-forget)
     /** The item is not owner-tracked.  When it cannot be queued, the task is discarded instead of run.
@@ -524,6 +562,12 @@ public:
     */
     DLLLOCAL bool dbgWaitIdleWaiter(int timeout_ms);
 
+    //! Debug-only: waits until a thread waits in waitForOwnerIdle() (in flushCallbacksByOwner(), whose mark is then
+    //! set; qore#7010)
+    /** @return true if a thread waits in waitForOwnerIdle(), false if none did when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitOwnerIdleWaiter(int timeout_ms);
+
     //! Debug-only: the number of onComplete() calls dispatched so far
     DLLLOCAL int64_t dbgOnCompleteDispatched() const {
         return dbg_on_complete_dispatched.load(std::memory_order_acquire);
@@ -591,10 +635,20 @@ public:
         item later: an item popped after clearOwnerShuttingDown() no longer sees
         the mark and would run the user callback past the barrier.
     */
-    DLLLOCAL void markOwnerShuttingDown(const std::string& owner);
+    DLLLOCAL void markOwnerShuttingDown(const std::string& owner,
+        const AioAppRestriction& restrict_app = AioAppRestriction());
 
     //! Remove an owner from the shutting-down set
-    DLLLOCAL void clearOwnerShuttingDown(const std::string& owner);
+    DLLLOCAL void clearOwnerShuttingDown(const std::string& owner,
+        const AioAppRestriction& restrict_app = AioAppRestriction());
+
+    //! Returns the key of the mark of an owner: the owner itself, or for restricted code its application's mark
+    DLLLOCAL static std::string ownerMarkKey(const std::string& owner, const AioAppRestriction& restrict_app);
+
+    //! Returns true if the owner of the item is marked as shutting down, for all its items or for its application's
+    /** Called with m held
+    */
+    DLLLOCAL bool ownerShuttingDownLocked(const AsyncWorkItem& item) const;
 
     //! Wait for in-flight callbacks belonging to a specific owner to complete
     /** Unlike waitForIdle() which waits for ALL callbacks, this only waits for
@@ -642,6 +696,8 @@ private:
     int dbg_idle_waiters = 0;
     //! Debug-only: signaled when a thread blocks in waitForIdle()
     QoreCondition dbg_idle_waiter_cond;
+    //! Debug-only: the number of threads blocked in waitForOwnerIdle() (see dbgWaitOwnerIdleWaiter())
+    int dbg_owner_idle_waiters = 0;
 #endif
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
@@ -939,6 +995,10 @@ public:
 
     //! Debug-only: waits until a thread waits in a flush of the callbacks (see QoreCallDispatcher::dbgWaitIdleWaiter())
     DLLLOCAL bool dbgWaitFlushBlocked(int timeout_ms);
+
+    //! Debug-only: waits until a thread waits in a flush of the callbacks of an owner (see
+    //! QoreCallDispatcher::dbgWaitOwnerIdleWaiter())
+    DLLLOCAL bool dbgWaitOwnerFlushBlocked(int timeout_ms);
 #endif
 
     //! Wakes a socket operation by QoreObject identity
@@ -1254,10 +1314,13 @@ private:
             processed, so the address cannot be reused meanwhile
         */
         const QoreObject* cancel_spop_obj = nullptr;
-        //! For Cancel / CancelOwner: if set, only the operations of this Program are canceled (qore#7010)
-        /** Set when the canceling code is sandboxed (see ownerProgramForCancel()); compared by address only
-        */
-        const QoreProgram* restrict_pgm = nullptr;
+        //! For Cancel / CancelOwner: the operations that the canceling code may cancel (qore#7010)
+        AioAppRestriction restrict_app;
+        //! For SubmitOp: the application that the operation is submitted for (see callerAppId())
+        qore_program_id_t submit_app_id = 0;
+        //! For SubmitOp: true if the submitting code is sandboxed: it does not take the key of another application's
+        //! operation (qore#7010)
+        bool submit_sandboxed = false;
         std::string owner;              //!< For CancelOwner / SubmitOp: the owner string
         //! For SubmitOp: the owner of the poll op whose continuePoll() was
         //! running on this (worker) thread when submit() was called — the
@@ -1353,6 +1416,8 @@ private:
         QoreHashNode* poll_info;        //!< Last SocketPollInfo hash (referenced, or nullptr)
         int64 timeout_us;               //!< Timeout in microseconds (negative = no timeout)
         std::string owner;              //!< Owner identifier
+        //! the application that the operation was submitted for (see callerAppId(), qore#7010)
+        qore_program_id_t app_pgm_id = 0;
         //! Inherited cancel scope: the owner of the poll op whose
         //! continuePoll() spawned this op (empty if none).  cancelByOwner()
         //! matches this in addition to @ref owner so cancelling a poll op
@@ -1575,6 +1640,8 @@ private:
         AsyncIoSandboxContext sandbox_ctx; //!< The submitter's sandbox context, for onComplete()
         //! The references taken by the synchronous exec() call that waits for the result, or empty
         std::shared_ptr<AsyncIoSyncRelease> sync_release;
+        //! the application of the operation (qore#7010)
+        qore_program_id_t app_pgm_id = 0;
     };
 
     //! Delivers the result of an operation whose abort() runs on a callback worker, after abort() has returned
@@ -1635,6 +1702,7 @@ private:
         AsyncIoSandboxContext sandbox_ctx;  //!< The submitter's sandbox context
         AsyncIoNativeTask* after_abort;     //!< Owned, or nullptr
         bool after_abort_on_complete;       //!< True if after_abort calls onComplete() when it is run
+        qore_program_id_t app_pgm_id = 0;   //!< the application of the operation (qore#7010)
     };
 
     //! Timer info stored under lock
@@ -1644,6 +1712,8 @@ private:
         AsyncIoSandboxContext sandbox_ctx; //!< The sandbox of the code that added the timer, for its callback
         //! The run-time parse options of the code that added the timer, which its callback runs with (qore#6208)
         AsyncIoRuntimeOptions runtime_po;
+        //! the application that the timer's code runs for (see AsyncIoControllerPriv::callerAppId(), qore#7010)
+        qore_program_id_t cb_app_id = 0;
         //! True if module code added the timer for an application with restrictions (see app_pgm_id)
         bool for_app = false;
         //! The ID of the application Program that module code added the timer for, if for_app is set
@@ -2137,7 +2207,7 @@ private:
         (or, during a continuePoll() batch, for the calling thread)
     */
     DLLLOCAL bool cancelByKeyOnIoThread(const std::string& uh, int own_idx, ExceptionSink* xsink,
-        const QoreProgram* restrict_pgm = nullptr);
+        const AioAppRestriction& restrict_app = AioAppRestriction());
 
     //! cancelByKey() from a non-I/O thread with several I/O threads: searches every live I/O thread and waits
     /** @param uh the operation key
@@ -2147,20 +2217,34 @@ private:
         @return true if an operation was found and canceled
     */
     DLLLOCAL bool cancelByKeyOnAllThreads(const std::string& uh, ExceptionSink* xsink,
-        const QoreObject* only_spop_obj = nullptr, const QoreProgram* restrict_pgm = nullptr);
+        const QoreObject* only_spop_obj = nullptr, const AioAppRestriction& restrict_app = AioAppRestriction());
 
-    //! Returns the Program whose operations the calling code may cancel by key or owner, or nullptr for any
-    /** Code that is sandboxed (see qore_caller_is_sandboxed()) cancels only the operations of its own Program, the
-        Program of the poll operation's (or the I/O object's) Qore object; trusted code cancels any operation
-        (qore#7010).  Keys and owners can be guessed, so without this sandboxed code could cancel the operations of
-        other code in the process.
+    //! Returns the ID of the application Program that the calling code runs for (qore#7010)
+    /** The application of module code is the application that it runs for (qore#6208, see
+        runtime_get_module_call_app_id()); the code of a callback of an operation runs for the application that the
+        operation was submitted for (see AioCallbackAppScope); the initialization of library code and the code of a
+        trusted build run for no application (QORE_NO_PROGRAM_ID): an operation that they submit belongs to no tenant
 
-        @param no_program set to true if the calling code is sandboxed but has no Program: it then cancels nothing
+        Operations record the application that they are submitted for; code that is sandboxed cancels, flushes and
+        replaces only the operations of its own application, as keys and owners can be guessed
     */
-    DLLLOCAL static const QoreProgram* ownerProgramForCancel(bool& no_program);
+    DLLLOCAL static qore_program_id_t callerAppId();
 
-    //! Returns true if the operation may be canceled by code restricted to the given Program (nullptr: any)
-    DLLLOCAL static bool opInProgram(const PollInfo& pinfo, const QoreProgram* restrict_pgm);
+    //! Returns the operations that the calling code may cancel or flush by key or owner
+    /** @param none set to true if the calling code is sandboxed but runs for no known application: it then acts on no
+        operation
+    */
+    DLLLOCAL static AioAppRestriction cancelRestriction(bool& none);
+
+    //! Delivers the canceled result of a submission that is not started, and releases what the command holds
+    /** Called on the I/O thread of the command
+    */
+    DLLLOCAL void refuseSubmitOp(Command& cmd, ExceptionSink* xsink);
+
+    //! Returns true if the operation may be canceled or flushed by code with the given restriction
+    DLLLOCAL static bool opInProgram(const PollInfo& pinfo, const AioAppRestriction& restrict_app) {
+        return !restrict_app.restricted || pinfo.app_pgm_id == restrict_app.app_id;
+    }
 
     //! Remove cancel_cond_map[key] (if present), broadcast its cond, and drop
     //! the map's ref.  Caller must hold m.
@@ -2807,7 +2891,8 @@ private:
         @param stream_key the stream identifier to pass to onStreamData()
     */
     DLLLOCAL void enqueueStreamDataDispatch(QoreObject* spop_obj, const std::string& stream_key,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        qore_program_id_t app_pgm_id = 0);
 
     //! Call abort on an AbstractPollOperation object
     DLLLOCAL static void callAbort(QoreObject* spop_obj, ExceptionSink* xsink);
@@ -2840,7 +2925,8 @@ private:
     */
     DLLLOCAL void deliverResult(Queue* queue, QoreObject* queue_obj, QoreObject* spop_obj, bool has_on_complete,
         QoreHashNode* result, ExceptionSink* xsink, const std::string& owner = std::string(),
-        AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(), AsyncIoSyncRelease* sync_release = nullptr);
+        AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(), AsyncIoSyncRelease* sync_release = nullptr,
+        qore_program_id_t app_pgm_id = 0);
 
     //! Notes the state an operation with a state queue has after a step, and reports it if it changed
     /** Called on the I/O thread with the state read after each step: the first state read is always reported,

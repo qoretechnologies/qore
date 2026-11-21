@@ -340,6 +340,13 @@ AsyncIoController::copy() {
     while the controller holds it is canceled: it is not continued again, and its result is a canceled result; its
     state is released when the controller no longer uses it
 
+    @note An operation belongs to the application that it is submitted for: the Program of the submitting code, or
+    the application that module code runs for, or none for the initialization of library code; an operation
+    submitted by a callback of an operation belongs to that operation's application.  Code that is sandboxed, or acts
+    for sandboxed code, does not take the key of another application's operation: on the I/O thread of the key, the
+    submission raises \c ASYNC-IO-KEY-ERROR; from another thread, its operation is not started and its result is a
+    canceled result.  The operation with the key is not affected
+
     @since %Qore 3.0
 */
 static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketPollOperationInfo> operation_info,
@@ -530,6 +537,9 @@ static nothing AsyncIoController::flushCallbacks() {
     of dispatched to user code.  The mark is cleared before return, so later
     submits by a new object reusing the owner string are unaffected.
 
+    Code that is sandboxed, or acts for sandboxed code, discards only the callbacks of the operations of its own
+    application (see @ref cancelByOwner()); the callbacks of other code's operations with the owner run
+
     @param owner the owner identifier to wait for
 
     @since %Qore 3.0
@@ -680,9 +690,20 @@ static bool AsyncIoController::getAutostop() {
       behind, which is a bug in %Qore); called from an I/O thread, only that thread is listed
     - \c io_threads: the number of I/O threads the controller runs (see @ref setMaxIoThreads())
 
+    @throw PERMISSION-DENIED the calling code is sandboxed, or acts for sandboxed code: the information gives the
+    operations of every caller in the process (see @ref getCacheSize())
+
     @since %Qore 3.0
 */
 static hash<auto> AsyncIoController::getInfo() {
+    // the keys and counts of the operations of every caller of the process-wide controller: not disclosed to
+    // sandboxed code (qore#7010), as getCacheSize()
+    if (qore_caller_is_sandboxed()) {
+        xsink->raiseException("PERMISSION-DENIED", "code that is sandboxed or acts for sandboxed code cannot read the "
+            "information of the global async I/O controller, which gives the operations of every caller in the "
+            "process");
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {

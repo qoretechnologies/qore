@@ -1,0 +1,137 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+#! a library module for asyncio_cancel_ownership.qtest: submits async I/O operations and wraps the cancel calls
+module AioCancelTestLib {
+    version = "1.0";
+    desc = "test library module that submits async I/O operations and wraps the cancel calls";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+public namespace AioCancelTestLib {
+#! an operation that waits for an event of its notifier, which never comes
+public class WaitingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+}
+
+#! an operation that completes at once; its completion, which is the module's code, submits a waiting operation
+class ChainOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        bool done;
+        string follow_key;
+        Queue submitted;
+    }
+
+    constructor(EventNotifier notifier, string follow_key, Queue submitted) {
+        self.notifier = notifier;
+        self.follow_key = follow_key;
+        self.submitted = submitted;
+    }
+
+    string getGoal() {
+        return "ready";
+    }
+
+    string getState() {
+        return done ? "ready" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return;
+        }
+        done = True;
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        EventNotifier n();
+        Lib::keep(n);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": new WaitingOperation(n),
+            "owner": follow_key,
+            "key": follow_key,
+            "to": -1s,
+        });
+        submitted.push(True);
+    }
+}
+
+public class Lib {
+    private:internal {
+        static list<EventNotifier> notifiers;
+        static Mutex lck();
+    }
+
+    static keep(EventNotifier n) {
+        AutoLock al(lck);
+        push notifiers, n;
+    }
+
+    static auto submit(EventNotifier n, string owner, string key) {
+        return AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": new WaitingOperation(n),
+            "owner": owner,
+            "key": key,
+            "to": -1s,
+        });
+    }
+
+    #! submits an operation whose completion submits a waiting operation with the given key; returns a queue that
+    #! gets True once the waiting operation was submitted
+    static Queue submitChained(string key, string follow_key) {
+        EventNotifier n();
+        keep(n);
+        n.notify();
+        Queue submitted();
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": new ChainOperation(n, follow_key, submitted),
+            "owner": key,
+            "key": key,
+            "to": 30s,
+        });
+        return submitted;
+    }
+
+    static bool cancelByKey(string key) {
+        return AsyncIoController::cancelByKey(key);
+    }
+
+    static int cancelByOwner(string owner) {
+        return AsyncIoController::cancelByOwner(owner);
+    }
+}
+}

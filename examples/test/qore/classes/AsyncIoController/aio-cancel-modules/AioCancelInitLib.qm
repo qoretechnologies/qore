@@ -1,0 +1,69 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+#! a library module for asyncio_cancel_ownership.qtest whose initialization submits an async I/O operation
+module AioCancelInitLib {
+    version = "1.0";
+    desc = "test library module whose initialization submits an async I/O operation";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    init = sub () {
+        AioCancelInitLib::Lib::init();
+    };
+}
+
+public namespace AioCancelInitLib {
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+}
+
+public class Lib {
+    private:internal {
+        static *EventNotifier notifier;
+    }
+
+    #! the key of the operation that the module's initialization submits
+    static string getKey() {
+        return sprintf("aio-cancel-init-lib-%d", getpid());
+    }
+
+    static init() {
+        notifier = new EventNotifier();
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new WaitingOperation(notifier),
+            "owner": getKey(),
+            "key": getKey(),
+            "to": -1s,
+        });
+    }
+
+    static bool cancelByKey(string key) {
+        return AsyncIoController::cancelByKey(key);
+    }
+}
+}

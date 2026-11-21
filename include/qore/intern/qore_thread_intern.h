@@ -667,6 +667,23 @@ DLLLOCAL qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* cal
 */
 DLLLOCAL bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id);
 
+//! returns the ID of the application Program that module code runs for when a sandboxed caller called it, or 0
+/** The module code of a call by a sandboxed caller (see runtime_module_call_inherits_caller_restrictions()), also of
+    one whose caller has no restrictions that the module does not have, records the application of its caller
+    (qore#7010); 0 if the code that runs is not such module code
+*/
+DLLLOCAL qore_program_id_t runtime_get_sandboxed_module_call_app_id();
+
+//! returns the ID of the application Program that the module code of a call by a sandboxed caller runs for
+/** The caller's application; for module code that calls module code for a sandboxed caller, the one that the calling
+    module code runs for (qore#7010)
+*/
+DLLLOCAL qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QoreProgram* caller_pgm);
+
+//! returns true if the calling code runs under a module initialization barrier: in the initialization of library code
+//! or in a trusted build (see QoreModuleInitSandboxBarrierHelper), unless a lift applies
+DLLLOCAL bool qore_runtime_under_library_init_barrier();
+
 //! Enters a capability scope of the current thread (qorus#867, design/thread-capability-scope.md)
 /** The thread's set becomes \a caps merged over the current set, or \a caps only with \a replace.
 

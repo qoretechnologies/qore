@@ -6784,6 +6784,11 @@ static const ThreadData::ModuleInitBarrier* qore_get_caller_module_init_barrier(
         ? nullptr : &td->module_init_barriers.back();
 }
 
+bool qore_runtime_under_library_init_barrier() {
+    ThreadData* td = thread_data.get();
+    return td && qore_get_caller_module_init_barrier(td);
+}
+
 int64 qore_caller_denied_user_domains(int64 domain) {
     const QoreParseOptions dom = QoreParseOptions(domain) & qore_restricting_domain_options();
     ThreadData* td = thread_data.get();
@@ -8006,6 +8011,24 @@ qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) 
         return td->runtime_po_state.app_pgm_id;
     }
     return caller_pgm ? caller_pgm->getProgramId() : 0;
+}
+
+qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QoreProgram* caller_pgm) {
+    // module code that calls module code for a sandboxed caller passes the caller's application on
+    if (td->runtime_po_state.sandboxed && td->runtime_po_state.app_pgm_id
+            && td->runtime_po_state.override_pgm == caller_pgm) {
+        return td->runtime_po_state.app_pgm_id;
+    }
+    return runtime_get_module_call_app_id(caller_pgm);
+}
+
+qore_program_id_t runtime_get_sandboxed_module_call_app_id() {
+    ThreadData* td = thread_data.get();
+    if (!td || !td->runtime_po_state.sandboxed || !td->runtime_po_state.override_pgm
+            || td->runtime_po_state.override_pgm != td->current_pgm) {
+        return 0;
+    }
+    return td->runtime_po_state.app_pgm_id;
 }
 
 bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {

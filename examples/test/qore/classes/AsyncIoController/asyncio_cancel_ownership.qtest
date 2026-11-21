@@ -8,7 +8,11 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/aio-cancel-modules"
 %requires QUnit
+%requires AioCancelTestLib
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
 
 %exec-class AsyncIoCancelOwnershipTest
 
@@ -42,6 +46,49 @@ class WaitingOperation inherits AbstractPollOperation<auto> {
             "events": SOCK_POLLIN,
             "socket": notifier,
         };
+    }
+}
+
+#! An operation that completes at once; its completion reports itself, after an optional gate
+class CompletingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        bool done;
+        Queue completed;
+        *Counter gate;
+    }
+
+    constructor(EventNotifier notifier, Queue completed, *Counter gate) {
+        self.notifier = notifier;
+        self.completed = completed;
+        self.gate = gate;
+    }
+
+    string getGoal() {
+        return "ready";
+    }
+
+    string getState() {
+        return done ? "ready" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return;
+        }
+        done = True;
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        completed.push(True);
+        if (gate) {
+            gate.waitForZero(HangGuard);
+        }
     }
 }
 
@@ -105,6 +152,76 @@ bool sub cancel_key(string key) {
 int sub cancel_owner(string owner) {
     return AsyncIoController::cancelByOwner(owner);
 }
+
+# submits its own operations with the given key; returns the results or errors
+list<auto> sub collide(string key, int n, bool replace) {
+    list<auto> rv = ();
+    for (int i = 0; i < n; ++i) {
+        EventNotifier en();
+        push notifiers, en;
+        try {
+            auto rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+                \"sock\": en, \"spop\": new TenantOperation(en), \"owner\": key + \"-tenant\", \"key\": key,
+                \"to\": -1s,
+            }, replace);
+            push rv, rq;
+        } catch (hash<ExceptionInfo> ex) {
+            push rv, ex.err;
+        }
+    }
+    return rv;
+}
+
+string sub get_info() {
+    try {
+        AsyncIoController::getInfo();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+sub flush_owner(string owner) {
+    AsyncIoController::flushCallbacksByOwner(owner);
+}
+";
+
+        #! the child of libraryInitTest(): its tenant loads the library whose initialization submits an operation
+        const ChildSource = "%modern
+%no-child-restrictions
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+SandboxManager sm();
+sm.setNetworkDefaultPolicy(True);
+p.setSandboxManager(sm);
+p.parse(\"%modern\\n%requires AioCancelInitLib\\n\"
+    \"string sub key() { return AioCancelInitLib::Lib::getKey(); }\\n\"
+    \"bool sub direct(string k) { return AsyncIoController::cancelByKey(k); }\\n\"
+    \"bool sub wrapper(string k) { return AioCancelInitLib::Lib::cancelByKey(k); }\\n\", \"tenant\");
+string k = p.callFunction(\"key\");
+printf(\"direct: %y\\n\", p.callFunction(\"direct\", k));
+printf(\"wrapper: %y\\n\", p.callFunction(\"wrapper\", k));
+printf(\"trusted: %y\\n\", AsyncIoController::cancelByKey(k));
+";
+
+        #! the tenant's code that uses a library module that submits operations and wraps the cancel calls
+        const TenantModuleSource = "%modern
+%requires AioCancelTestLib
+
+bool sub wrapper_key(string key) {
+    return AioCancelTestLib::Lib::cancelByKey(key);
+}
+
+int sub wrapper_owner(string owner) {
+    return AioCancelTestLib::Lib::cancelByOwner(owner);
+}
+
+bool sub direct_key(string key) {
+    return AsyncIoController::cancelByKey(key);
+}
+
+Queue sub chain(string key, string follow_key) {
+    return AioCancelTestLib::Lib::submitChained(key, follow_key);
+}
 ";
     }
 
@@ -113,9 +230,20 @@ int sub cancel_owner(string owner) {
     }
 
     constructor() : QUnit::Test("AsyncIoController cancel ownership", "1.0", \ARGV) {
+        # one I/O thread: every operation runs on it, so a submission with the key of another operation always meets
+        # that operation (the count can be set only before the controller's first operation)
+        AsyncIoController::setMaxIoThreads(1);
         addTestCase("a sandboxed caller cannot cancel another code's operation by its key", \keyTest());
         addTestCase("a sandboxed caller cannot cancel another code's operations by their owner", \ownerTest());
         addTestCase("a sandboxed caller cancels its own operations", \ownTest());
+        addTestCase("a sandboxed submit does not take the key of another code's operation", \collisionTest());
+        addTestCase("sandboxed code does not get the information of the controller", \infoTest());
+        addTestCase("a sandboxed flush does not discard another code's callbacks", \flushTest());
+        addTestCase("module code acting for a sandboxed caller cancels only that caller's operations",
+            \moduleWrapperTest());
+        addTestCase("an operation of a library's initialization belongs to no tenant", \libraryInitTest());
+        addTestCase("an operation submitted by a callback belongs to the callback's operation's application",
+            \callbackTest());
         set_return_value(main());
     }
 
@@ -159,6 +287,138 @@ int sub cancel_owner(string owner) {
         assertTrue(rq2.get(HangGuard).canceled);
     }
 
+    collisionTest() {
+        Program tenant = getTenant();
+        foreach bool replace in ((False, True)) {
+            string key = getName("host-collision");
+            EventNotifier n();
+            auto rq = submitHost(key, key, n);
+            on_exit AsyncIoController::cancelByOwner(key);
+            on_exit AsyncIoController::cancelByOwner(key + "-tenant");
+            list<auto> r = tenant.callFunction("collide", key, 8, replace);
+            # each of the tenant's submissions (from a thread that is not the I/O thread) is refused: its operation is
+            # not started, and its result is a canceled result
+            foreach auto i in (r) {
+                assertEq(NT_OBJECT, i.typeCode(), sprintf("replace %y: %y", replace, i));
+                assertTrue(i.get(HangGuard).canceled, "replace: " + replace);
+            }
+            assertEq(0, rq.size(), "the host's operation was not canceled (replace: " + replace + ")");
+            assertTrue(AsyncIoController::cancelByKey(key), "the host's operation is still there");
+            assertTrue(rq.get(HangGuard).canceled);
+        }
+    }
+
+    infoTest() {
+        Program tenant = getTenant();
+        assertEq("PERMISSION-DENIED", tenant.callFunction("get_info"));
+    }
+
+    #! the tenant flushes an owner while the host's callbacks of the owner run; the host's later callback is not
+    #! discarded
+    flushTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the flush is observed with a test hook of a debug build");
+        }
+        Program tenant = getTenant();
+        string owner = getName("host-flush");
+        Counter gate(1);
+        on_exit if (gate.getCount()) {
+            gate.dec();
+        }
+        # the host's first callback of the owner runs and is held: the tenant's flush waits for it
+        Queue c1();
+        EventNotifier n1();
+        n1.notify();
+        AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n1,
+            "spop": new CompletingOperation(n1, c1, gate), "owner": owner, "to": HangGuard});
+        assertTrue(c1.get(HangGuard), "the first callback runs");
+        Queue flushed();
+        background sub () {
+            try {
+                tenant.callFunction("flush_owner", owner);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            flushed.push(True);
+        }();
+        # the tenant's flush has marked the owner and waits
+        assertTrue(call_function("dbg_async_io_wait_owner_flush_blocked", HangGuard));
+        # the host's next callback of the owner runs while the tenant's flush waits
+        Queue c2();
+        EventNotifier n2();
+        n2.notify();
+        AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n2,
+            "spop": new CompletingOperation(n2, c2), "owner": owner, "to": HangGuard});
+        bool got;
+        try {
+            got = c2.get(HangGuard);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        assertTrue(got, "the host's callback is not discarded by the tenant's flush");
+        gate.dec();
+        assertTrue(flushed.get(HangGuard));
+    }
+
+    #! module code (a library module) that a sandboxed caller calls cancels only that caller's operations
+    moduleWrapperTest() {
+        Program tenant = getTenantModule();
+        string base = getName("host-module");
+        EventNotifier n1();
+        auto rq1 = AioCancelTestLib::Lib::submit(n1, base + "-o1", base + "-k1");
+        EventNotifier n2();
+        auto rq2 = AioCancelTestLib::Lib::submit(n2, base + "-o2", base + "-k2");
+        on_exit {
+            AsyncIoController::cancelByOwner(base + "-o1");
+            AsyncIoController::cancelByOwner(base + "-o2");
+        }
+        assertFalse(tenant.callFunction("direct_key", base + "-k1"), "direct");
+        assertFalse(tenant.callFunction("wrapper_key", base + "-k1"), "the module's cancel by key");
+        assertEq(0, tenant.callFunction("wrapper_owner", base + "-o2"), "the module's cancel by owner");
+        assertEq(0, rq1.size());
+        assertEq(0, rq2.size());
+    }
+
+    #! the operation that a library module's initialization submits, also when a tenant loads the module first,
+    #! belongs to no tenant: the tenant does not cancel it, directly or through the module's code
+    /** The module must be in the process-wide module path for its initialization to be that of library code, so the
+        check runs in a child process with that module path
+    */
+    libraryInitTest() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        TmpDir tmp("qore-asyncio-cancel-ownership-");
+        string child = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(child, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ChildSource);
+        f.close();
+        string output = tmp.path + DirSep + "output.txt";
+        string cmd = sprintf("LD_LIBRARY_PATH='%s' DYLD_LIBRARY_PATH='%s' QORE_LIBDIR='%s' QORE_MODULE_DIR_ONLY=1 "
+            "QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1", libqore_dir, libqore_dir, libqore_dir,
+            get_script_dir() + DirSep + "aio-cancel-modules", qore_bin, child, output);
+        int rc = system(cmd);
+        string out = ReadOnlyFile::readTextFile(output);
+        assertEq(0, rc, out);
+        assertRegex("^direct: False\\n", out, out);
+        assertRegex("\nwrapper: False\n", out, out);
+        assertRegex("\ntrusted: True\n", out, out);
+    }
+
+    #! an operation that the completion of a tenant's operation submits (module code, with no Program of the tenant on
+    #! the stack) belongs to the tenant: the tenant cancels it, another tenant does not
+    callbackTest() {
+        Program tenant = getTenantModule();
+        Program other = getTenantModule();
+        string key = getName("tenant-chain");
+        on_exit {
+            AsyncIoController::cancelByOwner(key);
+            AsyncIoController::cancelByOwner(key + "-follow");
+        }
+        Queue submitted = tenant.callFunction("chain", key, key + "-follow");
+        assertTrue(submitted.get(HangGuard), "the completion submitted the follow-up operation");
+        assertFalse(other.callFunction("direct_key", key + "-follow"), "another tenant does not cancel it");
+        assertTrue(tenant.callFunction("direct_key", key + "-follow"), "the tenant cancels it");
+    }
+
     #! submits an operation of the host's
     private auto submitHost(string owner, string key, EventNotifier n) {
         return AsyncIoController::submit(<SocketPollOperationInfo>{
@@ -168,6 +428,16 @@ int sub cancel_owner(string owner) {
             "key": key,
             "to": -1s,
         });
+    }
+
+    #! Returns a tenant that uses the library modules
+    private Program getTenantModule() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        p.parse(TenantModuleSource, "tenant");
+        return p;
     }
 
     #! Returns a tenant: a sandboxed Program
