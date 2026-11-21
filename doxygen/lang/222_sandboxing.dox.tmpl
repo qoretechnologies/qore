@@ -274,6 +274,20 @@ authenticate();
     around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
     this mechanism; provenance is execution context, not data taint tracking.
 
+    @subsection sandbox_private_access Classes Declared by Sandboxed Code and the Private Declarations of Trusted Classes
+
+    A class that sandboxed code declares can inherit a class that trusted code declares, such as a class of a library
+    module, but it has no private access to what the trusted class declares: the private members, methods, constants and static
+    class variables of the trusted class are as if they were \c private:internal for it, on every object, so that a
+    tenant's subclass cannot read or change the private state of the objects of the library that every Program shares,
+    nor call their private methods (see @ref sandboxed_class_private_access).  It can still override and implement the
+    private methods of the trusted class, and call the base class's version of a method that it overrides.
+
+    The rule is decided for a class when it is committed: a class parsed in a Program with a sandbox manager (or by
+    sandboxed code) is a class that sandboxed code declared.  A class that a Program parsed before a sandbox manager
+    was set for it keeps the private access that it had, so a host sets the manager before it parses code that it does
+    not trust.
+
     @subsection sandbox_program_capability Program Objects Are Capabilities
 
     A @ref Qore::Program "Program" object is a capability: code that holds one can use everything that the

@@ -702,6 +702,25 @@ while (i.next) {}  # parse exception: the call is i.next()
     Members declared as <tt><b>private:internal</b></tt> are not available outside the class, even in classes in the same class hierarchy, providing strong encapsulation of the declared member.  This can be used to ensure that the declared member can be changed in later versions of the class without affecting API compatibility.  A <tt><b>private:internal</b></tt> member is separate from the members with the same name declared by other classes in the hierarchy: each class reads and writes its own, which is initialized in every object of the class or of a subclass, however deep the hierarchy, and whatever the order of the parent classes in the <tt><b>inherits</b></tt> clauses of the hierarchy.\n\n
     Members declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.
 
+    @subsection sandboxed_class_private_access Private Access of Classes Declared by Sandboxed Code
+    A class declared in a @ref Qore::Program "Program" with a @ref sandbox_manager "sandbox manager" (or that sandboxed
+    code creates) has no private access to the private members, methods, static class variables and constants that a class
+    declared by trusted code (a module's code, or a Program without a sandbox manager) declares, on any object, also on
+    the objects of the class itself: for it they are as if they were <tt><b>private:internal</b></tt>.  An access that
+    can be resolved when parsing raises a parse error; an access resolved at run time (through a value without a type,
+    a member name computed at run time, the conversion of the object to a hash or its keys, a
+    @ref call_reference "call reference", or the reflection API) raises the same
+    exception as an access from outside the class hierarchy.
+
+
+    The class can still use its own members and methods and the public members and methods that it inherits, implement
+    and override the private (abstract) methods of the trusted class, which the trusted class then calls, and call the
+    version of a method that it overrides in a base class (<tt>Base::method()</tt>).  Code of the trusted class keeps
+    its private access to the objects of the subclass, and classes declared by trusted code are not affected.  A
+    library class that is meant to be subclassed by sandboxed code offers the members and methods that its subclasses
+    need as public members and methods.  The access is decided by the state of the class's Program when the class is
+    committed (see @ref sandbox_private_access).
+
     @subsection transient Transient Members
     Members declared with the <b><tt>transient</tt></b> keyword will not be processed with @ref Qore::Serializable "object serialization"
     and will get their default value (if any) when deserialized.
