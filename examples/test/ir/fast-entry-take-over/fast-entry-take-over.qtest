@@ -48,6 +48,7 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
         addTestCase("qcc code calls the entry that takes the arguments over", \testOwnedEntry());
+        addTestCase("a later JIT batch calls the owning entry", \testLaterJitBatch());
         addTestCase("a stack overflow in an entry that takes its arguments over", \testStackOverflow());
         addTestCase("the stack check of the large frame of an entry that takes its arguments over",
             \testFrameCheck());
@@ -71,6 +72,25 @@ class FastEntryTakeOverTest inherits QUnit::Test {
             testSkip("qcc is not available");
         }
         return qcc_bin;
+    }
+
+    testLaterJitBatch() {
+        TmpDir tmp();
+        string dump = tmp.path + "/jit.ll";
+        int rc;
+        # Inspect the call before LLVM can inline the owning entry.
+        string out = backquote(sprintf("%s QORE_JIT_OPT_LEVEL=0 QORE_JIT_SYNC_COMPILE=1 QORE_DUMP_LLVM_IR=1 %s -b "
+            "--exec-mode=jit %s/jit-cross-batch.q 2>%s", env, qore_bin, dir, dump), \rc);
+        assertEq(0, rc, out);
+        assertEq("release first\ncleared\nrelease second\ncleared\nrelease second\ncaught CONSUME-ERROR\n2 2 -1\n", out);
+        string ir = ReadOnlyFile::readTextFile(dump);
+        list<string> batches = ir.split("; ModuleID = ");
+        list<string> first = select batches, $1.startsWith("'qore_jit_batch_firstCaller@");
+        list<string> second = select batches, $1.startsWith("'qore_jit_batch_secondCaller@");
+        assertEq((1, 1), (first.size(), second.size()), "the callers were compiled in separate modules");
+        assertTrue(first[0] =~ /^define [^\n]*@"consume@/m, "the first module defines the callee");
+        assertTrue(second[0] =~ /\bcall [^@\n]*@"consume@[^"]*\.own\.10"\(/,
+            "the later caller hands its temporary to the existing callee");
     }
 
     testAst() {

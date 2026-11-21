@@ -678,8 +678,8 @@ private:
     DLLLOCAL void emitFastEntryEarlyExitReleases(llvm::Module& module, llvm::BasicBlock* stack_overflow_bb);
     //! Emits the call of the fast entry \a owned_fn that takes over the arguments of \a take_over: the slots that it
     //! hands over are cleared right before the call (issue #6105)
-    DLLLOCAL llvm::Value* emitOwnedFastEntryCall(llvm::Function* owned_fn, const FastEntryTakeOver& take_over,
-            const std::vector<llvm::Value*>& call_args);
+    DLLLOCAL llvm::CallInst* emitOwnedFastEntryCall(llvm::Function* owned_fn, const FastEntryTakeOver& take_over,
+            llvm::ArrayRef<llvm::Value*> call_args);
 
     // Boxed IR-only locals that are neither fast-entry params nor backed by a
     // pre-instantiated cleanup slot. Their alloca owns the current value and
@@ -1328,6 +1328,7 @@ private:
         //! true if the call gives a slot that it does not hand over (the slot of an argument of a borrowed
         //! parameter), which it releases when the call returns
         bool releases_given = false;
+        bool hasOwnedSlot() const;
     };
     //! Returns the cleanup slots that a call of the fast entry of \a info that takes its arguments over hands over
     /** \a given_slots are the slots of the temporaries that the call gives, by argument (buildArgCleanupArray())
@@ -2678,7 +2679,7 @@ private:
     */
     llvm::CallInst* emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
             const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
-            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0);
+            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0, const FastEntryTakeOver* take_over = nullptr);
 
     //! Emits a call that AOT-compiled code makes directly to a native entry of user code, with its frame
     /** As emitNativeCall(); the callee is the call target of \a target_slot in this function's context, and the

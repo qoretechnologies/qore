@@ -2453,6 +2453,48 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 llvm::DEBUG_METADATA_VERSION);
     }
 
+    auto lower_fast_entry = [&](const BatchCallee& callee, const BatchCalleeInfo& callee_info,
+            llvm::Function* fast_fn) -> bool {
+        const std::string& fast_name = callee_info.fast_name;
+        // Build param mapping: LocalVar* → LLVM function arg value
+        const UserVariantBase* uvb = callee.variant->getUserVariantBase();
+        const UserSignature* sig = uvb->getUserSignature();
+        std::unordered_map<const void*, llvm::Value*> param_map;
+        std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
+        for (unsigned i = 0; i < callee.num_params; ++i) {
+            const void* key = reinterpret_cast<const void*>(sig->lv[i]);
+            param_map[key] = fast_fn->getArg(i);
+            param_kind_map[key] = i < callee_info.param_kinds.size()
+                ? callee_info.param_kinds[i] : BatchCalleeParamKind::Boxed;
+            fast_fn->getArg(i)->setName(std::string("arg") + std::to_string(i));
+        }
+        for (size_t i = 0; i < callee_info.capture_locals.size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "JIT batch closure capture mapping")) {
+                error = "cancelled during JIT batch closure capture mapping";
+                return false;
+            }
+            const void* key = reinterpret_cast<const void*>(
+                callee_info.capture_locals[i]);
+            unsigned arg_index = callee.num_params + static_cast<unsigned>(i);
+            param_map[key] = fast_fn->getArg(arg_index);
+            param_kind_map[key] = callee_info.capture_kinds[i];
+            fast_fn->getArg(arg_index)->setName(
+                std::string("capture") + std::to_string(i));
+        }
+
+        QoreIRToLLVM fast_lowering(*ctx);
+        if (callee.deopt_counter) {
+            fast_lowering.setDeoptCounter(callee.deopt_counter);
+        }
+        fast_lowering.setBatchCallees(&batch_callee_map);
+        fast_lowering.setSharedDebugInfo(&di_builder, di_cu);
+        fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
+            nullptr, callee_info.return_kind, sig->getReturnTypeInfo());
+        return fast_lowering.lowerFunction(*callee.ir_func, *module, error);
+    };
+
     // Lower bodies for callees that aren't already compiled
     for (const auto& callee : callees) {
         if (!already_compiled.count(callee.ir_func->name)) {
@@ -2491,44 +2533,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             llvm::Function* fast_fn = module->getFunction(fast_name);
             assert(fast_fn && "fast entry function must be forward-declared");
 
-            // Build param mapping: LocalVar* → LLVM function arg value
-            const UserVariantBase* uvb = callee.variant->getUserVariantBase();
-            const UserSignature* sig = uvb->getUserSignature();
-            std::unordered_map<const void*, llvm::Value*> param_map;
-            std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
-            const auto& callee_info = batch_callee_map.at(callee.variant);
-            for (unsigned i = 0; i < callee.num_params; ++i) {
-                const void* key = reinterpret_cast<const void*>(sig->lv[i]);
-                param_map[key] = fast_fn->getArg(i);
-                param_kind_map[key] = i < callee_info.param_kinds.size()
-                    ? callee_info.param_kinds[i] : BatchCalleeParamKind::Boxed;
-                fast_fn->getArg(i)->setName(std::string("arg") + std::to_string(i));
-            }
-            for (size_t i = 0; i < callee_info.capture_locals.size(); ++i) {
-                if (i && !(i % 100)
-                        && qore_check_cancel(nullptr,
-                            "JIT batch closure capture mapping")) {
-                    error = "cancelled during JIT batch closure capture mapping";
-                    return false;
-                }
-                const void* key = reinterpret_cast<const void*>(
-                    callee_info.capture_locals[i]);
-                unsigned arg_index = callee.num_params + static_cast<unsigned>(i);
-                param_map[key] = fast_fn->getArg(arg_index);
-                param_kind_map[key] = callee_info.capture_kinds[i];
-                fast_fn->getArg(arg_index)->setName(
-                    std::string("capture") + std::to_string(i));
-            }
-
-            QoreIRToLLVM fast_lowering(*ctx);
-            if (callee.deopt_counter) {
-                fast_lowering.setDeoptCounter(callee.deopt_counter);
-            }
-            fast_lowering.setBatchCallees(&batch_callee_map);
-            fast_lowering.setSharedDebugInfo(&di_builder, di_cu);
-            fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
-                nullptr, callee_info.return_kind, sig->getReturnTypeInfo());
-            if (!fast_lowering.lowerFunction(*callee.ir_func, *module, error)) {
+            if (!lower_fast_entry(callee, fast_info->second, fast_fn)) {
                 // the fast entry was declared before the batch was lowered, and the code of the other members (and
                 // the callee's own standard entry) may call it already: the module is not compiled with an entry
                 // that has no body, and the root is compiled alone instead, as when a callee fails (qore#6313)
@@ -2563,8 +2568,47 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         }
     }
 
+    // A caller may request an owning entry after an earlier batch compiled the borrowing entry. Lower
+    // only the missing bodies needed for those specializations. Calls of the borrowing entry still bind
+    // to the earlier module. Lowering a body can request more entries for its own callees.
+    std::vector<llvm::Function*> borrowed_templates;
+    if (!already_defined_fast.empty()) {
+        std::unordered_map<std::string, const BatchCallee*> earlier;
+        for (const auto& callee : callees) {
+            const auto& info = batch_callee_map.at(callee.variant);
+            if (info.approach_b_eligible && already_defined_fast.count(info.fast_name)) {
+                earlier.emplace(info.fast_name, &callee);
+            }
+        }
+        for (llvm::Function& fn : *module) {
+            auto pos = fn.getName().rfind(QORE_OWNED_FAST_ENTRY_INFIX);
+            if (!fn.isDeclaration() || pos == llvm::StringRef::npos) {
+                continue;
+            }
+            auto it = earlier.find(fn.getName().take_front(pos).str());
+            if (it == earlier.end()) {
+                continue;
+            }
+            const BatchCallee& callee = *it->second;
+            const auto& info = batch_callee_map.at(callee.variant);
+            llvm::Function* fast_fn = module->getFunction(info.fast_name);
+            if (!lower_fast_entry(callee, info, fast_fn)) {
+                return false;
+            }
+            borrowed_templates.push_back(fast_fn);
+            earlier.erase(it);
+        }
+    }
+
     // Finalize shared debug info after all functions are lowered
     di_builder.finalize();
+    if (!QoreIRToLLVM::materializeOwnedFastEntries(*module, error)) {
+        return false;
+    }
+    for (llvm::Function* fast_fn : borrowed_templates) {
+        fast_fn->deleteBody();
+        fast_fn->setSubprogram(nullptr);
+    }
 
     // the optimization level is read from the Program while the lowering phase lasts
     const int opt_level = getEffectiveJITOptLevel(root_func.pgm);
