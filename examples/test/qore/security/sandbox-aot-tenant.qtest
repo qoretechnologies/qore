@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc-compiled module dylibs that the native-code trust model refuses to a sandboxed Program
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Sandboxed code never runs as code compiled with qcc (issues #6842, #7033, #7102): the trust model of native code
+# refuses a compiled module that is not on the module path to a sandboxed Program, also when the host loads it there,
+# and a compiled module on the module path is library code.  The compiled code's inlined member accesses (the getters
+# and setters that it inlines) therefore never run for a class that sandboxed code declared; a call of a non-public
+# method of a compiled call target is dispatched through the checked path while sandboxed code exists.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Logger
+%requires ../../TestInterpreter.qm
+
+%exec-class SandboxAotTenantTest
+
+#! the module of the tenant, compiled with qcc and loaded into the tenant's sandboxed Program
+const ModuleSource = "%modern
+%requires Logger
+%requires reflection
+module %s {
+    version = \"1.0\";
+    desc = \"tenant module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace %s {
+    public class WSub inherits Logger::LoggerWrapper {
+        static string run(string form, Logger::LoggerWrapper w) {
+            try {
+                switch (form) {
+                    case \"getter\": return w.getLogger() ? \"logger\" : \"nothing\";
+                    case \"read\": return w.logger ? \"logger\" : \"nothing\";
+                    case \"write\": w.logger = new Logger::Logger(\"tenant\"); return \"ok\";
+                    case \"reflection-write\": {
+                        Reflection::NormalMember m = Reflection::Class::forName(\"Logger::LoggerWrapper\")
+                            .getMember(\"logger\");
+                        m.setValue(w, new Logger::Logger(\"tenant\"));
+                        return \"ok\";
+                    }
+                    case \"owned\": return SandboxManager::isObjectOwnedByCaller(w) ? \"ok\" : \"not-owned\";
+                    default: throw \"UNKNOWN-FORM\", form;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        }
+    }
+
+    public class QSub inherits Logger::LoggerAppenderQueue {
+        static string getEventOf(Logger::LoggerAppenderQueue q) {
+            try {
+                return q.getEvent(0) ? \"ok\" : \"nothing\";
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        }
+    }
+
+    public hash<string, string> sub run_all(Logger::LoggerWrapper w) {
+        return map {$1: WSub::run($1, w)}, (\"getter\", \"read\", \"write\", \"reflection-write\", \"owned\");
+    }
+
+    public string sub get_event(Logger::LoggerAppenderQueue q) {
+        return QSub::getEventOf(q);
+    }
+
+    public Logger::LoggerWrapper sub make() {
+        return new Logger::LoggerWrapper(new Logger::Logger(\"own\"));
+    }
+
+    public Logger::LoggerAppenderQueue sub make_queue() {
+        Logger::LoggerAppenderQueue q();
+        q.push(new Logger::LoggerAppenderNull(), 2, \"own\");
+        return q;
+    }
+}
+";
+
+class SandboxAotTenantTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("sandboxed qcc-compiled tenant code", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        addTestCase("tenant module -O0", sub () { tenantModuleTest(0); });
+        addTestCase("tenant module -O3", sub () { tenantModuleTest(3); });
+        set_return_value(main());
+    }
+
+    tenantModuleTest(int opt) {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        string name = sprintf("AotTenantO%d", opt);
+        TmpDir tmp("qore-aot-tenant-");
+        string src = tmp.path + DirSep + name + ".qm";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(ModuleSource, name, name));
+        f.close();
+        string qmod = tmp.path + DirSep + name + ".qmod";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s "
+            "--module -O%d --strip-source -o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir,
+            ENV.QORE_MODULE_DIR ?? "", qcc_bin, opt, qmod, src));
+        if (!is_file(qmod)) {
+            throw "COMPILE-ERROR", out;
+        }
+        # the compiled module is loaded, not its source
+        unlink(src);
+
+        # sandboxed code never runs as compiled code: the trust model of native code refuses a compiled module that is
+        # not on the module path to a sandboxed Program, also when the host loads it there, and a compiled module on
+        # the module path is library code, which the owner rules do not restrict.  So a sandboxed caller reaches the
+        # inlined member accesses of compiled code (the getters and setters that it inlines) only through library or
+        # host code, which make their calls for themselves
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        assertThrows("LOAD-MODULE-ERROR", "only from the module path", \p.loadModule(), qmod);
+        Program q(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        q.setSandboxManager(new SandboxManager());
+        assertThrows("LOAD-MODULE-ERROR", "only from the module path", \q.parse(),
+            (sprintf("%%modern\n%%requires %s\n", qmod), "tenant"));
+    }
+}

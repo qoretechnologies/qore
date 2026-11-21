@@ -22981,6 +22981,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_object_method_direct_aot(
         *arg_list, xsink);
 }
 
+//! returns true if a call of the method of an AOT call target must be dispatched instead of inlined: a non-public
+//! method while code in the process is sandboxed, whose call the sandboxed rule of non-public method calls checks
+//! (qore#7102); the getters and setters that the AOT code inlines read and write the member directly
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD bool qore_rt_aot_target_non_public(const QoreAOTCallTarget& target) {
+    return target.variant ? METHV_const(target.variant)->getAccess() > Public : target.method->isPrivate();
+}
+
+static QORE_INTERN_ALWAYS_INLINE bool qore_rt_aot_target_needs_dispatch(const QoreAOTCallTarget& target) {
+    return qore_sandboxed_code_active() && target.method && qore_rt_aot_target_non_public(target);
+}
+
 static const QoreAOTObjectMemberDescriptor*
 qore_rt_get_aot_object_member_descriptor(
         QoreAOTCallTarget& target, const char* member_name,
@@ -23040,7 +23051,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
-    if (!target.method || !target.qc || target.is_pseudo
+    if (!target.method || !target.qc || target.is_pseudo || qore_rt_aot_target_needs_dispatch(target)
             || base.getType() != NT_OBJECT) {
         return qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, nullptr, 0, xsink);
@@ -23099,7 +23110,7 @@ static T qore_rt_load_object_getter_native_aot(QoreAOTContext* ctx,
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
     ValueHolder value(xsink);
-    if (!target.method || !target.qc || target.is_pseudo
+    if (!target.method || !target.qc || target.is_pseudo || qore_rt_aot_target_needs_dispatch(target)
             || base.getType() != NT_OBJECT) {
         value = fromBits(qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, nullptr, 0, xsink));
@@ -23169,7 +23180,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
-    if (!target.method || !target.qc || target.is_pseudo
+    if (!target.method || !target.qc || target.is_pseudo || qore_rt_aot_target_needs_dispatch(target)
             || base.getType() != NT_OBJECT || !args
             || !member_name || !*member_name
             || value_param < 0 || value_param >= nargs) {
@@ -23248,7 +23259,7 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
     ValueHolder fallback(xsink);
-    if (!target.method || !target.qc || target.is_pseudo
+    if (!target.method || !target.qc || target.is_pseudo || qore_rt_aot_target_needs_dispatch(target)
             || base.getType() != NT_OBJECT || !args
             || !member_name || !*member_name
             || value_param < 0 || value_param >= nargs) {
@@ -23367,7 +23378,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
-    if (!target.method || !target.qc || target.is_pseudo
+    if (!target.method || !target.qc || target.is_pseudo || qore_rt_aot_target_needs_dispatch(target)
             || base.getType() != NT_OBJECT || !args
             || !member_name || !*member_name
             || value_param < 0 || value_param >= nargs
