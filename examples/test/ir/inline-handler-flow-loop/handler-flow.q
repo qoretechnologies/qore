@@ -500,6 +500,339 @@ auto sub tryNestedHandlers(int n) {
     return n;
 }
 
+# a handler of a block of the body of a handler that is not the last one that its exit runs: a break or a continue
+# request that no loop or switch statement of that body takes ends that handler, and the normal end of the next handler
+# replaces it (StatementBlock::execIntern()), so the code after the block goes on (qore#7040: qcc executables ended
+# the function, or took a loop or a switch statement around the block)
+auto sub nonLast(int n) {
+    {
+        on_exit {
+            push log, "m1";
+        }
+        on_exit {
+            {
+                on_exit {
+                    push log, "m2i";                ### non_last
+                }
+                push log, "m2";
+            }
+        }
+        push log, "x";
+    }
+    push log, "y";
+    return n;
+}
+
+# the same in a loop body: the loop does not take the request (qore#7040)
+auto sub nonLastLoop(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            push log, "m1" + j;
+        }
+        on_exit {
+            {
+                on_exit {
+                    push log, "m2i" + j;            ### non_last_loop
+                }
+                push log, "m2" + j;
+            }
+            push log, "m2e" + j;
+        }
+        push log, "x" + j;
+    }
+    push log, "y";
+    return n;
+}
+
+# the same in a case block: the switch statement does not take a break (qore#7040)
+auto sub nonLastSwitch(int n) {
+    switch (n) {
+        case 3: {
+            on_exit {
+                push log, "m1";
+            }
+            on_exit {
+                {
+                    on_exit {
+                        push log, "m2i";            ### non_last_switch
+                    }
+                    push log, "m2";
+                }
+            }
+            push log, "x";
+        }
+    }
+    push log, "y";
+    return n;
+}
+
+# a loop of the body of the handler takes the request (qore#7040)
+auto sub nonLastInnerLoop(int n) {
+    {
+        on_exit {
+            push log, "m1";
+        }
+        on_exit {
+            for (int k = 0; k < 2; ++k) {
+                {
+                    on_exit {
+                        push log, "m2i" + k;        ### non_last_inner_loop
+                    }
+                    push log, "m2" + k;
+                }
+            }
+            push log, "m2e";
+        }
+        push log, "x";
+    }
+    push log, "y";
+    return n;
+}
+
+# three levels: the request ends the handler in the middle, which is the last of its exit, and then the outer one,
+# which is not (qore#7040)
+auto sub nonLastDeep(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            push log, "a" + j;
+        }
+        on_exit {
+            {
+                on_exit {
+                    {
+                        on_exit {
+                            push log, "c" + j;      ### non_last_deep
+                        }
+                        push log, "cb" + j;
+                    }
+                }
+                on_exit {
+                    push log, "b2" + j;
+                }
+                push log, "bb" + j;
+            }
+            push log, "be" + j;
+        }
+        push log, "x" + j;
+    }
+    push log, "y";
+    return n;
+}
+
+# a handler that is not the last one in the body of the last one of a loop body's exit: its body goes on after the
+# block (qore#7040)
+auto sub nonLastInner(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            {
+                on_exit {
+                    push log, "i1" + j;
+                }
+                on_exit {
+                    {
+                        on_exit {
+                            push log, "i2" + j;     ### non_last_inner
+                        }
+                        push log, "ib" + j;
+                    }
+                }
+                push log, "ob" + j;
+            }
+            push log, "oe" + j;
+        }
+        push log, "x" + j;
+    }
+    push log, "y";
+    return n;
+}
+
+# a try statement of the body passes the request (qore#7040)
+auto sub nonLastTry(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            push log, "m1" + j;
+        }
+        on_exit {
+            try {
+                {
+                    on_exit {
+                        push log, "m2i" + j;        ### non_last_try
+                    }
+                    push log, "m2" + j;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            push log, "m2e" + j;
+        }
+        push log, "x" + j;
+    }
+    push log, "y";
+    return n;
+}
+
+# an on_success handler (qore#7040)
+auto sub nonLastSuccess(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            push log, "m1" + j;
+        }
+        on_success {
+            {
+                on_exit {
+                    push log, "m2i" + j;            ### non_last_success
+                }
+                push log, "m2" + j;
+            }
+        }
+        push log, "x" + j;
+    }
+    push log, "y";
+    return n;
+}
+
+# a return statement of the body of a handler that is not the last one of its exit runs a handler of a block of that
+# body: a break or a continue request in it replaces the return, ends the handler, and the next handler's normal end
+# replaces it in turn (qore#7040)
+auto sub retNonLast(int n) {
+    {
+        on_exit {
+            push log, "m1";
+        }
+        on_exit {
+            {
+                on_exit {
+                    push log, "m2i";    ### ret_non_last
+                }
+                push log, "m2";
+                if (n == 3) {
+                    return -5;
+                }
+            }
+        }
+        push log, "x";
+    }
+    push log, "y";
+    return n;
+}
+
+# the same in the last handler: the request ends the function, which returns the return's value (qore#7040)
+auto sub retLast(int n) {
+    {
+        on_exit {
+            {
+                on_exit {
+                    push log, "m2i";    ### ret_last
+                }
+                push log, "m2";
+                if (n == 3) {
+                    return -5;
+                }
+            }
+        }
+        push log, "x";
+    }
+    push log, "y";
+    return n;
+}
+
+# the same in the last handler of a loop body: the loop takes the request, which abandons the return (qore#7040)
+auto sub retLastLoop(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            {
+                on_exit {
+                    push log, "m2i" + j;    ### ret_last_loop
+                }
+                push log, "m2" + j;
+                if (n == 3) {
+                    return -5;
+                }
+            }
+        }
+        push log, "x" + j;
+    }
+    push log, "y";
+    return n;
+}
+
+# a handler that is not the last one in a loop body (qore#7040)
+auto sub retNonLastLoop(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            push log, "m1" + j;
+        }
+        on_exit {
+            {
+                on_exit {
+                    push log, "m2i" + j;    ### ret_non_last_loop
+                }
+                push log, "m2" + j;
+                if (n == 3) {
+                    return -5;
+                }
+            }
+        }
+        push log, "x" + j;
+    }
+    push log, "y";
+    return n;
+}
+
+# three levels, the outer handler not the last one (qore#7040)
+auto sub retDeep(int n) {
+    {
+        on_exit {
+            push log, "a";
+        }
+        on_exit {
+            {
+                on_exit {
+                    {
+                        on_exit {
+                            push log, "c";      ### ret_deep
+                        }
+                        push log, "cb";
+                        if (n == 3) {
+                            return -5;
+                        }
+                    }
+                }
+                push log, "bb";
+            }
+            push log, "be";
+        }
+        push log, "x";
+    }
+    push log, "y";
+    return n;
+}
+
+# three levels, the outer handler the last one (qore#7040)
+auto sub retDeepLast(int n) {
+    {
+        on_exit {
+            {
+                on_exit {
+                    {
+                        on_exit {
+                            push log, "c";      ### ret_deep_last
+                        }
+                        push log, "cb";
+                        if (n == 3) {
+                            return -5;
+                        }
+                    }
+                }
+                push log, "bb";
+            }
+            push log, "be";
+        }
+        push log, "x";
+    }
+    push log, "y";
+    return n;
+}
+
 const Flows = {"return": DebugFlowReturn, "break": DebugFlowBreak, "continue": DebugFlowContinue};
 string result;
 *FlowDebugger dbg;
