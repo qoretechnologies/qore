@@ -71,6 +71,10 @@ ignored `SIGCHLD` inherited from the build is restored for the compiler. The tes
 it cannot cover is its interpreter: a Python 3 removed after the configure fails the
 compile until the build is configured again.
 
+Ninja 1.13 (the version tested) catches the race on its own as well: the toy test
+compiles the edit with Ninja also without the guard, and the guard does not change
+that result. The guard covers the Makefile generator and older Ninja versions.
+
 ccache: an edit during the compile changes the input's content, so the next compile
 is a cache miss and compiles the new content.
 
