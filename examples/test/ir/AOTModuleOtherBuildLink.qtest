@@ -362,16 +362,18 @@ printf(\"%s\\n\", realpath(get_module_hash().Mod.filename));";
 
     indirectDependencyTest() {
         TmpDir tmp = initTree();
-        # Top requires Mid, which requires Leaf: each build compiles them against its own modules
+        # Top requires Mid, which requires Leaf, and re-exports Leaf: each build compiles them against its own modules;
+        # the check of the files that Top was compiled against looks for Leaf, which is not loaded then, in the module
+        # path, where it finds the link
         write(src_qlib + "/Leaf.qm", moduleSource("Leaf", "source"));
         write(src_qlib + "/Mid.qm", moduleSource("Mid", "source", "%requires Leaf\n"));
-        write(src_qlib + "/Top.qm", moduleSource("Top", "source", "%requires Mid\n"));
+        write(src_qlib + "/Top.qm", moduleSource("Top", "source", "%requires(reexport) Leaf\n%requires Mid\n"));
         string b1 = makeBuild("b1", src_tree);
         string b2 = makeBuild("b2", src_tree);
         foreach string b in ((b1, b2)) {
             compileModule(b, "Leaf");
             compileModule(b, "Mid", False, "%requires Leaf\n");
-            compileModule(b, "Top", False, "%requires Mid\n");
+            compileModule(b, "Top", False, "%requires(reexport) Leaf\n%requires Mid\n");
         }
         map link(b2, $1 + ".qmod"), ("Leaf", "Mid", "Top");
         # no warning: each module is the one that the build compiled its dependents against

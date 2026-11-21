@@ -949,6 +949,10 @@ static const std::string* qore_libqore_dir = nullptr;
     initialization with glibc, whose dladdr() reads every dynamic symbol of the library
 */
 static void qore_init_libqore_dir(const char* lib_path) {
+    // set by an earlier initialization of the library
+    if (qore_libqore_dir) {
+        return;
+    }
     std::string lib;
     if (lib_path && *lib_path) {
         // canonical unless realpath() failed for it
@@ -961,7 +965,7 @@ static void qore_init_libqore_dir(const char* lib_path) {
         lib = qore_module_physical_path(info.dli_fname);
     }
     size_t sep = lib.rfind('/');
-    if (sep != std::string::npos && sep && !qore_libqore_dir) {
+    if (sep != std::string::npos && sep) {
         qore_libqore_dir = new std::string(lib.substr(0, sep));
     }
 }
@@ -977,15 +981,16 @@ static void qore_init_libqore_dir(const char* lib_path) {
 static const QoreOwnBuildTree& qore_own_build_tree() {
     // allocated once and never freed (see qore_libqore_dir)
     static const QoreOwnBuildTree* tree = []() -> const QoreOwnBuildTree* {
-        QoreOwnBuildTree* rv = new QoreOwnBuildTree;
+        // released when it is returned, so that it is freed if the work below throws
+        std::unique_ptr<QoreOwnBuildTree> rv(new QoreOwnBuildTree);
         if (!qore_libqore_dir) {
-            return rv;
+            return rv.release();
         }
         // read without blocking on a FIFO with the name of the file, and not inherited by a child process
         std::string cache_path = *qore_libqore_dir + "/CMakeCache.txt";
         int fd = open(cache_path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
         if (fd < 0) {
-            return rv;
+            return rv.release();
         }
         // a deleter of its own: decltype(&fclose) carries attributes of fclose() that GCC warns about
         struct FileCloser {
@@ -1000,7 +1005,7 @@ static const QoreOwnBuildTree& qore_own_build_tree() {
         }
         if (!cache) {
             close(fd);
-            return rv;
+            return rv.release();
         }
         static const char home_key[] = "CMAKE_HOME_DIRECTORY:INTERNAL=";
         static const size_t home_key_len = sizeof(home_key) - 1;
@@ -1024,15 +1029,15 @@ static const QoreOwnBuildTree& qore_own_build_tree() {
             }
         }
         if (home.empty()) {
-            return rv;
+            return rv.release();
         }
         std::string source_qlib = qore_module_physical_path(home + "/qlib");
         if (source_qlib.empty()) {
-            return rv;
+            return rv.release();
         }
         rv->build_dir = *qore_libqore_dir;
         rv->source_qlib = std::move(source_qlib);
-        return rv;
+        return rv.release();
     }();
     return *tree;
 }
@@ -1191,6 +1196,11 @@ static bool qore_find_build_qmod(QoreString& path, QoreString& found_path, struc
 #else
     // a link whose target is gone is looked at only by a libqore in a build tree, which has links in its source tree:
     // otherwise the search looks no further than stat() for a path that does not exist
+    // only an AOT module path (no other file in the module path is linked by a build)
+    size_t len = path.size();
+    if (len <= 5 || strcmp(path.c_str() + len - 5, ".qmod")) {
+        return false;
+    }
     struct stat lsb;
     if (qore_own_build_tree().build_dir.empty() || lstat(path.c_str(), &lsb) || !S_ISLNK(lsb.st_mode)) {
         return false;

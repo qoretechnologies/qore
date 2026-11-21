@@ -87,7 +87,8 @@ dependency file no longer applies to it.  When no source module is found to load
 (`refuse_stale_aot_module_without_source`) takes the directory of the replacement, the build's `qlib-qmod` directory,
 as the source directory, which only that rule uses.  A link whose target is gone (the other build was removed) is
 replaced as well: the decision uses the target that the link names, so the build's own module is loaded, not the
-source.  The dependency check of an AOT module finds a dependency that is not loaded yet as the loader would
+source.  A link to another link whose final target is gone is used as found, as before (the source loads), unless the
+first link names the module of a build's `qlib-qmod` directory itself.  The dependency check of an AOT module finds a dependency that is not loaded yet as the loader would
 (`findModuleFileUnlocked()`), so it judges the build's own module, not the other build's file and dependency file.
 The search looks at a missing path with `lstat()` (a link whose target is gone) only when libqore is in a build tree.
 
