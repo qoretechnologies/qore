@@ -6945,8 +6945,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // falls back to HTTP/1.1 or HTTP/2 if HTTP/3 fails there; another request raises the error, and the
                 // next request takes a new connection (qore#6930); not for a cancelled request, which is reported
                 if (http3_active && !attempted_h3_upgrade && !undelivered_h3_retried && *xsink
-                        && HttpClientConnectionManagerBase::isIdempotentMethod(meth)
-                        && !HttpClientConnectionManagerBase::isCancelPending()) {
+                        && qore_http_manager_ops::isIdempotentMethod(meth)
+                        && !qore_http_manager_ops::isCancelPending()) {
                     QoreStringValueHelper err(xsink->getExceptionErr());
                     if (!strcmp(err->c_str(), "HTTP3-PEER-UNRESPONSIVE")
                             || !strcmp(err->c_str(), "HTTP3-IDLE-CLOSE")) {
