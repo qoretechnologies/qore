@@ -317,7 +317,7 @@ AsyncIoController::copy() {
     @param operation_info the operation info hash; with a
     @ref Qore::SocketPollOperationInfo::stateQueue "stateQueue", the operation also reports its state; see
     @ref asynciocontroller_state_events
-    @param replace_existing if @ref True "True", cancel any existing operation with the same key
+    @param replace_existing if @ref True "True", cancel any existing operation with the same key and take its place; otherwise (also if not given) an existing operation under the key is left as it is, and the submission is refused: from an I/O thread of the controller the call raises \c ASYNC-IO-ERROR, and from any other thread the operation's result is a canceled result whose \c ex is that \c ASYNC-IO-ERROR (an operation that is submitted again, as the same object, under its own key is not a collision)
 
     @return a Queue object for receiving the result, or @ref nothing if a callback was provided
     in the info hash
@@ -406,7 +406,7 @@ static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketP
 
     @param operation_info the operation info hash; as with @ref Qore::AsyncIoController::submit() "submit()", a
     \c stateQueue receives the operation's state events, all of them before this method returns
-    @param replace_existing if @ref True "True", cancel any existing operation with the same key
+    @param replace_existing if @ref True "True", cancel any existing operation with the same key and take its place; otherwise (also if not given) an existing operation under the key is left as it is, and the submission is refused: from an I/O thread of the controller the call raises \c ASYNC-IO-ERROR, and from any other thread the operation's result is a canceled result whose \c ex is that \c ASYNC-IO-ERROR (an operation that is submitted again, as the same object, under its own key is not a collision)
 
     @return the operation result hash
 

@@ -2582,8 +2582,26 @@ private:
     //! Returns a name of the operation of \a pinfo for a message of the module cleanup: its class and owner
     DLLLOCAL static std::string moduleCleanupOpName(const PollInfo& pinfo);
 
+    //! Completes a submission that is not admitted: its operation is canceled and its result delivered
+    /** The result is a canceled result, which carries \a cancel_ex if given.  The operation is described as it is when
+        it is admitted, with the sandbox context of its submitter, so that its abort() and onComplete() run as they do
+        for an admitted operation that is canceled (a stale submission after a cancellation, a submission that is
+        refused because its key holds another operation).  Called from the I/O thread; the payload of \a cmd is
+        released.
+
+        @param cmd the SubmitOp command
+        @param cancel_ex if given, the exception that the canceled result carries (borrowed)
+        @param xsink for exceptions
+    */
+    DLLLOCAL void refuseSubmit(Command& cmd, QoreHashNode* cancel_ex, ExceptionSink* xsink);
+
     //! Cancel an operation internally (delivers result, called from I/O thread)
-    DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
+    /** @param pinfo the operation
+        @param xsink for exceptions
+        @param cancel_ex if given, the exception that the canceled result carries (a refused submission, which is
+        reported canceled with the reason; borrowed)
+    */
+    DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink, QoreHashNode* cancel_ex = nullptr);
 
     //! Delivers a deferred result and releases the references of @a dd
     DLLLOCAL void deliverDeferred(DeferredDelivery& dd, ExceptionSink* xsink);

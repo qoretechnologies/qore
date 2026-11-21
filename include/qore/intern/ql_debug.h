@@ -168,6 +168,10 @@ DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_
 //! Returns True if dbg_http2_hold_stream_data() holds the buffered data of this HTTP/2 stream back
 DLLLOCAL bool qore_dbg_h2_stream_data_held(int32_t stream_id);
 
+//! Returns the number of objects in the async I/O controller's registry of submitted poll operations without a C++
+//! poll operation (those implemented in Qore)
+DLLLOCAL size_t qore_dbg_registered_qore_ops();
+
 //! Returns True if dbg_http3_client_hide_error() makes the HTTP/3 client poll operations report no error
 DLLLOCAL bool qore_dbg_h3_client_error_hidden();
 

@@ -27095,6 +27095,16 @@ static QoreValue f_dbg_http3_client_error_hidden(const QoreListNode* params, Run
     return dbg_h3_client_error_hidden.load(std::memory_order_acquire);
 }
 
+//! returns the number of poll operations implemented in Qore that the async I/O controller has registered by their
+//! objects: those that are submitted and not yet released
+/** For tests that check that an operation which is never admitted to the controller (a submission that is refused)
+    leaves nothing registered.
+*/
+static QoreValue f_dbg_async_io_registered_qore_ops(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64_t>(qore_dbg_registered_qore_ops());
+}
+
 bool qore_dbg_h2_stream_data_held(int32_t stream_id) {
     return dbg_h2_hold_stream.load(std::memory_order_acquire) == stream_id;
 }
@@ -29816,6 +29826,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_http3_client_error_hidden", f_dbg_http3_client_error_hidden, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_registered_qore_ops", f_dbg_async_io_registered_qore_ops, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
     qns.addBuiltinVariant("dbg_http2_release_stream_data", f_dbg_http2_release_stream_data, QCF_NO_FLAGS,
