@@ -42,8 +42,8 @@ public class RestClientDataProviderBase inherits DataProvider::AbstractDataProvi
 
     #! Accepts a LoggerInterface object for logging (or clears it)
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
         LoggerWrapper::setLogger(logger);
+        rest.setLogger(logger);
     }
 
     #! This app opts out of the framework-injected generic API call child

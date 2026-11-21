@@ -1731,9 +1731,18 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         }
 
         #! Sets the logger for this client
+        /** @throw SANDBOX-OBJECT-ACCESS-ERROR code that is sandboxed or acts for sandboxed code tried to change the
+            logger of an object that its sandbox did not create (see
+            @ref Logger::LoggerWrapper::setLogger() "LoggerWrapper::setLogger()")
+        */
         setLogger(*LoggerInterface logger) {
+            # checked before the logger is passed on to the connection manager (issue 6842)
+            SandboxManager::checkObjectOwnedByCaller(self, "change the logger of");
             self.logger = logger;
-            mgr.setLogger(logger);
+            # a connection manager that another owner shares with the client keeps its logger
+            if (SandboxManager::isObjectOwnedByCaller(mgr)) {
+                mgr.setLogger(logger);
+            }
         }
 
         #! Sets the per-request timeout override

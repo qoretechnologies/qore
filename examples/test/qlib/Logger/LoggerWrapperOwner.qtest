@@ -139,6 +139,34 @@ list<string> sub msgs() {
 }
 ";
 
+#! the code of a tenant that changes the logger of a REST client's connection manager
+const MgrSource = "%modern
+%requires Logger
+%requires RestClientIo
+
+string sub set_mgr_logger(object rest) {
+    try {
+        rest.getConnectionManager().setLogger(new Logger::Logger(\"tenant\"));
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub set_logger(object rest) {
+    try {
+        rest.setLogger(new Logger::Logger(\"tenant\"));
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+object sub make_client() {
+    return new RestClientIo::RestClientIo({\"url\": \"http://localhost:1\"});
+}
+";
+
 class LoggerWrapperOwnerTest inherits QUnit::Test {
     public {
         #! the exception of a refused change
@@ -163,6 +191,7 @@ class LoggerWrapperOwnerTest inherits QUnit::Test {
         addTestCase("tenants and the host", \ownerTest());
         addTestCase("trusted code", \trustedTest());
         addTestCase("code safety", \codeSafetyTest());
+        addTestCase("the connection manager of a REST client", \connectionManagerTest());
         set_return_value(main());
     }
 
@@ -214,6 +243,29 @@ class LoggerWrapperOwnerTest inherits QUnit::Test {
                 "clear")) {
             assertEq("ok", a.callFunction("change", route, a_obj), "A on its own object: " + route);
         }
+    }
+
+    #! a tenant cannot change the logger of the connection manager of a client that the host created (qore#6842)
+    connectionManagerTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(MgrSource, "mgr-tenant");
+        object tenant_rest = p.callFunction("make_client");
+        # the host's client
+        object rest = new_rest_client();
+        assertEq(Err, p.callFunction("set_mgr_logger", rest), "the connection manager of the host's client");
+        assertEq(Err, p.callFunction("set_logger", rest), "the host's client");
+        # the tenant's own client
+        assertEq("ok", p.callFunction("set_mgr_logger", tenant_rest), "the connection manager of the tenant's client");
+        assertEq("ok", p.callFunction("set_logger", tenant_rest), "the tenant's client");
+    }
+
+    #! creates a REST client in trusted code
+    private static object new_rest_client() {
+        Program p(PO_NEW_STYLE);
+        p.parse("%modern\n%requires RestClientIo\nobject sub make() { return new RestClientIo::RestClientIo("
+            + "{\"url\": \"http://localhost:1\"}); }\n", "host-rest");
+        return p.callFunction("make");
     }
 
     #! code that a sandbox at the enforcement level of code safety governs owns every object, as trusted code does
