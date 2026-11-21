@@ -16380,7 +16380,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 case BatchCalleeReturnKind::NativeInt: kind = 'i'; break;
                 default: kind = 'b'; break;
             }
-            llvm_func->addFnAttr("qore-frame-check", std::to_string(xsink_param->getArgNo()) + ":" + kind);
+            // the ExceptionSink argument is marked itself: LLVM removes arguments of a function that no other
+            // code calls (dead-argument elimination, as in the copies of the fast entries that take their
+            // arguments over), so that an index would no longer name it (qore#7072); see QoreIRFrameCheck
+            llvm_func->addParamAttr(xsink_param->getArgNo(),
+                llvm::Attribute::get(llvm_func->getContext(), "qore-frame-check-xsink"));
+            llvm_func->addFnAttr("qore-frame-check", std::string(1, kind));
         }
     }
 

@@ -298,6 +298,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - test-interpreter-options (#6250): its checks run in child interpreters started with options of their own
         # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
         #   processes and in qcc executables
+        # - frame-check-qcc-o3 (#7072): its checks run in a qcc executable and in child processes that set their own
+        #   --exec-mode
         # - RestSchemaImportTool (#6190): its checks run tools/rest-schema-import.qr in child processes
         # - param-class-check-steps (#6449): its worker runs in child processes that set their own --exec-mode and in
         #   qcc executables
@@ -365,6 +367,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
+                                 "examples/test/qore/threads/frame-check-qcc-o3.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/functions/number-round-exact.qtest",
                                  "examples/test/qore/classes/Program/expression-declarations-modes.qtest",

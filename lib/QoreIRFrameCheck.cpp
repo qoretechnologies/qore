@@ -60,9 +60,10 @@ constexpr uint64_t FrameCheckMargin = 256;
 constexpr uint64_t FrameBoundOverhead = 2048;
 
 //! the function attribute that the code generator gives a function whose entry checks the stack (qore_rt_check_stack())
-/** its value is "<index of the ExceptionSink argument>:<the kind of the function's return value>", where the kind is
-    the one of the value that the function returns when the check raises an exception: 'b' (boxed: VAL_NOTHING), 'i'
-    (a native int: 0), 'f' (a native float: 0.0) or 'o' (a native bool: false)
+/** its value is the kind of the value that the function returns when the check raises an exception: 'b' (boxed:
+    VAL_NOTHING), 'i' (a native int: 0), 'f' (a native float: 0.0) or 'o' (a native bool: false); its ExceptionSink
+    argument has the parameter attribute QORE_FRAME_CHECK_XSINK_ATTR, which LLVM keeps on the argument wherever its
+    interprocedural passes leave it (qore#7072)
 */
 constexpr const char* FrameCheckAttr = "qore-frame-check";
 
@@ -202,23 +203,64 @@ llvm::Constant* getCheckReturnValue(llvm::Function& f, char kind) {
 //! call
 /** the frame size that the thunk checks is a variable that the diagnostic of the code's frame sets (FrameSizeHandler)
 
-    @return the function with the code of \a f, or nullptr if \a f has no stack check that tells how to make its thunk
+    @param f the function
+    @param error set to why the thunk cannot be made for a function with a stack check (FrameCheckAttr)
+
+    @return the function with the code of \a f, or nullptr if \a f has no stack check (\a error is empty then) or
+    if its thunk cannot be made (\a error says why: the compilation fails, as the function would allocate a frame
+    larger than its stack check covers; qore#7072)
 */
-llvm::Function* makeThunk(llvm::Function& f) {
-    if (!f.hasFnAttribute(FrameCheckAttr) || f.isVarArg()) {
+llvm::Function* makeThunk(llvm::Function& f, std::string& error) {
+    if (!f.hasFnAttribute(FrameCheckAttr)) {
+        return nullptr;
+    }
+    std::string fname = f.getName().str();
+    if (f.isVarArg()) {
+        error = "the function '" + fname + "' with a stack check takes a variable number of arguments";
         return nullptr;
     }
     llvm::StringRef spec = f.getFnAttribute(FrameCheckAttr).getValueAsString();
-    size_t colon = spec.find(':');
-    unsigned xsink_index;
-    if (colon == llvm::StringRef::npos || colon + 2 != spec.size()
-            || spec.substr(0, colon).getAsInteger(10, xsink_index) || xsink_index >= f.arg_size()) {
+    if (spec.size() != 1) {
+        error = "the stack check of '" + fname + "' has the invalid specification '" + spec.str() + "'";
         return nullptr;
+    }
+    // the ExceptionSink argument, wherever the optimization has left it
+    unsigned xsink_index = f.arg_size();
+    for (unsigned i = 0, e = f.arg_size(); i < e; ++i) {
+        if (f.getAttributes().hasParamAttr(i, QORE_FRAME_CHECK_XSINK_ATTR)) {
+            if (xsink_index != f.arg_size()) {
+                error = "the function '" + fname + "' with a stack check has more than one ExceptionSink argument";
+                return nullptr;
+            }
+            xsink_index = i;
+        }
+    }
+    if (xsink_index == f.arg_size()) {
+        error = "the function '" + fname + "' with a stack check has no ExceptionSink argument after optimization";
+        return nullptr;
+    }
+    if (!f.getArg(xsink_index)->getType()->isPointerTy()) {
+        error = "the ExceptionSink argument of '" + fname + "' with a stack check is not a pointer";
+        return nullptr;
+    }
+    // the arguments whose references the function owns, which the thunk releases if it does not call the code
+    std::vector<unsigned> owned;
+    for (unsigned i = 0, e = f.arg_size(); i < e; ++i) {
+        if (f.getAttributes().hasParamAttr(i, QORE_OWNED_FAST_ENTRY_ARG_ATTR)) {
+            if (!f.getArg(i)->getType()->isIntegerTy(64)) {
+                error = "the owned argument " + std::to_string(i) + " of '" + fname + "' with a stack check is not "
+                    "a value";
+                return nullptr;
+            }
+            owned.push_back(i);
+        }
     }
     llvm::Constant* nothing = nullptr;
     if (!f.getReturnType()->isVoidTy()) {
-        nothing = getCheckReturnValue(f, spec[colon + 1]);
+        nothing = getCheckReturnValue(f, spec[0]);
         if (!nothing) {
+            error = "the return type of '" + fname + "' with a stack check does not match its kind '" + spec.str()
+                + "'";
             return nullptr;
         }
     }
@@ -237,7 +279,6 @@ llvm::Function* makeThunk(llvm::Function& f) {
     thunk->setAttributes(f.getAttributes());
     thunk->removeFnAttr("warn-stack-size");
     thunk->removeFnAttr(FrameCheckAttr);
-    thunk->removeFnAttr(QORE_OWNED_FAST_ENTRY_ARGS_ATTR);
     thunk->removeFnAttr(llvm::Attribute::NoInline);
     // optnone requires noinline, which the thunk does not have
     thunk->removeFnAttr(llvm::Attribute::OptimizeNone);
@@ -286,19 +327,14 @@ llvm::Function* makeThunk(llvm::Function& f) {
     }
 
     b.SetInsertPoint(overflow_bb);
-    // a fast entry that takes its arguments over owns the references of the arguments of its mask, which its code
-    // releases: the thunk that does not call the code releases them (issue #6105); the mask indexes the arguments as
-    // the entry was declared, as the index of the ExceptionSink checked above does, so it is used only for a function
-    // whose arguments optimization has not removed (see QORE_OWNED_FAST_ENTRY_ARGS_ATTR, issue #7072)
-    if (f.hasFnAttribute(QORE_OWNED_FAST_ENTRY_ARGS_ATTR)) {
-        llvm::StringRef mask = f.getFnAttribute(QORE_OWNED_FAST_ENTRY_ARGS_ATTR).getValueAsString();
+    // a fast entry that takes its arguments over owns the references of its arguments with
+    // QORE_OWNED_FAST_ENTRY_ARG_ATTR, which its code releases: the thunk that does not call the code releases them
+    // (issue #6105)
+    if (!owned.empty()) {
         llvm::FunctionCallee decref = m.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {i64_type, ptr_type}, false));
-        for (unsigned i = 0; i < mask.size() && i < thunk->arg_size(); ++i) {
-            if (mask[i] == '1') {
-                assert(thunk->getArg(i)->getType() == i64_type);
-                b.CreateCall(decref, {thunk->getArg(i), thunk->getArg(xsink_index)});
-            }
+        for (unsigned i : owned) {
+            b.CreateCall(decref, {thunk->getArg(i), thunk->getArg(xsink_index)});
         }
     }
     if (nothing) {
@@ -342,10 +378,15 @@ bool QoreIRFrameCheck::emit(llvm::Module& m, const std::function<bool(llvm::Modu
     // the code of each function with a thunk, whose frame size the thunk checks
     std::vector<std::string> bodies;
     for (llvm::Function* f : large) {
-        if (llvm::Function* body = makeThunk(*f)) {
+        std::string thunk_error;
+        if (llvm::Function* body = makeThunk(*f, thunk_error)) {
             // every frame of the code has its diagnostic, which gives its size to the thunk
             body->addFnAttr("warn-stack-size", "0");
             bodies.push_back(body->getName().str());
+        } else if (!thunk_error.empty()) {
+            // a function with a stack check never loses it: the compilation fails (qore#7072)
+            error = thunk_error;
+            return false;
         } else {
             f->addFnAttr("warn-stack-size", t);
         }

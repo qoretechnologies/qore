@@ -138,9 +138,12 @@ bool QoreIRToLLVM::materializeOwnedFastEntries(llvm::Module& module, std::string
         owned->setName(owned_name);
         owned->setLinkage(llvm::Function::InternalLinkage);
         // the arguments that the copy owns, which the thunk of a large frame releases if it does not call the code
-        // (QoreIRFrameCheck)
-        if (taken_mask.find('1') != std::string::npos) {
-            owned->addFnAttr(QORE_OWNED_FAST_ENTRY_ARGS_ATTR, taken_mask);
+        // (QoreIRFrameCheck); each is marked itself, as the optimization can remove arguments before it (qore#7072)
+        for (size_t i = 0; i < taken_mask.size(); ++i) {
+            if (taken_mask[i] == '1') {
+                owned->addParamAttr(static_cast<unsigned>(i),
+                    llvm::Attribute::get(owned->getContext(), QORE_OWNED_FAST_ENTRY_ARG_ATTR));
+            }
         }
 #ifdef DEBUG
         // the module was verified before the copies were made
