@@ -13,8 +13,8 @@ const Pool = 200000;
 our list<auto> pool = ();
 #! weak references to the objects of the pool, which do not keep them alive
 our list<auto> weaks = ();
-#! the depth that the recursion reached
-our int maxd = 0;
+#! the index in the pool of the last object given to the recursion
+our int last = 0;
 
 class T {
 }
@@ -36,12 +36,13 @@ bool sub alive(auto w) {
     }
 }
 
-#! runs the recursion and prints its exception and the number of the objects given at its deepest calls that still
-#! exist once it has unwound and the pool is released
+#! runs the recursion and prints its exception and the number of the last objects given to it that still exist once
+#! it has unwound and the pool is released
 /** the objects are made before the recursion, so that the stack overflows in the entry of the callee (or in the thunk
     of its frame) and not in the construction of an object
 */
 sub run(string name, code c) {
+    last = 0;
     for (int i = 0; i < Pool; ++i) {
         pool[i] = new T();
         weaks[i] := pool[i];
@@ -52,7 +53,7 @@ sub run(string name, code c) {
         printf("%s: %s\n", name, ex.err);
     }
     pool = ();
-    printf("%s: %d alive\n", name, (select xrange(max(0, maxd - 8), min(Pool - 1, maxd + 8)),
+    printf("%s: %d alive\n", name, (select xrange(max(0, last - 16), min(Pool - 1, last + 2)),
         alive(weaks[$1])).size());
 }
 
@@ -973,7 +974,7 @@ int sub r(int d) {
         "p298": cast<hash<HD>>({"a": d + 298}),
         "p299": cast<hash<HD>>({"a": d + 299})
     };
-    maxd = d;
+    last = d;
     big((0, remove pool[d]), d);
     return r(d + 1) + h.size();
 }

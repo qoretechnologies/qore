@@ -110,7 +110,7 @@ class FastEntryTakeOverTest inherits QUnit::Test {
     */
     testStackOverflow() {
         string prog = dir + "/fast-entry-take-over-overflow.q";
-        string expected_out = "r: STACK-LIMIT-EXCEEDED\nr: 0 alive\n";
+        string expected_out = "r: STACK-LIMIT-EXCEEDED\nr: 0 alive\nra: STACK-LIMIT-EXCEEDED\nra: 0 alive\n";
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
             "--exec-mode=ast %s", qore_bin, prog));
         assertEq(0, r.rc, sprintf("ast: exit status (output: %y)", r.out));
@@ -120,6 +120,13 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         foreach string opt in (("0", "3")) {
             string exe = sprintf("%s/overflow-O%s", tmp.path, opt);
             compile(qcc_bin, opt, exe, prog);
+            # ra() is called through the copy of its fast entry that takes over both temporaries (mask 110), one of
+            # them for a parameter to which the entry takes no reference
+            int rc;
+            string syms = backquote(sprintf("nm %s 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: nm: %s", opt, syms));
+            assertRegex("ra_any_list_auto__int_[^ \n]*_fast_[^ \n]*\\.own\\.110\n", syms,
+                sprintf("-O%s: ra() calls the copy that takes both temporaries over", opt));
             r = ExecModeHarness::run_command(sprintf("%s %s -b", env, exe));
             assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
             assertEq(expected_out, r.stdout, "-O" + opt);
@@ -142,6 +149,14 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         foreach string opt in (("0", "3")) {
             string exe = sprintf("%s/frame-O%s", tmp.path, opt);
             compile(qcc_bin, opt, exe, prog);
+            # big() is called through its copy that takes its argument over, whose code has a thunk that checks the
+            # stack for its frame (the code's symbol has the thunk's name and QoreIRFrameCheck::BodySuffix), so that
+            # the case does not pass through another stack check (r() has a large frame too)
+            int rc;
+            string syms = backquote(sprintf("nm %s 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: nm: %s", opt, syms));
+            assertRegex("big_list_auto__int_[^ \n]*_fast_[^ \n]*\\.own\\.10\\.qore\\.frame\n", syms,
+                sprintf("-O%s: the copy of big()'s fast entry has a thunk", opt));
             r = ExecModeHarness::run_command(sprintf("%s %s -b", env, exe));
             assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
             assertEq(expected_out, r.stdout, "-O" + opt);

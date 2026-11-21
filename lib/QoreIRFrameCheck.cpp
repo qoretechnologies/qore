@@ -289,7 +289,7 @@ llvm::Function* makeThunk(llvm::Function& f) {
     // a fast entry that takes its arguments over owns the references of the arguments of its mask, which its code
     // releases: the thunk that does not call the code releases them (issue #6105); the mask indexes the arguments as
     // the entry was declared, as the index of the ExceptionSink checked above does, so it is used only for a function
-    // whose arguments optimization has not removed (see QORE_OWNED_FAST_ENTRY_ARGS_ATTR)
+    // whose arguments optimization has not removed (see QORE_OWNED_FAST_ENTRY_ARGS_ATTR, issue #7072)
     if (f.hasFnAttribute(QORE_OWNED_FAST_ENTRY_ARGS_ATTR)) {
         llvm::StringRef mask = f.getFnAttribute(QORE_OWNED_FAST_ENTRY_ARGS_ATTR).getValueAsString();
         llvm::FunctionCallee decref = m.getOrInsertFunction("qore_rt_decref",

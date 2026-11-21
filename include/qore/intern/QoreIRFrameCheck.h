@@ -45,9 +45,9 @@ class Module;
 //! reference it owns, which the thunk releases when the stack has no room for the entry's frame (issue #6105)
 /** The mask is indexed by the position of the arguments as the entry was declared, as the index of the ExceptionSink
     in the "qore-frame-check" attribute is: both are valid only while optimization has not removed arguments from the
-    function.  Dead argument elimination of an internal function at -O3 can remove them; today the index of the
-    ExceptionSink then lies past the last argument and makeThunk() makes no thunk, so the mask is not used either.  A
-    fix that keeps the thunk must remap the mask with the index.
+    function.  Dead argument elimination of an internal function at -O3 can remove them (issue #7072); today the index
+    of the ExceptionSink then lies past the last argument and makeThunk() makes no thunk, so the mask is not used
+    either.  A fix that keeps the thunk must remap the mask with the index.
 */
 #define QORE_OWNED_FAST_ENTRY_ARGS_ATTR "qore-owned-args"
 
