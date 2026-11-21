@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The public getLogger() of the REST clients returns the logger only to the owner of the client (issue #7034): under
+# tenant isolation, a tenant that holds a client that the host or another tenant created gets NOTHING from it, and
+# cannot get the logger with the internal accessor that the client's own logging uses either (a private method, which
+# the code of a tenant's subclass cannot call on an object that its sandbox did not create, qore#7102); the client's
+# own logging, also for an operation that the tenant makes through it, is unchanged, and trusted code and the owner
+# get the logger.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires RestClient
+%requires RestClientIo
+
+%exec-class RestClientLoggerOwnerTest
+
+#! records the messages that it is given
+class Recorder inherits LoggerAppenderWithLayout {
+    public {
+        list<string> msgs = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("rec", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG) {
+            push msgs, params.toString();
+        }
+    }
+}
+
+#! the code of the tenants
+const TenantSource = "%modern
+%requires Logger
+%requires RestClient
+%requires RestClientIo
+%requires reflection
+
+#! a subclass of the REST client that gets the logger of a client with its internal accessor
+class TSub inherits RestClient::RestClient {
+    constructor() : RestClient::RestClient({\"url\": \"http://localhost:1\"}, True) {
+    }
+
+    #! gets the logger of the client with the given route
+    static string getInternal(RestClient::RestClient rc, string route) {
+        try {
+            *Logger::LoggerInterface l;
+            switch (route) {
+                case \"direct\": l = rc.getInternalLogger(); break;
+                case \"call-ref\": { code c = \\rc.getInternalLogger(); l = c(); break; }
+                case \"reflection\":
+                    l = Reflection::Class::forName(\"Logger::LoggerWrapper\").getNormalMethod(\"getInternalLogger\")
+                        .call(rc);
+                    break;
+                default: throw \"UNKNOWN-ROUTE\", route;
+            }
+            return l ? \"logger\" : \"nothing\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! the logger that the public accessor gives
+string sub get_logger(object rc) {
+    return rc.getLogger() ? \"logger\" : \"nothing\";
+}
+
+#! the logger that the internal accessor gives a subclass, with every route
+hash<string, string> sub get_internal(RestClient::RestClient rc) {
+    return map {$1: TSub::getInternal(rc, $1)}, (\"direct\", \"call-ref\", \"reflection\");
+}
+
+#! logs a message through the client's own logging
+sub log_through(RestClient::RestClient rc, string msg) {
+    rc.info(msg);
+}
+
+Logger::Logger sub own_logger() {
+    return new Logger::Logger(\"own\", Logger::LoggerLevel::getLevelInfo());
+}
+
+RestClient::RestClient sub make_client() {
+    return new RestClient::RestClient({\"url\": \"http://localhost:1\", \"logger\": own_logger()}, True);
+}
+
+RestClientIo::RestClientIo sub make_client_io() {
+    return new RestClientIo::RestClientIo({\"url\": \"http://localhost:1\", \"logger\": own_logger()});
+}
+";
+
+class RestClientLoggerOwnerTest inherits QUnit::Test {
+    public {
+        #! the exception of a refused call
+        const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
+    }
+
+    constructor() : QUnit::Test("REST client logger owner", "1.0", \ARGV) {
+        addTestCase("tenants and the host", \ownerTest());
+        addTestCase("code safety and trusted code", \trustedTest());
+        set_return_value(main());
+    }
+
+    #! creates a tenant
+    private static Program tenant(*int level) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        if (exists level) {
+            sm.setEnforcementLevel(level);
+        }
+        p.setSandboxManager(sm);
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    ownerTest() {
+        Program a = tenant();
+        Program b = tenant();
+
+        Recorder rec();
+        Logger host_logger("host", LoggerLevel::getLevelInfo());
+        host_logger.addAppender(rec);
+        RestClient host_rc({"url": "http://localhost:1", "logger": host_logger}, True);
+        RestClientIo host_io({"url": "http://localhost:1", "logger": host_logger});
+
+        # the public accessor
+        assertEq("nothing", a.callFunction("get_logger", host_rc), "A on the host's RestClient");
+        assertEq("nothing", a.callFunction("get_logger", host_io), "A on the host's RestClientIo");
+        assertEq("nothing", a.callFunction("get_logger", b.callFunction("make_client")), "A on B's RestClient");
+        assertEq("nothing", a.callFunction("get_logger", b.callFunction("make_client_io")), "A on B's RestClientIo");
+        assertEq("logger", a.callFunction("get_logger", a.callFunction("make_client")), "A on its own RestClient");
+        assertEq("logger", a.callFunction("get_logger", a.callFunction("make_client_io")),
+            "A on its own RestClientIo");
+
+        # the internal accessor
+        hash<string, string> refused = {"direct": Err, "call-ref": Err, "reflection": Err};
+        assertEq(refused, a.callFunction("get_internal", host_rc), "a subclass of A on the host's client");
+        assertEq(refused, a.callFunction("get_internal", b.callFunction("make_client")),
+            "a subclass of A on B's client");
+        assertEq({"direct": "logger", "call-ref": "logger", "reflection": "logger"},
+            a.callFunction("get_internal", a.callFunction("make_client")), "a subclass of A on its own client");
+
+        # the client's own logging is unchanged, also when a tenant makes an operation through it
+        a.callFunction("log_through", host_rc, "through A");
+        assertEq(("through A",), rec.msgs, "the host's client logs for A");
+    }
+
+    trustedTest() {
+        Logger host_logger("host", LoggerLevel::getLevelInfo());
+        RestClient host_rc({"url": "http://localhost:1", "logger": host_logger}, True);
+        RestClientIo host_io({"url": "http://localhost:1", "logger": host_logger});
+        # trusted code
+        assertTrue(host_rc.getLogger() == host_logger, "the host's RestClient");
+        assertTrue(host_io.getLogger() == host_logger, "the host's RestClientIo");
+        Program a = tenant();
+        assertTrue(exists cast<RestClient>(a.callFunction("make_client")).getLogger(), "a tenant's client");
+
+        # code that a sandbox at the enforcement level of code safety governs is not subject to the owner rules
+        Program safe = tenant(QSEL_CODE_SAFETY);
+        assertEq("logger", safe.callFunction("get_logger", host_rc), "code safety on the host's RestClient");
+        assertEq("logger", safe.callFunction("get_logger", host_io), "code safety on the host's RestClientIo");
+        assertEq({"direct": "logger", "call-ref": "logger", "reflection": "logger"},
+            safe.callFunction("get_internal", host_rc), "code safety with the internal accessor");
+    }
+}

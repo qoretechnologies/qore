@@ -371,7 +371,7 @@ public class XeroRestClient inherits RestClient::RestClient, XeroRestClientBase 
     /** The one call the discovery makes; an extension point for reaching Xero another way.
     */
     private *hash<auto> discoverTenant(string token) {
-        return XeroRestClientBase::discoverTenantOptions(token, getLogger());
+        return XeroRestClientBase::discoverTenantOptions(token, getInternalLogger());
     }
 }
 
@@ -419,7 +419,7 @@ public class XeroRestClientIo inherits RestClientIo::RestClientIo, XeroRestClien
     /** The one call the discovery makes; an extension point for reaching Xero another way.
     */
     private *hash<auto> discoverTenant(string token) {
-        return XeroRestClientBase::discoverTenantOptions(token, getLogger());
+        return XeroRestClientBase::discoverTenantOptions(token, logger);
     }
 
     #! Returns the path prefix of the payroll API for this connection's region

@@ -875,7 +875,7 @@ CdsRestClient rest({
         if (refresh) {
             return new_opts;
         }
-        return CdsRestClientBase::discoverAfterLogin(new_opts, h, getURL(), NOTHING, getLogger(),
+        return CdsRestClientBase::discoverAfterLogin(new_opts, h, getURL(), NOTHING, getInternalLogger(),
             \self.setURL());
     }
 }
@@ -1659,7 +1659,7 @@ public class CdsRestClientIo inherits RestClientIo::RestClientIo, CdsRestClientB
     */
     private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h) {
         return CdsRestClientBase::discoverAfterLogin(RestClientIo::getUpdateOptionsAfterLogin(h), h,
-            getUrl(), NOTHING, getLogger());
+            getUrl(), NOTHING, logger);
     }
 }
 

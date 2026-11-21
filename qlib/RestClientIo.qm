@@ -1725,9 +1725,16 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return cast<RestClient::AbstractRestClient>(Class::getClass(self).newObject(opts, mgr));
         }
 
-        #! Returns the logger for this client
+        #! Returns the logger of the client, or @ref nothing "NOTHING" to code that does not own the client
+        /** The logger is returned to trusted code and to sandboxed code whose sandbox created the client; code that is
+            sandboxed or acts for sandboxed code, under tenant isolation, whose sandbox did not create the client gets
+            @ref nothing "NOTHING" (see @ref Qore::SandboxManager::isObjectOwnedByCaller()
+            "SandboxManager::isObjectOwnedByCaller()"), so that it cannot log into the logger of another owner or read
+            its configuration.  The logging of the client itself is not affected.
+        */
         *LoggerInterface getLogger() {
-            return logger;
+            # the logger only to the owner of the client (issue 7034)
+            return SandboxManager::isObjectOwnedByCaller(self) ? logger : NOTHING;
         }
 
         #! Sets the logger for this client

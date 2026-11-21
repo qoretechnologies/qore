@@ -293,6 +293,9 @@ if (laq.isFull()) {
       (@ref Logger::LoggerWrapper::setLogger() "LoggerWrapper::setLogger()",
       @ref Logger::LoggerWrapper::setLevel() "setLevel()", \c incLevel() and \c decLevel(); see
       @ref sandbox_object_ownership; <a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>)
+    - the logging and level methods of @ref Logger::LoggerWrapper "LoggerWrapper" get the logger with the new private
+      \c getInternalLogger(), which a subclass whose public \c getLogger() refuses callers overrides
+      (<a href="https://github.com/qoretechnologies/qore/issues/7034">issue 7034</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"):
       @ref Logger::StdoutAppender "StdoutAppender" writes with @ref Qore::stdout "stdout", which needs terminal I/O only
       when it is written (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -2880,7 +2883,7 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     log(Qore::Logger::LoggerLevel level, string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(level, message, argv);
         }
@@ -2894,7 +2897,7 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     log(int level, string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(level, message, argv);
         }
@@ -2908,7 +2911,7 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     log(string level, string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(level, message, argv);
         }
@@ -2924,7 +2927,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @param args any format string arguments to the log message
     */
     logArgs(Qore::Logger::LoggerLevel level, string message, *softlist<auto> args) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(level, message, args);
         }
@@ -2940,7 +2943,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @param args any format string arguments to the log message
     */
     logArgs(int level, string message, *softlist<auto> args) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(level, message, args);
         }
@@ -2956,7 +2959,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @param args any format string arguments to the log message
     */
     logArgs(string level, string message, *softlist<auto> args) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(level, message, args);
         }
@@ -2967,7 +2970,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @param event the event to log
     */
     logEvent(LoggerEvent event) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logEvent(event);
         }
@@ -2981,7 +2984,7 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     trace(string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelTrace, message, argv);
         }
@@ -2995,7 +2998,7 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     debug(string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelDebug, message, argv);
         }
@@ -3009,7 +3012,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information.
     */
     detail(string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelDetail, message, argv);
         }
@@ -3023,7 +3026,7 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     info(string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelInfo, message, argv);
         }
@@ -3037,7 +3040,7 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     warn(string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelWarn, message, argv);
         }
@@ -3051,7 +3054,7 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     error(string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelError, message, argv);
         }
@@ -3065,7 +3068,7 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     fatal(string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelFatal, message, argv);
         }
@@ -3084,7 +3087,7 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     assertLog(bool assertion, string message, ...) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.assertLogArgs(assertion, message, argv);
         }
@@ -3098,7 +3101,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @param value the value of the variable
     */
     traceVar(string var_name, auto value) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.traceVar(var_name, value);
         }
@@ -3112,7 +3115,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @param value the value of the variable
     */
     debugVar(string var_name, auto value) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.debugVar(var_name, value);
         }
@@ -3123,7 +3126,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @param level the log level to check
     */
     bool isEnabledFor(LoggerLevel level) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.isEnabledFor(level);
         }
@@ -3135,7 +3138,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @param level the log level to check
     */
     bool isEnabledFor(int level) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.isEnabledFor(level);
         }
@@ -3147,7 +3150,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @param level the log level to check
     */
     bool isEnabledFor(string level) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.isEnabledFor(level);
         }
@@ -3156,7 +3159,7 @@ public class LoggerWrapper inherits LoggerInterface {
 
     #! Checks whether this Logger is enabled for the TRACE Level
     bool isTraceEnabled() {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.isTraceEnabled();
         }
@@ -3165,7 +3168,7 @@ public class LoggerWrapper inherits LoggerInterface {
 
     #! Checks whether this Logger is enabled for the DEBUG Level
     bool isDebugEnabled() {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.isDebugEnabled();
         }
@@ -3174,7 +3177,7 @@ public class LoggerWrapper inherits LoggerInterface {
 
     #! Checks whether this Logger is enabled for the INFO Level
     bool isInfoEnabled() {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.isInfoEnabled();
         }
@@ -3183,7 +3186,7 @@ public class LoggerWrapper inherits LoggerInterface {
 
     #! Checks whether this Logger is enabled for the WARN Level
     bool isWarnEnabled() {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.isWarnEnabled();
         }
@@ -3192,7 +3195,7 @@ public class LoggerWrapper inherits LoggerInterface {
 
     #! Checks whether this Logger is enabled for the ERROR Level
     bool isErrorEnabled() {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.isErrorEnabled();
         }
@@ -3201,7 +3204,7 @@ public class LoggerWrapper inherits LoggerInterface {
 
     #! Checks whether this Logger is enabled for the FATAL Level
     bool isFatalEnabled() {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.isFatalEnabled();
         }
@@ -3217,7 +3220,7 @@ public class LoggerWrapper inherits LoggerInterface {
     */
     setLevel(*LoggerLevel level) {
         SandboxManager::checkObjectOwnedByCaller(self, "change the logging level of");
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.setLevel(level);
         }
@@ -3232,7 +3235,7 @@ public class LoggerWrapper inherits LoggerInterface {
     */
     setLevel(string level) {
         SandboxManager::checkObjectOwnedByCaller(self, "change the logging level of");
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.setLevel(level);
         }
@@ -3247,7 +3250,7 @@ public class LoggerWrapper inherits LoggerInterface {
     */
     setLevel(int level) {
         SandboxManager::checkObjectOwnedByCaller(self, "change the logging level of");
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             logger.setLevel(level);
         }
@@ -3262,7 +3265,7 @@ public class LoggerWrapper inherits LoggerInterface {
     */
     *LoggerLevel decLevel() {
         SandboxManager::checkObjectOwnedByCaller(self, "change the logging level of");
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.decLevel();
         }
@@ -3277,7 +3280,7 @@ public class LoggerWrapper inherits LoggerInterface {
     */
     *LoggerLevel incLevel() {
         SandboxManager::checkObjectOwnedByCaller(self, "change the logging level of");
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.incLevel();
         }
@@ -3289,7 +3292,7 @@ public class LoggerWrapper inherits LoggerInterface {
         @throw LOGGER-ERROR if cannot get effective level from hierarchy
     */
     *LoggerLevel getLevel(bool effective = True) {
-        *LoggerInterface logger = getLogger();
+        *LoggerInterface logger = getInternalLogger();
         if (logger) {
             return logger.getLevel(effective);
         }
@@ -3298,6 +3301,21 @@ public class LoggerWrapper inherits LoggerInterface {
     #! Returns the logger interface for logging
     private *LoggerInterface getLogger() {
         return self.logger;
+    }
+
+    #! Returns the logger that the logging methods of the object use
+    /** The logging methods and the level methods of the object call this method, which returns getLogger() by
+        default.  A subclass with a public getLogger() that refuses callers (such as the REST clients, which return
+        @ref nothing "NOTHING" from it to code that does not own the object) overrides this method to return its
+        logger unchecked, so that the object's own logging does not depend on the caller.
+
+        A private method: under tenant isolation, the code of a class that sandboxed code declared cannot call it on
+        an object that its sandbox did not create.
+
+        @since Logger 1.1
+    */
+    private *LoggerInterface getInternalLogger() {
+        return getLogger();
     }
 }
 

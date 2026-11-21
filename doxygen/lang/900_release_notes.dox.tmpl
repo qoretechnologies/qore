@@ -2079,6 +2079,8 @@
         asynchronous client of a connection that awaits authorization is created without logging in (see
         @ref restclientv2_7 for every change in behavior;
         <a href="https://github.com/qoretechnologies/qore/issues/6906">issue 6906</a>)
+      - the public \c getLogger() of the clients returns the logger only to the owner of the client, under tenant
+        isolation (<a href="https://github.com/qoretechnologies/qore/issues/7034">issue 7034</a>)
       - see @ref restclientv2_7 for all changes
 
     - @ref restschemavalidatorintro "RestSchemaValidator" and @ref swaggerintro "Swagger" modules
