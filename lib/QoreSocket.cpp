@@ -12254,7 +12254,7 @@ QoreSocket::QoreSocket(int n_sock, int n_sfamily, int n_stype, int n_prot, const
 }
 
 QoreSocket::~QoreSocket() {
-    qore_socket_exec_close(this);
+    priv->closeForTeardown(true);
     priv->deref();
 }
 
@@ -15617,12 +15617,24 @@ Queue* QoreSocket::getQueue() {
 }
 
 void QoreSocket::cleanup(ExceptionSink* xsink) {
-    qore_socket_exec_close(this);
-    if (priv->outer_lock) {
-        AutoLocker al(*priv->outer_lock);
-        priv->cleanupQueues(xsink);
+    priv->cleanup(xsink, false);
+}
+
+void qore_socket_private::closeForTeardown(bool sole_owner) {
+    // An operation can be registered before it has a descriptor. Such a pollable holds a reference to the
+    // underlying socket. A shared Socket object can also have work registered under its own identity.
+    if (!sole_owner || !is_unique() || isOpen() || getH2SessionForClose()) {
+        qore_socket_exec_close_private(this);
+    }
+}
+
+void qore_socket_private::cleanup(ExceptionSink* xsink, bool sole_owner) {
+    closeForTeardown(sole_owner);
+    if (outer_lock) {
+        AutoLocker al(*outer_lock);
+        cleanupQueues(xsink);
     } else {
-        priv->cleanupQueues(xsink);
+        cleanupQueues(xsink);
     }
 }
 
