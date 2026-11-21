@@ -135,7 +135,7 @@ module HttpServer {
 # the client has been sent the 202 response
 class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        string reply_to = hdr."reply-to";
+        string reply_to = http_get_field(hdr, "reply-to");
         string reply = sprintf("processed %d bytes", body.size());
         return <HttpResponseInfo>{
             "code": 202,
@@ -270,6 +270,29 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - the stop notification of a listener (the \c stopc option of @ref HttpServer::HttpListenerOptionInfo
+      "HttpListenerOptionInfo") is now also called when the server is destroyed while the listener is stopping, where
+      it was skipped; an error that it raises is logged with the listener's logger
+      (<a href="https://github.com/qoretechnologies/qore/issues/6967">issue 6967</a>)
+    - on the thread of a dedicated persistent connection, a request for another handler than the session's (after the
+      session's handler ended its persistence while keeping the connection dedicated, or in the requests processed
+      after a persistent session ended) runs with the thread context of its own handler: it does not see the user
+      thread context that another handler, also of another tenant, left on the thread, and that handler gets back its
+      own (issue #6847)
+    - added the \c http_fields_at_top_level option
+      (@ref HttpServer::HttpServerOptionInfo::http_fields_at_top_level "HttpServerOptionInfo::http_fields_at_top_level";
+      default @ref True, deprecated), which gives the fields of a request only under the \c "headers" key of the
+      header hash given to the handlers when @ref False; the server reads the fields from there, and from the top
+      level of a header hash built by user code
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
+    - the header hash given to the handlers gives the fields of the request under \c "headers" over HTTP/1.1, HTTP/2
+      and HTTP/3; a field whose name is a key of the hash (ex: \c Path, \c Method, \c Body) is given only there and
+      no longer replaces the key, and a request with such a field is answered
+      (<a href="https://github.com/qoretechnologies/qore/issues/6761">issue 6761</a>)
+    - a request whose HTTP/1.x header, or whose chunked body's trailer section, is larger than the limit of the
+      connection (the new \c max_header_size option, 65536 bytes by default) is answered with @c 431 (Request Header
+      Fields Too Large) and the connection is closed; before, the server kept the header or trailer in memory without
+      a limit (issue #6867)
     - the error response for an exception of a request handler (400, 413 or 500) gives the error and its description
       only, without the location of the exception in the server's code, unless debugging is enabled
       (@ref HttpServer::HttpServer::setDebug() "HttpServer::setDebug()"; issue #6780)
@@ -805,6 +828,18 @@ public hashdecl HttpServerOptionInfo {
     */
     int max_request_body_size = 0;
 
+    #! Maximum size in bytes of the header of an HTTP/1.x request and of the trailer section of a chunked request body
+    /** The server answers a request whose header is larger than this limit with HTTP 431 (Request Header Fields Too
+        Large) and closes the connection, without keeping more of the header in memory, and a request whose chunked
+        body has a larger trailer section the same way.  The size is that of the text received, with the line ends.
+
+        - a positive value is the limit
+        - \c 0 (the default) uses the default of 65536 bytes
+
+        @since HttpServer 1.7
+    */
+    int max_header_size = 0;
+
     #! Maximum size in bytes of a decompressed request body
     /** A request body with a \c Content-Encoding is decompressed before it is passed to the handler; a body whose
         decompressed size exceeds this value receives HTTP 413 (Content Too Large) and the connection is closed.
@@ -964,6 +999,25 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.6
     */
     bool quic_headers_only = True;
+
+    #! Gives the fields of a request at the top level of the header hash given to the handlers too (deprecated)
+    /** The header hash of a request gives its fields under its \c "headers" key; with this option @ref True "True"
+        (the default), they are also given at its top level, except a field whose name is a key of the hash (see
+        @ref HttpUtil::HttpReservedFieldNames "HttpReservedFieldNames").  With @ref False "False", the fields are
+        given only under \c "headers", over HTTP/1.1, HTTP/2 and HTTP/3; read them with
+        @ref HttpUtil::http_get_field() "http_get_field()" (see @ref httpserverutil_request_headers).
+
+        The option is set on the listening sockets of the server (see
+        @ref Qore::Socket::setHttpFieldsAtTopLevel() "Socket::setHttpFieldsAtTopLevel()"), whose accepted sockets
+        take it.
+
+        @deprecated the top-level copies of the fields are deprecated, and a later release gives the fields only
+        under \c "headers"; set this option to @ref False "False" to check that a server's handlers read them from
+        there
+
+        @since HttpServer 1.7
+    */
+    bool http_fields_at_top_level = True;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -1214,6 +1268,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! Default max-age for Alt-Svc header (seconds)
         int alt_svc_max_age = 3600;
+
+        #! True if the fields of a request are given at the top level of its header hash too (deprecated)
+        bool http_fields_at_top_level = True;
 
         #! Map of TCP listener ID -> auto-created QUIC listener ID
         /** Keys are string listener IDs (Qore auto-converts int keys to strings
@@ -1915,6 +1972,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         # the port for IPv4 on 0.0.0.0 and 127.0.0.1 itself), and the random-port
         # retry in addListenerIntern() picks a fresh port that actually works.
         udp_sock.bindINET(bind_addr, bind_port, False, family, SOCK_DGRAM);
+        # the HTTP/3 requests read from the listener give their fields as the server's option says (qore#6851)
+        udp_sock.setHttpFieldsAtTopLevel(http_fields_at_top_level);
 
         # Get the actual port that was bound
         hash<auto> sock_info = udp_sock.getSocketInfo(False);
@@ -3061,6 +3120,44 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         rv.hdr."Content-Length" = string(len);
     }
 
+    #! sends an HTTP error message on the socket of a request of one of this server's listeners
+    /** @param listener the listener object that the handler of the request got (see
+        @ref HttpServer::HttpListenerInterface "HttpListenerInterface")
+        @param cx the request context
+        @param s the socket of the request
+        @param status_code the HTTP status code
+        @param msg the message
+        @param chunked_msg the message, streamed
+        @param extra_hdrs additional header fields
+        @param encoding the encoding of the response
+        @param head the request is a HEAD request
+
+        @throw INVALID-LISTENER-ERROR the object is not that of one of this server's listeners: of another server, of
+        a listener that has been removed from this server, or an object that the server did not give
+
+        @since HttpServer 1.7
+    */
+    sendHttpError(HttpServer::HttpListenerInterface listener, hash<auto> cx, Socket s, int status_code, *data msg,
+            *InputStream chunked_msg, *hash<auto> extra_hdrs, *string encoding, bool head) {
+        sendHttpError(getListenerOfHandlerView(listener), cx, s, status_code, msg, chunked_msg, extra_hdrs, encoding,
+            head);
+    }
+
+    #! Returns the listener of this server whose handlers get the given object (see HttpListener::getHandlerView())
+    /** @throw INVALID-LISTENER-ERROR the object is not that of one of this server's listeners
+    */
+    private:internal HttpListener getListenerOfHandlerView(HttpServer::HttpListenerInterface view) {
+        lm.enter();
+        on_exit lm.exit();
+
+        foreach HttpListener l in (listeners.iterator()) {
+            if (l.getHandlerView() === view) {
+                return l;
+            }
+        }
+        throw "INVALID-LISTENER-ERROR", "the object is not that of a listener of this server";
+    }
+
     #! sends an HTTP error message on the socket
     sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int status_code, *data msg, *InputStream chunked_msg,
             *hash<auto> extra_hdrs, *string encoding, bool head) {
@@ -3222,8 +3319,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     }
 
     static bool acceptsHtml(hash<auto> cx) {
-        if (!cx.hdr.accept.val() || cx.hdr.accept =~ /\btext\/html\b/i || cx.hdr.accept =~ /\b\*\/\*\b/
-            || cx.hdr.accept =~ /\btext\/\*\b/i) {
+        auto accept = http_get_field(cx.hdr, "accept");
+        if (!accept.val() || accept =~ /\btext\/html\b/i || accept =~ /\b\*\/\*\b/ || accept =~ /\btext\/\*\b/i) {
             return True;
         }
         return False;
@@ -3694,9 +3791,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             setTtl(effective_ttl);
         }
         max_request_body_size = opts.max_request_body_size ?? 0;
+        if ((opts.max_header_size ?? 0) < 0) {
+            throw "HTTP-SERVER-INIT-ERROR", sprintf("max_header_size (%d) must not be negative", opts.max_header_size);
+        }
         max_decoded_body_size = opts.max_decoded_body_size ?? 0;
         enable_h3 = opts.enable_h3 ?? True;
         alt_svc_max_age = opts.alt_svc_max_age ?? 3600;
+        http_fields_at_top_level = opts.http_fields_at_top_level ?? True;
         # Initialize async I/O
         AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
         # the global controller logs through the server's logger while the server runs
@@ -3712,6 +3813,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             "lingering_close_timeout": opts.lingering_close_timeout,
             "peer_hostname_lookup": opts.peer_hostname_lookup,
             "io_operation_timeout": opts.io_operation_timeout,
+            "max_header_size": opts.max_header_size,
         });
         asyncIo.start();
     }
@@ -4045,6 +4147,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 c.done();
                 rethrow;
             }
+            # the requests read from the sockets accepted from the listener give their fields as the server's option
+            # says (qore#6851)
+            l.setHttpFieldsAtTopLevel(http_fields_at_top_level);
 
             # Register listener in maps BEFORE adding to async I/O controller
             # This prevents a race where an accept could arrive before registration is complete
@@ -4422,8 +4527,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         else
             str = "<no URL>";
 
-        if (hdr."content-type")
-            str += sprintf(", content-type=%y", hdr."content-type");
+        if (http_get_field(hdr, "content-type"))
+            str += sprintf(", content-type=%y", http_get_field(hdr, "content-type"));
         else
             str += ", <no content-type>";
 
@@ -4456,6 +4561,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             *HttpServer::AbstractHttpRequestHandler handler, int max_body, bool is_multiplexed, bool want_streaming,
             hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         *data body;
+        # the fields of the request that its body is read and decoded by (qore#6851)
+        auto content_type = http_get_field(hdr, "content-type");
+        auto content_encoding = http_get_field(hdr, "content-encoding");
+        auto req_content_length = http_get_field(hdr, "content-length");
         if (cx."header-info".body_streaming && !want_streaming) {
             # Handler doesn't support streaming — buffer body on handler thread
             # for backward compatibility (body was previously read by I/O thread)
@@ -4594,13 +4703,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # of silently dispatching the handler with an empty body —
                 # which would otherwise be auto-converted to 204 No Content
                 # and corrupt application semantics for echo/upload paths.
-                if (h2_complete && !body_data.size() && hdr."content-length"
-                        && int(hdr."content-length") > 0) {
+                if (h2_complete && !body_data.size() && req_content_length
+                        && int(req_content_length) > 0) {
                     string etxt = sprintf(
                         "HTTP/2 request body delivery race: Content-Length "
                         "%y advertised but no DATA chunks received before "
                         "END_STREAM (stream=%d)",
-                        hdr."content-length", sid);
+                        req_content_length, sid);
                     listener.logError("%s: from %s", etxt,
                         cx."peer-info".address_desc);
                     cx.close = True;
@@ -4634,9 +4743,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             if (body_data.size()) {
                 # a multipart container's octets are not text in the request charset: each part
                 # carries its own encoding, so the container is handed over as bytes
-                if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                        || hdr."content-type" =~ /^application\/connect\+/
-                        || hdr."content-type" =~ /^multipart\//i) {
+                if (content_encoding || content_type == MimeTypeOctetStream
+                        || content_type =~ /^application\/connect\+/
+                        || content_type =~ /^multipart\//i) {
                     body = body_data;
                 } else {
                     try {
@@ -4675,9 +4784,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             }
             # Body is always binary from the I/O layer — convert to string if text content type;
             # a multipart container stays binary, as its parts carry their own encodings
-            if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                    || hdr."content-type" =~ /^application\/connect\+/
-                    || hdr."content-type" =~ /^multipart\//i) {
+            if (content_encoding || content_type == MimeTypeOctetStream
+                    || content_type =~ /^application\/connect\+/
+                    || content_type =~ /^multipart\//i) {
                 body = cx."header-info".body;
             } else {
                 # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
@@ -4694,7 +4803,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     return NOTHING;
                 }
             }
-        } else if (exists hdr."content-length" && !is_multiplexed) {
+        } else if (exists req_content_length && !is_multiplexed) {
             # HTTP/1.x only: the request body is read from the raw socket here.
             #
             # HTTP/2 and HTTP/3 bodies never arrive as raw socket bytes; they are
@@ -4708,9 +4817,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # differently (a sign, hexadecimal, an exponent, a list) is refused, as is one that a general
             # conversion would make a length of 0 or less, for which the read below would wait for the connection
             # to close (RFC 9110 section 8.6)
-            *int content_length = http_parse_content_length(hdr."content-length");
+            *int content_length = http_parse_content_length(req_content_length);
             if (!exists content_length) {
-                string etxt = sprintf("invalid Content-Length %y", hdr."content-length");
+                string etxt = sprintf("invalid Content-Length %y", req_content_length);
                 listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                 cx.close = True;
                 sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
@@ -4733,8 +4842,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # nothing to read
                 # a multipart container stays binary here too, so that a direct read and a
                 # buffered one hand the handler the same bytes
-                } else if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                        || hdr."content-type" =~ /^multipart\//i) {
+                } else if (content_encoding || content_type == MimeTypeOctetStream
+                        || content_type =~ /^multipart\//i) {
                     body = s.recvBinary(content_length, HttpServer::ReadTimeout);
                 } else {
                     # text is decoded by the rules shared by all HTTP clients and servers, as it is when the
@@ -4761,11 +4870,17 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     /** This method is called by listeners when a request is received.
 
         If async_response_out is provided, captures response info instead of sending
+
+        If thread_contexts is provided (the thread of a dedicated persistent connection), the request runs with the
+        thread context of its handler (issue #6847)
     */
     private handleRequest(RequestHelper request_helper, HttpListener listener, Socket s,
             reference<hash<auto>> cx, hash<auto> hdr, bool head = False, HttpPersistentHandlerInfo phi,
-            hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+            hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out,
+            *HttpHandlerThreadContexts thread_contexts) {
         remove cx."response-sent";
+        # the listener object of the handlers (qore#6921), read once per request
+        HttpServer::HttpListenerInterface hview = listener.getHandlerView();
         bool is_http2 = cx."header-info".http2 ?? False;
         bool is_multiplexed = is_http2 || (cx."header-info".http3 ?? False);
         # text from outside the server that is not valid is refused before any handler or other check
@@ -4834,7 +4949,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         # Protocol header parsers expose encoding names but discard their q-values. Select
         # once from the original header so HTTP/1, HTTP/2, and HTTP/3 all honor exclusions.
-        hash<string, float> preferences = getContentEncodingPreferences(hdr."accept-encoding");
+        hash<string, float> preferences = getContentEncodingPreferences(http_get_field(hdr, "accept-encoding"));
         cx."identity-acceptable" = (preferences.identity ?? 1.0) > 0.0;
         hash<string, bool> acceptable;
         foreach string encoding in (keys preferences) {
@@ -4938,8 +5053,18 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 cx.handler_name = defaultHandler.name;
             }
 
-            if (handler && hdr.expect) {
-                if (hdr.expect == "100-continue") {
+            # on the thread of a dedicated persistent connection, the request runs with the thread context of its
+            # handler, never with that of another handler that ran on the thread (issue #6847)
+            if (thread_contexts) {
+                if (handler) {
+                    cx.uctx = thread_contexts.enter(handler);
+                } else {
+                    remove cx.uctx;
+                }
+            }
+
+            if (handler && http_get_field(hdr, "expect")) {
+                if (http_get_field(hdr, "expect") == "100-continue") {
                     hash<HttpResponseInfo> resp = handler.handleExpectHeader(cx, hdr);
                     # 100-continue is an intermediate response that must be sent directly on the
                     # socket before the client sends the body.  Do NOT route through sendReply()
@@ -4963,7 +5088,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         return;
                     }
                 } else {
-                    string etxt = sprintf("unrecognized 'Expect' header: %y", hdr.expect);
+                    string etxt = sprintf("unrecognized 'Expect' header: %y", http_get_field(hdr, "expect"));
                     string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
                         cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
                     listener.logError("%s", str);
@@ -5024,7 +5149,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # handle the request anyway
                 *hash<HttpResponseInfo> ah;
                 try {
-                    ah = handler.preprocessRequest(listener, \hdr, \cx);
+                    ah = handler.preprocessRequest(hview, \hdr, \cx);
                 } catch (hash<ExceptionInfo> ex) {
                     # log the error
                     string desc = sprintf("Handler %y preprocessing error from %s: ", cx.handler_name,
@@ -5042,7 +5167,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
                 if (!ah) {
                     try {
-                        ah = handler.authenticateRequest(listener, hdr, \cx);
+                        ah = handler.authenticateRequest(hview, hdr, \cx);
                     } catch (hash<ExceptionInfo> ex) {
                         # log the error
                         string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
@@ -5075,17 +5200,20 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # decode body if applicable; a decoded body that is too large raises HTTP-BODY-TOO-LARGE,
                     # which is answered with 413, and text that is not valid in its encoding
                     # HTTP-BODY-ENCODING-ERROR, which is answered with 400
-                    if (body && hdr."content-encoding" && handler.decompress) {
+                    auto content_encoding = body && handler.decompress
+                        ? http_get_field(hdr, "content-encoding")
+                        : NOTHING;
+                    if (content_encoding) {
                         # the decompressed octets are text in the charset of the request, decoded as an
                         # uncompressed body is (qore#6618)
-                        body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
-                            handler.getMaxDecodedBodySize(listener));
+                        body = AbstractHttpRequestHandler::decodeRequestBody(content_encoding, body, NOTHING,
+                            handler.getMaxDecodedBodySize(hview));
                         if (handler.decompress_to_string) {
                             body = decodeRequestText(hdr, body);
                         }
                     }
 
-                    hash<auto!> hrv = handler.handleRequest(listener, s, cx, hdr, body);
+                    hash<auto!> hrv = handler.handleRequest(hview, s, cx, hdr, body);
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";
                     }
@@ -5213,6 +5341,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             int err_code;
             switch (ex.err) {
                 case "HTTP-BODY-TOO-LARGE": err_code = 413; break;
+                # the trailer section of a chunked request body is larger than the limit of the socket (qore#6867)
+                case "HTTP-HEADER-TOO-LARGE": err_code = 431; break;
                 case "HTTP-BODY-ENCODING-ERROR": err_code = 400; break;
                 default: err_code = 500; break;
             }
@@ -5485,8 +5615,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 && refuseNonTunnelExtendedConnectResponse(cx, hdr, rv)) {
             string proto_label = (cx."header-info".http3 ?? False) ? "HTTP/3" : "HTTP/2";
             listener.logError("cid %d: %s extended CONNECT (protocol %y) answered by handler %y with a %d response "
-                "that does not establish a tunnel; refusing the request", cx.id, proto_label, hdr.":protocol",
-                cx.handler_name, rv."code");
+                "that does not establish a tunnel; refusing the request", cx.id, proto_label,
+                http_get_field(hdr, ":protocol"), cx.handler_name, rv."code");
             # the refusal replaces the handler's response and is sent as an error response below, which also works
             # with the asynchronous I/O controller (HTTP/2 multiplexing, HTTP/3)
             rv."code" = 501;
@@ -5662,7 +5792,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             }
                         }
 
-                        hash<auto> sock_cx = cx + {"listener": listener, "id": sock_id};
+                        hash<auto> sock_cx = cx + {"listener": listener.getHandlerView(), "id": sock_id};
                         sock_cx."header-info".ws_end = getAsyncWebSocketEnd(holder, listener, NOTHING, sock_id,
                             cx.handler_name, pend);
                         sock_cx."header-info".ws_accept_end = sub () { holder.accept(); };
@@ -5784,7 +5914,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     }
 
                     # Pass poll_op and async I/O context to handler via header-info
-                    hash<auto> ws_cx = cx + {"listener": listener};
+                    hash<auto> ws_cx = cx + {"listener": listener.getHandlerView()};
                     # reports the end of the connection to the request's async target if the handler takes it over
                     *HttpServerAsyncIo::HttpPersistentRequestEnd pend;
                     if (ws_poll_op) {
@@ -6475,6 +6605,72 @@ class HttpPersistentHandlerInfo {
     }
 }
 
+#! Keeps the thread context of each handler apart on the thread of a dedicated persistent connection (issue #6847)
+/** The thread runs the requests of its connection one after the other.  When the session's handler ends its
+    persistence while the connection stays dedicated, or in the requests drained after its persistence ended, a request
+    of the connection can be for another handler, of another tenant.  The values that the server keeps for the handlers
+    in its own thread-local data (the user thread context, and the listener key that the loop removes when it ends)
+    are switched with the handler: each handler sees only the values that it left there, and never those of another
+    handler.  Values that a handler keeps in the thread-local data of another Program are not covered.
+
+    Used only by the thread of the connection.
+*/
+class HttpHandlerThreadContexts {
+    public {
+        #! the thread-local keys that the server keeps for the handlers
+        const Keys = ("uctx", "svc_listener");
+    }
+
+    private:internal {
+        #! the handler of the session
+        *HttpServer::AbstractHttpRequestHandler owner;
+
+        #! the handler whose values are on the thread
+        *HttpServer::AbstractHttpRequestHandler current;
+
+        #! the values of the other handlers: unique hash -> thread-local values
+        hash<string, hash<auto>> saved;
+    }
+
+    #! creates the object for the given session handler, whose values are on the thread
+    constructor(*HttpServer::AbstractHttpRequestHandler owner) {
+        self.owner = owner;
+        current = owner;
+    }
+
+    #! puts the values of the given handler on the thread; returns its user thread context
+    *hash<auto> enter(HttpServer::AbstractHttpRequestHandler handler) {
+        if (handler != current) {
+            # the values on the thread are those of the current handler, or of no handler
+            hash<auto> values = remove_thread_data(Keys);
+            if (current) {
+                saved{current.uniqueHash()} = values;
+            }
+            current = handler;
+            *hash<auto> mine = remove saved{handler.uniqueHash()};
+            # only the keys with a value are restored
+            mine = map {$1.key: $1.value}, mine.pairIterator(), exists $1.value;
+            if (mine) {
+                save_thread_data(mine);
+            }
+        }
+        return get_thread_data("uctx");
+    }
+
+    #! puts the values of the given persistent handler, or else of the session's handler, on the thread
+    restore(*HttpServer::AbstractHttpRequestHandler persistent_handler) {
+        *HttpServer::AbstractHttpRequestHandler handler = persistent_handler ?? owner;
+        if (handler) {
+            enter(handler);
+        }
+    }
+
+    #! releases the values of the handlers that are not on the thread
+    clear() {
+        remove saved;
+    }
+}
+
 #! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class
 public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
     public {
@@ -6490,8 +6686,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         #! private request-handling method from the server
         code<nothing(...)> handleRequest;
         Sequence ss;
-
-        *hash<HttpListenerOptionInfo> opts;
 
         #*SSLCertificate cert;
         #*SSLPrivateKey key;
@@ -6553,6 +6747,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         const PollInterval = 250ms;
         const ListenQueue = 1024;
+
+        #! the longest wait of signalPersistentSessionClose() for the cleanup of the session that it closes
+        const PersistentSessionCloseTimeout = 60s;
         const BodyLogLimit = 40;
 
         # handler ref count
@@ -6570,6 +6767,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     private:internal {
+        #! the listener's options, with its TLS certificate and private key: not readable by subclasses
+        *hash<HttpListenerOptionInfo> opts;
+
+        #! the listener as the code of its handlers sees it (see getHandlerView())
+        HttpListenerHandlerView handler_view;
+
         #! the test hook that stop() calls once it has marked the listener as stopping (see dbgSetStoppingHook())
         static *code<nothing(HttpListener)> dbg_stopping_hook;
     }
@@ -6589,6 +6792,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
         self.name = opts.name;
         self.handleRequest = handleRequest;
+        handler_view = new HttpListenerHandlerView(self);
         if (opts.cert_loc && !opts.cert) {
             opts += http_get_ssl_objects(opts.cert_loc, opts.key_loc, opts.key_password);
         }
@@ -6981,7 +7185,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         if (log_recv_body) {
-            if (body && (hdr."content-type" == MimeTypeOctetStream || hdr."content-encoding")) {
+            if (body && (http_get_field(hdr, "content-type") == MimeTypeOctetStream
+                    || http_get_field(hdr, "content-encoding"))) {
                 log("cid %d: RECV BODY: <%s>", cx.id, body.toHex());
             } else {
                 log("cid %d: RECV BODY: %s", cx.id, getMaskedBodyLogString(body));
@@ -7243,18 +7448,46 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         Safe to call from any thread; idempotent (no-op if no queue is
         registered under @c uh, e.g. when the dedicated thread has already
-        exited).
+        exited).  The wait for the cleanup is bounded by
+        @ref PersistentSessionCloseTimeout: if the dedicated thread has not completed its cleanup by then, the wait
+        ends and an error is logged (qore#6921).
 
         @param uh the connection unique hash identifying the persistent
             session to close
     */
     signalPersistentSessionClose(softstring uh) {
+        signalPersistentSessionCloseIntern(uh);
+    }
+
+    #! Force-closes the persistent session for the given connection, if the given handler registered it
+    /** As signalPersistentSessionClose(softstring), but the session is closed only if \a handler registered it
+        (qore#6921)
+
+        @param uh the key of the persistent session (\c cx.sock_key in the request context)
+        @param handler the handler whose persistent session it is
+
+        @since HttpServer 1.7
+    */
+    signalPersistentSessionClose(softstring uh, HttpServer::AbstractHttpRequestHandler handler) {
+        signalPersistentSessionCloseIntern(uh, handler);
+    }
+
+    #! Signals the close of a persistent session and waits, bounded, for its cleanup
+    private:internal signalPersistentSessionCloseIntern(string uh, *HttpServer::AbstractHttpRequestHandler owner) {
         *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = serv
             ? serv.getHttpAsyncIo() : NOTHING;
         if (ctrl) {
             Queue close_ack(1);
-            if (ctrl.signalPersistentQueuesForConnection(uh, close_ack)) {
-                close_ack.get();
+            if (ctrl.signalPersistentQueuesForConnection(uh, close_ack, owner)) {
+                try {
+                    close_ack.get(PersistentSessionCloseTimeout);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "QUEUE-TIMEOUT") {
+                        rethrow;
+                    }
+                    logError("persistent session %y: its cleanup did not complete within %y", uh,
+                        PersistentSessionCloseTimeout);
+                }
             }
         }
     }
@@ -7263,21 +7496,27 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         background stop();
     }
 
+%ifdef QoreDebug
     #! @cond nodoc
     #! Sets the test hook that stop() calls once it has marked the listener as stopping; a debug build of the library only
-    /** @param hook the hook, called with the listener in the thread of the stop, or @ref nothing to remove it
+    /** For tests: the hook is process-wide (it is called for the listeners of every server in the process), so only
+        trusted code with process control can set it, and the method exists only in a debug build of the library
 
-        @throw HTTPLISTENER-DEBUG-ERROR the library is not a debug build
-        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it: the hook is process-wide
+        @param hook the hook, called with the listener in the thread of the stop, or @ref nothing to remove it
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
-    static dbgSetStoppingHook(*code<nothing(HttpListener)> hook) {
+    static dbgSetStoppingHook(*code<nothing(HttpListener)> hook) [dom=PROCESS_CONTROL] {
         SandboxManager::checkProcessWideRegistration("set the stopping hook of HTTP listeners");
-        if (!Option::HAVE_LIBRARY_DEBUGGING) {
-            throw "HTTPLISTENER-DEBUG-ERROR", "the test hooks of HttpListener need a debug build of the library";
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot set the stopping hook of HTTP listeners from a context with restricted "
+                "process control";
         }
         dbg_stopping_hook = hook;
     }
     #! @endcond
+%endif
 
     stop(*bool silent) {
         # A stop that runs in a thread that runs a request of this listener does not wait for that request, which
@@ -7372,8 +7611,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # first to avoid a deadlock.
         if (serv) {
             serv.listenerStopped(self);
-            if (stopc) {
-                serv.callListenerStopCallback(stopc, name, socket_info);
+        }
+        # the stop notification is called here, not through the server: the server's notification above can let the
+        # destruction of the server end in another thread, which clears 'serv', and the notification was then not
+        # called (qore#6967)
+        if (stopc) {
+            try {
+                call_function(stopc, name);
+            } catch (hash<ExceptionInfo> ex) {
+                logError("error calling stop notification closure: %s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
             }
         }
 
@@ -7644,6 +7890,42 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         removeDedicatedSocket(id, True);
     }
 
+    #! Removes the given dedicated socket handler, if it is the handler of the given connection
+    /** @param id the ID of the connection
+        @param handler the handler of the connection; nothing is removed if the connection has another handler
+
+        @since HttpServer 1.7
+    */
+    removeExternalDedicatedSocket(softstring id, HttpServer::AbstractHttpSocketHandlerInterface handler) {
+        m.lock();
+        on_exit m.unlock();
+
+        if (shh{id} === handler) {
+            remove shh{id};
+        }
+    }
+
+    #! Returns the object that represents this listener to the code of its handlers
+    /** The handlers of the listener's requests and connections get this object, which gives only the methods of
+        @ref HttpServer::HttpListenerInterface "HttpListenerInterface", instead of the listener, whose other methods
+        (and those of its socket) are for the server only (qore#6921); the same object is returned for the life of
+        the listener
+
+        @since HttpServer 1.7
+    */
+    HttpServer::HttpListenerInterface getHandlerView() {
+        return handler_view;
+    }
+
+    #! Returns the header information of a request as its handler gets it (\c cx."header-info")
+    /** The persistent queue closures of the async I/O controller are for the listener only: it registers the queue
+        of a persistent session for its handler, and the entries of the queue refer to the server's own objects, so a
+        handler, which may be sandboxed, does not get them (qore#6921)
+    */
+    private:internal static hash<auto> getHandlerHeaderInfo(hash<auto> header_info) {
+        return header_info - ("register_persistent_queue", "deregister_persistent_queue");
+    }
+
     removeDedicatedSocket(softstring id, *bool managed_externally) {
         m.lock();
         on_exit m.unlock();
@@ -7780,6 +8062,27 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
     }
 
+    #! Sets the \c Content-Type of the request that handlers are given, and keeps the one received
+    /** The \c Content-Type received is kept in \c _qore_orig_content_type; the field is set to the content type
+        without its charset parameter, as reported for every HTTP version (qore#6318); it is not set when nothing but a
+        charset parameter is given.  The field is set under \c "headers", and at the top level only if the fields are
+        given there (qore#6851)
+    */
+    private static setupRequestContentType(reference<hash<auto>> hdr, *hash<auto> header_info) {
+        auto ct = http_get_field(hdr, "content-type");
+        if (ct) {
+            hdr."_qore_orig_content_type" = ct;
+        }
+        if (header_info."body-content-type".val()) {
+            # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
+            auto v = HttpListener::obsText(header_info."body-content-type");
+            if (v.typeCode() == NT_LIST) {
+                v = v[0];
+            }
+            http_set_field(\hdr, "content-type", v);
+        }
+    }
+
     #! Returns a masked copy of the request path without changing handler-visible path semantics
     private string maskRequestPath(string raw_path) {
         # Mask sensitive query values before URL decoding so an encoded '&' in
@@ -7875,24 +8178,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # Set authorization if present
-        if (hdr.authorization) {
-            cx.auth = hdr.authorization;
+        if (auto auth = http_get_field(hdr, "authorization")) {
+            cx.auth = auth;
         }
 
         # Save original content-type and process content-type header
-        if (hdr."content-type") {
-            hdr."_qore_orig_content_type" = hdr."content-type";
-        }
-        # the content type without its charset parameter, as reported for every HTTP version (qore#6318); it is not set
-        # when nothing but a charset parameter is given
-        if (header_info."body-content-type".val()) {
-            hdr."content-type" = header_info."body-content-type";
-            # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
-            hdr."content-type" = HttpListener::obsText(hdr."content-type");
-            if (hdr."content-type".typeCode() == NT_LIST) {
-                hdr."content-type" = hdr."content-type"[0];
-            }
-        }
+        setupRequestContentType(\hdr, header_info);
 
         # Copy headers to the context
         cx.hdr = hdr;
@@ -7908,8 +8199,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         if (request_helper.log_info) {
             string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
             string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
-                cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
-            if (hdr."transfer-encoding" == "chunked") {
+                cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, http_get_field(hdr, "user-agent"));
+            if (http_get_field(hdr, "transfer-encoding") == "chunked") {
                 lstr += " body: chunked";
             }
             if (hdr."_qore_orig_content_type") {
@@ -7929,7 +8220,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         if (header_info.body_streaming) {
             header_info.sock = s;
         }
-        cx."header-info" = header_info;
+        cx."header-info" = HttpListener::getHandlerHeaderInfo(header_info);
 
         # Add client certificate if requested and available
         if (get_remote_certs) {
@@ -8055,14 +8346,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
 
             Queue pq();
-            code<nothing(string, Queue)> register_fn =
-                header_info.register_persistent_queue;
+            # the queue is registered for its handler, which alone can close the session through its listener object
+            # (qore#6921)
+            code register_fn = header_info.register_persistent_queue;
             # Both explicit session termination and exception cleanup can deregister this queue. Bind
             # cleanup to its identity so a delayed exit cannot remove a new session on the same socket.
             code<nothing(string)> deregister_fn = sub (string key) {
                 header_info.deregister_persistent_queue(key, pq);
             };
-            register_fn(sock_key, pq);
+            register_fn(sock_key, pq, NOTHING, phi.handler);
             on_exit deregister_fn(sock_key);
             # this thread stays with the connection until persistence ends: it leaves the handler pool, so that it
             # does not count against max_handler_threads for that time (qore#5758)
@@ -8644,6 +8936,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # Static listener context template
         hash<auto> cx_listener = getContextTemplate(info);
         *Queue close_ack;
+        # the requests of the connection that this thread runs can be for other handlers than the session's; each
+        # handler runs with its own thread context (issue #6847)
+        HttpHandlerThreadContexts thread_contexts(phi.handler);
 
         # Clean up persistent handler state and thread-local data on exit
         on_exit {
@@ -8656,6 +8951,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
             on_exit remove_thread_data("svc_listener");
             on_exit removeUserThreadContext();
+            on_exit thread_contexts.clear();
             phi.clear();
         }
 
@@ -8710,7 +9006,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         "dedicated mode immediately", cx.id);
                     deregister_fn(sock_key);
                     drainOrphanedPersistentRequests(request_helper, pq, s,
-                        \cx, cx_listener, phi, info, \close_ack);
+                        \cx, cx_listener, phi, info, \close_ack, thread_contexts);
                     return;
                 }
                 # Wait for next request from Queue with idle timeout
@@ -8731,7 +9027,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                                 "exiting dedicated mode", cx.id);
                             deregister_fn(sock_key);
                             drainOrphanedPersistentRequests(request_helper, pq,
-                                s, \cx, cx_listener, phi, info, \close_ack);
+                                s, \cx, cx_listener, phi, info, \close_ack, thread_contexts);
                             return;
                         }
                         continue;
@@ -8767,7 +9063,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     log("cid %d: received end-persistent signal, terminating "
                         "persistent session", cx.id);
                     hash<auto> end_cx = cx_listener;
-                    end_cx."header-info" = conn_info.header_info;
+                    end_cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info);
                     end_cx.close = conn_info.header_info.close;
                     hash<HttpAsyncResponseInfo> end_response = <HttpAsyncResponseInfo>{
                         "code": 200,
@@ -8783,7 +9079,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     resumeQueuedPersistentEntry(entry);
                     deregister_fn(sock_key);
                     drainOrphanedPersistentRequests(request_helper, pq, s,
-                        \cx, cx_listener, phi, info, \close_ack);
+                        \cx, cx_listener, phi, info, \close_ack, thread_contexts);
                     if (!is_multiplexed && s.isOpen()) {
                         if (end_cx.close) {
                             serv.closeConnectionAfterResponse(s, end_cx, self);
@@ -8807,20 +9103,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 if (req_hdr.path =~ /^\//) {
                     splice req_hdr.path, 0, 1;
                 }
-                if (req_hdr.authorization) {
-                    cx.auth = req_hdr.authorization;
+                if (auto auth = http_get_field(req_hdr, "authorization")) {
+                    cx.auth = auth;
                 }
-                if (req_hdr."content-type") {
-                    req_hdr."_qore_orig_content_type" = req_hdr."content-type";
-                }
-                if (conn_info.header_info."body-content-type".val()) {
-                    req_hdr."content-type" = conn_info.header_info."body-content-type";
-                    # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
-                    req_hdr."content-type" = HttpListener::obsText(req_hdr."content-type");
-                    if (req_hdr."content-type".typeCode() == NT_LIST) {
-                        req_hdr."content-type" = req_hdr."content-type"[0];
-                    }
-                }
+                setupRequestContentType(\req_hdr, conn_info.header_info);
                 cx.hdr = req_hdr;
                 cx.char_encoding = s.getEncoding();
                 cx."response-encoding" = conn_info.header_info."accept-charset";
@@ -8832,7 +9118,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         ? req_hdr.http_version : "HTTP/" + req_hdr.http_version;
                     string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
                         cx."peer-info".address_desc, req_hdr.method, cx.masked_path,
-                        http_ver, req_hdr."user-agent");
+                        http_ver, http_get_field(req_hdr, "user-agent"));
                     if (req_hdr."_qore_orig_content_type") {
                         lstr += sprintf(" Content-Type: %y", req_hdr."_qore_orig_content_type");
                     }
@@ -8848,7 +9134,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 if (conn_info.header_info.body_streaming) {
                     conn_info.header_info.sock = s;
                 }
-                cx."header-info" = conn_info.header_info;
+                cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info);
 
                 if (get_remote_certs) {
                     if (conn_info.header_info.http3) {
@@ -8866,8 +9152,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 on_exit {
                     resumeQueuedPersistentEntry(entry);
                 }
+                # the thread context of the session's handler is the thread's again after the request
+                on_exit thread_contexts.restore(phi.handler);
                 handleRequest(request_helper, self, s, \cx, req_hdr,
-                    req_hdr.method == "HEAD", phi, info, \async_response);
+                    req_hdr.method == "HEAD", phi, info, \async_response, thread_contexts);
 
                 # If handler took over the socket (dedicated), we're done
                 if (request_helper.isDedicated()) {
@@ -8909,6 +9197,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     cleanupMultiplexedBodyStream(s, conn_info.header_info);
                 }
 
+                # the request has been answered: the checks below see the thread context of the session's handler
+                thread_contexts.restore(phi.handler);
+
                 if (!is_multiplexed && (cx.close || !s.isOpen())) {
                     # the response was sent, and the connection closes after it
                     if (s.isOpen()) {
@@ -8944,7 +9235,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     # Process any requests that were pushed to the queue during the
                     # brief window between the last pq.get() and the deregistration
                     drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
-                        cx_listener, phi, info, \close_ack);
+                        cx_listener, phi, info, \close_ack, thread_contexts);
                     if (!is_multiplexed && !cx.close && s.isOpen()) {
                         serv.returnConnectionToAsyncIo(s, cx, self);
                     }
@@ -8972,7 +9263,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # fresh connection.
             deregister_fn(sock_key);
             drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
-                cx_listener, phi, info, \close_ack);
+                cx_listener, phi, info, \close_ack, thread_contexts);
         }
     }
 
@@ -8993,11 +9284,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @param phi the persistent handler info (persistence already cleared)
         @param info peer info for logging
         @param close_ack receives the completion queue from an orphaned close request
+        @param thread_contexts the thread contexts of the handlers whose requests the thread runs (issue #6847)
     */
     private drainOrphanedPersistentRequests(RequestHelper request_helper, Queue pq,
             Socket s, reference<hash<auto>> cx, hash<auto> cx_listener,
             HttpPersistentHandlerInfo phi, hash<auto> info,
-            reference<*Queue> close_ack) {
+            reference<*Queue> close_ack, HttpHandlerThreadContexts thread_contexts) {
         while (True) {
             *hash<auto> entry;
             try {
@@ -9032,20 +9324,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (req_hdr.path =~ /^\//) {
                 splice req_hdr.path, 0, 1;
             }
-            if (req_hdr.authorization) {
-                cx.auth = req_hdr.authorization;
+            if (auto auth = http_get_field(req_hdr, "authorization")) {
+                cx.auth = auth;
             }
-            if (req_hdr."content-type") {
-                req_hdr."_qore_orig_content_type" = req_hdr."content-type";
-            }
-            if (conn_info.header_info."body-content-type".val()) {
-                req_hdr."content-type" = conn_info.header_info."body-content-type";
-                # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
-                req_hdr."content-type" = HttpListener::obsText(req_hdr."content-type");
-                if (req_hdr."content-type".typeCode() == NT_LIST) {
-                    req_hdr."content-type" = req_hdr."content-type"[0];
-                }
-            }
+            setupRequestContentType(\req_hdr, conn_info.header_info);
             cx.hdr = req_hdr;
             cx.char_encoding = s.getEncoding();
             cx."response-encoding" = conn_info.header_info."accept-charset";
@@ -9057,7 +9339,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     ? req_hdr.http_version : "HTTP/" + req_hdr.http_version;
                 string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y",
                     cx.id, cx."peer-info".address_desc, req_hdr.method,
-                    cx.masked_path, http_ver, req_hdr."user-agent");
+                    cx.masked_path, http_ver, http_get_field(req_hdr, "user-agent"));
                 if (req_hdr."_qore_orig_content_type") {
                     lstr += sprintf(" Content-Type: %y",
                         req_hdr."_qore_orig_content_type");
@@ -9074,7 +9356,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (conn_info.header_info.body_streaming) {
                 conn_info.header_info.sock = s;
             }
-            cx."header-info" = conn_info.header_info;
+            cx."header-info" = HttpListener::getHandlerHeaderInfo(conn_info.header_info);
 
             if (get_remote_certs) {
                 if (conn_info.header_info.http3) {
@@ -9090,10 +9372,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             on_exit {
                 resumeQueuedPersistentEntry(entry);
             }
+            # the thread context of the session's handler is the thread's again after the request
+            on_exit thread_contexts.restore(phi.handler);
 
             try {
                 handleRequest(request_helper, self, s, \cx, req_hdr,
-                    req_hdr.method == "HEAD", phi, info, \async_response);
+                    req_hdr.method == "HEAD", phi, info, \async_response, thread_contexts);
 
                 if (request_helper.isDedicated()) {
                     return;
@@ -9130,6 +9414,138 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 logError("cid %d: error processing orphaned request: %s", cx.id,
                     etxt);
             }
+        }
+    }
+}
+
+#! The listener as the code of its handlers sees it (qore#6921)
+/** The handlers of a listener's requests and connections get this object instead of the listener: it has only the
+    methods of @ref HttpServer::HttpListenerInterface "HttpListenerInterface", which it forwards to the listener;
+    the listener's other methods (such as those that give its TLS certificate and private key, or the handlers of
+    its other connections) and those of its socket are not methods of this object, whatever type it is cast to or
+    however its methods are called.  The class is not exported, so no code outside the module can name it.
+
+    Each listener has one such object for its whole life (see HttpListener::getHandlerView()), so code that keeps the
+    object of one request and uses it in a later one, also on another thread, reaches the same listener.  The object
+    refers to the listener weakly: once the listener is gone, its calls do nothing (or return the defaults of
+    @ref HttpServer::HttpListenerInterface "HttpListenerInterface").
+*/
+class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
+    private:internal {
+        #! the listener, weakly referenced
+        *HttpListener listener;
+    }
+
+    #! Creates the object for the given listener
+    constructor(HttpListener listener) {
+        self.listener := listener;
+    }
+
+    # the format and its arguments are forwarded as they are: the listener formats a message only if it is logged
+    log(string fmt, ...) {
+        if (*HttpListener l = listener) {
+            softlist<auto> args = fmt;
+            if (argv) {
+                args += argv;
+            }
+            call_object_method_args(l, "log", args);
+        }
+    }
+
+    logError(string fmt, ...) {
+        if (*HttpListener l = listener) {
+            softlist<auto> args = fmt;
+            if (argv) {
+                args += argv;
+            }
+            call_object_method_args(l, "logError", args);
+        }
+    }
+
+    logResponse(hash<auto> cx, hash<auto> rv) {
+        if (*HttpListener l = listener) {
+            l.logResponse(cx, rv);
+        }
+    }
+
+    #! Removes a dedicated socket handler; refused to sandboxed code, which removes only its own handler's connection
+    /** The variant without the handler cannot tell whose connection it removes, so it is refused to any code that a
+        sandbox governs (SandboxManager::isSandboxed()), also to a sandbox that sets only resource limits: the check
+        fails closed, and such code calls removeExternalDedicatedSocket(softstring,
+        AbstractHttpSocketHandlerInterface) with its own handler, as the standard socket handlers do.  Code that is
+        restricted only by the parse options of its Program, with no sandbox, is not governed by a sandbox, so this
+        check does not refuse it.
+
+        @throw HTTPLISTENER-ACCESS-ERROR the calling code is sandboxed
+    */
+    removeExternalDedicatedSocket(softstring id) {
+        if (SandboxManager::isSandboxed()) {
+            throw "HTTPLISTENER-ACCESS-ERROR", "sandboxed code can remove only the connection of its own handler";
+        }
+        if (*HttpListener l = listener) {
+            l.removeExternalDedicatedSocket(id);
+        }
+    }
+
+    removeExternalDedicatedSocket(softstring id, HttpServer::AbstractHttpSocketHandlerInterface handler) {
+        if (*HttpListener l = listener) {
+            l.removeExternalDedicatedSocket(id, handler);
+        }
+    }
+
+    int getMaxDecodedBodySize() {
+        if (*HttpListener l = listener) {
+            return l.getMaxDecodedBodySize();
+        }
+        return HttpListenerInterface::getMaxDecodedBodySize();
+    }
+
+    string getDefaultTextEncoding() {
+        if (*HttpListener l = listener) {
+            return l.getDefaultTextEncoding();
+        }
+        return HttpListenerInterface::getDefaultTextEncoding();
+    }
+
+    *hash<auto> getDefaultResponseHeaders() {
+        if (*HttpListener l = listener) {
+            return l.getDefaultResponseHeaders();
+        }
+    }
+
+    addUserThreadContext(hash<auto> uctx) {
+        if (*HttpListener l = listener) {
+            l.addUserThreadContext(uctx);
+        }
+    }
+
+    auto removeUserThreadContext(*string k) {
+        if (*HttpListener l = listener) {
+            return l.removeUserThreadContext(k);
+        }
+    }
+
+    #! Closes a persistent session; refused to sandboxed code, which closes only its own handler's session
+    /** As removeExternalDedicatedSocket(softstring), the variant without the handler cannot tell whose session it
+        closes, so it is refused to any code that a sandbox governs (the check fails closed); such code calls
+        signalPersistentSessionClose(softstring, AbstractHttpRequestHandler) with its own handler.  As there, code
+        that is restricted only by the parse options of its Program, with no sandbox, is not refused.
+
+        @throw HTTPLISTENER-ACCESS-ERROR the calling code is sandboxed
+    */
+    signalPersistentSessionClose(softstring uh) {
+        if (SandboxManager::isSandboxed()) {
+            throw "HTTPLISTENER-ACCESS-ERROR", "sandboxed code can close only the persistent session of its own "
+                "handler";
+        }
+        if (*HttpListener l = listener) {
+            l.signalPersistentSessionClose(uh);
+        }
+    }
+
+    signalPersistentSessionClose(softstring uh, HttpServer::AbstractHttpRequestHandler handler) {
+        if (*HttpListener l = listener) {
+            l.signalPersistentSessionClose(uh, handler);
         }
     }
 }
@@ -9207,15 +9623,17 @@ class HandlerInfo {
             return 0;
         }
 
-        if (hdr{special_header_list}) {
-            return 2;
+        foreach string name in (special_header_list) {
+            if (exists http_get_field(hdr, name)) {
+                return 2;
+            }
         }
 
         if (score || !content_type_map) {
             return 0;
         }
 
-        return content_type_map.(hdr."content-type") ? 1 : 0;
+        return content_type_map.(http_get_field(hdr, "content-type")) ? 1 : 0;
     }
 
     stop() {
@@ -9574,7 +9992,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
             return NOTHING;
         }
         # Reject requests with a body — the inline path does not read the body
-        if (info.hdr."content-length" || info.hdr."transfer-encoding") {
+        if (http_get_field(info.hdr, "content-length") || http_get_field(info.hdr, "transfer-encoding")) {
             return NOTHING;
         }
         # the inline path gives the request head to the handler as it is: a head that is not valid text takes the full

@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -162,7 +163,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("MistralDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.MISTRAL_CONNECTION;
+        conn_name = LiveProvider::get("mistral", "MISTRAL_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + 164 actions registered", \registrationTest());
         addTestCase("root provider lists 164 children",       \rootProviderTest());
@@ -681,6 +682,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
         Cost: ~$0.0001 per run (capped via max_tokens=16).
     */
     private liveMistralTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Mistral connection ping failed: %s",

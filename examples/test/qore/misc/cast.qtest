@@ -171,6 +171,12 @@ class CastingTest inherits QUnit::Test {
             auto h = h0;
             cast<hash>(h).size = 1;
             assertEq("hash", h.fullType());
+            assertEq(1, h.size);
+            cast<*hash>(h).size += 2;
+            assertEq(3, h.size);
+            h = "wrong type";
+            assertThrows("RUNTIME-CAST-ERROR", sub () { cast<hash>(h).size = 4; });
+            assertEq("wrong type", h);
         }
 
         {

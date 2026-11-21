@@ -70,10 +70,18 @@ module GcpAuth {
        @ref GcpAuth::getAccessTokenFromAuthorizedUserFile() "getAccessTokenFromAuthorizedUserFile()".
 
     4. <b>Composite ADC chain</b> — explicit credential file → \c GOOGLE_APPLICATION_CREDENTIALS
-       env var → \c ~/.config/gcloud/application_default_credentials.json →
-       metadata server, dispatching each resolved file to the service-account or
-       authorized_user grant by its \c "type".  See
+       env var → \c application_default_credentials.json in the gcloud configuration directory
+       (\c CLOUDSDK_CONFIG, else \c ~/.config/gcloud, as gcloud uses) → metadata server, dispatching each
+       resolved file to the service-account or authorized_user grant by its \c "type".  See
        @ref GcpAuth::getAccessToken() "getAccessToken()".
+
+    @par Turning off the implicit credentials
+    With the environment variable \c QORE_GCP_ADC_DISABLED set to a value other than \c "" or \c "0", the chain
+    uses only an explicit credential file and \c GOOGLE_APPLICATION_CREDENTIALS: neither the file of the gcloud
+    configuration directory nor the default metadata server is used, and
+    @ref GcpAuth::getAccessTokenFromMetadataServer() "getAccessTokenFromMetadataServer()" uses only an explicit
+    \c metadata_endpoint, so that a process (ex: a test that must not make live calls) cannot take credentials
+    that it did not choose (issue #6972).
 
     All three functions cache tokens keyed by the request parameters and
     refresh within a 5-minute safety window before expiry.
@@ -323,10 +331,14 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
 
     @return the bearer access token
 
-    @throw GCP-AUTH-ERROR metadata server unreachable or returned an error
+    @throw GCP-AUTH-ERROR metadata server unreachable or returned an error, or no \c metadata_endpoint is given while
+    \c QORE_GCP_ADC_DISABLED is set (see @ref gcpauthintro)
 */
 public string sub getAccessTokenFromMetadataServer(list<string> scopes,
         *hash<auto> opts) {
+    if (!opts.metadata_endpoint && adcDisabled()) {
+        throw "GCP-AUTH-ERROR", "the default metadata server is not used: QORE_GCP_ADC_DISABLED is set";
+    }
     string scope_str = (foldl $1 + " " + $2, scopes) ?? "";
     string endpoint = opts.metadata_endpoint ?? MetadataEndpoint;
     string key = tokenCacheKey(("mds", endpoint, scope_str));
@@ -359,8 +371,9 @@ public string sub getAccessTokenFromMetadataServer(list<string> scopes,
     1. explicit \a sa_json_path argument, if provided
     2. \c GOOGLE_APPLICATION_CREDENTIALS environment variable (read via
        \c getenv() so runtime mutations are honored)
-    3. \c ~/.config/gcloud/application_default_credentials.json (user
-       \c gcloud auth application-default login)
+    3. \c application_default_credentials.json in the gcloud configuration directory: \c CLOUDSDK_CONFIG if set,
+       else \c ~/.config/gcloud (user \c gcloud auth application-default login); not with
+       \c QORE_GCP_ADC_DISABLED set (see @ref gcpauthintro)
     4. compute metadata server (GCE, GKE, Cloud Run, Cloud Functions)
 
     File-based credentials are dispatched by their \c "type": an
@@ -409,17 +422,29 @@ public *string sub resolveCredentialLocation(*string location) {
             candidate = env_path;
         }
     }
-    if (!candidate.val()) {
-        # standard gcloud ADC location
-        *string user_home = getenv("HOME");
-        if (user_home.val()) {
-            string adc = user_home + "/.config/gcloud/application_default_credentials.json";
+    if (!candidate.val() && !adcDisabled()) {
+        # the ADC file of the gcloud configuration directory, which gcloud takes from CLOUDSDK_CONFIG if set
+        *string config_dir = getenv("CLOUDSDK_CONFIG");
+        if (!config_dir.val()) {
+            *string user_home = getenv("HOME");
+            if (user_home.val()) {
+                config_dir = user_home + "/.config/gcloud";
+            }
+        }
+        if (config_dir.val()) {
+            string adc = config_dir + "/application_default_credentials.json";
             if (is_file(adc)) {
                 candidate = adc;
             }
         }
     }
     return candidate;
+}
+
+#! Returns @ref True "True" if QORE_GCP_ADC_DISABLED turns the implicit credentials off (see @ref gcpauthintro)
+public bool sub adcDisabled() {
+    *string v = getenv("QORE_GCP_ADC_DISABLED");
+    return v.val() && v != "0";
 }
 
 #! Resolves the quota project independently of the project owning a resource

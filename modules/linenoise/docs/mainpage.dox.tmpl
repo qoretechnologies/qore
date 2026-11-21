@@ -109,14 +109,13 @@ Linenoise::set_callback(\my_callback());
     removed and the callback or object is released while its Program can still run its destructors.  Kept after its
     Program is destroyed, it could neither be called nor destroyed.
 
-    @section linenoise_sandbox Callbacks and Sandboxed Code
+    @section linenoise_sandbox The Line Editor and Sandboxed Code
 
-    Because the line editor and its callbacks are global to the process, code that is sandboxed or acts for sandboxed
-    code (see @ref sandbox_process_wide_registries) cannot set, replace or remove them:
-    @ref Qore::Linenoise::set_callback() "set_callback()",
-    @ref Qore::Linenoise::set_hints_callback() "set_hints_callback()",
-    @ref Qore::Linenoise::set_syntax_callback() "set_syntax_callback()",
-    @ref Qore::Linenoise::bind_key() "bind_key()", @ref Qore::Linenoise::unbind_key() "unbind_key()" and
-    @ref Qore::Linenoise::set_history_provider() "set_history_provider()" raise \c SANDBOX-REGISTRATION-ERROR for
-    such code; trusted code is not affected.
+    Because the line editor, its callbacks, history, settings and editing sessions are global to the process, code
+    that is sandboxed or acts for sandboxed code (see @ref sandbox_process_wide_registries) cannot use it: it would
+    read the input of the process's terminal and the lines that other code entered, and change the editor for all
+    of it.  For such code, every function of the module raises \c SANDBOX-REGISTRATION-ERROR, except
+    @ref Qore::Linenoise::columns() "columns()", @ref Qore::Linenoise::rows() "rows()" and
+    @ref Qore::Linenoise::history_get_max_len() "history_get_max_len()", which only read the size of the terminal
+    and of the history (qore#6743, qore#6846); trusted code is not affected.
 */

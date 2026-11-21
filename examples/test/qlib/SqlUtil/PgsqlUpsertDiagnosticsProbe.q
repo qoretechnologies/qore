@@ -64,7 +64,9 @@ class PgsqlUpsertDiagnosticsProbe {
 
     private run() {
         table_name = ENV.QORE_TEST_PGSQL_DIAG_TABLE;
+        # live-provider-optin: a value that PgsqlUpsertDiagnostics.qtest sets, to check that it is not logged
         rejected_key = ENV.QORE_TEST_PGSQL_DIAG_KEY;
+        # live-provider-optin: a value that PgsqlUpsertDiagnostics.qtest sets, to check that it is not logged
         secret = ENV.QORE_TEST_PGSQL_DIAG_SECRET;
 
         result.modules = map {$1: get_module_hash(){$1}.filename}, ("SqlUtil", "PgsqlSqlUtilBase", "PgsqlSqlUtil");

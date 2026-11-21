@@ -3,6 +3,7 @@
 %modern
 %allow-injection
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../LiveProviderTest.qm
 %requires QUnit
 %requires AwsTextractDataProvider
 %exec-class Contracts

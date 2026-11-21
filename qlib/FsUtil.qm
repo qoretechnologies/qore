@@ -81,6 +81,8 @@ module FsUtil {
     @section fsutil_relnotes Release Notes
 
     @subsection fsutil_v1_4 Version 1.4
+    - @ref FsUtil::remove_tree() and @ref FsUtil::TmpDir preserve filesystem names during cleanup
+      even when the names use a different encoding from the process
     - fixed @ref FsUtil::path_exists() "path_exists()" to correctly return \c False for permission errors
       instead of incorrectly returning \c True
     - fixed @ref FsUtil::remove_tree() "remove_tree()" to properly handle symlinks (by removing them with
@@ -536,13 +538,16 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
         partially removed anyway and REMOVE-TREE-ERROR is thrown and describes what exactly went wrong for each error.
     */
     public sub remove_tree(string path, bool fail_immediately = True) {
-        Dir dir();
+        # Use a single-byte view of both path components. Directory entries are filesystem bytes
+        # and may not be valid text in the process encoding or the caller's path encoding.
+        Dir dir("ISO-8859-1");
         dir.chdir(path);
+        string parent = binary_to_string(binary(path), "ISO-8859-1");
 
         # remove the directory's contents
         list errors = ();
         foreach string name in (dir.listNames()) {
-            string sub_path = join_paths(path, name);
+            string sub_path = join_paths(parent, name);
             try {
                 # Check for symlink first since is_dir follows symlinks
                 if (is_link(sub_path)) {

@@ -28,7 +28,7 @@
 
 %requires Logger
 %requires DataProvider
-%requires(reexport) RestClient >= 2.4
+%requires(reexport) RestClient >= 2.7
 %requires(reexport) HttpClientIo
 %requires(reexport) HttpClientStreamingIo
 %requires(reexport) RestSchemaValidator >= 1.0
@@ -1060,6 +1060,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             };
 
             #! OAuth2 option requirements per grant type
+            /** The options are validated with the requirements of
+                @ref RestClient::RestClient::OAuth2GrantOptions "RestClient::OAuth2GrantOptions", in which the
+                \c client_credentials grant type also requires \c oauth2_client_secret; OAuth2 client assertion
+                options can replace it (see
+                @ref RestClient::RestClient::checkOAuth2GrantOptions() "RestClient::checkOAuth2GrantOptions()")
+            */
             const hash<auto> OAuth2GrantOptions = {
                 "authorization_code": (
                     "oauth2_auth_url",
@@ -1369,6 +1375,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": ""}, connection_path);
 
             # OAuth2 options
+            # the redirect URL has the same default as with RestClient, so that the same options are accepted
+            if (!opts.oauth2_redirect_url) {
+                opts.oauth2_redirect_url = RestClient::RestClient::DefaultOAuth2RedirectUrl;
+            }
+            # the options are validated before they are set, so that an option of the wrong type raises OAUTH2-ERROR
+            # as with RestClient (qore#6906)
+            bool oauth2_grant_usable = checkOAuth2Options(opts);
             if (opts.oauth2_grant_type) {
                 oauth2_grant_type = opts.oauth2_grant_type;
             }
@@ -1407,10 +1420,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
             if (opts.oauth2_auth_url) {
                 oauth2_auth_url = opts.oauth2_auth_url;
-            }
-            # the redirect URL has the same default as with RestClient, so that the same options are accepted
-            if (!opts.oauth2_redirect_url) {
-                opts.oauth2_redirect_url = RestClient::RestClient::DefaultOAuth2RedirectUrl;
             }
             oauth2_redirect_url = opts.oauth2_redirect_url;
             if (exists opts.oauth2_auto_refresh) {
@@ -1460,7 +1469,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
             # Option update callback for notifying the connection about token changes
             update_options = remove opts.update_options;
-            if (!checkOAuth2Options(opts)) {
+            if (!oauth2_grant_usable) {
                 # the token given is used; the grant cannot be used to acquire a new one
                 oauth2_grant_type = NOTHING;
             }
@@ -4552,7 +4561,13 @@ rest.addSensitiveHeaders("Qorus-Token");
         }
 
         #! Validates OAuth2 options
-        /** A token that is given can be used without the options needed to acquire a new one with the grant type;
+        /** The options are validated with
+            @ref RestClient::RestClient::checkOAuth2GrantOptions() "RestClient::checkOAuth2GrantOptions()", as
+            @ref RestClient::RestClient "RestClient" validates them: an option that the grant type requires is missing
+            if it is not set or its value is empty; with the \c client_credentials grant type, OAuth2 client assertion
+            options can replace \c oauth2_client_secret.
+
+            A token that is given can be used without the options needed to acquire a new one with the grant type;
             the grant type is then not usable, and the token is not refreshed, as with
             @ref RestClient::RestClient "RestClient".
 
@@ -4565,42 +4580,33 @@ rest.addSensitiveHeaders("Qorus-Token");
         */
         private bool checkOAuth2Options(hash<auto> opts) {
             *string grant_type = opts.oauth2_grant_type ?? oauth2_grant_type;
-            if (!exists grant_type || grant_type == "none") {
+            if (!grant_type.val() || grant_type == "none") {
                 return True;
             }
             hash<auto> effective = getOAuth2Options() + opts;
-            *list<string> req_opts = OAuth2GrantOptions{grant_type};
-            if (!req_opts) {
-                throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y is unknown; known grant types: %y",
-                    grant_type, keys OAuth2GrantOptions);
+            # a client assertion replaces the client secret of the client credentials grant
+            *hash<string, bool> satisfied;
+            if (grant_type == "client_credentials" && hasOAuth2ClientAssertion(effective)) {
+                satisfied.oauth2_client_secret = True;
             }
-            foreach string req_opt in (req_opts) {
-                if (!effective.hasKey(req_opt) || !effective{req_opt}.val()) {
-                    if (effective.token.val() || token_val.val()) {
-                        log(LoggerLevel::DEBUG, "OAuth2 grant type %y requires option %y, which is not set; the "
-                            "token given is used and cannot be refreshed", grant_type, req_opt);
-                        return False;
-                    }
-                    throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires option %y, but this "
-                        "option is not set; options provided: %y", grant_type, req_opt, keys opts);
+            bool usable;
+            try {
+                usable = RestClient::RestClient::checkOAuth2GrantOptions(grant_type, effective,
+                    effective.token.val() || token_val.val(), satisfied);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "OAUTH2-ERROR" && ex.arg.grant_type == "client_credentials"
+                        && ex.arg.option == "oauth2_client_secret") {
+                    throw "OAUTH2-ERROR", "OAuth2 grant type \"client_credentials\" requires option "
+                        "\"oauth2_client_secret\" or OAuth2 client assertion options", ex.arg;
                 }
+                rethrow;
+            }
+            if (!usable) {
+                log(LoggerLevel::DEBUG, "OAuth2 grant type %y requires options that are not set; the token given is "
+                    "used and cannot be refreshed", grant_type);
+                return False;
             }
             validateOAuth2ClientAssertionOptions(effective);
-            if (grant_type == "client_credentials" && !effective.oauth2_client_secret.val()
-                    && !hasOAuth2ClientAssertion(effective)) {
-                throw "OAUTH2-ERROR", "OAuth2 grant type \"client_credentials\" requires option "
-                    "\"oauth2_client_secret\" or OAuth2 client assertion options";
-            }
-            if (grant_type == "password") {
-                if (!effective.username.val()) {
-                    throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
-                        "password; no username is set";
-                }
-                if (!effective.password.val()) {
-                    throw "OAUTH2-ERROR", "the 'password' OAuth2 grant type requires a username and "
-                        "password; no password is set";
-                }
-            }
             return True;
         }
 

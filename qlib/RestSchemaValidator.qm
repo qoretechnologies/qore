@@ -101,6 +101,11 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - the server-side request validation reads the fields of a request, including the header parameters, which it
+      checks and sets defaults for under \c "headers", from the \c "headers" key of its header hash, or from the top
+      level of a hash built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with
+      the HttpServer option \c http_fields_at_top_level set to @ref False
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - the \c pattern of a schema is compiled once, when the schema is created by a REST schema module, which raises
       \c REGEX-COMPILATION-ERROR for one that is not valid; before, it was compiled for each value checked, and one
       that is not valid failed each request (issue #6603)
@@ -3608,7 +3613,7 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
                 "query": h.params,
             });
 
-            *string ct = mime_get_base_type(headers."content-type");
+            *string ct = mime_get_base_type(http_get_field(headers, "content-type"));
 
             if (exists http_body) {
                 *hash<auto> dh = DataDeserializationSupport{ct};
@@ -3751,9 +3756,9 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             });
 
             if (response_body.val()) {
-                string raw_ct = (hdr."content-type".typeCode() == NT_LIST
-                    ? hdr."content-type"[0]
-                    : hdr."content-type") ?? "";
+                string raw_ct = (http_get_field(hdr, "content-type").typeCode() == NT_LIST
+                    ? http_get_field(hdr, "content-type")[0]
+                    : http_get_field(hdr, "content-type")) ?? "";
                 if (!raw_ct.val()) {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body without a content-type; "
                         "response body: %y; headers: %y", response_body, hdr);
@@ -3768,7 +3773,7 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
                 }
                 if (!dh) {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body; content-type is: %y; "
-                        "types supported: %y; response body: %y", hdr."content-type",
+                        "types supported: %y; response body: %y", http_get_field(hdr, "content-type"),
                         keys DataDeserializationSupport, response_body);
                 }
 

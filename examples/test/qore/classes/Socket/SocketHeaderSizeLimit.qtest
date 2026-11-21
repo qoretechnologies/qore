@@ -1,0 +1,408 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Socket::setMaxHeaderSize() (qore#6867): the readers of an HTTP header section, of the trailer section of a chunked
+    body and of a chunk size line raise an HTTP-HEADER-TOO-LARGE exception, and keep no more data in memory, when a
+    peer sends more than the limit, whether the data is many small lines, one long line or never ends.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class SocketHeaderSizeLimitTest
+
+#! the readers of a header
+enum HeaderReader {
+    Header = "readHTTPHeader",
+    HeaderString = "readHTTPHeaderString",
+}
+
+#! the readers of a chunked body
+enum BodyReader {
+    String = "string",
+    Binary = "binary",
+    OutputStream = "output-stream",
+    Callback = "callback",
+    BinaryCallback = "binary-callback",
+}
+
+class SocketHeaderSizeLimitTest inherits QUnit::Test {
+    private {
+        #! the limit set in most tests
+        const Limit = 4096;
+
+        #! the default limit
+        const DefaultLimit = 65536;
+
+        #! the size of a line in the sections made of many lines
+        const LineSize = 64;
+
+        const HeaderReaders = (HeaderReader::Header, HeaderReader::HeaderString);
+
+        const BodyReaders = (
+            BodyReader::String,
+            BodyReader::Binary,
+            BodyReader::OutputStream,
+            BodyReader::Callback,
+            BodyReader::BinaryCallback,
+        );
+
+        #! the start line of a response
+        const StartLine = "HTTP/1.1 200 OK\r\n";
+    }
+
+    constructor() : Test("SocketHeaderSizeLimitTest", "1.0") {
+        addTestCase("header at and over the limit", \headerLimitTest());
+        addTestCase("header of many small lines", \headerManyLinesTest());
+        addTestCase("header of one long line", \headerLongLineTest());
+        addTestCase("header that never ends", \headerFloodTest());
+        addTestCase("trailer at and over the limit", \trailerLimitTest());
+        addTestCase("trailer of many small lines", \trailerManyLinesTest());
+        addTestCase("trailer that never ends", \trailerFloodTest());
+        addTestCase("chunk size line", \chunkSizeLineTest());
+        addTestCase("readHTTPChunk() size line and trailer", \readHttpChunkTest());
+        addTestCase("poll operations", \pollOperationsTest());
+        addTestCase("default limit", \defaultLimitTest());
+        addTestCase("limit accessor", \limitAccessorTest());
+        set_return_value(main());
+    }
+
+    #! a header of the given total size, in one field line
+    private static string makeHeader(int size) {
+        string head = StartLine + "X-Pad: ";
+        string tail = "\r\n\r\n";
+        if (size <= head.size() + tail.size()) {
+            throw "TEST-ERROR", sprintf("header size %d is too small", size);
+        }
+        return head + strmul("a", size - head.size() - tail.size()) + tail;
+    }
+
+    #! a header made of lines of LineSize bytes of the given total size
+    private static string makeLineHeader(int size) {
+        string rv = StartLine;
+        int n = 0;
+        # the last line takes the rest (at least 64 bytes), with the empty line that ends the header
+        while (size - rv.size() - 2 >= 2 * LineSize) {
+            rv += sprintf("X-%d: %s\r\n", n++, strmul("a", LineSize - 2 - 2 - n.toString().size() - 2));
+        }
+        int rest = size - rv.size() - 2;
+        rv += "X-L: " + strmul("b", rest - 5 - 2) + "\r\n";
+        return rv + "\r\n";
+    }
+
+    #! a trailer section (the field lines and the empty line that ends it) of the given total size, in lines of LineSize
+    private static string makeTrailer(int size) {
+        string rv;
+        int n = 0;
+        while (rv.size() + 2 + LineSize + 2 <= size) {
+            rv += sprintf("X-%d: %s\r\n", n++, strmul("t", LineSize - 2 - 2 - n.toString().size() - 2));
+        }
+        int rest = size - rv.size() - 2;
+        if (rest > 0) {
+            rv += "X: " + strmul("t", rest - 5) + "\r\n";
+        }
+        return rv + "\r\n";
+    }
+
+    #! a chunked body with one chunk, followed by the given trailer section
+    private static string makeBody(string trailer) {
+        return "5\r\nhello\r\n0\r\n" + trailer;
+    }
+
+    #! starts a peer that sends the data and keeps the connection open until done
+    private hash<auto> startPeer(string data) {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        hash<auto> info = server.getSocketInfo(False);
+
+        Counter done(1);
+        background sub () {
+            try {
+                Socket client();
+                client.connectINET(info.address, info.port, 10s, info.family);
+                client.send(data, 10s);
+                # keep the connection open until the reader has finished
+                done.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                # the reader closes the connection when it stops reading: not an error of the test
+            }
+        }();
+        return {"server": server, "done": done};
+    }
+
+    #! reads a header with the given reader and limit; returns the exception, if any
+    private *hash<ExceptionInfo> readHeader(HeaderReader reader, string data, int limit) {
+        hash<auto> peer = startPeer(data);
+        on_exit peer.done.dec();
+        Socket conn = peer.server.accept(5s);
+        conn.setMaxHeaderSize(limit);
+        try {
+            switch (reader) {
+                case HeaderReader::Header:
+                    conn.readHTTPHeader(5s);
+                    break;
+                case HeaderReader::HeaderString:
+                    conn.readHTTPHeaderString(5s);
+                    break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! reads a chunked body with the given reader and limit; returns the exception, if any
+    private *hash<ExceptionInfo> readBody(BodyReader reader, string data, int limit) {
+        hash<auto> peer = startPeer(data);
+        on_exit peer.done.dec();
+        Socket conn = peer.server.accept(5s);
+        conn.setMaxHeaderSize(limit);
+        code recv = sub (hash<auto> v) {};
+        BinaryOutputStream os();
+        try {
+            switch (reader) {
+                case BodyReader::String:
+                    conn.readHTTPChunkedBody(5s);
+                    break;
+                case BodyReader::Binary:
+                    conn.readHTTPChunkedBodyBinary(5s);
+                    break;
+                case BodyReader::OutputStream:
+                    conn.readHTTPChunkedBodyToOutputStream(os, 5s);
+                    break;
+                case BodyReader::Callback:
+                    conn.readHTTPChunkedBodyWithCallback(recv, 5s);
+                    break;
+                case BodyReader::BinaryCallback:
+                    conn.readHTTPChunkedBodyBinaryWithCallback(recv, 5s);
+                    break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    private checkTooLarge(*hash<ExceptionInfo> ex, int limit, string msg) {
+        assertEq("HTTP-HEADER-TOO-LARGE", ex.err, msg);
+        assertRegex(sprintf("exceeds the maximum size of %d bytes", limit), ex.desc, msg);
+    }
+
+    headerLimitTest() {
+        string at = makeHeader(Limit);
+        string over = makeHeader(Limit + 1);
+        assertEq(Limit, at.size());
+        foreach HeaderReader reader in (HeaderReaders) {
+            assertNothing(readHeader(reader, at, Limit), reader.toString() + " at the limit");
+            checkTooLarge(readHeader(reader, over, Limit), Limit, reader.toString() + " one over the limit");
+        }
+    }
+
+    headerManyLinesTest() {
+        string at = makeLineHeader(Limit);
+        string over = makeLineHeader(Limit * 4);
+        assertEq(Limit, at.size());
+        foreach HeaderReader reader in (HeaderReaders) {
+            assertNothing(readHeader(reader, at, Limit), reader.toString() + " at the limit");
+            checkTooLarge(readHeader(reader, over, Limit), Limit, reader.toString() + " many lines");
+        }
+    }
+
+    headerLongLineTest() {
+        string over = makeHeader(Limit * 16);
+        foreach HeaderReader reader in (HeaderReaders) {
+            checkTooLarge(readHeader(reader, over, Limit), Limit, reader.toString());
+        }
+    }
+
+    headerFloodTest() {
+        # data without the end of the header, much more than the limit
+        string flood = StartLine + strmul("x", 1024 * 1024);
+        foreach HeaderReader reader in (HeaderReaders) {
+            checkTooLarge(readHeader(reader, flood, Limit), Limit, reader.toString());
+        }
+        # lines without the empty line that ends the header
+        string lines = StartLine + strmul("X-A: a\r\n", 100000);
+        foreach HeaderReader reader in (HeaderReaders) {
+            checkTooLarge(readHeader(reader, lines, Limit), Limit, reader.toString() + " lines");
+        }
+    }
+
+    trailerLimitTest() {
+        string at = makeTrailer(Limit);
+        string over = makeTrailer(Limit + 1);
+        assertEq(Limit, at.size());
+        foreach BodyReader reader in (BodyReaders) {
+            assertNothing(readBody(reader, makeBody(at), Limit), reader.toString() + " at the limit");
+            checkTooLarge(readBody(reader, makeBody(over), Limit), Limit, reader.toString() + " one over the limit");
+        }
+    }
+
+    trailerManyLinesTest() {
+        string over = makeTrailer(Limit * 4);
+        foreach BodyReader reader in (BodyReaders) {
+            checkTooLarge(readBody(reader, makeBody(over), Limit), Limit, reader.toString());
+        }
+    }
+
+    trailerFloodTest() {
+        # trailer lines without the empty line that ends the section
+        string lines = makeBody(strmul("X-A: a\r\n", 100000));
+        string longline = makeBody("X-A: " + strmul("a", 1024 * 1024));
+        foreach BodyReader reader in (BodyReaders) {
+            checkTooLarge(readBody(reader, lines, Limit), Limit, reader.toString() + " lines");
+            checkTooLarge(readBody(reader, longline, Limit), Limit, reader.toString() + " one line");
+        }
+    }
+
+    chunkSizeLineTest() {
+        # the size line of a chunk with a long extension
+        string ext = "5;" + strmul("e", Limit * 4) + "\r\nhello\r\n0\r\n\r\n";
+        foreach BodyReader reader in (BodyReaders) {
+            checkTooLarge(readBody(reader, ext, Limit), Limit, reader.toString());
+        }
+        # a size line that never ends
+        string flood = "5;" + strmul("e", 1024 * 1024);
+        foreach BodyReader reader in (BodyReaders) {
+            checkTooLarge(readBody(reader, flood, Limit), Limit, reader.toString() + " flood");
+        }
+        # a size line at the limit: "5" + extension + CRLF is Limit bytes
+        string at = "5;" + strmul("e", Limit - 5) + "\r\nhello\r\n0\r\n\r\n";
+        foreach BodyReader reader in (BodyReaders) {
+            assertNothing(readBody(reader, at, Limit), reader.toString() + " at the limit");
+        }
+    }
+
+    readHttpChunkTest() {
+        # readHTTPChunk() reads the size line of the chunk
+        hash<auto> peer = startPeer("5;" + strmul("e", Limit * 4) + "\r\nhello\r\n");
+        on_exit peer.done.dec();
+        Socket conn = peer.server.accept(5s);
+        conn.setMaxHeaderSize(Limit);
+        try {
+            conn.readHTTPChunk(5s);
+            assertTrue(False, "readHTTPChunk() size line");
+        } catch (hash<ExceptionInfo> ex) {
+            checkTooLarge(ex, Limit, "readHTTPChunk() size line");
+        }
+
+        # and the trailer after the last chunk
+        hash<auto> peer2 = startPeer("0\r\n" + makeTrailer(Limit * 4));
+        on_exit peer2.done.dec();
+        Socket conn2 = peer2.server.accept(5s);
+        conn2.setMaxHeaderSize(Limit);
+        try {
+            conn2.readHTTPChunk(5s);
+            assertTrue(False, "readHTTPChunk() trailer");
+        } catch (hash<ExceptionInfo> ex) {
+            checkTooLarge(ex, Limit, "readHTTPChunk() trailer");
+        }
+    }
+
+    #! drives the poll operation to its end; returns the exception that it raised, if any
+    private *hash<ExceptionInfo> runPoll(AbstractPollOperation op) {
+        try {
+            while (*hash<SocketPollInfo> pi = op.continuePoll()) {
+                Socket::poll((pi,), 10s);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    pollOperationsTest() {
+        # the poll operation that reads a header
+        foreach string data in (makeHeader(Limit * 4), makeLineHeader(Limit * 4), StartLine + strmul("x", 1024 * 1024)) {
+            hash<auto> peer = startPeer(data);
+            on_exit peer.done.dec();
+            Socket conn = peer.server.accept(5s);
+            conn.setMaxHeaderSize(Limit);
+            checkTooLarge(runPoll(conn.startPollReadHttpHeader()), Limit, "header " + $#.toString());
+        }
+        hash<auto> ok_peer = startPeer(makeHeader(Limit));
+        on_exit ok_peer.done.dec();
+        Socket ok_conn = ok_peer.server.accept(5s);
+        ok_conn.setMaxHeaderSize(Limit);
+        assertNothing(runPoll(ok_conn.startPollReadHttpHeader()), "header at the limit");
+
+        # the poll operation that reads a chunked body: a chunk size line, and the trailer section
+        foreach string body in ("5;" + strmul("e", Limit * 4) + "\r\nhello\r\n0\r\n\r\n",
+                                "5;" + strmul("e", 1024 * 1024),
+                                makeBody(makeTrailer(Limit * 4)),
+                                makeBody(strmul("X-A: a\r\n", 100000))) {
+            hash<auto> peer = startPeer(body);
+            on_exit peer.done.dec();
+            Socket conn = peer.server.accept(5s);
+            conn.setMaxHeaderSize(Limit);
+            checkTooLarge(runPoll(conn.startPollReadHttpBody(-1, True, False)), Limit, "body " + $#.toString());
+        }
+        hash<auto> ok_body = startPeer(makeBody(makeTrailer(Limit)));
+        on_exit ok_body.done.dec();
+        Socket ok_conn2 = ok_body.server.accept(5s);
+        ok_conn2.setMaxHeaderSize(Limit);
+        assertNothing(runPoll(ok_conn2.startPollReadHttpBody(-1, True, False)), "trailer at the limit");
+    }
+
+    defaultLimitTest() {
+        # without a limit set, the default applies
+        int dflt = DefaultLimit;
+        assertEq(65536, dflt);
+        foreach HeaderReader reader in (HeaderReaders) {
+            hash<auto> peer = startPeer(makeHeader(dflt + 1));
+            on_exit peer.done.dec();
+            Socket conn = peer.server.accept(5s);
+            try {
+                if (reader == HeaderReader::Header) {
+                    conn.readHTTPHeader(5s);
+                } else {
+                    conn.readHTTPHeaderString(5s);
+                }
+                assertTrue(False, reader.toString());
+            } catch (hash<ExceptionInfo> ex) {
+                checkTooLarge(ex, dflt, reader.toString());
+            }
+            hash<auto> peer2 = startPeer(makeHeader(dflt));
+            on_exit peer2.done.dec();
+            Socket conn2 = peer2.server.accept(5s);
+            if (reader == HeaderReader::Header) {
+                conn2.readHTTPHeader(5s);
+            } else {
+                conn2.readHTTPHeaderString(5s);
+            }
+        }
+    }
+
+    limitAccessorTest() {
+        Socket s();
+        assertEq(DefaultLimit, s.getMaxHeaderSize());
+        s.setMaxHeaderSize(Limit);
+        assertEq(Limit, s.getMaxHeaderSize());
+        s.setMaxHeaderSize(0);
+        assertEq(DefaultLimit, s.getMaxHeaderSize());
+        assertThrows("INVALID-ARGUMENT", \s.setMaxHeaderSize(), -1);
+        assertEq(DefaultLimit, s.getMaxHeaderSize());
+    }
+}

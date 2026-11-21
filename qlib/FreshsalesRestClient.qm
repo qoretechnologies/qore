@@ -29,12 +29,12 @@
 %modern
 
 %requires(reexport) Mime >= 1.3
-%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClient >= 2.7
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module FreshsalesRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "User module for calling Freshsales REST API services";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
@@ -62,12 +62,38 @@ module FreshsalesRestClient {
     The main classes are:
     - @ref FreshsalesRestClient::FreshsalesRestClient "FreshsalesRestClient":
       this class provides the REST client API for communication with the Freshsales API;
-      it handles API key authentication
+      it authenticates with OAuth2 or with an API key
     - @ref FreshsalesRestClient::FreshsalesRestConnection "FreshsalesRestConnection":
       provides a connection object to Freshsales services (based on the
       @ref connectionproviderintro "ConnectionProvider" module)
 
+    @section freshsalesrestclient_auth Authentication
+
+    |!Method|!What it is|!Options
+    |OAuth2|the authorization code flow, with refresh tokens, against OAuth credentials created for the \
+Freshworks organization|\c domain, \c oauth2_client_id, \c oauth2_client_secret, \c oauth2_scopes
+    |API key|the key shown under Profile Settings > API Settings in Freshsales|\c domain, \c apikey
+
+    OAuth2 is the first alternative of the connection.  Its endpoints are on the organization's own domain:
+    \c https://{org}.myfreshworks.com/org/oauth/v2/authorize and \c https://{org}.myfreshworks.com/org/oauth/v2/token,
+    both built from the \c domain option; the token endpoint takes the client ID and secret by HTTP basic
+    authentication (see
+    <a href="https://developers.freshworks.com/docs/app-sdk/v3.0/deal/oauth-implementation-in-apps/oauth-in-external-apps/">OAuth in external apps</a>).
+    Freshworks does not publish a list of its scopes, and accepts only the scopes selected for the OAuth credentials
+    (ex: \c freshsales.deals.create), so \c oauth2_scopes has no default and must be set to those scopes.
+
+    Freshsales takes an OAuth2 access token in the same form as an API key, \c "Authorization: Token token=TOKEN",
+    so the clients send every token in that form, whatever token type the token response names.
+
+    When an \c apikey is given, the OAuth2 options are removed, so that the client does not try to run the OAuth2
+    flow.
+
     @section freshsalesrestclientrelnotes Release Notes
+
+    @subsection freshsalesrestclientv1_1 FreshsalesRestClient v1.1
+    - added OAuth2 authorization code authentication with refresh tokens on the organization's domain as the first
+      alternative of the connection, with the API key kept as the fallback; OAuth2 access tokens are sent as
+      \c "Token token=TOKEN" (<a href="https://github.com/qoretechnologies/qore/issues/6896">issue 6896</a>)
 
     @subsection freshsalesrestclientv1_0 FreshsalesRestClient v1.0
     - initial release
@@ -113,6 +139,57 @@ public class FreshsalesRestClientBase {
 
         #! Default connection URL
         const DefaultConnectionUrl = "freshsalesrest://app.myfreshworks.com";
+
+        #! The path of the OAuth2 authorization endpoint on the organization's domain
+        const AuthPath = "/org/oauth/v2/authorize";
+
+        #! The path of the OAuth2 token endpoint on the organization's domain
+        const TokenPath = "/org/oauth/v2/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! The authorization scheme of the \c Authorization header for API keys and OAuth2 access tokens
+        /** The header is \c "Token token=TOKEN".
+        */
+        const TokenAuthPrefix = "Token token=";
+
+        #! Options that only apply to OAuth2; removed when an API key is given
+        const OAuth2OptionNames = (
+            "oauth2_auth_args",
+            "oauth2_auth_url",
+            "oauth2_client_id",
+            "oauth2_client_secret",
+            "oauth2_grant_type",
+            "oauth2_redirect_url",
+            "oauth2_refresh_token",
+            "oauth2_scopes",
+            "oauth2_token_url",
+            "oauth2_token_use_basic_auth",
+        );
+    }
+
+    #! Returns the OAuth2 authorization URL for the given domain option value
+    /** @param domain a \c domain option value; see @ref getDomainHost()
+
+        @return the OAuth2 authorization URL on the organization's domain
+    */
+    static string getAuthUrl(string domain) {
+        return "https://" + getDomainHost(domain) + AuthPath;
+    }
+
+    #! Returns the OAuth2 token URL for the given domain option value
+    /** @param domain a \c domain option value; see @ref getDomainHost()
+
+        @return the OAuth2 token URL on the organization's domain
+    */
+    static string getTokenUrl(string domain) {
+        return "https://" + getDomainHost(domain) + TokenPath;
+    }
+
+    #! Returns the value of the \c Authorization header for an API key or OAuth2 access token
+    static string getAuthHeader(string token) {
+        return TokenAuthPrefix + token;
     }
 
     #! Extracts the host from a domain option value
@@ -148,8 +225,25 @@ public class FreshsalesRestClientBase {
         }
 
         # Set Freshsales token authentication
-        if (opts.apikey) {
-            hdr.Authorization = "Token token=" + opts.apikey;
+        if (opts.apikey.val()) {
+            hdr.Authorization = getAuthHeader(opts.apikey);
+            # a client authenticating with an API key does not use OAuth2; the OAuth2 options are removed after
+            # the defaults are applied, or a defaulted grant type would make the client demand a client ID and
+            # secret.  The test is whether an API key was given: an authorized OAuth2 connection also has a
+            # token and keeps its OAuth2 options so that the token can be refreshed
+            rv -= OAuth2OptionNames;
+        } else if (opts.oauth2_client_id.val()) {
+            # the OAuth2 endpoints are on the organization's domain
+            if (opts.domain) {
+                rv.oauth2_auth_url = getAuthUrl(opts.domain);
+                rv.oauth2_token_url = getTokenUrl(opts.domain);
+            }
+            if (!rv.oauth2_grant_type) {
+                rv.oauth2_grant_type = DefaultGrantType;
+            }
+            if (!exists rv.oauth2_token_use_basic_auth) {
+                rv.oauth2_token_use_basic_auth = True;
+            }
         }
 
         # Remove raw options to prevent RestClient misinterpretation
@@ -168,8 +262,9 @@ public class FreshsalesRestClientBase {
     token-based authentication.
 
     @par Authentication:
-    - API key via Authorization header: \c "Token token=API_KEY"
+    - OAuth2 access token or API key via Authorization header: \c "Token token=TOKEN"
     - API key obtained from: Profile Settings > API Settings in Freshsales
+    - see @ref freshsalesrestclient_auth
 
     @par API Structure:
     All endpoints are under /crm/sales/api (set via default_path)
@@ -189,7 +284,10 @@ FreshsalesRestClient freshsales({
         class plus:
         - \c domain: the Freshsales subdomain (e.g., \c "mycompany" for
           \c "https://mycompany.myfreshworks.com")
-        - \c apikey: the Freshsales API key
+        - \c apikey: the Freshsales API key; if given, the OAuth2 options are removed
+
+        Without \c apikey, the OAuth2 options are used (\c oauth2_client_id and \c oauth2_client_secret, with
+        \c token and \c oauth2_refresh_token once authorized); the OAuth2 URLs are built from \c domain.
 
         @param do_not_connect if \c False (the default), then a connection will be immediately
         established to the remote server
@@ -201,10 +299,20 @@ FreshsalesRestClient freshsales({
             : RestClient(FreshsalesRestClientBase::getOptions(opts), do_not_connect) {
         setAssumedEncoding("UTF-8");
     }
+
+    #! Sets a token for authentication
+    /** Freshsales takes an OAuth2 access token as \c "Authorization: Token token=TOKEN", whatever the token type
+        of the token response, so the header that the base class sets is replaced with that form.
+    */
+    setToken(string token_type, string token, *string refresh_token, *date token_expiry) {
+        RestClient::setToken(token_type, token, refresh_token, token_expiry);
+        addDefaultHeaders({"Authorization": FreshsalesRestClientBase::getAuthHeader(token)});
+    }
 }
 
 #! Class for Freshsales REST connections; returns @ref FreshsalesRestClient objects
-/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; the OAuth2
+    URLs are always built from the \c domain option (see @ref freshsalesrestclient_auth)
 
     @see @ref FreshsalesRestClient::FreshsalesRestClient::constructor() for more information on the
     above options
@@ -225,7 +333,10 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
                 "4. Copy your API key\n\n"
                 "**To find your subdomain:**\n"
                 "Your subdomain is the part before `.myfreshworks.com` in your Freshsales URL "
-                "(e.g., `mycompany` from `https://mycompany.myfreshworks.com`)",
+                "(e.g., `mycompany` from `https://mycompany.myfreshworks.com`)\n\n"
+                "**OAuth2** can be used instead of an API key: use the client ID and secret of OAuth "
+                "credentials created for your Freshworks organization and set the scopes selected for "
+                "them. The OAuth2 endpoints are built from your domain.",
             "cls": Class::forName("FreshsalesRestConnection"),
             "auto_url": True,
             "schemes": {
@@ -234,7 +345,9 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
             "base_scheme_map": {
                 "https": "freshsalesrest",
             },
-            "required_options": "domain,apikey",
+            # OAuth2 is the first alternative and the API key the fallback; both need the organization's domain,
+            # which the OAuth2 endpoints are on
+            "required_options": "domain,oauth2_client_id,oauth2_client_secret|domain,apikey",
             "options": RestConnection::ConnectionScheme.options + {
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
@@ -265,6 +378,14 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
                         "The subdomain or domain is extracted automatically",
                     "preselected": True,
                 },
+                "oauth2_grant_type": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_grant_type, {
+                        "default_value": FreshsalesRestClientBase::DefaultGrantType,
+                    }),
+                "oauth2_token_use_basic_auth": connection_option_override(
+                    RestConnection::ConnectionScheme.options.oauth2_token_use_basic_auth, {
+                        "default_value": True,
+                    }),
                 "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
                     "default_value": FreshsalesRestClientBase::DefaultPingHeaders,
                 }),
@@ -293,7 +414,8 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
     constructor(string name, string description,
             string url = FreshsalesRestClientBase::DefaultConnectionUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(name, description, url, attributes,
+                FreshsalesRestConnection::fixOAuth2Urls(options)) {
     }
 
     #! creates the FreshsalesRestConnection object
@@ -324,7 +446,31 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
             string host = FreshsalesRestClientBase::getDomainHost(config.opts.domain ?? "app");
             config.url = "freshsalesrest://" + host;
         }
+        if (config.opts) {
+            config.opts = FreshsalesRestConnection::fixOAuth2Urls(config.opts);
+        }
         return config;
+    }
+
+    #! Builds the OAuth2 URLs from the \c domain option, so that they always match it
+    /** A connection with an API key does not use OAuth2 and gets no OAuth2 URLs.
+    */
+    private static hash<auto> fixOAuth2Urls(hash<auto> options) {
+        if (options.domain && !options.apikey) {
+            options.oauth2_auth_url = FreshsalesRestClientBase::getAuthUrl(options.domain);
+            options.oauth2_token_url = FreshsalesRestClientBase::getTokenUrl(options.domain);
+        }
+        return options;
+    }
+
+    #! Returns connection options with the OAuth2 URLs always built from the \c domain option
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        if (rv.domain && !rv.apikey) {
+            rv.oauth2_auth_url = FreshsalesRestClientBase::getAuthUrl(rv.domain);
+            rv.oauth2_token_url = FreshsalesRestClientBase::getTokenUrl(rv.domain);
+        }
+        return rv;
     }
 
     #! returns \c "freshsalesrest"
@@ -373,6 +519,17 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
             if (url != expected_url) {
                 update.url = expected_url;
             }
+            # Rebuild the OAuth2 URLs from the domain
+            if (opts.domain && !opts.apikey) {
+                string expected_auth_url = FreshsalesRestClientBase::getAuthUrl(opts.domain);
+                if (opts.oauth2_auth_url != expected_auth_url) {
+                    update.oauth2_auth_url = expected_auth_url;
+                }
+                string expected_token_url = FreshsalesRestClientBase::getTokenUrl(opts.domain);
+                if (opts.oauth2_token_url != expected_token_url) {
+                    update.oauth2_token_url = expected_token_url;
+                }
+            }
             if (opts.ping_path =~ /^\//) {
                 update.ping_path = opts.ping_path.substr(1);
             }
@@ -414,6 +571,15 @@ public class FreshsalesRestClientIo inherits RestClientIo::RestClientIo, Freshsa
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(FreshsalesRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    #! Sets a token for authentication
+    /** Freshsales takes an OAuth2 access token as \c "Authorization: Token token=TOKEN", whatever the token type
+        of the token response, so the header that the base class sets is replaced with that form.
+    */
+    setToken(string token_type, string token, *string new_refresh_token, *date token_expiry) {
+        RestClientIo::setToken(token_type, token, new_refresh_token, token_expiry);
+        addDefaultHeaders({"authorization": FreshsalesRestClientBase::getAuthHeader(token)});
     }
 }
 }

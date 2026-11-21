@@ -1757,7 +1757,6 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - the methods that subclasses call are public, so that a subclass declared in a sandboxed Program, which cannot
       use the private methods of the library's classes, can call them:
       @ref DataProvider::AbstractDataProvider::checkOptions() "AbstractDataProvider::checkOptions()",
-      @ref DataProvider::AbstractDataProvider::logCaughtError() "logCaughtError()",
       @ref DataProvider::AbstractDataProvider::processSearchParameters() "processSearchParameters()" and
       @ref DataProvider::AbstractDataProvider::getWrappedExceptionArg() "getWrappedExceptionArg()";
       @ref DataProvider::AbstractDataProviderType::checkChange() "AbstractDataProviderType::checkChange()";
@@ -1768,6 +1767,11 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       @ref DataProvider::AbstractTimestampWatchDataProvider::getEventName() "AbstractTimestampWatchDataProvider::getEventName()"
       and @ref DataProvider::AbstractTimestampWatchDataProvider::getWatchRecordTimestamp() "getWatchRecordTimestamp()"
       (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+    - added @ref DataProvider::DataProvider::setModuleHostHooks() "DataProvider::setModuleHostHooks()" and
+      @ref DataProvider::DataProvider::getModuleHostHooks() "DataProvider::getModuleHostHooks()": the host sets, once
+      and before a module is loaded, the hooks the module needs to run code for sandboxed callers, and the module reads
+      them in its initialization, even when it is loaded lazily
+      (<a href="https://github.com/qoretechnologies/qore/issues/6845">issue 6845</a>)
     - added optional processing-locality and billing-model metadata to apps and actions: the \c processing
       (@ref DataProvider::DataProviderProcessingInfo "DataProviderProcessingInfo") and \c billing
       (@ref DataProvider::DataProviderBillingInfo "DataProviderBillingInfo") fields of
@@ -1860,6 +1864,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       "AbstractDataProviderType::freeze()" and @ref DataProvider::AbstractDataField::freeze()
       "AbstractDataField::freeze()" for types that a module builds in a sandboxed call and keeps for every caller
       (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+    - @ref DataProvider::DataProvider::getGlobalLogger() "DataProvider::getGlobalLogger()" returns
+      @ref nothing "NOTHING" for code that is sandboxed or acts for sandboxed code, which does not get the process-wide
+      logger that the host set; the messages that the module produces for such code still go to that logger
+      (<a href="https://github.com/qoretechnologies/qore/issues/6746">issue 6746</a>)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

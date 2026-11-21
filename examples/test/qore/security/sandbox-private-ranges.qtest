@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - address resolution and socket binds of the sandbox's network policy
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxPrivateRangesTest
+
+#! SandboxManager::blockPrivateNetworks() denies every range that is not a public unicast destination (#6858)
+/** Before the change, the "this network" range, the shared address space of carrier-grade NAT, multicast, the
+    reserved range and the broadcast address, and the IPv6 unspecified and multicast addresses were reachable for
+    sandboxed code, as were denied IPv4 addresses embedded in NAT64 and 6to4 IPv6 addresses.  A bind on all interfaces
+    is still allowed: it is not a destination.
+*/
+class SandboxPrivateRangesTest inherits QUnit::Test {
+    public {
+        const TenantSource = "%modern
+string sub check(string host) {
+    try {
+        SandboxManager::checkNetworkConnect(host, 80);
+        return \"allowed\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub bindAll() {
+    try {
+        Socket s();
+        s.bind(\"0.0.0.0:0\", True);
+        s.close();
+        return \"bound\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! the addresses that the policy must deny, with what they are
+        const Denied = {
+            "0.1.2.3": "this network",
+            "100.64.0.1": "carrier-grade NAT (first)",
+            "100.127.255.254": "carrier-grade NAT (last)",
+            "224.0.0.1": "multicast",
+            "239.255.255.250": "multicast (SSDP)",
+            "240.0.0.1": "reserved",
+            "255.255.255.255": "limited broadcast",
+            "::": "IPv6 unspecified",
+            "ff02::1": "IPv6 multicast",
+            "64:ff9b::7f00:1": "NAT64 of 127.0.0.1",
+            "64:ff9b::a00:1": "NAT64 of 10.0.0.1",
+            "2002:7f00:1::1": "6to4 of 127.0.0.1",
+            "2002:c0a8:101::1": "6to4 of 192.168.1.1",
+            "2002:a9fe:a9fe::1": "6to4 of 169.254.169.254",
+            "::ffff:127.0.0.1": "IPv4-mapped 127.0.0.1",
+            "fd00:ec2::254": "cloud metadata (IPv6)",
+            "169.254.169.254": "cloud metadata",
+        };
+
+        #! public addresses next to the denied ranges, which the policy allows
+        const Allowed = {
+            "8.8.8.8": "public",
+            "100.63.255.255": "below carrier-grade NAT",
+            "100.128.0.1": "above carrier-grade NAT",
+            "223.255.255.254": "below multicast",
+            "64:ff9b::808:808": "NAT64 of 8.8.8.8",
+            "2002:808:808::1": "6to4 of 8.8.8.8",
+            "2606:4700:4700::1111": "public IPv6",
+        };
+    }
+
+    constructor() : QUnit::Test("sandbox private ranges", "1.0", \ARGV) {
+        addTestCase("the ranges that are not public unicast destinations are denied", \deniedTest());
+        addTestCase("public addresses next to them are allowed", \allowedTest());
+        addTestCase("a bind on all interfaces is still allowed", \bindTest());
+        set_return_value(main());
+    }
+
+    private Program tenant() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.blockPrivateNetworks();
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    deniedTest() {
+        Program p = tenant();
+        foreach hash<auto> i in (Denied.pairIterator()) {
+            assertEq("NETWORK-ACCESS-DENIED", p.callFunction("check", i.key), sprintf("%s (%s)", i.key, i.value));
+        }
+    }
+
+    allowedTest() {
+        Program p = tenant();
+        foreach hash<auto> i in (Allowed.pairIterator()) {
+            assertEq("allowed", p.callFunction("check", i.key), sprintf("%s (%s)", i.key, i.value));
+        }
+    }
+
+    bindTest() {
+        assertEq("bound", tenant().callFunction("bindAll"));
+    }
+}

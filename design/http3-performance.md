@@ -394,6 +394,10 @@ similar to how nginx handles all QUIC connections on the same event loop as TCP.
 
 ---
 
+### Network emulation
+
+Extreme netem profiles are out of scope; see the header of `examples/test/qlib/HttpClientIo/ClientReceiveCredit.qtest`.
+
 ## Benchmark Reproduction
 
 ```bash

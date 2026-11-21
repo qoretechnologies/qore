@@ -4075,8 +4075,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @since %DataProvider 3.9
     */
-    logCaughtError(string message, ...) {
-        *LoggerInterface logger = getLogger() ?? DataProvider::getGlobalLogger();
+    private logCaughtError(string message, ...) {
+        # the global logger is read directly, as the message is produced by the module also for sandboxed callers
+        *LoggerInterface logger = getLogger() ?? DataProviderGlobalLogger::logger;
         if (logger) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelError, message, argv);
         }
@@ -8182,7 +8183,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @since DataProvider 3.0
     */
-    static registerChild(string name, code generator) {
+    static registerChild(string name, code generator) [dom=PROCESS_CONTROL] {
         throw "UNSUPPORTED-ERROR", "This data provider does not support dynamically adding child providers";
     }
 

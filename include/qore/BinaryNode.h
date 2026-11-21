@@ -39,6 +39,7 @@
 /** this class is implemented simply as a pointer and a length indicator
  */
 class BinaryNode : public SimpleValueQoreNode {
+    friend class qore_binary_node_ops;
     friend class qore_binary_node_private;
 
 private:
@@ -67,9 +68,6 @@ private:
 protected:
     //! frees and memory owned by the object
     DLLEXPORT virtual ~BinaryNode();
-
-    DLLLOCAL void checkOffset(qore_offset_t& offset) const;
-    DLLLOCAL void checkOffset(qore_offset_t& offset, qore_offset_t& num) const;
 
 public:
     //! creates the object

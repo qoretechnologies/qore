@@ -357,7 +357,7 @@ string how = ARGV[1];
 string arg = ARGV[2] ?? \"\";
 string attacker = ENV.PROBE_ATTACKER;
 string other = ENV.PROBE_OTHER;
-string secret = ENV.PROBE_SECRET;
+string secret = ENV.PROBE_SECRET; # live-provider-optin: a fake value that the parent test sets
 
 SandboxManager sm();
 sm.setFilesystemDefaultPolicy(False);

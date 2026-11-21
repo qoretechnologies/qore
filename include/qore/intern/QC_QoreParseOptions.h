@@ -35,6 +35,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreParseOptions.h>
 #include <qore/ParseOptionMap.h>
+#include <qore/intern/SyncParseOptions.h>
 
 DLLEXPORT extern qore_classid_t CID_PARSEOPTIONS;
 DLLLOCAL extern QoreClass* QC_PARSEOPTIONS;
@@ -45,10 +46,37 @@ class QoreParseOptionsData : public AbstractPrivateData {
 public:
     DLLLOCAL QoreParseOptionsData() {}
     DLLLOCAL QoreParseOptionsData(const QoreParseOptions& po) : po(po) {}
-    DLLLOCAL QoreParseOptionsData(const QoreParseOptionsData& other) : po(other.po) {}
+    DLLLOCAL QoreParseOptionsData(const QoreParseOptionsData& other) : po(other.get()) {}
 
-    DLLLOCAL const QoreParseOptions& get() const { return po; }
-    DLLLOCAL QoreParseOptions& getRef() { return po; }
+    DLLLOCAL QoreParseOptions get() const {
+        std::lock_guard<std::mutex> lock(qore_parse_options_values_mutex);
+        return po;
+    }
+
+    DLLLOCAL void set(const QoreParseOptions& bits) {
+        std::lock_guard<std::mutex> lock(qore_parse_options_values_mutex);
+        po |= bits;
+    }
+
+    DLLLOCAL void clear(const QoreParseOptions& bits) {
+        std::lock_guard<std::mutex> lock(qore_parse_options_values_mutex);
+        po &= ~bits;
+    }
+
+    DLLLOCAL void set(const QoreParseOptionsData& other) {
+        std::lock_guard<std::mutex> lock(qore_parse_options_values_mutex);
+        po |= other.po;
+    }
+
+    DLLLOCAL void clear(const QoreParseOptionsData& other) {
+        std::lock_guard<std::mutex> lock(qore_parse_options_values_mutex);
+        po &= ~other.po;
+    }
+
+    DLLLOCAL std::pair<QoreParseOptions, QoreParseOptions> snapshotWith(const QoreParseOptionsData& other) const {
+        std::lock_guard<std::mutex> lock(qore_parse_options_values_mutex);
+        return {po, other.po};
+    }
 
     //! Resolve parse option from string name, raising an exception if not found
     DLLLOCAL static QoreParseOptions resolveOption(const QoreStringNode* name, ExceptionSink* xsink) {
@@ -67,9 +95,11 @@ public:
     DLLLOCAL QoreListNode* toStringList(ExceptionSink* xsink) const {
         ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
 
+        const QoreParseOptions snapshot = get();
+
         // Iterate lo bits (0-63)
         for (int p = 0; p < 64; ++p) {
-            int64 v = po.getLo() & (1LL << p);
+            int64 v = snapshot.getLo() & (1LL << p);
             if (v) {
                 const char* name = ParseOptionMap::find_name(QoreParseOptions(v));
                 if (name) {
@@ -80,7 +110,7 @@ public:
 
         // Iterate hi bits (64-127)
         for (int p = 0; p < 64; ++p) {
-            int64 v = po.getHi() & (1LL << p);
+            int64 v = snapshot.getHi() & (1LL << p);
             if (v) {
                 const char* name = ParseOptionMap::find_name(QoreParseOptions(0, v));
                 if (name) {

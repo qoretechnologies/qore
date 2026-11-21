@@ -71,7 +71,7 @@ QoreString *QoreInstanceOfOperatorNode::getAsString(bool& del, int foff, Excepti
 }
 
 int QoreInstanceOfOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    qore_string_private::get(str)->concat(&InstanceOf_str);
+    qore_string_private::get(str)->concatAsciiName(InstanceOf_str);
     return 0;
 }
 

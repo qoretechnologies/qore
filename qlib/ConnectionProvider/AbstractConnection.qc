@@ -224,6 +224,10 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
         @throw CONNECTION-URL-ERROR URL is invalid, because it contains control characters
+
+        @throw PERMISSION-DENIED the calling code is restricted from the functional domain of the connection's
+        clients (see getConnectionDomainsImpl()); a connection is a capability of the code that creates it, also
+        when it is deserialized (qore#7052)
     */
     deprecated
     constructor(string name,
@@ -269,6 +273,10 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         @throw CONNECTION-URL-ERROR URL is invalid, because it contains control characters
 
         @note use constructor(\c hash&lt;auto&gt; config, \c *hash&lt;auto&gt; attr) instead
+
+        @throw PERMISSION-DENIED the calling code is restricted from the functional domain of the connection's
+        clients (see getConnectionDomainsImpl()); a connection is a capability of the code that creates it, also
+        when it is deserialized (qore#7052)
     */
     deprecated constructor(string name, string description, string url, hash<auto> attributes = {},
             hash<auto> options = {}, *LoggerInterface logger) : LoggerWrapper(logger) {
@@ -278,6 +286,22 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             "url": url,
             "opts": options,
         }, attributes);
+    }
+
+    private:internal {
+        #! Refuses sandboxed callers a connection of a module with uncontrolled external I/O
+        /** Created with the connection, also when it is deserialized, so that it runs with the connection's
+            provenance; created while serving a sandboxed caller, it would run under that caller's sandbox for every
+            caller
+        */
+        transient DataProvider::DataProviderSandboxCheck sandbox_check();
+
+        #! The functional domains that the code that created the connection is restricted from (qore#6981)
+        /** Set when the connection is created, also when it is deserialized: code restricted from the domains that
+            the connection's clients use cannot create the connection (qore#7052; see checkCreation() and
+            getConnectionDomainsImpl())
+        */
+        transient int creator_restrictions = AbstractConnection::getCreatorRestrictions();
     }
 
     #! creates the AbstractConnection object
@@ -298,16 +322,10 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
         @throw CONNECTION-URL-ERROR URL is invalid, because it contains control characters
+        @throw PERMISSION-DENIED the calling code is restricted from the functional domain of the connection's
+        clients (see getConnectionDomainsImpl()); a connection is a capability of the code that creates it, also
+        when it is deserialized (qore#7052)
     */
-    private:internal {
-        #! Refuses sandboxed callers a connection of a module with uncontrolled external I/O
-        /** Created with the connection, also when it is deserialized, so that it runs with the connection's
-            provenance; created while serving a sandboxed caller, it would run under that caller's sandbox for every
-            caller
-        */
-        transient DataProvider::DataProviderSandboxCheck sandbox_check();
-    }
-
     constructor(hash<auto> config, *hash<auto> attr) {
         constructorInit(config, attr);
     }
@@ -847,6 +865,10 @@ conn.checkSandboxAccess(True);
         @throw CONNECTION-ASYNC-UNSUPPORTED if the connection type does not support async I/O
         (the base class implementation throws this; subclasses override @ref getAsyncImpl()
         to provide the async variant)
+        @throw PERMISSION-DENIED the async client is, or creates, an \c HttpClientIo connection manager (the async
+        clients of HTTP and REST connections, for example), and the calling code is restricted from the \c NETWORK
+        functional domain: the manager is created for the calling code, also with a connection that unrestricted code
+        created (see the \c HttpClientIo module's restricted callers section)
 
         @since ConnectionProvider 2.2
 
@@ -1284,6 +1306,8 @@ scheme://user:pass@hostname:port/path
         @throw CONNECTION-URL-ERROR URL is invalid, because it contains control characters
     */
     private:internal constructorInit(hash<auto> config, *hash<auto> attr) {
+        # code restricted from the domains of the connection cannot create it (qore#7052)
+        checkCreation(config.name);
         # string name, string description, string url, hash<auto> attributes, hash<auto> options) {
         # metadata
         name = getString(config, "name", True);
@@ -1404,6 +1428,82 @@ scheme://user:pass@hostname:port/path
         @return the connection object
     */
     private abstract object getImpl(bool connect = True, *hash<auto> rtopts);
+
+    #! Returns the functional domains that the connection's clients use (qore#6981)
+    /** Code restricted from any of them cannot create the connection; the connections to a network host return
+        @ref Qore::DOM_NETWORK "DOM_NETWORK", those of the file system @ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM",
+        those of a database @ref Qore::DOM_DATABASE "DOM_DATABASE", and a connection whose clients use no functional
+        domain returns 0.
+
+        The default implementation returns all of the domains that a connection's clients can use (\c NETWORK,
+        \c FILESYSTEM and \c DATABASE), so code restricted from any of them cannot create a connection of a class
+        that does not declare its domains; unrestricted code is not affected.  Every connection class should override
+        this method, declared \c final, to return the domains that its clients use.
+
+        @since %ConnectionProvider 3.1
+    */
+    private int getConnectionDomainsImpl() {
+        return DOM_NETWORK | DOM_FILESYSTEM | DOM_DATABASE;
+    }
+
+    #! Refuses a connection that code restricted from the connection's domains creates or deserializes (qore#7052)
+    /** A connection is a capability of the code that creates it: code restricted from the domains that the
+        connection's clients use cannot create one, by any constructor, also of a subclass, nor by deserialization,
+        so no client of it can be obtained; a connection that unrestricted code created and lends is not refused
+    */
+    private:internal checkCreation(auto conn_name) {
+        int dom = creator_restrictions & getConnectionDomainsImpl();
+        if (dom) {
+            throw "PERMISSION-DENIED", sprintf("code restricted from the %s functional domain cannot create connection "
+                "%y; use a connection that the host provides", AbstractConnection::getDomainNames(dom), conn_name);
+        }
+    }
+
+    #! Assigns the members of the class after deserialization (qore#7052)
+    /** Deserialization creates a connection too, so it is refused to code restricted from the connection's domains;
+        the transient members are assigned here, as no automatic member initialization is performed when this method
+        is defined
+    */
+    private:internal deserializeMembers(hash<auto> members) {
+        transient_info = {};
+        sandbox_check = new DataProvider::DataProviderSandboxCheck();
+        creator_restrictions = AbstractConnection::getCreatorRestrictions();
+        checkCreation(members.name);
+        # the transient and internal members are the deserializing process's own, never the serialized data's
+        self += members - TransientMembers;
+    }
+
+    #! The members that deserializeMembers() assigns itself
+    const TransientMembers = ("transient_info", "sandbox_check", "creator_restrictions");
+
+    #! The functional domains that a connection's clients can use (see getConnectionDomainsImpl())
+    const ConnectionDomains = (DOM_NETWORK, DOM_FILESYSTEM, DOM_DATABASE);
+
+    #! Returns the names of the given connection domains, for messages
+    private:internal static string getDomainNames(int dom) {
+        list<string> rv = ();
+        if (dom & DOM_NETWORK) {
+            push rv, "NETWORK";
+        }
+        if (dom & DOM_FILESYSTEM) {
+            push rv, "FILESYSTEM";
+        }
+        if (dom & DOM_DATABASE) {
+            push rv, "DATABASE";
+        }
+        return rv.join(" and ");
+    }
+
+    #! Returns the functional domains of a connection that the calling code is restricted from (qore#6981)
+    private:internal static int getCreatorRestrictions() {
+        int rv = 0;
+        foreach int dom in (ConnectionDomains) {
+            if (SandboxManager::isCallerRestricted(dom)) {
+                rv |= dom;
+            }
+        }
+        return rv;
+    }
 
     #! returns an async-I/O-capable connection object
     /** The default implementation throws \c CONNECTION-ASYNC-UNSUPPORTED.

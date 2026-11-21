@@ -64,6 +64,7 @@ class RuntimeConfig;
    Defines the interface for all value and parse types in Qore expression trees.  Default implementations are given for most virtual functions.
  */
 class AbstractQoreNode : public QoreReferenceCounter {
+    friend class qore_abstract_node_ops;
 public:
     //! custom operator new that zero-initializes memory to avoid valgrind warnings about uninitialized bitfield padding
     DLLLOCAL static void* operator new(size_t size) QORE_NODE_ALLOC_NOINLINE {
@@ -282,15 +283,6 @@ public:
         @see ValueEvalRefHolder
     */
     DLLEXPORT QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const;
-
-    //! optionally evaluates the argument with RuntimeConfig
-    /** return value requires a dereference if needs_deref is true
-        @param rc the runtime configuration
-        @param needs_deref this is an output parameter, if needs_deref is true then the value returned must be dereferenced
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-        @see ValueEvalRefHolder
-    */
-    DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     //! returns true if the node represents a value
     /**

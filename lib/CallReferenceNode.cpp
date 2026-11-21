@@ -45,6 +45,7 @@
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/WeakHashReferenceNode.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <shared_mutex>
 #include <optional>
@@ -275,7 +276,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue CallReferenceCallNode::evalImplInternal(Runt
         return qore_call_ref_invoke_named(r, args, *runtime_arg_names, policy, xsink);
     }
     if constexpr (LexicalInvocation) {
-        return r->invokeLexical(args, xsink, getSemanticPolicy());
+        return qore_resolved_call_reference_node_ops(r).invokeLexical(args, xsink, getSemanticPolicy());
     } else {
         return r->invoke(args, xsink);
     }
@@ -1994,7 +1995,7 @@ QoreValue DeferredStaticMethodCallReferenceNode::dispatchLexicalValue(const Qore
     if (!ref) {
         return QoreValue();
     }
-    QoreValue rv = ref->invokeLexical(args, xsink, policy);
+    QoreValue rv = qore_resolved_call_reference_node_ops(ref).invokeLexical(args, xsink, policy);
     ref->deref(xsink);
     return rv;
 }
@@ -2539,7 +2540,7 @@ QoreValue DeferredFunctionCallReferenceNode::dispatchLexicalValue(const QoreList
     if (!ref) {
         return QoreValue();
     }
-    QoreValue rv = ref->invokeLexical(args, xsink, policy);
+    QoreValue rv = qore_resolved_call_reference_node_ops(ref).invokeLexical(args, xsink, policy);
     ref->deref(xsink);
     return rv;
 }
@@ -2564,10 +2565,9 @@ QoreValue ResolvedCallReferenceNode::invoke(const QoreListNode* args, ExceptionS
     return dispatchValue(args, xsink);
 }
 
-QoreValue ResolvedCallReferenceNode::invokeLexical(const QoreListNode* args, ExceptionSink* xsink,
-        const LexicalSemanticPolicy& policy) const {
-    QoreSandboxProvenanceHelper provenance(this);
-    return dispatchLexicalValue(args, xsink, policy);
+QoreValue qore_resolved_call_reference_node_ops::invokeLexicalImpl(ResolvedCallReferenceNode* b, const QoreListNode* args, ExceptionSink* xsink, const LexicalSemanticPolicy& policy) {
+    QoreSandboxProvenanceHelper provenance(b);
+    return b->dispatchLexicalValue(args, xsink, policy);
 }
 
 namespace {
@@ -2726,9 +2726,9 @@ public:
             if (!build) {
                 privilege.emplace();
             }
-            return callback->invokeLexical(*evaluated, xsink, policy);
+            return qore_resolved_call_reference_node_ops(callback).invokeLexical(*evaluated, xsink, policy);
         }
-        return callback->invokeLexical(args, xsink, policy);
+        return qore_resolved_call_reference_node_ops(callback).invokeLexical(args, xsink, policy);
     }
 
     QoreFunction* getFunction() const override { return callback->getFunction(); }

@@ -66,6 +66,9 @@ class ColumnarResultDecimalExactWriteTest inherits QUnit::Test {
                 }
             }
         }
+        # A second long run inside the exact value still has significant digits after it.
+        values += ("0.1" + strmul("0", 17) + "7" + strmul("9", 17) + "2",
+            "-0.1" + strmul("9", 17) + "7" + strmul("0", 17) + "2");
         checkValues(values, "run");
     }
 

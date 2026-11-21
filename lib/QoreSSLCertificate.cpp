@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QoreSSLIntern.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <openssl/err.h>
 #include <memory>
@@ -90,8 +91,8 @@ QoreSSLCertificate::QoreSSLCertificate(const QoreString* str, ExceptionSink* xsi
 
 QoreSSLCertificate::operator bool() const { return (bool)priv->cert; }
 
-QoreValue QoreSSLCertificate::doPurposeValue(int id, int ca) const {
-   int rc = X509_check_purpose(priv->cert, id, ca);
+QoreValue qore_ssl_certificate_ops::doPurposeValueImpl(QoreSSLCertificate* b, int id, int ca) {
+   int rc = X509_check_purpose(b->priv->cert, id, ca);
    if (rc == 1)
       return true;
 
@@ -245,9 +246,9 @@ QoreHashNode* QoreSSLCertificate::getPurposeHash() const {
         }
 
         // get non-CA value
-        h->setKeyValue(name, doPurposeValue(id, 0), nullptr);
+        h->setKeyValue(name, qore_ssl_certificate_ops(this).doPurposeValue(id, 0), nullptr);
         // get CA value
-        h->setKeyValue(nameca, doPurposeValue(id, 1), nullptr);
+        h->setKeyValue(nameca, qore_ssl_certificate_ops(this).doPurposeValue(id, 1), nullptr);
     }
     return h;
 }

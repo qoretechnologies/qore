@@ -368,8 +368,8 @@ int sub run_test() {
         string cmd;
         # the library path is set again because a shell can remove it from its environment (macOS)
         foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
-            if (ENV{var}) {
-                cmd += sprintf("%s=%s ", var, shellQuote(ENV{var}));
+            if (ENV{var}) { # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
+                cmd += sprintf("%s=%s ", var, shellQuote(ENV{var})); # live-provider-optin: LD_LIBRARY_PATH and DYLD_LIBRARY_PATH for the child command
             }
         }
         # the script's handler reports to this test's FIFO, not to run_tests.sh

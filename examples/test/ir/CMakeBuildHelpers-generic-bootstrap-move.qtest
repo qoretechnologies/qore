@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ./CMakeBuildHelpersTestBase.qm
+
+%exec-class CMakeGenericBootstrapMoveTest
+
+#! Generic qcc objects: a source rewritten while the batch bootstrap publishes the group
+/** One scenario of the incremental life of the generic qcc object helper project of CMakeBuildHelpersTestBase.qm,
+    on a baseline built for it.  Each scenario is a file of its own, so that none comes near the time limit of a
+    test and test shards run them side by side.
+
+    This is the only scenario whose baseline has a source rewritten during the first build's publication (the
+    \c bootstrap_move baseline of @ref CMakeBuildHelpersTestBase::GenericQccObjectTest::buildGenericBaseline()): the
+    other generic scenarios build the plain baseline and rely on this one for the check that the group is then
+    rebuilt exactly once, without a retry loop (qore#6894).
+*/
+class CMakeGenericBootstrapMoveTest inherits CMakeBuildHelpersTestBase::GenericQccObjectTest {
+    constructor() : GenericQccObjectTest("CMakeGenericBootstrapMoveTest", "1.0", \ARGV) {
+        addTestCase("generic qcc objects: a source rewritten during the batch bootstrap's publication",
+            \testBootstrapMove());
+        set_return_value(main());
+    }
+
+    #! The baseline with a source rewritten during the batch bootstrap's publication, and the build after it
+    /** Steps:
+        - the first build: the provider is rewritten between the shared parse and its publication; the group is
+          rebuilt exactly once, without a retry loop (checked in @ref buildGenericBaseline()), and its outputs are
+          those of the plain baseline
+        - the tree is then current: the next build compiles nothing (@ref settleGenericBaseline())
+    */
+    testBootstrapMove() {
+        TmpDir tmp("qore-cmake-qcc-bootstrap-move-", NOTHING, cmakeTmpBase());
+        hash<GenericQccProject> project = buildGenericBaseline(tmp.path, True);
+        settleGenericBaseline(project);
+    }
+}

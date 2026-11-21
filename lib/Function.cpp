@@ -1102,7 +1102,8 @@ QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore
             last_class = qore_class_private::get(*fc);
             if (last_class && class_ctx) {
                 // set the internal access flag
-                internal_access = last_class->equal(*class_ctx);
+                // by identity, never by name and signature (qore#7036)
+                internal_access = last_class->sameClass(*class_ctx);
             }
         }
     }
@@ -1885,6 +1886,10 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     qore_dbg_runtime_chosen_variant = false;
 #endif
     QoreSandboxProvenanceHelper::set(self);
+    // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
+    if (getContext() && qore_sandbox_check_isolation(xsink, "calling a method")) {
+        return;
+    }
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
@@ -2288,7 +2293,7 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
         const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
         ClassAccess va = mv->getAccess();
         if ((va > Public && !class_ctx) || (va == Internal
-            && !qore_class_private::get(*mv->getClass())->equal(*qc))) {
+            && !qore_class_private::get(*mv->getClass())->sameClass(*qc))) {
             xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
                 mv->className(), func->getName(), mv->getSignature()->getSignatureText());
             return -1;
@@ -2982,24 +2987,27 @@ void UserSignature::setupFromAOTMetadata(
     }
 
     lv.resize(nparams);
+    // the types are found before the locks are taken
+    std::vector<const QoreTypeInfo*> local_types(nparams);
     for (size_t i = 0; i < nparams; ++i) {
-        const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
-        lv[i] = local_pp->createLocalVar(pname, getParamLocalTypeInfo(paramTypes[i]));
-        if (paramReadOnlyList[i]) {
-            lv[i]->setReadOnly();
-        }
+        local_types[i] = getParamLocalTypeInfo(paramTypes[i]);
     }
-
-    typeList = std::move(paramTypes);
-    names = std::move(paramNames);
-
-    // Take ownership of default-arg references (caller's vector is moved-from,
-    // so no refSelf/discard round-trip is needed).
-    defaultArgList = std::move(defaults);
-    defaultArgList.resize(nparams);
+    const QoreTypeInfo* self_type = classTypeInfo ? classTypeInfo->getTypeInfo() : nullptr;
 
     {
+        // the local variables of the signature are created in one hold of the locks of the Program's metadata: the
+        // lock of its stripe is held only while the records are changed, and nothing here takes another lock (see
+        // qore_program_private_base::recordLock())
         std::lock_guard<std::recursive_mutex> lock(local_pp->runtime_metadata_lock);
+        std::lock_guard<std::mutex> rl(local_pp->threadContainerLock());
+        for (size_t i = 0; i < nparams; ++i) {
+            const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
+            lv[i] = local_pp->createLocalVarLocked(pname, local_types[i]);
+            if (paramReadOnlyList[i]) {
+                lv[i]->setReadOnly();
+            }
+        }
+
         // selfid per class — interned across every method variant of a class
         // using the program-scoped cache.  Same safety argument as the argv
         // intern above (LocalVar* is the identity, thread-local stack holds
@@ -3007,12 +3015,17 @@ void UserSignature::setupFromAOTMetadata(
         // and LLVM lowering rely on it for the static borrowed-reference semantics
         // of constructor/method self.
         if (classTypeInfo) {
-            LocalVar*& cached = local_pp->shared_aot_self[classTypeInfo];
-            if (!cached) {
-                cached = local_pp->createLocalVar("self", classTypeInfo->getTypeInfo());
+            auto ci = local_pp->shared_aot_self.find(classTypeInfo);
+            LocalVar* cached;
+            if (ci == local_pp->shared_aot_self.end()) {
+                cached = local_pp->createLocalVarLocked("self", self_type);
                 cached->setSelf();
-            } else if (!cached->isSelf()) {
-                cached->setSelf();
+                local_pp->shared_aot_self.insert(std::make_pair(classTypeInfo, cached));
+            } else {
+                cached = ci->second;
+                if (!cached->isSelf()) {
+                    cached->setSelf();
+                }
             }
             selfid = cached;
         }
@@ -3024,10 +3037,18 @@ void UserSignature::setupFromAOTMetadata(
         // Removes ~N (one-per-variant) deque emplaces on the hot path (qwf:
         // 656 k variants).
         if (!local_pp->shared_aot_argv) {
-            local_pp->shared_aot_argv = local_pp->createLocalVar("argv", autoListOrNothingTypeInfo);
+            local_pp->shared_aot_argv = local_pp->createLocalVarLocked("argv", autoListOrNothingTypeInfo);
         }
         argvid = local_pp->shared_aot_argv;
     }
+
+    typeList = std::move(paramTypes);
+    names = std::move(paramNames);
+
+    // Take ownership of default-arg references (caller's vector is moved-from,
+    // so no refSelf/discard round-trip is needed).
+    defaultArgList = std::move(defaults);
+    defaultArgList.resize(nparams);
 
     // Set flags
     varargs = hasVarargs;
@@ -7661,6 +7682,9 @@ void UserVariantBase::setProgram(QoreProgram* p) {
 
 void qore_program_private::registerUserVariant(const UserVariantBase* v) {
     std::lock_guard<std::mutex> lock(user_variant_lock);
+    // the list is changed at run time as well (AOT closures deserialized lazily): fork() waits for the change (see
+    // recordLock())
+    std::lock_guard<std::mutex> rl(threadContainerLock());
     assert(!v->uv_prev && !v->uv_next && user_variants != v);
     v->uv_next = user_variants;
     if (user_variants) {
@@ -7674,6 +7698,7 @@ void qore_program_private::registerUserVariant(const UserVariantBase* v) {
 
 void qore_program_private::unregisterUserVariant(const UserVariantBase* v) {
     std::lock_guard<std::mutex> lock(user_variant_lock);
+    std::lock_guard<std::mutex> rl(threadContainerLock());
     // a variant that is not in the list leaves it unchanged
     if (!v->uv_prev && user_variants != v) {
         assert(false);
@@ -7798,7 +7823,7 @@ void UserVariantBase::registerPrecompiledAOTFunction(
         has_aot_lazy_function_ir.store(false, std::memory_order_release);
     }
     if (ctx) {
-        if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+        if (QORE_ENV_IS_SET("QORE_DISABLE_IR_CONTEXT_ELISION")) {
             uses_argv.store(signature.argvid != nullptr, std::memory_order_release);
             uses_self.store(signature.selfid != nullptr, std::memory_order_release);
         } else {
@@ -7823,7 +7848,7 @@ void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn, cons
         aot_lazy_function_ir_index = entry_index;
         has_aot_lazy_function_ir.store(true, std::memory_order_release);
     }
-    if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_CONTEXT_ELISION")) {
         uses_argv.store(signature.argvid != nullptr, std::memory_order_release);
         uses_self.store(signature.selfid != nullptr, std::memory_order_release);
     } else {
@@ -7899,7 +7924,7 @@ UserVariantBase::IRContextFlags UserVariantBase::getIRContextFlags(const QoreIRF
     flags.all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
     // the frame of a call that needs one has argv and self, as in the AST interpreter, also when the code does not
     // use them
-    if (ir->needs_call_frame || q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+    if (ir->needs_call_frame || QORE_ENV_IS_SET("QORE_DISABLE_IR_CONTEXT_ELISION")) {
         flags.uses_argv = signature.argvid != nullptr;
         flags.uses_self = signature.selfid != nullptr;
     } else {
@@ -8682,7 +8707,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     qore_ir_fold_debug_statements(*func);
     // the interpreter makes the check of a call's target in the load of the target (issue #5784)
     qore_ir_fuse_call_target_checks(*func);
-    if (q_env_is_set("QORE_IR_OPT_STATS")) {
+    if (QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu constant-loads=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
@@ -8711,7 +8736,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             optimization_stats.constant_containers_loaded);
     }
 
-    if (q_env_is_set("QORE_IR_CONTEXT_STATS")) {
+    if (QORE_ENV_IS_SET("QORE_IR_CONTEXT_STATS")) {
         IRContextFlags flags = getIRContextFlags(func);
         fprintf(stderr, "IR-CONTEXT: %s: argv=%d self=%d\n",
             name ? name : "<fn>", flags.uses_argv, flags.uses_self);
@@ -8869,7 +8894,7 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
 static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction* callee_ir,
         QoreProgram* root_pgm) {
     // not "debug", which would hide the debugging level that printd() compares with
-    bool batch_debug = q_env_is_set("QORE_BATCH_DEBUG");
+    bool batch_debug = QORE_ENV_IS_SET("QORE_BATCH_DEBUG");
 
     // Must be same program (no ProgramThreadCountContextHelper needed)
     if (uvb->pgm != root_pgm) {
@@ -9092,7 +9117,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
     std::vector<QoreJIT::BatchCallee> callees;
     std::unordered_set<const AbstractQoreFunctionVariant*> seen;
     std::vector<const QoreIRFunction*> worklist{&func};
-    bool collect_transitive = !q_env_is_set("QORE_DISABLE_JIT_TRANSITIVE_BATCH");
+    bool collect_transitive = !QORE_ENV_IS_SET("QORE_DISABLE_JIT_TRANSITIVE_BATCH");
     size_t check_count = 0;
 
     // the root's code is read as well; the compile can be started on a call path that has not entered its Program
@@ -9139,7 +9164,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                         }
                     }
                 } else if (inst->opcode == QoreIROpcode::CreateClosure
-                        && !q_env_is_set("QORE_DISABLE_JIT_NATIVE_CLOSURES")) {
+                        && !QORE_ENV_IS_SET("QORE_DISABLE_JIT_NATIVE_CLOSURES")) {
                     const auto* create =
                         static_cast<const QoreIRCreateClosureInstruction*>(inst.get());
                     const QoreClosureParseNode* closure = create->closure_node;
@@ -9265,7 +9290,7 @@ void UserVariantBase::attemptJITCompilation() const {
         // the same oversized function.
         jit_compile_failed.store(true, std::memory_order_release);
         jit_compile_state.store(2, std::memory_order_release);
-        if (q_env_is_set("QORE_JIT_TIMING")) {
+        if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] skipped native promotion of '%s' (compilation budget exceeded; "
                 "%zu IR instructions; limit %zu)\n", ir->name.c_str(), instruction_count,
                 jit_ir_budget);
@@ -9280,7 +9305,7 @@ void UserVariantBase::attemptJITCompilation() const {
         if (handler_cost > jit_handler_budget) {
             jit_compile_failed.store(true, std::memory_order_release);
             jit_compile_state.store(2, std::memory_order_release);
-            if (q_env_is_set("QORE_JIT_TIMING")) {
+            if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] skipped native promotion of '%s' (handler budget exceeded; about %zu "
                     "instructions; limit %zu)\n", ir->name.c_str(), handler_cost, jit_handler_budget);
             }
@@ -9321,7 +9346,7 @@ void UserVariantBase::attemptJITCompilation() const {
             batch_instruction_count += callee.ir_func->getInstructionCount();
         }
         if (batch_instruction_count > jit_ir_budget) {
-            if (q_env_is_set("QORE_JIT_TIMING")) {
+            if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] disabled oversized batch for '%s' (compilation budget exceeded; "
                     "%zu IR instructions; limit %zu)\n", ir->name.c_str(), batch_instruction_count,
                     jit_ir_budget);
@@ -9332,12 +9357,12 @@ void UserVariantBase::attemptJITCompilation() const {
 
     if (!callees.empty()) {
         std::shared_ptr<QoreIRFunction> compile_ir;
-        if (statements && !q_env_is_set("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
+        if (statements && !QORE_ENV_IS_SET("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
             compile_ir.reset(lowerIRFunction(
                 ir->getDisplayName().c_str(), ir->name,
                 nullptr, nullptr, false, false));
         }
-        if (q_env_is_set("QORE_BATCH_DEBUG")) {
+        if (QORE_ENV_IS_SET("QORE_BATCH_DEBUG")) {
             printd(5, "BATCH: '%s' enqueued with %d callees:",
                 ir->name.c_str(), (int)callees.size());
             for ([[maybe_unused]] const auto& c : callees) {
@@ -9696,7 +9721,7 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
                 // returns to be released here, after the locals, as the AST interpreter releases it (#6029)
                 ir_return_value.discard(xsink);
             } else {
-                if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
+                if (QORE_ENV_IS_SET("QORE_IR_TRACE_SILENT_FAIL")) {
                     QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
                 }
                 if (pgm) {
@@ -10129,7 +10154,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                         }
                     }
                     fell_back_to_ast = true;
-                    if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
+                    if (QORE_ENV_IS_SET("QORE_IR_TRACE_SILENT_FAIL")) {
                         QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
                     }
                     if (pgm) {

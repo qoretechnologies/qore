@@ -69,6 +69,7 @@ class Queue;
    - proFTPd 1.3.0 (Darwin/OS X 10.4.7) EPSV, PORT, AUTH TLS, PBSZ 0, PROT P
 */
 class QoreFtpClient {
+    friend class qore_ftp_client_ops;
     friend class qore_ftp_private;
 public:
     //! creates the object and sets connection parameters based on the url passed
@@ -506,26 +507,9 @@ public:
     */
     DLLEXPORT QoreHashNode* sendControlMessage(const char* cmd, const char* arg, ExceptionSink* xsink);
 
-    //! sets the socket I/O timeout value in milliseconds
-    /** @since Qore 0.8.12.3
-    */
-    DLLLOCAL void setTimeout(int timeout_ms);
 
-    //! returns the socket I/O timeout value as an integer in milliseconds
-    /** @since Qore 0.8.12.3
-    */
-    DLLLOCAL int getTimeout() const;
 
-    //! sets the same event queue for data and control sockets
-    DLLLOCAL void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data);
 
-    //! sets the event queue for the data socket
-    DLLLOCAL void setDataEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data);
-
-    //! sets the event queue for the control socket
-    DLLLOCAL void setControlEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data);
-
-    DLLLOCAL void cleanup(ExceptionSink* xsink);
 
 protected:
     //! private implementation of the object

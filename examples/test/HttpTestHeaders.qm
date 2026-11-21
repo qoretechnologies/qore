@@ -1,0 +1,71 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file HttpTestHeaders.qm compares the headers of two HTTP responses without the values that differ by nature
+
+/*  HttpTestHeaders.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module HttpTestHeaders {
+    version = "1.0";
+    desc    = "compares the headers of two HTTP responses without the values that differ by nature";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** Two responses sent in different seconds have different \c Date fields, so a test that compares the headers of
+    two responses leaves the date out.  A header hash can have the fields at its top level and again in a nested hash
+    (for example a \c headers hash with the fields of the header section), so the date is left out at every level,
+    whatever the case of its name.
+
+    @par Example:
+    @code{.py}
+%requires ../../HttpTestHeaders.qm
+
+hash<auto> a = HttpTestHeaders::stable(r1.hdr);
+hash<auto> b = HttpTestHeaders::stable(r2.hdr);
+assertEq(sort(keys a), sort(keys b));
+map assertEq(a{$1}, b{$1}, "header " + $1), keys a;
+    @endcode
+*/
+public namespace HttpTestHeaders {
+    #! the fields whose values differ between two responses by nature
+    public const Unstable = ("date",);
+
+    #! returns the header hash without the fields given, at the top level and in every nested hash
+    /** @param hdr the header hash
+        @param names the names of the fields to leave out, in lower case; a field is left out whatever the case of
+        its name
+
+        @return the header hash without the fields
+    */
+    public hash<auto> sub stable(hash<auto> hdr, list<string> names = Unstable) {
+        hash<auto> rv = {};
+        foreach hash<auto> i in (hdr.pairIterator()) {
+            if (inlist(i.key.lwr(), names)) {
+                continue;
+            }
+            rv{i.key} = i.value.typeCode() == NT_HASH ? stable(i.value, names) : i.value;
+        }
+        return rv;
+    }
+}

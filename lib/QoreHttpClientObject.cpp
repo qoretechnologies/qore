@@ -80,6 +80,9 @@
 #include "qore/intern/SseEventFramer.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/HttpClientDrainDebug.h"
+#include "qore/intern/QoreHttpManagerSysEnvOps.h"
+#include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <atomic>
 #include <cassert>
@@ -193,7 +196,7 @@ static std::optional<std::string> get_string_header_value(ExceptionSink* xsink, 
     return std::string(str->c_str());
 }
 
-const char* QoreHttpClientObject::getHttpStatusMessage(int code) {
+const char* qore_http_client_object_ops::getHttpStatusMessage(int code) {
     switch (code) {
         // 1xx: Informational
         case 100: return "Continue";
@@ -403,9 +406,8 @@ static void convert_response_body_limit_error(int64 max_size, ExceptionSink* xsi
     if (!*xsink) {
         return;
     }
-    QoreValue err = xsink->getExceptionErr();
-    if (err.getType() != NT_STRING
-            || strcmp(err.get<const QoreStringNode>()->c_str(), "DECOMPRESSION-LIMIT-EXCEEDED")) {
+    // the error code can be an inline short string, which has no node (issue #7038)
+    if (QoreStringDataHelper(xsink->getExceptionErr()) != "DECOMPRESSION-LIMIT-EXCEEDED") {
         return;
     }
     xsink->clear();
@@ -893,6 +895,15 @@ struct HttpRequestTarget {
 //
 // See LEGACY RESPONSE SHAPE ADAPTERS block above for the rationale and
 // the full list of callers — do not reuse this function for anything else.
+// the fields of the response are given under "headers" and "trailers", and at the top level too (matching the
+// readHTTPHeader format), except a field whose name is a key of the response or one that this file reads from the
+// response itself (qore#6811); the copies at the top level are used by the processing of the response here, and are
+// removed from the hash given to the caller when the http_fields_at_top_level option is off (see
+// remove_http_field_copies())
+static bool is_internal_response_key(const char* name) {
+    return !strcmp(name, "protocol") || !strncmp(name, "_qore_", 6);
+}
+
 static QoreHashNode* transformConnMgrResponse(QoreHashNode* src, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
 
@@ -910,14 +921,26 @@ static QoreHashNode* transformConnMgrResponse(QoreHashNode* src, ExceptionSink* 
         result->setKeyValue("http_version", v.refSelf(), xsink);
     }
 
-    // Flatten nested headers to top level (matching readHTTPHeader format)
+    // the header fields, also at the top level; a field never replaces a key of the response
     v = src->getKeyValue("headers");
     if (v.getType() == NT_HASH) {
         const QoreHashNode* hdrs = v.get<const QoreHashNode>();
         ConstHashIterator hi(hdrs);
         while (hi.next()) {
-            result->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+            const char* key = hi.getKey();
+            if (!qore_http_is_reserved_field_name(key) && !is_internal_response_key(key)) {
+                result->setKeyValue(key, hi.get().refSelf(), xsink);
+            }
         }
+        result->setKeyValue("headers", hdrs->hashRefSelf(), xsink);
+    } else {
+        result->setKeyValue("headers", new QoreHashNode(autoTypeInfo), xsink);
+    }
+
+    // the trailer fields of the response, if any (HTTP/1.1 chunked, HTTP/2, HTTP/3)
+    v = src->getKeyValue("trailers");
+    if (v.getType() == NT_HASH && !v.get<const QoreHashNode>()->empty()) {
+        result->setKeyValue("trailers", v.refSelf(), xsink);
     }
 
     // Copy body if present
@@ -927,6 +950,69 @@ static QoreHashNode* transformConnMgrResponse(QoreHashNode* src, ExceptionSink* 
     }
 
     return result.release();
+}
+
+// Removes the "headers" and "trailers" sub-hashes from info."response-headers", as consumers of
+// info."response-headers" read it as the header fields of the response (qore#6811)
+/* info."response-headers" is the response hash made by transformConnMgrResponse() itself while the response is
+   processed, as in earlier versions, so that the processing is seen in it; this is done when the request is done, and
+   for the copies of info given to a receive callback
+*/
+static void fix_info_response_headers(QoreHashNode* info, ExceptionSink* xsink) {
+    if (!info) {
+        return;
+    }
+    QoreValue v = info->getKeyValue("response-headers");
+    if (v.getType() != NT_HASH) {
+        return;
+    }
+    const QoreHashNode* ans = v.get<const QoreHashNode>();
+    if (!ans->existsKey("headers") && !ans->existsKey("trailers")) {
+        return;
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ConstHashIterator hi(ans);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        if (strcmp(key, "headers") && strcmp(key, "trailers")) {
+            rv->setKeyValue(key, hi.get().refSelf(), xsink);
+        }
+    }
+    info->setKeyValue("response-headers", rv.release(), xsink);
+}
+
+// Returns a copy of info for a receive callback, with info."response-headers" as fix_info_response_headers() gives it
+static QoreHashNode* copy_info_for_callback(const QoreHashNode* info, ExceptionSink* xsink) {
+    if (!info) {
+        return nullptr;
+    }
+    QoreHashNode* rv = info->copy();
+    fix_info_response_headers(rv, xsink);
+    return rv;
+}
+
+// Returns the response hash given to the caller of a blocking HTTPClient method when the http_fields_at_top_level
+// option is off: the hash made by transformConnMgrResponse() without the copies of the header and trailer fields at
+// its top level (qore#6811); takes the reference of h
+static QoreHashNode* remove_http_field_copies(QoreHashNode* h, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> src(h, xsink);
+    if (!h) {
+        return nullptr;
+    }
+    // only the header fields are copied to the top level (see transformConnMgrResponse())
+    QoreValue v = h->getKeyValue("headers");
+    const QoreHashNode* hdrs = v.getType() == NT_HASH ? v.get<const QoreHashNode>() : nullptr;
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ConstHashIterator hi(h);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        if (hdrs && !qore_http_is_reserved_field_name(key) && !is_internal_response_key(key)
+            && hdrs->existsKey(key)) {
+            continue;
+        }
+        rv->setKeyValue(key, hi.get().refSelf(), xsink);
+    }
+    return rv.release();
 }
 
 // Transform a clean HttpClientResponseInfo-shaped response hash into the
@@ -990,7 +1076,7 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const S
             rh->setKeyValue("status_message", sm.refSelf(), xsink);
         } else if (!sc.isNullOrNothing()) {
             rh->setKeyValue("status_message",
-                new QoreStringNode(QoreHttpClientObject::getHttpStatusMessage(
+                new QoreStringNode(qore_http_client_object_ops::getHttpStatusMessage(
                     (int)sc.getAsBigInt())), xsink);
         }
         QoreValue hv = src->getKeyValue("http_version");
@@ -1067,7 +1153,7 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const S
             sm_str = sm_storage.c_str();
         }
         if (!sm_str[0]) {
-            sm_str = QoreHttpClientObject::getHttpStatusMessage(
+            sm_str = qore_http_client_object_ops::getHttpStatusMessage(
                 (int)sc.getAsBigInt());
         }
         const char* ver = "HTTP/1.1";
@@ -1275,6 +1361,11 @@ struct qore_httpclient_priv {
     //! on pending poll ops to SOCKET-NOT-OPEN (matching legacy semantics).
     std::atomic<bool> user_disconnect_in_progress{false};
 
+    //! The fields of a response are also given at the top level of its hash (deprecated; qore#6811)
+    /** Atomic as it is read by the requests without the lock of the client
+    */
+    std::atomic<bool> http_fields_at_top_level{true};
+
     //! Channel for conn_mgr streaming receive (sendAndStream mode).
     /** When non-null, readHTTPChunk/readServerSentEvent read from this
         channel instead of the raw socket.  Set by send_internal_conn_mgr
@@ -1284,6 +1375,12 @@ struct qore_httpclient_priv {
 
     //! The Content-Type used to decode the body received from streaming_recv_channel
     std::string streaming_content_type;
+
+    //! The trailer fields of the response received from streaming_recv_channel, given with its end (qore#6811)
+    /** Set when the end of the response is received, which can come with its last body data, and given by the read
+        that reports the end of the body; released by clearStreamingChannel()
+    */
+    QoreHashNode* streaming_trailers = nullptr;
 
     //! Active conn_mgr-backed HTTP/2 extended CONNECT stream state.
     HttpClientConnectionBase* h2_connect_conn = nullptr;
@@ -1386,7 +1483,7 @@ struct qore_httpclient_priv {
         @param retried true if the request has already been repeated
     */
     DLLLOCAL static bool canRepeatOnNewConnection(const char* meth, bool conn_reused, bool retried) {
-        return conn_reused && !retried && HttpClientConnectionManagerBase::isIdempotentMethod(meth);
+        return conn_reused && !retried && qore_http_manager_ops::isIdempotentMethod(meth);
     }
 
     //! Returns the Proxy-Authorization value for the connection manager, or an empty string if not needed
@@ -1657,7 +1754,7 @@ struct qore_httpclient_priv {
             sink_q->ref();
         }
         QoreValue sink_arg = arg.refSelf();
-        msock->socket->setEventQueue(xsink, q, arg, with_data);
+        qore_socket_ops(msock->socket).setEventQueue(xsink, q, arg, with_data);
         event_sink->set(xsink, sink_q, sink_arg, with_data);
     }
 
@@ -1791,6 +1888,9 @@ struct qore_httpclient_priv {
         if (redirect_passthru) {
             h->setKeyValueIntern("redirect_passthru", redirect_passthru);
         }
+        if (!http_fields_at_top_level.load(std::memory_order_relaxed)) {
+            h->setKeyValueIntern("http_fields_at_top_level", false);
+        }
         if (priv.cert) {
             h->setKeyValueIntern("ssl_cert_data", priv.cert->getDER(nullptr));
         }
@@ -1892,7 +1992,7 @@ struct qore_httpclient_priv {
 
     DLLLOCAL void setNoDelay() {
         if (nodelay) {
-            if (msock->socket->setNoDelay(1)) {
+            if (qore_socket_ops(msock->socket).setNoDelay(1)) {
                 nodelay = false;
             }
         }
@@ -2059,6 +2159,21 @@ struct qore_httpclient_priv {
     }
 
     //! Clears the streaming receive channel, closing it if open
+    //! Returns the end of the body read from the streaming receive channel and clears the channel
+    /** @return an empty hash, or one with the trailer fields of the response under \c "trailers" (qore#6811)
+
+        Must be called with the client lock held.
+    */
+    DLLLOCAL QoreHashNode* takeStreamingEnd(QoreChannel* expected) {
+        QoreHashNode* rv = new QoreHashNode(autoTypeInfo);
+        if (streaming_recv_channel == expected && streaming_trailers) {
+            rv->setKeyValue("trailers", streaming_trailers, nullptr);
+            streaming_trailers = nullptr;
+        }
+        clearStreamingChannel(expected);
+        return rv;
+    }
+
     DLLLOCAL void clearStreamingChannel(QoreChannel* expected = nullptr) {
         if (expected && streaming_recv_channel != expected) {
             return;
@@ -2070,6 +2185,11 @@ struct qore_httpclient_priv {
             streaming_recv_channel = nullptr;
         }
         streaming_content_type.clear();
+        if (streaming_trailers) {
+            ExceptionSink xsink;
+            streaming_trailers->deref(&xsink);
+            streaming_trailers = nullptr;
+        }
         sse_recv_buffer.clear();
         sse_decoder.reset();
         sse_framer.reset();
@@ -2125,7 +2245,7 @@ struct qore_httpclient_priv {
             return 0;
         }
 
-        if (msock->socket->setNoDelay(1)) {
+        if (qore_socket_ops(msock->socket).setNoDelay(1)) {
             return -1;
         }
 
@@ -2535,6 +2655,14 @@ struct qore_httpclient_priv {
     DLLLOCAL void clearProxyUserPassword() {
         AutoLocker al(msock->m);
         proxy_connection.clearUserPassword();
+    }
+
+    DLLLOCAL void setHttpFieldsAtTopLevel(bool set) {
+        http_fields_at_top_level.store(set, std::memory_order_relaxed);
+    }
+
+    DLLLOCAL bool getHttpFieldsAtTopLevel() const {
+        return http_fields_at_top_level.load(std::memory_order_relaxed);
     }
 
     DLLLOCAL bool setErrorPassthru(bool set) {
@@ -3093,14 +3221,16 @@ struct qore_httpclient_priv {
     */
     DLLLOCAL std::string getBodyContentType(const QoreHashNode& ans, QoreValue ct) const {
         std::string rv;
-        if (ct.getType() == NT_STRING) {
-            rv = ct.get<const QoreStringNode>()->c_str();
+        // the values can be inline short strings, which have no node (issue #7038)
+        QoreStringDataHelper ct_str(ct);
+        if (ct_str) {
+            rv = ct_str.c_str();
         }
-        QoreValue ce = ans.getKeyValue("content-encoding");
-        if (ce.getType() != NT_STRING) {
+        QoreStringDataHelper ce(ans.getKeyValue("content-encoding"));
+        if (!ce) {
             return rv;
         }
-        const char* start = ce.get<const QoreStringNode>()->c_str();
+        const char* start = ce.c_str();
         while (*start == ' ' || *start == '\t') {
             ++start;
         }
@@ -3453,9 +3583,10 @@ struct qore_httpclient_priv {
         // and the peer may have closed the connection after rejecting it
         {
             std::string sent;
-            QoreValue v = nh->getKeyValue(auth_hdr);
-            if (v.getType() == NT_STRING) {
-                sent = v.get<const QoreStringNode>()->c_str();
+            // the value can be an inline short string, which has no node (issue #7038)
+            QoreStringDataHelper v(nh->getKeyValue(auth_hdr));
+            if (v) {
+                sent = v.c_str();
             } else if (code == 407) {
                 // the credentials that the connection manager sends to the proxy with every request
                 sent = getConnMgrProxyAuthorization();
@@ -3523,7 +3654,7 @@ qore_httpclient_priv::pct_encoding_map_t qore_httpclient_priv::pct_encoding_map 
 };
 
 // static initialization
-void QoreHttpClientObject::static_init() {
+void qore_http_client_object_ops::static_init() {
     // setup static members of QoreHttpClientObject class
     method_map.insert(method_map_t::value_type("OPTIONS", true));
     // Historical compatibility: GET accepts a message body even though it
@@ -3550,7 +3681,7 @@ QoreHttpClientObject::~QoreHttpClientObject() {
 
 void QoreHttpClientObject::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
-        cleanup(xsink);
+        qore_http_client_object_ops(this).cleanup(xsink);
         delete this;
     }
 }
@@ -3980,10 +4111,12 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 "options hash; got type \"%s\" instead", key, n.getTypeName());
             return -1;
         }
-        if (q_check_path(*n.get<const QoreStringNode>(), "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+        // the value can be an inline short string, which has no node (issue #7038)
+        QoreStringValueHelper path_str(n);
+        if (q_check_path(**path_str, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
             return -1;
         }
-        const char* path = n.get<const QoreStringNode>()->c_str();
+        const char* path = path_str->c_str();
         if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
             xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"%s\" option = \"%s\" when "
                 "sandboxing restriction PO_NO_FILESYSTEM is set", key, path);
@@ -4013,6 +4146,15 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("encoding_passthru");
     if (n.getAsBool()) {
         http_priv->encoding_passthru = true;
+    }
+
+    // the fields of a response are given under "headers" and "trailers", and also at the top level unless this
+    // option is False (qore#6811)
+    n = opts->getKeyValue("http_fields_at_top_level");
+    if (!n.isNothing()) {
+        // only the hash given to the caller changes: the client's own reading of a response uses the fields at the
+        // top level, so the setting of the client's socket is not changed
+        http_priv->http_fields_at_top_level.store(n.getAsBool(), std::memory_order_relaxed);
     }
 
     n = opts->getKeyValue("max_response_body_size");
@@ -4416,7 +4558,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             cleanup_failed_connect();
             xsink->raiseException("HTTP2-CONNECT-ERROR",
                 "HTTP/2 connection closed before CONNECT response was received");
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
         if (rv->getType() != NT_HASH) {
@@ -4434,7 +4576,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 CONNECT request failed";
             cleanup_failed_connect();
             xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
 
@@ -4641,7 +4783,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             restore_forced_h3();
             xsink->raiseException("HTTP3-CONNECT-ERROR",
                 "HTTP/3 connection closed before CONNECT response was received");
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
         if (rv->getType() != NT_HASH) {
@@ -4660,7 +4802,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             cleanup_failed_connect();
             restore_forced_h3();
             xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
 
@@ -4809,7 +4951,7 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
                 const char* err_str = err_data.c_str();
                 const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 stream read failed";
                 xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-                HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                 return nullptr;
             }
             QoreValue legacy_error = h->getKeyValue("error");
@@ -5018,7 +5160,7 @@ BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int tim
                 const char* err_str = err_data.c_str();
                 const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/3 stream read failed";
                 xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-                HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                 return nullptr;
             }
             QoreValue legacy_error = h->getKeyValue("error");
@@ -5488,6 +5630,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     }
     // a streamed request body cannot be sent again for a redirect that repeats the request
     bool stream_body = send_callback || is;
+    // set once a request that an HTTP/3 connection did not deliver has been repeated on a new connection (qore#6930)
+    bool undelivered_h3_retried = false;
     bool has_body = stream_body || body_len;
     // the request target of a redirect; already percent-encoded
     std::string redirect_target;
@@ -5499,6 +5643,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     ReferenceHolder<QoreHashNode> ans(xsink);
     // the headers of the last response with lower-case names, as received
     ReferenceHolder<QoreHashNode> resp_headers(xsink);
+    ValueHolder response_protocol(xsink);
+    auto set_response = [&](QoreHashNode* raw) {
+        // Only the manager's response metadata identifies the transport. Keep it across the
+        // redirect loop independently of the response hash exposed to the caller.
+        response_protocol = raw->getKeyValue("protocol").refSelf();
+        resp_headers = get_response_headers_ref(raw);
+        ans = transformConnMgrResponse(raw, xsink);
+    };
     int code = 0;
 
     while (true) {
@@ -5850,7 +6002,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                                 "connection closed before response received");
                             // a cancellation of this thread that closed the connection is reported as such
-                            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                         }
                         break;
                     }
@@ -5878,7 +6030,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s",
                             desc_str.c_str());
                         // a cancellation of this thread that ended the request first is reported as such
-                        HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                        qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                         close_and_evict_if_unusable();
                         return nullptr;
                     }
@@ -5887,8 +6039,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     QoreValue sc_val = h->getKeyValue("status_code");
                     if (!sc_val.isNullOrNothing() && !got_headers) {
                         got_headers = true;
-                        ans = transformConnMgrResponse(h, xsink);
-                        resp_headers = get_response_headers_ref(h);
+                        set_response(h);
                         if (*xsink) {
                             channel->close();
                             return nullptr;
@@ -5915,9 +6066,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             ReferenceHolder<QoreListNode> args(
                                 new QoreListNode(autoTypeInfo), xsink);
                             QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
-                            cb_arg->setKeyValue("hdr", ans->refSelf(), xsink);
-                            cb_arg->setKeyValue("info",
-                                info ? info->copy() : nullptr, xsink);
+                            cb_arg->setKeyValue("hdr", http_fields_at_top_level.load(std::memory_order_relaxed)
+                                ? ans->hashRefSelf()
+                                : remove_http_field_copies(ans->hashRefSelf(), xsink), xsink);
+                            cb_arg->setKeyValue("info", copy_info_for_callback(info, xsink), xsink);
                             cb_arg->setKeyValue("send_aborted", false, xsink);
                             if (obj) {
                                 cb_arg->setKeyValue("obj", obj->refSelf(), xsink);
@@ -6044,7 +6196,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             ReferenceHolder<QoreListNode> args(
                                 new QoreListNode(autoTypeInfo), xsink);
                             QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
-                            cb_arg->setKeyValue("hdr", QoreValue(), xsink);
+                            // the trailer fields of the response, if any (qore#6811)
+                            QoreValue tv = h->getKeyValue("trailers");
+                            cb_arg->setKeyValue("hdr", tv.getType() == NT_HASH
+                                && !tv.get<const QoreHashNode>()->empty() ? tv.refSelf() : QoreValue(), xsink);
                             cb_arg->setKeyValue("send_aborted", false, xsink);
                             if (obj) {
                                 cb_arg->setKeyValue("obj", obj->refSelf(), xsink);
@@ -6115,7 +6270,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
                     // a cancellation of this thread that ended the request first (the code that it ends closes the
                     // transport) is reported as such
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     result.discard(xsink);
                     close_and_evict_if_unusable();
                     return nullptr;
@@ -6134,8 +6289,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // Transform to legacy flat format
                 ReferenceHolder<QoreHashNode> raw_resp(
                     result.get<QoreHashNode>(), xsink);
-                ans = transformConnMgrResponse(*raw_resp, xsink);
-                resp_headers = get_response_headers_ref(*raw_resp);
+                set_response(*raw_resp);
                 if (*xsink) {
                     return nullptr;
                 }
@@ -6295,11 +6449,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
                     // a cancellation of this thread that ended the request first is reported as such, and the
                     // request is not repeated
-                    if (HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink)) {
+                    if (qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink)) {
                         return nullptr;
                     }
                     // a reused connection closed by the peer before a response was received
-                    if (!got_headers && HttpClientConnectionManagerBase::isConnectionClosedError(*xsink)
+                    if (!got_headers && qore_http_manager_ops::isConnectionClosedError(*xsink)
                             && canRepeatOnNewConnection(meth, conn_reused, stream_retried)) {
                         xsink->clear();
                         stream_retry = true;
@@ -6313,8 +6467,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 if (!sc_val.isNullOrNothing() && !got_headers) {
                     got_headers = true;
                     // Transform to flat format for redirect/error processing
-                    ans = transformConnMgrResponse(h, xsink);
-                    resp_headers = get_response_headers_ref(h);
+                    set_response(h);
                     if (*xsink) {
                         channel->close();
                         return nullptr;
@@ -6406,8 +6559,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     if (recv_callback) {
                         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
                         QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
-                        cb_arg->setKeyValue("hdr", ans->refSelf(), xsink);
-                        cb_arg->setKeyValue("info", info ? info->copy() : nullptr, xsink);
+                        cb_arg->setKeyValue("hdr", http_fields_at_top_level.load(std::memory_order_relaxed)
+                            ? ans->hashRefSelf()
+                            : remove_http_field_copies(ans->hashRefSelf(), xsink), xsink);
+                        cb_arg->setKeyValue("info", copy_info_for_callback(info, xsink), xsink);
                         cb_arg->setKeyValue("send_aborted", false, xsink);
                         if (obj) {
                             cb_arg->setKeyValue("obj", obj->refSelf(), xsink);
@@ -6597,7 +6752,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     if (recv_callback) {
                         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
                         QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
-                        cb_arg->setKeyValue("hdr", QoreValue(), xsink);
+                        // the trailer fields of the response, if any (qore#6811)
+                        QoreValue tv = h->getKeyValue("trailers");
+                        cb_arg->setKeyValue("hdr", tv.getType() == NT_HASH
+                            && !tv.get<const QoreHashNode>()->empty() ? tv.refSelf() : QoreValue(), xsink);
                         cb_arg->setKeyValue("send_aborted", false, xsink);
                         if (obj) {
                             cb_arg->setKeyValue("obj", obj->refSelf(), xsink);
@@ -6678,7 +6836,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 if (!has_value) {
                     xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                         "connection closed before response headers received");
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
 
@@ -6703,15 +6861,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         desc_str = desc->c_str();
                     }
                     xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
 
                 // Check for response headers
                 QoreValue sc_val = h->getKeyValue("status_code");
                 if (!sc_val.isNullOrNothing()) {
-                    ans = transformConnMgrResponse(h, xsink);
-                    resp_headers = get_response_headers_ref(h);
+                    set_response(h);
                     if (*xsink) {
                         channel->close();
                         return nullptr;
@@ -6784,13 +6941,33 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // at this boundary so the documented error reaches the caller
             q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
             if (!raw_resp || *xsink) {
+                // A request on an HTTP/3 connection whose peer sent nothing before the connection was closed
+                // (HTTP3-PEER-UNRESPONSIVE: within the connect timeout of the request; or HTTP3-IDLE-CLOSE: by the
+                // idle timer) went to a server whose connection state is gone (ex: it restarted).  The server may
+                // still have processed it before it went away, so only an idempotent request is repeated, once, on
+                // a new connection (RFC 9110 section 9.2.2): the next pass takes the Alt-Svc upgrade again, and
+                // falls back to HTTP/1.1 or HTTP/2 if HTTP/3 fails there; another request raises the error, and the
+                // next request takes a new connection (qore#6930); not for a cancelled request, which is reported
+                if (http3_active && !attempted_h3_upgrade && !undelivered_h3_retried && *xsink
+                        && qore_http_manager_ops::isIdempotentMethod(meth)
+                        && !qore_http_manager_ops::isCancelPending()) {
+                    QoreStringValueHelper err(xsink->getExceptionErr());
+                    if (!strcmp(err->c_str(), "HTTP3-PEER-UNRESPONSIVE")
+                            || !strcmp(err->c_str(), "HTTP3-IDLE-CLOSE")) {
+                        undelivered_h3_retried = true;
+                        http3_active = false;
+                        dropConnMgr(true);
+                        xsink->clear();
+                        continue;
+                    }
+                }
                 // If this was an Alt-Svc-driven H3 upgrade attempt,
                 // mark the Alt-Svc entry with a backoff and retry
                 // over H1/H2.
                 // (not for a cancelled request: the cancellation is reported, and the Alt-Svc entry is kept)
                 if (attempted_h3_upgrade
                         && http3_mode != HTTP3_MODE_REQUIRED
-                        && !HttpClientConnectionManagerBase::isCancelPending()) {
+                        && !qore_http_manager_ops::isCancelPending()) {
                     markAltSvcFailed(this_connection.host.c_str(),
                         this_connection.port);
                     http3_active = false;
@@ -6823,7 +7000,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
                     xsink->raiseExceptionArg(err_str.c_str(), raw_resp->getKeyValue("arg").refSelf(), "%s",
                         desc_str.c_str());
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
                 QoreValue sc_val = raw_resp->getKeyValue("status_code");
@@ -6854,14 +7031,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             "received");
                     }
                     // a cancellation of this thread that ended the request first is reported as such
-                    HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+                    qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
                     return nullptr;
                 }
             }
 
             // Transform to legacy flat format
-            ans = transformConnMgrResponse(*raw_resp, xsink);
-            resp_headers = get_response_headers_ref(*raw_resp);
+            set_response(*raw_resp);
             if (*xsink) {
                 return nullptr;
             }
@@ -7008,20 +7184,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         return nullptr;
     }
 
-    // Refresh http2_active for NEGOTIATE clients: the first successful
-    // response reveals the actual protocol the conn_mgr selected.  Phase 6
-    // of design/conn-mgr-alpn-negotiation.md (Option β).
-    {
-        QoreValue proto = ans->getKeyValue("protocol");
-        if (proto.getType() == NT_STRING) {
-            QoreStringValueHelper proto_str(proto);
-            const char* p = proto_str->c_str();
-            if (!strcmp(p, "h2")) {
-                http2_active = true;
-            } else if (!strcmp(p, "h3")) {
-                http3_active = true;
-            }
-        }
+    if (response_protocol->getType() == NT_STRING) {
+        // the protocol can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper protocol_str(*response_protocol);
+        const char* protocol = protocol_str.c_str();
+        http2_active = !strcmp(protocol, "h2");
+        http3_active = !strcmp(protocol, "h3");
     }
 
     // Parse Alt-Svc for future HTTP/3 upgrades.  Without this, the conn_mgr
@@ -7099,7 +7267,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         std::optional<std::string> mess = get_string_header_value(xsink, **ans, "status_message");
         const char* msg = mess ? mess->c_str() : "<no message>";
         assert(!*xsink);
-        xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", ans.release(),
+        // the response is given as the caller gets one, without the fields at its top level if the option is off
+        // (qore#6811)
+        QoreHashNode* arg = http_fields_at_top_level.load(std::memory_order_relaxed) ? ans.release()
+            : remove_http_field_copies(ans.release(), xsink);
+        xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", arg,
             "HTTP status code %d received: message: %s", code, msg);
         return nullptr;
     }
@@ -7251,7 +7423,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
         if (!has_value) {
             xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                 "connection closed before WebSocket Upgrade response received");
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
         if (rv->getType() != NT_HASH) {
@@ -7270,7 +7442,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
             const char* desc_str = desc_data ? desc_data.c_str() : "WebSocket Upgrade request failed";
             // the description is text, not a format
             xsink->raiseExceptionArg(err_str, h->getKeyValue("arg").refSelf(), "%s", desc_str);
-            HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+            qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
             return nullptr;
         }
 
@@ -7329,9 +7501,11 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     }
 
     if (recv_callback) {
+        // the header given to the callback, without the fields at its top level if the option is off (qore#6811)
+        ReferenceHolder<QoreHashNode> cb_hdr(http_fields_at_top_level.load(std::memory_order_relaxed)
+            ? ans->hashRefSelf() : remove_http_field_copies(ans->hashRefSelf(), xsink), xsink);
         if (msock->socket->priv->runHeaderCallback(xsink, "HTTPClient", mname,
-                *recv_callback, nullptr, *ans, info ? info->copy() : nullptr,
-                false, obj)) {
+                *recv_callback, nullptr, *cb_hdr, copy_info_for_callback(info, xsink), false, obj)) {
             return nullptr;
         }
         return nullptr;
@@ -7341,7 +7515,11 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
         std::optional<std::string> mess = get_string_header_value(xsink, **ans, "status_message");
         const char* msg = mess ? mess->c_str() : "<no message>";
         assert(!*xsink);
-        xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", ans.release(),
+        // the response is given as the caller gets one, without the fields at its top level if the option is off
+        // (qore#6811)
+        QoreHashNode* arg = http_fields_at_top_level.load(std::memory_order_relaxed) ? ans.release()
+            : remove_http_field_copies(ans.release(), xsink);
+        xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", arg,
             "HTTP status code %d received: message: %s", code, msg);
         return nullptr;
     }
@@ -7458,17 +7636,23 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             is_ws_upgrade = has_conn_upgrade && has_upgrade_ws;
         }
         if (!is_ws_upgrade) {
-            return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
+            QoreHashNode* rv = send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
                 msg_body, data, size, send_callback, getbody, info, timeout_ms,
                 recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming, request_target);
+            fix_info_response_headers(info, xsink);
+            return http_fields_at_top_level.load(std::memory_order_relaxed) ? rv
+                : remove_http_field_copies(rv, xsink);
         }
         if (send_callback || is || os || trailer_callback || streaming) {
             xsink->raiseException("HTTP-CLIENT-UPGRADE-ERROR",
                 "WebSocket Upgrade requests with streaming send/receive callbacks are not supported");
             return nullptr;
         }
-        return send_websocket_upgrade_conn_mgr(xsink, mname, meth, mpath, headers,
+        QoreHashNode* rv = send_websocket_upgrade_conn_mgr(xsink, mname, meth, mpath, headers,
             msg_body, data, size, info, timeout_ms, recv_callback, obj, request_target);
+        fix_info_response_headers(info, xsink);
+        return http_fields_at_top_level.load(std::memory_order_relaxed) ? rv
+            : remove_http_field_copies(rv, xsink);
     }
 
 }
@@ -8719,12 +8903,11 @@ public:
         // HTTP/2 and HTTP/3 carry no reason phrase; the blocking request derives the standard one from the status
         // code (see HttpClientConnectionManagerBase::request()), so the same message is reported here
         QoreValue smv = resp->getKeyValue("status_message");
+        // the message can be an inline short string, which has no node (issue #7038)
         SimpleRefHolder<QoreStringNode> derived_message(smv.getType() == NT_STRING
-            ? nullptr
-            : new QoreStringNode(QoreHttpClientObject::getHttpStatusMessage(code)));
-        const QoreStringNode* status_message = smv.getType() == NT_STRING
-            ? smv.get<const QoreStringNode>()
-            : *derived_message;
+            ? QoreStringNodeValueHelper(smv).getReferencedValue()
+            : new QoreStringNode(qore_http_client_object_ops::getHttpStatusMessage(code)));
+        const QoreStringNode* status_message = *derived_message;
         const char* msg = status_message && !status_message->empty() ? status_message->c_str() : "<no message>";
 
         SimpleRefHolder<QoreStringNode> loc(resp_headers
@@ -9342,8 +9525,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
         if (!*xsink) {
             p->setSelf(*rv);
-            rv->setValue("sock", notifier_obj.release(), xsink);
-            rv->setValue("goal", new QoreStringNode("received"), xsink);
+            qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+            qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
         }
         return rv.release();
     };
@@ -9599,8 +9782,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setValue("sock", notifier_obj.release(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -9653,8 +9836,8 @@ QoreObject* qore_httpclient_priv::deferredAcquireErrorPollOp(ExceptionSink& acqu
         new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setValue("sock", notifier_obj.release(), xsink);
-        rv->setValue("goal", new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode(goal), xsink);
     }
     return rv.release();
 }
@@ -9752,8 +9935,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
             new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
         if (!*xsink) {
             p->setSelf(*rv);
-            rv->setValue("sock", notifier_obj.release(), xsink);
-            rv->setValue("goal", new QoreStringNode("connect"), xsink);
+            qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+            qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
         }
         return rv.release();
     }
@@ -9805,8 +9988,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
                 new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
             if (!*xsink) {
                 p->setSelf(*rv);
-                rv->setValue("sock", n2_obj.release(), xsink);
-                rv->setValue("goal", new QoreStringNode("connect"), xsink);
+                qore_poll_op_set_member(rv, "sock", n2_obj.release(), xsink);
+                qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
             }
             return rv.release();
         }
@@ -9861,8 +10044,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
             new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), err_poller.release()), xsink);
         if (!*xsink) {
             err_p->setSelf(*err_rv);
-            err_rv->setValue("sock", err_notifier_obj.release(), xsink);
-            err_rv->setValue("goal", new QoreStringNode("connect"), xsink);
+            qore_poll_op_set_member(err_rv, "sock", err_notifier_obj.release(), xsink);
+            qore_poll_op_set_member(err_rv, "goal", new QoreStringNode("connect"), xsink);
         }
         return err_rv.release();
     }
@@ -9881,8 +10064,8 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setValue("sock", notifier_obj.release(), xsink);
-        rv->setValue("goal", new QoreStringNode("connect"), xsink);
+        qore_poll_op_set_member(rv, "sock", notifier_obj.release(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
     }
     return rv.release();
 }
@@ -9923,8 +10106,7 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
     if (!has_value) {
         // Channel closed = EOF
         SafeLocker sl(priv->m);
-        http_priv->clearStreamingChannel(*ch);
-        return new QoreHashNode(autoTypeInfo);
+        return http_priv->takeStreamingEnd(*ch);
     }
 
     if (rv->getType() != NT_HASH) {
@@ -9951,8 +10133,24 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
         }
         xsink->raiseExceptionArg(err_str.c_str(), h->getKeyValue("arg").refSelf(), "%s", desc_str.c_str());
         // a cancellation of this thread that ended the stream first is reported as such
-        HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(*xsink);
+        qore_http_manager_ops::replaceErrorWithPendingCancel(*xsink);
         return nullptr;
+    }
+
+    // the end of the response, which can come with its last body data, gives the trailer fields of the response, if
+    // any; they are given by the read that reports the end of the body (qore#6811)
+    QoreValue end_val = h->getKeyValue("end_stream");
+    if (end_val.getAsBool()) {
+        QoreValue tv = h->getKeyValue("trailers");
+        if (tv.getType() == NT_HASH && !tv.get<const QoreHashNode>()->empty()) {
+            SafeLocker sl(priv->m);
+            if (http_priv->streaming_recv_channel == *ch) {
+                if (http_priv->streaming_trailers) {
+                    http_priv->streaming_trailers->deref(xsink);
+                }
+                http_priv->streaming_trailers = tv.get<QoreHashNode>()->hashRefSelf();
+            }
+        }
     }
 
     // Check for body data
@@ -9964,11 +10162,9 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
     }
 
     // Check for end_stream
-    QoreValue end_val = h->getKeyValue("end_stream");
     if (!end_val.isNullOrNothing()) {
         SafeLocker sl(priv->m);
-        http_priv->clearStreamingChannel(*ch);
-        return new QoreHashNode(autoTypeInfo);  // empty = EOF
+        return http_priv->takeStreamingEnd(*ch);  // EOF: empty, or with the trailer fields
     }
 
     // Unknown message type — skip (recurse)
@@ -10053,14 +10249,15 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
 
         const char* ptr = nullptr;
         size_t len = 0;
+        // the body can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper body_str(body_val);
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* bin = body_val.get<const BinaryNode>();
             ptr = static_cast<const char*>(bin->getPtr());
             len = bin->size();
-        } else if (body_val.getType() == NT_STRING) {
-            const QoreStringNode* str = body_val.get<const QoreStringNode>();
-            ptr = str->c_str();
-            len = str->size();
+        } else if (body_str) {
+            ptr = body_str.c_str();
+            len = body_str.size();
         }
         if (len) {
             SafeLocker sl(priv->m);
@@ -10101,6 +10298,7 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
         content_type = http_priv->streaming_content_type;
     }
     SimpleRefHolder<BinaryNode> body(new BinaryNode);
+    ReferenceHolder<QoreHashNode> trailers(xsink);
     while (true) {
         ReferenceHolder<QoreHashNode> chunk(readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
         if (*xsink) {
@@ -10111,7 +10309,12 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
         }
         QoreValue body_val = chunk->getKeyValue("body");
         if (body_val.isNullOrNothing()) {
-            break;  // EOF
+            // EOF; the trailer fields of the response, if any, are given with the body (qore#6811)
+            QoreValue tv = chunk->getKeyValue("trailers");
+            if (tv.getType() == NT_HASH) {
+                trailers = tv.get<QoreHashNode>()->hashRefSelf();
+            }
+            break;
         }
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* bin = body_val.get<const BinaryNode>();
@@ -10141,6 +10344,9 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
     }
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     result->setKeyValue("body", qore_http_body_string(charset, body->getPtr(), body->size()), xsink);
+    if (trailers) {
+        result->setKeyValue("trailers", trailers.release(), xsink);
+    }
     return result.release();
 }
 
@@ -10161,6 +10367,7 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout
     // the body is received into memory, so it is limited like a body that is returned whole
     int64 max_size = getMaxResponseBodySize();
     SimpleRefHolder<BinaryNode> body(new BinaryNode());
+    ReferenceHolder<QoreHashNode> trailers(xsink);
     while (true) {
         ReferenceHolder<QoreHashNode> chunk(readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
         if (*xsink) {
@@ -10171,7 +10378,12 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout
         }
         QoreValue body_val = chunk->getKeyValue("body");
         if (body_val.isNullOrNothing()) {
-            break;  // EOF
+            // EOF; the trailer fields of the response, if any, are given with the body (qore#6811)
+            QoreValue tv = chunk->getKeyValue("trailers");
+            if (tv.getType() == NT_HASH) {
+                trailers = tv.get<QoreHashNode>()->hashRefSelf();
+            }
+            break;
         }
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* bin = body_val.get<const BinaryNode>();
@@ -10192,6 +10404,9 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout
 
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     result->setKeyValue("body", body.release(), xsink);
+    if (trailers) {
+        result->setKeyValue("trailers", trailers.release(), xsink);
+    }
     return result.release();
 }
 
@@ -10442,19 +10657,19 @@ void QoreHttpClientObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreVal
     http_priv->setEventQueueUnlocked(xsink, q, arg, with_data);
 }
 
-void QoreHttpClientObject::cleanup(ExceptionSink* xsink) {
+void qore_http_client_object_ops::cleanupImpl(QoreHttpClientObject* b, ExceptionSink* xsink) {
     qore_socket_private* close_priv = nullptr;
     std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
     {
-        AutoLocker al(priv->m);
-        close_priv = http_priv->disconnect_unlocked_prepare_close();
-        old_mgr = http_priv->resetConnMgr();
-        priv->invalidate();
+        AutoLocker al(b->priv->m);
+        close_priv = b->http_priv->disconnect_unlocked_prepare_close();
+        old_mgr = b->http_priv->resetConnMgr();
+        b->priv->invalidate();
     }
     qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
     qore_httpclient_priv::closeReferencedSocket(close_priv);
-    http_priv->getEventSink()->clear(xsink);
-    priv->socket->cleanup(xsink);
+    b->http_priv->getEventSink()->clear(xsink);
+    b->priv->socket->cleanup(xsink);
 }
 
 void QoreHttpClientObject::lock() {
@@ -10558,6 +10773,14 @@ bool QoreHttpClientObject::setEncodingPassthru(bool set) {
 
 bool QoreHttpClientObject::getEncodingPassthru() const {
     return http_priv->getEncodingPassthru();
+}
+
+void QoreHttpClientObject::setHttpFieldsAtTopLevel(bool set) {
+    http_priv->setHttpFieldsAtTopLevel(set);
+}
+
+bool QoreHttpClientObject::getHttpFieldsAtTopLevel() const {
+    return http_priv->getHttpFieldsAtTopLevel();
 }
 
 bool QoreHttpClientObject::setErrorPassthru(bool set) {

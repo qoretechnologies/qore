@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires DataProvider
 %requires ConnectionProvider
 %requires StripeDataProvider
@@ -654,12 +655,12 @@ public class StripeDataProviderTest inherits QUnit::Test {
         TypeScript one is removed.
     */
     private *StripeRestClientIo getLiveClient() {
-        *string conn_name = m_options.conn ?? ENV.STRIPE_CONNECTION;
+        *string conn_name = LiveProvider::get("stripe", "STRIPE_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             testSkip("no connection specified; use -c,--connection=ARG or set STRIPE_CONNECTION");
             return;
         }
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("stripe", "STRIPE_CONNECTION", m_options.conn);
         if (conn.getType() == "stripe") {
             return cast<StripeRestClientIo>(conn.getAsync());
         }

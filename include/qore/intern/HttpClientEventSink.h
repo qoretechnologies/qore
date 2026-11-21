@@ -230,12 +230,13 @@ public:
             }
             v = l->retrieveEntry(0);
         }
-        if (v.getType() == NT_STRING) {
-            const QoreStringNode* str = v.get<const QoreStringNode>();
+        // the value can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper str(v);
+        if (str) {
             char* end;
             errno = 0;
-            long long rv = strtoll(str->c_str(), &end, 10);
-            if (errno || end == str->c_str()) {
+            long long rv = strtoll(str.c_str(), &end, 10);
+            if (errno || end == str.c_str()) {
                 return -1;
             }
             len = rv;

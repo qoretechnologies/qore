@@ -55,6 +55,9 @@
     without a return, or a return whose handlers were lowered inline, which replace its value themselves), and the
     value is ignored, as the AST interpreter's is when the block is not left by a return.
 */
+//! the frame of a function that the IR interpreter runs (lib/QoreIRInterpreter.cpp)
+struct IRCallFrame;
+
 struct QoreHandlerRunContext {
     //! Takes the value of a return statement of the handler (borrowed: the function takes a reference of its own)
     using hand_over_t = void (*)(void* data, QoreValue value, ExceptionSink* xsink);
@@ -82,6 +85,12 @@ struct QoreHandlerRunContext {
     //! interpreter: a run of the handlers of a block of the handler itself, in that frame, forwards the values that
     //! its handlers hand over to this run's function (see forwardFrom())
     size_t ir_frame_index = static_cast<size_t>(-1);
+    //! the IR frame of the function that the handler runs for, if the handler's frame takes the location of the
+    //! statement that called that function from it (IRCallFrame::body_entry_loc): an exception releases the locals that
+    //! the handler declares in the root block of its function there, as the AST interpreter does
+    //! (QoreIRFunction::local_unwind_locations, qore#6831); the handler's frame starts at the statement that ran the
+    //! handler
+    const IRCallFrame* body_entry_frame = nullptr;
 
     //! Makes this run of the handlers of a block of a handler body forward the values that its handlers hand over to
     //! the function that the handler runs for, as the AST interpreter runs the handlers of a handler with the same

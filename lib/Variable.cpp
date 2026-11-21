@@ -67,6 +67,7 @@
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreBufferNodePrivate.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 typedef std::set<int64, std::greater<int64>> ind_set_t;
 
@@ -2261,7 +2262,7 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove, c
     }
     int rc = qore_object_private::getLValue(*o, mem, *this, ctx, for_remove, vl.xsink);
     if (!rc && !ctx) {
-        vl.addMemberNotification(o, mem); // add member notification for external updates
+        qore_auto_vlock_ops(vl).addMemberNotification(o, mem); // add member notification for external updates
     }
     if (*vl.xsink) {
         return -1;
@@ -2746,11 +2747,11 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
 
 void LValueHelper::setAndLock(QoreVarRWLock& rwl) {
     qore_var_rwlock_ops(rwl).wrlock();
-    vl.set(&rwl);
+    qore_auto_vlock_ops(vl).set(&rwl);
 }
 
 void LValueHelper::set(QoreVarRWLock& rwl) {
-    vl.set(&rwl);
+    qore_auto_vlock_ops(vl).set(&rwl);
 }
 
 QoreValue LValueHelper::getReferencedValue() const {

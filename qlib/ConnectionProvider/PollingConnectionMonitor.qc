@@ -590,7 +590,13 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             cache{name}.ping_active = False;
             cache{name}.conn.last_check = now_us();
             cache{name}.spop = spop;
-            handlePingFailed(name, now_us() - cache{name}.start, ex);
+            # the deadline of the operation can pass before this first step, when this thread does not run for its
+            # duration: a timeout, as when the controller's steps raise it (handlePingResult(), qore#6973)
+            if (ex.err == "SOCKET-TIMEOUT") {
+                handlePingTimeout(name, now_us() - cache{name}.start);
+            } else {
+                handlePingFailed(name, now_us() - cache{name}.start, ex);
+            }
             if (active) {
                 scheduleNextPing(name, ping_repeat);
             }

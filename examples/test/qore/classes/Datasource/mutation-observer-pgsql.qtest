@@ -7,6 +7,7 @@
 %requires Util
 %requires QUnit
 %requires ../../../qlib/SqlUtil/PgsqlTestIsolation.qm
+%requires ../../../qlib/SqlUtil/TestRunIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -127,6 +128,8 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
             ds.setAutoCommit(autocommit);
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
+            # a database that cannot be connected to fails the test case (qore#6934)
+            TestRun::rethrowPrecondition(ex);
             testSkip("no PostgreSQL connection: " + ex.err + ": " + ex.desc);
         }
         obs.reset();
@@ -287,6 +290,8 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
             dsp = new DatasourcePool(connstr + "{min=1,max=2}");
             dsp.getServerVersion();
         } catch (hash<ExceptionInfo> ex) {
+            # a database that cannot be connected to fails the test case (qore#6934)
+            TestRun::rethrowPrecondition(ex);
             testSkip("no PostgreSQL connection: " + ex.err + ": " + ex.desc);
         }
 
@@ -321,6 +326,8 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
             try {
                 call_function("dbg_ds_arm_connection_abort", ds, OpInfo.op_id, FaultAfterExec);
             } catch (hash<ExceptionInfo> ex) {
+                # a database that cannot be connected to fails the test case (qore#6934)
+                TestRun::rethrowPrecondition(ex);
                 if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
                     testSkip("debug build required for dbg_ds_arm_connection_abort()");
                 }
@@ -376,6 +383,8 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
                 call_function("dbg_ds_arm_connection_abort", ds,
                     OpInfo.op_id, FaultAfterCommit);
             } catch (hash<ExceptionInfo> ex) {
+                # a database that cannot be connected to fails the test case (qore#6934)
+                TestRun::rethrowPrecondition(ex);
                 if (ex.err == "NO-FUNCTION"
                         || ex.err == "UNDEFINED-FUNCTION-CALL") {
                     testSkip("debug build required for dbg_ds_arm_connection_abort()");
@@ -409,6 +418,8 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
             dsp = new DatasourcePool(connstr + "{min=1,max=2}");
             dsp.getServerVersion();
         } catch (hash<ExceptionInfo> ex) {
+            # a database that cannot be connected to fails the test case (qore#6934)
+            TestRun::rethrowPrecondition(ex);
             testSkip("no PostgreSQL connection: " + ex.err + ": " + ex.desc);
         }
         # Roll back before dropTable(setup) runs. In a release build the
@@ -432,6 +443,8 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
                 call_function("dbg_ds_arm_connection_abort", dsp,
                     OpInfo.op_id, FaultAfterCommit);
             } catch (hash<ExceptionInfo> ex) {
+                # a database that cannot be connected to fails the test case (qore#6934)
+                TestRun::rethrowPrecondition(ex);
                 if (ex.err == "NO-FUNCTION"
                         || ex.err == "UNDEFINED-FUNCTION-CALL") {
                     testSkip("debug build required for dbg_ds_arm_connection_abort()");

@@ -150,9 +150,11 @@ x=null@endverbatim
     Program created without a parent (the main Program, or one created as an independent Program) and every Program
     created from it or from one of its members, so code in a child Program sees the data that its parent saves in the
     same thread, and the other way around.  A thread's data is freed when the thread ends or when the family's root
-    Program is destroyed, whichever comes first.  Data that a thread saves while the root is being destroyed is freed
-    by the end of the root's destruction, and a child Program that is still alive then has thread-local data of its
-    own, empty at first.
+    Program is destroyed, whichever comes first.  A thread that ends frees its data itself, after it has left the
+    family's Programs (see @ref threads_and_program_deletion), so it can still be freeing it when the root's
+    destruction returns: code that needs to know that the data is freed waits for it (for example, for a destructor
+    of a value to run).  Data that a thread saves while the root is being destroyed is freed by the end of the root's
+    destruction, and a child Program that is still alive then has thread-local data of its own, empty at first.
 
     A user module's Program is created without a parent, so it is the root of a family of its own: module code, which
     runs in the module's Program (a module function, a method of a module class, or a closure created in module

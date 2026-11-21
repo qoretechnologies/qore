@@ -14,8 +14,9 @@
 
 %exec-class LinenoiseSandboxTest
 
-#! The callbacks of the line editor are process-wide: sandboxed code cannot set, replace or remove them (issue #6743)
-/** The line editor is shared by the whole process, and its callbacks run for whatever code reads a line; a change by
+#! The line editor is process-wide: sandboxed code cannot use it (issues #6743, #6846)
+/** The line editor is shared by the whole process: its callbacks run for whatever code reads a line, its history
+    holds the lines of all of it, and an editing session can be used by any code that knows its number; a call by
     sandboxed code raises \c SANDBOX-REGISTRATION-ERROR, and trusted code is not affected
 */
 class LinenoiseSandboxTest inherits QUnit::Test {
@@ -31,6 +32,30 @@ class LinenoiseSandboxTest inherits QUnit::Test {
             "unbind_key": "Linenoise::unbind_key(\"ctrl-x\");",
             "clear_history_provider": "Linenoise::set_history_provider();",
             "set_history_provider": "Linenoise::set_history_provider(new HP());",
+            # the line editor itself, its history, settings and editing sessions (qore#6846)
+            "line": "Linenoise::line(\"> \");",
+            "line_with_timeout": "Linenoise::line_with_timeout(\"> \", 1);",
+            "history_add": "Linenoise::history_add(\"tenant line\");",
+            "history_set_max_len": "Linenoise::history_set_max_len(1);",
+            "history_save": "Linenoise::history_save(\"/tmp/linenoise-sandbox-history\");",
+            "history_load": "Linenoise::history_load(\"/tmp/linenoise-sandbox-history\");",
+            "history_free": "Linenoise::history_free();",
+            "history": "Linenoise::history();",
+            "preload_buffer": "Linenoise::preload_buffer(\"text\");",
+            "set_auto_dedent": "Linenoise::set_auto_dedent(\"    \", \"}\");",
+            "set_mask_mode": "Linenoise::set_mask_mode(True);",
+            "set_menu_complete": "Linenoise::set_menu_complete(True);",
+            "set_completion_case_insensitive": "Linenoise::set_completion_case_insensitive(True);",
+            "set_filename_completion": "Linenoise::set_filename_completion(True);",
+            "set_right_prompt": "Linenoise::set_right_prompt(\"right\");",
+            "edit_start": "Linenoise::edit_start(\"> \");",
+            "edit_feed": "Linenoise::edit_feed(1, 10);",
+            "edit_get_line": "Linenoise::edit_get_line(1);",
+            "edit_stop": "Linenoise::edit_stop(1);",
+            "edit_fd": "Linenoise::edit_fd(1);",
+            "edit_get_buffer": "Linenoise::edit_get_buffer(1);",
+            "edit_set_silent": "Linenoise::edit_set_silent(1, True);",
+            "edit_key_type": "Linenoise::edit_key_type(1);",
         };
     }
 
@@ -42,7 +67,8 @@ class LinenoiseSandboxTest inherits QUnit::Test {
 ";
 
     constructor() : Test("LinenoiseSandboxTest", "1.0", \ARGV) {
-        addTestCase("sandboxed code cannot change the line editor's callbacks", \sandboxedTest());
+        addTestCase("sandboxed code cannot use the line editor", \sandboxedTest());
+        addTestCase("sandboxed code cannot read or change the history of the line editor", \historyTest());
         addTestCase("trusted code is not refused", \trustedTest());
         set_return_value(main());
     }
@@ -62,6 +88,18 @@ class LinenoiseSandboxTest inherits QUnit::Test {
             }
         }
         assertEq({}, not_refused);
+    }
+
+    #! qore#6846: the history of trusted code's lines is neither read nor changed by a tenant
+    historyTest() {
+        Linenoise::history_free();
+        Linenoise::history_add("trusted secret");
+        on_exit Linenoise::history_free();
+        foreach string func in (("history", "history_add", "history_free")) {
+            Program tenant = LinenoiseSandboxTest::tenant(func, Calls{func});
+            assertThrows("SANDBOX-REGISTRATION-ERROR", \tenant.callFunction(), ("t_" + func,), func);
+        }
+        assertEq(("trusted secret",), Linenoise::history(), "the history is unchanged");
     }
 
     trustedTest() {

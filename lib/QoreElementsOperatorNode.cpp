@@ -43,7 +43,7 @@ QoreString *QoreElementsOperatorNode::getAsString(bool& del, int foff, Exception
 }
 
 int QoreElementsOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    qore_string_private::get(str)->concat(&Elements_str);
+    qore_string_private::get(str)->concatAsciiName(Elements_str);
     return 0;
 }
 

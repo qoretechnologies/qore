@@ -126,6 +126,14 @@ struct QuicStreamInfo {
           is discarded and the rest of the stream is not read.
     */
     bool body_too_large = false;
+
+    //! The size of the header list received so far in the current header block (RFC 9114 section 4.2.2: the length of
+    //! each name and value plus 32 bytes) (qore#6867)
+    size_t header_list_size = 0;
+
+    //! The header list exceeded the maximum header size of the socket; the stream was rejected and error_message says
+    //! so (qore#6867)
+    bool header_too_large = false;
     //! true if stream received data in 0-RTT (for server-side logging/auditing)
     bool received_0rtt_data = false;
 
@@ -216,11 +224,15 @@ struct QuicStreamingBodyData {
     */
     std::deque<std::vector<uint8_t>> sent_bufs;
     size_t front_acked = 0;          //!< bytes of sent_bufs.front() already acknowledged
+    uint64_t acked_total = 0;        //!< bytes of the stream acknowledged by the peer so far (never decreases)
     bool eof = false;                //!< InputStream signaled EOF
     bool deferred = false;           //!< WOULDBLOCK returned, waiting for resume
     bool no_end_stream = false;      //!< Keep stream open after data exhausted (CONNECT tunnels)
     //! the limit of the staged data set with QuicSession::setStreamSendLimit(), 0 for the default
     size_t send_limit = 0;
+    //! the length of the data that the stream's own limit refused last, 0 once data was taken again: the stream is
+    //! drained when that data fits (waitForStreamDrain(); issue #6907)
+    size_t refused_len = 0;
     //! the latest WebSocket pong kept while the staged data was over its limit (issue #5900)
     std::vector<uint8_t> pending_pong;
     //! true once a WebSocket close frame was staged past the limit (once per stream; issue #5900)
@@ -635,6 +647,14 @@ public:
     //! waiters are woken by notifyStreamDrain() when the data is acknowledged or the stream closes
     DLLLOCAL int streamSendFlushed(int64_t stream_id);
 
+    //! Returns the number of bytes of the stream's data that the peer has acknowledged so far (never decreases)
+    /** A client waiting for a full send buffer to drain uses it as its measure of progress: the peer takes the data
+        only while it reads the stream and grants flow-control credit (issue #6968).
+
+        @return the acknowledged byte count, or -1 if the stream has no staged data record
+    */
+    DLLLOCAL int64_t streamAckedBytes(int64_t stream_id);
+
     //! Take the next completed stream (transfers ownership)
     DLLLOCAL std::unique_ptr<QuicStreamInfo> takeCompletedStream();
 
@@ -671,6 +691,12 @@ public:
     */
     DLLLOCAL void setMaxResponseBodySize(int64_t size) {
         max_response_body_size_.store(size, std::memory_order_relaxed);
+    }
+
+    //! Sets the maximum size in bytes of the header list of a received header block (the maximum header size of the
+    //! socket; qore#6867)
+    DLLLOCAL void setMaxHeaderListSize(size_t size) {
+        max_header_list_size_.store(size, std::memory_order_relaxed);
     }
 
     //! Atomically find first headers-ready stream, copy it, and mark as dispatched
@@ -854,7 +880,29 @@ public:
         Idle       = 1,  //!< local NGTCP2_ERR_IDLE_CLOSE — our own idle timer expired
         LocalClose = 2,  //!< we sent CONNECTION_CLOSE (in_closing_period)
         PeerClose  = 3,  //!< peer sent CONNECTION_CLOSE (in_draining_period)
+        //! a client connection on which the peer sent nothing for its peer response timeout after a request was
+        //! submitted (see setPeerResponseTimeout()): the peer's connection state is gone (ex: it restarted)
+        Unresponsive = 4,
     };
+
+    //! The peer response timeout of a client connection when its client gives no connect timeout
+    static constexpr uint64_t QUIC_DEFAULT_PEER_RESPONSE_TIMEOUT_NS = 30ULL * NGTCP2_SECONDS;
+
+    //! Sets the peer response timeout of a client connection (qore#6930)
+    /** A request submitted on the connection arms a deadline this long after its submission, which any packet
+        received from the peer disarms: a live peer acknowledges the request within its maximum ACK delay.  If the
+        deadline passes, the peer has not received the request (QUIC acknowledges every packet it receives), so its
+        connection state is gone (ex: the server restarted, which a stateless reset reports only if the server can
+        still compute one), and the connection is closed with @ref CloseReason::Unresponsive, instead of waiting for
+        the idle timeout.  0 disables it; it is at most the connection's idle timeout.
+    */
+    DLLLOCAL void setPeerResponseTimeout(uint64_t timeout_ns);
+
+private:
+    //! arms the deadline for a packet from the peer after a request, if it is not armed (client connections only)
+    DLLLOCAL void armPeerResponseDeadlineLocked();
+
+public:
 
     //! Returns the close cause; @ref CloseReason::Open if still open.
     DLLLOCAL CloseReason getCloseReason() const;
@@ -1432,6 +1480,9 @@ public:
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const;
 
 private:
+#ifdef DEBUG
+    friend class QuicPacketPacingTest;
+#endif
     DLLLOCAL QuicSession();
 
     //! Initialize client-side connection
@@ -1769,6 +1820,8 @@ private:
                                     void* conn_user_data, void* stream_user_data);
 
     //! HTTP/3 receive header
+    DLLLOCAL static bool h3CheckHeaderListSize(QuicSession* session, QuicStreamInfo& stream, int64_t stream_id,
+            size_t name_len, size_t value_len);
     DLLLOCAL static int h3RecvHeaderCallback(nghttp3_conn* conn, int64_t stream_id,
                                     int32_t token, nghttp3_rcbuf* name,
                                     nghttp3_rcbuf* value, uint8_t flags,
@@ -1880,10 +1933,19 @@ private:
     //! Number of lines written to @ref trace_ring_ so far
     uint64_t trace_count_ = 0;
     ngtcp2_duration local_idle_timeout_ns_ = QUIC_IDLE_TIMEOUT_NS; //!< advertised idle timeout for this session
+    //! the peer response timeout (see setPeerResponseTimeout()); mtx_ must be held to access it
+    uint64_t peer_response_timeout_ns_ = 0;
+    //! the deadline armed by a request for a packet from the peer, 0 if none; mtx_ must be held to access it
+    ngtcp2_tstamp peer_response_deadline_ = 0;
+    //! set when the connection was closed because the peer did not respond (see setPeerResponseTimeout())
+    std::atomic<bool> peer_unresponsive_{false};
     int64_t max_request_body_size_ = 0;             //!< maximum request body size (0 = unlimited); consistent with Http2Session
     //! Maximum size of a client response body received into memory; <= 0 = no limit
     // atomic: set from the thread that polls the session while it can be read by callbacks
     std::atomic<int64_t> max_response_body_size_{0};
+    //! Maximum size of the header list of a received header block (qore#6867)
+    // the default is that of QORE_MAX_HEADER_SIZE; the session is given the limit of its socket when it is created
+    std::atomic<size_t> max_header_list_size_{65536};
 
     //! Server CID for this session (used for CID-based routing)
     ngtcp2_cid scid_{};
@@ -2311,6 +2373,10 @@ DLLLOCAL void qore_quic_test_packets_received(int64_t& client, int64_t& server);
     I/O, so a test controls when they arrive.
 */
 DLLLOCAL void qore_quic_test_hold_client_settings(bool hold);
+
+//! Debug-only: server connections closed from now on send nothing to their peer: no HTTP/3 GOAWAY and no
+//! CONNECTION_CLOSE, as for a server process that is killed (qore#6930)
+DLLLOCAL void qore_quic_test_silent_server_close(bool silent);
 
 //! Debug-only: the number of client sessions whose SETTINGS are held (see qore_quic_test_hold_client_settings())
 DLLLOCAL int64_t qore_quic_test_held_client_settings();

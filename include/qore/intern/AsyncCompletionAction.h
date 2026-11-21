@@ -44,6 +44,7 @@
 #include <memory>
 #include "qore/intern/QoreConsumeHook.h"
 #include "qore/intern/HttpStreamConsumeHook.h"
+#include "qore/intern/QoreIoClassesOps.h"
 #include <mutex>
 
 #ifdef DEBUG
@@ -655,7 +656,7 @@ public:
         // the queue's hook serves every stream whose events it receives; without a queue, no event is kept, and the
         // data is credited as it is parsed
         if (queue) {
-            item_hook = queue->getItemConsumeHook();
+            item_hook = qore_queue_ops(queue).getItemConsumeHook();
         }
         stream_hook = std::move(hook);
         return true;

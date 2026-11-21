@@ -1116,7 +1116,7 @@ int QoreHashNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) c
     }
 
     if (!size()) {
-        qore_string_private::get(str)->concat(&EmptyHashString);
+        qore_string_private::get(str)->concatAsciiName(EmptyHashString);
         return 0;
     }
     str.concat("hash: (");

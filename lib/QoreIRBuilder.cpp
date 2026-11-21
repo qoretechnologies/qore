@@ -221,7 +221,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
             break;
         case QoreIROpcode::ToString:
         case QoreIROpcode::ToStringChecked:
-            if (!q_env_is_set("QORE_DISABLE_IR_ASSIGNED_STRING_CONVERSION_FACTS")) {
+            if (!QORE_ENV_IS_SET("QORE_DISABLE_IR_ASSIGNED_STRING_CONVERSION_FACTS")) {
                 QoreIRValueFacts facts;
                 facts.type_info = stringTypeInfo;
                 facts.assigned_state = QoreIRAssignedState::Assigned;

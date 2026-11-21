@@ -80,6 +80,7 @@ enum Http3Mode {
 /** thread-safe, uses QoreSocket for socket communication
  */
 class QoreHttpClientObject : public QoreSocketObject {
+    friend class qore_http_client_object_ops;
     friend struct qore_httpclient_priv;
     // HttpClientConnectSendRecvPollOperation was the legacy poll op
     // for startPollSendRecv/startPollConnect; removed in Phase 5
@@ -986,6 +987,16 @@ public:
     DLLEXPORT QoreHashNode* getUsageInfo() const;
     DLLEXPORT void clearStats();
 
+    //! sets the http_fields_at_top_level option: the fields of a response are also given at the top level of its hash
+    /** @since %Qore 3.0
+     */
+    DLLEXPORT void setHttpFieldsAtTopLevel(bool set);
+
+    //! returns the value of the http_fields_at_top_level option
+    /** @since %Qore 3.0
+     */
+    DLLEXPORT bool getHttpFieldsAtTopLevel() const;
+
     //! sets the new and returns the old error_passthru status
     /** @since %Qore 0.9.3
      */
@@ -1045,15 +1056,6 @@ public:
     /** @since %Qore 2.0
     */
     DLLEXPORT QoreHashNode* getConfig() const;
-
-    DLLLOCAL static void static_init();
-
-    //! Returns the standard HTTP reason phrase for a status code.
-    /** @since %Qore 3.0
-    */
-    DLLLOCAL static const char* getHttpStatusMessage(int code);
-
-    DLLLOCAL void cleanup(ExceptionSink* xsink);
 
 protected:
     //! destroys the object and frees all associated memory

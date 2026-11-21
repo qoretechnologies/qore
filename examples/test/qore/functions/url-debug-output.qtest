@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class UrlDebugOutputTest
+
+#! the debug output of URL parsing (qore -d, debug builds) does not show the URL or its password (qore#6961)
+class UrlDebugOutputTest inherits QUnit::Test {
+    public {
+        const User = "u_SECRET1";
+        const Pass = "p_SECRET2";
+        const Host = "h-host";
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("UrlDebugOutput", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("URL parsing", \parseTest());
+        set_return_value(main());
+    }
+
+    parseTest() {
+        TmpDir tmp("qore-url-debug-");
+        string file = tmp.path + DirSep + "parse.q";
+        # the password is not in the source text, which the debug output of the parser can show
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%new-style\n"
+            # live-provider-optin: the text of a parsed script; the variables are never read (the test checks the debug output of the parser)
+            "string url = \"http://\" + ENV.URL_TEST_USER + \":\" + ENV.URL_TEST_PASS + \"@\" + ENV.URL_TEST_HOST "
+                "+ \":8080/path\";\n"
+            "hash<UrlInfo> h = parse_url(url);\n"
+            "printf(\"parsed: %s %s\\n\", h.host, h.port);\n"
+            "hash<auto> h2 = parse_url(url, QURL_DECODE);\n"
+            "printf(\"decoded: %s\\n\", h2.host);\n");
+        f.close();
+
+        string out = backquote(sprintf("URL_TEST_USER=%s URL_TEST_PASS=%s URL_TEST_HOST=%s %s -d 5 %s 2>&1", User,
+            Pass, Host, qore_bin, file));
+        assertRegex("parsed: " + Host + " 8080", out, "the URL was parsed");
+        # in a debug build, the URL parser writes debug output
+        if (out !~ /QoreURL::parse_intern/) {
+            testSkip("debug build required for the debug output of URL parsing");
+        }
+        assertEq(-1, out.find(Pass), "the debug output does not show the password");
+        assertEq(-1, out.find(User + ":"), "the debug output does not show the user and password");
+    }
+}

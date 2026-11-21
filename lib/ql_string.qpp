@@ -2491,6 +2491,7 @@ chomp(\str);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
 
+   // note: safe; getUnique() makes the lvalue's inline short string a node (LValueHelper::ensureUnique())
    QoreStringNode* rv = reinterpret_cast<QoreStringNode* >(ref.getUnique());
    if (*xsink)
       return QoreValue();
@@ -2543,6 +2544,7 @@ trim(\str);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
 
+   // note: safe; getUnique() makes the lvalue's inline short string a node (LValueHelper::ensureUnique())
    QoreStringNode* rv = reinterpret_cast<QoreStringNode*>(ref.getUnique());
    if (*xsink)
       return QoreValue();
@@ -2595,6 +2597,7 @@ ltrim(\str);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
 
+   // note: safe; getUnique() makes the lvalue's inline short string a node (LValueHelper::ensureUnique())
    QoreStringNode* rv = reinterpret_cast<QoreStringNode*>(ref.getUnique());
    if (*xsink)
       return QoreValue();
@@ -2645,6 +2648,7 @@ rtrim(\str);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
 
+   // note: safe; getUnique() makes the lvalue's inline short string a node (LValueHelper::ensureUnique())
    QoreStringNode* rv = reinterpret_cast<QoreStringNode*>(ref.getUnique());
    if (*xsink)
       return QoreValue();

@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class InheritedMemberInitializerTest
+
+class MemberInitializerBase {
+    public {
+        const InitialLabel = "base initializer";
+        string label = InitialLabel;
+    }
+}
+
+class MemberInitializerLeft inherits MemberInitializerBase {
+}
+
+class MemberInitializerRight inherits MemberInitializerBase {
+}
+
+class MemberInitializerLeaf inherits MemberInitializerLeft {
+}
+
+class InheritedMemberInitializerTest inherits QUnit::Test {
+    constructor() : Test("InheritedMemberInitializerTest", "1.0") {
+        addTestCase("siblings and a grandchild use the base member initializer", \inheritedValues());
+        addTestCase("a descriptor copied during initialization receives the completed expression",
+            \copiedInitializer(), True);
+        addTestCase("a failed initialization leaves its pending copies empty", \copiedInitializer(), False);
+        set_return_value(main());
+    }
+
+    inheritedValues() {
+        MemberInitializerLeft left();
+        MemberInitializerRight right();
+        MemberInitializerLeaf leaf();
+        assertEq("base initializer", left.label);
+        assertEq("base initializer", right.label);
+        assertEq("base initializer", leaf.label);
+        left.label = "left instance";
+        assertEq("base initializer", leaf.label);
+    }
+
+    copiedInitializer(bool resolve) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("requires the Debug member initializer probe");
+        }
+        assertEq({
+            "parsed": resolve, "exposed": False, "source": True,
+            "child": resolve, "leaf": resolve, "copies_empty": !resolve,
+        }, call_function("dbg_inherited_member_initializer", resolve));
+    }
+}

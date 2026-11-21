@@ -9,6 +9,7 @@
 %requires Util
 %requires HttpServer
 %requires HttpServerUtil
+%requires ../../HttpTestHeaders.qm
 
 %exec-class HttpServerHeadTest
 
@@ -109,13 +110,14 @@ class HttpServerHeadTest inherits QUnit::Test {
             hash<auto> head = request(c, "HEAD", path);
             assertEq(get.code, head.code, path);
             assertEq(0, head.body.size(), path + ": no message body");
-            hash<auto> gh = get.hdr - ("date",);
-            hash<auto> hh = head.hdr - ("date", "content-length");
-            # the headers of the HEAD response are those of the GET response, except that its length can be left out
+            # the date differs by nature, and the length of the HEAD response can be left out
+            hash<auto> gh = HttpTestHeaders::stable(get.hdr, ("date", "content-length"));
+            hash<auto> hh = HttpTestHeaders::stable(head.hdr, ("date", "content-length"));
+            # the headers of the HEAD response are those of the GET response
             foreach string name in (keys hh) {
                 assertEq(gh{name}, hh{name}, path + ": header " + name);
             }
-            foreach string name in (keys (gh - ("content-length",))) {
+            foreach string name in (keys gh) {
                 assertTrue(exists hh{name}, path + ": header " + name + " of the GET response is there");
             }
         }

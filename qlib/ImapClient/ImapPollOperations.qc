@@ -98,7 +98,7 @@ public class ImapPingPollOperation inherits Qore::PollPipeline {
     #! @cond nodoc
     private setup(ImapClient imap, bool send_noop) {
         hash<auto> info = imap.getInfo();
-        goal = send_noop ? "ping" : "connect";
+        setGoal(send_noop ? "ping" : "connect");
 
         hash<ImapAuthInfo> ai = ImapClient::getAuthInfo(info);
         int max_size = info.max_response_size;
@@ -246,7 +246,7 @@ public class ImapPingPollOperation inherits Qore::PollPipeline {
     /** @return \c "ping" or \c "connect"
     */
     string getGoal() {
-        return goal;
+        return PollPipeline::getGoal();
     }
 
     #! Returns the current state
@@ -314,7 +314,7 @@ public class ImapCommandPollOperation inherits Qore::PollPipeline {
     constructor(Socket sock, string tag, string command, int max_size = DefaultMaxResponseSize)
             : PollPipeline(sock) {
         self.tag = tag;
-        goal = "command";
+        setGoal("command");
 
         # every command of ImapClient is sent here: a line break in an argument that is not quoted (a message set,
         # a flag, search criteria or a command given to ImapClient::sendCommand()) would start another command
@@ -377,7 +377,7 @@ public class ImapIdleStartPollOperation inherits Qore::PollPipeline {
     */
     constructor(Socket sock, string tag) : PollPipeline(sock) {
         check_line_text(tag, "IMAP tag", "IMAP-IDLE-ERROR");
-        goal = "idle-start";
+        setGoal("idle-start");
         addSetContextBinary("idle_cmd", sprintf("%s IDLE\r\n", tag));
         addSendFromContext("idle_cmd");
         # a single line: the server answers "+ idling" to grant the continuation request
@@ -413,7 +413,7 @@ public class ImapIdleReadPollOperation inherits Qore::PollPipeline {
     /** @param sock the connected, idling socket
     */
     constructor(Socket sock) : PollPipeline(sock) {
-        goal = "idle-read";
+        setGoal("idle-read");
         addRecvUntilBytes("\r\n");
     }
 
@@ -455,7 +455,7 @@ public class ImapIdleDoneSendPollOperation inherits Qore::PollPipeline {
     /** @param sock the connected, idling socket
     */
     constructor(Socket sock) : PollPipeline(sock) {
-        goal = "idle-done-send";
+        setGoal("idle-done-send");
         addSend("DONE\r\n");
     }
 
@@ -499,7 +499,7 @@ public class ImapIdleDonePollOperation inherits Qore::PollPipeline {
     */
     constructor(Socket sock, string tag, int max_size = DefaultMaxResponseSize) : PollPipeline(sock) {
         self.tag = tag;
-        goal = "idle-done";
+        setGoal("idle-done");
         addSetContextValue("tag", tag);
         addSend("DONE\r\n");
         addRecvImapResponse("tag", "response", "IMAP-IDLE-ERROR", max_size);
@@ -570,7 +570,7 @@ public class ImapAppendPollOperation inherits Qore::PollPipeline {
             *date internal_date, bool literal_plus = False, int max_size = DefaultMaxResponseSize)
             : PollPipeline(sock) {
         self.tag = tag;
-        goal = "append";
+        setGoal("append");
 
         string args = sprintf("%s APPEND %s", tag, ImapClient::quoteString(mailbox));
         if (flags) {

@@ -530,6 +530,10 @@ private:
 
     std::atomic<ReqState> req_state {ReqState::IDLE};
 
+    //! The size in bytes of the part of the trailer section of the response that was read, which counts against the
+    //! maximum header size of the socket (I/O thread only; qore#6867)
+    size_t trailer_bytes = 0;
+
     //! Request-body send sub-state for full-duplex streaming (I/O thread only)
     SendState send_state = SendState::INACTIVE;
 
@@ -626,6 +630,12 @@ private:
 
     //! Response headers with original case (ref'd or nullptr)
     QoreHashNode* response_headers_raw = nullptr;
+
+    //! The text of the trailer section of a chunked response, read line by line (qore#6811)
+    std::string response_trailer_text;
+
+    //! The trailer fields of a chunked response (ref'd or nullptr, lowercase keys; qore#6811)
+    QoreHashNode* response_trailers = nullptr;
 
     //! Accumulated response body (ref'd or nullptr)
     BinaryNode* response_body = nullptr;
