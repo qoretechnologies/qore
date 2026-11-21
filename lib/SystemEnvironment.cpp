@@ -32,6 +32,7 @@
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/ql_debug.h"
 
+#include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <cstdlib>
@@ -400,8 +401,13 @@ bool SystemEnvironment::valueExists(const char* name) {
     return value_exists_intern(name);
 }
 
+// the number of lookups of single variables in the environment by the library, for tests of code that must not read
+// the environment in its hot paths (dbg_environment_lookups(); qore#7086)
+std::atomic<uint64_t> qore_env_lookup_count{0};
+
 bool SystemEnvironment::isSet(const char* name) {
     assert(name);
+    qore_env_lookup_count.fetch_add(1, std::memory_order_relaxed);
     QoreEnvSharedHelper env_lock;
     return getenv(name) != nullptr;
 }
@@ -455,6 +461,7 @@ QoreEnvironmentReadLock::~QoreEnvironmentReadLock() {
 
 QoreEnvironmentValue::QoreEnvironmentValue(const char* name) {
     assert(name);
+    qore_env_lookup_count.fetch_add(1, std::memory_order_relaxed);
     QoreEnvSharedHelper env_lock;
     const char* p = getenv(name);
     if (p) {

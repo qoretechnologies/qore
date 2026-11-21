@@ -7818,7 +7818,7 @@ void UserVariantBase::registerPrecompiledAOTFunction(
         has_aot_lazy_function_ir.store(false, std::memory_order_release);
     }
     if (ctx) {
-        if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+        if (QORE_ENV_IS_SET("QORE_DISABLE_IR_CONTEXT_ELISION")) {
             uses_argv.store(signature.argvid != nullptr, std::memory_order_release);
             uses_self.store(signature.selfid != nullptr, std::memory_order_release);
         } else {
@@ -7843,7 +7843,7 @@ void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn, cons
         aot_lazy_function_ir_index = entry_index;
         has_aot_lazy_function_ir.store(true, std::memory_order_release);
     }
-    if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_CONTEXT_ELISION")) {
         uses_argv.store(signature.argvid != nullptr, std::memory_order_release);
         uses_self.store(signature.selfid != nullptr, std::memory_order_release);
     } else {
@@ -7919,7 +7919,7 @@ UserVariantBase::IRContextFlags UserVariantBase::getIRContextFlags(const QoreIRF
     flags.all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
     // the frame of a call that needs one has argv and self, as in the AST interpreter, also when the code does not
     // use them
-    if (ir->needs_call_frame || q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+    if (ir->needs_call_frame || QORE_ENV_IS_SET("QORE_DISABLE_IR_CONTEXT_ELISION")) {
         flags.uses_argv = signature.argvid != nullptr;
         flags.uses_self = signature.selfid != nullptr;
     } else {
@@ -8702,7 +8702,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     qore_ir_fold_debug_statements(*func);
     // the interpreter makes the check of a call's target in the load of the target (issue #5784)
     qore_ir_fuse_call_target_checks(*func);
-    if (q_env_is_set("QORE_IR_OPT_STATS")) {
+    if (QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu constant-loads=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
@@ -8731,7 +8731,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             optimization_stats.constant_containers_loaded);
     }
 
-    if (q_env_is_set("QORE_IR_CONTEXT_STATS")) {
+    if (QORE_ENV_IS_SET("QORE_IR_CONTEXT_STATS")) {
         IRContextFlags flags = getIRContextFlags(func);
         fprintf(stderr, "IR-CONTEXT: %s: argv=%d self=%d\n",
             name ? name : "<fn>", flags.uses_argv, flags.uses_self);
@@ -8889,7 +8889,7 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
 static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction* callee_ir,
         QoreProgram* root_pgm) {
     // not "debug", which would hide the debugging level that printd() compares with
-    bool batch_debug = q_env_is_set("QORE_BATCH_DEBUG");
+    bool batch_debug = QORE_ENV_IS_SET("QORE_BATCH_DEBUG");
 
     // Must be same program (no ProgramThreadCountContextHelper needed)
     if (uvb->pgm != root_pgm) {
@@ -9112,7 +9112,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
     std::vector<QoreJIT::BatchCallee> callees;
     std::unordered_set<const AbstractQoreFunctionVariant*> seen;
     std::vector<const QoreIRFunction*> worklist{&func};
-    bool collect_transitive = !q_env_is_set("QORE_DISABLE_JIT_TRANSITIVE_BATCH");
+    bool collect_transitive = !QORE_ENV_IS_SET("QORE_DISABLE_JIT_TRANSITIVE_BATCH");
     size_t check_count = 0;
 
     // the root's code is read as well; the compile can be started on a call path that has not entered its Program
@@ -9159,7 +9159,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                         }
                     }
                 } else if (inst->opcode == QoreIROpcode::CreateClosure
-                        && !q_env_is_set("QORE_DISABLE_JIT_NATIVE_CLOSURES")) {
+                        && !QORE_ENV_IS_SET("QORE_DISABLE_JIT_NATIVE_CLOSURES")) {
                     const auto* create =
                         static_cast<const QoreIRCreateClosureInstruction*>(inst.get());
                     const QoreClosureParseNode* closure = create->closure_node;
@@ -9285,7 +9285,7 @@ void UserVariantBase::attemptJITCompilation() const {
         // the same oversized function.
         jit_compile_failed.store(true, std::memory_order_release);
         jit_compile_state.store(2, std::memory_order_release);
-        if (q_env_is_set("QORE_JIT_TIMING")) {
+        if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] skipped native promotion of '%s' (compilation budget exceeded; "
                 "%zu IR instructions; limit %zu)\n", ir->name.c_str(), instruction_count,
                 jit_ir_budget);
@@ -9300,7 +9300,7 @@ void UserVariantBase::attemptJITCompilation() const {
         if (handler_cost > jit_handler_budget) {
             jit_compile_failed.store(true, std::memory_order_release);
             jit_compile_state.store(2, std::memory_order_release);
-            if (q_env_is_set("QORE_JIT_TIMING")) {
+            if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] skipped native promotion of '%s' (handler budget exceeded; about %zu "
                     "instructions; limit %zu)\n", ir->name.c_str(), handler_cost, jit_handler_budget);
             }
@@ -9341,7 +9341,7 @@ void UserVariantBase::attemptJITCompilation() const {
             batch_instruction_count += callee.ir_func->getInstructionCount();
         }
         if (batch_instruction_count > jit_ir_budget) {
-            if (q_env_is_set("QORE_JIT_TIMING")) {
+            if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] disabled oversized batch for '%s' (compilation budget exceeded; "
                     "%zu IR instructions; limit %zu)\n", ir->name.c_str(), batch_instruction_count,
                     jit_ir_budget);
@@ -9352,12 +9352,12 @@ void UserVariantBase::attemptJITCompilation() const {
 
     if (!callees.empty()) {
         std::shared_ptr<QoreIRFunction> compile_ir;
-        if (statements && !q_env_is_set("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
+        if (statements && !QORE_ENV_IS_SET("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
             compile_ir.reset(lowerIRFunction(
                 ir->getDisplayName().c_str(), ir->name,
                 nullptr, nullptr, false, false));
         }
-        if (q_env_is_set("QORE_BATCH_DEBUG")) {
+        if (QORE_ENV_IS_SET("QORE_BATCH_DEBUG")) {
             printd(5, "BATCH: '%s' enqueued with %d callees:",
                 ir->name.c_str(), (int)callees.size());
             for ([[maybe_unused]] const auto& c : callees) {
@@ -9716,7 +9716,7 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
                 // returns to be released here, after the locals, as the AST interpreter releases it (#6029)
                 ir_return_value.discard(xsink);
             } else {
-                if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
+                if (QORE_ENV_IS_SET("QORE_IR_TRACE_SILENT_FAIL")) {
                     QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
                 }
                 if (pgm) {
@@ -10149,7 +10149,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                         }
                     }
                     fell_back_to_ast = true;
-                    if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
+                    if (QORE_ENV_IS_SET("QORE_IR_TRACE_SILENT_FAIL")) {
                         QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
                     }
                     if (pgm) {

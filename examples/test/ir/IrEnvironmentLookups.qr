@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The optimization of compiled code reads the environment switches of the optimizer once, not for each instruction
+# that it analyzes, so that its cost does not depend on the size of the environment (qore#7086); see
+# IrEnvironmentLookups.qtest.  Needs a debug libqore (dbg_environment_lookups()).
+
+# the source of a Program with the given number of functions, each with loops, lists and hashes for the analyses
+string sub make_source(int count) {
+    string src = "";
+    for (int i = 0; i < count; ++i) {
+        src += sprintf("int sub f%d(int n) {
+    list<int> l = ();
+    for (int j = 0; j < n; ++j) {
+        l += j * %d;
+    }
+    hash<auto> h = {};
+    foreach int v in (l) {
+        h{v.toString()} = v;
+    }
+    int sum = 0;
+    map sum += $1, l;
+    return sum + h.size();
+}
+", i, i + 1);
+    }
+    src += "int sub run_all() {\n    int t = 0;\n";
+    for (int i = 0; i < count; ++i) {
+        src += sprintf("    t += f%d(3);\n", i);
+    }
+    src += "    return t;\n}\n";
+    return src;
+}
+
+# the number of environment lookups that the compilation and a run of a Program with the given number of functions
+# makes
+int sub lookups(int count) {
+    int before = dbg_environment_lookups();
+    {
+        Program p(PO_NEW_STYLE);
+        p.parse(make_source(count), sprintf("generated-%d", count));
+        p.callFunction("run_all");
+    }
+    return dbg_environment_lookups() - before;
+}
+
+# the first compilation reads each switch once
+lookups(10);
+int small = lookups(10);
+int large = lookups(200);
+printf("small: %d\nlarge: %d\n", small, large);

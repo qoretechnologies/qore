@@ -1713,6 +1713,10 @@ DLLLOCAL void qore_aot_runtime_init_once();
     This calls the exported SystemEnvironment::isSet(), so that inline functions of internal headers that use it
     also link in the executables and modules that include them.
 */
+//! the number of lookups of single environment variables by the library (SystemEnvironment::isSet() and
+//! QoreEnvironmentValue), for tests (dbg_environment_lookups(); qore#7086)
+DLLLOCAL extern std::atomic<uint64_t> qore_env_lookup_count;
+
 static inline bool q_env_is_set(const char* name) {
     return SystemEnvironment::isSet(name);
 }
@@ -1754,6 +1758,22 @@ private:
     //! -1 = not read yet, 0 = not set, 1 = set
     mutable std::atomic<int> state{-1};
 };
+
+//! true if the environment variable is set (even to an empty value), read once for the call site (qore#7086)
+/** For a check in code that runs often, such as a pass of the IR optimizer that runs for each instruction:
+    q_env_is_set() scans the whole environment each time, so the cost of such code would depend on the size of the
+    environment.  Each call site has a QoreEnvFlag of its own, read the first time the site runs; \a name must be a
+    string literal.
+    @code{.cpp}
+    if (QORE_ENV_IS_SET("QORE_DISABLE_X")) {
+        return;
+    }
+    @endcode
+*/
+#define QORE_ENV_IS_SET(name) ([]() -> bool { \
+        static constinit QoreEnvFlag qore_env_flag_(name); \
+        return qore_env_flag_.get(); \
+    }())
 
 //! a value computed the first time it is needed, without a static initialization guard
 /** For settings computed from the environment; see QoreEnvFlag.  Declare it \c constinit:
