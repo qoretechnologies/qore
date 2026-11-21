@@ -1,0 +1,268 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  FreshsalesRestClientOAuth2.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires json
+%requires ConnectionProvider
+%requires RestClient
+%requires HttpServerUtil
+%requires HttpServer
+%requires FreshsalesRestClient
+
+%exec-class FreshsalesRestClientOAuth2Test
+
+#! A local stand-in for the Freshworks token endpoint and the Freshsales API that records the requests it gets
+class FreshsalesStandInHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? body.toString() : NOTHING,
+        };
+        if (hdr.path == "org/oauth/v2/token") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({
+                    "access_token": "new-access-token",
+                    "token_type": "Token",
+                    "expires_in": 1800,
+                    "refresh_token": "new-refresh-token",
+                }),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"users": ()}),
+        };
+    }
+}
+
+#! OAuth2 and API key authentication of the Freshsales REST client and connection (qore#6896)
+/** No credentials and no network: options and URLs are inspected, and requests go to a local stand-in.
+*/
+public class FreshsalesRestClientOAuth2Test inherits QUnit::Test {
+    constructor() : Test("FreshsalesRestClientOAuth2", "1.0", \ARGV, Opts) {
+        addTestCase("scheme", \schemeTest());
+        addTestCase("OAuth2 URLs from the domain", \oauth2UrlTest());
+        addTestCase("OAuth2 connection", \oauth2ConnectionTest());
+        addTestCase("API key fallback", \apiKeyFallbackTest());
+        addTestCase("token header form", \tokenHeaderTest());
+        addTestCase("requests to a stand-in", \standInRequestTest());
+        set_return_value(main());
+    }
+
+    #! The connection scheme names OAuth2 first; both alternatives need the domain
+    schemeTest() {
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("freshsalesrest");
+        assertEq("domain,oauth2_client_id,oauth2_client_secret|domain,apikey", scheme.required_options);
+        list<string> alternatives = scheme.required_options.split("|");
+        assertEq("domain,oauth2_client_id,oauth2_client_secret", alternatives[0]);
+        assertEq("domain,apikey", alternatives[1]);
+        assertEq("authorization_code", scheme.options.oauth2_grant_type.default_value);
+        assertEq(True, scheme.options.oauth2_token_use_basic_auth.default_value);
+        # the endpoints depend on the organization's domain, so they have no default
+        assertNothing(scheme.options.oauth2_auth_url.default_value);
+        assertNothing(scheme.options.oauth2_token_url.default_value);
+        assertTrue(scheme.options.apikey.sensitive);
+        assertTrue(scheme.options.oauth2_client_secret.sensitive);
+    }
+
+    #! The OAuth2 endpoints are built on the organization's domain in each form the domain option takes
+    oauth2UrlTest() {
+        list<list<string>> cases = (
+            ("acme", "acme.myfreshworks.com"),
+            ("acme-org.myfreshworks.com", "acme-org.myfreshworks.com"),
+            ("https://acme-org.myfreshworks.com/crm/sales", "acme-org.myfreshworks.com"),
+        );
+        foreach list<string> c in (cases) {
+            assertEq("https://" + c[1] + "/org/oauth/v2/authorize", FreshsalesRestClientBase::getAuthUrl(c[0]), c[0]);
+            assertEq("https://" + c[1] + "/org/oauth/v2/token", FreshsalesRestClientBase::getTokenUrl(c[0]), c[0]);
+        }
+    }
+
+    #! A connection with the OAuth2 client credentials gets the OAuth2 URLs of its domain
+    oauth2ConnectionTest() {
+        FreshsalesRestConnection conn({
+            "name": "freshsales-oauth2",
+            "opts": {
+                "domain": "acme-org.myfreshworks.com",
+                "oauth2_client_id": "client-1",
+                "oauth2_client_secret": "secret-1",
+                "oauth2_redirect_url": "https://example.com/callback",
+                "oauth2_scopes": ("freshsales.deals.create", "freshsales.deals.edit"),
+                # a stale URL is always replaced with the one of the domain
+                "oauth2_token_url": "https://other.myfreshworks.com/org/oauth/v2/token",
+            },
+        });
+        hash<auto> opts = conn.getConnectionOptions();
+        assertEq("https://acme-org.myfreshworks.com/org/oauth/v2/authorize", opts.oauth2_auth_url);
+        assertEq("https://acme-org.myfreshworks.com/org/oauth/v2/token", opts.oauth2_token_url);
+        assertEq("authorization_code", opts.oauth2_grant_type);
+        assertEq(True, opts.oauth2_token_use_basic_auth);
+
+        *hash<auto> features = conn.getFeatures();
+        assertTrue(features{RestConnection::RCF_OAUTH2});
+        assertTrue(features{RestConnection::RCF_OAUTH2_AUTH_CODE});
+
+        string auth_req = conn.getAuthorizationCodeRequest(<AuthCodeInfo>{"state": "st"});
+        assertRegex("^https://acme-org\\.myfreshworks\\.com/org/oauth/v2/authorize\\?", auth_req);
+        assertRegex("client_id=client-1", auth_req);
+        assertRegex("response_type=code", auth_req);
+        assertRegex("scope=freshsales\\.deals\\.create%20freshsales\\.deals\\.edit", auth_req);
+
+        # the client options carry the URLs of the domain too
+        hash<auto> client_opts = FreshsalesRestClientBase::getOptions(opts);
+        assertEq("https://acme-org.myfreshworks.com", client_opts.url);
+        assertEq("https://acme-org.myfreshworks.com/org/oauth/v2/token", client_opts.oauth2_token_url);
+        assertFalse(client_opts.hasKey("domain"));
+    }
+
+    #! An API key wins over OAuth2: the OAuth2 options are removed
+    apiKeyFallbackTest() {
+        FreshsalesRestConnection conn({
+            "name": "freshsales-apikey",
+            "opts": {
+                "domain": "acme",
+                "apikey": "key-1",
+            },
+        });
+        hash<auto> info = conn.getInfo();
+        assertTrue(info.up);
+        assertFalse(conn.getFeatures(){RestConnection::RCF_OAUTH2} ?? False);
+        # nor does it need authorization (qore#6901)
+        assertFalse(conn.needsAuth());
+        assertEq("none", conn.getExtendedInfo().oauth2_grant_type);
+        hash<auto> conn_opts = conn.getConnectionOptions();
+        assertNothing(conn_opts.oauth2_auth_url);
+        assertNothing(conn_opts.oauth2_token_url);
+
+        hash<auto> client_opts = FreshsalesRestClientBase::getOptions(conn_opts);
+        assertEq("Token token=key-1", client_opts.headers.Authorization);
+        assertNothing(client_opts.apikey);
+        foreach string opt in (FreshsalesRestClientBase::OAuth2OptionNames) {
+            assertFalse(client_opts.hasKey(opt), opt);
+        }
+
+        # an API key given with OAuth2 credentials still wins
+        client_opts = FreshsalesRestClientBase::getOptions({
+            "domain": "acme",
+            "apikey": "key-1",
+            "oauth2_client_id": "client-1",
+            "oauth2_client_secret": "secret-1",
+        });
+        assertEq("Token token=key-1", client_opts.headers.Authorization);
+        assertFalse(client_opts.hasKey("oauth2_client_id"));
+        assertFalse(client_opts.hasKey("oauth2_token_url"));
+    }
+
+    #! An OAuth2 access token is sent as "Token token=<token>" whatever its token type
+    tokenHeaderTest() {
+        hash<auto> opts = {
+            "domain": "acme",
+            "oauth2_client_id": "client-1",
+            "oauth2_client_secret": "secret-1",
+            "token": "access-1",
+        };
+        foreach *string token_type in ((NOTHING, "Bearer", "bearer", "Token")) {
+            hash<auto> o = opts + (token_type ? {"token_type": token_type} : {});
+            FreshsalesRestClient client(o, True);
+            assertEq("Token token=access-1", client.getDefaultHeaders().Authorization, token_type ?? "none");
+            FreshsalesRestClientIo client_io(o);
+            assertEq("Token token=access-1", client_io.getDefaultHeaders().authorization, token_type ?? "none");
+        }
+    }
+
+    #! An expired token is refreshed with HTTP basic client authentication, and the new token is sent as a token
+    standInRequestTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        FreshsalesStandInHandler handler();
+        server.setDefaultHandler("freshsales", handler);
+        string base = "http://localhost:" + port;
+
+        # no domain option, so that the stand-in's URLs are used; a token is refreshed only when every option of
+        # the authorization code grant is set
+        FreshsalesRestClient client({
+            "url": base,
+            "oauth2_client_id": "client-1",
+            "oauth2_client_secret": "secret-1",
+            "oauth2_auth_url": base + "/org/oauth/v2/authorize",
+            "oauth2_token_url": base + "/org/oauth/v2/token",
+            "token": "old-access-token",
+            "oauth2_refresh_token": "old-refresh-token",
+            "oauth2_token_expiry": now_us() - 1h,
+        }, True);
+        client.get("selector/owners");
+
+        assertEq(2, handler.requests.size());
+        hash<auto> token_req = handler.requests[0];
+        assertEq("POST", token_req.method);
+        assertEq("org/oauth/v2/token", token_req.path);
+        assertEq("Basic " + make_base64_string("client-1:secret-1"), token_req.authorization);
+        hash<auto> form = mime_parse_form_urlencoded_string(token_req.body);
+        assertEq("refresh_token", form.grant_type);
+        assertEq("old-refresh-token", form.refresh_token);
+        assertFalse(form.hasKey("client_secret"));
+
+        hash<auto> api_req = handler.requests[1];
+        assertEq("GET", api_req.method);
+        assertEq("crm/sales/api/selector/owners", api_req.path);
+        assertEq("Token token=new-access-token", api_req.authorization);
+
+        # the async client sends an OAuth2 token in the same form
+        handler.requests = ();
+        FreshsalesRestClientIo client_io({
+            "url": base,
+            "oauth2_client_id": "client-1",
+            "oauth2_client_secret": "secret-1",
+            "token": "access-io",
+        });
+        client_io.restGet("selector/owners");
+        assertEq(1, handler.requests.size());
+        assertEq("Token token=access-io", handler.requests[0].authorization);
+
+        # an API key is sent in the same form
+        handler.requests = ();
+        FreshsalesRestClient key_client({"url": base, "apikey": "key-1"}, True);
+        key_client.get("selector/owners");
+        assertEq(1, handler.requests.size());
+        assertEq("Token token=key-1", handler.requests[0].authorization);
+    }
+}

@@ -4,24 +4,24 @@
     "fr": {
       "messages": {
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.desc": {
-          "source": "A connection to the ClickFunnels REST API for managing contacts, orders, products, funnels, courses, forms, and fulfillments",
-          "message": "Une connexion à l’API REST de ClickFunnels pour gérer les contacts, les commandes, les produits, les funnel, les cours, les formulaires et les livraisons"
+          "source": "A connection to the ClickFunnels REST API for managing contacts, orders, products, funnels, courses, forms, and fulfillments\n\n**Authentication** is OAuth2 with a ClickFunnels platform application, which sets the API URL to the workspace you authorize, or an **API token** with your team subdomain as the fallback.",
+          "message": "Une connexion à l’API REST de ClickFunnels pour gérer les contacts, les commandes, les produits, les funnel, les cours, les formulaires et les livraisons\n\n**L’authentification** se fait par OAuth2 avec une application de plateforme ClickFunnels, qui définit l’URL de l’API sur l’espace de travail que vous autorisez, ou à défaut par un **jeton d’API** avec le sous-domaine de votre équipe."
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.display_name": {
           "source": "ClickFunnels REST Connection",
           "message": "Connexion REST ClickFunnels"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.content": {
-          "source": "The **Team Subdomain** is required to connect to your ClickFunnels account.\n\n**How to find it:**\n1. Log in to your ClickFunnels 2.0 account\n2. Look at the URL in your browser: `https://**myteam**.myclickfunnels.com`\n3. The team subdomain is the part before `.myclickfunnels.com`",
-          "message": "Le **Sous-domaine de l’équipe** est requis pour vous connecter à votre compte ClickFunnels.\n\n**Comment le trouver :**\n1. Connectez-vous à votre compte ClickFunnels 2.0\n2. Consultez l’URL dans votre navigateur : `https://**myteam**.myclickfunnels.com`\n3. Le sous-domaine de l’équipe est la partie située avant `.myclickfunnels.com`"
+          "source": "The **Team Subdomain** is required to connect with an API token. With OAuth2, it is taken from the workspace you authorize.\n\n**How to find it:**\n1. Log in to your ClickFunnels 2.0 account\n2. Look at the URL in your browser: `https://**myteam**.myclickfunnels.com`\n3. The team subdomain is the part before `.myclickfunnels.com`",
+          "message": "Le **Sous-domaine de l’équipe** est requis pour vous connecter avec un jeton d’API. Avec OAuth2, il est repris de l’espace de travail que vous autorisez.\n\n**Comment le trouver :**\n1. Connectez-vous à votre compte ClickFunnels 2.0\n2. Consultez l’URL dans votre navigateur : `https://**myteam**.myclickfunnels.com`\n3. Le sous-domaine de l’équipe est la partie située avant `.myclickfunnels.com`"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMQ.title": {
           "source": "How to Find Your Team Subdomain",
           "message": "Comment trouver votre sous-domaine d’équipe"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.content": {
-          "source": "An **API Token** is required for authentication.\n\n**How to generate one:**\n1. Log in to your ClickFunnels 2.0 account\n2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n3. Click **Add new platform application** and fill in the required information\n4. Copy the **API access token** from the platform application details\n\n**Note:** Store this token securely; it provides full API access to your ClickFunnels account. API access requires a Scale, Optimize, or Dominate plan",
-          "message": "Un **jeton d’API** est requis pour l’authentification.\n\n**Comment en générer un :**\n1. Connectez-vous à votre compte ClickFunnels 2.0\n2. Allez dans **Liste des équipes > Votre équipe > Paramètres de l’équipe > Portail développeur**\n3. Cliquez sur **Ajouter une nouvelle application plateforme** et remplissez les informations requises\n4. Copiez le **jeton d’accès API** depuis les détails de l’application plateforme\n\n**Remarque :** Stockez ce jeton en sécurité ; il donne un accès complet à l’API de votre compte ClickFunnels. L’accès API nécessite un abonnement Scale, Optimize ou Dominate"
+          "source": "An **API Token** is needed only if you do not connect with OAuth2.\n\n**How to generate one:**\n1. Log in to your ClickFunnels 2.0 account\n2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n3. Click **Add new platform application** and fill in the required information\n4. Copy the **API access token** from the platform application details\n\n**Note:** Store this token securely; it provides full API access to your ClickFunnels account. API access requires a Scale, Optimize, or Dominate plan",
+          "message": "Un **jeton d’API** n’est nécessaire que si vous ne vous connectez pas avec OAuth2.\n\n**Comment en générer un :**\n1. Connectez-vous à votre compte ClickFunnels 2.0\n2. Allez dans **Liste des équipes > Votre équipe > Paramètres de l’équipe > Portail développeur**\n3. Cliquez sur **Ajouter une nouvelle application plateforme** et remplissez les informations requises\n4. Copiez le **jeton d’accès API** depuis les détails de l’application plateforme\n\n**Remarque :** Stockez ce jeton en sécurité ; il donne un accès complet à l’API de votre compte ClickFunnels. L’accès API nécessite un abonnement Scale, Optimize ou Dominate"
         },
         "connection.Q2xpY2tGdW5uZWxzUmVzdENsaWVudA.scheme.Q2xpY2tGdW5uZWxzUmVzdENvbm5lY3Rpb24.message.c2V0dXAtMg.title": {
           "source": "How to Generate an API Token",

@@ -1560,6 +1560,7 @@ sub validate_input(int value, int max_value) {
 
     @par Description:
     Includes a file to be parsed. If the path is not absolute (i.e. starting with \c "/"), then files are searched first in the directory of the currently-executing script (if known), then in each path in the environment variable \c QORE_INCLUDE_DIR.\n
+    Single or double quotes around a filename preserve the same lookup order.\n
     If the first character of the include target is \c '$', then environment variable substitution is performed on the leading environment variable.\n
     A file that cannot be found is a parse error (\c PARSE-EXCEPTION) at the location of the directive
 

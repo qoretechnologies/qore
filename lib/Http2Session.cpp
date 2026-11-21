@@ -2793,6 +2793,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     h2->pending_pongs.erase(stream_id);
     h2->close_frame_streams.erase(stream_id);
     h2->stream_send_limits.erase(stream_id);
+    h2->stream_refused_len.erase(stream_id);
     // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
@@ -3200,8 +3201,12 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
             if (pending > 0 && pending + len > lit->second) {
                 printd(2, "sendStreamData() stream %d over its send limit: %zu bytes pending + %zu > %zu, data "
                     "dropped\n", stream_id, pending, len, lit->second);
+                stream_refused_len[stream_id] = len;
                 return 1;
             }
+        }
+        if (len > 0) {
+            stream_refused_len.erase(stream_id);
         }
     } else if (it != pending_body_data.end() && (len > 0 || !end_stream)) {
         size_t pending = it->second.data.size() - it->second.offset;
@@ -3615,9 +3620,22 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = pending_body_data.find(stream_id);
     if (it == pending_body_data.end()) {
-        return -1;  // stream not found
+        // the buffer of a stream is dropped once nghttp2 has taken all its data: a stream that nghttp2 still has is
+        // drained, not gone (issue #6908)
+        if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+            return -1;  // stream not found
+        }
+        return 0;
     }
     size_t pending = it->second.data.size() - it->second.offset;
+    // a stream with its own limit is drained when the data it refused last fits, as sendStreamData() then takes it
+    // (issue #6907)
+    auto lit = stream_send_limits.find(stream_id);
+    if (lit != stream_send_limits.end()) {
+        auto rit = stream_refused_len.find(stream_id);
+        size_t refused = rit == stream_refused_len.end() ? 0 : rit->second;
+        return (!pending || pending + refused <= lit->second) ? 0 : 1;
+    }
     return pending <= MAX_STREAM_BUFFER ? 0 : 1;
 }
 

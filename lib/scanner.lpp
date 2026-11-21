@@ -557,6 +557,21 @@ static QoreString* get_include_file_name(char* file) {
             *p = '\\';
 #endif
 
+    // Remove the delimiters before looking for the file in the script directory and include paths.
+    if (*file == '"' || *file == '\'') {
+        size_t len = strlen(file);
+        while (len > 1 && (file[len - 1] == ' ' || file[len - 1] == '\t')) {
+            --len;
+        }
+        if (len >= 2 && file[len - 1] == *file) {
+            file[len - 1] = '\0';
+            ++file;
+            if (!*file) {
+                return new QoreString;
+            }
+        }
+    }
+
     // if the filename begins with an environment variable, then try to do environment variable substitution
     if (file[0] == '$') {
         // the file depends on the environment where the code is loaded (qore#6351)
@@ -2708,14 +2723,6 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <incl>[^\n\r]+                          {
                                            // The source spelling is already UTF-8, including in a tagged Program.
                                            TempString fname(get_include_file_name(yytext));
-                                           const char* fn = fname->c_str();
-                                           // remove enclosing quotes if any
-                                           if (fname->strlen()
-                                               && ((fn[0] == '\"' && fn[fname->strlen() - 1] == '\"')
-                                                   || (fn[0] == '\'' && fn[fname->strlen() - 1] == '\''))) {
-                                              fname->trim(fn[0]);
-                                           }
-
                                            QoreProgram* pgm = getProgram();
 
                                            if (parse_check_restriction(PO_NO_FILESYSTEM)) {
@@ -2725,8 +2732,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                               parse_error(*get_loc(yylloc), "missing argument to %%include");
                                               BEGIN(INITIAL);
                                            } else {
-                                              // re-get the buffer pointer
-                                              fn = fname->c_str();
+                                              const char* fn = fname->c_str();
                                               // check if regular file
                                               struct stat sbuf;
                                               int rc = stat(fn, &sbuf);

@@ -80,7 +80,7 @@ public class OpenAiDataProvider inherits OpenAiDataProviderCommon {
     /** @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot change the
             registry, which is process-wide (see @ref sandbox_process_wide_registries)
     */
-    static registerChild(string pathname, Reflection::Class cls) {
+    static registerChild(string pathname, Reflection::Class cls) [dom=PROCESS_CONTROL] {
         # the registry is process-wide: sandboxed code cannot change it (qore#6744)
         SandboxManager::checkProcessWideRegistration("register a child data provider");
         if (childMap{pathname}) {

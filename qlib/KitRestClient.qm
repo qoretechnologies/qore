@@ -29,7 +29,7 @@
 %modern
 
 %requires(reexport) Mime >= 1.3
-%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClient >= 2.7
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
@@ -297,6 +297,9 @@ public class KitRestConnection inherits RestClient::RestConnection {
                         "default_value": KitRestClientBase::DefaultTokenUrl,
                     }),
             },
+            # OAuth2 is the first alternative; an API key or a token is the fallback, and a connection with one does
+            # not use the defaulted OAuth2 grant type (qore#6901)
+            "required_options": "oauth2_client_id,oauth2_client_secret|apikey|token",
         });
     }
 
@@ -343,8 +346,16 @@ public class KitRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns connection options
+    /** A connection authenticated by an API key or a token alone returns no OAuth2 options (see
+        @ref RestClient::AbstractRestConnection::usesNonOAuth2Credential() "usesNonOAuth2Credential()"); otherwise
+        the OAuth2 URLs and defaults are always set
+    */
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        # a key-only connection does not use OAuth2: the defaulted grant must not be given back to its clients
+        if (usesNonOAuth2Credential()) {
+            return rv;
+        }
         # Always set OAuth2 URLs
         rv.oauth2_auth_url = KitRestClientBase::DefaultAuthUrl;
         rv.oauth2_token_url = KitRestClientBase::DefaultTokenUrl;

@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - stack guard margin for clang-built native recursion (formatting, YAML) on small stacks
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%include StackGuardCaseTest.qc
+%include DataStackGuard.qc
+
+%exec-class DataStackGuardPart2
+
+#! runs part 2 of 3 of the cases of DataStackGuardBase
+class DataStackGuardPart2 inherits DataStackGuardBase {
+    constructor() : DataStackGuardBase("DataStackGuardPart2", 2) {
+    }
+}

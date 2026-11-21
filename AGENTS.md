@@ -109,6 +109,10 @@
   part (ex: `ir/CMakeBuildHelpers.qc`); `examples/test/runner/test_split_tests.py` checks the parts.
 - The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
   pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
+- The Linux CI build and test jobs run on the qore-test-base digests that `resolve-qore-test-base-images` resolves the
+  tags to when the pipeline starts (`image: $QORE_TEST_BASE_<flavor>_<arch>_IMAGE`; a new job on a qore-test-base image
+  uses one of these and, with `needs`, names the resolver); a tag published during a pipeline reaches only the next
+  pipeline (design/ci-test-base-image-digests.md, `examples/test/runner/test_resolve_image_digests.py`).
 
 ## Running Tests Under valgrind
 - Disable signal handling with `-b` (`--disable-signals`), for example

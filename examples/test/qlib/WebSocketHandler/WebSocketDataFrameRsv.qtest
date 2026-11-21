@@ -1,0 +1,255 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections over HTTP/1.1, HTTP/2 and HTTP/3 over TLS with permessage-deflate
+
+/*  WebSocketDataFrameRsv.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The WebSocket server checks the RSV bits of every data frame against the negotiated extensions over HTTP/1.1,
+    HTTP/2 and HTTP/3 (RFC 6455 section 5.2, qore#6810): a data frame, a continuation frame included, with an RSV bit
+    that no negotiated extension defines fails the connection with 1002.  The client sends the frames as they are
+    with sendRawFrame().
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketDataFrameRsvTest
+
+const HangGuard = 60s;
+
+#! the message that every case sends compressed and fragmented
+const Fragmented = "fragmented café";
+
+class EchoConnection inherits WebSocketConnection {
+    private {
+        EchoHandler h;
+    }
+
+    constructor(EchoHandler handler) : WebSocketConnection(handler) {
+        h = handler;
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+
+    connectionClosed() {
+        h.closed.push(getCloseCode());
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    public {
+        #! the close code of each connection
+        Queue closed();
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts + {"close_timeout": HangGuard}) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self);
+    }
+
+    logError(string fmt) {
+    }
+}
+
+class WebSocketDataFrameRsvTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        EchoHandler plain;
+        EchoHandler deflate;
+        int port;
+        int tls_port;
+    }
+
+    constructor() : Test("WebSocket server: RSV bits of data frames", "1.0") {
+        foreach string ver in (("1.1", "2.0", "3")) {
+            addTestCase(sprintf("HTTP/%s: RSV bits on a data frame without an extension", ver), \testNoExtension(),
+                ver);
+            addTestCase(sprintf("HTTP/%s: RSV bits on a continuation frame without an extension", ver),
+                \testNoExtensionContinuation(), ver);
+            addTestCase(sprintf("HTTP/%s: RSV bits that permessage-deflate does not define", ver),
+                \testDeflate(), ver);
+            addTestCase(sprintf("HTTP/%s: RSV2 on a continuation frame with permessage-deflate", ver),
+                \testDeflateContinuation(), ver);
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        plain = new EchoHandler();
+        deflate = new EchoHandler({"extensions": ("permessage-deflate",)});
+        server.setHandler("plain", "/plain", NOTHING, plain);
+        server.setHandler("deflate", "/deflate", NOTHING, deflate);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    setUp() {
+        plain.closed.clear();
+        deflate.closed.clear();
+    }
+
+    #! Connects a client; its messages and its close code (as a hash) are pushed to \a events
+    private WebSocketClient getClient(string ver, string path, Queue events, *bool use_deflate) {
+        hash<auto> opts = {
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        };
+        switch (ver) {
+            case "1.1":
+                opts += {"url": sprintf("ws://127.0.0.1:%d%s", port, path), "http_version": "1.1"};
+                break;
+            case "2.0":
+                opts += {"url": sprintf("wss://localhost:%d%s", tls_port, path), "http_version": "2.0"};
+                break;
+            case "3":
+                opts += {"url": sprintf("wss://127.0.0.1:%d%s", tls_port, path), "http3_mode": "required"};
+                break;
+        }
+        if (use_deflate) {
+            opts.extensions = (new PerMessageDeflateExtension(),);
+        }
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (exists msg) {
+                events.push(msg);
+            } else {
+                events.push({"closed": wsc.getCloseCode(), "reason": wsc.getCloseReason()});
+            }
+        }, opts);
+        wsc.connect();
+        if (ver == "2.0" && !wsc.isHttp2()) {
+            wsc.disconnect();
+            testSkip("HTTP/2 was not negotiated");
+        }
+        if (ver == "3" && !wsc.isHttp3()) {
+            wsc.disconnect();
+            testSkip("HTTP/3 was not negotiated");
+        }
+        # the connection works
+        wsc.send("ok");
+        assertEq("ok", events.get(HangGuard));
+        return wsc;
+    }
+
+    #! Sends the frames as they are, masked as a client's frames are
+    private static sendFrames(WebSocketClient wsc, list<hash<auto>> frames) {
+        object op = wsc.getPollOperation();
+        foreach hash<auto> f in (frames) {
+            op.sendRawFrame(ws_encode_message(f.msg, f.op, True, f.fin, f.rsv ?? 0));
+        }
+    }
+
+    #! Asserts that the server closes the connection with 1002, without giving the message to the connection
+    private assertProtocolError(Queue events, EchoHandler handler, string what) {
+        auto e = events.get(HangGuard);
+        assertEq(Type::Hash, e.type(), what + ": the server does not take the message");
+        assertEq(WSCC_ProtocolError, e.closed, sprintf("%s: the server closes the connection with 1002 (reason: %y)",
+            what, e.reason));
+        assertEq(WSCC_ProtocolError, handler.closed.get(HangGuard), what + ": the server's connection ends with 1002");
+    }
+
+    #! Without an extension, no RSV bit may be set on a data frame
+    testNoExtension(string ver) {
+        foreach int rsv in ((WS_RSV1, WS_RSV2, WS_RSV3)) {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, "/plain", events);
+            on_exit wsc.disconnect();
+            sendFrames(wsc, ({"msg": "rsv", "op": WSOP_Text, "fin": True, "rsv": rsv},));
+            assertProtocolError(events, plain, sprintf("RSV bits 0x%x", rsv));
+        }
+    }
+
+    #! Without an extension, no RSV bit may be set on a continuation frame either
+    testNoExtensionContinuation(string ver) {
+        Queue events();
+        WebSocketClient wsc = getClient(ver, "/plain", events);
+        on_exit wsc.disconnect();
+        sendFrames(wsc, (
+            {"msg": "frag", "op": WSOP_Text, "fin": False},
+            {"msg": "mented", "op": WSOP_Continuation, "fin": True, "rsv": WS_RSV2},
+        ));
+        assertProtocolError(events, plain, "RSV2 on a continuation frame");
+    }
+
+    #! permessage-deflate defines RSV1 on the first frame of a message only
+    testDeflate(string ver) {
+        # a fragmented compressed message, RSV1 on its first frame only, is taken
+        {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+            on_exit wsc.disconnect();
+            binary payload = deflate_raw(Fragmented);
+            sendFrames(wsc, (
+                {"msg": payload.substr(0, 4), "op": WSOP_Text, "fin": False, "rsv": WS_RSV1},
+                {"msg": payload.substr(4), "op": WSOP_Continuation, "fin": True},
+            ));
+            assertEq(Fragmented, events.get(HangGuard), "a fragmented compressed message is taken");
+        }
+        # the client disconnected: its end is taken, so that the next connection's is checked
+        assertEq(WSCC_GoingAway, deflate.closed.get(HangGuard), "the client disconnected (going away)");
+        foreach int rsv in ((WS_RSV2, WS_RSV3)) {
+            Queue events();
+            WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+            on_exit wsc.disconnect();
+            sendFrames(wsc, ({"msg": "rsv", "op": WSOP_Text, "fin": True, "rsv": rsv},));
+            assertProtocolError(events, deflate, sprintf("RSV bits 0x%x with permessage-deflate", rsv));
+        }
+    }
+
+    #! RSV2 on a continuation frame of a compressed message: the extension sees the RSV bits of the first frame only
+    testDeflateContinuation(string ver) {
+        Queue events();
+        WebSocketClient wsc = getClient(ver, "/deflate", events, True);
+        on_exit wsc.disconnect();
+        binary payload = deflate_raw(Fragmented);
+        sendFrames(wsc, (
+            {"msg": payload.substr(0, 4), "op": WSOP_Text, "fin": False, "rsv": WS_RSV1},
+            {"msg": payload.substr(4), "op": WSOP_Continuation, "fin": True, "rsv": WS_RSV2},
+        ));
+        assertProtocolError(events, deflate, "RSV2 on a continuation frame with permessage-deflate");
+    }
+}

@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Verifies the strongly-connected-component decomposition and the generation
+# identity that qore-qo-source-order publishes for incremental AOT builds.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires Util
+%requires json
+
+%include AOTSccGeneration.qc
+
+%exec-class AOTSccGenerationPart2
+
+#! runs part 2 of 2 of the cases of AOTSccGenerationBase
+class AOTSccGenerationPart2 inherits AOTSccGenerationBase {
+    constructor() : AOTSccGenerationBase("AOTSccGenerationPart2", 2) {
+    }
+}

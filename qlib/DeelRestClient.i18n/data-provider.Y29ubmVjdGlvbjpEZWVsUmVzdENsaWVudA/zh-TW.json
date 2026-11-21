@@ -4,8 +4,8 @@
     "zh-TW": {
       "messages": {
         "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.desc": {
-          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.",
-          "message": "連接到 Deel REST API，用於全球人力資源管理。\n\nDeel 是一個全球性的人力資源平台，支援聘僱、管理及支付全球的自由工作者與全職員工。此整合功能支援合約、工時表、發票調整、工作者、休假、法律實體、發票與事件觸發。"
+          "source": "A connection to the Deel REST API for global workforce management.\n\nDeel is a global HR platform for hiring, managing, and paying contractors and full-time employees worldwide. This integration supports contracts, timesheets, invoice adjustments, workers, time-off, legal entities, invoices, and event triggers.\n\n**Authentication** is OAuth2 (authorization code with refresh tokens) with an app registered in Deel's Developer Center, or an **API token** as the fallback.",
+          "message": "連接到 Deel REST API，用於全球人力資源管理。\n\nDeel 是一個全球性的人力資源平台，支援聘僱、管理及支付全球的自由工作者與全職員工。此整合功能支援合約、工時表、發票調整、工作者、休假、法律實體、發票與事件觸發。\n\n**驗證**使用 OAuth2（含重新整理權杖的授權碼），搭配在 Deel Developer Center 註冊的應用程式；或以 **API 金鑰** 作為備用方式。"
         },
         "connection.RGVlbFJlc3RDbGllbnQ.scheme.RGVlbFJlc3RDb25uZWN0aW9u.display_name": {
           "source": "Deel REST Connection",

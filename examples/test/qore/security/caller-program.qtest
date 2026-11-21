@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT and AOT code generation of calls into module Programs, threads and thread pool tasks
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%exec-class CallerProgramTest
+
+#! The caller Program of module code (SandboxManager::getCallerProgramId(), qore#6852)
+/** Module code that serves the code of a tenant Program gets that Program's ID, also through more module code, a
+    method of a module class, a thread or a thread pool task that the module code starts, and the module of a
+    tenant; a closure runs its own Program's code wherever it is called; the caller is unknown in a trusted build and
+    in a Program that it created; the sandbox checks are unchanged.  The checks are in
+    caller-program/caller-program-worker.q, which is run in each execution mode, with the modules compiled to AOT
+    modules, and as a program compiled with qcc.
+*/
+class CallerProgramTest inherits QUnit::Test {
+    public {
+        #! the cases of the worker, in the order it runs them
+        const Cases = (
+            "main-direct", "main-module", "direct", "module", "module-via-module", "method", "background",
+            "thread-pool", "closure-of-a-called-by-b", "closure-of-b", "closure-of-a-called-by-main",
+            "sandboxed-both-id", "sandboxed-both-allowed", "unsandboxed-both-id", "unsandboxed-both-allowed",
+            "tenant-module", "trusted-build", "trusted-build-program",
+        );
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string dir = get_script_dir() + DirSep + "caller-program";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("CallerProgramTest", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("each execution mode", \testModes());
+        addTestCase("AOT modules", \testAotModules());
+        addTestCase("qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! the expected output of the worker, with the file that the module is loaded from
+    private static string expected(string module_file) {
+        return (map $1 + "=ok\n", Cases).join("") + "module-file=" + module_file + "\n";
+    }
+
+    testModes() {
+        string worker = quote(dir + DirSep + "caller-program-worker.q");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the tenant Programs and modules that the worker creates and loads run with their own execution modes
+            assertEq(expected("CallerProbeA.qm"), ExecModeHarness::run(prefix + quote(qore_bin)
+                + " -b --enable-debug --exec-mode=" + mode + " " + worker, ExecModeHarness::NativeCheck::None), mode);
+        }
+        assertEq(expected("CallerProbeA.qm"), ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + worker), ExecModeHarness::IRTierName);
+    }
+
+    #! the modules compiled with qcc -m: their code runs as native code of their own Programs
+    testAotModules() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-caller-program-");
+        foreach string f in (("CallerProbeA.qm", "CallerProbeB.qm", "TenantMod.qm", "caller-program-worker.q")) {
+            copy_file(dir + DirSep + f, tmp.path + DirSep + f);
+        }
+        foreach string m in (("CallerProbeB", "CallerProbeA")) {
+            ExecModeHarness::run_any(sprintf("cd %s && QORE_MODULE_DIR=%s:$QORE_MODULE_DIR %s%s -m -o %s.qmod %s.qm",
+                quote(tmp.path), quote(tmp.path), prefix, quote(qcc_bin), m, m));
+            assertTrue(is_file(tmp.path + DirSep + m + ".qmod"), m + ".qmod was compiled");
+        }
+        string worker = quote(tmp.path + DirSep + "caller-program-worker.q");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected("CallerProbeA.qmod"), ExecModeHarness::run(prefix + quote(qore_bin)
+                + " -b --enable-debug --exec-mode=" + mode + " " + worker, ExecModeHarness::NativeCheck::None),
+                "AOT modules, " + mode);
+        }
+    }
+
+    #! the worker compiled with qcc
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-caller-program-exe-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "caller-program" + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " "
+                + quote(dir + DirSep + "caller-program-worker.q"));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable");
+            assertEq(expected("CallerProbeA.qm"), ExecModeHarness::run_any(prefix + quote(exe) + " -b"),
+                "qcc " + opt);
+        }
+    }
+}

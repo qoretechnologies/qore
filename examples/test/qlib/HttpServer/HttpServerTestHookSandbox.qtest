@@ -1,0 +1,164 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+
+%exec-class HttpServerTestHookSandboxTest
+
+#! the test hook of HttpListener and the options of a listener are not reachable by sandboxed code (qore#6848)
+/** The test hook that HttpListener::stop() calls is process-wide: it is called for the listeners of every server in
+    the process.  Code that a sandbox governs and a Program that such code created cannot set it (qore#6743), nor can
+    code without process control; and a sandboxed subclass of HttpListener cannot read a listener's options, which
+    hold its TLS certificate and private key.  The hook exists only in a debug build of the library, so its cases are
+    skipped otherwise.  Before the change, code without process control set the hook, which then received the
+    listener of another Program's server, and the subclass was parsed.
+*/
+class HttpServerTestHookSandboxTest inherits QUnit::Test {
+    public {
+        #! the tenant's code: each function returns "ok" or the code of the exception raised
+        const TenantSource = "%modern
+%requires HttpServer
+
+Queue received();
+
+string sub call(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub setHook() {
+    return call(sub () {
+        call_static_method(\"HttpServer::HttpListener\", \"dbgSetStoppingHook\", sub (HttpListener l) {
+            received.push(l.getListenerSocketInfo().port);
+        });
+    });
+}
+
+string sub setHookFromChild() {
+    return call(sub () {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(\"%modern\n%requires HttpServer\nsub set(code h) { call_static_method(\\\"HttpServer::HttpListener\\\", \\\"dbgSetStoppingHook\\\", h); }\", \"child\");
+        p.callFunction(\"set\", sub (HttpListener l) {
+            received.push(l.getListenerSocketInfo().port);
+        });
+    });
+}
+
+int sub received() {
+    return received.size();
+}
+";
+
+        #! a subclass of HttpListener that reads the options of a listener, with its keys
+        const OptsReaderSource = "%modern
+%requires HttpServer
+
+class OptsReader inherits HttpListener {
+    static auto get(HttpListener l) {
+        return l.opts;
+    }
+}
+
+auto sub get(HttpListener l) {
+    return OptsReader::get(l);
+}
+";
+    }
+
+    constructor() : QUnit::Test("HttpServer test hook sandbox", "1.0", \ARGV) {
+        addTestCase("a sandboxed Program cannot set the listener stopping hook", \sandboxedHookTest());
+        addTestCase("a Program that sandboxed code created cannot set the listener stopping hook", \childHookTest());
+        addTestCase("code without process control cannot set the listener stopping hook", \noProcessControlTest());
+        addTestCase("a sandboxed subclass of HttpListener cannot read a listener's options", \optsTest());
+        set_return_value(main());
+    }
+
+    sandboxedHookTest() {
+        checkDebugBuild();
+        Program tenant = getTenant();
+        on_exit clearHook();
+        assertEq("SANDBOX-REGISTRATION-ERROR", tenant.callFunction("setHook"));
+        stopHostListener();
+        assertEq(0, tenant.callFunction("received"), "the tenant's hook does not receive the host's listener");
+    }
+
+    childHookTest() {
+        checkDebugBuild();
+        Program tenant = getTenant();
+        on_exit clearHook();
+        assertEq("SANDBOX-REGISTRATION-ERROR", tenant.callFunction("setHookFromChild"));
+        stopHostListener();
+        assertEq(0, tenant.callFunction("received"), "the hook of the tenant's child does not receive the host's "
+            "listener");
+    }
+
+    noProcessControlTest() {
+        checkDebugBuild();
+        Program p(PO_NO_PROCESS_CONTROL);
+        p.parse(TenantSource, "restricted");
+        on_exit clearHook();
+        # the method's functional domain refuses the call
+        assertEq("INVALID-FUNCTION-ACCESS", p.callFunction("setHook"));
+        stopHostListener();
+        assertEq(0, p.callFunction("received"), "the restricted code's hook does not receive the host's listener");
+    }
+
+    #! the subclass's access does not reach the listener's options (a private:internal member of HttpListener)
+    optsTest() {
+        Program tenant = getTenant(OptsReaderSource);
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        HttpListener l(server, sub () {}, 0, new Sequence(), <HttpListenerOptionInfo>{
+            "name": "host-listener",
+            "no_bind": True,
+        });
+        auto v;
+        try {
+            v = tenant.callFunction("get", l);
+        } catch (hash<ExceptionInfo> ex) {
+            # refused: the options are not read
+            return;
+        }
+        assertEq(NOTHING, v, "a sandboxed subclass of HttpListener does not read the listener's options");
+    }
+
+    #! skips the case without a debug build of the library, which has no test hook
+    private checkDebugBuild() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test hook of HttpListener exists only in a debug build of the library");
+        }
+    }
+
+    #! removes the hook in case a case set it
+    private clearHook() {
+        call_static_method("HttpServer::HttpListener", "dbgSetStoppingHook");
+    }
+
+    #! starts and stops a listener of a server of the host's
+    private stopHostListener() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        server.stopListenerID(linfo.id);
+    }
+
+    #! Returns a tenant: a sandboxed Program with the given source (by default the source that sets the hook)
+    private Program getTenant(string source = TenantSource) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(source, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+}

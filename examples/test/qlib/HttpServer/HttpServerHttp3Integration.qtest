@@ -39,6 +39,7 @@
 %requires QUnit
 %requires Mime
 %requires Logger
+%requires FsUtil
 %requires HttpServerUtil
 %requires AsyncSocketIo
 %requires HttpServerAsyncIo
@@ -1607,6 +1608,18 @@ l50Xb2GWQesIt9k5jF5IOw==
         connection with no upgrade attempt — no UDP timeout window in play.
     */
     testConnMgrAltSvcCrossOrigin() {
+        TmpFile log_file("alt-svc-cross-origin-", ".log");
+        LoggerAppenderFile capture("cross-origin", new LoggerLayoutPattern("%d{HH:mm:SS.xx} [%p] %m%n"), log_file.path);
+        capture.open();
+        on_exit capture.close();
+        mLogger.addAppender(capture);
+        on_exit mLogger.removeAppender(capture);
+        *hash<auto> resp;
+        on_error {
+            printf("Cross-origin response: status %y, protocol %y, body %y\nServer log:\n%s\n",
+                resp.status_code, resp.protocol, resp.body, ReadOnlyFile::readTextFile(log_file.path));
+        }
+
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
             "enable_h3": False,
@@ -1619,13 +1632,34 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.setHandler("xorigin", "/test", NOTHING,
             new FakeAltSvcHandler(443, "otherhost.invalid"));
         server.waitForAsyncIo();
-        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+        # The first request probes QUIC before it tries TCP. Own both transports so that
+        # a QUIC listener from another test cannot answer on our TCP port.
+        Socket udp_guard();
+        on_exit delete udp_guard;
+        hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{
             "node": "127.0.0.1",
-            "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
-        });
-        server.waitForAsyncIo();
+        };
+        hash<auto> info;
+        for (int attempt = 0; ; ++attempt) {
+            udp_guard.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+            opts.service = string(udp_guard.getSocketInfo().port);
+            try {
+                info = server.addListener(opts);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SOCKET-BIND-ERROR" || ex.arg != EADDRINUSE || attempt == 15) {
+                    rethrow;
+                }
+                udp_guard.close();
+            }
+        }
+
+        assertThrows("SOCKET-BIND-ERROR", sub () {
+            Socket competing_listener();
+            competing_listener.bindINET("127.0.0.1", string(info.port), False, AF_INET, SOCK_DGRAM);
+        }, NOTHING, "the origin port is reserved on UDP before protocol selection");
 
         HttpClientIo::HttpClientConnectionManager mgr(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
@@ -1640,15 +1674,15 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         string url = sprintf("https://127.0.0.1:%d", info.port);
 
-        hash<auto> resp1 = mgr.request(url, "GET", "/test");
-        assertEq(200, resp1.status_code, "cross-origin: first request OK");
-        assertTrue(exists resp1.headers."alt-svc",
+        resp = mgr.request(url, "GET", "/test");
+        assertEq(200, resp.status_code, "cross-origin: first request OK");
+        assertTrue(exists resp.headers."alt-svc",
             "cross-origin: response carried Alt-Svc header");
 
         # No h3 cache, no H2 drain → second request reuses pooled H2 → fast.
-        hash<auto> resp2 = mgr.request(url, "GET", "/test");
-        assertEq(200, resp2.status_code, "cross-origin: second request OK");
-        assertNeq("h3", resp2.protocol ?? "h2",
+        resp = mgr.request(url, "GET", "/test");
+        assertEq(200, resp.status_code, "cross-origin: second request OK");
+        assertNeq("h3", resp.protocol ?? "h2",
             "cross-origin: must NOT upgrade to H3 when alt-host differs from origin");
     }
 

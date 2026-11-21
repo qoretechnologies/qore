@@ -627,6 +627,12 @@ private:
     //! Response headers with original case (ref'd or nullptr)
     QoreHashNode* response_headers_raw = nullptr;
 
+    //! The text of the trailer section of a chunked response, read line by line (qore#6811)
+    std::string response_trailer_text;
+
+    //! The trailer fields of a chunked response (ref'd or nullptr, lowercase keys; qore#6811)
+    QoreHashNode* response_trailers = nullptr;
+
     //! Accumulated response body (ref'd or nullptr)
     BinaryNode* response_body = nullptr;
 
