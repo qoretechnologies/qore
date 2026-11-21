@@ -15,8 +15,10 @@
 /** The section readers of a load share one open of the metadata: a qcc executable, a script that a host registers
     with qore_aot_script_register() (immediately and in a batch) and a .qmod module open their metadata once and
     decompress each of its parts once (the body of metadata compressed whole, or the string pool and each section of
-    sectioned metadata), also when the program then runs the functions whose contexts are built lazily from the
-    metadata.  QORE_AOT_TRACE_METADATA_DECOMPRESS prints a line for each open and each decompression.
+    sectioned metadata); an executable and a registered script also when they then run the functions whose contexts
+    are built lazily from the metadata.  A module keeps no decompressed metadata after its load unless its
+    initialization needs it, so the contexts of its functions that are built after the load can open it again.
+    QORE_AOT_TRACE_METADATA_DECOMPRESS prints a line for each open and each decompression.
 */
 class AOTMetadataDecompressOnceTest inherits QUnit::Test {
     private {

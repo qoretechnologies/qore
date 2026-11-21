@@ -1897,13 +1897,6 @@ private:
     QoreAOTReadBounds saved;
 };
 
-//! Binary format reader for AOT metadata
-/** Reader instances are confined to one metadata deserialization session and
-    are not thread-safe. Sectioned metadata populates lazy decompression buffers
-    from getSectionData().
-
-    The reads of a section are bounded by QoreAOTSectionBounds (qore#6265).
-*/
 //! The decompressed metadata of an opened AOT image, which every reader of the open shares (qore#6702)
 /** QoreAOTBinaryReader::open() decompresses compressed metadata into an object of this type, once; a copy of the
     reader, or a reader that it is moved to (a deserializer, the debug metadata of the image), reads the same buffers,
@@ -1983,6 +1976,13 @@ private:
     bool needs_decoded = false;
 };
 
+//! Binary format reader for AOT metadata
+/** A reader instance is used by one thread at a time; its copies can be used in other threads.  The decompressed
+    metadata is shared by the copies of a reader (QoreAOTDecodedMetadata): the sections of sectioned metadata are
+    decompressed by getSectionData() when first read, once, for all of them (qore#6702).
+
+    The reads of a section are bounded by QoreAOTSectionBounds (qore#6265).
+*/
 class QoreAOTBinaryReader {
     friend class QoreAOTBinaryReaderRef;
 

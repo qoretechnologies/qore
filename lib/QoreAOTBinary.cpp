@@ -5081,7 +5081,8 @@ void QoreAOTBinaryReaderRef::set(const QoreAOTBinaryReader& reader, bool strong,
     if (!strong) {
         weak_decoded = shell->decoded;
     } else if (reader.decoded && reader.decoded->sections) {
-        // sectioned metadata: the string pool and the sections that the later reader reads are kept
+        // sectioned metadata: the string pool and those of the sections that the later reader reads that the load
+        // has decompressed are kept; the later reader decompresses the others if it reads them
         const QoreAOTDecodedMetadata& src = *reader.decoded;
         auto kept = std::make_shared<QoreAOTDecodedMetadata>();
         kept->string_pool = src.string_pool;
@@ -5089,12 +5090,14 @@ void QoreAOTBinaryReaderRef::set(const QoreAOTBinaryReader& reader, bool strong,
         kept->section_count = src.section_count;
         for (size_t i = 0; i < keep_count; ++i) {
             const QoreAOTSectionHeader* sec = reader.findSection(keep_types[i]);
-            // a section that cannot be decompressed now is decompressed when the later reader reads it
-            if (!sec || !reader.getSectionData(*sec)) {
+            if (!sec) {
                 continue;
             }
             size_t index = static_cast<size_t>(sec - reader.sections.data());
-            assert(index < src.section_count && src.sections[index].ready.load(std::memory_order_acquire));
+            assert(index < src.section_count);
+            if (index >= src.section_count || !src.sections[index].ready.load(std::memory_order_acquire)) {
+                continue;
+            }
             kept->sections[index].data = src.sections[index].data;
             kept->sections[index].ready.store(true, std::memory_order_release);
         }

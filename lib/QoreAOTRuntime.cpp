@@ -16992,7 +16992,12 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             }
             std::vector<std::string> deps;
             std::string dep_error;
-            assert(blob_readers[i]);
+            // a blob that was added after the setup (by the load of a dependency) has no reader of the setup
+            if (i >= blob_readers.size() || !blob_readers[i]) {
+                fprintf(stderr, "qore_aot_script_end_batch(%s): the script was registered in the batch while it "
+                    "was being loaded\n", d.label.c_str());
+                return 14;
+            }
             if (readDependencies(*blob_readers[i], deps, dep_error)) {
                 size_t dep_load_i = 0;
                 for (const std::string& dep : deps) {
@@ -17067,8 +17072,15 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             }
             std::string err;
             // the session takes over the reader that the setup opened
-            std::unique_ptr<QoreAOTBinaryReader> reader = std::move(blob_readers[i]);
-            assert(reader);
+            std::unique_ptr<QoreAOTBinaryReader> reader;
+            if (i < blob_readers.size()) {
+                reader = std::move(blob_readers[i]);
+            }
+            if (!reader) {
+                fprintf(stderr, "qore_aot_script_end_batch(%s): the script was registered in the batch while it "
+                    "was being loaded\n", d.label.c_str());
+                return 14;
+            }
             if (!batch->mdes.addBlob(std::move(*reader), err)) {
                 fprintf(stderr, "qore_aot_script_end_batch(%s): "
                     "addBlob failed: %s\n", d.label.c_str(), err.c_str());
