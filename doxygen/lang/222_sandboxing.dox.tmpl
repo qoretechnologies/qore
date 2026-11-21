@@ -565,6 +565,44 @@ authenticate();
     module, where the calling code is not looked up (see @ref sandbox_module_init): a declared domain that their code
     calls is refused as it would be for their creator (\c INVALID-FUNCTION-ACCESS).
 
+    @anchor sandbox_lent_objects
+    Objects that the host lends are grants: an object of a class of a library module (or of a class that inherits
+    one) that the host's code creates, while no restriction applies to that code (a restriction of
+    @ref sandbox_uncontrolled_api "uncontrolled APIs" aside), is lent to the code that the host gives it to.  When the
+    code of another %Program that is not a module's calls one of its methods itself, the method runs as under the
+    host's policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()"):
+    the calling code's restrictions of the file system, the network and external information
+    (@ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM", @ref Qore::DOM_NETWORK "DOM_NETWORK" and
+    @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO") do not count for the code of the method and the code that it
+    calls, so a connection object that the host gives a restricted %Program creates its client when that %Program uses
+    it, while the %Program cannot create a connection itself.  The other domains (such as \c DATABASE, \c PROCESS or
+    \c THREAD_CONTROL) are not lent, and neither is the loading of native code (see @ref sandbox_uncontrolled_api): a
+    host that lends an object whose methods need them gives the restricted code a capability instead
+    (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") or runs the
+    operation for it.
+
+    Only code that holds the object uses it as a grant, by calling its methods itself; this is any code of a %Program
+    that is not a module's that obtains the object, so a host that keeps such objects in a registry that restricted
+    code can read (a library function that returns them) lends them to all of that code:
+    - library code that acts on such an object for its caller lends nothing: a library function that uses a
+      connection that the host registered with it, or a helper to which the restricted code gives the lent object, is
+      checked against the restricted code as before (\c INVALID-FUNCTION-ACCESS)
+    - neither do the closures of the object's code, the builtin methods that its class inherits, calls of its methods
+      by code of its own module (its own %Program), and its destructor, also when the restricted code releases the
+      last reference to the object; all of them are checked against their callers
+    - what the restricted code gives the method is still its own: an object or call reference that it created keeps
+      its restrictions, and a callback that it gives runs as restricted code; a method called through a call reference
+      that restricted code created runs for that code
+    - an object that a method of a lent object creates is lent too if its class is a module's, unless a library
+      module is initialized in the method (its first load): the objects that the initialization creates belong to
+      nobody; an object of a class that the restricted code supplies (its subclass of a module's class) is not
+    - an object that library code creates in its initialization, or with no code of the host on the stack (the
+      library's own shared state), is not lent, and neither is an object that restricted code creates, a copy that it
+      makes of a lent object, or an object that trusted code creates for it under a host grant (a policy barrier or a
+      system-policy capability): the grant does not outlive itself
+    - a sandbox that governs the calling code still governs the method's code (its policy, limits and interrupts);
+      only the restrictions of the calling code's functional domains are lent
+
     The \c SqlUtil and \c DbDataProvider modules refuse a connection string or datasource configuration this way: the
     variants of @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
     @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()" and the constructors of

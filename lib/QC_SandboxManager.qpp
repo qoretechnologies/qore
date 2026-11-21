@@ -1697,6 +1697,12 @@ static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
       for the restricted caller: a closure or call reference that library code creates while it serves the caller
       keeps the caller's restrictions, so the code is created in the module's initialization, or it is a capability
       created there
+    - an object of a library module's class that the host's code creates, while no restriction other than that of
+      uncontrolled APIs applies to it, is lent as a grant is (see @ref sandbox_lent_objects): while one of its methods
+      that the restricted code itself called runs, the file system, the network and external information are lent,
+      as by a policy barrier; the other domains, and the loading of native code, are not; library code that calls the
+      object (one that holds it, or that the restricted code gave it) lends nothing; the arguments that restricted
+      code gives the method keep their restrictions, and a callback of restricted code runs as restricted code
 
     It reveals only whether the calling code is restricted, so it is not restricted itself.
 

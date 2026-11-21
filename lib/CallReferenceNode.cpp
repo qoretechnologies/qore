@@ -71,6 +71,7 @@ void qore_capture_call_reference_provenance(const ResolvedCallReferenceNode* ref
     if (!context) {
         return;
     }
+    context->reference = true;
     auto& registry = call_reference_provenance_registry();
     std::unique_lock<std::shared_mutex> lock(registry.mutex);
     registry.contexts.emplace(ref, context.get());
@@ -95,6 +96,7 @@ void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, co
     }
     std::unique_ptr<QoreSandboxContext> context(new QoreSandboxContext(false));
     context->origin_restrictions = origin;
+    context->reference = true;
     registry.contexts.emplace(ref, context.get());
     context.release();
     call_reference_provenance_count.fetch_add(1, std::memory_order_relaxed);

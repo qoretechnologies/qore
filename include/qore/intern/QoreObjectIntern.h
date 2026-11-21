@@ -239,6 +239,11 @@ public:
     QoreProgram* pgm;
     //! Immutable creation context; does not retain a Program or any Qore object
     QoreSandboxContext* sandbox_provenance = nullptr;
+    //! true if the object is a capability (qore#7052): an object of module code that the host's code created without
+    //! restrictions; a call of one of its methods that enters the Program of its code marks the context that it
+    //! enters as a grant (see ProgramThreadCountContextHelper::set() and ThreadData::CapabilityFrame); read only when
+    //! a call enters another Program, never by calls within one
+    bool capability_origin = false;
     cdmap_t* cdmap = nullptr;
 
     // used for garbage collection

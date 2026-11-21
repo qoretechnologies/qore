@@ -6766,7 +6766,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         return false;
     }
     QoreProgram* method_caller_pgm = getProgram();
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true, self);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;

@@ -15328,7 +15328,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
         xsink);
 
     // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true, self);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -21777,7 +21777,7 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         xsink);
 
     // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
+    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true, o);
     if (*xsink) {
         result = toBits(QoreValue());
         return true;

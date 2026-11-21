@@ -163,7 +163,7 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
         code_pgm = oc->getProgram();
     }
     std::unique_ptr<QoreSandboxContext> provenance(qore_capture_sandbox_provenance(code_pgm,
-        code_pgm && qc->spansPrograms()));
+        code_pgm && qc->spansPrograms(), &capability_origin));
     //printd(5, "qore_object_private::qore_object_private() this: %p obj: %p '%s'\n", this, obj, oc->getName());
 #ifdef QORE_DEBUG_OBJ_REFS
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
