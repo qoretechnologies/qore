@@ -1942,6 +1942,19 @@ DLLLOCAL void q_ds_append_masked_string(QoreString& str, const char* ds);
 */
 DLLLOCAL void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds);
 
+//! returns a copy of the options of a datasource with the value of each option that cannot be shown masked (qore#7070)
+/** The value of an option is kept only if \a driver is a driver already loaded that declares the option and does not
+    declare it sensitive (\ref QDBI_OPT_SENSITIVE); every other value is replaced with \ref QORE_DS_MASK (fail-closed:
+    an option of a driver that is not loaded or that the driver does not declare is masked); no module is loaded;
+    never raises an exception
+
+    @param driver the driver name, if any
+    @param opts the options, if any
+
+    @return a new hash with the keys of \a opts, owned by the caller
+*/
+DLLLOCAL QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts);
+
 //! appends the masked description of a datasource hash for a message (qore#6988)
 /** The description is made with q_ds_append_masked(QoreString&, const char*, const char*, int) from the \c "type",
     \c "host" and \c "port" keys of the hash (as in a datasource hash returned by parse_datasource()); a \c "type" or

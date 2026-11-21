@@ -176,6 +176,13 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
       \c "@" by its driver name only; a password with \c "{" can still make a datasource string ambiguous, so give
       such a password in a @ref datasource_hash "datasource hash" or with the connection arguments of
       @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool"
+    - the masked description of a datasource shows none of its options; where a datasource's options are shown,
+      such as in the safe URL and the information of a \c db:// connection
+      (\c DbDataProvider::DatasourceConnection), the value of each option that its driver
+      declares sensitive (the \c "sensitive" key of
+      @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), that its driver does not declare, or of a
+      driver that is not loaded, is shown as \c "****";
+      @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" gives these options to Qore code
     - the debug output of URL parsing shows no URL or password
 
     A datasource string without a driver prefix is ambiguous: in a string such as <tt>scott:tiger\@orcl</tt>, the text
@@ -463,6 +470,40 @@ string mask_datasource(hash<auto> config) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNodeHolder rv(new QoreStringNode);
     q_ds_append_masked_hash(**rv, config);
     return rv.release();
+}
+
+//! Returns the options of a datasource for display, with the value of each sensitive option masked
+/** The value of an option is kept only if the DBI driver \a driver is already loaded and declares the option without
+    declaring it sensitive (see the \c "sensitive" key of
+    @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"); every other value is replaced with
+    \c "****": the value of a sensitive option (a credential, or a connection string or URL that can embed one), of
+    an option that the driver does not declare and of every option of a driver that is not loaded.  The driver is
+    never loaded by this function.
+
+    @param driver the name of the DBI driver of the datasource
+    @param options the options of the datasource (as in the \c "options" key of a
+    @ref datasource_hash "datasource hash")
+
+    @return a hash with the keys of \a options, where the value of each option that cannot be shown is \c "****"; an
+    empty hash if no options are given
+
+    @par Example:
+    @code{.py}
+# ex: {"conn": "****", "timezone": "Europe/Prague"} once the odbc driver is loaded
+hash<auto> h = mask_datasource_options("odbc", {"conn": "DSN=x;PWD=secret", "timezone": "Europe/Prague"});
+    @endcode
+
+    @note this function never throws an exception
+
+    @see
+    - @ref Qore::SQL::mask_datasource(string) "mask_datasource()"
+    - @ref datasource_secrets
+
+    @since %Qore 3.0
+*/
+hash<auto> mask_datasource_options(string driver, *hash<auto> options) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // a driver name with a NUL character is not a driver name: every value is masked
+    return q_dbi_mask_options(strlen(driver->c_str()) == driver->size() ? driver->c_str() : nullptr, options);
 }
 ///@}
 

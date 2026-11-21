@@ -577,7 +577,7 @@ conn.checkSandboxAccess(True);
         });
         # Ping results are diagnostics, including when authentication fails. Apply
         # the same sensitive-option policy as getInfo() before returning either result.
-        map remove rv.opts{$1.key}, getConnectionSchemeInfo().options.pairIterator(), $1.value.sensitive;
+        rv.opts = getSafeOptions(rv.opts);
         rv.url = safe_url;
 
         last_check = now_us();
@@ -682,7 +682,7 @@ conn.checkSandboxAccess(True);
             h.url = safe_url;
             delete h.url_hash.password;
             # remove all sensitive option values as well
-            map remove h.opts{$1.key}, getConnectionSchemeInfo().options.pairIterator(), $1.value.sensitive;
+            h.opts = getSafeOptions(h.opts);
         }
         # sort options by key
         if (h.opts) {
@@ -1231,6 +1231,23 @@ conn.checkSandboxAccess(True);
     # hash of parse_datasource()), which is stored in urlh (issue #5838)
     private hash<auto> parseUrl(string url) {
         return Qore::parse_url(url);
+    }
+
+    #! Returns the options of the connection that can be shown, for the information and ping results of the connection
+    /** @param opts the options of the connection
+
+        @return the options without the sensitive ones; this base implementation removes the options that the
+        connection scheme declares \c sensitive
+
+        Called by getInfo() without \c with_passwords and by ping(); reimplement this method to also remove or mask
+        the options that the connection scheme does not declare, but that can hold a credential (the call of the base
+        implementation removes the declared ones)
+
+        @since %ConnectionProvider 3.1
+    */
+    private *hash<auto> getSafeOptions(*hash<auto> opts) {
+        map remove opts{$1.key}, getConnectionSchemeInfo().options.pairIterator(), $1.value.sensitive;
+        return opts;
     }
 
     #! creates a "safe" URL string with password information removed

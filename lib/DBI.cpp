@@ -935,6 +935,31 @@ void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h) {
     q_ds_append_masked(str, type.c_str(), host.c_str(), host.size(), q_ds_hash_port(h));
 }
 
+QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    if (!opts || opts->empty()) {
+        return rv.release();
+    }
+    // the driver is looked up among the drivers already loaded only: masking never loads a module, which could fail
+    // or be refused; fail-closed, every value is masked when the driver is not loaded (qore#7070)
+    const qore_dbi_private* dd = nullptr;
+    if (q_dbi_valid_driver_name(driver)) {
+        DBIDriver* d = qore_dbi_driver_list_ops(DBI).find_intern(driver);
+        if (d) {
+            dd = qore_dbi_private::get(*d);
+        }
+    }
+    ConstHashIterator i(opts);
+    while (i.next()) {
+        if (dd && dd->isOptionShowable(i.getKey())) {
+            rv->setKeyValue(i.getKey(), i.getReferencedValue(), nullptr);
+        } else {
+            rv->setKeyValue(i.getKey(), new QoreStringNode(QORE_DS_MASK), nullptr);
+        }
+    }
+    return rv.release();
+}
+
 void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds) {
     // the string is never shown, and an exception raised parsing it is not raised to the caller
     ExceptionSink xsink;

@@ -17,6 +17,7 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         addTestCase("the driver option information", \driverOptions());
         addTestCase("the option information of a Datasource", \datasourceOptions());
         addTestCase("the option information of a DatasourcePool", \poolOptions());
+        addTestCase("mask_datasource_options()", \maskOptions());
         set_return_value(main());
     }
 
@@ -56,5 +57,26 @@ class DatasourceSensitiveOptionsTest inherits QUnit::Test {
         hash<auto> h = pool.getOptionHash();
         assertTrue(h.secret.sensitive);
         assertFalse(h.rows.sensitive);
+    }
+
+    maskOptions() {
+        # a sensitive option and an option that the driver does not declare are masked
+        assertEq({"secret": "****", "rows": 3, "fault": "", "unknown": "****"},
+            mask_datasource_options("dbitest", {"secret": "s3cr3t", "rows": 3, "fault": "", "unknown": "x"}));
+        # option names are matched as the driver matches them, without case
+        assertEq({"SECRET": "****", "Rows": 3}, mask_datasource_options("dbitest", {"SECRET": "s3cr3t", "Rows": 3}));
+        # a driver that is not loaded is not loaded by the function: every value is masked
+        assertEq({"rows": "****"}, mask_datasource_options("qore-7070-no-such-driver", {"rows": 3}));
+        assertFalse(inlist("qore-7070-no-such-driver", dbi_get_driver_list() ?? ()));
+        # a driver module that is installed but not loaded is not loaded either
+        if (!inlist("sqlite3", dbi_get_driver_list() ?? ())) {
+            assertEq({"timeout": "****"}, mask_datasource_options("sqlite3", {"timeout": 1}));
+            assertFalse(inlist("sqlite3", dbi_get_driver_list() ?? ()));
+        }
+        # neither is a value given with a name that is not a driver name, or a name with a NUL character
+        assertEq({"rows": "****"}, mask_datasource_options("dbitest:u/p@db", {"rows": 3}));
+        assertEq({"rows": "****"}, mask_datasource_options("dbitest\0x", {"rows": 3}));
+        assertEq({}, mask_datasource_options("dbitest", NOTHING));
+        assertEq({}, mask_datasource_options("dbitest", {}));
     }
 }

@@ -144,12 +144,17 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
     }
 
     #! Returns connection info
-    /** Overridden to strip the @c pass key from @c url_hash (datasource URLs use @c pass instead of @c password)
+    /** Overridden to strip the @c pass key from @c url_hash (datasource URLs use @c pass instead of @c password) and
+        to mask the values of the driver options in @c url_hash that cannot be shown (see
+        @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()"; since DbDataProvider 2.5)
     */
     hash<ConnectionInfo> getInfo(*hash<auto> opts) {
         hash<ConnectionInfo> h = AbstractConnectionWithInfo::getInfo(opts);
         if (!opts.with_passwords) {
             delete h.url_hash.pass;
+            if (h.url_hash.options) {
+                h.url_hash.options = maskDriverOptions(h.url_hash.type, h.url_hash.options);
+            }
         }
         return h;
     }
@@ -198,10 +203,34 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
 
     #! Creates a "safe" URL string with password information removed
     /** @param urlh a parsed URL hash (as returned from parseUrl())
-        @return a safe URL string with the @c "db://" prefix and no password
+        @return a safe URL string with the @c "db://" prefix and no password; the value of each driver option is
+        masked as \c "****" unless the driver is loaded and declares the option without declaring it sensitive (see
+        @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()"; since DbDataProvider 2.5)
     */
     private string getSafeUrl(hash<auto> urlh) {
+        # the values of the driver options that can hold a credential are masked (qore#7070)
+        if (urlh.options) {
+            urlh.options = maskDriverOptions(urlh.type, urlh.options);
+        }
         return "db://" + make_datasource_string(urlh - "pass");
+    }
+
+    #! Returns the options of the connection that can be shown, with the values of the driver options masked
+    /** The pool options \c min and \c max are shown; the value of each driver option is masked as \c "****" unless
+        the driver is loaded and declares the option without declaring it sensitive (see
+        @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()")
+
+        @since DbDataProvider 2.5
+    */
+    private *hash<auto> getSafeOptions(*hash<auto> opts) {
+        opts = AbstractConnectionWithInfo::getSafeOptions(opts);
+        return opts ? maskDriverOptions(ds_urlh.type ?? urlh.type, opts) : opts;
+    }
+
+    #! Returns the options with the value of each driver option that cannot be shown masked; the pool options are kept
+    private:internal hash<auto> maskDriverOptions(*string type, hash<auto> o) {
+        *hash<auto> driver_opts = o - ("min", "max");
+        return driver_opts ? o + mask_datasource_options(type ?? "", driver_opts) : o;
     }
 
     #! Validates connection options

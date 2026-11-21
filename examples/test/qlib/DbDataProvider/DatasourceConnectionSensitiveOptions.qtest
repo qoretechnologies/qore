@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%requires DbDataProvider
+%requires ConnectionProvider
+%requires dbitest
+
+%exec-class DatasourceConnectionSensitiveOptionsTest
+
+#! The safe URL, the information and the ping result of a db:// connection mask the sensitive driver options (qore#7070)
+/** The "dbitest" mock driver declares its "secret" option sensitive; "rows" is not sensitive.  The value of a driver
+    option is shown only if the driver is loaded and declares the option without declaring it sensitive.
+*/
+class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
+    public {
+        const Secret = "s3cr3t-7070";
+        const Url = "db://dbitest:user/pass@db{secret=" + Secret + ",rows=3,undeclared=" + Secret + ",min=1,max=2}";
+    }
+
+    constructor() : Test("DatasourceConnection sensitive driver options", "1.0", \ARGV) {
+        addTestCase("safe URL", \safeUrl());
+        addTestCase("connection info", \connectionInfo());
+        addTestCase("connection info with passwords", \connectionInfoWithPasswords());
+        addTestCase("ping", \ping());
+        addTestCase("options given as connection options", \connectionOptions());
+        addTestCase("driver not loaded", \driverNotLoaded());
+        set_return_value(main());
+    }
+
+    safeUrl() {
+        DatasourceConnection conn("c7070", "test", Url);
+        string url = conn.getSafeUrl();
+        assertFalse(url.find(Secret) >= 0, url);
+        assertFalse(url =~ /pass/, url);
+        hash<auto> h = parse_datasource(url.substr(5));
+        assertEq("****", h.options.secret);
+        assertEq("****", h.options.undeclared);
+        assertEq("3", h.options.rows);
+        assertEq("1", h.options.min);
+        assertEq("2", h.options.max);
+    }
+
+    connectionInfo() {
+        DatasourceConnection conn("c7070", "test", Url);
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertFalse(sprintf("%y", info).find(Secret) >= 0);
+        assertEq("****", info.url_hash.options.secret);
+        assertEq("****", info.url_hash.options.undeclared);
+        assertEq("3", info.url_hash.options.rows);
+        assertEq("****", info.opts.secret);
+        assertEq("****", info.opts.undeclared);
+        assertEq("3", info.opts.rows);
+        assertEq(1, info.opts.min);
+        assertEq(2, info.opts.max);
+        hash<ConnectionDataInfo> dinfo = conn.getInfoAsData();
+        assertFalse(sprintf("%y", dinfo).find(Secret) >= 0);
+    }
+
+    connectionInfoWithPasswords() {
+        DatasourceConnection conn("c7070", "test", Url);
+        hash<ConnectionInfo> info = conn.getInfo({"with_passwords": True});
+        assertEq(Secret, info.url_hash.options.secret);
+        assertEq(Secret, info.opts.secret);
+    }
+
+    ping() {
+        DatasourceConnection conn("c7070", "test", Url);
+        hash<PingInfo> rv = conn.ping();
+        assertFalse(sprintf("%y", rv).find(Secret) >= 0);
+        assertEq("****", rv.opts.secret);
+        assertEq("3", rv.opts.rows);
+    }
+
+    connectionOptions() {
+        DatasourceConnection conn("c7070", "test", "db://dbitest:user/pass@db", {}, {
+            "driver": {"secret": Secret, "rows": 4},
+        });
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertFalse(sprintf("%y", info).find(Secret) >= 0);
+        assertEq("****", info.opts.secret);
+        assertEq(4, info.opts.rows);
+    }
+
+    driverNotLoaded() {
+        # a driver that is not loaded: every driver option value is masked, and the pool options are shown
+        DatasourceConnection conn("c7070", "test", "db://qore7070nodriver:user/pass@db{rows=3,min=1,max=2}");
+        hash<auto> h = parse_datasource(conn.getSafeUrl().substr(5));
+        assertEq("****", h.options.rows);
+        assertEq("1", h.options.min);
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertEq("****", info.opts.rows);
+        assertEq("****", info.url_hash.options.rows);
+    }
+}
