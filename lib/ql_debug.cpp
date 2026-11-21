@@ -354,6 +354,12 @@ static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeC
     return h.release();
 }
 
+//! Returns true if the current thread uses the cache of its local data of Programs with module lifetime (qore#7025)
+static QoreValue f_dbg_module_program_cache_enabled(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_thread_module_program_cache_enabled();
+}
+
 //! Returns the number of class, hashdecl and enum declarations kept after they were destroyed because derived types
 //! name their types (issue #5790)
 static QoreValue f_dbg_retired_type_declarations(const QoreListNode* params, RuntimeConfig& rc,
@@ -28081,6 +28087,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_generic_cache_counts", f_dbg_generic_cache_counts, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_module_program_cache_enabled", f_dbg_module_program_cache_enabled, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
     qns.addBuiltinVariant("dbg_retired_type_declarations", f_dbg_retired_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_declaration_groups", f_dbg_type_declaration_groups, QCF_NO_FLAGS,

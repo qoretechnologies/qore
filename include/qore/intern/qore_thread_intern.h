@@ -1670,6 +1670,8 @@ DLLLOCAL bool qore_catch_thread_exit(ExceptionSink* xsink);
 
 DLLLOCAL VLock* getVLock();
 DLLLOCAL void end_signal_thread(ExceptionSink* xsink);
+//! returns true if the current thread uses the cache of its local data of Programs with module lifetime (qore#7025)
+DLLLOCAL bool q_thread_module_program_cache_enabled();
 DLLLOCAL void delete_thread_local_data();
 
 //! Ends cancellation for a thread that has stopped running the code a cancellation request targeted
@@ -4026,6 +4028,21 @@ public:
             e = ModuleProgramDataCacheEntry();
          }
       }
+   }
+
+   //! returns true if the cache of the thread's local data of Programs with module lifetime is used
+   DLLLOCAL bool moduleProgramDataCacheEnabled() const {
+      return !module_pgm_cache_disabled;
+   }
+
+   //! uses the data again after del() freed it, for a thread that runs more code after that (qore#7025)
+   /** The signal thread frees the data of each handler with del() and then runs the next handler with the same data:
+       the cache that del() disabled for the destructors that it runs, and emptied, is used again.  The thread can be
+       in a Program's set again (pgm_set): the last freeAllThreadData() of del() runs after the Programs were left,
+       and a destructor that it runs can enter one, whose data is then the thread's for the next handler
+   */
+   DLLLOCAL void reuseAfterDel() {
+      module_pgm_cache_disabled = false;
    }
 
    //! caches the thread's local data of a Program with module lifetime; see findModuleProgramData()
