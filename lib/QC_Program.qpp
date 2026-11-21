@@ -722,7 +722,7 @@ const PO_DEFAULT = PO_DEFAULT;
 const PO_FREE_OPTIONS = PO_FREE_OPTIONS;
 
 //! Only set by the system when in a @ref user_modules "user module" Program
-/** @note This option cannot be set manually or an exception will be raised
+/** @note Program raises PROGRAM-OPTION-ERROR if user code asks to set or clear this option
  */
 const PO_IN_MODULE = PO_IN_MODULE;
 
@@ -1683,9 +1683,7 @@ Program pgm();
  */
 Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
         [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
-    if (parse_options & PO_SYSTEM_OPS) {
-        xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted options that "
-            "can only be set by the system", parse_options);
+    if (qore_program_private::checkSystemParseOptions(parse_options, xsink)) {
         return;
     }
 
@@ -1753,13 +1751,17 @@ Program pgm(opts);
  */
 Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool independent)
         [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    const QoreParseOptions requested = parse_options->get();
+    if (qore_program_private::checkSystemParseOptions(requested, xsink)) {
+        return;
+    }
     QoreProgram* creator = getProgram();
     // as the constructor with integer options
     bool restricted = false;
     QoreParseOptions restrictions;
     QoreParseOptions po = independent
-        ? qore_program_private::restrictForCreator(creator, parse_options->get(), restrictions, restricted)
-        : parse_options->get();
+        ? qore_program_private::restrictForCreator(creator, requested, restrictions, restricted)
+        : requested;
     // the parent's options are read once: the %modern check and the options that the child inherits use the same
     // value, also if they change meanwhile (issue #6176)
     QoreProgram* parent = independent ? nullptr : creator;
@@ -2706,12 +2708,7 @@ pgm.setParseOptions(PO_NO_THREADS | PO_NO_GUI);
      @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
 */
 nothing Program::setParseOptions(softint parse_options = PO_DEFAULT) [flags=NAMED_ARGS] {
-   if (parse_options & PO_SYSTEM_OPS)
-      return xsink->raiseException("PROGRAM-OPTION-ERROR",
-          "parse options (0x" QLLX ") contain restricted options that can only be set by the system",
-          parse_options);
-
-   p->setParseOptions(parse_options, xsink);
+    p->setParseOptions(parse_options, xsink);
 }
 
 //! Sets parse options from a ParseOptions object
@@ -2724,6 +2721,7 @@ pgm.setParseOptions(opts);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-OPTION-ERROR the requested mask contains a system-owned option
     @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @since %Qore 3.0
@@ -2785,12 +2783,7 @@ pgm.disableParseOptions(PO_NO_THREADS | PO_NO_GUI);
      @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
 */
 nothing Program::disableParseOptions(softint parse_options) [flags=NAMED_ARGS] {
-   if (parse_options & PO_SYSTEM_OPS)
-      return xsink->raiseException("PROGRAM-OPTION-ERROR",
-          "parse options (0x" QLLX ") contain restricted options that can only be set by the system",
-          parse_options);
-
-   p->disableParseOptions(parse_options, xsink);
+    p->disableParseOptions(parse_options, xsink);
 }
 
 //! Disables parse options from a ParseOptions object
@@ -2803,6 +2796,7 @@ pgm.disableParseOptions(opts);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-OPTION-ERROR the requested mask contains a system-owned option
     @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @since %Qore 3.0
@@ -2831,6 +2825,7 @@ pgm.replaceParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @throw OPTION-ERROR The calling Program does not have the @ref PO_NO_CHILD_PO_RESTRICTIONS option set, and therefore cannot call Program::replaceParseOptions()
     @throw OPTIONS-LOCKED the parse options are locked, and the replacement would remove a restriction locked in or
     add an option that gives more freedom
+    @throw PROGRAM-OPTION-ERROR the requested mask would change a system-owned option
     @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @see Program::setParseOptions() and Program::disableParseOptions().

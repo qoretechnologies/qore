@@ -9,6 +9,7 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/system-options"
 %requires QUnit
 
 %exec-class LockedOptionsReplaceTest
@@ -25,14 +26,50 @@ class LockedOptionsReplaceTest inherits QUnit::Test {
         addTestCase("a Program locked with lockOptions() keeps the restrictions it had then", \lockOptions());
         addTestCase("an extended restriction is not dropped by an int replacement", \extendedRestriction());
         addTestCase("an unlocked Program may still drop a restriction", \unlocked());
+        addTestCase("system options belong to the runtime", \systemOptions());
         set_return_value(main());
+    }
+
+    systemOptions() {
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        int original = pgm.getParseOptions();
+        int mask = PO_NO_NETWORK | PO_IN_MODULE;
+        ParseOptions boxed(mask);
+        assertThrows("PROGRAM-OPTION-ERROR", "PO_IN_MODULE", sub() { new Program(mask); });
+        assertThrows("PROGRAM-OPTION-ERROR", "PO_IN_MODULE", sub() { new Program(boxed); });
+        assertThrows("PROGRAM-OPTION-ERROR", "PO_IN_MODULE", \pgm.setParseOptions(), mask);
+        assertEq(original, pgm.getParseOptions());
+        assertThrows("PROGRAM-OPTION-ERROR", "PO_IN_MODULE", \pgm.setParseOptions(), boxed);
+        assertEq(original, pgm.getParseOptions());
+        pgm.setParseOptions(PO_NO_NETWORK);
+        assertThrows("PROGRAM-OPTION-ERROR", "PO_IN_MODULE", \pgm.disableParseOptions(), mask);
+        assertEq(original | PO_NO_NETWORK, pgm.getParseOptions());
+        assertThrows("PROGRAM-OPTION-ERROR", "PO_IN_MODULE", \pgm.disableParseOptions(), boxed);
+        assertEq(original | PO_NO_NETWORK, pgm.getParseOptions());
+        pgm.disableParseOptions(PO_NO_NETWORK);
+        assertThrows("PROGRAM-OPTION-ERROR", "PO_IN_MODULE", \pgm.replaceParseOptions(), original | mask);
+        assertEq(original, pgm.getParseOptions());
+
+        # Load the module in a Program that passes its restrictions to children.
+        Program loader(PO_MODERN);
+        loader.loadModule("SystemOptionsFixture");
+        loader.parse("Program sub makeChild() { return SystemOptionsFixture::child(); }", "factory");
+        Program moduleChild = loader.callFunction("makeChild");
+        int inherited = moduleChild.getParseOptions();
+        assertTrue((inherited & PO_IN_MODULE) != 0, "a module child inherits the runtime option");
+        moduleChild.replaceParseOptions(inherited | PO_NO_NETWORK);
+        assertEq(inherited | PO_NO_NETWORK, moduleChild.getParseOptions());
+        assertThrows("PROGRAM-OPTION-ERROR", "PO_IN_MODULE", \moduleChild.replaceParseOptions(),
+            inherited & ~PO_IN_MODULE);
+        assertEq(inherited | PO_NO_NETWORK, moduleChild.getParseOptions());
     }
 
     createdLocked() {
         Program pgm(PO_NO_NETWORK | PO_NO_FILESYSTEM);
         checkLocked(pgm, "created locked");
+        assertThrows("OPTIONS-LOCKED", "enable-debug", \pgm.setParseOptions(), PO_ENABLE_DEBUG);
         # disableParseOptions() is refused as well
-        assertThrows("OPTIONS-LOCKED", \pgm.disableParseOptions(), PO_NO_FILESYSTEM);
+        assertThrows("OPTIONS-LOCKED", "PO_NO_FILESYSTEM", \pgm.disableParseOptions(), PO_NO_FILESYSTEM);
         assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_FILESYSTEM), "created locked: the restriction is kept");
     }
 
@@ -50,7 +87,7 @@ class LockedOptionsReplaceTest inherits QUnit::Test {
         Program pgm(PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_NETWORK | PO_NO_FILESYSTEM);
         pgm.lockOptions();
         checkLocked(pgm, "lockOptions()");
-        assertThrows("OPTIONS-LOCKED", \pgm.disableParseOptions(), PO_NO_FILESYSTEM);
+        assertThrows("OPTIONS-LOCKED", "PO_NO_FILESYSTEM", \pgm.disableParseOptions(), PO_NO_FILESYSTEM);
         assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_FILESYSTEM), "lockOptions(): the restriction is kept");
 
         # a restriction added after the lock may be dropped by a replacement
@@ -67,7 +104,7 @@ class LockedOptionsReplaceTest inherits QUnit::Test {
         Program pgm(new ParseOptions("no-new"));
         assertTrue(pgm.getFullParseOptions().hasAll("no-new"), "the Program has the extended restriction");
         # the int mask cannot hold the extended option, so this replacement would drop it
-        assertThrows("OPTIONS-LOCKED", \pgm.replaceParseOptions(), pgm.getParseOptions());
+        assertThrows("OPTIONS-LOCKED", "no-new", \pgm.replaceParseOptions(), pgm.getParseOptions());
         assertTrue(pgm.getFullParseOptions().hasAll("no-new"), "the extended restriction is kept");
         assertThrows("PARSE-EXCEPTION", "NO_NEW", \pgm.parse(), ("auto sub f() { return new Mutex(); }", "use"));
         # the control: the code parses in a Program without the restriction

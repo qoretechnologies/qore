@@ -4973,16 +4973,30 @@ public:
         syncExecModeWithParseOptions();
     }
 
+    DLLLOCAL static int raiseLockedOptions(const QoreParseOptions& requested, ExceptionSink* xsink);
+
+    //! Rejects user requests to set or clear an option owned by the runtime.
+    DLLLOCAL static bool checkSystemParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
+        if (!(po & PO_SYSTEM_OPS)) {
+            return false;
+        }
+        static_assert(PO_SYSTEM_OPS == PO_IN_MODULE, "name each system option in the diagnostic");
+        xsink->raiseException("PROGRAM-OPTION-ERROR", "only the system may set or clear PO_IN_MODULE");
+        return true;
+    }
+
     DLLLOCAL int setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
+        if (checkSystemParseOptions(po, xsink)) {
+            return -1;
+        }
         // the checks and the change are atomic: the write lock of the options is held throughout (#6078), and
         // po_mutex only inside it (isLocked(), changeIfNotLocked()), so that no exception is raised under po_mutex
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         // the check and the change are one step with respect to lockOptions() (changeIfNotLocked()); the exceptions
         // are raised without po_mutex, as raising one takes other locks (the Programs on the call stack)
         if (isLocked(po, true)) {
-            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-            return -1;
+            return raiseLockedOptions(po, xsink);
         }
         // a change for the whole Program is checked against the Program's own options, not against the scoped
         // options of a parse in progress, which it does not change (issue #6207)
@@ -4995,8 +5009,7 @@ public:
             return -1;
         }
         if (changeIfNotLocked(po, true)) {
-            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-            return -1;
+            return raiseLockedOptions(po, xsink);
         }
         return 0;
     }
@@ -5019,14 +5032,16 @@ public:
 
     DLLLOCAL int disableParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
+        if (checkSystemParseOptions(po, xsink)) {
+            return -1;
+        }
         // the checks and the change are atomic: the write lock of the options is held throughout (#6078), and
         // po_mutex only inside it (isLocked(), changeIfNotLocked()), so that no exception is raised under po_mutex
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         // only raise the exception if parse options are locked and the option is not a "free option"; disabling a
         // positive option is more restrictive and is allowed, disabling a restriction is not; as setParseOptions()
         if (isLocked(po, false)) {
-            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-            return -1;
+            return raiseLockedOptions(po, xsink);
         }
         // checked against the Program's own options, as setParseOptions()
         QoreParseOptions current = pwo.parse_options.loadShared();
@@ -5038,8 +5053,7 @@ public:
             return -1;
         }
         if (changeIfNotLocked(po, false)) {
-            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-            return -1;
+            return raiseLockedOptions(po, xsink);
         }
         return 0;
     }
@@ -5078,12 +5092,17 @@ public:
         // locked with Program::lockOptions()) keeps them: the options that the replacement removes and adds are
         // checked as Program::disableParseOptions() and Program::setParseOptions() check them; the check and the
         // change are one step with respect to lockOptions(), and the exception is raised without po_mutex
+        QoreParseOptions changed;
         bool refused;
         {
             // the write lock before po_mutex (see po_mutex)
             std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
             // the options that the replacement replaces are the Program's own (issue #6207)
             QoreParseOptions current = pwo.parse_options.loadShared();
+            changed = current ^ po;
+            if (checkSystemParseOptions(changed, xsink)) {
+                return -1;
+            }
             if (static_cast<bool>(po & PO_ALLOW_REPARSE) != static_cast<bool>(current & PO_ALLOW_REPARSE)
                     && checkReparseOptionChange("Program::replaceParseOptions()", xsink)) {
                 return -1;
@@ -5097,8 +5116,7 @@ public:
             }
         }
         if (refused) {
-            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-            return -1;
+            return raiseLockedOptions(changed, xsink);
         }
         return 0;
     }

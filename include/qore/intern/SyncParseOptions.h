@@ -45,7 +45,8 @@
 #include <utility>
 
 //! serializes the insertion of a new value into the value set of any SyncParseOptions object (issue #6177)
-/** A leaf lock, held only around the insertion (which allocates): it is acquired by the fork handlers before fork()
+/** Also protects the two-word value of a mutable ParseOptions object while it is copied or changed.
+    A leaf lock, held only around the insertion or value access: it is acquired by the fork handlers before fork()
     (rank QFLR_LEAF, see design/fork-handlers.md), so that no other thread is inside an insertion when the process is
     copied, and a writer in the child does not insert into a set that was left in the middle of an update.  The write
     lock of each object (writeLock()) cannot be acquired before fork(): it is held across checks, parses and module
