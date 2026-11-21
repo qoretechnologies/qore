@@ -2462,6 +2462,10 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         std::unordered_map<const void*, llvm::Value*> param_map;
         std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
         for (unsigned i = 0; i < callee.num_params; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "JIT fast entry parameter mapping")) {
+                error = "cancelled during JIT fast entry parameter mapping";
+                return false;
+            }
             const void* key = reinterpret_cast<const void*>(sig->lv[i]);
             param_map[key] = fast_fn->getArg(i);
             param_kind_map[key] = i < callee_info.param_kinds.size()
@@ -2507,6 +2511,9 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             lowering.setBatchCallees(&batch_callee_map);
             lowering.setSharedDebugInfo(&di_builder, di_cu);
             if (!lowering.lowerFunction(*callee.ir_func, *module, error)) {
+                if (qore_check_cancel(nullptr, "JIT batch lowering fallback")) {
+                    return false;
+                }
                 // If a callee fails to lower, fall back to compiling root alone
                 printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
                     callee.ir_func->name.c_str(), error.c_str());
@@ -2534,6 +2541,9 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             assert(fast_fn && "fast entry function must be forward-declared");
 
             if (!lower_fast_entry(callee, fast_info->second, fast_fn)) {
+                if (qore_check_cancel(nullptr, "JIT batch lowering fallback")) {
+                    return false;
+                }
                 // the fast entry was declared before the batch was lowered, and the code of the other members (and
                 // the callee's own standard entry) may call it already: the module is not compiled with an entry
                 // that has no body, and the root is compiled alone instead, as when a callee fails (qore#6313)
@@ -2614,7 +2624,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     if (!QoreIRToLLVM::materializeOwnedFastEntries(*module, error)) {
         return false;
     }
-    for (llvm::Function* fast_fn : borrowed_templates) {
+    for (size_t i = 0; i < borrowed_templates.size(); ++i) {
+        if (i && !(i % 10) && qore_check_cancel(nullptr, "JIT owning entry template cleanup")) {
+            error = "cancelled during JIT owning entry template cleanup";
+            return false;
+        }
+        llvm::Function* fast_fn = borrowed_templates[i];
         fast_fn->deleteBody();
         fast_fn->setSubprogram(nullptr);
     }

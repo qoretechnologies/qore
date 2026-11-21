@@ -13995,7 +13995,11 @@ static bool qore_rt_method_fast_call_eligible(const AbstractQoreFunctionVariant*
 namespace {
 struct QoreNativeMethodContext {
     // Reflective code called by the method sees a distinct local-variable frame, just as in the ordinary binder.
-    ThreadFrameBoundaryHelper local_frame{true};
+    struct LocalFrame {
+        LocalFrame() { thread_push_frame_boundary(); }
+        ~LocalFrame() { thread_pop_frame_boundary(); }
+    };
+    [[no_unique_address]] LocalFrame local_frame;
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env{nullptr};
     ObjectSubstitutionHelper receiver;
     ArgvContextHelper implicit_args;
