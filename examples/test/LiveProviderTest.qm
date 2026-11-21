@@ -192,8 +192,9 @@ public class LiveProvider {
     */
     static string skipReason(string provider, softlist<string> vars) {
         if (!LiveProvider::enabled(provider)) {
-            return sprintf("live %s tests are disabled: set %s=%s (or 1) and %s", provider, OptInVar, provider,
-                join(", ", vars));
+            # a test that needs no variable (ex: it reaches a service without a credential) names only the opt-in
+            return sprintf("live %s tests are disabled: set %s=%s (or 1)%s", provider, OptInVar, provider,
+                vars ? " and " + join(", ", vars) : "");
         }
         list<string> missing = select vars, !LiveProvider::getVar($1);
         return sprintf("live %s tests are enabled, but %s %s not set", provider, join(", ", missing),

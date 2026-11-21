@@ -14,6 +14,7 @@
 %requires HttpServerAsyncIo
 %requires HttpServer
 %requires FsUtil
+%requires ../../LiveProviderTest.qm
 %requires Mime
 %requires json
 
@@ -210,6 +211,12 @@ public class GetFileFromUrlTest inherits QUnit::Test {
     }
 
     testGetFileFromUrlSftp() {
+        # the login uses the user's own SSH key, a real credential, so it runs only when enabled or given a key on
+        # the command line (qore#6964)
+        if (!m_options.privkey && !LiveProvider::enabled("sftp-local")) {
+            testSkip(LiveProvider::skipReason("sftp-local", ()));
+        }
+
         TmpFile tmp();
         tmp.file.write("test");
 

@@ -140,10 +140,12 @@ class AwsTest inherits QUnit::Test {
             testSkip("no client support");
         }
 
-        # https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08
+        # https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08; the clients do not connect: the signatures
+        # are computed offline, and the test makes no call to AWS (qore#6964)
         AwsRestTestClient aws_client;
         try {
-            aws_client = new AwsRestTestClient({"url": "https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08"} + FakeAwsOptions);
+            aws_client = new AwsRestTestClient({"url": "https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08"}
+                + FakeAwsOptions, True);
         } catch (hash<ExceptionInfo> ex) {
             if (QUnit::Test::isConnectionError(ex) || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
                     || ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-TIMEOUT"
@@ -161,7 +163,7 @@ class AwsTest inherits QUnit::Test {
 
         try {
             aws_client = new AwsRestTestClient({"url": "https://iotevents.eu-central-1.amazonaws.com"}
-                + (FakeAwsOptions - ("aws_service", "aws_region")));
+                + (FakeAwsOptions - ("aws_service", "aws_region")), True);
         } catch (hash<ExceptionInfo> ex) {
             if (QUnit::Test::isConnectionError(ex) || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
                     || ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-TIMEOUT"
@@ -787,7 +789,7 @@ class FakeStsHandler inherits AbstractHttpRequestHandler {
 }
 
 class AwsRestTestClient inherits AwsRestClient {
-    constructor(hash<auto> opts) : AwsRestClient(opts) {
+    constructor(hash<auto> opts, *softbool do_not_connect) : AwsRestClient(opts, do_not_connect) {
     }
 
     string getSignatureTest(string meth, string path, hash<auto> hdr, *data body, date gmdate, string scope) {

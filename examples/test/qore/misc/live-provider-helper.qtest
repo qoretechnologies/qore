@@ -100,6 +100,8 @@ class LiveProviderHelperTest inherits QUnit::Test {
         unsetenv(LiveProvider::OptInVar);
         checkSkip("live mistral tests are disabled: set QORE_TEST_LIVE_PROVIDERS=mistral (or 1) and " + Var + ", "
             + Other);
+        assertEq("live sftp-local tests are disabled: set QORE_TEST_LIVE_PROVIDERS=sftp-local (or 1)",
+            LiveProvider::skipReason("sftp-local", ()));
         setenv(LiveProvider::OptInVar, "mistral");
         unsetenv(Other);
         checkSkip("live mistral tests are enabled, but " + Other + " is not set");
