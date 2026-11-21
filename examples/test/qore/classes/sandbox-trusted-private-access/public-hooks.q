@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires FtpPoller
+%requires DataProvider
 %requires FsUtil
 %requires Util
 
@@ -18,6 +19,7 @@ const Opts = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPS
     Program p(Opts);
     p.setSandboxManager(new SandboxManager());
     p.loadModule("FtpPoller");
+    p.loadModule("DataProvider");
     try {
         p.parse(code, label);
         return p;
@@ -35,6 +37,8 @@ const PollerHead = "class MyPoller inherits FtpPoller::FtpPoller {
 # the private members themselves: refused at parse time
 const ParseCases = (
     "ftppoller-fatal-member": PollerHead + "    bool f() { fatal = True; return fatal; } }",
+    "observable-map-member": "class MyObservable inherits DataProvider::Observable {
+        int f() { return observer_map.size(); } }",
 );
 
 foreach hash<auto> i in (ParseCases.pairIterator()) {
@@ -51,6 +55,27 @@ const Tenant = PollerHead + "    list<bool> useFatal() {
         rv += isFatal();
         return rv;
     }
+}
+
+class MyObservable inherits DataProvider::Observable {
+    list<auto> useObservers() {
+        list<auto> rv = (hasObservers(), getObserverCount());
+        DataProvider::Observer o = new MyObserver();
+        registerObserver(o);
+        rv += (hasObservers(), getObserverCount());
+        deregisterObserver(o);
+        rv += (hasObservers(), getObserverCount());
+        return rv;
+    }
+}
+
+class MyObserver inherits DataProvider::Observer {
+    update(string event_id, hash<auto> data_) {}
+}
+
+auto sub run_observable() {
+    MyObservable o();
+    return o.useObservers();
 }
 
 auto sub run_poller(Qore::FtpClient f) {
@@ -79,3 +104,4 @@ FtpClient ftp("ftp://user:pass@127.0.0.1:" + serv.getPort());
 ftp.connect();
 on_exit ftp.disconnect();
 show("ftppoller fatal flag", auto sub () { return p.callFunction("run_poller", ftp); });
+show("observable observers", auto sub () { return p.callFunction("run_observable"); });

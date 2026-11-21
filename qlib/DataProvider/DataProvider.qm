@@ -1750,6 +1750,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - added @ref DataProvider::Observable::hasObservers() "Observable::hasObservers()" and
+      @ref DataProvider::Observable::getObserverCount() "getObserverCount()" for subclasses, which cannot use the
+      private members of the class when sandboxed code declares them; a subclass that needs its observers keeps track
+      of them itself (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - the methods that subclasses call are public, so that a subclass declared in a sandboxed Program, which cannot
       use the private methods of the library's classes, can call them:
       @ref DataProvider::AbstractDataProvider::checkOptions() "AbstractDataProvider::checkOptions()",
