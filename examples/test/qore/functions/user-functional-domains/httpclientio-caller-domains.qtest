@@ -25,6 +25,8 @@
     - a class that restricted code declares with the name and signature of the module's exemption class grants none
     - code that runs while a lent manager creates a connection (its logger, created by the restricted code) cannot use
       the exemption, and none is left after the creation, also when it fails with an exception
+    - the exemption is kept by TID, which Qore reuses after it has assigned every TID: a thread that gets the TID of a
+      thread whose lent manager created a connection is not exempt
 */
 class HttpClientIoCallerDomainsTest inherits QUnit::Test {
     private {
@@ -115,6 +117,7 @@ class HttpClientIoCallerDomainsTest inherits QUnit::Test {
             addTestCase("CA locations, " + m, sub () { testFilesystem(m); });
             addTestCase("a look-alike exemption class, " + m, sub () { testLookAlike(m); });
             addTestCase("callbacks of a lent manager, " + m, sub () { testCallbacks(m); });
+            addTestCase("a reused TID, " + m, sub () { testReusedTid(m); });
         }
         set_return_value(main());
     }
@@ -205,6 +208,46 @@ class HttpClientIoCallerDomainsTest inherits QUnit::Test {
                 "c.getPollOperation().continuePoll(); return \"created\"; } catch (hash<ExceptionInfo> ex) { "
                 "return ex.err; } }\n", Connections.Http1ClientConnection), "look-alike");
         assertEq("PERMISSION-DENIED", p.callFunction("t", port), "look-alike, " + mode);
+        assertEq(NOTHING, listener.accept(0), "no connection, " + mode);
+    }
+
+    #! a thread that gets the TID of a thread whose lent manager created a connection is not exempt
+    private testReusedTid(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse(sprintf("%%modern\n%%requires HttpClientIo\n"
+            "string sub connect(int port) { try { object c = %s; c.getPollOperation().continuePoll(); "
+            "return \"created\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+            "string sub request(object mgr, int target) { try { mgr.request(sprintf(\"http://127.0.0.1:%%d\", "
+            "target), \"GET\", \"/\"); return \"called\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n",
+            regex_subst(Connections.Http1ClientConnection, ", ca\\)$", ")")), "reused tid");
+
+        # a thread on which a lent manager creates a connection for the restricted code (to a port where nothing
+        # listens)
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        int target = get_free_port();
+        string rv;
+        int exempt_tid = background sub () { rv = p.callFunction("request", mgr, target); }();
+        thread_join(exempt_tid);
+        assertTrue(rv != "PERMISSION-DENIED" && rv != "INVALID-FUNCTION-ACCESS", rv + ", lent manager, " + mode);
+
+        # threads are started one after the other until one gets its TID: TIDs are assigned in order, and a TID is
+        # assigned again once every TID has been assigned, so it is reached before twice as many threads as there are
+        # TIDs have been started
+        *string reused;
+        int started;
+        while (!exists reused && started < 0x4000) {
+            int tid = background sub () {
+                if (gettid() == exempt_tid) {
+                    reused = p.callFunction("connect", port);
+                }
+            }();
+            ++started;
+            thread_join(tid);
+        }
+        assertEq("PERMISSION-DENIED", reused, sprintf("the thread with the reused TID %d (after %d threads), %s",
+            exempt_tid, started, mode));
         assertEq(NOTHING, listener.accept(0), "no connection, " + mode);
     }
 
