@@ -1846,6 +1846,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       @ref nothing "NOTHING" for code that is sandboxed or acts for sandboxed code, which does not get the process-wide
       logger that the host set; the messages that the module produces for such code still go to that logger
       (<a href="https://github.com/qoretechnologies/qore/issues/6746">issue 6746</a>)
+    - @ref DataProvider::DataProviderTypeCache::getLock() "DataProviderTypeCache::getLock()" raises
+      \c DATA-PROVIDER-REGISTRATION-DENIED for the process-wide type cache when the calling code is sandboxed, as its
+      lock serializes every caller of the module
+      (<a href="https://github.com/qoretechnologies/qore/issues/6749">issue 6749</a>)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

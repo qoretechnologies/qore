@@ -46,6 +46,7 @@ public class Krb5ModuleTest inherits QUnit::Test {
     }
 
     constructor() : Test("Krb5ModuleTest", "1.0") {
+        addTestCase("the default realm requires the FILESYSTEM domain", \testDefaultRealmDomain());
         addTestCase("utility module helpers", \testUtilityModuleHelpers());
         addTestCase("utility find HTTP Negotiate header",
             \testUtilityFindNegotiateHeader());
@@ -287,6 +288,13 @@ public class Krb5ModuleTest inherits QUnit::Test {
         addTestCase("strings with NUL characters are refused", \testNulCharacters());
 
         set_return_value(main());
+    }
+
+    testDefaultRealmDomain() {
+        # the realm comes from the Kerberos configuration of the host, as for a Krb5Context (qore#6749)
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        assertThrows("PARSE-EXCEPTION", "getDefaultRealm", \p.parse(), ("%requires krb5\nstring sub t() { "
+            "return Krb5Principal::getDefaultRealm(); }", "restricted"));
     }
 
     private string getSandboxCachePath(string suffix) {

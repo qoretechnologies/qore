@@ -1161,6 +1161,27 @@ static inline bool qore_isolation_domain_is_mixed(const std::string& domain) {
 //! qore_caller_isolation_domain() are available
 #define QORE_HAVE_ISOLATION_DOMAINS 1
 
+//! Returns the functional-domain restrictions that a callable value or an object runs with when other code calls it
+/** A scheduler that runs a callback or task later, on another thread or for other code, can refuse a callable that
+    restricted code created by these restrictions, independently of the code that hands it over: they are those
+    recorded with the call reference, closure or object when it was created (the restrictions of the creating code,
+    for code that is not the creating %Program's own: the code of a module or builtin code), combined with the parse
+    options of the %Program whose code it runs, if that is not a module's %Program (a closure, function or method of
+    a restricted %Program is restricted by that %Program, which records nothing), and with those of the %Program that
+    created it, if that is not a module's %Program (an object of a builtin class, or of a class of the host that it
+    imported, which records nothing).  For a method reference, the code is that of the method's class; for an object,
+    that of its class.  An object of a builtin class that module code created for restricted code, and a copy that
+    restricted code made of an object of the host, have no restrictions yet (issue #7039).
+
+    @param v a call reference, a closure or an object; any other value has no restrictions
+
+    @return the restricting functional domains (\c QDOM_*, as a bitmask; the domains of the options that allow
+    something, such as \c QDOM_INJECTION, never count), or 0 if there are none
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int64 qore_callable_origin_restrictions(const QoreValue v);
+
 //! defined if qore_caller_restricts_domain() is available
 #define QORE_HAVE_CALLER_RESTRICTS_DOMAIN 1
 
@@ -1201,12 +1222,21 @@ DLLEXPORT int qore_check_process_wide_registration(const char* what, ExceptionSi
     A module's Program is a module's from its creation, also while the module is initialized: the initialization of a
     module that a Program loads by its own path serves that Program.  The initialization of library code (a module
     from a trusted module directory, see QoreModuleManager::isTrustedModulePath(), not one that a sandboxed Program
-    loads into a container of its own) creates state that the whole
-    process shares, whoever loads it first, so the code that loads it is not its caller, which would own that state.
+    loads into a container of its own) creates state that the whole process shares, whoever loads it first, so the
+    code that loads it is not its caller, which would own that state.
+
+    A trusted build (SandboxManager::createTrustedBuildCall()) runs its creator's code: entered by another Program's
+    code, the code of the Program that created the capability is that Program's code, as a closure's is.  A Program
+    that a build created is a Program like any other, whose code is its own; a module that a build loaded first serves
+    the code that calls it, as any module does.  The code of a Program that several tenants can run code in (a shared
+    Program that a build created, with an expression, for example) identifies no tenant: what it owns is shared by
+    all of them.
 
     The caller is unknown, and the function fails, where the code that the running code serves cannot be identified:
     - the initialization of library code, and the threads and tasks that it starts, whoever loads it (qore#7077)
-    - code that a trusted build (SandboxManager::createTrustedBuildCall()) created or runs
+    - the module code of a trusted build that module code created, and the threads and tasks that it starts:
+      a build creates shared state for whichever caller needs it first, so the code that entered it is not the caller
+      (it would own that state); also a build that its creator's own code entered
     - work that started on a thread that no code submitted (an I/O callback, a signal handler), when no Program that
       is not a module's runs in it
 
@@ -1241,6 +1271,10 @@ DLLEXPORT QoreProgram* qore_get_caller_program();
     @since %Qore 3.0
 */
 #define _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY 1
+
+//! defined if SandboxManager::callGoverned() is available (qore#7052)
+#define _QORE_HAS_SANDBOX_CALL_GOVERNED 1
+
 
 //! RAII barrier that stops a sandboxed CALLER's policy from being inherited
 /** Sandbox policy normally propagates across program boundaries: code in a Qore-language
@@ -1401,9 +1435,10 @@ public:
     //! Returns true if a sandbox governed the thread that captured the object
     DLLEXPORT bool isSandboxed() const;
 
-    //! Returns true if both objects captured the same sandbox (or both captured none)
+    //! Returns true if both objects captured the same sandbox (or both captured none) for code with the same
+    //! functional-domain restrictions
     /** Work captured under the same sandbox can be combined, for example into one batch, and run under either
-        capture.
+        capture: the work of either then runs with the same restrictions (see QoreSandboxCaptureHelper).
     */
     DLLEXPORT bool sameSandbox(const QoreSandboxCapture& other) const;
 
@@ -1461,6 +1496,11 @@ private:
 /** The captured sandbox governs the work as its outermost caller, exactly as if the work ran on a thread that the
     capturing code had started: a Program that the work enters and that has a sandbox manager of its own is still
     governed by that manager.
+
+    The work also runs for the capturing code: it has the functional-domain restrictions of that code (the
+    restrictions of a restricted Program that made the capture, or of the restricted caller that library code made it
+    for, see @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()") instead of those
+    of the code that started the thread, also when no sandbox governed the capturing code.
 
     @since %Qore 3.0
 */

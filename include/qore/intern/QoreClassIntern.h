@@ -3130,6 +3130,9 @@ public:
     */
     qore_ns_private* ns = nullptr;
     BCList* scl = nullptr;          // base class list
+    //! whether a base class has the code of another Program (see spansPrograms()): 0 if not known yet, 1 if not, 2 if
+    //! so; the hierarchy does not change once objects of the class exist
+    mutable std::atomic<signed char> spans_programs_cache{0};
     //! true if the class is the copy of a class of another namespace (a builtin class, a module's class, a class
     //! that a Program imports), which outlives the Program the copy is in; see ownedByProgram()
     bool ns_copy = false;
@@ -3411,6 +3414,13 @@ public:
         it is released once
     */
     std::atomic<QoreProgram*> spgm{nullptr};
+
+    //! returns true if a base class of the class, at any level, has its code in the Program of a module other than
+    //! the class's own Program
+    /** The methods that such a class inherits run in the Program of the module, where the code that created the
+        object is not on the stack: the object records the restrictions of the code that creates it (qore#6844)
+    */
+    DLLLOCAL bool spansPrograms() const;
 
     //! the ID of the source Program that released the class with deleteClassData(), or 0
     /** Set before spgm is cleared there: from then on, the namespace of the class is destroyed with that Program in

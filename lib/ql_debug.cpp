@@ -56,6 +56,7 @@
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QuicSession.h"
 
+#include <bit>
 #include <map>
 #include <memory>
 #include "qore/intern/QC_Counter.h"
@@ -18681,13 +18682,34 @@ static QoreValue f_dbg_async_io_hold_step_results(const QoreListNode* params, Ru
     return QoreValue();
 }
 
-//! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (True), or not
+//! Debug-only: holds the onComplete() work items that the module cleanup hands over from now on (True), or not;
+//! with the second argument True, also the stream data and poll-complete notifications of its operations
 /** The items held run when the module cleanup releases them (qore_dbg_release_held_module_cleanup_work()); see
     AsyncIoControllerPriv::dbgHoldModuleCleanupWork() (qore#6928)
 */
 static QoreValue f_dbg_async_io_hold_module_cleanup_work(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    AsyncIoControllerPriv::dbgHoldModuleCleanupWork(get_param_value(params, 0).getAsBool());
+    AsyncIoControllerPriv::dbgHoldModuleCleanupWork(get_param_value(params, 0).getAsBool(),
+        get_param_value(params, 1).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until at least the given number of items are held by dbg_async_io_hold_module_cleanup_work(), of
+//! operations whose class name contains the string given, if any; False if the wait timed out (qore#7027)
+static QoreValue f_dbg_async_io_wait_held_module_cleanup_work(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t count = get_param_value(params, 0).getAsBigInt();
+    // the class name can be an inline short string, which has no node (issue #7038)
+    QoreStringDataHelper cls(get_param_value(params, 2));
+    return AsyncIoControllerPriv::dbgWaitHeldModuleCleanupWork(count < 0 ? 0 : static_cast<size_t>(count),
+        cls ? cls.c_str() : nullptr, get_param_value(params, 1).getAsBigInt());
+}
+
+//! Debug-only: the held test-hook work that the module cleanup's drain releases (qore#7027); see
+//! AsyncIoControllerPriv::dbgModuleCleanupDrainReleases()
+static QoreValue f_dbg_async_io_module_cleanup_drain_releases(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgModuleCleanupDrainReleases(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
     return QoreValue();
 }
 
@@ -22808,6 +22830,34 @@ static void ut_variant_takes_call_arity(UnitTestCounters& c) {
     UT_ASSERT(c, qore_variant_takes_call_arity(255, 0, true), "many arguments for a variant with extra args");
 }
 
+// the size helper of the JIT runtime (JITRuntime.cpp)
+extern "C" uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSink* xsink);
+
+//! qore#7062: qore_fast_any_size() returns the length in characters of a string in both representations
+/** The caller of the helper gives strings to qore_fast_length() and qore_fast_strlen() first, so this is the only
+    check that an inline short string reaching it gets its length instead of 0
+*/
+static void ut_fast_any_size_short_string(UnitTestCounters& c) {
+    auto any_size = [] (QoreValue v, ExceptionSink& xsink) -> int64 {
+        return std::bit_cast<QoreValue>(qore_fast_any_size(std::bit_cast<uint64_t>(v), &xsink)).getAsBigInt();
+    };
+    ExceptionSink xsink;
+    // "\xc3\xa9\xc3\xa9" is two characters in four bytes
+    QoreValue short_value = QoreValue::makeStringValue("\xc3\xa9\xc3\xa9");
+    UT_ASSERT(c, short_value.isShortString(), "a 4-byte string is stored inline");
+    UT_ASSERT_EQ(c, 2, (int)any_size(short_value, xsink), "the size of an inline short string is its length");
+    UT_ASSERT(c, !xsink.isException(), "the size of an inline short string raises no exception");
+    QoreValue empty = QoreValue::makeStringValue("");
+    UT_ASSERT_EQ(c, 0, (int)any_size(empty, xsink), "the size of an empty string is 0");
+    // the same characters in a node: "\xc3\xa9\xc3\xa9\xc3\xa9a" is four characters in seven bytes
+    SimpleRefHolder<QoreStringNode> node(new QoreStringNode("\xc3\xa9\xc3\xa9\xc3\xa9" "a", QCS_UTF8));
+    QoreValue node_value(*node);
+    UT_ASSERT(c, !node_value.isShortString(), "a 7-byte string is not stored inline");
+    UT_ASSERT_EQ(c, 4, (int)any_size(node_value, xsink), "the size of a string node is its length");
+    UT_ASSERT(c, !xsink.isException(), "the size of a string node raises no exception");
+    xsink.clear();
+}
+
 static void ut_old_background_self_call_helper(UnitTestCounters& c) {
     auto is_rebuild_error = [] (ExceptionSink& xsink) -> bool {
         if (!xsink.isException()) {
@@ -23094,6 +23144,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
     ut_variant_takes_call_arity(c);
+    ut_fast_any_size_short_string(c);
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
@@ -27013,6 +27064,69 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
 }
 
 namespace {
+//! the HTTP/2 stream whose buffered data is held back, set by dbg_http2_hold_stream_data(); -1: none
+std::atomic<int64_t> dbg_h2_hold_stream{-1};
+}
+
+namespace {
+//! set by dbg_http3_client_hide_error()
+std::atomic<bool> dbg_h3_client_error_hidden{false};
+}
+
+bool qore_dbg_h3_client_error_hidden() {
+    return dbg_h3_client_error_hidden.load(std::memory_order_acquire);
+}
+
+//! makes the HTTP/3 client poll operations report no error, as if a connection left the connecting state without one
+/** For a test of how a connection race reports a leg that settled without an error (issue #6970): the error is
+    recorded as usual, and only reading it returns nothing.
+
+    @param on True to hide the errors, False to report them again
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_http3_client_hide_error(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_h3_client_error_hidden.exchange(HARD_QORE_VALUE_BOOL(params, 0));
+}
+
+//! returns True if dbg_http3_client_hide_error() hides the errors of the HTTP/3 client poll operations
+static QoreValue f_dbg_http3_client_error_hidden(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_h3_client_error_hidden.load(std::memory_order_acquire);
+}
+
+bool qore_dbg_h2_stream_data_held(int32_t stream_id) {
+    return dbg_h2_hold_stream.load(std::memory_order_acquire) == stream_id;
+}
+
+//! holds the buffered data of an HTTP/2 stream back from the transport, as when its peer grants no flow-control credit
+/** The data that is sent on the stream stays buffered in the session, so that tests can fill the stream's send
+    buffer deterministically.  Only one stream is held at a time (the stream ID is that of both ends of a connection
+    within a process: a test holds the stream of a request that its server never answers).
+
+    @param stream_id the HTTP/2 stream ID
+*/
+static QoreValue f_dbg_http2_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t stream_id = get_param_value(params, 0).getAsBigInt();
+    if (stream_id <= 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http2_hold_stream_data(): invalid stream ID %lld",
+            (long long)stream_id);
+        return QoreValue();
+    }
+    dbg_h2_hold_stream.store(stream_id, std::memory_order_release);
+    return QoreValue();
+}
+
+//! stops holding the buffered data of the HTTP/2 stream held with dbg_http2_hold_stream_data()
+/** The next send on the stream resumes it.
+*/
+static QoreValue f_dbg_http2_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_h2_hold_stream.store(-1, std::memory_order_release);
+    return QoreValue();
+}
+
+namespace {
 //! the stream whose acknowledged byte count dbg_quic_simulate_stream_progress() advances, the number of reads of the
 //! count that still advance it, and the progress added so far
 std::atomic<int64_t> dbg_quic_progress_stream{-1};
@@ -27033,9 +27147,10 @@ int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id) {
     return dbg_quic_progress_added.load(std::memory_order_acquire);
 }
 
-//! simulates a peer that takes the data of an HTTP/3 client stream a little at a time
-/** The next \a reads reads of the stream's acknowledged byte count (Socket::getQuicClientStreamAckedBytes(), which
-    a send waiting for a full send buffer to drain makes at the start and at the end of each wait) each see one byte
+//! simulates a peer that takes the data of an HTTP/2 or HTTP/3 client stream a little at a time
+/** The next \a reads reads of the stream's progress count (Socket::getQuicClientStreamAckedBytes() or
+    Socket::getHttp2StreamTakenBytes(), which a send waiting for a full send buffer to drain makes at the start and
+    at the end of each wait) each see one byte
     more acknowledged than the one before, with no clock involved: with the stream's staged data held back (see
     dbg_quic_hold_stream_data()), a wait that times out after such a read has seen progress.  Setting it again
     starts a new count.
@@ -29241,8 +29356,17 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
     qns.addBuiltinVariant("dbg_async_io_hold_module_cleanup_work", f_dbg_async_io_hold_module_cleanup_work,
-        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
-        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold",
+        boolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "stream_data");
+    qns.addBuiltinVariant("dbg_async_io_wait_held_module_cleanup_work", f_dbg_async_io_wait_held_module_cleanup_work,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 3,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms",
+        stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "class_part");
+    qns.addBuiltinVariant("dbg_async_io_module_cleanup_drain_releases",
+        f_dbg_async_io_module_cleanup_drain_releases, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "flags");
     qns.addBuiltinVariant("dbg_async_io_wait_held_step_results", f_dbg_async_io_wait_held_step_results,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
@@ -29688,6 +29812,17 @@ void init_debug_functions(QoreNamespace& qns) {
         "stream_id");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http3_client_hide_error", f_dbg_http3_client_hide_error, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
+    qns.addBuiltinVariant("dbg_http3_client_error_hidden", f_dbg_http3_client_error_hidden, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
+    qns.addBuiltinVariant("dbg_http2_release_stream_data", f_dbg_http2_release_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");
     qns.addBuiltinVariant("dbg_quic_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");

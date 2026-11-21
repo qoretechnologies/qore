@@ -1,0 +1,20 @@
+box: 42
+other member: "text"
+wrong box: RUNTIME-TYPE-ERROR
+mandatory: RUNTIME-TYPE-ERROR
+optional: null
+optional member: "text"
+late parameter: "text"
+late parameter rejects int: RUNTIME-TYPE-ERROR
+late parameter rejects nothing: RUNTIME-TYPE-ERROR
+optional late parameter: null
+soft conversion: 42
+callable: 11
+wrong signature: RUNTIME-TYPE-ERROR
+symbolic hash element: "text"
+union argument: "text"
+union argument rejects int: RUNTIME-TYPE-ERROR
+round trip: True True
+nullable enum member: True
+nested nullable member: True
+symbolic round trip: True True True

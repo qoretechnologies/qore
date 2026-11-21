@@ -208,6 +208,7 @@ DatasourcePool::DatasourcePool(const DatasourcePool& old, const std::shared_ptr<
     stats_hits(0),
     warning_callback(nullptr),
     config(old.config, copier),
+    connection_name(old.connection_name),
     valid(false) {
     // the references are taken once the members that can fail are created, so that they cannot leak
     warning_callback = old.warning_callback ? old.warning_callback->refRefSelf() : nullptr;

@@ -1,0 +1,279 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the operations of CleanupFollowUp.qm, in a module of their own: the module cleanup deletes the data of
+# CleanupFollowUp first (its destructors run before this module's Program is torn down), as a module that keeps a
+# connection of a library module does; see ModuleCleanupCancel.qtest (qore#7027)
+
+%modern
+
+module FollowUpOps {
+    version = "1.0";
+    desc = "the operations of the module cleanup follow-up test";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace FollowUpOps {
+#! when a follow-up operation reaches its goal
+public enum FollowUpGoal {
+    #! never: it waits for data that does not come
+    Never = "never",
+    #! in its first step
+    AtOnce = "at-once",
+    #! in the step after its socket is readable, which the code that submits it makes it later
+    OnEvent = "on-event",
+}
+
+#! what the onComplete() of a follow-up operation does
+public enum FollowUpAction {
+    #! nothing
+    None = "none",
+    #! submits the operation again (a reader that re-arms itself)
+    Submit = "resubmit",
+    #! adds a timer that fires at once (a retry)
+    Timer = "timer",
+    #! submits a task to the controller (a delivery, as WebSocketClient schedules one)
+    Task = "task",
+    #! runs an operation synchronously with AsyncIoController::exec()
+    Exec = "exec",
+    #! runs an operation that never reaches its goal synchronously with AsyncIoController::exec()
+    ExecNever = "exec-never",
+    #! submits a task that submits itself again (a polling loop)
+    TaskChain = "task-chain",
+    #! submits a task with a cancel callback
+    TaskCancel = "task-cancel",
+}
+
+#! the destructor of this object submits an operation: an operation that keeps one runs it when its references are
+#! released
+public class ReleaseResubmitter {
+    private {
+        EventNotifier notifier;
+        string label;
+    }
+
+    constructor(EventNotifier notifier, string label) {
+        self.notifier = notifier;
+        self.label = label;
+    }
+
+    destructor() {
+        try {
+            submit_operation(notifier, label + "-released", FollowUpGoal::Never, FollowUpAction::None);
+            printf("%s release resubmitted\n", label);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s release resubmit refused: %s\n", label, ex.err);
+        }
+        flush();
+    }
+}
+
+#! an operation whose goal and onComplete() action are given
+public class FollowUpOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        string label;
+        FollowUpGoal goal;
+        FollowUpAction action;
+        bool reached = False;
+        bool polled = False;
+        #! decremented by its first step, so that the code that submits it can wait until it waits for its socket
+        *Counter started;
+        #! submits an operation when the operation's references are released
+        *ReleaseResubmitter resubmitter;
+    }
+
+    constructor(EventNotifier notifier, string label, FollowUpGoal goal, FollowUpAction action, *Counter started,
+            *ReleaseResubmitter resubmitter) {
+        self.notifier = notifier;
+        self.label = label;
+        self.goal = goal;
+        self.action = action;
+        self.started = started;
+        self.resubmitter = resubmitter;
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return reached ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (started) {
+            started.dec();
+            remove started;
+        }
+        if (goal == FollowUpGoal::AtOnce || (goal == FollowUpGoal::OnEvent && polled)) {
+            reached = True;
+            return NOTHING;
+        }
+        polled = True;
+        # waits for its socket
+        return <SocketPollInfo>{"socket": notifier, "events": SOCK_POLLIN};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        printf("%s onComplete: canceled: %y\n", label, result.canceled);
+        flush();
+        try {
+            switch (action) {
+                case FollowUpAction::None:
+                    break;
+                case FollowUpAction::Submit:
+                    submit_operation(notifier, label, FollowUpGoal::Never, FollowUpAction::Submit);
+                    printf("%s resubmitted\n", label);
+                    break;
+                case FollowUpAction::Timer:
+                    AsyncIoController::addTimerDelay(0s, follow_up_printer(label + " timer ran"));
+                    printf("%s timer added\n", label);
+                    break;
+                case FollowUpAction::Task:
+                    AsyncIoController::submitTask(follow_up_printer(label + " task ran"));
+                    printf("%s task submitted\n", label);
+                    break;
+                case FollowUpAction::TaskChain:
+                    AsyncIoController::submitTask(follow_up_chain_task(label));
+                    break;
+                case FollowUpAction::TaskCancel:
+                    AsyncIoController::submitTask(follow_up_printer(label + " task ran"),
+                        follow_up_printer(label + " task cancel callback ran"));
+                    printf("%s task submitted\n", label);
+                    break;
+                case FollowUpAction::Exec:
+                case FollowUpAction::ExecNever: {
+                    EventNotifier exec_notifier();
+                    hash<SocketPollResultInfo> r = AsyncIoController::exec(<SocketPollOperationInfo>{
+                        "sock": exec_notifier,
+                        "spop": new ExecOperation(exec_notifier, action == FollowUpAction::Exec),
+                        "owner": "module-cleanup-follow-up-" + label + "-exec",
+                    });
+                    printf("%s exec: canceled: %y\n", label, r.canceled);
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s %s refused: %s\n", label, action, ex.err);
+        }
+        flush();
+    }
+}
+
+#! an operation whose abort() submits another one
+class AbortingOperation inherits FollowUpOperation {
+    constructor(EventNotifier notifier, string label, *Counter started)
+            : FollowUpOperation(notifier, label, FollowUpGoal::Never, FollowUpAction::None, started) {
+    }
+
+    abort() {
+        try {
+            submit_operation(notifier, label + "-aborted", FollowUpGoal::Never, FollowUpAction::None);
+            printf("%s abort resubmitted\n", label);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s abort resubmit refused: %s\n", label, ex.err);
+        }
+        flush();
+    }
+}
+
+#! an operation for AsyncIoController::exec(), which takes one without an onComplete(): it reaches its goal at once,
+#! or never
+class ExecOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        bool done;
+    }
+
+    constructor(EventNotifier notifier, bool done) {
+        self.notifier = notifier;
+        self.done = done;
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return done ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (!done) {
+            # waits for data that does not come
+            return <SocketPollInfo>{"socket": notifier, "events": SOCK_POLLIN};
+        }
+    }
+}
+
+#! returns a closure that writes \a msg; created outside of a method, as a closure created in one cannot run once its
+#! object is gone (it does not keep the object)
+code sub follow_up_printer(string msg) {
+    return sub () {
+        printf("%s\n", msg);
+        flush();
+    };
+}
+
+#! returns a task that writes that it ran and submits itself again; created outside of a method (see
+#! follow_up_printer())
+code sub follow_up_chain_task(string label) {
+    return sub () {
+        printf("%s chain task ran\n", label);
+        try {
+            AsyncIoController::submitTask(follow_up_chain_task(label));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s chain task resubmit refused: %s\n", label, ex.err);
+        }
+        flush();
+    };
+}
+
+#! writes when the module cleanup deletes the data of this module, which comes after the data of CleanupFollowUp
+#! and the drain that waits for its work
+class ClearMarker {
+    destructor() {
+        printf("follow-up ops cleared\n");
+        flush();
+    }
+}
+
+#! the data of this module
+class Data {
+    public {
+        static ClearMarker marker();
+    }
+}
+
+#! submits an operation whose abort() submits another one; its first step decrements \a started
+public sub submit_aborting_operation(EventNotifier notifier, string label, Counter started) {
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        "sock": notifier,
+        "spop": new AbortingOperation(notifier, label, started),
+        "owner": "module-cleanup-follow-up-" + label,
+    });
+}
+
+#! submits an operation; with \a started, its first step decrements it
+public sub submit_operation(EventNotifier notifier, string label, FollowUpGoal goal, FollowUpAction action,
+        timeout to = -1s, *Counter started, *ReleaseResubmitter resubmitter) {
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        "sock": notifier,
+        "spop": new FollowUpOperation(notifier, label, goal, action, started, resubmitter),
+        "owner": "module-cleanup-follow-up-" + label,
+        "to": to,
+    });
+}
+}
