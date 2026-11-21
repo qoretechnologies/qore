@@ -2,7 +2,8 @@
 %allow-debugger
 # a handler declared in the root block of a handler that runs inline at an exit of a loop (qore#6905): with no
 # debugger attached, ARGV[0] is a function to call; with a request, the debugger requests a flow at the hit-th step
-# event of the statement on a line in that function (the lines of the statements tagged "### <tag>")
+# event of the statement on a line in that function (the lines of the statements tagged "### <tag>"), and optionally
+# a second one (ARGV[4..6])
 class FlowDebugger inherits DebugProgram {
     public {
         list<auto> steps = ();
@@ -10,6 +11,11 @@ class FlowDebugger inherits DebugProgram {
         int line;
         int hit;
         int hits = 0;
+        #! the second request, if any
+        int flow2 = -1;
+        int line2;
+        int hit2;
+        int hits2 = 0;
     }
     constructor(int flow, int line, int hit) {
         self.flow = flow;
@@ -27,6 +33,9 @@ class FlowDebugger inherits DebugProgram {
         push steps, l;
         if (l == line && ++hits == hit) {
             flow = self.flow;
+        }
+        if (flow2 >= 0 && l == line2 && ++hits2 == hit2) {
+            flow = flow2;
         }
     }
     onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) { rs = DebugStep; }
@@ -127,11 +136,253 @@ auto sub nestedLoops(int n) {
     return -1;
 }
 
+# a handler of the function's root block that a return runs (qore#6949): a request in it ends the handler, and the
+# return goes on with its value
+auto sub noLoop(int n) {
+    on_exit {
+        push log, "handler";                        ### noloop_handler
+        push log, "handler2";
+    }
+    push log, "body";
+    return n;
+}
+
+# three levels of handlers of handler bodies that a return runs: a request in the innermost ends it, and the
+# requests of the handlers around it go on with the return (qore#6949)
+auto sub deepReturn(int n) {
+    on_exit {
+        on_exit {
+            on_exit {
+                push log, "deep";                   ### deep_inner
+            }
+            push log, "middle";
+        }
+        push log, "outer";
+    }
+    push log, "body";
+    return n;
+}
+
+# handlers declared in blocks of the body of a handler that a return runs (an if block, a loop body, at two levels,
+# and in a loop body of the function): a request in them goes on with the return (qore#6949)
+auto sub nestIf(int n) {
+    on_exit {
+        if (n) {
+            on_exit {
+                push log, "ifh";                    ### nest_if
+            }
+            push log, "ifbody";
+        }
+        push log, "outer";
+    }
+    return n;
+}
+
+auto sub nestLoop(int n) {
+    on_exit {
+        for (int k = 0; k < 2; ++k) {
+            on_exit {
+                push log, "lh" + k;                 ### nest_loop
+            }
+            push log, "lb" + k;
+        }
+        push log, "outer";
+    }
+    return n;
+}
+
+auto sub deepIf(int n) {
+    on_exit {
+        if (n) {
+            on_exit {
+                on_exit {
+                    push log, "deep";               ### deep_if
+                }
+                push log, "middle";
+            }
+            push log, "if";
+        }
+        push log, "outer";
+    }
+    return n;
+}
+
+auto sub loopIf(int n) {
+    for (int i = 0; i < 3; ++i) {
+        on_exit {
+            if (n) {
+                on_exit {
+                    push log, "lif" + i;            ### loop_if
+                }
+            }
+        }
+        if (i == 1) {
+            return i + 10;
+        }
+    }
+    return -1;
+}
+
+# a handler that can return, in a block of the body of a handler that a return runs, which the code of a request in a
+# handler of an inner block of the body lowers inline: a request in it goes on with the return (qore#6949)
+auto sub midReturn(int n) {
+    on_exit {
+        {
+            on_exit {
+                push log, "mid";                    ### mid_handler
+                if (n > 100) {
+                    return -5;
+                }
+                push log, "mid2";
+            }
+            {
+                on_exit {
+                    push log, "in";                 ### mid_inner
+                }
+                push log, "x";
+            }
+            push log, "y";
+        }
+        push log, "outer";
+    }
+    return n;
+}
+
+# a return request in a try statement of a handler that a return runs ends the try statement, whose return value
+# (none) replaces that of the return; a break or a continue request goes on with the return (qore#6949)
+auto sub tryReturn(int n) {
+    on_exit {
+        try {
+            push log, "h";                          ### try_handler
+        } catch (hash<ExceptionInfo> ex) {
+            push log, "c";
+        }
+        push log, "h2";
+    }
+    return n;
+}
+
+# the same in a handler of a block in a try statement of such a handler's body
+auto sub tryNested(int n) {
+    on_exit {
+        try {
+            {
+                on_exit {
+                    push log, "in";                 ### try_nested
+                }
+                push log, "x";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            push log, "c";
+        }
+        push log, "h2";
+    }
+    return n;
+}
+
+# a handler of a case block of a switch statement in such a handler's body: a break request is taken by the switch
+# statement, a continue request goes on with the return (qore#6949)
+auto sub switchContinue(int n) {
+    on_exit {
+        switch (n) {
+            case 3: {
+                on_exit {
+                    push log, "sw";                 ### switch_continue
+                }
+                push log, "c3";
+                break;
+            }
+        }
+        push log, "outer";
+    }
+    return n;
+}
+
+# a handler of a block in a loop of such a handler's body, whose block a break or a continue leaves from a try
+# statement: the handler runs after the try statement, and a request in it goes on with the return (qore#6949)
+auto sub tryExitBreak(int n) {
+    on_exit {
+        int i = 0;
+        while (i++ < 2) {
+            {
+                on_exit {
+                    push log, "in";                 ### try_exit_break
+                }
+                try {
+                    push log, "x";
+                    break;
+                } catch (hash<ExceptionInfo> ex) {
+                }
+            }
+        }
+        push log, "after";
+    }
+    return n;
+}
+
+auto sub tryExitContinue(int n) {
+    on_exit {
+        int i = 0;
+        while (i++ < 2) {
+            {
+                on_exit {
+                    push log, "in" + i;             ### try_exit_continue
+                }
+                try {
+                    push log, "x" + i;
+                    continue;
+                } catch (hash<ExceptionInfo> ex) {
+                }
+            }
+        }
+        push log, "after";
+    }
+    return n;
+}
+
+# a handler that can return, which the paths of a switch statement's case block in a loop of such a handler's body
+# lower inline, after a break out of a try statement of that block: a return request in it goes on with the return
+# (qore#6949)
+auto sub tryCutReturn(int n) {
+    on_exit {
+        int i = 0;
+        while (i++ < 2) {
+            on_exit {
+                if (!n) {
+                    return 9;
+                }
+                push log, "w" + i;                  ### try_cut_handler
+            }
+            switch (1) {
+                case 1:
+                    {
+                        on_exit {
+                            push log, "in" + i;     ### try_cut_inner
+                        }
+                        try {
+                            push log, "x" + i;
+                            break;
+                        } catch (hash<ExceptionInfo> ex) {
+                        }
+                    }
+            }
+            push log, "s" + i;
+        }
+        push log, "after";
+    }
+    return n;
+}
+
 const Flows = {"return": DebugFlowReturn, "break": DebugFlowBreak, "continue": DebugFlowContinue};
 string result;
 *FlowDebugger dbg;
 if (ARGV.size() > 1) {
     dbg = new FlowDebugger(Flows{ARGV[1]}, ARGV[2].toInt(), ARGV[3].toInt());
+    if (ARGV.size() > 4) {
+        dbg.flow2 = Flows{ARGV[4]};
+        dbg.line2 = ARGV[5].toInt();
+        dbg.hit2 = ARGV[6].toInt();
+    }
 }
 ProgramControl pc = ProgramControl::getProgram();
 Counter done(1);

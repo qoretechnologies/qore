@@ -5862,8 +5862,9 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
                 return lowerDebugFlowPath(rc, jt, loc, error);
             }
         }
-        // the end of the handler: the cleanups of the blocks of the body, and the code after the handler
-        QoreIRBasicBlock* end = getInlineHandlerFlowEnd(rc, error);
+        // the end of the handler: the cleanups of the blocks of the body, and the code after the handler; a request in
+        // a try statement of the body ends the try statement with its own return value (qore#6949)
+        QoreIRBasicBlock* end = getInlineHandlerFlowEnd(rc, error, rc == RC_RETURN && try_depth != hf.try_depth);
         if (!end) {
             return nullptr;
         }
@@ -6001,12 +6002,35 @@ const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t
         std::vector<BlockCleanupEntry> saved_entries(cleanup_stack.begin() + scope_entry, cleanup_stack.end());
         const size_t temp_depth = entry.temp_scope_depth;
         QoreIRBuilder::TempScopeState temp_state = builder.saveTempScopeState();
+        // the try statements in the block are left too: their entries are those with try_end_depth (one each), and the
+        // code after the block has the try depth outside them (InlineHandlerFlow::try_depth, qore#6949)
+        const int saved_try_depth = try_depth;
+        for (const BlockCleanupEntry& saved : saved_entries) {
+            if (saved.try_end_depth) {
+                --try_depth;
+            }
+        }
         cleanup_stack.resize(scope_entry);
         builder.truncateTempScopes(temp_depth);
-        auto restore = [&]() {
-            cleanup_stack.insert(cleanup_stack.end(), saved_entries.begin(), saved_entries.end());
-            builder.restoreTempScopeState(std::move(temp_state));
-        };
+        // restores the state of the block on every way out, also on an exception, and drops the scope's paths unless
+        // they were all lowered
+        struct ScopePathsRestore {
+            QoreIRLowering& lowering;
+            std::vector<BlockCleanupEntry>& saved_entries;
+            QoreIRBuilder::TempScopeState& temp_state;
+            int saved_try_depth;
+            uint32_t scope_id;
+            bool done = false;
+            ~ScopePathsRestore() {
+                lowering.cleanup_stack.insert(lowering.cleanup_stack.end(), saved_entries.begin(),
+                    saved_entries.end());
+                lowering.builder.restoreTempScopeState(std::move(temp_state));
+                lowering.try_depth = saved_try_depth;
+                if (!done) {
+                    lowering.scope_exit_flow_paths.erase(scope_id);
+                }
+            }
+        } scope_paths_restore{*this, saved_entries, temp_state, saved_try_depth, scope_id};
         paths.return_path = lowerDebugFlowPath(RC_RETURN, LoopJumpTarget(), loc, error);
         for (int rc : {RC_BREAK, RC_CONTINUE}) {
             if (!paths.return_path) {
@@ -6020,11 +6044,11 @@ const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t
             }
             (rc == RC_BREAK ? paths.break_path : paths.continue_path) = path;
         }
-        restore();
         if (!paths.return_path) {
-            scope_exit_flow_paths.erase(scope_id);
+            // the guard drops the scope's paths
             return nullptr;
         }
+        scope_paths_restore.done = true;
     }
     return &paths;
 }
@@ -7230,8 +7254,11 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
         hf.temp_depth = builder.getTempScopeDepth();
         hf.flow_depth = flow_stack.size();
         hf.scope_id = scope_id;
-        hf.last = last_run && scope_id;
-        if (hf.last) {
+        hf.return_walk = return_walk;
+        hf.try_depth = try_depth;
+        // the entry of the handler's scope, also for a handler that is not the last: it tells whether the handler is in
+        // the body of the handler around it (qore#6949)
+        if (scope_id) {
             for (size_t j = cleanup_stack.size(); j > 0; --j) {
                 if (cleanup_stack[j - 1].type == BlockCleanupEntry::Scope
                         && cleanup_stack[j - 1].scope_id == scope_id) {
@@ -7239,7 +7266,17 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
                     break;
                 }
             }
-            hf.last = hf.scope_entry != SIZE_MAX;
+        }
+        hf.last = last_run && hf.scope_entry != SIZE_MAX;
+        // the try statements still open above the handler's scope are those that the exit leaves (each has one entry
+        // with try_end_depth: its try block's Scope or its catch block's CatchScope)
+        hf.scope_try_depth = try_depth;
+        if (hf.scope_entry != SIZE_MAX) {
+            for (size_t j = hf.scope_entry + 1; j < cleanup_stack.size(); ++j) {
+                if (cleanup_stack[j].try_end_depth) {
+                    --hf.scope_try_depth;
+                }
+            }
         }
         inline_handler_flow_stack.push_back(hf);
     }
@@ -7366,11 +7403,50 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
     return true;
 }
 
-QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEnd(int rc, std::string& error) {
+QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEnd(int rc, std::string& error, bool in_try) {
     assert(!inline_handler_flow_stack.empty());
+    return getInlineHandlerFlowEndAt(inline_handler_flow_stack.size() - 1, rc, error, in_try);
+}
+
+size_t QoreIRLowering::inlineHandlerOuterBody(size_t hf_index) const {
+    // the handler around it whose body has the handler's scope: the innermost one whose body starts at or below the
+    // scope's entry; not necessarily the entry before it: a handler can be lowered inline by the code of a request in
+    // a handler that is (getInlineHandlerFlowEndAt()), whose body does not have the scope
+    const size_t entry = inline_handler_flow_stack[hf_index].scope_entry;
+    if (entry == SIZE_MAX) {
+        return SIZE_MAX;
+    }
+    for (size_t j = hf_index; j > 0; --j) {
+        if (inline_handler_flow_stack[j - 1].cleanup_depth <= entry) {
+            return j - 1;
+        }
+    }
+    return SIZE_MAX;
+}
+
+bool QoreIRLowering::inlineHandlerInReturnWalk(size_t hf_index, bool return_request) const {
+    while (true) {
+        const InlineHandlerFlow& hf = inline_handler_flow_stack[hf_index];
+        if (hf.return_walk) {
+            return true;
+        }
+        // a handler of a block of the body of the handler around it: that handler's exit runs it
+        // ... and for a return request, no try statement of that body around it: a return through it gives the try
+        // statement's value
+        const size_t outer = inlineHandlerOuterBody(hf_index);
+        if (outer == SIZE_MAX
+                || (return_request && inline_handler_flow_stack[outer].try_depth != hf.scope_try_depth)) {
+            return false;
+        }
+        hf_index = outer;
+    }
+}
+
+QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEndAt(size_t hf_index, int rc, std::string& error,
+        bool in_try) {
+    assert(hf_index < inline_handler_flow_stack.size());
     // the entry is read and written by its index: the lowering of the scope's paths below lowers handlers inline,
     // which pushes entries on inline_handler_flow_stack and can reallocate it
-    const size_t hf_index = inline_handler_flow_stack.size() - 1;
     if (!inline_handler_flow_stack[hf_index].last) {
         // the exit goes on with the next handler: the code after the handler, which the lowering of the handler
         // continues in (lowerHandlerAtExit()); a block of the normal code
@@ -7382,7 +7458,12 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEnd(int rc, std::string& e
     }
     // the last handler of the exit: the request becomes that of the block, whose scope is left with its handlers run
     const size_t end_index = rc == RC_RETURN ? 0 : (rc == RC_BREAK ? 1 : 2);
-    if (QoreIRBasicBlock* end = inline_handler_flow_stack[hf_index].request_end[end_index]) {
+    // the cache of the request's code: a request in a try statement of the body has code of its own (in_try)
+    auto ends = [&]() -> QoreIRBasicBlock** {
+        InlineHandlerFlow& hf = inline_handler_flow_stack[hf_index];
+        return in_try ? hf.request_end_try : hf.request_end;
+    };
+    if (QoreIRBasicBlock* end = ends()[end_index]) {
         return end;
     }
     const size_t scope_entry = inline_handler_flow_stack[hf_index].scope_entry;
@@ -7394,13 +7475,95 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEnd(int rc, std::string& e
     }
     QoreIRBasicBlock* scope_path = rc == RC_RETURN ? paths->return_path
         : (rc == RC_BREAK ? paths->break_path : paths->continue_path);
+    // a return request in a try statement of the body ends the try statement, whose return value (none) replaces that
+    // of the return, as in the AST interpreter (TryStatement::execImpl()): the scope's return path (qore#6949)
+    if (!in_try && scope_path == paths->return_path) {
+        // in the cleanups of a return statement, a request that ends the function goes on with that return, whose
+        // value the function returns, as the code after the handler does (qore#6949): the scope's return path returns
+        // no value
+        if (inline_handler_flow_stack[hf_index].return_walk) {
+            QoreIRBasicBlock*& join = inline_handler_flow_stack[hf_index].join;
+            if (!join && !(join = createBlock("handler.inline.join"))) {
+                error = "IR builder failed to create the join block of a handler";
+            }
+            return join;
+        }
+        // the scope is in the body of the handler around this one (its top block or a block in it), which is lowered
+        // inline too, in the cleanups of a return statement (itself, or a handler around it): the request is a request
+        // of that handler, as the AST interpreter ends the blocks of the handler's body with it, and goes on with the
+        // return (qore#6949): the blocks of that body are left (from where this handler's body starts down to where
+        // that handler's body starts, which leaves this handler's scope as a request in the body of a handler of the
+        // scope does), then the request goes on as one made in that handler's body; otherwise the scope's return path
+        // ends the function.  The code of a break and a continue is the same
+        const size_t outer_index = inlineHandlerOuterBody(hf_index);
+        // a break or a continue that no loop or switch statement takes goes on as one in that handler (where no loop
+        // or switch statement takes it either), and passes a try statement as it is; a return request in a try
+        // statement of that handler's body ends the try statement with its own value
+        const bool return_request = rc == RC_RETURN;
+        if (outer_index != SIZE_MAX
+                && (!return_request
+                    || inline_handler_flow_stack[outer_index].try_depth
+                        == inline_handler_flow_stack[hf_index].scope_try_depth)
+                && inlineHandlerInReturnWalk(outer_index, return_request)) {
+            // a break and a continue that go on in that handler share the code (not the code of one that a switch
+            // statement of the body takes)
+            if (!return_request) {
+                if (QoreIRBasicBlock* shared = inline_handler_flow_stack[hf_index].propagated_end) {
+                    inline_handler_flow_stack[hf_index].request_end[end_index] = shared;
+                    return shared;
+                }
+            }
+            const InlineHandlerFlow outer = inline_handler_flow_stack[outer_index];
+            const size_t inner_depth = inline_handler_flow_stack[hf_index].cleanup_depth;
+            const size_t inner_temp_depth = inline_handler_flow_stack[hf_index].temp_depth;
+            QoreIRBasicBlock* outer_end = getInlineHandlerFlowEndAt(outer_index, rc, error);
+            if (!outer_end) {
+                return nullptr;
+            }
+            QoreIRFunction* func = builder.getFunction();
+            QoreIRBasicBlock* end = createBlock("debug.flow.handler.outer");
+            if (!end) {
+                error = "IR builder failed to create the block of a debugger flow request";
+                return nullptr;
+            }
+            QoreIRBasicBlock* saved_block = builder.getBlock();
+            const size_t first_block = func->blocks.size() - 1;
+            QoreIRBuilder::TempScopeState temp_state = builder.saveTempScopeState();
+            // the walk starts where this handler's body starts, with its temp scopes, whatever event asks first
+            builder.truncateTempScopes(inner_temp_depth);
+            bool ok;
+            {
+                DebugFlowPathLowering path_lowering(*this);
+                builder.setBlock(end);
+                ok = emitBlockCleanups(outer.cleanup_depth, error, false, CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE,
+                    outer.temp_depth, nullptr, inner_depth);
+                if (ok && !blockHasTerminator(builder.getBlock())) {
+                    builder.createBranch(outer_end, nullptr);
+                }
+            }
+            builder.restoreTempScopeState(std::move(temp_state));
+            builder.setBlock(saved_block);
+            if (!ok) {
+                return nullptr;
+            }
+            for (size_t i = first_block; i < func->blocks.size(); ++i) {
+                func->blocks[i]->debug_flow = true;
+            }
+            inline_handler_flow_stack[hf_index].request_end[end_index] = end;
+            if (!return_request) {
+                inline_handler_flow_stack[hf_index].propagated_end = end;
+            }
+            return end;
+        }
+    }
     // the requests whose paths after the handler are the same (a break or a continue that no loop or switch
     // statement takes is a return) share the end
-    for (QoreIRBasicBlock* other : inline_handler_flow_stack[hf_index].request_end) {
+    for (size_t i = 0; i < 3; ++i) {
+        QoreIRBasicBlock* other = ends()[i];
         if (other && !other->instructions.empty()) {
             const auto* br = qore_ir_inst_cast<const QoreIRBranchInstruction*>(other->instructions.back().get());
             if (br && br->target == scope_path) {
-                inline_handler_flow_stack[hf_index].request_end[end_index] = other;
+                ends()[end_index] = other;
                 return other;
             }
         }
@@ -7417,7 +7580,7 @@ QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEnd(int rc, std::string& e
     builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
     builder.createBranch(scope_path, nullptr);
     builder.setBlock(saved_block);
-    inline_handler_flow_stack[hf_index].request_end[end_index] = end;
+    ends()[end_index] = end;
     return end;
 }
 
