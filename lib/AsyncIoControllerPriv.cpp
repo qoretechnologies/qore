@@ -9797,43 +9797,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         // a canceled completion (deliver-exactly-once
                         // invariant), exactly like the cancelled_owners path
                         // below.
-                        PollInfo pinfo;
-                        pinfo.sock_obj = cmd.submit_sock_obj;
-                        pinfo.sock = cmd.submit_sock;
-                        pinfo.spop_obj = cmd.submit_spop_obj;
-                        pinfo.spop_base = cmd.submit_spop_base;
-                        pinfo.poll_info = cmd.submit_poll_info;
-                        pinfo.other = cmd.submit_other;
-                        pinfo.queue = cmd.submit_queue;
-                        pinfo.queue_obj = cmd.submit_queue_obj;
-                        pinfo.state_queue = cmd.submit_state_queue;
-                        pinfo.state_queue_obj = cmd.submit_state_queue_obj;
-                        pinfo.timeout_us = cmd.submit_timeout_us;
-                        pinfo.owner = cmd.owner;
-                        pinfo.has_qore_abort = cmd.submit_has_qore_abort;
-                        pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
-                        pinfo.socket_async_io = cmd.submit_socket_async_io;
-                        pinfo.submit_route_sock_hash = cmd.submit_route_sock_hash;
-                        pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
-                        pinfo.controller = this;
-                        pinfo.sync_release = std::move(cmd.submit_sync_release);
-                        // Null command fields to prevent double-deref on
-                        // command destruction — pinfo.cleanup() owns them now.
-                        cmd.submit_sock_obj = nullptr;
-                        cmd.submit_sock = nullptr;
-                        cmd.submit_spop_obj = nullptr;
-                        cmd.submit_spop_base = nullptr;
-                        cmd.submit_poll_info = nullptr;
-                        cmd.submit_other = nullptr;
-                        cmd.submit_queue = nullptr;
-                        cmd.submit_queue_obj = nullptr;
-                        cmd.submit_state_queue = nullptr;
-                        cmd.submit_state_queue_obj = nullptr;
-                        cmd.submit_socket_async_io = false;
-                        cmd.submit_route_sock_hash.clear();
-                        cmd.submit_route_thread_idx = -1;
-                        doCancelIntern(pinfo, xsink);
-                        pinfo.cleanup(xsink);
+                        // the operation is completed as when it is admitted and canceled: with the sandbox context of its
+                        // submitter, its inherited owner and its state events, and its registration is released
+                        refuseSubmit(cmd, nullptr, xsink);
                         break;
                     }
                     // Detect the cancelByOwner-before-submit race: if this owner
@@ -9868,43 +9834,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             // Build a PollInfo from the submit payload so
                             // doCancelIntern() can fire the action's abort and
                             // dispatch onComplete(canceled=true) to the caller.
-                            PollInfo pinfo;
-                            pinfo.sock_obj = cmd.submit_sock_obj;
-                            pinfo.sock = cmd.submit_sock;
-                            pinfo.spop_obj = cmd.submit_spop_obj;
-                            pinfo.spop_base = cmd.submit_spop_base;
-                            pinfo.poll_info = cmd.submit_poll_info;
-                            pinfo.other = cmd.submit_other;
-                            pinfo.queue = cmd.submit_queue;
-                            pinfo.queue_obj = cmd.submit_queue_obj;
-                            pinfo.state_queue = cmd.submit_state_queue;
-                            pinfo.state_queue_obj = cmd.submit_state_queue_obj;
-                            pinfo.timeout_us = cmd.submit_timeout_us;
-                            pinfo.owner = cmd.owner;
-                            pinfo.has_qore_abort = cmd.submit_has_qore_abort;
-                            pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
-                            pinfo.socket_async_io = cmd.submit_socket_async_io;
-                            pinfo.submit_route_sock_hash = cmd.submit_route_sock_hash;
-                            pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
-                            pinfo.controller = this;
-                            pinfo.sync_release = std::move(cmd.submit_sync_release);
-                            // Null command fields to prevent double-deref on
-                            // command destruction — pinfo.cleanup() owns them now.
-                            cmd.submit_sock_obj = nullptr;
-                            cmd.submit_sock = nullptr;
-                            cmd.submit_spop_obj = nullptr;
-                            cmd.submit_spop_base = nullptr;
-                            cmd.submit_poll_info = nullptr;
-                            cmd.submit_other = nullptr;
-                            cmd.submit_queue = nullptr;
-                            cmd.submit_queue_obj = nullptr;
-                            cmd.submit_state_queue = nullptr;
-                            cmd.submit_state_queue_obj = nullptr;
-                            cmd.submit_socket_async_io = false;
-                            cmd.submit_route_sock_hash.clear();
-                            cmd.submit_route_thread_idx = -1;
-                            doCancelIntern(pinfo, xsink);
-                            pinfo.cleanup(xsink);
+                            // the operation is completed as when it is admitted and canceled: with the sandbox context of its
+                            // submitter, its inherited owner and its state events, and its registration is released
+                            refuseSubmit(cmd, nullptr, xsink);
                             break;
                         }
                     }
