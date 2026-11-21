@@ -2701,6 +2701,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - generic specialization and compiled programs retain all declared alternatives of a @ref union_type "union type"
+      that begins with a parameterized class, and code compiled with such a union before this fix must be recompiled
+      (<a href="https://github.com/qoretechnologies/qore/issues/7147">issue 7147</a>)
     - @ref providerindexutilintro "ProviderIndexUtil" applies @ref providerindexutil_sandbox "caller permissions"
       to process-wide logging and initialization
       (<a href="https://github.com/qoretechnologies/qore/issues/7060">issue 7060</a> and
