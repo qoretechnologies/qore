@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Code of a Program That May Not Control Threads Is Not Run in Other Threads
+    The APIs that run code in another thread refuse a closure, call reference or object authored by code that may not
+    control threads with \c PERMISSION-DENIED, whichever code passes it on; such code that a \c background expression
+    computes ends the new thread with it (see @ref sandbox_thread_callables;
+    <a href="https://github.com/qoretechnologies/qore/issues/7056">issue 7056</a>).
+
     @par Functional Domains for Standard Module Sources
     Restricted Programs now get a parse error when explicitly loading standard module sources outside the
     process-wide module path if the source needs a denied @ref function_domains "functional domain".
