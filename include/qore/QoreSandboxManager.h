@@ -1155,8 +1155,8 @@ DLLEXPORT bool qore_caller_restricts_domain(int64 domain);
     a restricted %Program is restricted by that %Program, which records nothing), and with those of the %Program that
     created it, if that is not a module's %Program (an object of a builtin class, or of a class of the host that it
     imported, which records nothing).  For a method reference, the code is that of the method's class; for an object,
-    that of its class.  An object of a builtin class that module code created for restricted code has no restrictions
-    yet (issue #7039).
+    that of its class.  An object of a builtin class that module code created for restricted code, and a copy that
+    restricted code made of an object of the host, have no restrictions yet (issue #7039).
 
     @param v a call reference, a closure or an object; any other value has no restrictions
 

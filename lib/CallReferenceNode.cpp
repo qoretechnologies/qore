@@ -129,6 +129,8 @@ static QoreParseOptions qore_non_module_program_restrictions(const QoreProgram* 
         : QoreParseOptions();
 }
 
+static const QoreMethod* qore_call_reference_code_method(const ResolvedCallReferenceNode* rcr);
+
 QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v) {
     // only the restricting options are domains: not the positive options (PO_ALLOW_*) or PO_IN_MODULE
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
@@ -148,7 +150,21 @@ QoreParseOptions qore_callable_origin_restrictions_po(const QoreValue v) {
             // the Program whose code it runs, and the Program that created it, which the reference keeps alive: the
             // code of a restricted Program, or a reference that it created to the code of another Program (a method of
             // an object of a class that the host imported into it, for example)
-            rv |= qore_non_module_program_restrictions(qore_call_reference_code_program(rcr));
+            // the Program whose code it runs: for a method, the source Program of its class, referenced, as it can be
+            // deleted while the reference exists; otherwise a Program that the reference keeps alive
+            const QoreMethod* m = qore_call_reference_code_method(rcr);
+            if (m) {
+                const QoreClass* cls = m->getClass();
+                QoreProgram* code_pgm = qore_class_private::get(*cls)->getReferencedSourceProgram();
+                if (code_pgm) {
+                    rv |= qore_non_module_program_restrictions(code_pgm);
+                    code_pgm->deref();
+                } else {
+                    rv |= qore_non_module_program_restrictions(cls->getProgram());
+                }
+            } else {
+                rv |= qore_non_module_program_restrictions(qore_call_reference_code_program(rcr));
+            }
             rv |= qore_non_module_program_restrictions(rcr->getProgram());
             // the code that created a run-time reference, if it is the code of a Program that is not a module's: a
             // reference that restricted code created to a method of an object of another Program (one lent to it)
@@ -1410,8 +1426,10 @@ int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, Excep
     return 0;
 }
 
-const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr) {
-    assert(rcr);
+//! returns the method whose code a call of a method or static method reference runs, or nullptr for another reference
+/** For a method of an object, the method that the call is dispatched to on the object's class
+*/
+static const QoreMethod* qore_call_reference_code_method(const ResolvedCallReferenceNode* rcr) {
     const QoreMethod* m = nullptr;
     // the object a method is called on, if any: the call is dispatched on its class
     const QoreObject* obj = nullptr;
@@ -1435,6 +1453,12 @@ const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceN
             m = dm;
         }
     }
+    return m;
+}
+
+const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr) {
+    assert(rcr);
+    const QoreMethod* m = qore_call_reference_code_method(rcr);
     if (!m) {
         // a closure's code is that of the Program that defines it, which is not necessarily the Program it runs
         // in: a closure that module code creates while running a method for an object of a class of its caller

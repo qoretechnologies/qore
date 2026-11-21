@@ -880,6 +880,9 @@ public:
     uint64_t restriction_gen = 0;
     //! the ID of the Program whose application the work of a SandboxManager::callGoverned() call belongs to, or 0
     qore_program_id_t governed_app_pgm_id = 0;
+    //! the Program of the host code that made the SandboxManager::callGoverned() call: the application applies to its
+    //! code and to module code, not to the code of another Program that the factory calls
+    const QoreProgram* governed_host_pgm = nullptr;
     //! the generation of thread_caller_restrictions: changed each time it is set, restored with it
     uint64_t thread_caller_restrictions_gen = 0;
 
@@ -7899,17 +7902,21 @@ namespace {
 //! sets the application of a SandboxManager::callGoverned() call for its duration (see ThreadData::governed_app_pgm_id)
 class QoreGovernedAppHelper {
 public:
-    QoreGovernedAppHelper(ThreadData* td, qore_program_id_t id) : td(td), old(td->governed_app_pgm_id) {
+    QoreGovernedAppHelper(ThreadData* td, qore_program_id_t id) : td(td), old(td->governed_app_pgm_id),
+            old_host(td->governed_host_pgm) {
         td->governed_app_pgm_id = id;
+        td->governed_host_pgm = td->current_pgm;
     }
 
     ~QoreGovernedAppHelper() {
         td->governed_app_pgm_id = old;
+        td->governed_host_pgm = old_host;
     }
 
 private:
     ThreadData* td;
     qore_program_id_t old;
+    const QoreProgram* old_host;
 };
 }
 
@@ -7971,6 +7978,8 @@ QoreValue qore_sandbox_call_governed(const ResolvedCallReferenceNode* factory, Q
             ctx->deref();
         }
     } holder{new QoreSandboxContext(false)};
+    // no sandbox governs the calling code (checked above): the context captured none
+    assert(!holder.ctx->manager && !holder.ctx->policy_manager);
     holder.ctx->manager = sm;
     sm->ref();
     holder.ctx->policy_manager = sm;
@@ -8479,13 +8488,20 @@ bool runtime_module_call_inherits_caller_restrictions(ThreadData* td, const Qore
         || (td->current_pgm != caller_pgm && qore_program_private::isSandboxed(td->current_pgm));
 }
 
+//! returns true if the application of a SandboxManager::callGoverned() call applies to the code of \a pgm: the code of
+//! the host that made the call, module code, or builtin code; not the code of another Program that the factory calls
+static bool qore_governed_app_applies(ThreadData* td, const QoreProgram* pgm) {
+    return td->governed_app_pgm_id
+        && (!pgm || pgm == td->governed_host_pgm || qore_program_is_module_inline(pgm));
+}
+
 qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) {
     ThreadData* td = thread_data.get();
     if (td->runtime_po_state.module_pgm) {
         return td->runtime_po_state.app_pgm_id;
     }
     // the work of a SandboxManager::callGoverned() call belongs to the application of the governed Program
-    if (td->governed_app_pgm_id) {
+    if (qore_governed_app_applies(td, caller_pgm)) {
         return td->governed_app_pgm_id;
     }
     return caller_pgm ? caller_pgm->getProgramId() : 0;
@@ -8498,7 +8514,7 @@ bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
     // timers, so that it cannot be used to cancel the timers of an application (qore#6208)
     if (!td->runtime_po_state.module_pgm || td->runtime_po_state.module_pgm != td->current_pgm) {
         // the work of a SandboxManager::callGoverned() call belongs to the application of the governed Program
-        if (td->governed_app_pgm_id) {
+        if (qore_governed_app_applies(td, td->current_pgm)) {
             app_pgm_id = td->governed_app_pgm_id;
             return true;
         }

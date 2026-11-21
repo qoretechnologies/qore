@@ -1339,8 +1339,10 @@ static code SandboxManager::createTrustedBuildCall(code call) [dom=UNCONTROLLED_
     creates, as their provenance, for their whole life:
     - its filesystem and network policy applies to their I/O, whoever calls their methods; its interrupts and force
       terminations reach them, and its limits count them
-    - the work that they start (timers, asynchronous operations, callbacks) belongs to the governed %Program's
-      application (its timers can be cancelled by that %Program's code as its own), not to the host
+    - the work that the call starts (timers, asynchronous operations, callbacks added while the factory runs, by host or
+      module code) belongs to the governed %Program's application, not to the host; work that the objects' methods
+      start later belongs to the code that calls them (the code of another %Program that the factory calls keeps its
+      own application)
     - the objects record the host's functional-domain restrictions (none), not those of the governed %Program:
       arguments that the governed %Program's code passes to their methods later (URLs, paths) are used with the
       objects' rights, and are still checked against the sandbox's policy; code that the governed %Program gives them
@@ -1349,12 +1351,16 @@ static code SandboxManager::createTrustedBuildCall(code call) [dom=UNCONTROLLED_
     Two axes are kept apart: the functional-domain restrictions of the code that creates an object (here the host's)
     and the sandbox that governs the object (here the governed %Program's).
 
-    The objects themselves are created in the host's %Program (their %Program is the host's).
+    The objects themselves are created in the host's %Program (their %Program is the host's).  A restricted %Program
+    that calls
+    host code which calls this method with a fixed factory of its own is allowed: the calling code is the host's
+    (see isCallerRestricted()); the host decides what its code creates for whom.
 
     @param factory the host code to call; it must not have been created by code whose functional domains are
     restricted, or by sandboxed code
     @param governed the %Program whose sandbox governs the call and the objects that it creates; it must have a
-    sandbox manager (see Program::setSandboxManager()), and it is referenced for the call
+    sandbox manager (see Program::setSandboxManager()) or the sandbox of the code that created it, and it is referenced
+    for the call
     @param call_args optional arguments for @p factory
 
     @return the value that @p factory returns
