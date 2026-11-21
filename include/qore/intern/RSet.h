@@ -704,6 +704,10 @@ public:
 
         DestructorRunHelper(const DestructorRunHelper&) = delete;
         DestructorRunHelper& operator=(const DestructorRunHelper&) = delete;
+
+    private:
+        //! the deletion state of the thread (see RSet.cpp), kept so that the destructor does not look it up again
+        void* state;
     };
 
     //! Makes the deletion that deleteOrDefer() makes now or defers

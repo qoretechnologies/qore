@@ -1048,6 +1048,15 @@ const QoreSandboxCallBudget* QoreSandboxBudgetStack::findCPUBudget() const {
     return nullptr;
 }
 
+bool QoreSandboxBudgetStack::hasStackBudget() const {
+    for (const Frame& frame : frames) {
+        if (frame.budget && frame.budget->stack_bytes > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int64 QoreSandboxBudgetStack::findStackLimit(size_t limit) const {
     for (const Frame& frame : frames) {
         if (frame.applied_stack_limit && frame.applied_stack_limit == limit) {

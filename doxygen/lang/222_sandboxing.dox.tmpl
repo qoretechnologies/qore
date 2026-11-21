@@ -1467,6 +1467,11 @@ sm.setMaxStackSize(1024 * 1024);  # 1MB per call
     @note The stack size limit is only enforced where %Qore checks the stack of its threads, as it does for the
     \c STACK-LIMIT-EXCEEDED exception of all code.
 
+    @note The slice of the stack that the destructor of an object released at the thread's stack limit can use (see
+    @ref destructors_at_stack_limit) never extends a sandbox's limit: in a call into a sandbox with a stack size limit, a
+    destructor that cannot start within the limit does not run, also that of an object of trusted code that the
+    sandboxed code releases.
+
     @section sandbox_interrupt Safe Code Interruption
 
     The interrupt mechanism allows safely stopping sandboxed code that is stuck in loops
