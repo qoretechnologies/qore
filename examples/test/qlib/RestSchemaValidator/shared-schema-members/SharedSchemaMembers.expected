@@ -1,0 +1,66 @@
+Swagger:
+  basePath: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  setBasePath(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  setTimeZoneLocale(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  host: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  info.title: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  info object's title: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  reusable schemas: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  addParameter(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's desc: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's dataType: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's orNothingDataType: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's properties: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's required: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's items: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's additionalProperties: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's example: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's type: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  delete the schema: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  reads of a shared schema: "/api" "test" "a thing" ["name"]
+OpenAPI 3:
+  basePath: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  setBasePath(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  setTimeZoneLocale(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  host: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  info.title: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  info object's title: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  reusable schemas: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  addParameter(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's desc: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's dataType: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's orNothingDataType: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's properties: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's required: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's items: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's additionalProperties: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's example: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's type: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  delete the schema: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  reads of a shared schema: "/api" "test" "a thing" ["name"]
+AsyncAPI:
+  info.title: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  defaultContentType: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  components object's schemas: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's desc: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's properties: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  delete the schema: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  reads of a shared schema: "test" "a thing" ["name"]
+Stripe:
+  basePath: shared: SHARED-OBJECT-ERROR, unchanged
+  setBasePath(): shared: SHARED-OBJECT-ERROR, unchanged
+  setTimeZoneLocale(): shared: SHARED-OBJECT-ERROR, unchanged
+  host: shared: SHARED-OBJECT-ERROR, unchanged
+  info.title: shared: SHARED-OBJECT-ERROR, unchanged
+  info object's title: shared: SHARED-OBJECT-ERROR, unchanged
+  addParameter(): shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's desc: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's dataType: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's orNothingDataType: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's properties: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's required: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's items: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's additionalProperties: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's example: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's type: shared: SHARED-OBJECT-ERROR, unchanged
+trusted code changes a shared schema: "/trusted" "trusted"

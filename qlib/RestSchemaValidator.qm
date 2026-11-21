@@ -365,6 +365,7 @@ public namespace RestSchemaValidator {
 
         #! Constructor
         public constructor() {
+            AbstractObjectBase::markShared(self);
         }
 
         #! Constructor
@@ -372,12 +373,34 @@ public namespace RestSchemaValidator {
             @param oh deserialized hash from the source schema description describing the object
         */
         public constructor(hash<auto> oh) {
+            AbstractObjectBase::markShared(self);
             initialize(oh);
         }
 
         #! Copy constructor
         constructor(AbstractObjectBase other) {
+            AbstractObjectBase::markShared(self);
             vendorExtensions = other.vendorExtensions;
+        }
+
+        #! A copy is shared only if code that no sandbox governs makes it, as for an object that such code creates
+        copy() {
+            AbstractObjectBase::markShared(self);
+        }
+
+        #! Marks an object of a schema as shared if code that no sandbox governs creates it (qore#6843)
+        /** Such an object may be shared by every Program of the process (in a constant or a static variable of a
+            module), so sandboxed code cannot change its members or delete it; see
+            @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"
+
+            @param obj the object to mark
+
+            @since RestSchemaValidator 2.5
+        */
+        static markShared(object obj) {
+            if (SandboxManager::createsSharedObjects()) {
+                SandboxManager::shareObject(obj);
+            }
         }
 
         #! Initialize
@@ -2682,10 +2705,17 @@ public namespace RestSchemaValidator {
 
         #! Creates the object without a logger
         constructor() {
+            AbstractObjectBase::markShared(self);
         }
 
         #! Creates the object with the given logger
         constructor(Logger::LoggerInterface logger) : LoggerWrapper(logger) {
+            AbstractObjectBase::markShared(self);
+        }
+
+        #! A copy is shared only if code that no sandbox governs makes it, as for a schema that such code creates
+        copy() {
+            AbstractObjectBase::markShared(self);
         }
 
         #! Releases the types that the schema objects of the schema cache through opaque references
@@ -3129,6 +3159,11 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
         /** @param basePath the new base path value; use an empty string here to clear the basePath
         */
         setBasePath(string basePath) {
+            # a shared schema cannot be changed by sandboxed code; a call that changes nothing is not refused
+            # (qore#6843)
+            if (basePath != getBasePathImpl()) {
+                SandboxManager::checkSharedObjectChange(self, "set the base path");
+            }
             setBasePathImpl(basePath);
         }
 
@@ -3159,6 +3194,8 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             @since RestSchemaValidator 2.1.3
         */
         setTimeZoneLocale(*TimeZone tz) {
+            # a shared schema cannot be changed by sandboxed code (qore#6843)
+            SandboxManager::checkSharedObjectChange(self, "set the time zone locale");
             # must be performed in the implementing module's Program container
             setTimeZoneLocaleImpl(tz);
         }

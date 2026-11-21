@@ -734,6 +734,8 @@ public class ParameterGroup inherits ObjectBase {
 
     #! Adds a parameter to the group
     addParameter(string key, AbstractSwaggerParameterObject p) {
+        # a shared schema cannot be changed by sandboxed code (qore#6843)
+        SandboxManager::checkSharedObjectChange(self, "add a parameter");
         if (p.inLoc == "query" && cast<OtherParameter>(p).type == "object") {
             if (exists query_obj) {
                 throw "SWAGGER-SCHEMA-ERROR", sprintf("Query parameter %y has already been defined with type "
@@ -1312,6 +1314,10 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         @since Swagger 2.6
     */
     setReadOnlyProperties() {
+        # a shared schema cannot be changed by sandboxed code; a call that changes nothing is not refused (qore#6843)
+        if (!readonly_properties) {
+            SandboxManager::checkSharedObjectChange(self, "record a read-only property");
+        }
         readonly_properties = True;
     }
 
@@ -4161,6 +4167,8 @@ public class SwaggerHashDataType inherits HashDataType {
         @param after the name of the property declared before it, if any
     */
     addResponseField(AbstractDataField field, *string after) {
+        # a shared type cannot be changed by sandboxed code (qore#6843)
+        checkChange("fields");
         response_fields += {"field": field, "after": after};
     }
 

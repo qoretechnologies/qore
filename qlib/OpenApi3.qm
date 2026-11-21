@@ -753,6 +753,8 @@ public class ParameterGroup inherits Qore::Serializable {
         not declare is reported as unknown rather than folded into one of them.
     */
     addParameter(string key, ParameterObject p) {
+        # a shared schema cannot be changed by sandboxed code (qore#6843)
+        SandboxManager::checkSharedObjectChange(self, "add a parameter");
         if (p.inLoc == "query" && !p.content && p.schema && p.schema.type == "object") {
             query_objs{key} = True;
             query_obj = query_objs.size() == 1 ? key : NOTHING;
@@ -4882,6 +4884,8 @@ public class OpenApi3HashDataType inherits HashDataType {
         @since OpenApi3 1.0
     */
     addResponseField(AbstractDataField field, *string after) {
+        # a shared type cannot be changed by sandboxed code (qore#6843)
+        checkChange("fields");
         response_fields += {"field": field, "after": after};
     }
 
@@ -7467,6 +7471,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @since OpenApi3 1.0
     */
     setEnumDisplayNames(hash<string, string> display_names) {
+        # a shared schema cannot be changed by sandboxed code (qore#6843)
+        SandboxManager::checkSharedObjectChange(self, "set the display names of the values");
         if (!enumValues) {
             throw "SCHEMA-ENUM-ERROR", sprintf("schema %y has no enumeration to give display names to", name);
         }
