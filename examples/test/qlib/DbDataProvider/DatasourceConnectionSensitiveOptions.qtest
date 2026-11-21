@@ -35,7 +35,7 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
 
     safeUrl() {
         DatasourceConnection conn("c7070", "test", Url);
-        string url = conn.getSafeUrl();
+        string url = conn.safe_url;
         assertFalse(url.find(Secret) >= 0, url);
         assertFalse(url =~ /pass/, url);
         hash<auto> h = parse_datasource(url.substr(5));
@@ -90,7 +90,7 @@ class DatasourceConnectionSensitiveOptionsTest inherits QUnit::Test {
     driverNotLoaded() {
         # a driver that is not loaded: every driver option value is masked, and the pool options are shown
         DatasourceConnection conn("c7070", "test", "db://qore7070nodriver:user/pass@db{rows=3,min=1,max=2}");
-        hash<auto> h = parse_datasource(conn.getSafeUrl().substr(5));
+        hash<auto> h = parse_datasource(conn.safe_url.substr(5));
         assertEq("****", h.options.rows);
         assertEq("1", h.options.min);
         hash<ConnectionInfo> info = conn.getInfo();
