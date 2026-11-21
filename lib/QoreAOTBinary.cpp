@@ -5074,12 +5074,19 @@ QoreAOTBinaryReaderRef::QoreAOTBinaryReaderRef() = default;
 
 void QoreAOTBinaryReaderRef::set(const QoreAOTBinaryReader& reader, bool strong, const QoreAOTSectionType* keep_types,
         size_t keep_count) {
-    shell.reset(new QoreAOTBinaryReader(reader));
-    needs_decoded = static_cast<bool>(reader.decoded);
-    strong_decoded.reset();
-    weak_decoded.reset();
+    // the new state is made first and replaces the old one when it is complete, so that an exception leaves this
+    // object as it was
+    std::unique_ptr<QoreAOTBinaryReader> new_shell(new QoreAOTBinaryReader(reader));
+    new_shell->decoded.reset();
+    // the read state of the reader that the copy is made from is not that of a new reader
+    new_shell->wrap_const_ref_in_rcr = false;
+    new_shell->defer_unresolved_const_refs = false;
+    new_shell->expr_native_capture = nullptr;
+
+    std::shared_ptr<QoreAOTDecodedMetadata> new_strong;
+    std::weak_ptr<QoreAOTDecodedMetadata> new_weak;
     if (!strong) {
-        weak_decoded = shell->decoded;
+        new_weak = reader.decoded;
     } else if (reader.decoded && reader.decoded->sections) {
         // sectioned metadata: the string pool and those of the sections that the later reader reads that the load
         // has decompressed are kept; the later reader decompresses the others if it reads them
@@ -5101,15 +5108,15 @@ void QoreAOTBinaryReaderRef::set(const QoreAOTBinaryReader& reader, bool strong,
             kept->sections[index].data = src.sections[index].data;
             kept->sections[index].ready.store(true, std::memory_order_release);
         }
-        strong_decoded = std::move(kept);
+        new_strong = std::move(kept);
     } else {
-        strong_decoded = shell->decoded;
+        new_strong = reader.decoded;
     }
-    shell->decoded.reset();
-    // the read state of the reader that the copy is made from is not that of a new reader
-    shell->wrap_const_ref_in_rcr = false;
-    shell->defer_unresolved_const_refs = false;
-    shell->expr_native_capture = nullptr;
+
+    shell = std::move(new_shell);
+    strong_decoded = std::move(new_strong);
+    weak_decoded = std::move(new_weak);
+    needs_decoded = static_cast<bool>(reader.decoded);
 }
 
 QoreAOTBinaryReaderRef::~QoreAOTBinaryReaderRef() = default;

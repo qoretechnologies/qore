@@ -12,13 +12,14 @@
 %exec-class AOTMetadataDecompressOnceTest
 
 #! qore#6702: the metadata of an AOT image is opened and decompressed once per load
-/** The section readers of a load share one open of the metadata: a qcc executable, a script that a host registers
-    with qore_aot_script_register() (immediately and in a batch) and a .qmod module open their metadata once and
-    decompress each of its parts once (the body of metadata compressed whole, or the string pool and each section of
-    sectioned metadata); an executable and a registered script also when they then run the functions whose contexts
-    are built lazily from the metadata.  A module keeps no decompressed metadata after its load unless its
-    initialization needs it, so the contexts of its functions that are built after the load can open it again.
-    QORE_AOT_TRACE_METADATA_DECOMPRESS prints a line for each open and each decompression.
+/** The section readers of a load share one open of the metadata: a qcc executable, a script aggregate that a host
+    registers with qore_aot_script_register() (immediately and in a batch) and a .qmod module open their metadata once
+    and decompress each of its parts once (the body of metadata compressed whole, or the string pool and each section
+    of sectioned metadata), in each compression mode; an executable and a registered script also when they then run
+    the functions whose contexts are built lazily from the metadata.  A module keeps no decompressed metadata after its
+    load unless its initialization needs it, so the contexts of its functions that are built after the load open its
+    compressed metadata once more.  QORE_AOT_TRACE_METADATA_DECOMPRESS prints a line for each open and each
+    decompression.
 */
 class AOTMetadataDecompressOnceTest inherits QUnit::Test {
     private {
@@ -125,6 +126,12 @@ int sub onceMain() {
         write(runner, "%modern\n%no-child-restrictions\n"
             "Program p(PO_NEW_STYLE); p.loadModule(\"DecompressOnce\");\n"
             "printf(\"DECOMPRESS-ONCE-OK\\n\");\n");
+        # calls a function of the module after its load
+        string call_runner = tmp.path + "/module-call.qr";
+        write(call_runner, "%modern\n%no-child-restrictions\n"
+            "Program p(PO_NEW_STYLE); p.loadModule(\"DecompressOnce\");\n"
+            "p.callFunction(\"runOnce\");\n"
+            "printf(\"DECOMPRESS-ONCE-OK\\n\");\n");
         foreach string mode in (Modes) {
             string dir = tmp.path + "/" + mode;
             mkdir(dir);
@@ -134,33 +141,96 @@ int sub onceMain() {
             out = run(sprintf("QORE_MODULE_DIR=%s:$QORE_MODULE_DIR %s %s", dir, qore_bin, runner));
             assertTrue(out.find("DECOMPRESS-ONCE-OK") >= 0, mode + " module loads: " + out);
             checkOnce(mode, mode + " module load", out);
+
+            # the module keeps no decompressed metadata after its load, so the contexts of its functions that are
+            # built after the load open compressed metadata once more and decompress what they read once more;
+            # uncompressed metadata is read in place, without another open
+            out = run(sprintf("QORE_MODULE_DIR=%s:$QORE_MODULE_DIR %s %s", dir, qore_bin, call_runner));
+            assertTrue(out.find("DECOMPRESS-ONCE-OK") >= 0, mode + " module function runs: " + out);
+            assertTrue(out.find("value=42") >= 0, mode + " module function result: " + out);
+            hash<string, int> counts = decompressions(out);
+            assertFalse(counts.empty(), mode + " module call: the metadata is opened: " + out);
+            foreach hash<auto> i in (counts.pairIterator()) {
+                string part = i.key.split(" ")[1];
+                if (part == "open") {
+                    assertEq(mode == "none" ? 1 : 2, i.value, mode + " module call: " + i.key + ": " + out);
+                } else if (part =~ /^section:/) {
+                    assertTrue(i.value == 1 || i.value == 2, mode + " module call: " + i.key + " at most twice: "
+                        + out);
+                } else {
+                    assertEq(2, i.value, mode + " module call: " + i.key + ": " + out);
+                }
+            }
         }
     }
 
+    #! a script registered with qore_aot_script_register() by a host program, immediately and in a batch
+    /** The metadata of a script-context object is not compressed, so the script is compiled to a script aggregate,
+        whose metadata is compressed as the policy says, and to the per-file objects of its native code
+    */
     testRegisteredScript() {
         TmpDir tmp("qore-aot-decompress-once-");
-        string script = tmp.path + "/metadata.qr";
+        string decls = tmp.path + "/decls.qr";
+        write(decls, "%modern\n" + Body);
+        string main = tmp.path + "/main.qr";
         # the host calls retainedMain()
-        write(script, "%modern\n" + Body + "int sub retainedMain() { return onceMain(); }\n");
+        write(main, "%modern\nint sub retainedMain() { return onceMain(); }\n");
+        string glue = tmp.path + "/host.cpp";
+        write(glue, "#include <qore/Qore.h>
+#include <qore/QoreAOT.h>
+#include <stdio.h>
+#include <string.h>
+
+extern \"C\" void init_DECOMPRESS_ONCE_AGG_qo(QoreProgram*);
+
+int main(int argc, char** argv) {
+    bool batch = argc > 1 && !strcmp(argv[1], \"batch\");
+    qore_init(QL_GPL, \"UTF-8\", true);
+    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
+    if (!pgm) {
+        qore_cleanup();
+        return 1;
+    }
+    if (batch) {
+        qore_aot_script_begin_batch(pgm);
+    }
+    init_DECOMPRESS_ONCE_AGG_qo(pgm);
+    int rc = batch ? qore_aot_script_end_batch(pgm) : 0;
+    if (!rc) {
+        rc = qore_run_callable(pgm, \"retainedMain\", nullptr);
+    }
+    qore_destroy_program(pgm);
+    qore_cleanup();
+    if (!rc) {
+        puts(\"RETAINED-METADATA-OK\");
+    }
+    return rc;
+}
+");
         *list<*string> target = Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/;
         string flags = target ? target[0] : "-ldl";
-        # qcc does not compress the metadata of a script-context object
-        foreach string mode in ("none",) {
+        foreach string mode in (Modes) {
             string dir = tmp.path + "/" + mode;
             mkdir(dir);
-            string object = dir + "/metadata.qo";
-            string out = run(sprintf("%s -O0 -c -o %s %s", qcc, object, script));
-            assertTrue(is_file(object), "compile host metadata " + mode + ": " + out);
+            string qo_dir = dir + "/qo";
+            mkdir(qo_dir);
+            string aggregate = dir + "/aggregate.qo";
+            string out = run(sprintf("%s -O0 -c --output-dir=%s --batch-script-aggregate=DECOMPRESS_ONCE_AGG"
+                " --batch-script-aggregate-output=%s --script-aggregate-native-registers"
+                " --aot-metadata-compression=%s %s %s", qcc, qo_dir, aggregate, mode, decls, main));
+            assertTrue(is_file(aggregate), "compile script aggregate " + mode + ": " + out);
+            list<string> objects = glob(qo_dir + "/*.qo") ?? ();
+            assertEq(2, objects.size(), mode + " per-file objects: " + out);
             string exe = dir + "/host";
-            out = backquote(sprintf("%s %s -std=c++17 -I%s/include -I%s/include %s/examples/test/ir/"
-                "aot_retained_metadata_host.cpp %s -L%s -Wl,-rpath,%s -lqore %s -o %s 2>&1", env,
-                ENV.CXX ?? "c++", root, libdir, root, object, libdir, libdir, flags, exe));
+            out = backquote(sprintf("%s %s -std=c++17 -I%s/include -I%s/include %s %s %s -L%s -Wl,-rpath,%s -lqore "
+                "%s -o %s 2>&1", env, ENV.CXX ?? "c++", root, libdir, glue, objects.join(" "), aggregate, libdir,
+                libdir, flags, exe));
             if (!is_file(exe)) {
                 testSkip("the host program cannot be linked: " + out);
                 return;
             }
             foreach string batch in ("immediate", "batch") {
-                out = run(sprintf("%s borrow %s", exe, batch));
+                out = run(sprintf("%s %s", exe, batch));
                 assertTrue(out.find("RETAINED-METADATA-OK") >= 0, mode + " " + batch + " host runs: " + out);
                 assertTrue(out.find("value=42") >= 0, mode + " " + batch + " host result: " + out);
                 checkOnce(mode, mode + " " + batch + " registered script", out);

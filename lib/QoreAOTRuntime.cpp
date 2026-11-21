@@ -16992,10 +16992,12 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             }
             std::vector<std::string> deps;
             std::string dep_error;
-            // a blob that was added after the setup (by the load of a dependency) has no reader of the setup
+            // the setup opened every blob of the batch, which this function removed from the Program before its
+            // loops, so that no blob can be added to it
+            assert(i < blob_readers.size() && blob_readers[i]);
             if (i >= blob_readers.size() || !blob_readers[i]) {
-                fprintf(stderr, "qore_aot_script_end_batch(%s): the script was registered in the batch while it "
-                    "was being loaded\n", d.label.c_str());
+                fprintf(stderr, "qore_aot_script_end_batch(%s): internal error: the metadata of the script was not "
+                    "opened\n", d.label.c_str());
                 return 14;
             }
             if (readDependencies(*blob_readers[i], deps, dep_error)) {
@@ -17076,9 +17078,11 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             if (i < blob_readers.size()) {
                 reader = std::move(blob_readers[i]);
             }
+            // the setup opened every blob of the batch (see above)
+            assert(reader);
             if (!reader) {
-                fprintf(stderr, "qore_aot_script_end_batch(%s): the script was registered in the batch while it "
-                    "was being loaded\n", d.label.c_str());
+                fprintf(stderr, "qore_aot_script_end_batch(%s): internal error: the metadata of the script was not "
+                    "opened\n", d.label.c_str());
                 return 14;
             }
             if (!batch->mdes.addBlob(std::move(*reader), err)) {
