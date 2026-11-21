@@ -891,6 +891,11 @@ list<AbstractMethod> l = cls.getMethods();
     @return a list of all class methods including special and static methods
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+
+    @note the non-static methods (the special methods included) are returned first, then the static methods; each
+    group is in the order in which its methods were declared (a method that has several variants is at the place
+    of its first declaration), also for a class that was copied and for a program compiled with \c qcc
+    (qore#7169)
 */
 list<AbstractMethod> AbstractClass::getMethods() [flags=RET_VALUE_ONLY] {
     // get read access to program object

@@ -6840,6 +6840,11 @@ void qore_class_private::parseRollback() {
     has_new_user_changes = false;
 }
 
+uint64_t qore_method_private::nextDeclSeq() {
+    static std::atomic<uint64_t> seq{0};
+    return seq.fetch_add(1, std::memory_order_relaxed);
+}
+
 QoreMethod::QoreMethod(const QoreClass* n_parent_class, MethodFunctionBase* n_func, bool n_static)
         : priv(new qore_method_private(n_parent_class, n_func, n_static)) {
 }
@@ -6919,7 +6924,10 @@ bool qore_method_ops::inMethodImpl(QoreMethod* b, const QoreObject* self) {
 }
 
 QoreMethod* qore_method_ops::copyImpl(QoreMethod* b, const QoreClass* p_class) {
-    return new QoreMethod(p_class, b->priv->func->copy(p_class), b->priv->static_flag);
+    std::unique_ptr<QoreMethod> m(new QoreMethod(p_class, b->priv->func->copy(p_class), b->priv->static_flag));
+    // the copy is declared where the method that it is a copy of is (issue #7169)
+    m->priv->decl_seq = b->priv->decl_seq;
+    return m.release();
 }
 
 const QoreTypeInfo* QoreMethod::getUniqueReturnTypeInfo() const {
@@ -8728,16 +8736,18 @@ void QoreClass::setSystemConstructor(q_system_constructor_t m) {
 QoreListNode* QoreClass::getMethodList() const {
     QoreListNode* l = new QoreListNode(stringTypeInfo);
 
-    for (hm_method_t::const_iterator i = priv->hm.begin(), e = priv->hm.end(); i != e; ++i)
-        l->push(new QoreStringNode(i->first), nullptr);
+    for (QoreMethod* m : qore_methods_in_declaration_order(priv->hm)) {
+        l->push(new QoreStringNode(m->getNameStr()), nullptr);
+    }
     return l;
 }
 
 QoreListNode* QoreClass::getStaticMethodList() const {
     QoreListNode* l = new QoreListNode(stringTypeInfo);
 
-    for (hm_method_t::const_iterator i = priv->shm.begin(), e = priv->shm.end(); i != e; ++i)
-        l->push(new QoreStringNode(i->first), nullptr);
+    for (QoreMethod* m : qore_methods_in_declaration_order(priv->shm)) {
+        l->push(new QoreStringNode(m->getNameStr()), nullptr);
+    }
     return l;
 }
 
@@ -11976,27 +11986,42 @@ QoreValue BuiltinNormalMethodVariantBase::evalPseudoMethod(const QoreValue n, Co
     });
 }
 
+std::vector<QoreMethod*> qore_methods_in_declaration_order(const hm_method_t& m) {
+    std::vector<QoreMethod*> v;
+    v.reserve(m.size());
+    for (auto& i : m) {
+        v.push_back(i.second);
+    }
+    std::sort(v.begin(), v.end(), [](const QoreMethod* a, const QoreMethod* b) {
+        return qore_method_private::getDeclSeq(*a) < qore_method_private::getDeclSeq(*b);
+    });
+    return v;
+}
+
 class qmi_priv {
 public:
-    hm_method_t& m;
-    hm_method_t::iterator i;
+    //! the methods in the order of their declaration
+    std::vector<QoreMethod*> v;
+    //! the index of the current method; the size of the vector before the first call to next()
+    size_t i;
+    bool started = false;
 
-    DLLLOCAL qmi_priv(hm_method_t& n_m) : m(n_m) {
-        i = m.end();
+    DLLLOCAL qmi_priv(hm_method_t& n_m) : v(qore_methods_in_declaration_order(n_m)), i(0) {
     }
 
     DLLLOCAL bool next() {
-        if (i == m.end()) {
-            i = m.begin();
-        } else {
+        if (!started) {
+            started = true;
+            i = 0;
+        } else if (i < v.size()) {
             ++i;
         }
-        return i != m.end();
+        return i < v.size();
     }
 
     DLLLOCAL const QoreMethod* getMethod() const {
-        assert(i != m.end());
-        return i->second;
+        assert(started && i < v.size());
+        return v[i];
     }
 };
 #define HMI_CAST(p) (reinterpret_cast<qmi_priv*>(p))
