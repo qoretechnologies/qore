@@ -59,9 +59,10 @@ class ObjectConstantLocalsTest inherits QUnit::Test {
                 "in library-debug builds");
         }
         hash<string, int> results = runWorker("ir");
-        # the local that an on_exit handler reads is on the runtime stack, so the counter reads the function's own frame
+        # the local that the function gives a reference to is on the runtime stack, so the counter reads the
+        # function's own frame
         assertGt(results."control-entries", results."kept-entries",
-            "ir: the local that an on_exit handler reads is on the runtime stack");
+            "ir: the local that the function gives a reference to is on the runtime stack");
         assertEq(results."control-entries", results."stderr-entries",
             "ir: no body local of the stderr function is on the runtime stack");
         assertEq(results."control-entries", results."stdout-entries",

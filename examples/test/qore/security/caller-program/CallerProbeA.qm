@@ -57,6 +57,29 @@ public *int sub in_pool() {
     return q.get();
 }
 
+#! returns a trusted build that this module creates: its own code is this module's, which serves the code that enters
+#! the build; it creates a Program from \a src and returns it with the caller Program in the build and in a thread
+#! that it starts (qore#6852)
+public code sub make_build(string src) {
+    return SandboxManager::createTrustedBuildCall(hash<auto> sub () {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(src, "built");
+        return {"pgm": p, "in_build": probe(), "in_thread": in_background()};
+    });
+}
+
+#! returns a trusted build that this module creates and that calls the code that the caller gives it
+public code sub make_callback_build() {
+    return SandboxManager::createTrustedBuildCall(auto sub (code c) {
+        return c();
+    });
+}
+
+#! calls a function of a Program as this module's code
+public auto sub call_pgm(Program p, string f) {
+    return p.callFunction(f);
+}
+
 #! a class whose methods run as this module's code
 public class Probe {
     *int probe() {

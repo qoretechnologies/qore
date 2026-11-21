@@ -1,0 +1,219 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class MergeSelfMemberTest
+
+#! a class with a member that can hold the object itself or another object of the class
+class MergeSelf {
+    public {
+        int a = 1;
+        *string b;
+        *object o;
+        *object p;
+        hash<auto> h = {};
+    }
+}
+
+#! a class that counts its live objects
+class MergeTracked inherits MergeSelf {
+    private {
+        Counter live;
+    }
+
+    constructor(Counter live) {
+        self.live = live;
+        live.inc();
+    }
+
+    destructor() {
+        live.dec();
+    }
+}
+
+#! a class whose members are merged
+class MergeOther {
+    public {
+        int a = 3;
+        string b = "other";
+    }
+}
+
+#! A merge with the += operator through a member of an object locks no object that the lvalue holds already (qore#7107)
+/** The lvalue of a member holds the lock of the object that has the member for writing; the merge took the lock of
+    the target and of the source object again, which deadlocked (an assertion in a debug build) when either is the
+    object whose member is the lvalue.  Such a merge into an object is made after the lvalue has released its lock, as
+    with a local variable that holds the object: the merge can then also replace the member that is the lvalue, and
+    the scan of the object's recursive references runs without the lock.  A merge of the object into a hash member
+    copies the object's members without locking it again, before the hash is changed.  The removal of members with
+    the -= operator and with the remove and delete operators through such a member takes them in the same way.
+*/
+class MergeSelfMemberTest inherits QUnit::Test {
+    constructor() : QUnit::Test("MergeSelfMember", "1.0", \ARGV) {
+        addTestCase("a merge of a hash into the object of the member", \selfTargetHashTest());
+        addTestCase("a merge of an object into the object of the member", \selfTargetObjectTest());
+        addTestCase("a merge of the object of the member into another object", \selfSourceTest());
+        addTestCase("a merge of the object of the member into itself", \selfSourceTargetTest());
+        addTestCase("a merge that adds a recursive reference", \selfRecursiveTest());
+        addTestCase("a merge into an object in a recursive set", \selfRecursiveSetTest());
+        addTestCase("a merge that replaces the member that is the lvalue", \selfReplaceLvalueTest());
+        addTestCase("a merge of the object into a hash member", \selfHashTest());
+        addTestCase("a removal with -= through a member of the object", \selfMinusEqualsTest());
+        addTestCase("a removal with remove and delete through a member of the object", \selfRemoveTest());
+        set_return_value(main());
+    }
+
+    selfTargetHashTest() {
+        MergeSelf t();
+        t.o = t;
+        t.o += {"a": 2, "b": "hash"};
+        assertEq(2, t.a);
+        assertEq("hash", t.b);
+        assertTrue(t.o == t, "the member still holds the object");
+        remove t.o;
+    }
+
+    selfTargetObjectTest() {
+        MergeSelf t();
+        t.o = t;
+        t.o += new MergeOther();
+        assertEq(3, t.a);
+        assertEq("other", t.b);
+        remove t.o;
+    }
+
+    selfSourceTest() {
+        MergeSelf t();
+        t.a = 5;
+        t.b = "source";
+        t.o = new MergeSelf();
+        t.o += t;
+        MergeSelf o = t.o;
+        assertEq(5, o.a);
+        assertEq("source", o.b);
+        # the merge copies the member that holds the merged object: o.o is that object now
+        assertTrue(o.o == o, "the copied member holds the object");
+        remove o.o;
+        remove t.o;
+    }
+
+    selfSourceTargetTest() {
+        MergeSelf t();
+        t.a = 7;
+        t.o = t;
+        t.o += t;
+        assertEq(7, t.a);
+        assertTrue(t.o == t, "the member still holds the object");
+        remove t.o;
+    }
+
+    #! the merge adds a member that refers to the object: its recursive references are counted, so the object is
+    #! destroyed when the last reference from outside the cycle is gone
+    selfRecursiveTest() {
+        Counter live();
+        {
+            MergeTracked t(live);
+            assertEq(1, live.getCount());
+            t.o = t;
+            t.o += {"p": t};
+            assertTrue(t.p == t, "the merged member refers to the object");
+        }
+        # the object is only in a cycle of its own members now: it is destroyed
+        assertEq(0, live.getCount(), "the object in the cycle is destroyed");
+    }
+
+    #! the object is in a recursive set when the merge adds an edge: the scan after the merge marks the set stale,
+    #! which takes the object's lock
+    selfRecursiveSetTest() {
+        Counter live();
+        {
+            MergeTracked t(live);
+            {
+                MergeTracked u(live);
+                t.p = u;
+                u.o = t;
+            }
+            assertEq(2, live.getCount());
+            t.o = t;
+            t.o += {"p": t};
+            assertTrue(t.p == t, "the merged member refers to the object");
+            # the other object was only in the cycle with this one
+            assertEq(1, live.getCount(), "the object that the merge removed from the cycle is destroyed");
+        }
+        assertEq(0, live.getCount(), "the object in the cycle is destroyed");
+    }
+
+    #! the merge replaces the member that the lvalue is: the count of the object's references from objects is not
+    #! changed twice
+    selfReplaceLvalueTest() {
+        MergeSelf t();
+        t.p = new MergeOther();
+        t.o = t;
+        t.o += {"o": NOTHING};
+        assertNothing(t.o, "the merge replaced the member");
+        remove t.p;
+        t.o = t;
+        MergeOther other();
+        t.o += {"o": other};
+        assertTrue(t.o == other, "the merge replaced the member with another object");
+        remove t.o;
+    }
+
+    #! the object is merged into a hash member of its own: the hash gets the values of the members before the merge
+    selfHashTest() {
+        MergeSelf t();
+        t.a = 9;
+        t.h += t;
+        assertEq(9, t.h.a);
+        assertEq({}, t.h.h, "the hash member had its value before the merge");
+        assertNothing(t.h.o);
+        t.h += t;
+        assertEq(9, t.h.a);
+        assertEq(9, t.h.h.a, "the hash member had the members of the first merge");
+    }
+
+    selfMinusEqualsTest() {
+        MergeSelf t();
+        t.b = "x";
+        t.p = new MergeOther();
+        t.o = t;
+        t.o -= "b";
+        assertNothing(t.b);
+        t.b = "y";
+        t.o -= ("b", "p");
+        assertNothing(t.b);
+        assertNothing(t.p);
+        assertTrue(t.o == t, "the member still holds the object");
+        # the removed member is the lvalue
+        t.o -= "o";
+        assertNothing(t.o);
+    }
+
+    selfRemoveTest() {
+        Counter live();
+        MergeSelf t();
+        t.b = "x";
+        t.p = new MergeTracked(live);
+        t.o = t;
+        assertEq("x", remove t.o.b);
+        assertNothing(t.b);
+        delete t.o.p;
+        assertEq(0, live.getCount(), "the deleted object is destroyed");
+        assertNothing(t.p);
+        t.b = "y";
+        t.p = new MergeOther();
+        hash<auto> h = remove t.o.("b", "p");
+        assertEq("y", h.b);
+        assertEq(3, h.p.a);
+        assertNothing(t.b);
+        assertNothing(t.p);
+        # the removed member is the lvalue
+        assertTrue((remove t.o.o) == t, "the removed member held the object");
+        assertNothing(t.o);
+    }
+}

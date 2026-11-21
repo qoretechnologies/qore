@@ -26,6 +26,11 @@
 public namespace ConnectionProvider {
 #! this class is used to mark invalid connections so they can be loaded and reported as invalid
 public class InvalidConnection inherits AbstractConnection {
+    #! The connection gives no client, so it uses no functional domain (qore#7052)
+    private final int getConnectionDomainsImpl() {
+        return 0;
+    }
+
     public {
         #! Error message provided by constructor's \c attributes.error
         string error = "unknown error";

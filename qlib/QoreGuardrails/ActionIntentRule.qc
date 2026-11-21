@@ -167,7 +167,7 @@ public class ActionIntentRule inherits AbstractGuardrailRule {
     }
 
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
-        date start = now_us();
+        int start_us = clock_get_monotonic_us();
 
         # No classifier configured — either fail closed (block every
         # input) or pass every input through.  fail_closed is the safer
@@ -180,11 +180,11 @@ public class ActionIntentRule inherits AbstractGuardrailRule {
                     "configured) and rule is fail-closed",
                     NOTHING,
                     {"detection_method": "fail_closed"});
-                fc_result.duration_ms = getElapsedMs(start);
+                fc_result.duration_ms = getElapsedMs(start_us);
                 return fc_result;
             }
             hash<GuardrailResult> pass_result = makePassResult();
-            pass_result.duration_ms = getElapsedMs(start);
+            pass_result.duration_ms = getElapsedMs(start_us);
             return pass_result;
         }
 
@@ -202,11 +202,11 @@ public class ActionIntentRule inherits AbstractGuardrailRule {
                         "%s: %s", ex.err, ex.desc),
                     NOTHING,
                     {"detection_method": "fail_closed", "error": ex.desc});
-                fc_result.duration_ms = getElapsedMs(start);
+                fc_result.duration_ms = getElapsedMs(start_us);
                 return fc_result;
             }
             hash<GuardrailResult> pass_result = makePassResult();
-            pass_result.duration_ms = getElapsedMs(start);
+            pass_result.duration_ms = getElapsedMs(start_us);
             return pass_result;
         }
 
@@ -220,11 +220,11 @@ public class ActionIntentRule inherits AbstractGuardrailRule {
                     NOTHING,
                     {"detection_method": "fail_closed",
                         "reason": "no_label"});
-                fc_result.duration_ms = getElapsedMs(start);
+                fc_result.duration_ms = getElapsedMs(start_us);
                 return fc_result;
             }
             hash<GuardrailResult> pass_result = makePassResult();
-            pass_result.duration_ms = getElapsedMs(start);
+            pass_result.duration_ms = getElapsedMs(start_us);
             return pass_result;
         }
 
@@ -243,12 +243,12 @@ public class ActionIntentRule inherits AbstractGuardrailRule {
                     "intent": intent,
                     "block_intents": block_intents,
                 });
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
 
         hash<GuardrailResult> pass_result = makePassResult();
-        pass_result.duration_ms = getElapsedMs(start);
+        pass_result.duration_ms = getElapsedMs(start_us);
         return pass_result;
     }
 }

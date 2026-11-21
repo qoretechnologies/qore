@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class DgcCollectHandoffRaceTest
 
@@ -55,6 +56,7 @@ public class DgcCollectHandoffRaceTest inherits QUnit::Test {
     constructor() : QUnit::Test("dgc-collect-handoff-race", "1.0") {
         addTestCase("a dereference that hands off the collection that another one decided does not wait for it",
             \handoffTest());
+        addTestCase("each queue releases its ownership and the cycle is destroyed once", \lifetimeTest());
         set_return_value(main());
     }
 
@@ -68,9 +70,28 @@ public class DgcCollectHandoffRaceTest inherits QUnit::Test {
         second.push(obj);
     }
 
+    lifetimeTest() {
+        Queue first();
+        Queue second();
+        DgcCollectHandoffRaceTest::makeCycle(first, second);
+        assertEq(0, DgcHandoffRaceObject::destructor_tids.size());
+        first.clear();
+        assertEq(0, DgcHandoffRaceObject::destructor_tids.size());
+        second.clear();
+        assertEq(1, DgcHandoffRaceObject::destructor_tids.size());
+        assertEq(gettid(), DgcHandoffRaceObject::destructor_tids.get());
+    }
+
     handoffTest() {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("the hooks that order the dereferences are only in debug builds");
+        }
+        # Native code can release a temporary while assigning Queue::get() to the local. The hook would then
+        # observe a different release while the worker still owns the object. Only run this internal assertion
+        # when AST or interpreted IR was selected explicitly. The lifetime case exercises every execution mode.
+        *string mode = TestInterpreter::exec_mode(get_script_path());
+        if (TestInterpreter::running_compiled() || (mode != "ast" && mode != "ir")) {
+            testSkip("the handoff assertion requires explicit AST or interpreted IR");
         }
         Queue first();
         Queue second();

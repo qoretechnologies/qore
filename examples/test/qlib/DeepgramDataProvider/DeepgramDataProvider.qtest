@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires Mime
 %requires json
@@ -104,7 +105,7 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("DeepgramDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.DEEPGRAM_CONNECTION;
+        conn_name = LiveProvider::get("deepgram", "DEEPGRAM_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + 2 actions registered", \registrationTest());
         addTestCase("transcribe-file builds query string from non-URL params",
@@ -441,6 +442,7 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         against any tier.
     */
     private liveDeepgramTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Deepgram connection ping failed: %s",

@@ -2,15 +2,21 @@
 # Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
 # Called only by live-media.py after a persistent credit reservation. No source prepend: qualify compiled artifacts.
 %modern
+%requires ../../LiveProviderTest.qm
 %requires StabilityAiDataProvider
 %requires QoreMediaUtils
 %requires json
 
-if (ENV.QORE_STABILITYAI_LIVE_MEDIA != "1" || !ENV.STABILITYAI_APIKEY.val()) {
-    throw "LIVE-TEST-DISABLED", "use the explicitly opt-in ledger runner with a privately loaded credential";
+*string apikey = LiveProvider::get("stabilityai", "STABILITYAI_APIKEY");
+if (LiveProvider::get("stabilityai", "QORE_STABILITYAI_LIVE_MEDIA") != "1" || !apikey.val()) {
+    throw "LIVE-TEST-DISABLED", "use the explicitly opt-in ledger runner with a privately loaded credential and "
+        + LiveProvider::skipReason("stabilityai", ("QORE_STABILITYAI_LIVE_MEDIA", "STABILITYAI_APIKEY"));
 }
-hash<auto> options = {"apikey": ENV.STABILITYAI_APIKEY, "timeout": 120s, "connect_timeout": 10s};
-if (ENV.QORE_STABILITYAI_LIVE_ORGANIZATION.val()) { options.organization = ENV.QORE_STABILITYAI_LIVE_ORGANIZATION; }
+hash<auto> options = {"apikey": apikey, "timeout": 120s, "connect_timeout": 10s};
+*string organization = LiveProvider::get("stabilityai", "QORE_STABILITYAI_LIVE_ORGANIZATION");
+if (organization.val()) {
+    options.organization = organization;
+}
 StabilityAiRestClientIo client(options);
 StabilityAiDataProvider::StabilityAiDataProvider root(client);
 string action = ARGV[0];
@@ -36,7 +42,7 @@ if (action == "generate-image") {
 } else if (action == "media-facade") {
     request = {"model": "core", "prompt": "A single orange wooden sphere on a plain pale blue studio background, no text.",
         "seed": 5423, "output_format": "png"};
-    hash<auto!> config = {"backend": "stability-ai", "api_key": ENV.STABILITYAI_APIKEY, "model": "core"};
+    hash<auto!> config = {"backend": "stability-ai", "api_key": apikey, "model": "core"};
     if (exists options.organization) { config.provider_options = {"organization": options.organization}; }
     auto generator = QoreMediaUtils::MediaProviderRegistry::createImageGenerator(cast<hash<QoreMediaUtils::ImageGeneratorConfig>>(config));
     result = map {$1.key: $1.value}, generator.generateImage(request.prompt, {"seed": 5423}).pairIterator();

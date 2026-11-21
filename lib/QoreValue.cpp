@@ -50,6 +50,7 @@
 #include "qore/intern/QoreValueExceptionOps.h"
 #include <qore/QoreBufferNode.h>
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <bit>
 
@@ -586,6 +587,17 @@ bool LexicalSemanticPolicy::getAsBool(const QoreValue& value) const {
 // ============================================================================
 
 qore_type_t QoreValue::getType() const {
+    // the tags of a node and an integer first, the types of most of the values that the runtime checks (#7006): no
+    // other kind of value has either tag (an encoded double, a special value, a short string, an opaque value and an
+    // enum have tags of their own), so the type is the one that the tests below give
+    const uint64_t t = tag();
+    if (t == TAG_POINTER) {
+        AbstractQoreNode* n = getPointerUnsafe();
+        return n ? n->getType() : NT_NOTHING;
+    }
+    if (t == TAG_INT48) {
+        return NT_INT;
+    }
     if (isFloat()) {
         return NT_FLOAT;
     }
@@ -989,6 +1001,7 @@ void QoreValue::sanitize() {
         }
         case NT_STRING: {
             // Try to convert short strings to inline
+            // note: safe; n is the node that this value holds
             QoreStringNode* str = reinterpret_cast<QoreStringNode*>(n);
             size_t len = str->size();
             if (len <= SHORTSTR_MAX_BYTES && str->getEncoding() == QCS_UTF8) {
@@ -1075,20 +1088,20 @@ int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xs
         return getEnumMember()->getValue().getAsString(str, format_offset, xsink);
     }
     if (isNothing()) {
-        qore_string_private::get(str)->concat(
+        qore_string_private::get(str)->concatAsciiName(
             (format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
-                ? &YamlNullString : &NothingTypeString);
+                ? YamlNullString : NothingTypeString);
         return 0;
     }
     if (isNull()) {
-        qore_string_private::get(str)->concat(&NullTypeString);
+        qore_string_private::get(str)->concatAsciiName(NullTypeString);
         return 0;
     }
 
     if (isInt()) {
         str.sprintf(QLLD, getInt());
     } else if (isBool()) {
-        qore_string_private::get(str)->concat(getBool() ? &TrueString : &FalseString);
+        qore_string_private::get(str)->concatAsciiName(getBool() ? TrueString : FalseString);
     } else if (isChar()) {
         str.concat("c'");
         SimpleRefHolder<QoreStringNode> ch(makeCharString(getChar(), QCS_UTF8, xsink));
@@ -1239,7 +1252,7 @@ QoreValue qore_value_ops::evalImpl(QoreValue* b, RuntimeConfig& rc, bool& needs_
         needs_deref = false;
         return *b;
     }
-    return n->eval(rc, needs_deref, xsink);
+    return qore_abstract_node_ops(n).eval(rc, needs_deref, xsink);
 }
 
 // ============================================================================
@@ -1507,7 +1520,7 @@ int qore_value_eval_ref_holder_ops::evalInternImpl(ValueEvalRefHolder* b, Runtim
         return 0;
     }
     b->needs_deref = true;
-    b->v = exp->eval(rc, b->needs_deref, b->xsink);
+    b->v = qore_abstract_node_ops(exp).eval(rc, b->needs_deref, b->xsink);
     return b->xsink && *b->xsink ? -1 : 0;
 }
 

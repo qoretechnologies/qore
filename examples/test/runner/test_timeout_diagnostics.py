@@ -18,6 +18,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_watchdog import STAND_IN_VERSION, stand_in_build  # noqa: E402
 
 
 # run_tests.sh reads the kernel's core pattern from /proc/sys/kernel/core_pattern, which the cat stand-in reports,
@@ -39,10 +41,14 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
             helpers.mkdir()
             (helpers / "ci-job-processes.sh").symlink_to(ROOT / "examples/test/docker_test/ci-job-processes.sh")
             (binaries / "libqore.so").touch()
-            # touch -t reads its time in UTC (TZ=UTC0): a local time can name two instants or none
+            # the test's core holds the test's mark, as a real core holds the environment of its process: a core that
+            # does not is not the test's (qore#6893); touch -t reads its time in UTC (TZ=UTC0): a local time can name
+            # two instants or none
             scripts = {
-                "qore": '#!/bin/sh\ncase "$*" in *one.qtest*) '
-                        'if [ "$FRESH_CORE" = 1 ]; then TZ=UTC0 touch -t 203001010000 "$TEST_CORE_TARGET"; fi; '
+                "qore": '#!/bin/sh\n' + STAND_IN_VERSION + 'case "$*" in *one.qtest*) '
+                        'if [ "$FRESH_CORE" = 1 ]; then '
+                        'printf "QORE_TEST_PROCESS_MARK=%s\\0" "$QORE_TEST_PROCESS_MARK" > "$TEST_CORE_TARGET"; '
+                        'TZ=UTC0 touch -t 203001010000 "$TEST_CORE_TARGET"; fi; '
                         'if [ "$TEST_EXIT" = TERM ]; then trap "exit 143" TERM; '
                         'printf "%s\\n" "$$" | (read -r pid && kill -TERM "$pid"); fi; '
                         'exit "$TEST_EXIT";; esac\nexit 0\n',
@@ -66,6 +72,8 @@ class TimeoutDiagnosticsTest(unittest.TestCase):
                 path = binaries / name
                 path.write_text(source)
                 path.chmod(0o755)
+            # the tree is an archive of the stand-in build's commit (#6897)
+            stand_in_build(root, binaries)
             cores = root / "cores"
             cores.mkdir()
             system_cores = root / "system cores"

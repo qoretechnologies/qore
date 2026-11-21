@@ -2,6 +2,7 @@
 # Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
 # Intentionally has no source prepend: qualification must use installed artifacts only.
 %modern
+%requires ../../LiveProviderTest.qm
 %requires AzureDocumentIntelligenceDataProvider
 %requires ProviderIndex
 %requires FsUtil

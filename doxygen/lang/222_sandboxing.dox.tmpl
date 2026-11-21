@@ -459,7 +459,9 @@ authenticate();
     read are listed, each with the reason why every caller may read it, and a check of the sources
     (\c examples/test/runner/test_module_shared_statics.py) fails for any other.  The members of an object that hold
     credentials, such as the options of an HTTP listener with its TLS certificate and private key, are
-    \c private:internal as well, so that a subclass cannot read them from an object that it is given.
+    \c private:internal as well, so that a subclass cannot read them from an object that it is given.  A class that
+    sandboxed code declares with the name and the declarations of a trusted class is another class, with no private
+    access to the objects of the trusted class (see @ref private_access_class_identity).
 
     The same applies to the code of a module that changes such state for its caller: a registry, lookup, resolver,
     serializer, codec, schema or type cache of a standard module, which every caller uses, refuses registrations,
@@ -529,7 +531,106 @@ authenticate();
     (\c PERMISSION-DENIED), as it counts the operations of every caller; the autostop setting, which only trusted code can
     change, can be read with @ref Qore::AsyncIoController::getAutostop() "AsyncIoController::getAutostop()".
 
+    The same applies to the other objects and settings that the library or a module keeps once for the whole process
+    and that serve every caller, such as loggers, sessions and defaults (as a separate copy per isolation domain is not
+    available yet):
+    - code that is sandboxed or acts for sandboxed code cannot replace or change them
+      (\c SANDBOX-REGISTRATION-ERROR): the default stack size of new threads
+      (@ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()"), the allocation tracking session
+      (@ref Qore::start_alloc_tracking() "start_alloc_tracking()" and
+      @ref Qore::stop_alloc_tracking() "stop_alloc_tracking()", whose data covers every caller) and the start time of
+      the relative time of the \c logger_bin module (\c LoggerEvent::setStartTime())
+    - it does not get the loggers that the host set: the global loggers of the \c DataProvider and
+      \c ProviderIndexUtil modules (\c getGlobalLogger()) return @ref nothing "NOTHING" for it, as if none were set
+    - a setting that holds no data of any caller can still be read, such as the default thread stack size and the
+      start time of relative logger time
+    - the messages that the library and the modules produce while they serve sandboxed code go to a logger that the
+      caller gave its own object, to the loggers that the host configured, which no sandboxed code can replace, or are
+      not logged; never to a logger of another tenant
+
+    State that the host or the library sets for the whole process and that can hold data or configuration of the host
+    or of other tenants is not readable by sandboxed code either, until a separate view per isolation domain is
+    available, and an API that returns it requires the functional domain that its content requires:
+    - the code of a sandboxed %Program does not get the values of the application registry
+      (@ref Qore::get_app_registry() "get_app_registry()") or the module options
+      (@ref Qore::get_module_option() "get_module_option()"): they return @ref nothing "NOTHING" for it, and both
+      require the \c PROCESS functional domain; library module code that reads them to serve sandboxed code still
+      gets them, as the \c DataProvider module does for the custom expressions that the host publishes there
+    - code that is sandboxed or acts for sandboxed code does not get the process-wide YAML tag handler registry of the
+      \c YamlTagHandler module (\c globalTagRegistry() raises \c YAML-TAG-REGISTRATION-DENIED), the lock of the
+      process-wide type cache of \c DataProvider, the default post-processing code of the connections of
+      \c ConnectionProvider (\c AbstractConnection::getPostProcessing()), the locale data fallbacks of the \c i18n
+      module, which record the locales of every caller (\c SANDBOX-REGISTRATION-ERROR), or the number of shared
+      clients of \c VoyageRestClient, whose clients it shares only with the code of its own %Program
+    - an object that a builtin constant of the library or of a binary module holds, such as
+      @ref Qore::stdout "stdout", the type constants of the \c reflection module and the level objects of the
+      \c logger_bin module (which \c LoggerLevel::getLevel() also returns), and the process-wide
+      @ref Qore::AsyncIoController "AsyncIoController" object, is one object for every %Program: no code can add
+      members to it (\c SYSTEM-OBJECT-ERROR), so that no data passes through it from one caller to another; only an
+      object that no %Program owns is such a constant (a constant that a language bridge imports into a %Program is
+      that %Program's), and a member write gate of the class, which owns the storage of its undeclared members, is
+      evaluated before the rule
+    - the code of a sandboxed %Program cannot give a member that the class does not declare to an object of a
+      builtin class without a public member list that another %Program or the library created
+      (\c SYSTEM-OBJECT-ERROR): such an object can be shared, as one that a module keeps in a static member is,
+      such as the \c Type object of \c Mapper::recordType; the members that the class declares, which its own code
+      writes, and the objects that the %Program created itself are not affected (an object that a %Program that it
+      created, or a module that it loaded by its path, created is another %Program's)
+    - type descriptors, constants and settings that hold no data of any caller can still be read, such as the types
+      of the process-wide type cache of \c DataProvider and the global options of that module
+    - a public static member of a standard module that the host sets cannot be hidden from sandboxed code: such a
+      member is deprecated in favor of a setter and a getter that refuse sandboxed code, such as
+      \c AbstractConnection::post_processing, which \c AbstractConnection::setPostProcessing() replaces
+
     @since %Qore 3.0
+
+    @subsection sandbox_isolation_domains Isolation Domains (Tenants)
+
+    A host that runs the code of several tenants gives each tenant's sandboxes an isolation domain with
+    @ref Qore::SandboxManager::setIsolationDomain() "SandboxManager::setIsolationDomain()", before it gives them to a
+    %Program.  The domain cannot change afterwards, and only trusted code can set it.  A sandbox that sandboxed code
+    creates or copies belongs to the domain of the sandbox that governs that code.
+
+    The code of one domain never runs for another: a trusted build
+    (@ref Qore::SandboxManager::createTrustedBuildCall() "createTrustedBuildCall()") that sandboxed code of one domain
+    calls refuses to enter a sandbox of another domain with a \c SANDBOX-ISOLATION-ERROR exception, before any of its
+    code runs.  This holds on every path: code given in the build's arguments or reached through them, code returned
+    by the caller's callbacks, code that the build passes on to a nested build, and code that threads, pool tasks and
+    asynchronous I/O that the build starts run.  These may run in such a build:
+    - the caller's own code, and the code of other sandboxes of the caller's domain (a tenant's other interfaces);
+    - the build's own code (the sandboxes of the %Program that created the capability);
+    - code that no sandbox governs (the host's code), and the code of sandboxes without a domain.
+
+    Such a build cannot use a %Program of another domain either, neither its code nor its state: every method of
+    @ref Qore::Program "Program" and @ref Qore::ProgramControl "ProgramControl" called on it raises
+    \c SANDBOX-ISOLATION-ERROR before it reads or changes anything (parsing, loading modules, reading or setting global
+    variables, taking call references, introspection), except \c getProgramId(), which only identifies it.  So do
+    the methods of @ref Qore::DebugProgram "DebugProgram" and @ref Qore::Breakpoint "Breakpoint" given its
+    @ref Qore::ProgramControl "ProgramControl" or bound to it (a breakpoint assigned to it, a debugger that it was
+    added to; except \c Breakpoint::getBreakpointId()), and @ref Qore::load_user_module_with_program()
+    "load_user_module_with_program()" and @ref Qore::Program::loadUserModuleWithProgram()
+    "Program::loadUserModuleWithProgram()" given it as the container of a module.  Deleting its object, or a
+    breakpoint or debugger bound to it (which unassigns or detaches it), is not refused.  The %Program of a module from a trusted module directory, a %Program of the host and one of a sandbox
+    without a domain are not another domain's.
+
+    A build that trusted code calls may run the code of any domain: the host can orchestrate across tenants.  A host
+    that sets no domains is not affected.
+
+    Code that the sandboxes of more than one domain govern together, as a method of an object that one tenant's call
+    created when another tenant calls it, belongs to no domain: @ref Qore::SandboxManager::getCallerIsolationDomain()
+    "SandboxManager::getCallerIsolationDomain()" raises \c SANDBOX-ISOLATION-ERROR for it, and so do the creation of
+    a sandbox by its sandboxed code, the creation of a %Program and the start of a thread; a trusted build that it
+    calls runs the code of none of those domains, only the build's own code and the code of sandboxes without a
+    domain.
+
+    Isolation applies between the sandboxes that have a domain: a host that isolates tenants gives every tenant's
+    sandbox a domain.  A sandbox without a domain is the host's (as the sandboxes of system policies are) and is
+    outside isolation by design: it is treated as host code, so a sandbox without a domain that governs a tenant's
+    code together with the tenant's sandbox does not change the tenant's domain, and the code of a sandboxed %Program
+    whose sandbox has no domain is not isolated from the tenants.
+
+    @note Isolation domains decide which code runs where; they do not by themselves keep a tenant from obtaining
+    another tenant's objects through state that the process shares (see @ref sandbox_module_state)
 
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
 
@@ -668,6 +769,10 @@ authenticate();
     source module is next to it is loaded as the source module, which runs under the sandbox of the loading code.  A
     module statically linked into a program built with \c qcc is part of that program's own native code and needs no
     such decision.
+
+    When library code accepts a module path at run time, the restrictions of its caller apply through nested library
+    calls and when loading into a different %Program. Host-controlled module directories remain the way to provide
+    native dependencies to restricted callers.
 
     What the library checks when it loads native code that it may load is the integrity of the file, not its trust:
     the code signature of a module on macOS (when signatures are verified) detects a damaged file, and the
@@ -895,26 +1000,18 @@ sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
 
     Server-Side Request Forgery (SSRF) attacks trick applications into making requests to internal
     resources. The @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()" method
-    blocks all private and internal network ranges:
+    blocks every address that is not a public unicast destination: the private, loopback, link-local, shared
+    (carrier-grade NAT), "this network", documentation, benchmarking, multicast and reserved ranges of IPv4 and IPv6
+    (see the method for the list).  An IPv6 address that embeds an IPv4 address (IPv4-mapped or -compatible, NAT64,
+    6to4, Teredo) is judged by the IPv4 address, and the rules apply to the resolved address of each connection when
+    it is made, so a host name that resolves to a blocked address is refused whatever name it has.  A blocked range
+    takes precedence over the sandbox's allowed hosts and ranges.
 
     @code{.py}
 SandboxManager sm();
 
-# Block all private networks (essential for SSRF prevention)
+# Block every non-public address (essential for SSRF prevention)
 sm.blockPrivateNetworks();
-
-# This blocks:
-# - 127.0.0.0/8 (localhost)
-# - 10.0.0.0/8 (RFC 1918 Class A)
-# - 172.16.0.0/12 (RFC 1918 Class B)
-# - 192.168.0.0/16 (RFC 1918 Class C)
-# - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
-# - 0.0.0.0/8, 100.64.0.0/10 (carrier-grade NAT), 224.0.0.0/4 (multicast), 240.0.0.0/4 (reserved, broadcast)
-# - ::1/128 (IPv6 localhost)
-# - fe80::/10 (IPv6 link-local)
-# - fc00::/7 (IPv6 unique local)
-# - ff00::/8 (IPv6 multicast)
-# an IPv6 address that embeds an IPv4 address (IPv4-mapped, NAT64, 6to4) is judged by the IPv4 address
 
 # Allow public internet access
 sm.setNetworkDefaultPolicy(True);
@@ -987,7 +1084,9 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()".
 
     A connection is decided by these rules in order, after DNS resolution, for each address:
-    -# an IPv4-mapped IPv6 address (<tt>&#58;&#58;ffff:a.b.c.d</tt>) is checked as the IPv4 address it carries, and an
+    -# an IPv6 address that embeds an IPv4 address (IPv4-mapped, such as <tt>&#58;&#58;ffff:a.b.c.d</tt>,
+       IPv4-compatible, NAT64 with the well-known prefix, 6to4 or Teredo) is checked as the IPv4 address it carries
+       (a denied or allowed IP range also applies to the address as given); an
        unspecified destination address (\c 0.0.0.0 or <tt>::</tt>), which the system connects to the local host, is
        checked as the loopback address
     -# an address in a denied IP range is denied, also for an allowed host name, so a name that resolves to a
@@ -999,7 +1098,8 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     A bind is decided by the same rules without host names, except that a system-assigned port (port \c 0) is
     not restricted by allowed ports, and denied IP ranges do not deny a bind to a loopback address (\c 127.0.0.0/8
-    or <tt>::1</tt>, also as an IPv4-mapped address): a socket bound there can only be reached from the local host, which
+    or <tt>::1</tt>, also as an IPv4-mapped address, but not in another form that embeds it): a socket bound there can
+    only be reached from the local host, which
     is less than a bind on all interfaces exposes, so a sandbox that blocks private networks, such as with
     @ref Qore::SandboxManager::blockPrivateNetworks() "SandboxManager::blockPrivateNetworks()", can still run a
     local listener, while connections to loopback addresses stay denied.  Denied ranges still deny a bind to any
@@ -1467,6 +1567,11 @@ sm.setMaxStackSize(1024 * 1024);  # 1MB per call
     @note The stack size limit is only enforced where %Qore checks the stack of its threads, as it does for the
     \c STACK-LIMIT-EXCEEDED exception of all code.
 
+    @note The slice of the stack that the destructor of an object released at the thread's stack limit can use (see
+    @ref destructors_at_stack_limit) never extends a sandbox's limit: in a call into a sandbox with a stack size limit, a
+    destructor that cannot start within the limit does not run, also that of an object of trusted code that the
+    sandboxed code releases.
+
     @section sandbox_interrupt Safe Code Interruption
 
     The interrupt mechanism allows safely stopping sandboxed code that is stuck in loops
@@ -1668,6 +1773,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
     |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
+    |\c SANDBOX-ISOLATION-ERROR|SandboxManager|Code of another @ref sandbox_isolation_domains "isolation domain" was to run in a trusted build that sandboxed code called, or its %Program was used there
     |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality

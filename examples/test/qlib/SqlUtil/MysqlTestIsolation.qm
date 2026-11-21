@@ -135,8 +135,10 @@ public class MysqlRunDatabase {
 
         @return the datasource string of the run's database: the given one with the run's database in place of its
         database; the given one if it is not for the \c mysql driver, if the \c mysql module cannot be loaded (it
-        is not installed, or it was built for another module API), or if the server cannot be reached; no value if
-        none is given
+        is not installed, or it was built for another module API); no value if none is given
+
+        @throw TEST-EXCEPTION the server cannot be connected to: the current test case fails with the variable, the
+        masked datasource and the error (TestRunIsolation::TestRun::failUnreachable())
     */
     static *string getConnectionString(*string connstr, string suite) {
         try {
@@ -182,8 +184,9 @@ public class MysqlRunDatabase {
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
-            # a server that cannot be reached: the test finds it so when it connects, and reports or skips it
-            return connstr;
+            # a database outage is not a reason to skip: the variable is set, so the test case fails with the
+            # variable, the masked datasource and the error (qore#6934)
+            TestRun::failUnreachable(connstr, ex);
         }
         MysqlRunDatabase::dropLeftoversIntern(ds);
 

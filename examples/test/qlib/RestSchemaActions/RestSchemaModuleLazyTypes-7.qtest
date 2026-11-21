@@ -18,7 +18,7 @@
 
 %exec-class RestSchemaModuleLazyTypesPart7
 
-#! runs part 7 of 8 of the cases of RestSchemaModuleLazyTypesBase
+#! runs part 7 of 14 of the cases of RestSchemaModuleLazyTypesBase
 class RestSchemaModuleLazyTypesPart7 inherits RestSchemaModuleLazyTypesBase {
     constructor() : RestSchemaModuleLazyTypesBase("RestSchemaModuleLazyTypesPart7", 7) {
     }

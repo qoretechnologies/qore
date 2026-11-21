@@ -55,7 +55,7 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
         # create datasource
         hash<auto> dsh = remove members.ds;
         # must initialize transient members explicitly when "deserializeMembers()" is defined
-        ds = sqlutil_get_ds(dsh.ds_type, dsh.ds, dsh.ds_config);
+        ds = sqlutil_get_ds(dsh);
 
         # load any dependent module
         AbstractDatabase::loadModule(ds);
@@ -143,13 +143,61 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
         }
     }
 
+    #! returns a description of the datasource for messages, with the user name, password and database name masked
+    /** @par Example:
+        @code{.py}
+# shows the driver, host and port; the user name, password and database name are shown as "****"
+string desc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
+        @endcode
+
+        @param ds the datasource to describe
+
+        @return the description of the datasource as returned by
+        @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()":
+        <tt><em>driver</em>:****</tt><tt>/****</tt><tt>\@****[%<em>host</em>[:<em>port</em>]]</tt>; the user name, the
+        password and the database name are never shown
+
+        @note since %SqlUtil 3.11.0 the description shows no user name or database name (issue #6988); it is the same
+        for all connections of a driver to a host and port, so it does not identify a connection; use
+        makeDatasourceKey() for a key that does
+
+        @see makeDatasourceKey()
+    */
     static string makeDatasourceDesc(AbstractDatasource ds) {
-        string dsdesc = sprintf("%s:%s@%s", ds.getDriverName(), ds.getUserName(), ds.getDBName());
-        if (ds.getHostName())
-            dsdesc += "%" + ds.getHostName();
-        if (ds.getPort())
-            dsdesc += sprintf(":%d", ds.getPort());
-        return dsdesc;
+        return ds.getMaskedDescription();
+    }
+
+    #! returns a key that identifies the connection of the datasource, for caches; never for messages
+    /** @param ds the datasource
+
+        @return a key made from the driver name, the user name, the database name, the host and the port of the
+        datasource: <tt><em>driver</em>:<em>user</em>\@<em>db</em>[%<em>host</em>][:<em>port</em>]</tt>, where each
+        \c "\\", \c ":", \c "@" and \c "%" in the driver name, the user name, the database name and the host is
+        escaped with a \c "\\", so that two connections that differ in any of them never get the same key
+
+        @note the key contains the user name and the database name, so it must not be shown in exception messages or
+        logs; use makeDatasourceDesc() for messages
+
+        @see makeDatasourceDesc()
+
+        @since %SqlUtil 3.11.0
+    */
+    static string makeDatasourceKey(AbstractDatasource ds) {
+        # each separator in a part is escaped, so that the key is never the same for two connections (issue #6988)
+        string key = sprintf("%s:%s@%s", AbstractSqlUtilBase::escapeKeyPart(ds.getDriverName()),
+            AbstractSqlUtilBase::escapeKeyPart(ds.getUserName()), AbstractSqlUtilBase::escapeKeyPart(ds.getDBName()));
+        if (*string host = ds.getHostName()) {
+            key += "%" + AbstractSqlUtilBase::escapeKeyPart(host);
+        }
+        if (*int port = ds.getPort()) {
+            key += sprintf(":%d", port);
+        }
+        return key;
+    }
+
+    #! returns a part of a key of makeDatasourceKey() with each separator and escape character escaped
+    private:internal static string escapeKeyPart(*string str) {
+        return str ? regex_subst(str, "([\\\\:@%])", "\\\\$1", RE_Global) : "";
     }
 
     #! returns a name as an SQL identifier for the database
@@ -574,7 +622,10 @@ string id = AbstractSqlUtilBase::getDelimitedIdentifier("a\"b", "\"", "\"", "pgs
         return ds.getDriverName();
     }
 
-    #! returns a descriptive string for the datasource
+    #! returns a descriptive string for the datasource, with the user name, password and database name masked
+    /** @return the description of the datasource as returned by makeDatasourceDesc(); it shows no user name,
+        password or database name (since %SqlUtil 3.11.0, issue #6988)
+    */
     string getDatasourceDesc() {
         return dsdesc;
     }

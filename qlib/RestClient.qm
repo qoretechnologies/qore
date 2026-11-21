@@ -35,6 +35,7 @@
 %allow-weak-references
 
 %requires Mime >= 1.7
+%requires HttpServerUtil
 %requires(reexport) ConnectionProvider >= 1.10
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires Swagger >= 2.0
@@ -197,10 +198,8 @@ printf("%Y\n", ans.body);
       <a href="https://github.com/qoretechnologies/qore/issues/6901">issue 6901</a>)
     - the \c headers of a @ref RestClient::RestResponseInfo "RestResponseInfo" hash are the header fields of the
       response, without the \c headers and \c trailers sub-hashes that an @ref Qore::HTTPClient "HTTPClient" response
-      now has; RestClient raises \c RESTCLIENT-ERROR for the HTTPClient option \c http_fields_at_top_level set to
-      @ref False and for RestClient::setHttpFieldsAtTopLevel(False), as it reads the fields of a response at its top
-      level (<a href="https://github.com/qoretechnologies/qore/issues/6811">issue 6811</a>,
-      <a href="https://github.com/qoretechnologies/qore/issues/6869">issue 6869</a>)
+      now has. RestClient also supports the HTTPClient option \c http_fields_at_top_level set to @ref False
+      (see @ref httpclient_response_fields, issues #6811 and #6869).
     - a response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other
       text and raises \c INVALID-ENCODING when it is of a structured type, as with
       @ref Qore::HTTPClient "HTTPClient", also for streamed and polled responses (see
@@ -1217,13 +1216,6 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
 public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, ConnectionProvider::UpdateOptionsInterface,
         ConnectionProvider::OptionHelper, AbstractRestClient {
     public {
-        #! The description of the error raised when the fields of responses are not to be given at the top level
-        /** @since RestClient 2.7
-        */
-        const HttpFieldsAtTopLevelError = "RestClient does not support giving the fields of a response only under "
-            "\"headers\" (the http_fields_at_top_level option or setHttpFieldsAtTopLevel() set to False) yet, as it "
-            "reads them at the top level of the response; see issue #6869";
-
         #! Data serialization support mapping codes to MIME types and de/serialization functions
         const SupportsCbor =
             exists_function("make_cbor") && exists_function("parse_cbor")
@@ -1682,35 +1674,15 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
 
-        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, the
-        \c http_fields_at_top_level option set to @ref False (issue #6869), etc
+        @throw RESTCLIENT-ERROR invalid option passed to constructor or unsupported data serialization
 
         @since
         - %RestClient 1.2 the \a send_encoding option was added
         - %RestClient 1.4 the \a validator and \a swagger options were added
     */
-    #! Raises an exception if @a top_level is @ref False, which RestClient does not support yet
-    /** @param top_level must be @ref True: the fields of a response are given at the top level of its hash as well
-
-        @throw RESTCLIENT-ERROR @a top_level is @ref False (issue #6869)
-
-        @since RestClient 2.7
-    */
-    nothing setHttpFieldsAtTopLevel(bool top_level) {
-        if (!top_level) {
-            throw "RESTCLIENT-ERROR", HttpFieldsAtTopLevelError;
-        }
-        HTTPClient::setHttpFieldsAtTopLevel(top_level);
-    }
-
     constructor(*hash<auto> opts, *softbool do_not_connect)
             : HTTPClient(getRestClientHttpClientConstructorOptions(opts)
                 + ((opts.url || !opts.validator) ? NOTHING : {"url": opts.validator.getTargetUrl()})) {
-        # the setting that the HTTPClient constructor applied; RestClient reads the fields of a response at its top
-        # level (issue #6869)
-        if (!getHttpFieldsAtTopLevel()) {
-            throw "RESTCLIENT-ERROR", HttpFieldsAtTopLevelError;
-        }
         # capture caller options verbatim for copyWithUrl() sibling construction
         saved_opts = opts ?? {};
         # set logger, if any
@@ -2568,12 +2540,7 @@ hash<auto> ans = rest.del("/orders/1");
     hash<RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
         hash<auto> info;
         hash<auto> rv = doValidatedRequest(method, path, body, \info, NOTHING, hdr);
-        return <RestResponseInfo>{
-            "status_code": rv.status_code,
-            "headers": info."response-headers" ?? rv.hdr ?? (rv - ("body", "status_code", "headers", "trailers")),
-            "body": rv.body,
-            "content_type": rv."content-type",
-        };
+        return makeRestResponse(rv);
     }
 
     #! Sends a request with an explicit target; see AbstractRestClient::restDoRequestTarget()
@@ -2733,11 +2700,12 @@ hash<auto> ans = rest.del("/orders/1");
     /** @since RestClient 2.4
     */
     private hash<RestResponseInfo> makeRestResponse(hash<auto> rv) {
+        hash<auto> fields = rv.headers ?? rv.hdr ?? (rv - ("body", "status_code", "trailers"));
         return <RestResponseInfo>{
             "status_code": rv.status_code,
-            "headers": rv.hdr ?? (rv - ("body", "status_code", "headers", "trailers")),
+            "headers": fields,
             "body": rv.body,
-            "content_type": RestClient::getSingleHeaderValue(rv."content-type"),
+            "content_type": RestClient::getSingleHeaderValue(fields."content-type"),
         };
     }
 
@@ -3344,12 +3312,14 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         @return \a resp with additional or processed information
     */
     hash<auto> processRestResponse(hash<auto> resp, string method, string path, *reference<hash<auto>> info) {
+        hash<auto> fields = resp.headers ?? resp;
+        *string ct = RestClient::getSingleHeaderValue(fields."content-type");
         hash<RestResponseClientInfo> sh;
         try {
-            sh = validator.parseResponse(method, path, resp.status_code, resp.body, resp);
+            sh = validator.parseResponse(method, path, resp.status_code, resp.body, fields);
         } catch (hash<ExceptionInfo> ex) {
             if (allow_any_response && (ex.err == "DESERIALIZATION-ERROR") && resp.body.val()) {
-                if (!is_mime_text(resp."content-type")) {
+                if (!is_mime_text(ct)) {
                     resp.body = binary(resp.body);
                 }
                 info."response-body" = resp.body;
@@ -3362,7 +3332,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             resp.body = sh.body;
             info += {
                 "response-serialization": sh.info."code"
-                    ?? NullRestSchemaValidator::DataDeserializationSupport{resp."content-type"}."code"
+                    ?? NullRestSchemaValidator::DataDeserializationSupport{ct ? mime_get_base_type(ct) : NOTHING}."code"
                     ?? "unknown",
                 "response-body": resp.body,
             };
@@ -4173,12 +4143,14 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     private hash<auto> sendWithResponseLimit(*data body, string m, string path, hash<auto> hdr,
             reference<hash<auto>> info, int max_response_bytes) {
         RestClientResponseOutputStream response_stream(max_response_bytes);
+        hash<auto> response;
         code<nothing(hash<auto>)> receive_callback = sub (hash<auto> callback_info) {
-            if (!callback_info.hdr) {
+            if (callback_info.hdr.status_code.typeCode() != NT_INT) {
                 return;
             }
-            hash<auto> response_hdr = callback_info.hdr;
-            int status_code = response_hdr.status_code;
+            response = callback_info.hdr;
+            hash<auto> response_hdr = response.headers;
+            int status_code = response.status_code;
             bool followed_redirect = !getRedirectPassthru() && status_code >= 300 && status_code < 400
                 && status_code != 304;
             bool possible_auth_retry = !getErrorPassthru() && (status_code == 401 || status_code == 407);
@@ -4190,8 +4162,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 getResponseHeaderValue(response_hdr, "content-encoding"),
                 getResponseHeaderValue(response_hdr, "content-length"), getEncodingPassthru(),
                 response_body_allowed && !followed_redirect && !possible_auth_retry,
-                getResponseHeaderValue(response_hdr, "_qore_orig_content_type")
-                    ?? getResponseHeaderValue(response_hdr, "content-type"));
+                getResponseHeaderValue(response_hdr, "content-type"));
             if (character_encoding) {
                 # Match HTTPClient's compatibility handling for servers that misuse Content-Encoding for a charset.
                 setEncoding(character_encoding);
@@ -4221,7 +4192,6 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             rethrow;
         }
 
-        hash<auto> response = {} + info."response-headers";
         *data response_body = response_stream.getBody(getAssumedEncoding());
         if (exists response_body) {
             response.body = response_body;
@@ -4286,10 +4256,13 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 # and has no character encoding
                 debug("RestClient sent: %y received: %y (%y: %s bytes%s)", info."request-uri", info."response-uri",
                     (h.body.typeCode() == NT_STRING ? h.body.encoding() : (h.body ? h.body.type() : "n/a")),
-                    h.body.size(), h.body.size() && h."content-type" ? (" " + h."content-type") : "");
-                if (!h."content-type".val() && assume_content_type.val()) {
+                    h.body.size(), h.body.size() && h.headers."content-type" ? (" " + h.headers."content-type") : "");
+                if (!h.headers."content-type".val() && assume_content_type.val()) {
                     debug("missing content-type from response; assuming %y", assume_content_type);
-                    h."content-type" = assume_content_type;
+                    h.headers."content-type" = assume_content_type;
+                    if (getHttpFieldsAtTopLevel()) {
+                        h."content-type" = assume_content_type;
+                    }
                 }
                 info."response-body-raw" = h.body;
                 if (negotiate_retry && h.status_code == 401
@@ -4567,13 +4540,12 @@ RestRequestPollOperation poller = rest.startPollPatch("/api/resource", body);
 
     #! tries to decode an error response
     static private:internal tryDecodeErrorResponse(reference<hash<auto>> h, *reference<hash<auto>> info) {
-        string ct = (h."content-type".typeCode() == NT_LIST
-            ? h."content-type"[0]
-            : h."content-type");
+        hash<auto> fields = h.headers ?? h;
+        string ct = mime_get_base_type(RestClient::getSingleHeaderValue(fields."content-type") ?? "");
         *hash<auto> dh = NullRestSchemaValidator::DataDeserializationSupport{ct};
         if (!dh) {
             throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body; content-type is: %y; types "
-                "supported: %y; response body: %y", h."content-type",
+                "supported: %y; response body: %y", fields."content-type",
                 NullRestSchemaValidator::DataDeserializationSupport.keys(), h.body);
         }
 
@@ -4585,6 +4557,14 @@ RestRequestPollOperation poller = rest.startPollPatch("/api/resource", body);
         info."response-serialization" = code;
     }
 } # class RestClient
+
+#! Parsed TLS credentials supplied by the owner of a REST connection
+public hashdecl RestConnectionTlsCredentials {
+    #! Client certificate parsed from the configured certificate file
+    *SSLCertificate cert;
+    #! Private key parsed from the configured key file
+    *SSLPrivateKey key;
+}
 
 #! Base class for REST HTTP connections: options, authentication (including OAuth2), features, pings and polling
 /** This class provides everything that @ref RestClient::RestConnection "RestConnection" does, except that its
@@ -5548,6 +5528,10 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     /** @return a \c FileLocationHandler::AbstractFileLocationHandler object driving this connection's asynchronous
         client returned by \c getAsync()
 
+        A connection created by trusted code can use its own local TLS credential files when the caller is
+        restricted from \c FILESYSTEM. Each new client reads the configured files again. Replacing a path in
+        \c real_opts uses the caller's normal access policy.
+
         @note The \c FileLocationHandler module is loaded dynamically; it is a leaf utility that sits below this
         module, so declaring a dependency on it here would invert the dependency graph
 
@@ -5839,10 +5823,42 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         return client instanceof RestClient ? setupRestClientConfig(cast<RestClient>(client)) : client;
     }
 
+    private:internal {
+        # A reader captures its location at construction and never accepts a filename to open.
+        transient *code<*data(string, bool)> cert_reader;
+        transient *code<*data(string, bool)> key_reader;
+    }
+
+    private:internal static *code<*data(string, bool)> bindTlsFile(*string location) {
+        if (!location.val() || SandboxManager::isCallerRestricted(DOM_FILESYSTEM) || SandboxManager::isRestricted()) {
+            return;
+        }
+        string path = location;
+        if (path.startsWith("file://")) {
+            splice path, 0, 7;
+        } else if (path =~ /^\w+:\/\//) {
+            return;
+        }
+        # Options and substitutions belong to the location handler. Only plain local filenames can be bound.
+        if (!path.val() || path =~ /[${}]/) {
+            return;
+        }
+        if (!absolute_path(path)) {
+            path = getcwd() + DirSep + path;
+        }
+        return *data sub (string requested, bool der) {
+            if (requested == location) {
+                return der ? ReadOnlyFile::readBinaryFile(path) : ReadOnlyFile::readTextFile(path);
+            }
+        };
+    }
+
     #! Common REST client initialization
     /** @since RestClient 2.2.0
     */
     private setupRest() {
+        cert_reader = bindTlsFile(opts.ssl_cert_path);
+        key_reader = bindTlsFile(opts.ssl_key_path);
         real_opts = {"url": real_url} + opts;
         if (urlh.username.val() && !opts.username) {
             real_opts.username = urlh.username;
@@ -6237,6 +6253,24 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         load_module("RestClientIo");
         # RestClientIo supports the same options, including the URL encoding options
         hash<auto> opts = getConnectionOptions(rtopts);
+        if ((cert_reader || key_reader) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+            hash<RestConnectionTlsCredentials> credentials();
+            if (cert_reader && opts.ssl_cert_path.val() && !exists opts.ssl_cert_data && !exists rtopts.ssl_cert_path) {
+                *data cert = cert_reader(opts.ssl_cert_path, opts.ssl_cert_der ?? False);
+                if (exists cert) {
+                    credentials.cert = new SSLCertificate(cert);
+                }
+            }
+            if (key_reader && opts.ssl_key_path.val() && !exists opts.ssl_key_data && !exists rtopts.ssl_key_path) {
+                *data key = key_reader(opts.ssl_key_path, opts.ssl_key_der ?? False);
+                if (exists key) {
+                    credentials.key = new SSLPrivateKey(key, opts.ssl_key_password);
+                }
+            }
+            if (credentials.cert || credentials.key) {
+                return create_object("RestClientIo::RestClientIo", opts, NOTHING, credentials);
+            }
+        }
         return create_object("RestClientIo::RestClientIo", opts);
     }
 
@@ -7115,12 +7149,32 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto>
                     continue;
                 }
 
-                # build response hash compatible with processRestResponse()
-                hash<auto> h = {
+                # The poll API's processed headers include status-line metadata. Take the fields from the raw
+                # map so a field called Body or Status_Code stays distinct from the body and status.
+                hash<auto> fields = {};
+                foreach hash<auto> field in (resp.info."response-headers-raw".pairIterator()) {
+                    string name = field.key.lwr();
+                    if (fields.hasKey(name)) {
+                        softlist<auto> values = fields{name};
+                        softlist<auto> additional = field.value;
+                        fields{name} = values + additional;
+                    } else {
+                        fields{name} = field.value;
+                    }
+                }
+                hash<auto> h = resp.info."response-headers"{"status_message", "http_version"} + {
                     "status_code": resp."code",
                     "body": rbody,
-                    "content-type": resp.info."body-content-type",
-                } + resp.info."response-headers";
+                    "headers": fields,
+                };
+                if (rc.getHttpFieldsAtTopLevel()) {
+                    foreach hash<auto> field in (fields.pairIterator()) {
+                        if (!HttpServer::HttpReservedFieldNames{field.key} && field.key != "protocol"
+                                && field.key !~ /^_qore_/) {
+                            h{field.key} = field.value;
+                        }
+                    }
+                }
 
                 info."response-code" = resp."code";
                 info."response-body-raw" = rbody;

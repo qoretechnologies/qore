@@ -1255,8 +1255,10 @@ QoreValue SelfFunctionCallNode::evalUnresolvedQualified(LexicalSemanticPolicy po
     // the call is non-virtual: it calls the method of the class that it names (qc; see the deferred self calls in
     // QoreAOTRuntime.cpp), or of a class that the named class inherits
     const char* name = ns.getIdentifier();
+    // by identity: a class with the same name and signature as a class of the object's hierarchy is another class
+    // (qore#7036)
     bool priv;
-    if (!qc || !self->getClass()->getClass(*qc, priv)) {
+    if (!qc || !qore_class_private::getBoundMethodClass(*self->getClass(), *qc, priv)) {
         xsink->raiseException("METHOD-DOES-NOT-EXIST", "cannot call %s() on an object of class '%s', which does "
             "not inherit the class of the call", ns.ostr, self->getClassName());
         return QoreValue();

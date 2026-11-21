@@ -1,0 +1,511 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TLS handshakes with OCSP status requests and sockets of the MongoDB client library
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires mongodb
+
+%try-module process
+%define NoProcess
+%endtry
+
+%exec-class MongoDbDriverConnectionsTest
+
+#! A MongoDB server that answers the handshake (hello) and fails every other command; it counts its connections
+class FakeMongoServer {
+    private {
+        Socket listener();
+        int port;
+        *hash<auto> tls;
+        Mutex m();
+        int connections = 0;
+        bool stopping;
+        Counter running();
+        list<Socket> clients = ();
+    }
+
+    constructor(*hash<auto> tls) {
+        self.tls = tls;
+        listener.bind("127.0.0.1:0", True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    int getConnections() {
+        AutoLock al(m);
+        return connections;
+    }
+
+    stop() {
+        {
+            AutoLock al(m);
+            stopping = True;
+            map $1.shutdown(), clients;
+        }
+        running.waitForZero();
+        listener.close();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (True) {
+            {
+                AutoLock al(m);
+                if (stopping) {
+                    break;
+                }
+            }
+            # the timeout only lets the loop see a stop; a TLS handshake has its own (long) time limit, so that a slow
+            # machine (valgrind) never loses a client in its handshake
+            *Socket s = listener.accept(100ms);
+            if (!s) {
+                continue;
+            }
+            if (tls) {
+                try {
+                    s.setCertificate(tls.cert);
+                    s.setPrivateKey(tls.key);
+                    s.upgradeServerToSSL(60s);
+                } catch (hash<ExceptionInfo> ex) {
+                    # a client that fails its TLS handshake
+                    continue;
+                }
+            }
+            {
+                AutoLock al(m);
+                ++connections;
+                clients += s;
+            }
+            running.inc();
+            background serve(s);
+        }
+    }
+
+    private serve(Socket s) {
+        on_exit running.dec();
+        try {
+            while (True) {
+                binary header = s.recvBinary(16, 10s);
+                StreamReader hr(new BinaryInputStream(header));
+                int len = hr.readi4LSB();
+                int request_id = hr.readi4LSB();
+                hr.readi4LSB();
+                int opcode = hr.readi4LSB();
+                binary body = s.recvBinary(len - 16, 10s);
+                bool hello = binary_to_string(body, "ISO-8859-1") =~ /hello|isMaster|ismaster/;
+                binary doc = hello ? Bson::doc({
+                    "helloOk": True,
+                    "isWritablePrimary": True,
+                    "ismaster": True,
+                    "maxBsonObjectSize": 16777216,
+                    "maxMessageSizeBytes": 48000000,
+                    "maxWriteBatchSize": 100000,
+                    "logicalSessionTimeoutMinutes": 30,
+                    "connectionId": 1,
+                    "minWireVersion": 0,
+                    "maxWireVersion": 21,
+                    "readOnly": False,
+                    "ok": 1,
+                }) : Bson::doc({
+                    "ok": 0,
+                    "errmsg": "not supported by the test server",
+                    "code": 59,
+                });
+                BinaryOutputStream out();
+                StreamWriter w(out);
+                if (opcode == 2004) {
+                    # OP_QUERY: OP_REPLY
+                    w.writei4LSB(16 + 20 + doc.size());
+                    w.writei4LSB(request_id + 1);
+                    w.writei4LSB(request_id);
+                    w.writei4LSB(1);
+                    w.writei4LSB(0);
+                    w.writei8LSB(0);
+                    w.writei4LSB(0);
+                    w.writei4LSB(1);
+                } else {
+                    # OP_MSG
+                    w.writei4LSB(16 + 5 + doc.size());
+                    w.writei4LSB(request_id + 1);
+                    w.writei4LSB(request_id);
+                    w.writei4LSB(2013);
+                    w.writei4LSB(0);
+                    w.writei1(0);
+                }
+                w.write(doc);
+                s.send(out.getData());
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the client closed the connection, or the server stops
+        }
+    }
+}
+
+#! A listener that counts the connections that reach it, and closes each at once
+class CountingListener {
+    private {
+        Socket listener();
+        int port;
+        Queue accepted();
+        bool stopping;
+        Mutex m();
+        Counter running(1);
+    }
+
+    constructor(string host) {
+        listener.bind(host + ":0", True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background acceptLoop();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    #! the connections accepted: each is counted before it is closed, so before its client sees the close
+    int getConnections() {
+        return accepted.size();
+    }
+
+    stop() {
+        {
+            AutoLock al(m);
+            stopping = True;
+        }
+        running.waitForZero();
+        listener.close();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (True) {
+            {
+                AutoLock al(m);
+                if (stopping) {
+                    break;
+                }
+            }
+            *Socket s = listener.accept(100ms);
+            if (s) {
+                accepted.push(True);
+                s.close();
+            }
+        }
+    }
+}
+
+#! A minimal BSON encoder for the test server's replies
+class Bson {
+    static binary doc(hash<auto> h) {
+        BinaryOutputStream out();
+        StreamWriter w(out);
+        foreach hash<auto> i in (h.pairIterator()) {
+            switch (i.value.typeCode()) {
+                case NT_INT:
+                    w.writei1(0x10);
+                    Bson::cstring(w, i.key);
+                    w.writei4LSB(i.value);
+                    break;
+                case NT_BOOLEAN:
+                    w.writei1(0x08);
+                    Bson::cstring(w, i.key);
+                    w.writei1(i.value ? 1 : 0);
+                    break;
+                case NT_STRING:
+                    w.writei1(0x02);
+                    Bson::cstring(w, i.key);
+                    binary b = binary(i.value);
+                    w.writei4LSB(b.size() + 1);
+                    w.write(b);
+                    w.writei1(0);
+                    break;
+            }
+        }
+        binary body = out.getData();
+        BinaryOutputStream rv();
+        StreamWriter rw(rv);
+        rw.writei4LSB(body.size() + 5);
+        rw.write(body);
+        rw.writei1(0);
+        return rv.getData();
+    }
+
+    private static cstring(StreamWriter w, string s) {
+        w.write(binary(s));
+        w.writei1(0);
+    }
+}
+
+#! The MongoDB client library connects by itself for some options; sandboxed code is refused them
+/** libmongoc fetches credentials and tokens for some authentication mechanisms, and contacts OCSP responders for TLS
+    connections, through connections of its own, which no sandbox check governs (qoretechnologies/qore#6911): code
+    that a sandbox governs is refused the mechanisms, when the client is created and when it connects, and its TLS
+    connections never contact an OCSP responder.  No test connects outside of the loopback interface: the old code's
+    driver connections are observed on loopback listeners, or the refusal is checked before any connection.
+*/
+class MongoDbDriverConnectionsTest inherits QUnit::Test {
+    public {
+        const TenantSource = '
+%modern
+%requires mongodb
+
+*hash<ExceptionInfo> sub create(string url) {
+    try {
+        MongoClient client(url);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub ping(string url) {
+    try {
+        MongoClient client(url);
+        client.ping();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub ping_client(MongoClient client) {
+    try {
+        client.ping();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+';
+
+        const Timeouts = "serverSelectionTimeoutMS=3000&connectTimeoutMS=3000";
+    }
+
+    constructor() : QUnit::Test("MongoDB driver connections", "1.0", \ARGV) {
+        addTestCase("sandboxed code connects as before with other mechanisms", \controlTest());
+        addTestCase("MONGODB-AWS without credentials is refused when the client is created", \awsCreationTest());
+        addTestCase("MONGODB-AWS without credentials is refused when sandboxed code connects", \awsConnectTest());
+        addTestCase("MONGODB-OIDC with an environment is refused", \oidcTest());
+        addTestCase("a client made by sandboxed code stays governed by its sandbox", \creationPolicyTest());
+        addTestCase("sandboxed TLS connections contact no OCSP responder", \ocspTest());
+        addTestCase("GSSAPI is refused unless the network policy is unrestricted", \gssapiTest());
+        set_return_value(main());
+    }
+
+    private Program tenant(int port, *string fs_root) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "mongodb-tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.addNetworkAllowedHost("127.0.0.1");
+        sm.addNetworkAllowedPort(port);
+        if (fs_root) {
+            sm.setFilesystemSandboxRoot(fs_root);
+        }
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    controlTest() {
+        FakeMongoServer server();
+        on_exit server.stop();
+        Program p = tenant(server.getPort());
+        # the server answers the handshake and fails the command: the connection was made
+        *hash<ExceptionInfo> ex = p.callFunction("ping", sprintf("mongodb://127.0.0.1:%d/?%s", server.getPort(),
+            Timeouts));
+        assertTrue(exists ex);
+        assertGt(0, server.getConnections());
+    }
+
+    awsCreationTest() {
+        FakeMongoServer server();
+        on_exit server.stop();
+        Program p = tenant(server.getPort());
+        *hash<ExceptionInfo> ex = p.callFunction("create", sprintf("mongodb://127.0.0.1:%d/?authMechanism="
+            "MONGODB-AWS&%s", server.getPort(), Timeouts));
+        assertEq("NETWORK-ACCESS-DENIED", ex.err, sprintf("%y", ex));
+        assertRegex("MONGODB-AWS", ex.desc);
+        assertEq(0, server.getConnections());
+        # credentials in the connection string: the driver fetches none
+        ex = p.callFunction("create", sprintf("mongodb://AKIDEXAMPLE:secret@127.0.0.1:%d/?authMechanism="
+            "MONGODB-AWS&%s", server.getPort(), Timeouts));
+        assertNothing(ex, sprintf("%y", ex));
+    }
+
+    awsConnectTest() {
+        FakeMongoServer server();
+        on_exit server.stop();
+        # credentials of the host process: a sandboxed tenant must not get them, nor the endpoints that the driver
+        # fetches them from with none (the endpoints are not loopback addresses, so this test sets credentials, and
+        # the old code connects without contacting them)
+        setenv("AWS_ACCESS_KEY_ID", "AKIDHOST");
+        setenv("AWS_SECRET_ACCESS_KEY", "hostsecret");
+        on_exit {
+            unsetenv("AWS_ACCESS_KEY_ID");
+            unsetenv("AWS_SECRET_ACCESS_KEY");
+        }
+        # a client made by code that no sandbox governs, used by sandboxed code
+        MongoClient client(sprintf("mongodb://127.0.0.1:%d/?authMechanism=MONGODB-AWS&%s", server.getPort(),
+            Timeouts));
+        *hash<ExceptionInfo> ex = tenant(server.getPort()).callFunction("ping_client", client);
+        assertTrue(exists ex);
+        assertRegex("NETWORK-ACCESS-DENIED", ex.desc, sprintf("%y", ex));
+        assertEq(0, server.getConnections());
+    }
+
+    oidcTest() {
+        FakeMongoServer server();
+        on_exit server.stop();
+        Program p = tenant(server.getPort());
+        # azure: the driver fetches tokens from the instance metadata endpoint; refused before any connection (with a
+        # user name, which libmongoc 2 requires in the URI of this mechanism, so that the URI is valid for every version)
+        *hash<ExceptionInfo> ex = p.callFunction("create", sprintf("mongodb://user@127.0.0.1:%d/?authMechanism="
+            "MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:x&%s", server.getPort(),
+            Timeouts));
+        assertEq("NETWORK-ACCESS-DENIED", ex.err, sprintf("%y", ex));
+        assertRegex("MONGODB-OIDC", ex.desc);
+        # a client made with an environment by code that no sandbox governs, used by sandboxed code: k8s reads a
+        # token file, so the old code connects without contacting an endpoint
+        MongoClient client(sprintf("mongodb://127.0.0.1:%d/?authMechanism=MONGODB-OIDC&authMechanismProperties="
+            "ENVIRONMENT:k8s&%s", server.getPort(), Timeouts));
+        ex = p.callFunction("ping_client", client);
+        assertTrue(exists ex);
+        assertRegex("NETWORK-ACCESS-DENIED", ex.desc, sprintf("%y", ex));
+        assertEq(0, server.getConnections());
+    }
+
+    creationPolicyTest() {
+        FakeMongoServer server();
+        on_exit server.stop();
+        # a sandbox that denies the server: a client that sandboxed code made, used by code that no sandbox governs,
+        # is still refused the connection
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%modern\n%requires mongodb\nMongoClient sub make(string url) { return new MongoClient(url); }\n",
+            "mongodb-maker");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        MongoClient client = p.callFunction("make", sprintf("mongodb://127.0.0.1:%d/?%s", server.getPort(),
+            Timeouts));
+        assertThrows("MONGODB-CLIENT-ERROR", \client.ping());
+        assertEq(0, server.getConnections());
+    }
+
+    ocspTest() {
+%ifdef NoProcess
+        testSkip("the process module is required to generate the test certificates");
+%else
+        if (!Process::commandExists("openssl")) {
+            testSkip("the openssl executable is required to generate the test certificates");
+        }
+        # the OCSP responder that the server's certificate names: a loopback address that the sandbox denies
+        CountingListener responder("127.0.0.2");
+        on_exit responder.stop();
+        string dir = make_tmp_dir("qore-mongodb-ocsp-");
+        on_exit remove_tree(dir);
+        hash<auto> tls = makeCertificates(dir, sprintf("http://127.0.0.2:%d/", responder.getPort()));
+        FakeMongoServer server(tls);
+        on_exit server.stop();
+        string url = sprintf("mongodb://127.0.0.1:%d/?tls=true&tlsCAFile=%s&%s", server.getPort(), dir + "/ca.pem",
+            Timeouts);
+        *hash<ExceptionInfo> ex = tenant(server.getPort(), dir).callFunction("ping", url);
+        assertTrue(exists ex, "the test server fails the command");
+        if (ex.desc =~ /are not supported with libmongoc/) {
+            # a libmongoc version whose TLS options the module cannot set: the connection is refused, closed
+            assertEq(0, responder.getConnections());
+            return;
+        }
+        # the TLS connection was made, and the driver contacted no responder
+        assertGt(0, server.getConnections(), sprintf("%y", ex));
+        assertEq(0, responder.getConnections());
+%endif
+    }
+
+    gssapiTest() {
+        # Kerberos gets a configuration and a credential cache of its own: no realm lookup in DNS, no KDC, no
+        # credentials of the host; the old code connects to the test server and fails its authentication there
+        string dir = make_tmp_dir("qore-mongodb-gssapi-");
+        on_exit remove_tree(dir);
+        File f();
+        f.open2(dir + "/krb5.conf", O_CREAT | O_EXCL | O_WRONLY, 0600);
+        f.write("[libdefaults]\ndefault_realm = TEST.INVALID\ndns_lookup_kdc = false\ndns_lookup_realm = false\n"
+            "[realms]\nTEST.INVALID = {\n kdc = 127.0.0.2:1\n}\n");
+        f.close();
+        setenv("KRB5_CONFIG", dir + "/krb5.conf");
+        setenv("KRB5CCNAME", "FILE:" + dir + "/ccache");
+        on_exit {
+            unsetenv("KRB5_CONFIG");
+            unsetenv("KRB5CCNAME");
+        }
+        FakeMongoServer server();
+        on_exit server.stop();
+        string url = sprintf("mongodb://user%%40TEST.INVALID@127.0.0.1:%d/?authMechanism=GSSAPI&%s",
+            server.getPort(), Timeouts);
+        # a restricted network policy: refused when the client is created
+        Program p = tenant(server.getPort());
+        *hash<ExceptionInfo> ex = p.callFunction("create", url);
+        assertEq("NETWORK-ACCESS-DENIED", ex.err, sprintf("%y", ex));
+        assertRegex("GSSAPI", ex.desc);
+        # a client made by code that no sandbox governs, used by sandboxed code: refused before it connects
+        MongoClient client(url);
+        ex = p.callFunction("ping_client", client);
+        assertTrue(exists ex);
+        assertRegex("NETWORK-ACCESS-DENIED", ex.desc, sprintf("%y", ex));
+        assertEq(0, server.getConnections());
+        # an unrestricted network policy: allowed, as the krb5 module allows it
+        Program u(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        u.parse(TenantSource, "mongodb-unrestricted");
+        SandboxManager usm();
+        usm.setNetworkDefaultPolicy(True);
+        u.setSandboxManager(usm);
+        assertNothing(u.callFunction("create", url));
+    }
+
+    #! Makes a CA and a server certificate for 127.0.0.1 that names an OCSP responder; returns the server's
+    private hash<auto> makeCertificates(string dir, string ocsp_url) {
+%ifndef NoProcess
+        File f();
+        f.open2(dir + "/ca.cnf", O_CREAT | O_EXCL | O_WRONLY, 0600);
+        f.write("[req]\ndistinguished_name = dn\nx509_extensions = v3_ca\nprompt = no\n[dn]\nCN = test-ca\n"
+            "[v3_ca]\nbasicConstraints = critical,CA:TRUE\nkeyUsage = critical,keyCertSign,cRLSign\n");
+        f.close();
+        f.open2(dir + "/srv.cnf", O_CREAT | O_EXCL | O_WRONLY, 0600);
+        f.write("[req]\ndistinguished_name = dn\nprompt = no\n[dn]\nCN = 127.0.0.1\n"
+            "[ext]\nsubjectAltName = IP:127.0.0.1\nauthorityInfoAccess = OCSP;URI:" + ocsp_url + "\n"
+            "keyUsage = critical,digitalSignature,keyEncipherment\nextendedKeyUsage = serverAuth\n");
+        f.close();
+        run(("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", dir + "/ca.key", "-out", dir + "/ca.pem",
+            "-days", "2", "-config", dir + "/ca.cnf"));
+        run(("req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", dir + "/srv.key", "-out", dir + "/srv.csr",
+            "-config", dir + "/srv.cnf"));
+        run(("x509", "-req", "-in", dir + "/srv.csr", "-CA", dir + "/ca.pem", "-CAkey", dir + "/ca.key",
+            "-CAcreateserial", "-out", dir + "/srv.pem", "-days", "2", "-extfile", dir + "/srv.cnf", "-extensions",
+            "ext"));
+        return {
+            "cert": ReadOnlyFile::readTextFile(dir + "/srv.pem"),
+            "key": ReadOnlyFile::readTextFile(dir + "/srv.key"),
+        };
+%endif
+    }
+
+%ifndef NoProcess
+    private run(list<string> args) {
+        Process p("openssl", args);
+        p.wait();
+        if (p.exitCode()) {
+            throw "TEST-CERTIFICATE-ERROR", p.readStderr(65536) ?? "";
+        }
+    }
+%endif
+}

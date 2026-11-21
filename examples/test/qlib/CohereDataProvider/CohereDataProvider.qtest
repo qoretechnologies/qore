@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -221,7 +222,7 @@ public class CohereDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("CohereDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.COHERE_CONNECTION;
+        conn_name = LiveProvider::get("cohere", "COHERE_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + 24 actions registered", \registrationTest());
         addTestCase("root provider resolves all 24 action paths",       \rootProviderTest());
@@ -554,35 +555,42 @@ public class CohereDataProviderTest inherits QUnit::Test {
     }
 
     private liveMediaTest() {
-        if (!ENV.COHERE_APIKEY || !ENV.COHERE_TEST_IMAGE || !ENV.COHERE_TEST_AUDIO) {
-            testSkip("set COHERE_APIKEY, COHERE_TEST_IMAGE, and COHERE_TEST_AUDIO for live media checks");
+        if (!LiveProvider::get("cohere", "COHERE_APIKEY") || !LiveProvider::get("cohere", "COHERE_TEST_IMAGE") || !
+            LiveProvider::get("cohere", "COHERE_TEST_AUDIO")) {
+            testSkip(LiveProvider::enabled("cohere") ?
+                "set COHERE_APIKEY, COHERE_TEST_IMAGE, and COHERE_TEST_AUDIO for live media checks"
+                    : LiveProvider::skipReason("cohere", "COHERE_APIKEY"));
         }
-        CohereDataProvider::CohereDataProvider root({"apikey": ENV.COHERE_APIKEY});
+        CohereDataProvider::CohereDataProvider root({"apikey": LiveProvider::get("cohere", "COHERE_APIKEY")});
         auto parsed = root.getChildProvider("parse").doRequest({
             "document": {"type": "image_url", "image_url": "data:image/png;base64,"
-                + make_base64_string(File::readBinaryFile(ENV.COHERE_TEST_IMAGE))},
+                + make_base64_string(File::readBinaryFile(LiveProvider::get("cohere", "COHERE_TEST_IMAGE")))},
             "output_format": "markdown",
         });
         assertTrue(parsed.pages[0].markdown.content.val());
-        if (ENV.COHERE_TEST_IMAGE_TEXT) {
-            assertTrue(parsed.pages[0].markdown.content.find(ENV.COHERE_TEST_IMAGE_TEXT) >= 0);
+        if (LiveProvider::get("cohere", "COHERE_TEST_IMAGE_TEXT")) {
+            assertTrue(parsed.pages[0].markdown.content.find(
+                LiveProvider::get("cohere", "COHERE_TEST_IMAGE_TEXT")) >= 0);
         }
         auto transcript = root.getChildProvider("transcribe").doRequest({
             "language": "en",
-            "file": {"name": basename(ENV.COHERE_TEST_AUDIO),
-                "content": File::readBinaryFile(ENV.COHERE_TEST_AUDIO)},
+            "file": {"name": basename(LiveProvider::get("cohere", "COHERE_TEST_AUDIO")),
+                "content": File::readBinaryFile(LiveProvider::get("cohere", "COHERE_TEST_AUDIO"))},
         });
         assertTrue(transcript.text.val());
-        if (ENV.COHERE_TEST_AUDIO_TEXT) {
-            assertTrue(transcript.text.find(ENV.COHERE_TEST_AUDIO_TEXT) >= 0);
+        if (LiveProvider::get("cohere", "COHERE_TEST_AUDIO_TEXT")) {
+            assertTrue(transcript.text.find(LiveProvider::get("cohere", "COHERE_TEST_AUDIO_TEXT")) >= 0);
         }
     }
 
     private liveDatasetTest() {
-        if (!ENV.COHERE_APIKEY || ENV.COHERE_TEST_RESOURCES != "1") {
-            testSkip("set COHERE_APIKEY and COHERE_TEST_RESOURCES=1 to create and delete a test dataset");
+        if (!LiveProvider::get("cohere", "COHERE_APIKEY") ||
+            LiveProvider::get("cohere", "COHERE_TEST_RESOURCES") != "1") {
+            testSkip(LiveProvider::enabled("cohere") ?
+                "set COHERE_APIKEY and COHERE_TEST_RESOURCES=1 to create and delete a test dataset"
+                    : LiveProvider::skipReason("cohere", "COHERE_APIKEY"));
         }
-        CohereDataProvider::CohereDataProvider root({"apikey": ENV.COHERE_APIKEY});
+        CohereDataProvider::CohereDataProvider root({"apikey": LiveProvider::get("cohere", "COHERE_APIKEY")});
         *string cleanup_id;
         on_exit {
             if (cleanup_id.val()) {
@@ -615,10 +623,11 @@ public class CohereDataProviderTest inherits QUnit::Test {
     }
 
     private liveKeyTest() {
-        if (!ENV.COHERE_APIKEY) {
-            testSkip("set COHERE_APIKEY to exercise the live key-check action");
+        if (!LiveProvider::get("cohere", "COHERE_APIKEY")) {
+            testSkip(LiveProvider::enabled("cohere") ? "set COHERE_APIKEY to exercise the live key-check action"
+                : LiveProvider::skipReason("cohere", "COHERE_APIKEY"));
         }
-        CohereDataProvider::CohereDataProvider root({"apikey": ENV.COHERE_APIKEY});
+        CohereDataProvider::CohereDataProvider root({"apikey": LiveProvider::get("cohere", "COHERE_APIKEY")});
         assertTrue(root.getChildProvider("check-api-key").doRequest({}).valid);
         CohereDataProvider::CohereDataProvider invalid({"apikey": "invalid-qore-test-key"});
         assertFalse(invalid.getChildProvider("check-api-key").doRequest({}).valid);
@@ -630,6 +639,7 @@ public class CohereDataProviderTest inherits QUnit::Test {
         Cost: 1 embedding (Cohere trial-key friendly — 1000 calls/month free).
     */
     private liveCohereTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Cohere connection ping failed: %s",

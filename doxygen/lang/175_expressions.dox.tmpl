@@ -227,7 +227,9 @@ c(2.5); # calls f(float)
     as in <tt>auto sub (auto x = (self.a = 20)) { return x; }</tt>, and they do not prolong the scope of the object
     either).  \c self is the closure's own there, as in its code: a default value can also take a reference to it or to
     a member through it (ex: <tt>\\self.a</tt>), and a write to \c self itself through such a reference leaves the
-    closure's object unchanged.\n\n
+    closure's object unchanged.  A closure created outside a method has no object there, and is in the class context
+    in which it was created (the class of a static method that created it) or in none, whatever the class context of
+    the code that calls it (see @ref function_param_default_values).\n\n
     Note that parameter and return types are required when the @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_REQUIRE_PROTOTYPES parse options are set.
 
     @par Example

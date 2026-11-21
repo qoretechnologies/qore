@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires ConnectionProvider
 %requires DataProvider
 %requires Logger
@@ -113,7 +114,7 @@ public class CohereRestClientTest inherits QUnit::Test {
     }
 
     constructor() : Test("CohereRestClient Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.COHERE_CONNECTION;
+        conn_name = LiveProvider::get("cohere", "COHERE_CONNECTION", m_options.conn);
 
         addTestCase("connection scheme registered",       \connectionSchemeTest());
         addTestCase("LLM factory registered + advertises capabilities",
@@ -438,11 +439,13 @@ public class CohereRestClientTest inherits QUnit::Test {
     }
 
     private livePingTest() {
-        if (!ENV.COHERE_APIKEY) {
-            testSkip("set COHERE_APIKEY to run live authentication checks");
+        if (!LiveProvider::get("cohere", "COHERE_APIKEY")) {
+            testSkip(LiveProvider::enabled("cohere") ? "set COHERE_APIKEY to run live authentication checks"
+                : LiveProvider::skipReason("cohere", "COHERE_APIKEY"));
         }
         CohereRestClient::CohereRestConnection conn("live-cohere", "live trial key",
-            CohereRestClient::CohereRestConnection::DefaultUrl, {}, {"apikey": ENV.COHERE_APIKEY});
+            CohereRestClient::CohereRestConnection::DefaultUrl, {}, {"apikey":
+                LiveProvider::get("cohere", "COHERE_APIKEY")});
         assertTrue(conn.ping(True).ok);
         drivePing(conn.startPollConnect());
         CohereRestClient::CohereRestConnection invalid("invalid-cohere", "invalid key",
@@ -461,6 +464,7 @@ public class CohereRestClientTest inherits QUnit::Test {
             testSkip("no Cohere connection given; use -c/--connection or set "
                 "COHERE_CONNECTION");
         }
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<PingInfo> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("connection %y ping failed: %s", conn_name,

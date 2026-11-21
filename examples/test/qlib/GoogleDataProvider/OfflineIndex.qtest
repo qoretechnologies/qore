@@ -20,6 +20,7 @@ public class OfflineGoogleIndexTest inherits QUnit::Test {
     constructor() : Test("Offline Google index", "1.0") {
         addTestCase("unavailable output schemas are recorded on every build and can recover", \recoveryTest());
         addTestCase("Google worker and native indexes agree and leave no workers or temporary files", \workerTest());
+        # live-provider-optin: saved and restored around the cases, which set it to a fixture
         *string previous = getenv("QORE_DATA_PROVIDERS");
         unsetenv("QORE_DATA_PROVIDERS");
         on_exit if (exists previous) { setenv("QORE_DATA_PROVIDERS", previous); }
@@ -74,6 +75,7 @@ public class OfflineGoogleIndexTest inherits QUnit::Test {
         }
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
+        # live-provider-optin: saved and restored around the cases, which set it to a fixture
         *string old_modules = getenv("QORE_DATA_PROVIDERS");
         *string old_fixture = getenv("QORE_PROVIDER_INDEX_FIXTURE_MODULE");
         on_exit {
@@ -113,6 +115,7 @@ public class OfflineGoogleIndexTest inherits QUnit::Test {
         f.write(sprintf("File f();\nf.open2(%y, O_CREAT | O_WRONLY);\nf.write(sprintf(\"%%d\", getpid()));\n"
             "f.close();\nQueue blocked();\nblocked.get();\n", pidfile));
         f.close();
+        # live-provider-optin: saved and restored around the cases, which set it to a fixture
         *string old_modules = getenv("QORE_DATA_PROVIDERS");
         on_exit if (exists old_modules) { setenv("QORE_DATA_PROVIDERS", old_modules); }
         else { unsetenv("QORE_DATA_PROVIDERS"); }

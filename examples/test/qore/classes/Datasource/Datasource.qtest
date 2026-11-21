@@ -8,6 +8,7 @@
 %requires QUnit
 # the tests that need a connection run against every database connection that is configured
 %requires ../../../DbTestConnections.qm
+%requires ../../../qlib/SqlUtil/TestRunIsolation.qm
 
 %exec-class DatasourceTest
 
@@ -236,7 +237,17 @@ public class DatasourceTest inherits QUnit::Test {
             ds.open();
             return ds;
         } catch (hash<ExceptionInfo> ex) {
-            testSkip("skipping test: " + ex.err + ": " + ex.desc);
+            # a datasource string of an environment variable whose database cannot be connected to fails the test
+            # case: a database outage is not a reason to skip (qore#6934); the error of a default datasource string,
+            # which names its user and database, is not printed
+            if (ex.err != "TEST-SKIPPED-EXCEPTION" && ex.err != "LOAD-MODULE-ERROR"
+                && TestRun::getVariable(connstr) != "the datasource string") {
+                TestRun::failUnreachable(connstr, ex);
+            }
+            if (ex.err == "TEST-SKIPPED-EXCEPTION") {
+                rethrow;
+            }
+            testSkip("skipping test: " + ex.err);
         }
     }
 
@@ -257,7 +268,17 @@ public class DatasourceTest inherits QUnit::Test {
             ds.open();
             return ds;
         } catch (hash<ExceptionInfo> ex) {
-            testSkip("skipping test: " + ex.err + ": " + ex.desc);
+            # a datasource string of an environment variable whose database cannot be connected to fails the test
+            # case: a database outage is not a reason to skip (qore#6934); the error of a default datasource string,
+            # which names its user and database, is not printed
+            if (ex.err != "TEST-SKIPPED-EXCEPTION" && ex.err != "LOAD-MODULE-ERROR"
+                && TestRun::getVariable(connstr) != "the datasource string") {
+                TestRun::failUnreachable(connstr, ex);
+            }
+            if (ex.err == "TEST-SKIPPED-EXCEPTION") {
+                rethrow;
+            }
+            testSkip("skipping test: " + ex.err);
         }
     }
 }

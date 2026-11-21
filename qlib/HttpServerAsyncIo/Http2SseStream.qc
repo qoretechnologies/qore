@@ -350,9 +350,18 @@ public class Http2SseStream inherits AbstractSseConnection {
             delay_ms = 1;
         }
         int generation = heartbeat_generation;
-        # the static API: no controller wrapper per frame (issue #6836)
-        heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(delay_ms),
-            sub () { self.handleHeartbeatTimer(generation); });
+        try {
+            # the static API: no controller wrapper per frame (issue #6836)
+            heartbeat_timer_id = Qore::AsyncIoController::addTimerDelay(milliseconds(delay_ms),
+                sub () { self.handleHeartbeatTimer(generation); });
+        } catch (hash<ExceptionInfo> ex) {
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the stream goes on without its
+            # heartbeat comments (qore#7027)
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+        }
     }
 
     private cancelHeartbeatTimerLocked() {

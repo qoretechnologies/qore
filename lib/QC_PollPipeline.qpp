@@ -35,6 +35,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_PollPipeline.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/SocketRecvHttpLinePollOperation.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
@@ -44,7 +45,11 @@
 #include "qore/intern/ql_crypto.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreSandboxPollOps.h"
 #include "qore/WebSocketFrameCodec.h"
+
+// the step type of the pipeline, for the operations of the ops class that are written outside the class
+using StepType = PollPipelinePriv::StepType;
 
 /** @cond INTERNAL */
 
@@ -335,7 +340,7 @@ void PollPipelinePriv::deref() {
 }
 
 void PollPipelinePriv::cleanup(ExceptionSink* xsink) {
-    releaseCurrentOp(xsink);
+    qore_poll_pipeline_ops(this).releaseCurrentOp(xsink);
 
     ctx.cleanup(xsink);
     output.discard(xsink);
@@ -460,6 +465,10 @@ int PollPipelinePriv::addRecvExact(size_t size, bool as_string) {
 }
 
 int PollPipelinePriv::addRecvUntil(const char* pattern, bool as_string) {
+    return addRecvUntil(pattern, as_string, 0);
+}
+
+int PollPipelinePriv::addRecvUntil(const char* pattern, bool as_string, size_t max_size) {
     QoreStringNode* pat = new QoreStringNode(pattern);
     int idx = (int)string_data.size();
     string_data.push_back(pat);
@@ -468,6 +477,7 @@ int PollPipelinePriv::addRecvUntil(const char* pattern, bool as_string) {
     s.type = StepType::RECV_UNTIL;
     s.pattern_idx = idx;
     s.recv_as_string = as_string;
+    s.recv_size = max_size;  // the maximum size of the data received (0 = no limit besides that of a line; qore#6914)
     steps.push_back(std::move(s));
     return (int)steps.size() - 1;
 }
@@ -976,13 +986,15 @@ int PollPipelinePriv::addCheckRegex(const char* source_key, const char* pattern,
         const pcre2_code* code = re.get();
         // a string in another encoding is matched in UTF-8
         TempEncodingHelper str;
-        if (v.getType() == NT_STRING) {
-            const QoreStringNode* s = v.get<const QoreStringNode>();
-            if (s->getEncoding() == QCS_UTF8) {
-                subject = s->c_str();
-                len = s->size();
+        // the value can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper data(v);
+        if (data) {
+            if (data.getEncoding() == QCS_UTF8) {
+                subject = data.c_str();
+                len = data.size();
             } else {
-                if (!str.set(s, QCS_UTF8, xsink)) {
+                // note: safe; an inline short string is in UTF-8, so a string in another encoding has a node
+                if (!str.set(v.get<const QoreStringNode>(), QCS_UTF8, xsink)) {
                     return;
                 }
                 subject = str->c_str();
@@ -1138,67 +1150,67 @@ void PollPipelinePriv::setResultAction(AbstractAsyncAction* action) {
 
 // --- RECV_IMAP_RESPONSE helpers (I/O thread) ---
 
-int PollPipelinePriv::armImapLineRead(ExceptionSink* xsink) {
-    sock_obj->ref();
+int qore_poll_pipeline_ops::armImapLineReadImpl(PollPipelinePriv* b, ExceptionSink* xsink) {
+    b->sock_obj->ref();
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
     // read in binary mode: the raw response is kept byte-exact for the caller to parse
     ReferenceHolder<SocketRecvUntilBytesPollOperation> op(
-        new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, false), xsink);
+        new SocketRecvUntilBytesPollOperation(xsink, *pattern, b->sock_obj, false), xsink);
     if (*xsink) {
         return -1;
     }
-    op->setSelf(*self);
-    current_op = op.release();
+    op->setSelf(*b->self);
+    b->current_op = op.release();
     return 0;
 }
 
-int PollPipelinePriv::armImapLiteralRead(size_t count, ExceptionSink* xsink) {
-    sock_obj->ref();
+int qore_poll_pipeline_ops::armImapLiteralReadImpl(PollPipelinePriv* b, size_t count, ExceptionSink* xsink) {
+    b->sock_obj->ref();
     ReferenceHolder<SocketRecvPollOperation> op(
-        new SocketRecvPollOperation(xsink, (ssize_t)count, sock_obj, false), xsink);
+        new SocketRecvPollOperation(xsink, (ssize_t)count, b->sock_obj, false), xsink);
     if (*xsink) {
         return -1;
     }
-    op->setSelf(*self);
-    current_op = op.release();
+    op->setSelf(*b->self);
+    b->current_op = op.release();
     return 0;
 }
 
-int PollPipelinePriv::handleImapResponse(ExceptionSink* xsink) {
+int qore_poll_pipeline_ops::handleImapResponseImpl(PollPipelinePriv* b, ExceptionSink* xsink) {
     // 2^64 - 1 is 20 digits, so a longer run cannot be a valid IMAP literal count;
     // bounding the backward scan at this length keeps literal detection O(1) regardless
     // of how long the line is
     constexpr size_t MaxImapLiteralDigits = 20;
 
-    const Step& step = steps[current_step];
-    const char* err_code = (step.data_idx >= 0 && step.data_idx < (int)string_data.size())
-        ? string_data[step.data_idx]->c_str()
+    const PollPipelinePriv::Step& step = b->steps[b->current_step];
+    const char* err_code = (step.data_idx >= 0 && step.data_idx < (int)b->string_data.size())
+        ? b->string_data[step.data_idx]->c_str()
         : "IMAP-RESPONSE-ERROR";
 
-    if (!ctx.imap_accum) {
-        ctx.imap_accum = new BinaryNode();
+    if (!b->ctx.imap_accum) {
+        b->ctx.imap_accum = new BinaryNode();
     }
 
     // Append the chunk just read to the raw accumulator, enforcing the size cap before
     // allocating.  The inner ops are created in binary mode; strings are handled
     // defensively in case a step is ever re-armed differently.
-    const size_t prev_size = ctx.imap_accum->size();
+    const size_t prev_size = b->ctx.imap_accum->size();
     size_t chunk_len = 0;
-    if (ctx.last_output.getType() == NT_BINARY) {
-        const BinaryNode* b = ctx.last_output.get<const BinaryNode>();
-        if (b) {
-            chunk_len = b->size();
+    if (b->ctx.last_output.getType() == NT_BINARY) {
+        const BinaryNode* bin = b->ctx.last_output.get<const BinaryNode>();
+        if (bin) {
+            chunk_len = bin->size();
             if (prev_size + chunk_len > step.recv_size) {
                 xsink->raiseException(err_code, "IMAP response exceeds the maximum accepted "
                     "size of %zu bytes", step.recv_size);
                 return -1;
             }
             if (chunk_len) {
-                ctx.imap_accum->append(b->getPtr(), chunk_len);
+                b->ctx.imap_accum->append(bin->getPtr(), chunk_len);
             }
         }
-    } else if (ctx.last_output.getType() == NT_STRING) {
-        QoreStringValueHelper s(ctx.last_output);
+    } else if (b->ctx.last_output.getType() == NT_STRING) {
+        QoreStringValueHelper s(b->ctx.last_output);
         chunk_len = s->size();
         if (prev_size + chunk_len > step.recv_size) {
             xsink->raiseException(err_code, "IMAP response exceeds the maximum accepted "
@@ -1206,11 +1218,11 @@ int PollPipelinePriv::handleImapResponse(ExceptionSink* xsink) {
             return -1;
         }
         if (chunk_len) {
-            ctx.imap_accum->append(s->c_str(), chunk_len);
+            b->ctx.imap_accum->append(s->c_str(), chunk_len);
         }
     }
-    ctx.last_output.discard(xsink);
-    ctx.last_output = QoreValue();
+    b->ctx.last_output.discard(xsink);
+    b->ctx.last_output = QoreValue();
 
     if (!chunk_len) {
         xsink->raiseException(err_code, "the connection was closed before a complete IMAP "
@@ -1219,45 +1231,45 @@ int PollPipelinePriv::handleImapResponse(ExceptionSink* xsink) {
     }
 
     // Completes the step: publish the raw response and clear per-step state
-    auto finish = [this, &step, xsink]() -> int {
-        if (!ctx.extra) {
-            ctx.extra = new QoreHashNode(autoTypeInfo);
+    auto finish = [b, &step, xsink]() -> int {
+        if (!b->ctx.extra) {
+            b->ctx.extra = new QoreHashNode(autoTypeInfo);
         }
-        if (step.pattern_idx >= 0 && step.pattern_idx < (int)string_data.size()) {
-            ctx.extra->setKeyValue(string_data[step.pattern_idx]->c_str(),
-                ctx.imap_accum->binRefSelf(), xsink);
+        if (step.pattern_idx >= 0 && step.pattern_idx < (int)b->string_data.size()) {
+            b->ctx.extra->setKeyValue(b->string_data[step.pattern_idx]->c_str(),
+                b->ctx.imap_accum->binRefSelf(), xsink);
             if (*xsink) {
                 return -1;
             }
         }
-        ctx.extra->setKeyValue("imap_continuation", ctx.imap_continuation, xsink);
+        b->ctx.extra->setKeyValue("imap_continuation", b->ctx.imap_continuation, xsink);
         if (*xsink) {
             return -1;
         }
         // leave the raw response in last_output as well
-        ctx.last_output = ctx.imap_accum->binRefSelf();
-        ctx.imap_accum->deref(xsink);
-        ctx.imap_accum = nullptr;
-        ctx.imap_literal_remaining = 0;
+        b->ctx.last_output = b->ctx.imap_accum->binRefSelf();
+        b->ctx.imap_accum->deref(xsink);
+        b->ctx.imap_accum = nullptr;
+        b->ctx.imap_literal_remaining = 0;
         return 1;
     };
 
     // --- literal mode: we just consumed literal payload octets ---
-    if (ctx.imap_literal_remaining) {
-        if (chunk_len >= ctx.imap_literal_remaining) {
-            ctx.imap_literal_remaining = 0;
+    if (b->ctx.imap_literal_remaining) {
+        if (chunk_len >= b->ctx.imap_literal_remaining) {
+            b->ctx.imap_literal_remaining = 0;
         } else {
-            ctx.imap_literal_remaining -= chunk_len;
+            b->ctx.imap_literal_remaining -= chunk_len;
         }
-        if (ctx.imap_literal_remaining) {
-            return armImapLiteralRead(ctx.imap_literal_remaining, xsink) ? -1 : 0;
+        if (b->ctx.imap_literal_remaining) {
+            return qore_poll_pipeline_ops(b).armImapLiteralRead(b->ctx.imap_literal_remaining, xsink) ? -1 : 0;
         }
         // the remainder of the line follows the literal payload
-        return armImapLineRead(xsink) ? -1 : 0;
+        return qore_poll_pipeline_ops(b).armImapLineRead(xsink) ? -1 : 0;
     }
 
     // --- line mode: inspect the CRLF-terminated line just read ---
-    const char* line = static_cast<const char*>(ctx.imap_accum->getPtr()) + prev_size;
+    const char* line = static_cast<const char*>(b->ctx.imap_accum->getPtr()) + prev_size;
     size_t len = chunk_len;
     // strip the trailing CRLF for inspection (it stays in the accumulator)
     if (len && line[len - 1] == '\n') {
@@ -1293,7 +1305,7 @@ int PollPipelinePriv::handleImapResponse(ExceptionSink* xsink) {
             char* ep = nullptr;
             unsigned long long n = strtoull(buf, &ep, 10);
             if (!errno && ep && !*ep) {
-                if (ctx.imap_accum->size() + (size_t)n > step.recv_size) {
+                if (b->ctx.imap_accum->size() + (size_t)n > step.recv_size) {
                     xsink->raiseException(err_code, "IMAP literal of %llu bytes would take the "
                         "response past the maximum accepted size of %zu bytes", n,
                         step.recv_size);
@@ -1301,22 +1313,22 @@ int PollPipelinePriv::handleImapResponse(ExceptionSink* xsink) {
                 }
                 if (!n) {
                     // zero-length literal: nothing to read, continue with the next line
-                    return armImapLineRead(xsink) ? -1 : 0;
+                    return qore_poll_pipeline_ops(b).armImapLineRead(xsink) ? -1 : 0;
                 }
-                ctx.imap_literal_remaining = (size_t)n;
-                return armImapLiteralRead(ctx.imap_literal_remaining, xsink) ? -1 : 0;
+                b->ctx.imap_literal_remaining = (size_t)n;
+                return qore_poll_pipeline_ops(b).armImapLiteralRead(b->ctx.imap_literal_remaining, xsink) ? -1 : 0;
             }
         }
     }
 
     // Command continuation request
     if (len && line[0] == '+') {
-        ctx.imap_continuation = true;
+        b->ctx.imap_continuation = true;
         return finish();
     }
 
     // Tagged completion line?
-    QoreValue tagv = ctx.extra ? ctx.extra->getKeyValue(step.target.c_str()) : QoreValue();
+    QoreValue tagv = b->ctx.extra ? b->ctx.extra->getKeyValue(step.target.c_str()) : QoreValue();
     if (tagv.getType() == NT_STRING) {
         QoreStringValueHelper tag(tagv);
         const size_t tlen = tag->size();
@@ -1342,7 +1354,7 @@ int PollPipelinePriv::handleImapResponse(ExceptionSink* xsink) {
     }
 
     // Untagged (or unrecognized) line: keep reading
-    return armImapLineRead(xsink) ? -1 : 0;
+    return qore_poll_pipeline_ops(b).armImapLineRead(xsink) ? -1 : 0;
 }
 
 // --- continuePoll state machine (I/O thread) ---
@@ -1359,7 +1371,7 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
             if (poll_xsink) {
                 QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
                 QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
-                setError(*err_str ? err_str->c_str() : "POLL-PIPELINE-ERROR",
+                qore_poll_pipeline_ops(this).setError(*err_str ? err_str->c_str() : "POLL-PIPELINE-ERROR",
                     *desc_str ? desc_str->c_str() : "step failed", xsink);
                 // Propagate the original exception to the caller
                 xsink->assimilate(poll_xsink);
@@ -1375,11 +1387,11 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
             }
 
             if (current_op->goalReached()) {
-                extractOutput(xsink);
+                qore_poll_pipeline_ops(this).extractOutput(xsink);
                 if (*xsink) {
                     return nullptr;
                 }
-                releaseCurrentOp(xsink);
+                qore_poll_pipeline_ops(this).releaseCurrentOp(xsink);
 
                 // Special handling for RECV_LINE_RESPONSE: check for continuation lines
                 if (steps[current_step].type == StepType::RECV_LINE_RESPONSE) {
@@ -1402,6 +1414,17 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                                 ctx.line_accum->concat('\n');
                             }
                             ctx.line_accum->concat(str, len);
+                            // the lines of a reply count together against the maximum line size of the socket
+                            // (qore#6914)
+                            size_t max_line = sock_obj->getMaxLineSize();
+                            if (ctx.line_accum->size() > max_line) {
+                                QoreString msg;
+                                msg.sprintf("the reply received exceeds the maximum size of %zu bytes; the limit can "
+                                    "be changed with Socket::setMaxLineSize()", max_line);
+                                qore_poll_pipeline_ops(this).setError("SOCKET-LINE-TOO-LARGE", msg.c_str(), xsink);
+                                xsink->raiseException("SOCKET-LINE-TOO-LARGE", msg.c_str());
+                                return nullptr;
+                            }
                         }
 
                         // Check continuation: line[3] == '-' means more lines follow
@@ -1559,7 +1582,7 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                 // Special handling for RECV_IMAP_RESPONSE: consume literals and keep
                 // reading until the tagged completion or continuation line
                 if (steps[current_step].type == StepType::RECV_IMAP_RESPONSE) {
-                    int rc = handleImapResponse(xsink);
+                    int rc = qore_poll_pipeline_ops(this).handleImapResponse(xsink);
                     if (rc < 0) {
                         return nullptr;
                     }
@@ -1587,14 +1610,14 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                 // Return nullptr to let the caller re-invoke us.
                 return nullptr;
             } else {
-                setError("POLL-PIPELINE-ERROR", "step did not reach goal", xsink);
+                qore_poll_pipeline_ops(this).setError("POLL-PIPELINE-ERROR", "step did not reach goal", xsink);
                 return nullptr;
             }
         }
 
         // Check if we're done
         if (current_step >= (int)steps.size()) {
-            deliverResult(xsink);
+            qore_poll_pipeline_ops(this).deliverResult(xsink);
             return nullptr;
         }
 
@@ -1626,7 +1649,7 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
             }
 
             case StepType::DELIVER_RESULT: {
-                deliverResult(xsink);
+                qore_poll_pipeline_ops(this).deliverResult(xsink);
                 return nullptr;
             }
 
@@ -1793,10 +1816,10 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
 
             default: {
                 // I/O step — create inner op
-                current_op = createInnerOp(step, xsink);
+                current_op = qore_poll_pipeline_ops(this).createInnerOp(step, xsink);
                 if (*xsink || !current_op) {
                     if (!*xsink) {
-                        setError("POLL-PIPELINE-ERROR",
+                        qore_poll_pipeline_ops(this).setError("POLL-PIPELINE-ERROR",
                             "failed to create inner operation", xsink);
                     }
                     return nullptr;
@@ -1811,14 +1834,13 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
 
 // --- Inner operation factory ---
 
-SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
-        ExceptionSink* xsink) {
+SocketPollOperationBase* qore_poll_pipeline_ops::createInnerOpImpl(PollPipelinePriv* b, const PollPipelinePriv::Step& step, ExceptionSink* xsink) {
     switch (step.type) {
         case StepType::CONNECT: {
-            sock_obj->ref();
+            b->sock_obj->ref();
             ReferenceHolder<SocketConnectPollOperation> op(
                 new SocketConnectPollOperation(xsink, false, step.target.c_str(),
-                    sock_obj, true, *sandbox_manager),
+                    b->sock_obj, true, *b->sandbox_manager),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1827,10 +1849,10 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
         }
 
         case StepType::CONNECT_SSL: {
-            sock_obj->ref();
+            b->sock_obj->ref();
             ReferenceHolder<SocketConnectPollOperation> op(
                 new SocketConnectPollOperation(xsink, true, step.target.c_str(),
-                    sock_obj, true, *sandbox_manager),
+                    b->sock_obj, true, *b->sandbox_manager),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1839,9 +1861,9 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
         }
 
         case StepType::SSL_UPGRADE: {
-            sock_obj->ref();
+            b->sock_obj->ref();
             ReferenceHolder<SocketUpgradeClientSslPollOperation> op(
-                new SocketUpgradeClientSslPollOperation(xsink, sock_obj),
+                new SocketUpgradeClientSslPollOperation(xsink, b->sock_obj),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1850,17 +1872,17 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
         }
 
         case StepType::SEND: {
-            if (step.data_idx < 0 || step.data_idx >= (int)binary_data.size()) {
+            if (step.data_idx < 0 || step.data_idx >= (int)b->binary_data.size()) {
                 xsink->raiseException("POLL-PIPELINE-ERROR",
                     "invalid send data index %d (have %d entries)",
-                    step.data_idx, (int)binary_data.size());
+                    step.data_idx, (int)b->binary_data.size());
                 return nullptr;
             }
-            BinaryNode* data = binary_data[step.data_idx];
+            BinaryNode* data = b->binary_data[step.data_idx];
             data->ref();
-            sock_obj->ref();
+            b->sock_obj->ref();
             ReferenceHolder<SocketSendPollOperation> op(
-                new SocketSendPollOperation(xsink, data, sock_obj),
+                new SocketSendPollOperation(xsink, data, b->sock_obj),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1869,9 +1891,9 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
         }
 
         case StepType::RECV_HEADER: {
-            sock_obj->ref();
+            b->sock_obj->ref();
             ReferenceHolder<SocketReadHttpHeaderPollOperation> op(
-                new SocketReadHttpHeaderPollOperation(xsink, sock_obj),
+                new SocketReadHttpHeaderPollOperation(xsink, b->sock_obj),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1880,10 +1902,10 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
         }
 
         case StepType::RECV_EXACT: {
-            sock_obj->ref();
+            b->sock_obj->ref();
             ReferenceHolder<SocketRecvPollOperation> op(
                 new SocketRecvPollOperation(xsink, (ssize_t)step.recv_size,
-                    sock_obj, step.recv_as_string),
+                    b->sock_obj, step.recv_as_string),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1893,19 +1915,21 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
 
         case StepType::RECV_UNTIL: {
             if (step.pattern_idx < 0
-                    || step.pattern_idx >= (int)string_data.size()) {
+                    || step.pattern_idx >= (int)b->string_data.size()) {
                 xsink->raiseException("POLL-PIPELINE-ERROR",
                     "invalid pattern index %d (have %d entries)",
-                    step.pattern_idx, (int)string_data.size());
+                    step.pattern_idx, (int)b->string_data.size());
                 return nullptr;
             }
-            QoreStringNode* pattern = string_data[step.pattern_idx];
-            sock_obj->ref();
+            QoreStringNode* pattern = b->string_data[step.pattern_idx];
+            b->sock_obj->ref();
             // SocketRecvUntilBytesPollOperation takes const QoreStringNode*
             // and calls stringRefSelf() internally
-            ReferenceHolder<SocketRecvUntilBytesPollOperation> op(
-                new SocketRecvUntilBytesPollOperation(xsink, pattern,
-                    sock_obj, step.recv_as_string),
+            // a step with a maximum size limits the data received (qore#6914)
+            ReferenceHolder<SocketRecvUntilBytesPollOperation> op(step.recv_size
+                ? new SocketRecvHttpLinePollOperation(xsink, pattern, b->sock_obj, step.recv_as_string, false, nullptr,
+                    0, step.recv_size)
+                : new SocketRecvUntilBytesPollOperation(xsink, pattern, b->sock_obj, step.recv_as_string),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1914,9 +1938,9 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
         }
 
         case StepType::RECV_DATA: {
-            sock_obj->ref();
+            b->sock_obj->ref();
             ReferenceHolder<SocketRecvDataPollOperation> op(
-                new SocketRecvDataPollOperation(xsink, sock_obj,
+                new SocketRecvDataPollOperation(xsink, b->sock_obj,
                     step.recv_as_string),
                 xsink);
             if (*xsink) {
@@ -1933,9 +1957,9 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
             bool is_head = !step.target.empty()
                 && !strcasecmp(step.target.c_str(), "HEAD");
 
-            if (ctx.headers) {
+            if (b->ctx.headers) {
                 // Check Transfer-Encoding: chunked
-                QoreValue te_val = pp_get_header_field(ctx.headers, "transfer-encoding");
+                QoreValue te_val = pp_get_header_field(b->ctx.headers, "transfer-encoding");
                 if (te_val.getType() == NT_STRING) {
                     QoreStringValueHelper te_str(te_val);
                     const char* te = te_str->c_str();
@@ -1945,13 +1969,13 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
                 }
                 // Check Content-Length
                 if (!chunked) {
-                    QoreValue cl_val = pp_get_header_field(ctx.headers, "content-length");
+                    QoreValue cl_val = pp_get_header_field(b->ctx.headers, "content-length");
                     if (!cl_val.isNullOrNothing()) {
                         content_length = cl_val.getAsBigInt();
                     }
                 }
                 // Check Connection: close
-                QoreValue conn_val = pp_get_header_field(ctx.headers, "connection");
+                QoreValue conn_val = pp_get_header_field(b->ctx.headers, "connection");
                 if (conn_val.getType() == NT_STRING) {
                     QoreStringValueHelper conn_str(conn_val);
                     const char* conn = conn_str->c_str();
@@ -1961,10 +1985,10 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
                 }
             }
 
-            sock_obj->ref();
+            b->sock_obj->ref();
             ReferenceHolder<SocketReadHttpBodyPollOperation> op(
-                new SocketReadHttpBodyPollOperation(xsink, sock_obj,
-                    ctx.status_code, content_length, chunked, conn_close, is_head),
+                new SocketReadHttpBodyPollOperation(xsink, b->sock_obj,
+                    b->ctx.status_code, content_length, chunked, conn_close, is_head),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1973,22 +1997,22 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
         }
 
         case StepType::DELEGATE: {
-            if (step.delegate_idx < 0 || step.delegate_idx >= (int)delegate_ops.size()) {
+            if (step.delegate_idx < 0 || step.delegate_idx >= (int)b->delegate_ops.size()) {
                 xsink->raiseException("POLL-PIPELINE-ERROR", "invalid delegate index");
                 return nullptr;
             }
-            DelegateOp& dop = delegate_ops[step.delegate_idx];
+            PollPipelinePriv::DelegateOp& dop = b->delegate_ops[step.delegate_idx];
             dop.op->ROreference();  // extra ref for pipeline's current_op ownership
             return dop.op;
         }
 
         case StepType::SEND_FROM_CONTEXT: {
-            if (!ctx.extra) {
+            if (!b->ctx.extra) {
                 xsink->raiseException("POLL-PIPELINE-ERROR",
                     "no context data for SEND_FROM_CONTEXT");
                 return nullptr;
             }
-            QoreValue data = ctx.extra->getKeyValue(step.target.c_str());
+            QoreValue data = b->ctx.extra->getKeyValue(step.target.c_str());
             BinaryNode* bin = nullptr;
             if (data.getType() == NT_BINARY) {
                 bin = data.get<BinaryNode>()->binRefSelf();
@@ -2002,9 +2026,9 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
                     step.target.c_str(), data.getFullTypeName());
                 return nullptr;
             }
-            sock_obj->ref();
+            b->sock_obj->ref();
             ReferenceHolder<SocketSendPollOperation> op(
-                new SocketSendPollOperation(xsink, bin, sock_obj), xsink);
+                new SocketSendPollOperation(xsink, bin, b->sock_obj), xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -2013,17 +2037,17 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
 
         case StepType::RECV_IMAP_RESPONSE: {
             // (re)initialize the raw accumulator and literal state for this step
-            if (ctx.imap_accum) {
-                ctx.imap_accum->deref(xsink);
+            if (b->ctx.imap_accum) {
+                b->ctx.imap_accum->deref(xsink);
             }
-            ctx.imap_accum = new BinaryNode();
-            ctx.imap_literal_remaining = 0;
-            ctx.imap_continuation = false;
+            b->ctx.imap_accum = new BinaryNode();
+            b->ctx.imap_literal_remaining = 0;
+            b->ctx.imap_continuation = false;
 
-            sock_obj->ref();
+            b->sock_obj->ref();
             SimpleRefHolder<QoreStringNode> imap_pattern(new QoreStringNode("\r\n"));
             ReferenceHolder<SocketRecvUntilBytesPollOperation> op(
-                new SocketRecvUntilBytesPollOperation(xsink, *imap_pattern, sock_obj, false),
+                new SocketRecvUntilBytesPollOperation(xsink, *imap_pattern, b->sock_obj, false),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -2034,15 +2058,15 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
         case StepType::RECV_LINE_RESPONSE: {
             // Initialize accumulator in ctx.extra
             // Initialize dedicated accumulator field (no hash lookup needed)
-            if (ctx.line_accum) {
-                ctx.line_accum->deref(xsink);
+            if (b->ctx.line_accum) {
+                b->ctx.line_accum->deref(xsink);
             }
-            ctx.line_accum = new QoreStringNode();
+            b->ctx.line_accum = new QoreStringNode();
 
-            sock_obj->ref();
+            b->sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
             ReferenceHolder<SocketRecvUntilBytesPollOperation> op(
-                new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true),
+                new SocketRecvUntilBytesPollOperation(xsink, *pattern, b->sock_obj, true),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -2059,119 +2083,119 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
 
 // --- Output extraction ---
 
-void PollPipelinePriv::extractOutput(ExceptionSink* xsink) {
-    QoreValue out = current_op->getOutput();
+void qore_poll_pipeline_ops::extractOutputImpl(PollPipelinePriv* b, ExceptionSink* xsink) {
+    QoreValue out = b->current_op->getOutput();
     if (out.isNullOrNothing()) {
         return;
     }
 
-    ctx.last_output.discard(xsink);
-    ctx.last_output = out;  // takes ownership
+    b->ctx.last_output.discard(xsink);
+    b->ctx.last_output = out;  // takes ownership
 
     // For RECV_HEADER: extract status_code and headers into context
-    if (steps[current_step].type == StepType::RECV_HEADER
+    if (b->steps[b->current_step].type == StepType::RECV_HEADER
             && out.getType() == NT_HASH) {
         QoreHashNode* h = out.get<QoreHashNode>();
         QoreValue hdr_val = h->getKeyValue("hdr");
         if (hdr_val.getType() == NT_HASH) {
             QoreHashNode* hdr = hdr_val.get<QoreHashNode>();
-            ctx.status_code = (int)hdr->getKeyValue("status_code").getAsBigInt();
-            if (ctx.headers) {
-                ctx.headers->deref(xsink);
+            b->ctx.status_code = (int)hdr->getKeyValue("status_code").getAsBigInt();
+            if (b->ctx.headers) {
+                b->ctx.headers->deref(xsink);
             }
-            ctx.headers = hdr->hashRefSelf();
+            b->ctx.headers = hdr->hashRefSelf();
         }
     }
 
     // For READ_HTTP_BODY: store the body binary in context
-    if (steps[current_step].type == StepType::READ_HTTP_BODY
+    if (b->steps[b->current_step].type == StepType::READ_HTTP_BODY
             && out.getType() == NT_BINARY) {
-        if (ctx.body) {
-            ctx.body->deref(xsink);
+        if (b->ctx.body) {
+            b->ctx.body->deref(xsink);
         }
-        ctx.body = out.get<BinaryNode>()->binRefSelf();
+        b->ctx.body = out.get<BinaryNode>()->binRefSelf();
     }
 
     // For DELEGATE: extract HTTP response fields if the output is a response hash
     // HTTPClient.startPollSendRecv returns {code, info: {response-headers: {...}}, ...}
-    if (steps[current_step].type == StepType::DELEGATE
+    if (b->steps[b->current_step].type == StepType::DELEGATE
             && out.getType() == NT_HASH) {
         QoreHashNode* h = out.get<QoreHashNode>();
         QoreValue code_val = h->getKeyValue("code");
         if (!code_val.isNullOrNothing()) {
-            ctx.status_code = (int)code_val.getAsBigInt();
+            b->ctx.status_code = (int)code_val.getAsBigInt();
         }
         // Try info."response-headers" first (HTTPClient format), then "hdr" (raw format)
         QoreValue info_val = h->getKeyValue("info");
         if (info_val.getType() == NT_HASH) {
             QoreValue resp_hdr = info_val.get<QoreHashNode>()->getKeyValue("response-headers");
             if (resp_hdr.getType() == NT_HASH) {
-                if (ctx.headers) {
-                    ctx.headers->deref(xsink);
+                if (b->ctx.headers) {
+                    b->ctx.headers->deref(xsink);
                 }
-                ctx.headers = resp_hdr.get<QoreHashNode>()->hashRefSelf();
+                b->ctx.headers = resp_hdr.get<QoreHashNode>()->hashRefSelf();
             }
         }
-        if (!ctx.headers) {
+        if (!b->ctx.headers) {
             QoreValue hdr_val = h->getKeyValue("hdr");
             if (hdr_val.getType() == NT_HASH) {
-                ctx.headers = hdr_val.get<QoreHashNode>()->hashRefSelf();
+                b->ctx.headers = hdr_val.get<QoreHashNode>()->hashRefSelf();
             }
         }
         QoreValue body_val = h->getKeyValue("body");
         if (body_val.getType() == NT_BINARY) {
-            if (ctx.body) {
-                ctx.body->deref(xsink);
+            if (b->ctx.body) {
+                b->ctx.body->deref(xsink);
             }
-            ctx.body = body_val.get<BinaryNode>()->binRefSelf();
+            b->ctx.body = body_val.get<BinaryNode>()->binRefSelf();
         }
     }
 }
 
 // --- Current op release ---
 
-void PollPipelinePriv::releaseCurrentOp(ExceptionSink* xsink) {
-    if (current_op) {
-        current_op->deref(xsink);
-        current_op = nullptr;
+void qore_poll_pipeline_ops::releaseCurrentOpImpl(PollPipelinePriv* b, ExceptionSink* xsink) {
+    if (b->current_op) {
+        b->current_op->deref(xsink);
+        b->current_op = nullptr;
     }
 }
 
 // --- Result delivery ---
 
-void PollPipelinePriv::deliverResult(ExceptionSink* xsink) {
-    completed = true;
-    if (result_action) {
-        ReferenceHolder<QoreHashNode> result(buildResultHash(xsink), xsink);
+void qore_poll_pipeline_ops::deliverResultImpl(PollPipelinePriv* b, ExceptionSink* xsink) {
+    b->completed = true;
+    if (b->result_action) {
+        ReferenceHolder<QoreHashNode> result(qore_poll_pipeline_ops(b).buildResultHash(xsink), xsink);
         if (*xsink) {
             return;
         }
-        result_action->execute(result.release(), xsink);
+        b->result_action->execute(result.release(), xsink);
     }
 }
 
-QoreHashNode* PollPipelinePriv::buildResultHash(ExceptionSink* xsink) const {
+QoreHashNode* qore_poll_pipeline_ops::buildResultHashImpl(PollPipelinePriv* b, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
-    if (ctx.status_code) {
-        h->setKeyValue("status_code", ctx.status_code, xsink);
+    if (b->ctx.status_code) {
+        h->setKeyValue("status_code", b->ctx.status_code, xsink);
     }
-    if (ctx.headers) {
-        h->setKeyValue("hdr", ctx.headers->hashRefSelf(), xsink);
+    if (b->ctx.headers) {
+        h->setKeyValue("hdr", b->ctx.headers->hashRefSelf(), xsink);
     }
-    if (ctx.body) {
-        h->setKeyValue("body", ctx.body->refSelf(), xsink);
+    if (b->ctx.body) {
+        h->setKeyValue("body", b->ctx.body->refSelf(), xsink);
     }
-    if (!ctx.last_output.isNullOrNothing()) {
-        h->setKeyValue("output", ctx.last_output.refSelf(), xsink);
+    if (!b->ctx.last_output.isNullOrNothing()) {
+        h->setKeyValue("output", b->ctx.last_output.refSelf(), xsink);
     }
-    if (ctx.extra) {
-        h->setKeyValue("extra", ctx.extra->hashRefSelf(), xsink);
+    if (b->ctx.extra) {
+        h->setKeyValue("extra", b->ctx.extra->hashRefSelf(), xsink);
     }
     return h.release();
 }
 
 QoreHashNode* PollPipelinePriv::getResult(ExceptionSink* xsink) const {
-    return buildResultHash(xsink);
+    return qore_poll_pipeline_ops(this).buildResultHash(xsink);
 }
 
 // --- Abort ---
@@ -2239,13 +2263,12 @@ const char* PollPipelinePriv::getStateImpl() const {
 
 // --- Error handling ---
 
-void PollPipelinePriv::setError(const char* err, const char* desc,
-        ExceptionSink* xsink) {
-    closed = true;
-    if (result_action) {
-        result_action->executeError(err, desc, xsink);
-        result_action->deref(xsink);
-        result_action = nullptr;
+void qore_poll_pipeline_ops::setErrorImpl(PollPipelinePriv* b, const char* err, const char* desc, ExceptionSink* xsink) {
+    b->closed = true;
+    if (b->result_action) {
+        b->result_action->executeError(err, desc, xsink);
+        b->result_action->deref(xsink);
+        b->result_action = nullptr;
     }
 }
 
@@ -2278,7 +2301,6 @@ void PollPipelinePriv::setError(const char* err, const char* desc,
     @since %Qore 3.0
 */
 qclass PollPipeline [
-    private_members=object sock,string goal;
     ns=Qore;
     arg=PollPipelinePriv* priv;
     vparent=SocketPollOperationBase<auto>
@@ -2297,10 +2319,9 @@ PollPipeline::constructor(Socket[QoreSocketObject] socket) [flags=NAMED_ARGS] {
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setMemberValue("sock", QC_POLLPIPELINE, sock_obj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_obj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_POLLPIPELINE,
-        new QoreStringNode("poll_pipeline"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("poll_pipeline"), xsink);
 
     sock_ptr->ref();
     self->setPrivate(CID_POLLPIPELINE,
@@ -2316,7 +2337,7 @@ PollPipeline::constructor(Socket[QoreSocketObject] socket) [flags=NAMED_ARGS] {
     @since %Qore 3.0
 */
 PollPipeline::constructor(*string goal) [flags=NAMED_ARGS] {
-    self->setMemberValue("goal", QC_POLLPIPELINE,
+    qore_poll_op_set_member(self, "goal",
         goal ? new QoreStringNode(goal->c_str()) : new QoreStringNode("poll_pipeline"), xsink);
 
     self->setPrivate(CID_POLLPIPELINE,
@@ -2477,14 +2498,28 @@ int PollPipeline::addRecvExact(int byte_count, bool as_string = False) [dom=NETW
 }
 
 //! Adds a receive-until-pattern step
-/** @param pattern the byte pattern to match
+/** A read until a line terminator (<tt>&quot;\\n&quot;</tt> or <tt>&quot;\\r\\n&quot;</tt>) is limited to the maximum line size of the socket (see
+    @ref Qore::Socket::setMaxLineSize() "Socket::setMaxLineSize()").
+
+    @param pattern the byte pattern to match
     @param as_string if True, return the data as a string (default True)
+    @param max_size the maximum size in bytes of the data received, a \c SOCKET-RESPONSE-TOO-LARGE exception is raised
+        for more; 0 (the default) means no limit besides that of a line; the data is kept in memory until the pattern
+        is matched, so a read of a message of a peer that is not trusted needs a limit
+
     @return the step index
+
+    @throw PIPELINE-ADD-ERROR \a max_size is negative
 
     @since %Qore 3.0
 */
-int PollPipeline::addRecvUntilBytes(string pattern, bool as_string = True) [dom=NETWORK; flags=NAMED_ARGS] {
-    return priv->addRecvUntil(pattern->c_str(), as_string);
+int PollPipeline::addRecvUntilBytes(string pattern, bool as_string = True, int max_size = 0)
+        [dom=NETWORK; flags=NAMED_ARGS] {
+    if (max_size < 0) {
+        return xsink->raiseException("PIPELINE-ADD-ERROR", "the maximum size cannot be negative (" QLLD ")",
+            max_size);
+    }
+    return priv->addRecvUntil(pattern->c_str(), as_string, static_cast<size_t>(max_size));
 }
 
 //! Adds a receive-available-data step
@@ -3240,7 +3275,28 @@ nothing PollPipeline::setResultChannel(object channel) [flags=NAMED_ARGS] {
 /** @return the goal string ("poll_pipeline")
 */
 string PollPipeline::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
+}
+
+//! Sets the goal of the operation
+/** For subclasses that build a pipeline for a goal of their own; the goal is a private:internal member of the
+    system base class, which a subclass cannot write directly (qore#6839)
+
+    @param goal the goal returned by getGoal()
+
+    @par Example:
+    @code{.py}
+class MyPollOperation inherits PollPipeline {
+    constructor(Socket sock) : PollPipeline(sock) {
+        setGoal("my-goal");
+    }
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+private nothing PollPipeline::setGoal(string goal) [flags=NAMED_ARGS] {
+    qore_poll_op_set_member(self, "goal", goal->stringRefSelf(), xsink);
 }
 
 //! Returns the current state

@@ -68,14 +68,6 @@ DateTimeNode* pth_make_date(const AbstractQoreZoneInfo* zone, int64 us) {
     }
     return DateTimeNode::makeAbsolute(zone, secs, static_cast<int>(rem));
 }
-
-//! returns the error string of an exception, or nullptr if it is not a string
-const char* pth_get_err_string(const QoreValue& err) {
-    if (err.getType() != NT_STRING) {
-        return nullptr;
-    }
-    return err.get<const QoreStringNode>()->c_str();
-}
 }
 
 const char* program_thread_outcome_name(ProgramThreadOutcome outcome) {
@@ -101,16 +93,14 @@ ProgramThreadOutcome program_thread_get_outcome(const ExceptionSink& xsink, bool
     if (!e) {
         return xsink.isThreadExit() ? ProgramThreadOutcome::EXITED : ProgramThreadOutcome::COMPLETED;
     }
-    const char* err = pth_get_err_string(sink.getExceptionErr());
-    if (err) {
-        if (!strcmp(err, "THREAD-CANCELLED")) {
-            return ProgramThreadOutcome::CANCELLED;
-        }
-        // the Program was interrupted, or a sandbox ended the thread for reaching a limit
-        if (!strcmp(err, "PROGRAM-INTERRUPTED") || !strcmp(err, "SANDBOX-TIMEOUT")
-                || !strcmp(err, "SANDBOX-MEMORY-LIMIT")) {
-            return ProgramThreadOutcome::INTERRUPTED;
-        }
+    // the error code can be an inline short string, which has no node (issue #7038)
+    QoreStringDataHelper err(sink.getExceptionErr());
+    if (err == "THREAD-CANCELLED") {
+        return ProgramThreadOutcome::CANCELLED;
+    }
+    // the Program was interrupted, or a sandbox ended the thread for reaching a limit
+    if (err == "PROGRAM-INTERRUPTED" || err == "SANDBOX-TIMEOUT" || err == "SANDBOX-MEMORY-LIMIT") {
+        return ProgramThreadOutcome::INTERRUPTED;
     }
     return ProgramThreadOutcome::EXCEPTION;
 }

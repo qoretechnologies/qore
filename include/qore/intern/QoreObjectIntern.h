@@ -48,6 +48,7 @@
 #include "qore/intern/RSection.h"
 #include "qore/intern/RSet.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #define OS_OK            0
 #define OS_DELETED      -1
@@ -59,15 +60,11 @@
 
 class LValueHelper;
 
-class lthash {
-public:
-    DLLLOCAL bool operator()(char* s1, char* s2) const {
-        return memcmp(s1, s2, SH_SIZE) < 0;
-    }
-};
-
-// per-class internal data
-typedef std::map<char*, QoreHashNode*, lthash> cdmap_t;
+//! the private:internal members of an object, per class, keyed by the class ID of the class that declares them
+/** The class ID is the identity of the class: the copies of a class imported into other Programs share it, and a class
+    with the same name and signature as another one (whose signature hash is the same) has its own (qore#7036)
+*/
+typedef std::map<qore_classid_t, QoreHashNode*> cdmap_t;
 
 /*
   Qore internal class data is stored against the object with this data structure
@@ -212,6 +209,18 @@ class VRMutex;
 */
 DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink);
 
+//! Marks the objects in \a v as constants of the whole process, whose members no code can change (qore#6749)
+/** Called for the value of each builtin constant of the library and of binary modules (QoreNamespace::addConstant(),
+    QoreClass::addBuiltinConstant()) and for the process-wide singleton objects of the library, before the objects are
+    shared: one such object serves every Program and thread, so a member that one caller gave it would be read by
+    every other caller, also by the code of other sandboxes.  The objects in the lists and hashes of \a v are marked
+    too; only system objects (no Program owns them) are marked, as an object that a Program owns, such as one that a
+    language bridge imports as a constant of a Program, is that Program's.  Adding a member to a marked object raises
+    \c SYSTEM-OBJECT-ERROR (a class's member write gate, which owns the storage of its undeclared members, is
+    evaluated first).
+*/
+DLLLOCAL void qore_object_mark_process_constant(QoreValue v);
+
 //! Returns true if an object that a write removed from \a root needs a scan of its own after the root's (#6335)
 /** Not if it is in no recursive set, nor if the removed value holds its only reference (it is freed when the value is
     released), nor if the root's scan reached it (it is in the root's valid set).
@@ -264,6 +273,13 @@ public:
     private_data_scan_list_t* private_data_scans = nullptr;
 
     bool system_object;
+    //! set when the object is a constant of the whole process: its members cannot be changed (qore#6749)
+    /** An object that a builtin constant of the library or of a binary module holds, and a process-wide singleton
+        object of the library, is one object for every Program and thread: a member that any code gave it would be
+        seen by all other code, also by the code of other sandboxes.  Set before the object is shared (see
+        qore_object_mark_process_constant()) and never cleared, so it is read without a lock.
+    */
+    bool process_constant = false;
     //! set when the object's destruction has started; read without the object's locks as status is
     std::atomic<bool> in_destructor;
     bool recursive_ref_found;
@@ -369,12 +385,16 @@ public:
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
             LexicalSemanticPolicy policy);
 
+    //! merges the members of the object that the current class context can use into \a hash
+    /** @param lock false if this thread holds the object's lock for writing already (the lvalue of the merge is a
+        member of this object; qore#7107)
+    */
     DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy) const;
+            LexicalSemanticPolicy policy, bool lock = true) const;
 
     template <bool Lexical>
     DLLLOCAL void mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy) const;
+            LexicalSemanticPolicy policy, bool lock) const;
 
     DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
 
@@ -400,6 +420,53 @@ public:
 
     DLLLOCAL int getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove,
             ExceptionSink* xsink);
+
+    //! Raises \c SYSTEM-OBJECT-ERROR and returns -1 if the member write is refused (qore#6749)
+    /** see checkProcessConstantWrite() and checkForeignBuiltinMemberWrite(); called only where a member is created
+        (the miss path of a member write) and for merges, so that a write to a member that exists, such as a declared
+        member, costs nothing more
+
+        @param mem the member written, or nullptr for a merge
+        @param h the members merged, or nullptr for a member write
+        @param class_ctx the class context of the write
+    */
+    DLLLOCAL int checkMemberWrite(const char* mem, const QoreHashNode* h, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const {
+        // only a constant of the whole process or an object of a builtin class
+        if (!process_constant && !qore_class_private::get(*theclass)->sys) [[likely]] {
+            return 0;
+        }
+        return checkProcessConstantWrite(mem, xsink) || checkForeignBuiltinMemberWrite(mem, h, class_ctx, xsink)
+            ? -1 : 0;
+    }
+
+    //! Raises \c SYSTEM-OBJECT-ERROR and returns -1 if the object is a constant of the whole process (qore#6749)
+    /** @param mem the member written, or nullptr for a merge
+    */
+    DLLLOCAL int checkProcessConstantWrite(const char* mem, ExceptionSink* xsink) const {
+        if (!process_constant) [[likely]] {
+            return 0;
+        }
+        return raiseProcessConstantWrite(mem, xsink);
+    }
+
+    //! Raises \c SYSTEM-OBJECT-ERROR for a member write to a constant of the whole process; returns -1
+    DLLLOCAL int raiseProcessConstantWrite(const char* mem, ExceptionSink* xsink) const;
+
+    //! Raises \c SYSTEM-OBJECT-ERROR and returns -1 if sandboxed code gives a member to a foreign builtin object
+    /** The code of a sandboxed Program cannot give an object of a builtin class without a public member list,
+        which another Program or the library created, a member that the class does not declare (qore#6749): the
+        object can be shared, as one that a module keeps in a static member is, and the member would be read by other
+        callers, also by the code of other sandboxes.  The members that the class declares (the private and internal
+        members of a builtin class, which its C++ code writes) and the objects that the Program created are not
+        affected.
+
+        @param mem the member written, or nullptr for a merge
+        @param h the members merged, or nullptr for a member write
+        @param class_ctx the class context of the write
+    */
+    DLLLOCAL int checkForeignBuiltinMemberWrite(const char* mem, const QoreHashNode* h,
+            const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreStringNode* firstKey(ExceptionSink* xsink) {
         // get the current class context
@@ -480,11 +547,24 @@ public:
         return theclass_priv->runtimeCheckMemberAccess(info, class_ctx) ? QOA_OK : QOA_PRIV_ERROR;
     }
 
+    //! raises OBJECT-ALREADY-DELETED and returns true if the object is deleted
+    /** takes the object's read lock unless \a vl holds the object's lock: the lvalue is then a member of the object
+        itself, whose lock this thread holds for writing
+    */
+    DLLLOCAL bool raiseIfDeleted(const AutoVLock& vl, ExceptionSink* xsink) const {
+        QoreSafeVarRWReadLocker sl(rml, qore_auto_vlock_ops(&vl).getRWL() != &rml);
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+            return true;
+        }
+        return false;
+    }
+
     // must be called in the object read lock
     DLLLOCAL const QoreHashNode* getInternalData(const qore_class_private* class_ctx) const {
         if (!cdmap)
             return nullptr;
-        cdmap_t::const_iterator i = cdmap->find(class_ctx->getHash());
+        cdmap_t::const_iterator i = cdmap->find(class_ctx->classID);
         return i != cdmap->end() ? i->second : nullptr;
     }
 
@@ -492,7 +572,7 @@ public:
     DLLLOCAL QoreHashNode* getInternalData(const qore_class_private* class_ctx) {
         if (!cdmap)
             return nullptr;
-        cdmap_t::iterator i = cdmap->find(class_ctx->getHash());
+        cdmap_t::iterator i = cdmap->find(class_ctx->classID);
         return i != cdmap->end() ? i->second : nullptr;
     }
 
@@ -752,7 +832,12 @@ public:
         return true;
     }
 
-    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const;
+    //! merges the members of the object that the current class context can use into \a hash
+    /** @param lock false if this thread holds the object's lock for writing already (the lvalue of the merge is a
+        member of this object; qore#7107)
+    */
+    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            bool lock = true) const;
 
     DLLLOCAL bool checkData(qore_classid_t key) {
         if (!privateData) {
@@ -1021,9 +1106,9 @@ private:
 
 public:
     DLLLOCAL qore_object_lock_handoff_helper(qore_object_private* n_pobj, AutoVLock& n_vl) : pobj(n_pobj), vl(n_vl) {
-        if (pobj->obj == vl.getObject()) {
-            assert(vl.getRWL() == &pobj->rml);
-            vl.clear();
+        if (pobj->obj == qore_auto_vlock_ops(vl).getObject()) {
+            assert(qore_auto_vlock_ops(vl).getRWL() == &pobj->rml);
+            qore_auto_vlock_ops(vl).clear();
             return;
         }
 
@@ -1047,7 +1132,7 @@ public:
     }
 
     DLLLOCAL void stayLocked() {
-        vl.set(pobj->obj, &pobj->rml);
+        qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
         pobj = nullptr;
     }
 };

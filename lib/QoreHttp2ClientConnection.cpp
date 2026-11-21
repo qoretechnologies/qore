@@ -322,11 +322,11 @@ int Http2ClientConnection::finalizePollOpSubmission(
         ExceptionSink* xsink) {
     // Set poll op QoreObject members: "sock" and "goal" — same as the
     // QPP binding would.
-    poll_obj_holder->setValue("sock", sock_obj_holder->refSelf(), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "sock", sock_obj_holder->refSelf(), xsink);
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setValue("goal", new QoreStringNode("http2_client"), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "goal", new QoreStringNode("http2_client"), xsink);
     if (*xsink) {
         return -1;
     }

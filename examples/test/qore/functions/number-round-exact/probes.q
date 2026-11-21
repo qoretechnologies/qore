@@ -1,7 +1,8 @@
 # probes of number-round-exact.qtest (qore#6278): round(), ceil() and floor() of a number with a precision find the
-# multiple of the power of 10 exactly, from the binary value of the number, and give it correctly rounded to the
-# number's precision; probes() returns the results, one per line, as shortest round-trip strings in scientific
-# notation with the precision of each result
+# multiple of the power of 10 exactly, from the binary value of the number, and give it correctly rounded: with
+# digits after the decimal point to the precision of the number parsed from the decimal string of the multiple
+# (qore#7014), and otherwise to the number's precision; probes() returns the results, one per line, as shortest
+# round-trip strings in scientific notation with the precision of each result
 
 %modern
 

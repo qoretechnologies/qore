@@ -1,0 +1,510 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# the masked description of a datasource for messages, as given by mask_datasource() for a datasource string or hash
+# and by AbstractDatasource::getMaskedDescription() for a datasource object, shows the driver, the host and the port,
+# and none of the user name, the password and the database name (qore#6988)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DatasourceMaskedDescriptionTest
+
+#! a datasource implemented in Qore, which gives the values set in its constructor
+class ScriptedDatasource inherits AbstractDatasource {
+    private {
+        auto driver;
+        auto host;
+        auto port;
+        *string throw_in;
+    }
+
+    #! creates the object; \a throw_in names a method that throws an exception
+    constructor(auto driver, auto host, auto port, *string throw_in) {
+        self.driver = driver;
+        self.host = host;
+        self.port = port;
+        self.throw_in = throw_in;
+    }
+
+    nothing commit() {}
+    nothing rollback() {}
+    auto exec(string sql, ...) {}
+    auto vexec(string sql, *softlist<auto> vargs) {}
+    auto execRaw(string sql) {}
+    auto select(string sql, ...) {}
+    auto selectRow(string sql, ...) {}
+    auto selectRows(string sql, ...) {}
+    auto selectTyped(string sql, ...) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselect(string sql, *softlist<auto> vargs) {}
+    auto vselectRow(string sql, *softlist<auto> vargs) {}
+    auto vselectRows(string sql, *softlist<auto> vargs) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+    nothing beginTransaction() {}
+    *string getUserName() { return DatasourceMaskedDescriptionTest::User; }
+    *string getPassword() { return DatasourceMaskedDescriptionTest::Pass; }
+    *string getDBName() { return DatasourceMaskedDescriptionTest::Db; }
+    *string getDBEncoding() {}
+    *string getOSEncoding() {}
+    *string getHostName() {
+        check("getHostName");
+        return host;
+    }
+    *int getPort() {
+        check("getPort");
+        return port;
+    }
+    string getDriverName() {
+        check("getDriverName");
+        return driver;
+    }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    hash<auto> getConfigHash() { return {}; }
+    string getConfigString() { return ""; }
+
+    private check(string method) {
+        if (throw_in == method) {
+            throw "SCRIPTED-ERROR", method;
+        }
+    }
+}
+
+#! a datasource implemented in Qore that returns short string literals, which compiled code can return as values
+#! stored inline, without a string node
+class ShortLiteralDatasource inherits ScriptedDatasource {
+    constructor() : ScriptedDatasource(NOTHING, NOTHING, 1) {
+    }
+
+    *string getHostName() {
+%ifdef QoreDebug
+        # stored inline in the value in every execution mode
+        return dbg_make_short_string("h");
+%else
+        return "h";
+%endif
+    }
+
+    string getDriverName() {
+%ifdef QoreDebug
+        return dbg_make_short_string("pg");
+%else
+        return "pg";
+%endif
+    }
+}
+
+#! a datasource implemented in Qore that counts the calls of getDriverName()
+class CountingDatasource inherits ScriptedDatasource {
+    public {
+        int calls = 0;
+    }
+
+    constructor() : ScriptedDatasource("pg", "h", 1) {
+    }
+
+    string getDriverName() {
+        ++calls;
+        return ScriptedDatasource::getDriverName();
+    }
+}
+
+class DatasourceMaskedDescriptionTest inherits QUnit::Test {
+    public {
+        const User = "u_SECRET1";
+        const Pass = "p_SECRET2";
+        const Db = "d_SECRET3";
+        const Secrets = (User, Pass, Db);
+
+        #! the credentials of a datasource string
+        const Creds = User + "/" + Pass + "@" + Db;
+
+        #! the mock driver, which needs no server
+        const Driver = "dbitest";
+        const Host = "h-host";
+        const Port = 4321;
+
+        #! the masked description of a datasource with the mock driver, the host and the port
+        const Masked = sprintf("%s:****/****@****%%%s:%d", Driver, Host, Port);
+
+        #! datasource strings and their masked descriptions
+        const Strings = (
+            # all the parts of a datasource string
+            ("pgsql:" + Creds + "(utf8)%db.example.com:5432{min=2,max=4," + Pass + "=" + User + "}",
+                "pgsql:****/****@****%db.example.com:5432"),
+            ("pgsql:" + Creds + "%db.example.com", "pgsql:****/****@****%db.example.com"),
+            # a port of 0 in a string is refused (issue #6997): the string is described as one that cannot be parsed
+            ("pgsql:" + Creds + "%db.example.com:0", "pgsql:****"),
+            ("pgsql:" + Creds, "pgsql:****/****@****"),
+            ("pgsql:" + User + "@" + Db, "pgsql:****/****@****"),
+            ("pgsql:@" + Db, "pgsql:****/****@****"),
+            # a string without a driver
+            ("@" + Db, "****:****/****@****"),
+            # strings that cannot be parsed
+            ("pgsql:" + User + "/" + Pass, "pgsql:****"),
+            ("pgsql:" + Creds + "%host:12x", "pgsql:****"),
+            ("pgsql:" + Creds + "{" + Pass + "=1," + Pass + "=2}", "pgsql:****"),
+            (User + "/" + Pass + "x" + Db, "****"),
+            ("", "****"),
+            # a driver name that is not valid, which can be a part of a datasource string
+            (User + " " + Pass + ":" + Creds, "****:****/****@****"),
+            (User + " " + Pass + ":" + User + "/" + Pass, "****"),
+            # a NUL character
+            ("pgsql:" + Creds + "\x00" + Pass, "pgsql:****"),
+        );
+
+        #! datasource hashes and their masked descriptions
+        const Hashes = (
+            ({"type": "oracle", "user": User, "pass": Pass, "db": Db, "host": "db.example.com", "port": 1521,
+                "charset": "AL32UTF8", "options": {"min": 2, Pass: User}},
+                "oracle:****/****@****%db.example.com:1521"),
+            ({"type": "oracle", "user": User, "pass": Pass, "db": Db, "host": "db.example.com"},
+                "oracle:****/****@****%db.example.com"),
+            ({"type": "oracle", "user": User, "pass": Pass, "db": Db}, "oracle:****/****@****"),
+            # the port as a string
+            ({"type": "oracle", "db": Db, "host": "h", "port": "1521"}, "oracle:****/****@****%h:1521"),
+            # ports that are not valid are not shown
+            ({"type": "oracle", "db": Db, "host": "h", "port": "15x1"}, "oracle:****/****@****%h"),
+            ({"type": "oracle", "db": Db, "host": "h", "port": "123456"}, "oracle:****/****@****%h"),
+            ({"type": "oracle", "db": Db, "host": "h", "port": 65536}, "oracle:****/****@****%h"),
+            ({"type": "oracle", "db": Db, "host": "h", "port": -1}, "oracle:****/****@****%h"),
+            ({"type": "oracle", "db": Db, "host": "h", "port": 1.5}, "oracle:****/****@****%h"),
+            # a port without a host is not shown
+            ({"type": "oracle", "db": Db, "port": 1521}, "oracle:****/****@****"),
+            # values that are not strings
+            ({"type": ("oracle",), "db": Db, "host": 1}, "****:****/****@****"),
+            # a driver name that is not valid
+            ({"type": User + "/" + Pass + "@" + Db, "db": Db}, "****:****/****@****"),
+            ({"type": "", "db": Db}, "****:****/****@****"),
+            ({}, "****:****/****@****"),
+        );
+
+        #! a long driver name and host name: strings too long to be stored inline in a value
+        const LongDriver = "a_long_driver_name";
+        const LongHost = "a-long-host-name.example.com";
+
+        #! datasource hashes with short strings (which can be stored inline in a value, without a string node, as in
+        #! compiled code) and long strings, and their masked descriptions
+        const ShortLongHashes = (
+            # all short
+            ({"type": "pg", "db": Db, "host": "h", "port": "1"}, "pg:****/****@****%h:1"),
+            ({"type": "pg", "db": Db, "host": "h", "port": "65535"}, "pg:****/****@****%h:65535"),
+            ({"type": "pg", "db": Db, "host": "h", "port": "6553x"}, "pg:****/****@****%h"),
+            ({"type": "pg", "db": Db, "host": "h", "port": "65536"}, "pg:****/****@****%h"),
+            ({"type": "pg", "db": Db, "host": "h", "port": "0"}, "pg:****/****@****%h"),
+            ({"type": "pg", "db": Db, "host": "h", "port": ""}, "pg:****/****@****%h"),
+            # all long
+            ({"type": LongDriver, "db": Db, "host": LongHost, "port": 5432},
+                LongDriver + ":****/****@****%" + LongHost + ":5432"),
+            # mixed
+            ({"type": "pg", "db": Db, "host": LongHost, "port": "5432"}, "pg:****/****@****%" + LongHost + ":5432"),
+            ({"type": LongDriver, "db": Db, "host": "h", "port": "5432"}, LongDriver + ":****/****@****%h:5432"),
+            # a short driver name that is not valid
+            ({"type": "a/b", "db": Db, "host": "h"}, "****:****/****@****%h"),
+        );
+    }
+
+    constructor() : Test("DatasourceMaskedDescriptionTest", "1.0") {
+        addTestCase("mask_datasource() with a string", \maskString());
+        addTestCase("mask_datasource() with a hash", \maskHash());
+        addTestCase("mask_datasource() with short and long strings in a hash", \maskHashShortLong());
+        addTestCase("mask_datasource() with special characters in the password", \maskPasswordChars());
+        addTestCase("mask_datasource() with an ambiguous option block", \maskAmbiguousOptions());
+        addTestCase("masked descriptions with host names that are not valid", \maskInvalidHost());
+        addTestCase("masked descriptions with ports that are not valid", \maskInvalidPort());
+        addTestCase("AbstractDatasource::getMaskedDescription() calls the methods", \abstractDescCalls());
+        addTestCase("Datasource::getMaskedDescription()", \datasourceDesc());
+        addTestCase("DatasourcePool::getMaskedDescription()", \poolDesc());
+        addTestCase("AbstractDatasource::getMaskedDescription()", \abstractDesc());
+        set_return_value(main());
+    }
+
+    maskString() {
+        foreach list<auto> l in (Strings) {
+            string desc = mask_datasource(l[0]);
+            checkNoSecrets(desc, sprintf("mask_datasource(%y)", l[0]));
+            assertEq(l[1], desc, sprintf("mask_datasource(%y)", l[0]));
+        }
+        # the description is the same as that of the hash of the string
+        string str = "pgsql:" + Creds + "%db.example.com:5432";
+        assertEq(mask_datasource(parse_datasource(str)), mask_datasource(str));
+        # and that of a datasource made from the string
+        assertEq(Masked, mask_datasource(sprintf("%s:%s%%%s:%d", Driver, Creds, Host, Port)));
+        # a string in another encoding is described in the default encoding
+        assertEq("pgsql:****/****@****%db.example.com:5432", mask_datasource(convert_encoding(str, "UTF-16LE")));
+        # a port of 0 in a string is refused (issue #6997)
+        assertThrows("DATASOURCE-PARSE-ERROR", \parse_datasource(), "pgsql:" + Creds + "%h:0");
+        # named arguments are accepted
+        assertEq("pgsql:****/****@****", mask_datasource(datasource: "pgsql:" + Creds));
+    }
+
+    maskHash() {
+        foreach list<auto> l in (Hashes) {
+            string desc = mask_datasource(l[0]);
+            checkNoSecrets(desc, sprintf("mask_datasource(%y)", l[0]));
+            assertEq(l[1], desc, sprintf("mask_datasource(%y)", l[0]));
+        }
+        assertEq("oracle:****/****@****", mask_datasource(config: {"type": "oracle", "db": Db}));
+    }
+
+    maskHashShortLong() {
+        foreach list<auto> l in (ShortLongHashes) {
+            string desc = mask_datasource(l[0]);
+            checkNoSecrets(desc, sprintf("mask_datasource(%y)", l[0]));
+            assertEq(l[1], desc, sprintf("mask_datasource(%y)", l[0]));
+            # the same hash with values made at run time
+            hash<auto> h = map {$1.key: $1.value.typeCode() == NT_STRING ? sprintf("%s", $1.value) : $1.value},
+                l[0].pairIterator();
+            assertEq(l[1], mask_datasource(h), sprintf("mask_datasource(%y) (run time)", h));
+%ifdef QoreDebug
+            # the same hash with each short string stored inline in the value, as compiled code can store it, in
+            # every execution mode
+            h = map {$1.key: ($1.value.typeCode() == NT_STRING && $1.value.size() <= 6)
+                ? dbg_make_short_string($1.value) : $1.value}, l[0].pairIterator();
+            assertEq(l[1], mask_datasource(h), sprintf("mask_datasource(%y) (inline short strings)", h));
+%endif
+        }
+    }
+
+    datasourceDesc() {
+        Datasource ds(sprintf("%s:%s%%%s:%d", Driver, Creds, Host, Port));
+        assertEq(Masked, ds.getMaskedDescription());
+        # the values are not shown while it is open either
+        ds.open();
+        on_exit ds.close();
+        assertEq(Masked, ds.getMaskedDescription());
+
+        # the host and port of the next connection are shown
+        ds.setHostName("other-host");
+        ds.setPort(1234);
+        string desc = ds.getMaskedDescription();
+        assertEq(sprintf("%s:****/****@****%%other-host:1234", Driver), desc);
+        checkNoSecrets(desc, "Datasource::getMaskedDescription()");
+
+        # a datasource without a host
+        Datasource ds2(Driver, User, Pass, Db);
+        assertEq(Driver + ":****/****@****", ds2.getMaskedDescription());
+    }
+
+    poolDesc() {
+        DatasourcePool p(sprintf("%s:%s%%%s:%d{min=1,max=1}", Driver, Creds, Host, Port));
+        on_exit delete p;
+        string desc = p.getMaskedDescription();
+        checkNoSecrets(desc, "DatasourcePool::getMaskedDescription()");
+        assertEq(Masked, desc);
+
+        DatasourcePool p2(Driver, User, Pass, Db, NOTHING, NOTHING, 1, 1);
+        on_exit delete p2;
+        assertEq(Driver + ":****/****@****", p2.getMaskedDescription());
+    }
+
+    abstractDesc() {
+        # a datasource implemented in Qore gets the description from its driver name, host and port
+        assertEq("pgsql:****/****@****%h:5432", new ScriptedDatasource("pgsql", "h", 5432).getMaskedDescription());
+        assertEq("pgsql:****/****@****", new ScriptedDatasource("pgsql", NOTHING, 5432).getMaskedDescription());
+        assertEq("pgsql:****/****@****%h", new ScriptedDatasource("pgsql", "h", NOTHING).getMaskedDescription());
+        # short strings (which can be stored inline in a value, as in compiled code) and long strings
+        assertEq("pg:****/****@****%h:1", new ScriptedDatasource("pg", "h", 1).getMaskedDescription());
+        assertEq(LongDriver + ":****/****@****%" + LongHost + ":5432",
+            new ScriptedDatasource(LongDriver, LongHost, 5432).getMaskedDescription());
+        assertEq("pg:****/****@****%" + LongHost, new ScriptedDatasource("pg", LongHost).getMaskedDescription());
+        assertEq(LongDriver + ":****/****@****%h", new ScriptedDatasource(LongDriver, "h").getMaskedDescription());
+        assertEq("pg:****/****@****%h:1", new ShortLiteralDatasource().getMaskedDescription());
+        # a driver name that is not valid is not shown
+        string desc = new ScriptedDatasource(Creds, "h", 1).getMaskedDescription();
+        checkNoSecrets(desc, "AbstractDatasource::getMaskedDescription()");
+        assertEq("****:****/****@****%h:1", desc);
+
+        # an exception raised by one of its methods is raised to the caller
+        foreach string method in (("getDriverName", "getHostName", "getPort")) {
+            try {
+                new ScriptedDatasource("pgsql", "h", 1, method).getMaskedDescription();
+                fail(sprintf("%s: no exception was raised", method));
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("SCRIPTED-ERROR", ex.err, method);
+                assertEq(method, ex.desc, method);
+            }
+        }
+
+        # a Datasource and a DatasourcePool as an AbstractDatasource
+        AbstractDatasource ads = new Datasource(sprintf("%s:%s%%%s:%d", Driver, Creds, Host, Port));
+        assertEq(Masked, ads.getMaskedDescription());
+        ads = new DatasourcePool(sprintf("%s:%s%%%s:%d{min=1,max=1}", Driver, Creds, Host, Port));
+        on_exit delete ads;
+        assertEq(Masked, ads.getMaskedDescription());
+    }
+
+    #! the password in a datasource string can have the characters that separate its parts (qore#6988)
+    /** The password ends at the last '@' before the database name, so a password with '@', '%', ':', '/', '{',
+        '}', '(' or ')', or a %-encoded password, is never shown, and the database name, host and port are found
+    */
+    maskPasswordChars() {
+        foreach string c in (("@", "%", ":", "/", "{", "}", "(", ")", "%40", "@%{", "/@:")) {
+            foreach string pw in ((Pass + c, c + Pass, Pass + c + Pass)) {
+                string label = sprintf("password %y", pw);
+                foreach list<string> l in (
+                        ("%db.example.com:5432", "pgsql:****/****@****%db.example.com:5432"),
+                        ("", "pgsql:****/****@****"),
+                        ("(utf8)%h:1{min=1}", "pgsql:****/****@****%h:1"),
+                    ) {
+                    string ds = "pgsql:" + User + "/" + pw + "@" + Db + l[0];
+                    string desc = mask_datasource(ds);
+                    checkNoSecrets(desc, label);
+                    assertEq(-1, desc.find(pw), label);
+                    assertEq(l[1], desc, label + ": " + l[0]);
+                    # the parser splits the string at the last '@', so the password and database name are found
+                    hash<auto> h = parse_datasource(ds);
+                    assertEq(pw, h.pass, label + ": the password");
+                    assertEq(User, h.user, label + ": the user name");
+                    assertEq(Db, h.db, label + ": the database name");
+                }
+            }
+        }
+    }
+
+    #! the option block is found from the last '{' of the string, so a '{' in the password can make it ambiguous
+    /** A string whose option block has an option name with '@' is refused, and one with an option value with '@' is
+        described by mask_datasource() by its driver only, so no part of the password is shown as the host or as an
+        option name (qore#6988)
+    */
+    maskAmbiguousOptions() {
+        string hostpart = "x_SECRET4";
+        foreach string ds in (
+                # a password with '@', then '%', then '{', and a '}' at the end with no later '{'
+                "pgsql:" + User + "/" + Pass + "@" + Db + "%" + hostpart + "{" + Pass + "@" + Db + "%h:1}",
+                "pgsql:" + User + "/" + Pass + "@y%" + hostpart + "{z@" + Db + "}",
+                "pgsql:" + User + "/" + Pass + "@y%" + hostpart + "{z=a@" + Db + "}",
+            ) {
+            string desc = mask_datasource(ds);
+            checkNoSecrets(desc, "ambiguous option block");
+            assertEq(-1, desc.find(hostpart), "ambiguous option block: a part of the password is not the host");
+            assertEq("pgsql:****", desc, "ambiguous option block");
+        }
+        # an option name with '@' is refused: the datasource string is not shown, nor are its option names
+        foreach string ds in (
+                "pgsql:" + User + "/" + Pass + "@" + Db + "%" + hostpart + "{" + Pass + "@" + Db + "%h:1}",
+                "pgsql:" + Creds + "%h:1{min=1," + Pass + "@" + Db + "}",
+            ) {
+            foreach code c in (
+                    sub () { hash<auto> h = parse_datasource(ds); remove h; },
+                    sub () { Datasource ds0(ds); },
+                    sub () { DatasourcePool p0(ds); delete p0; },
+                ) {
+                try {
+                    c();
+                    fail("no exception was raised");
+                } catch (hash<ExceptionInfo> ex) {
+                    string text = sprintf("%s: %s: %y", ex.err, ex.desc, ex.arg);
+                    checkNoSecrets(text, "an option name with '@'");
+                    assertEq(-1, text.find(hostpart), "an option name with '@': " + text);
+                }
+            }
+            assertThrows("DATASOURCE-PARSE-ERROR", "an option name in the option specification has '@'",
+                \parse_datasource(), ds);
+        }
+        # an option value with '@' is ambiguous as well, so only the driver is shown
+        assertEq("pgsql:****", mask_datasource("pgsql:" + Creds + "%h:1{email=a@b}"));
+        assertEq({"email": "a@b"}, parse_datasource("pgsql:" + Creds + "%h:1{email=a@b}").options);
+        # options without '@' are not
+        assertEq("pgsql:****/****@****%h:1", mask_datasource("pgsql:" + Creds + "%h:1{min=1,max=2,x=y/z}"));
+        # without a valid driver
+        assertEq("****", mask_datasource("a b:" + Creds + "%h:1{email=a@b}"));
+    }
+
+    #! a host name with a character that a host name or an IP address cannot have is not shown (qore#6988)
+    maskInvalidHost() {
+        list<string> hosts = ("h\nX", "h\rX", "h\x1b[31m", "h X", "h\tX", "/var/run/postgresql",
+            "h" + chr(0xe9), "h,X", "h;X", "h'X", "h\"X", "h\\X", "h*X", "h%X", "h@X");
+        foreach string host in (hosts) {
+            string label = sprintf("host %y", host);
+            # a hash
+            assertEq("pgsql:****/****@****%****:5432", mask_datasource({"type": "pgsql", "host": host, "port": 5432}),
+                label);
+            # a Qore implementation of AbstractDatasource
+            assertEq("pgsql:****/****@****%****:5432",
+                new ScriptedDatasource("pgsql", host, 5432).getMaskedDescription(), label);
+            # a Datasource and a DatasourcePool
+            Datasource ds(Driver, User, Pass, Db, NOTHING, host, Port);
+            assertEq(Driver + ":****/****@****%****:" + Port, ds.getMaskedDescription(), label);
+            ds.setHostName(Host);
+            assertEq(Masked, ds.getMaskedDescription(), label + ": a valid host set later is shown");
+            DatasourcePool p(Driver, User, Pass, Db, NOTHING, host, 1, 1, Port);
+            on_exit delete p;
+            assertEq(Driver + ":****/****@****%****:" + Port, p.getMaskedDescription(), label);
+        }
+        # a NUL character, which a Datasource does not accept in a host name
+        assertEq("pgsql:****/****@****%****:5432", mask_datasource({"type": "pgsql", "host": "h\x00X", "port": 5432}));
+        assertEq("pgsql:****/****@****%****:5432",
+            new ScriptedDatasource("pgsql", "h\x00X", 5432).getMaskedDescription());
+        # in a datasource string, a control character in the host
+        foreach string host in (("h\nX", "h\x1b[31m", "h X")) {
+            assertEq("pgsql:****/****@****%****:5432", mask_datasource("pgsql:" + Creds + "%" + host + ":5432"),
+                sprintf("string host %y", host));
+        }
+        # host names and IP addresses are shown
+        foreach string host in (("db.example.com", "db-1_a", "10.0.0.1", "::1", "[::1]", "fe80::1")) {
+            assertEq("pgsql:****/****@****%" + host + ":5432",
+                mask_datasource({"type": "pgsql", "host": host, "port": 5432}), host);
+        }
+        assertEq("pgsql:****/****@****%::1:5432", mask_datasource("pgsql:" + Creds + "%[::1]:5432"));
+    }
+
+    #! a port that is not valid never makes a masked description throw an exception (qore#6988)
+    maskInvalidPort() {
+        string big = strmul("9", 40);
+        foreach string ds in (
+                "pgsql:" + Creds + "%h:0",
+                "pgsql:" + Creds + "%h:" + big,
+                "pgsql:" + Creds + "%h:65536",
+                "pgsql:" + Creds + "%h:-1",
+                "pgsql:" + Creds + "%h:00000000000000000001",
+            ) {
+            string desc = mask_datasource(ds);
+            checkNoSecrets(desc, ds);
+            assertEq("pgsql:****", desc, sprintf("%y", ds));
+        }
+        foreach auto port in ((0, "0", big, -1, 65536, 1 << 40, -(1 << 40))) {
+            assertEq("pgsql:****/****@****%h", mask_datasource({"type": "pgsql", "host": "h", "port": port}),
+                sprintf("port %y", port));
+            if (port.typeCode() == NT_INT) {
+                assertEq("pgsql:****/****@****%h", new ScriptedDatasource("pgsql", "h", port).getMaskedDescription(),
+                    sprintf("port %y", port));
+            }
+        }
+        # a port of 0 is the default port of a Datasource and a DatasourcePool
+        Datasource ds(Driver, User, Pass, Db, NOTHING, Host, 0);
+        assertEq(Driver + ":****/****@****%" + Host, ds.getMaskedDescription());
+        ds.setPort(0);
+        assertEq(Driver + ":****/****@****%" + Host, ds.getMaskedDescription());
+        DatasourcePool p(Driver, User, Pass, Db, NOTHING, Host, 1, 1, 0);
+        on_exit delete p;
+        assertEq(Driver + ":****/****@****%" + Host, p.getMaskedDescription());
+    }
+
+    #! AbstractDatasource::getMaskedDescription() calls the methods of a subclass, which can have side effects, also
+    #! when its value is not used (qore#6988)
+    abstractDescCalls() {
+        CountingDatasource cds();
+        AbstractDatasource ads = cds;
+        ads.getMaskedDescription();
+        assertEq(1, cds.calls, "the call with its value not used calls the method");
+        string desc = ads.getMaskedDescription();
+        assertEq("pg:****/****@****%h:1", desc);
+        assertEq(2, cds.calls, "the call with its value used calls the method");
+    }
+
+    #! checks that a description shows none of the user name, password and database name
+    private checkNoSecrets(string desc, string label) {
+        foreach string secret in (Secrets) {
+            assertEq(-1, desc.find(secret), sprintf("%s: the description shows %y: %s", label, secret, desc));
+        }
+    }
+}

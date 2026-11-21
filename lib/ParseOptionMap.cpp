@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreMiscMembersOps.h"
 #include <qore/ParseOptionMap.h>
 #include <qore/Restrictions.h>
 
@@ -37,13 +38,13 @@ rev_opt_map_t ParseOptionMap::rmap;
 
 static ParseOptionMap parse_option_map;
 
-#define DO_MAP(a, b) map[(a)] = (b); rmap[(b)] = (a);
+#define DO_MAP(a, b) ParseOptionMap::map[(a)] = (b); ParseOptionMap::rmap[(b)] = (a);
 
 ParseOptionMap::ParseOptionMap() {
-    static_init();
+    qore_parse_option_map_ops(this).static_init();
 }
 
-void ParseOptionMap::static_init() {
+void qore_parse_option_map_ops::static_init() {
     DO_MAP("no-global-vars",           PO_NO_GLOBAL_VARS);
     DO_MAP("no-subroutine-defs",       PO_NO_SUBROUTINE_DEFS);
     DO_MAP("no-thread-control",        PO_NO_THREAD_CONTROL);
@@ -156,15 +157,15 @@ const char* ParseOptionMap::find_name(const QoreParseOptions& code) {
 }
 
 void ParseOptionMap::list_options() {
-    for (auto& i : map) {
+    for (auto& i : ParseOptionMap::map) {
         printf("%s\n", i.first);
     }
 }
 
-QoreHashNode* ParseOptionMap::getCodeToStringMap() {
+QoreHashNode* qore_parse_option_map_ops::getCodeToStringMap() {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
     QoreString key;
-    for (auto& i : rmap) {
+    for (auto& i : ParseOptionMap::rmap) {
         key.clear();
         // format as "lo:hi" for extended options, just "lo" for legacy
         if (i.first.getHi()) {
@@ -177,9 +178,9 @@ QoreHashNode* ParseOptionMap::getCodeToStringMap() {
     return h;
 }
 
-QoreHashNode* ParseOptionMap::getStringToCodeMap() {
+QoreHashNode* qore_parse_option_map_ops::getStringToCodeMap() {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
-    for (auto& i : map) {
+    for (auto& i : ParseOptionMap::map) {
         // for backward compatibility, return int for legacy options (hi == 0)
         if (i.second.getHi()) {
             // for extended options, return as a string "lo:hi"

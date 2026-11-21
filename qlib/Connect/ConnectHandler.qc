@@ -430,7 +430,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         @debug {
             if (m_debug && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stdout.printf("ConnectHandler::handleRequest() method=%y path=%y ct=%y body_size=%d\n",
-                    hdr.method, hdr.path, hdr."content-type", body.size());
+                    hdr.method, hdr.path, http_get_field(hdr, "content-type"), body.size());
             }
         }
 
@@ -473,7 +473,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         }
 
         # Parse Content-Type to determine codec and streaming mode
-        string content_type = hdr."content-type" ?? "";
+        string content_type = http_get_field(hdr, "content-type") ?? "";
         *hash<auto> ct_info = ConnectHelper::parseContentType(content_type);
 
         # Resolve codec
@@ -502,7 +502,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
 
         # Parse deadline from Connect-Timeout-Ms
         *date deadline;
-        *string timeout_str = hdr{ConnectTimeoutHeader};
+        *string timeout_str = http_get_field(hdr, ConnectTimeoutHeader);
         if (timeout_str.val()) {
             deadline = now_us() + milliseconds(int(timeout_str));
         }
@@ -618,13 +618,13 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         *int session_id = cx."header-info".session_id;
 
         # Negotiate compression
-        *string recv_encoding = hdr{ConnectContentEncodingHeader};
+        *string recv_encoding = http_get_field(hdr, ConnectContentEncodingHeader);
         if (recv_encoding && !ConnectCompression::isSupported(recv_encoding)) {
             return makeErrorResponse(400, CONNECT_ERROR_INVALID_ARGUMENT,
                 sprintf("unsupported connect-content-encoding: %y", recv_encoding));
         }
         *string send_encoding =
-            ConnectCompression::negotiateEncoding(hdr{ConnectAcceptEncodingHeader});
+            ConnectCompression::negotiateEncoding(http_get_field(hdr, ConnectAcceptEncodingHeader));
 
         # Deserialize request from streaming frames
         auto request;
@@ -714,13 +714,13 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         *int session_id = cx."header-info".session_id;
 
         # Negotiate compression
-        *string recv_encoding = hdr{ConnectContentEncodingHeader};
+        *string recv_encoding = http_get_field(hdr, ConnectContentEncodingHeader);
         if (recv_encoding && !ConnectCompression::isSupported(recv_encoding)) {
             return makeErrorResponse(400, CONNECT_ERROR_INVALID_ARGUMENT,
                 sprintf("unsupported connect-content-encoding: %y", recv_encoding));
         }
         *string send_encoding =
-            ConnectCompression::negotiateEncoding(hdr{ConnectAcceptEncodingHeader});
+            ConnectCompression::negotiateEncoding(http_get_field(hdr, ConnectAcceptEncodingHeader));
 
         # Parse all client messages from the buffered body
         list<auto> messages = parseStreamMessages(body, codec, recv_encoding);
@@ -802,13 +802,13 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         *int session_id = cx."header-info".session_id;
 
         # Negotiate compression
-        *string recv_encoding = hdr{ConnectContentEncodingHeader};
+        *string recv_encoding = http_get_field(hdr, ConnectContentEncodingHeader);
         if (recv_encoding && !ConnectCompression::isSupported(recv_encoding)) {
             return makeErrorResponse(400, CONNECT_ERROR_INVALID_ARGUMENT,
                 sprintf("unsupported connect-content-encoding: %y", recv_encoding));
         }
         *string send_encoding =
-            ConnectCompression::negotiateEncoding(hdr{ConnectAcceptEncodingHeader});
+            ConnectCompression::negotiateEncoding(http_get_field(hdr, ConnectAcceptEncodingHeader));
 
         # Parse all client messages from the buffered body
         list<auto> messages = parseStreamMessages(body, codec, recv_encoding);
@@ -1000,7 +1000,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
     private hash<auto> extractMetadata(hash<auto> hdr) {
         hash<auto> metadata();
         map metadata{$1.key} = $1.value,
-            hdr.pairIterator(),
+            http_get_fields(hdr).pairIterator(),
             $1.key != "content-type"
                 && $1.key != "content-length"
                 && $1.key != "host"

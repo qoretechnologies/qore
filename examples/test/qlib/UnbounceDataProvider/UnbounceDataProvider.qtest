@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -89,9 +90,9 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
     #! Sets up the Unbounce client for integration tests
     private setupConnection() {
         # Try to use a connection from Qorus if specified
-        *string conn_name = m_options.conn ?? ENV.UNBOUNCE_CONNECTION;
+        *string conn_name = LiveProvider::get("unbounce", "UNBOUNCE_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("unbounce", "UNBOUNCE_CONNECTION", m_options.conn);
             if (conn instanceof UnbounceRestClient::UnbounceRestConnection) {
                 client = conn.getAsync();
             }
@@ -99,7 +100,7 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
         }
 
         # Try environment variables
-        *string token = m_options.token ?? ENV.UNBOUNCE_TOKEN;
+        *string token = LiveProvider::get("unbounce", "UNBOUNCE_TOKEN", m_options.token);
         if (token) {
             client = new UnbounceRestClient::UnbounceRestClientIo({"token": token});
         }
@@ -299,11 +300,11 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
             testSkip("no Unbounce credentials available");
         }
 
-        *string conn_name = m_options.conn ?? ENV.UNBOUNCE_CONNECTION;
+        *string conn_name = LiveProvider::get("unbounce", "UNBOUNCE_CONNECTION", m_options.conn);
         if (!conn_name) {
             testSkip("no connection name available for ping test");
         }
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("unbounce", "UNBOUNCE_CONNECTION", m_options.conn);
         hash<auto> ping_result = conn.ping(True);
         assertEq(True, ping_result.ok, "connection ping succeeded");
 

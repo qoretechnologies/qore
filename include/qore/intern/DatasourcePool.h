@@ -44,6 +44,7 @@
 #include "qore/intern/SqlMutationContext.h"
 #include "qore/intern/DbiForkRegistry.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreDsConnectionName.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <map>
@@ -142,18 +143,12 @@ public:
     // because invalid options can cause an exception to be thrown
     DLLLOCAL Datasource* get(DatasourceStatementHelper* dsh, ExceptionSink* xsink) const;
 
-    //! returns the user name of the connections of the pool, for messages
-    /** Immutable, so it is read without a lock; the values in use of a connection belong to the thread that holds it
-        (qore#6142)
+    //! returns the description of the connections of the pool for messages
+    /** The user name, the password and the database name are masked (see q_ds_append_masked()); the driver name, the
+        host and the port are shown (qore#6961).  Immutable, so it is read without a lock; the values in use of a
+        connection belong to the thread that holds it (qore#6142)
     */
-    DLLLOCAL const std::string& getUser() const {
-        return user;
-    }
-
-    //! returns the database name of the connections of the pool, for messages; see getUser()
-    DLLLOCAL const std::string& getDb() const {
-        return db;
-    }
+    DLLLOCAL QoreString getMaskedDesc() const;
 
     DLLLOCAL void setQueue(Queue* n_q, QoreValue n_arg, ExceptionSink* xsink) {
         if (q)
@@ -203,6 +198,13 @@ protected:
         wait_max,
         tl_warning_ms;
 
+#ifdef DEBUG
+    //! signalled with the pool lock held when a thread starts to wait for a free connection; see dbgWaitForWaiters()
+    QoreCondition dbg_waiter_cond;
+    //! microseconds added to the measured time of the next wait for a free connection; see dbgAddNextWait()
+    int64 dbg_next_wait_us = 0;
+#endif
+
     int64 tl_timeout_ms,
         stats_reqs,
         stats_hits
@@ -212,6 +214,8 @@ protected:
     QoreValue callback_arg{};
 
     DatasourceConfig config;
+    //! the name of the connection that the pool was created for, set once (qore#7016)
+    QoreDsConnectionName connection_name;
 
     bool valid;
 
@@ -326,6 +330,12 @@ public:
         // the waiters are threads of the parent; the connections they held are given up when the pool is next used
         // (see forkCheckUnlocked())
         qore_condition_ops(static_cast<QoreCondition*>(this)).reinitAfterFork();
+#ifdef DEBUG
+        // a thread of the parent can wait on it in dbgWaitForWaiters()
+        qore_condition_ops(&dbg_waiter_cond).reinitAfterFork();
+        // set for a wait of a thread of the parent
+        dbg_next_wait_us = 0;
+#endif
         QoreThreadLock::reinitAfterFork();
         wait_count = 0;
     }
@@ -369,10 +379,22 @@ public:
     DLLLOCAL QoreStringNode* getPendingDBEncoding() const;
     DLLLOCAL QoreStringNode* getPendingHostName() const;
     DLLLOCAL int getPendingPort() const;
+    //! appends the masked description of the pool with its pending host and port, read together (qore#6988)
+    DLLLOCAL void appendMaskedPendingDesc(QoreString& str) const;
     DLLLOCAL const QoreEncoding* getQoreEncoding() const;
     DLLLOCAL const DBIDriver* getDriver() const {
         return pool[0]->getDriver();
     }
+    //! sets the name of the connection that the pool was created for, once (qore#7016)
+    DLLLOCAL int setConnectionName(const QoreString& name, ExceptionSink* xsink) {
+        return connection_name.set(name, xsink);
+    }
+
+    //! returns the name of the connection that the pool was created for with a reference, or nullptr
+    DLLLOCAL QoreStringNode* getConnectionName() const {
+        return connection_name.getReferencedName();
+    }
+
     DLLLOCAL const char* getDriverName() const {
         return pool[0]->getDriverName();
     }
@@ -412,6 +434,16 @@ public:
 #ifdef DEBUG
     //! arms a one-shot debug connection abort on the pool-wide context; see lib/ql_debug.cpp
     DLLLOCAL void dbgArmConnectionAbort(const char* op_id, int when);
+
+    //! waits until at least \a count threads wait for a free connection; see lib/ql_debug.cpp
+    /** @return true if that many threads are waiting, false if the timeout expired first
+    */
+    DLLLOCAL bool dbgWaitForWaiters(unsigned count, int timeout_ms);
+
+    //! adds the given microseconds to the measured time of the next wait for a free connection; see lib/ql_debug.cpp
+    /** The time is added once, by the next thread that ends a wait, and then reset
+    */
+    DLLLOCAL void dbgAddNextWait(int64 us);
 #endif
 
     // functions supporting DatasourceStatementHelper

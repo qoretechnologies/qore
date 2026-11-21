@@ -9,6 +9,7 @@
 %requires QUnit
 %requires SqlUtil
 %requires ./OracleTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -173,7 +174,7 @@ class DeleteOthersBulkRowsTest inherits QUnit::Test {
 
     private Datasource getDs() {
         if (!ds) {
-            testSkip(skip);
+            TestRun::skipOrFail(skip);
         }
         return ds;
     }

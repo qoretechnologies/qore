@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of nested calls whose targets are checked before their arguments
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class NestedCallTargetsTest
+
+#! Regression test for issue #6872: native code reads the target of a deeply nested call again after its arguments
+/** The target of a call is evaluated and checked before the call's arguments (issue #5784), and used again after them
+    by the check after the arguments and by the call; native code held the targets of nested calls in registers over
+    the code of the arguments, so that the targets of all levels were live together and the compilation took time in
+    the square of the nesting.  A call whose arguments check the targets of 4 or more calls now stores its target in
+    a slot of its own at the check and reads it from there for the call.
+
+    NestedCallTargets.q nests method calls and closure calls 1 to 40 deep, whose targets are a global, temporary
+    objects with destructors and code values, with one target a deleted object or a value that is not code at
+    different levels, or with an innermost argument that raises; its output must be the one in
+    NestedCallTargets.expected, which the AST interpreter prints (what is evaluated, raised and destroyed, in order),
+    in every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.  The JIT code of calls
+    nested 40 and 100 deep reads the target of every call again whose arguments check 4 or more targets, and only
+    those.
+*/
+class NestedCallTargetsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/NestedCallTargets.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/NestedCallTargets.expected");
+
+        #! the calls nested in the code of the reload check, by kind
+        const Calls = {
+            "method": "o.id(",
+            "closure": "cid(",
+        };
+    }
+
+    constructor() : QUnit::Test("nested call targets", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+        addTestCase("targets read again", \checkReloads());
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/nested-call-targets";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    #! the JIT code of f() reads the targets of the calls again whose arguments check 4 or more targets
+    private checkReloads() {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            foreach int depth in ((40, 100)) {
+                string script = sprintf("%s/%s-%d.q", dir, i.key, depth);
+                File f();
+                f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+                f.printf("%%modern\nclass C { auto id(auto x) { return x; } }\nour C o();\n"
+                    "our code cid = auto sub (auto x) { return x; };\nint sub side() { return 1; }\n"
+                    "auto sub f() { return %s; }\nprintf(\"%%y\\n\", f());\n",
+                    strmul(i.value, depth) + "side()" + strmul(")", depth));
+                f.close();
+                TmpFile err("nested-call-targets-", ".ll");
+                string out = backquote(sprintf("QORE_DUMP_LLVM_IR=1 QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 "
+                    "QORE_IR_THRESHOLD=1 %s --exec-mode=jit %s 2>%s", shellQuote(qore_bin), shellQuote(script),
+                    err.path));
+                assertEq("1\n", out, i.key + " " + depth);
+                # the code of f(), from its definition to its end
+                string ir = ReadOnlyFile::readTextFile(err.path);
+                *list<*string> m = (ir =~ x/(\ndefine [^\n]*@"f@.*?\n\}\n)/s);
+                assertTrue(exists m[0], i.key + " " + depth + ": the code of f()");
+                int reloads = (m[0] =~ x/(load volatile i64, ptr %call\.target\.slot)/g).size();
+                assertEq(depth - 4, reloads, i.key + " " + depth);
+            }
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

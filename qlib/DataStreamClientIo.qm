@@ -1841,6 +1841,11 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
 #! Class for DataStream REST connections using multiplexed I/O; returns @ref DataStreamClientIo objects
 public class DataStreamConnectionIo inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#7052)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("DataStreamClientIo",

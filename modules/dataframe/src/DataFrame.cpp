@@ -1425,10 +1425,10 @@ QoreColumnarResult* QoreDataFrame::toColumnarResult(ExceptionSink* xsink) const 
             if (!result->addColumn(col.name.c_str(), data.release(), schema, &schema_xsink)) {
                 continue;
             }
-            QoreValue err = schema_xsink.getExceptionErr();
-            const char* err_str = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : nullptr;
-            if (!err_str || (strcmp(err_str, "COLUMNAR-SCHEMA-ERROR") && strcmp(err_str, "BUFFER-TYPE-ERROR")
-                    && strcmp(err_str, "BUFFER-RANGE-ERROR") && strcmp(err_str, "COLUMNAR-RESULT-ERROR"))) {
+            // the error code is read in either string representation: an exception's values can be inline strings
+            QoreStringDataHelper err_str(schema_xsink.getExceptionErr());
+            if (!err_str || (err_str != "COLUMNAR-SCHEMA-ERROR" && err_str != "BUFFER-TYPE-ERROR"
+                    && err_str != "BUFFER-RANGE-ERROR" && err_str != "COLUMNAR-RESULT-ERROR")) {
                 xsink->assimilate(schema_xsink);
                 return nullptr;
             }

@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/2 and HTTP/3 header list limits (qore#6867): a request whose header list is larger than the limit of the
+    server (the max_header_size option) is rejected without the server keeping it, and a response whose header list is
+    larger than the limit of the client's socket fails the request; the connection stays usable for the next request.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpMultiplexedHeaderSizeLimitTest
+
+#! answers "/big" with a header of about 130000 bytes in 1000 fields, and everything else with "ok"
+class BigHeaderHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/big") {
+            # 1000 fields: more than the limit of the client's socket, but no field is larger than what the header
+            # compression of HTTP/3 allows
+            hash<auto> big = {"Content-Type": MimeTypeText};
+            map big{"X-" + $1} = strmul("b", 100), xrange(1000);
+            return makeResponse(200, "ok", big);
+        }
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+public class HttpMultiplexedHeaderSizeLimitTest inherits QUnit::Test {
+    private {
+        #! the limit of the server
+        const Limit = 4096;
+
+        #! the bound of a wait that only guards against a hang
+        const HangGuard = 30s;
+
+        HttpServer server;
+        string h2_url;
+        *string h3_url;
+    }
+
+    constructor() : Test("HttpMultiplexedHeaderSizeLimitTest", "1.0") {
+        addTestCase("HTTP/2 request header", \h2RequestTest());
+        addTestCase("HTTP/3 request header", \h3RequestTest());
+        addTestCase("HTTP/3 response header", \h3ResponseTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("multiplexed-header-limit", LoggerLevel::getLevelInfo()),
+            "max_header_size": Limit,
+        });
+        server.setDefaultHandler("big", new BigHeaderHandler());
+        h2_url = sprintf("https://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port);
+        try {
+            h3_url = sprintf("https://127.0.0.1:%d", server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port);
+        } catch (hash<ExceptionInfo> ex) {
+            # QUIC is not available; the HTTP/3 tests are skipped
+        }
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    h2RequestTest() {
+        requestTest("h2", h2_url);
+    }
+
+    h3RequestTest() {
+        checkH3();
+        requestTest("h3", h3_url);
+    }
+
+    h3ResponseTest() {
+        checkH3();
+        responseTest("h3", h3_url);
+    }
+
+    private checkH3() {
+        if (!h3_url) {
+            testSkip("QUIC is not available");
+        }
+    }
+
+    private HttpClientConnectionManager makeManager(string protocol) {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "connect_timeout": HangGuard,
+            "request_timeout": HangGuard,
+            "max_request_retries": 0,
+        });
+    }
+
+    #! a request header over the limit of the server is rejected; one under it, and the next request, are answered
+    private requestTest(string protocol, string url) {
+        HttpClientConnectionManager mgr = makeManager(protocol);
+        on_exit mgr.closeAll();
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code, protocol + " first request");
+        assertEq(200, mgr.request(url, "GET", "/ok", {"X-Pad": strmul("a", Limit / 2)}).status_code,
+            protocol + " request header under the limit");
+        # the header list of the request is over the limit, in one field and in many
+        requestFails(mgr, protocol, protocol + " one long field", url, {"X-Pad": strmul("a", Limit * 4)});
+        hash<auto> many;
+        map many{"X-" + $1} = strmul("a", 100), xrange(Limit / 50);
+        requestFails(mgr, protocol, protocol + " many fields", url, many);
+        # the connection is usable for the next request
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code, protocol + " request after the rejected ones");
+    }
+
+    #! expects the request to fail with the error that the protocol gives for a rejected stream
+    private requestFails(HttpClientConnectionManager mgr, string protocol, string msg, string url,
+            hash<auto> headers) {
+        # HTTP/2 resets the stream with INTERNAL_ERROR; HTTP/3 with H3_EXCESSIVE_LOAD (0x107)
+        string expected = protocol == "h2"
+            ? "HTTP2-STREAM-RESET: .*error_code=2"
+            : "QUIC-STREAM-RESET: .*0x107";
+        try {
+            mgr.request(url, "GET", "/ok", headers);
+            assertTrue(False, msg);
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex(expected, ex.desc, msg);
+        }
+    }
+
+    #! a response header over the limit of the client's socket fails the request; the next request is answered
+    private responseTest(string protocol, string url) {
+        HttpClientConnectionManager mgr = makeManager(protocol);
+        on_exit mgr.closeAll();
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code, protocol + " first request");
+        try {
+            mgr.request(url, "GET", "/big");
+            assertTrue(False, protocol + " a response header over the limit");
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("HTTP-HEADER-TOO-LARGE: .*exceeds the maximum size of 65536 bytes", ex.desc,
+                protocol + " the error of the response");
+        }
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code, protocol + " request after the rejected one");
+    }
+}

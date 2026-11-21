@@ -58,6 +58,7 @@ class DescribeKeepsBoundValuesTest inherits QUnit::Test {
         password and the database are always masked, in the datasource and in the error
     */
     private Datasource connect(string var) {
+        # live-provider-optin: a QORE_DB_CONNSTR_* connection string of a local test database, not a live provider
         string connstr = ENV{var};
         Datasource ds(connstr);
         try {

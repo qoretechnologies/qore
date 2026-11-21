@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HttpClientIo HTTP/1.x client (qore#6867): the client does not keep a response header, a chunk size line or the
+    trailer section of a chunked response that is larger than the limit of its socket (65536 bytes by default), whether
+    it is one long line, many small lines or never ends; the request fails with HTTP-HEADER-TOO-LARGE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires HttpClientIo
+
+%exec-class HttpClientHeaderSizeLimitTest
+
+#! An HTTP/1.1 server that answers each request with the same bytes and then keeps the connection open until stopped
+class CannedServer {
+    private {
+        Socket listener();
+        int port;
+        Counter running(1);
+        Counter done(1);
+        string response;
+    }
+
+    constructor(string response) {
+        self.response = response;
+        listener.bindINET("127.0.0.1", 0, True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    stop() {
+        done.dec();
+        listener.shutdown();
+        listener.close();
+        running.waitForZero();
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket peer;
+            try {
+                peer = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener was closed
+                return;
+            }
+            background answer(peer);
+        }
+    }
+
+    private answer(Socket peer) {
+        on_exit peer.close();
+        try {
+            # a connection can carry more than one request
+            while (True) {
+                peer.readHTTPHeader(30s);
+                peer.send(response, 20s);
+                if (done.getCount() == 0) {
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the client closed the connection
+        }
+    }
+}
+
+public class HttpClientHeaderSizeLimitTest inherits QUnit::Test {
+    private {
+        #! the default limit of the client's sockets
+        const DefaultLimit = 65536;
+
+        const StartLine = "HTTP/1.1 200 OK\r\n";
+    }
+
+    constructor() : Test("HttpClientHeaderSizeLimitTest", "1.0") {
+        addTestCase("response header at the limit", \headerAtLimitTest());
+        addTestCase("response header over the limit", \headerOverLimitTest());
+        addTestCase("response header of many small lines", \headerManyLinesTest());
+        addTestCase("response header that never ends", \headerFloodTest());
+        addTestCase("chunked response trailer", \trailerTest());
+        addTestCase("chunk size line", \chunkSizeLineTest());
+        set_return_value(main());
+    }
+
+    #! a response header of the given total size, in one header field, with an empty body
+    private static string makeHeader(int size) {
+        string head = StartLine + "Content-Length: 0\r\nX-Pad: ";
+        string tail = "\r\n\r\n";
+        return head + strmul("a", size - head.size() - tail.size()) + tail;
+    }
+
+    #! a chunked response with the given text after the last chunk
+    private static string makeChunked(string after_last) {
+        return StartLine + "Transfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n" + after_last;
+    }
+
+    #! requests with every client API against a server that answers with the response; returns the exception of each
+    #! or nothing
+    private hash<string, *hash<ExceptionInfo>> requestAll(string response) {
+        CannedServer server(response);
+        on_exit server.stop();
+        string url = sprintf("http://127.0.0.1:%d", server.getPort());
+        hash<string, *hash<ExceptionInfo>> rv();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "request_timeout": 20s,
+            "max_request_retries": 0,
+        });
+        on_exit mgr.closeAll();
+        try {
+            mgr.request(url, "GET", "/");
+        } catch (hash<ExceptionInfo> ex) {
+            rv."request" = ex;
+        }
+        try {
+            mgr.requestAsync(url, "GET", "/").get(30s);
+        } catch (hash<ExceptionInfo> ex) {
+            rv."requestAsync" = ex;
+        }
+        return rv;
+    }
+
+    private checkTooLarge(hash<string, *hash<ExceptionInfo>> res, string msg) {
+        foreach hash<auto> i in (res.pairIterator()) {
+            # request() gives the error of the reader in the description of its own; a future raises it as it is
+            assertRegex("^(HTTPCLIENT-REQUEST-ERROR: )?HTTP-HEADER-TOO-LARGE: .*exceeds the maximum size of 65536 bytes",
+                sprintf("%s: %s", i.value.err, i.value.desc), msg + " " + i.key);
+        }
+        assertEq(2, res.size(), msg);
+    }
+
+    private checkOk(hash<string, *hash<ExceptionInfo>> res, string msg) {
+        foreach hash<auto> i in (res.pairIterator()) {
+            assertNothing(i.value, msg + " " + i.key);
+        }
+    }
+
+    headerAtLimitTest() {
+        hash<string, *hash<ExceptionInfo>> res = requestAll(makeHeader(DefaultLimit));
+        checkOk(res, "at the limit");
+    }
+
+    headerOverLimitTest() {
+        checkTooLarge(requestAll(makeHeader(DefaultLimit + 1)), "one over");
+        checkTooLarge(requestAll(makeHeader(DefaultLimit * 4)), "long line");
+    }
+
+    headerManyLinesTest() {
+        string response = StartLine + strmul("X-A: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\n", 5000) + "\r\n";
+        checkTooLarge(requestAll(response), "many lines");
+    }
+
+    headerFloodTest() {
+        checkTooLarge(requestAll(StartLine + strmul("x", 1024 * 1024)), "no end");
+        checkTooLarge(requestAll(StartLine + strmul("X-A: a\r\n", 200000)), "lines without an end");
+    }
+
+    trailerTest() {
+        # the trailer section of a chunked response: many lines, one long line, and lines without an end
+        checkTooLarge(requestAll(makeChunked(strmul("X-T: tttttttttttttttttttttttttt\r\n", 5000) + "\r\n")),
+            "many trailer lines");
+        checkTooLarge(requestAll(makeChunked("X-T: " + strmul("t", 1024 * 1024) + "\r\n\r\n")), "long trailer line");
+        checkTooLarge(requestAll(makeChunked(strmul("X-T: tttttttttttttttttttttttt\r\n", 20000))),
+            "trailer without an end");
+        # a small trailer is accepted
+        checkOk(requestAll(makeChunked("X-T: t\r\n\r\n")), "small trailer");
+    }
+
+    chunkSizeLineTest() {
+        string response = StartLine + "Transfer-Encoding: chunked\r\n\r\n5;" + strmul("e", DefaultLimit * 2)
+            + "\r\nhello\r\n0\r\n\r\n";
+        checkTooLarge(requestAll(response), "chunk size line extension");
+        string flood = StartLine + "Transfer-Encoding: chunked\r\n\r\n5;" + strmul("e", 1024 * 1024);
+        checkTooLarge(requestAll(flood), "chunk size line without an end");
+    }
+}

@@ -64,13 +64,16 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
     #! Sets a process environment variable until restoreEnv() is called; workers inherit it
     private setEnv(string var, *string value) {
         if (!saved_env.hasKey(var)) {
+            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             saved_env{var} = getenv(var);
         }
         if (exists value) {
             setenv(var, value);
+            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             ENV{var} = value;
         } else {
             unsetenv(var);
+            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             remove ENV{var};
         }
     }
@@ -80,9 +83,11 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
         foreach hash<auto> i in (saved_env.pairIterator()) {
             if (exists i.value) {
                 setenv(i.key, i.value);
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 ENV{i.key} = i.value;
             } else {
                 unsetenv(i.key);
+                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 remove ENV{i.key};
             }
         }

@@ -41,6 +41,7 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/xxhash.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <algorithm>
 #include <cctype>
@@ -809,6 +810,7 @@ static QoreHashNode* qore_dbi_check_tcp_target(const char* driver, const QoreStr
         bool found = false;
         ConstListIterator i(*addresses);
         while (i.next()) {
+            // note: safe; the list holds the string nodes made below
             if (addr == i.getValue().get<const QoreStringNode>()->c_str()) {
                 found = true;
                 break;
@@ -893,10 +895,12 @@ int qore_ds_private::checkConnectTargets(ExceptionSink* xsink) {
         QoreValue host = t ? t->getKeyValue("host") : QoreValue();
         QoreValue port = t ? t->getKeyValue("port") : QoreValue();
         QoreHashNode* c;
+        // a driver can report a value that it was given, which can be an inline short string with no node (issue
+        // #7038)
         if (socket.getType() == NT_STRING && host.isNothing()) {
-            c = qore_dbi_check_socket_target(drv->name, socket.get<const QoreStringNode>(), managers, xsink);
+            c = qore_dbi_check_socket_target(drv->name, *QoreStringNodeValueHelper(socket), managers, xsink);
         } else if (host.getType() == NT_STRING && port.getType() == NT_INT && socket.isNothing()) {
-            c = qore_dbi_check_tcp_target(drv->name, host.get<const QoreStringNode>(), port.getAsBigInt(),
+            c = qore_dbi_check_tcp_target(drv->name, *QoreStringNodeValueHelper(host), port.getAsBigInt(),
                 managers, xsink);
         } else {
             xsink->raiseException("NETWORK-ACCESS-DENIED", "the %s driver reported an invalid destination of a "
@@ -1624,10 +1628,12 @@ void qore_dbi_keep_abandoned(void* p) {
 }
 
 void qore_dbi_raise_fork_error(ExceptionSink* xsink, const Datasource& ds, const char* reason) {
-    xsink->raiseException("DATASOURCE-FORK-ERROR", "%s:%s@%s: the connection was opened by the parent of this "
+    // the user name, the password and the database name are masked (qore#6961)
+    QoreString desc;
+    q_ds_append_masked(desc, ds);
+    xsink->raiseException("DATASOURCE-FORK-ERROR", "%s: the connection was opened by the parent of this "
         "process, which was created with fork(), and %s; the connection was given up without changing the parent's "
-        "session, and the next action opens a new connection", ds.getDriverName(), ds.getUsernameStr().c_str(),
-        ds.getDBNameStr().c_str(), reason);
+        "session, and the next action opens a new connection", desc.c_str(), reason);
 }
 
 void qore_ds_private::abandon() {
@@ -2161,80 +2167,79 @@ QoreHashNode* Datasource::selectRow(const QoreString* query_str, const QoreListN
     return rv;
 }
 
-QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, const QoreListNode* args,
-        ExceptionSink* xsink) {
+QoreValue qore_datasource_ops::exec_internalImpl(Datasource* b, bool doBind, const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
     // a connection opened by the parent of a child process created with fork() is not used
-    if (priv->forkCheck(xsink)) {
+    if (b->priv->forkCheck(xsink)) {
         return QoreValue();
     }
 
     // mutation observer admission point; delivered before any implicit transaction is started so
     // that a rejected operation can never leave an open transaction behind
-    if (priv->observes(SQL_MUTATION_MASK_EXEC)) {
+    if (b->priv->observes(SQL_MUTATION_MASK_EXEC)) {
         SqlMutationEvent ev(SQL_MUTATION_EVENT_PRE_EXEC, SQL_STMT_CLASS_EXEC);
-        if (priv->dispatchMutationEvent(ev, xsink)) {
+        if (b->priv->dispatchMutationEvent(ev, xsink)) {
             return QoreValue();
         }
     }
 
-    const bool tx_begin = !priv->getAutoCommit() && !priv->inTransaction();
-    if (tx_begin && beginImplicitTransaction(xsink))
+    const bool tx_begin = !b->priv->getAutoCommit() && !b->priv->inTransaction();
+    if (tx_begin && b->beginImplicitTransaction(xsink))
         return QoreValue();
 
-    if (tx_begin && priv->getMutationCtx()) {
-        priv->dispatchMutationTxBegin(xsink);
+    if (tx_begin && b->priv->getMutationCtx()) {
+        b->priv->dispatchMutationTxBegin(xsink);
     }
 
-    assert(priv->isopen && priv->private_data);
+    assert(b->priv->isopen && b->priv->private_data);
 
-    QoreValue rv = doBind ? qore_dbi_private::get(*priv->dsl)->execSQL(this, query_str, args, xsink)
-        : qore_dbi_private::get(*priv->dsl)->execRawSQL(this, query_str, xsink);;
+    QoreValue rv = doBind ? qore_dbi_private::get(*b->priv->dsl)->execSQL(b, query_str, args, xsink)
+        : qore_dbi_private::get(*b->priv->dsl)->execRawSQL(b, query_str, xsink);;
     //printd(5, "Datasource::exec_internal() this=%p, autocommit=%d, in_transaction=%d, xsink=%d\n", this,
     //    priv->getAutoCommit(), priv->inTransaction(), xsink->isException());
 
 #ifdef DEBUG
     // the statement has been executed and no commit has been attempted: this is the replay-safe
     // boundary a test arms to prove restartable failover on a real driver
-    if (!*xsink && priv->dbgCheckArmedFault(SQL_MUTATION_FAULT_AFTER_EXEC, xsink)) {
+    if (!*xsink && b->priv->dbgCheckArmedFault(SQL_MUTATION_FAULT_AFTER_EXEC, xsink)) {
         rv.discard(xsink);
         rv = QoreValue();
     }
 #endif
 
-    if (priv->connection_aborted) {
+    if (b->priv->connection_aborted) {
         assert(*xsink);
         assert(!rv);
-        if (priv->getMutationCtx()) {
-            if (priv->observes(SQL_MUTATION_MASK_EXEC)) {
+        if (b->priv->getMutationCtx()) {
+            if (b->priv->observes(SQL_MUTATION_MASK_EXEC)) {
                 SqlMutationEvent ev(SQL_MUTATION_EVENT_POST_EXEC, SQL_STMT_CLASS_EXEC);
                 ev.outcome = SQL_MUTATION_OUTCOME_LOST_CONNECTION;
                 // no commit was in flight, so the operation can be replayed
                 ev.replay_safe = 1;
                 ev.driver_xsink = xsink;
-                priv->dispatchMutationEvent(ev, xsink);
+                b->priv->dispatchMutationEvent(ev, xsink);
             }
-            priv->flushMutationConnectionLost(xsink);
+            b->priv->flushMutationConnectionLost(xsink);
         }
         return QoreValue();
     }
 
     const bool stmt_ok = !*xsink;
 
-    if (priv->observes(SQL_MUTATION_MASK_EXEC)) {
+    if (b->priv->observes(SQL_MUTATION_MASK_EXEC)) {
         SqlMutationEvent ev(SQL_MUTATION_EVENT_POST_EXEC, SQL_STMT_CLASS_EXEC);
         ev.outcome = stmt_ok ? SQL_MUTATION_OUTCOME_OK : SQL_MUTATION_OUTCOME_ERROR;
         ev.driver_xsink = xsink;
-        priv->dispatchMutationEvent(ev, xsink);
+        b->priv->dispatchMutationEvent(ev, xsink);
     }
 
-    if (priv->getAutoCommit()) {
-        if (priv->getMutationCtx()) {
-            priv->commit_in_progress = true;
+    if (b->priv->getAutoCommit()) {
+        if (b->priv->getMutationCtx()) {
+            b->priv->commit_in_progress = true;
         }
-        qore_dbi_private::get(*priv->dsl)->autoCommit(this, xsink);
-        if (priv->getMutationCtx()) {
-            priv->commit_in_progress = false;
+        qore_dbi_private::get(*b->priv->dsl)->autoCommit(b, xsink);
+        if (b->priv->getMutationCtx()) {
+            b->priv->commit_in_progress = false;
             int outcome;
             int replay_safe;
             if (!stmt_ok) {
@@ -2242,7 +2247,7 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
                 // committed; this is structural, not derived from the error
                 outcome = SQL_MUTATION_OUTCOME_ROLLBACK;
                 replay_safe = 1;
-            } else if (*xsink || priv->connection_aborted) {
+            } else if (*xsink || b->priv->connection_aborted) {
                 // the commit did not demonstrably succeed; the server may still have applied it
                 outcome = SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS;
                 replay_safe = 0;
@@ -2250,10 +2255,10 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
                 outcome = SQL_MUTATION_OUTCOME_COMMIT;
                 replay_safe = 0;
             }
-            priv->dispatchMutationOutcome(SQL_STMT_CLASS_COMMIT, outcome, replay_safe, xsink, xsink);
+            b->priv->dispatchMutationOutcome(SQL_STMT_CLASS_COMMIT, outcome, replay_safe, xsink, xsink);
         }
     } else {
-        priv->statementExecuted(*xsink);
+        b->priv->statementExecuted(*xsink);
     }
 
     return rv;
@@ -2266,17 +2271,17 @@ int Datasource::autoCommit(ExceptionSink* xsink) {
 }
 
 QoreValue Datasource::exec(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
-    return exec_internal(true, query_str, args, xsink);
+    return qore_datasource_ops(this).exec_internal(true, query_str, args, xsink);
 }
 
 // deprecated: remove due to extraneous ignored "args" argument
 QoreValue Datasource::execRaw(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(!args);
-    return exec_internal(false, query_str, nullptr, xsink);
+    return qore_datasource_ops(this).exec_internal(false, query_str, nullptr, xsink);
 }
 
 QoreValue Datasource::execRaw(const QoreString* query_str, ExceptionSink* xsink) {
-    return exec_internal(false, query_str, nullptr, xsink);
+    return qore_datasource_ops(this).exec_internal(false, query_str, nullptr, xsink);
 }
 
 int Datasource::bulkLoadBegin(const QoreString* table, const QoreListNode* columns, const QoreHashNode* options,
@@ -2403,8 +2408,11 @@ QoreHashNode* Datasource::describe(const QoreString* query_str, const QoreListNo
 int Datasource::beginImplicitTransaction(ExceptionSink* xsink) {
     //printd(5, "Datasource::beginImplicitTransaction() autocommit=%s\n", autocommit ? "true" : "false");
     if (priv->getAutoCommit()) {
-        xsink->raiseException("AUTOCOMMIT-ERROR", "%s:%s@%s: transaction management is not available because "
-            "autocommit is enabled for this Datasource", getDriverName(), priv->username.c_str(), priv->dbname.c_str());
+        // the user name, the password and the database name are masked (qore#6961)
+        QoreString desc;
+        q_ds_append_masked(desc, *this);
+        xsink->raiseException("AUTOCOMMIT-ERROR", "%s: transaction management is not available because "
+            "autocommit is enabled for this Datasource", desc.c_str());
         return -1;
     }
     return qore_dbi_private::get(*priv->dsl)->beginTransaction(this, xsink);
@@ -2681,6 +2689,21 @@ int Datasource::getPendingPort() const {
     return priv->getPendingPort();
 }
 
+int q_ds_set_connection_name(Datasource& ds, const QoreString& name, ExceptionSink* xsink) {
+    return qore_ds_private::get(ds)->connection_name.set(name, xsink);
+}
+
+QoreStringNode* q_ds_get_connection_name(const Datasource& ds) {
+    return qore_ds_private::get(const_cast<Datasource&>(ds))->connection_name.getReferencedName();
+}
+
+void q_ds_append_masked_pending(QoreString& str, const Datasource& ds) {
+    std::string host;
+    int port;
+    qore_ds_private::get(const_cast<Datasource&>(ds))->getPendingHostPort(host, port);
+    q_ds_append_masked(str, ds.getDriverName(), host.c_str(), port);
+}
+
 const char* Datasource::getDriverName() const {
     return priv->dsl->getName();
 }
@@ -2882,14 +2905,14 @@ int Datasource::reportMutationStreamEnd(int64 consumed_bytes, bool ok, Exception
     return 0;
 }
 
-SqlMutationContext* Datasource::getMutationContext() const {
-    return priv->getMutationCtx();
+SqlMutationContext* qore_datasource_ops::getMutationContextImpl(Datasource* b) {
+    return b->priv->getMutationCtx();
 }
 
-void Datasource::setMutationContext(SqlMutationContext* ctx, ExceptionSink* xsink) {
-    priv->setMutationContext(ctx, xsink);
+void qore_datasource_ops::setMutationContextImpl(Datasource* b, SqlMutationContext* ctx, ExceptionSink* xsink) {
+    b->priv->setMutationContext(ctx, xsink);
 }
 
-SqlMutationContext* Datasource::getOrCreateMutationContext() {
-    return priv->getOrCreateMutationContext();
+SqlMutationContext* qore_datasource_ops::getOrCreateMutationContextImpl(Datasource* b) {
+    return b->priv->getOrCreateMutationContext();
 }

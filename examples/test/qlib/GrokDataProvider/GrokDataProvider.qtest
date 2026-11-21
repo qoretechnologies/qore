@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires GrokDataProvider
@@ -167,7 +168,7 @@ public class GrokDataProviderTest inherits QUnit::Test {
     }
 
     private setupConnection() {
-        *string api_key = ENV.GROK_API_KEY;
+        *string api_key = LiveProvider::get("grok", "GROK_API_KEY");
         if (api_key) {
             rc = new GrokRestClient::GrokRestConnection("test", "test", NOTHING, NOTHING, {
                 "apikey": api_key,
@@ -655,7 +656,8 @@ public class GrokDataProviderTest inherits QUnit::Test {
     liveTest() {
         checkModule();
         if (!rc) {
-            testSkip("no connection; set GROK_API_KEY to run live tests");
+            testSkip(LiveProvider::enabled("grok") ? "no connection; set GROK_API_KEY to run live tests"
+                : LiveProvider::skipReason("grok", "GROK_API_KEY"));
         }
 
         # Test listing models

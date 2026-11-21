@@ -44,6 +44,7 @@
 #include "qore/intern/SSLSocketHelper.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/CompressionTransforms.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 
 #include "qore/intern/Http2Session.h"
 // NOTE: QuicSession.h pulls in ngtcp2, nghttp3, and OpenSSL headers transitively.
@@ -106,8 +107,22 @@ typedef struct ares_channeldata ares_channel_t;
 #define DEFAULT_SOCKET_BUFSIZE (64 * 1024)
 #endif
 
+//! The default maximum size in bytes of an HTTP/1.x header section, of a chunked body trailer section and of a chunk
+//! size line (qore#6867)
+/** The limit is the size of the text as received, with the line ends.  It can be changed per socket with
+    Socket::setMaxHeaderSize().
+*/
 #ifndef QORE_MAX_HEADER_SIZE
-#define QORE_MAX_HEADER_SIZE 16384
+#define QORE_MAX_HEADER_SIZE 65536
+#endif
+
+//! The default maximum size in bytes of a line that a client of a line-based protocol (IMAP, POP3, SMTP, FTP) reads,
+//! or that any reader reads until a line terminator ("\n" or "\r\n") (qore#6914)
+/** The limit is the size of the line as received, with the line end.  It can be changed per socket with
+    Socket::setMaxLineSize().
+*/
+#ifndef QORE_MAX_LINE_SIZE
+#define QORE_MAX_LINE_SIZE (1024 * 1024)
 #endif
 
 #define CHF_HTTP11  (1 << 0)
@@ -129,6 +144,11 @@ class QoreFuture;
 
 DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const char* type = "target");
 DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
+
+#ifndef _Q_WINDOWS
+//! Raises \a err and returns -1 if a UNIX socket path does not fit a socket address with its terminator (issue #6910)
+DLLLOCAL int qore_socket_check_unix_path(const char* path, const char* err, ExceptionSink* xsink);
+#endif
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
@@ -145,6 +165,18 @@ class QoreSocketObject;
     @return 0 if the stream has no data buffered to be sent (or the stream or the session is gone), 1 if the wait timed
     out, -1 if an exception was raised (\c HTTP2-ERROR or \c QUIC-ERROR without a session)
 */
+//! Returns the bytes of an HTTP/2 stream's buffered data that nghttp2 has taken so far (never decreases)
+/** @return the byte count, -1 if the session is closed or the stream is gone, or if an exception was raised
+*/
+DLLLOCAL int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink);
+
+//! Returns the bytes of a client stream's data that the peer has acknowledged on the socket's first QUIC session
+/** @return the byte count (never decreases), -1 if the session or the stream's data record is gone, or if an
+    exception was raised
+*/
+DLLLOCAL int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id,
+        ExceptionSink* xsink);
+
 DLLLOCAL int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool http2, int64_t stream_id, int timeout_ms,
         ExceptionSink* xsink);
 //! Returns a reference to the sandbox manager whose network policy applies to the calling thread, or nullptr
@@ -152,6 +184,18 @@ DLLLOCAL int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool ht
     resolves the manager on the thread that creates it and keeps it for its checks.
 */
 DLLLOCAL QoreSandboxManager* qore_socket_ref_policy_sandbox_manager();
+#ifdef DEBUG
+//! Makes the policy lookup of the thread find no policy while it exists (dbg_socket_drop_network_policy(), #6913)
+class QoreSocketDbgDropPolicyHelper {
+public:
+    DLLLOCAL QoreSocketDbgDropPolicyHelper();
+    DLLLOCAL ~QoreSocketDbgDropPolicyHelper();
+    QoreSocketDbgDropPolicyHelper(const QoreSocketDbgDropPolicyHelper&) = delete;
+    QoreSocketDbgDropPolicyHelper& operator=(const QoreSocketDbgDropPolicyHelper&) = delete;
+private:
+    bool old;
+};
+#endif
 //! Opens the socket in the given family and type if necessary and binds it to the given numeric address
 /** Runs no resolution and waits for nothing, so it can be called on an async I/O thread, by the operation that
     drives the socket (with the lock of its socket object held, if it has one).  The bind is checked against the
@@ -1076,6 +1120,12 @@ private:
             hold it (see qore_owned_descriptor_create())
         */
         std::shared_ptr<QoreSharedDescriptor> owned;
+        //! true once the socket has taken the attempt's descriptor over: the socket closes it (qore#6962)
+        /** The attempt keeps the number to check the connection; once the socket has closed its descriptor (a connect
+            timeout, or a close by its owner) the number can belong to another descriptor of the process, so it is
+            never closed nor polled by the attempt, whatever the socket's descriptor is then
+        */
+        bool socket_owned = false;
 
         DLLLOCAL ConnAttempt() = default;
         DLLLOCAL ConnAttempt(ConnAttempt&&) = default;
@@ -1300,11 +1350,15 @@ public:
         return sent;
     }
 
+    DLLLOCAL bool started() const { return sent || tls_write_pending; }
+
 private:
     qore_socket_private* sock;
     const char* data;
     size_t size;
     size_t sent = 0;
+    size_t tls_awaiting_drain = 0;
+    bool tls_write_pending = false;
 };
 
 class SocketRecvPollState : public AbstractPollState {
@@ -1331,6 +1385,8 @@ public:
         return received;
     }
 
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retry_tls_read; }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
@@ -1338,6 +1394,7 @@ private:
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     size_t size;
+    bool retry_tls_read = false;
     size_t received = 0;
 };
 
@@ -1365,6 +1422,13 @@ public:
         return bin ? bin->size() : 0;
     }
 
+    //! Exchanges a DEFAULT_SOCKET_BUFSIZE buffer with the I/O thread driving HTTP/2.
+    DLLLOCAL void swapReadBuffer(std::unique_ptr<char[]>& spare) { rbuf.swap(spare); }
+
+    DLLLOCAL bool mustRetryTlsRead() const { return retry_tls_read; }
+
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retry_tls_read; }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
@@ -1376,6 +1440,7 @@ private:
     //! the thread that drives the operation (an I/O thread or a handler thread with a small stack)
     std::unique_ptr<char[]> rbuf;
     bool io = false;
+    bool retry_tls_read = false;
 };
 
 class SocketRecvPacketPollState : public AbstractPollState {
@@ -1399,8 +1464,10 @@ public:
 
     //! Returnd the number of bytes received so far
     DLLLOCAL size_t getBytesReceived() const {
-        return bin ? bin->size() : 0;
+        return retrying ? retry_offset : (bin ? bin->size() : 0);
     }
+
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retrying; }
 
 private:
     //! Receives data; continuePoll() records received data on the socket
@@ -1409,6 +1476,8 @@ private:
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     bool io = false;
+    bool retrying = false;
+    size_t retry_offset = 0; // logical length while the remainder is reserved for an unfinished TLS read
 };
 
 class SocketRecvUntilBytesPollState : public AbstractPollState {
@@ -1437,15 +1506,59 @@ public:
         return bin ? bin->size() : 0;
     }
 
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retry_tls_read; }
+
+    //! Limits the size of the data received, including the pattern, for the reader of an HTTP header or trailer
+    //! section or of a line of a chunked body (qore#6867)
+    /** An HTTP-HEADER-TOO-LARGE exception is raised, and no more data is read or kept, when the data received is
+        larger than the limit.
+
+        @param max_size the maximum size in bytes; 0 = no limit
+        @param what what is read, for the exception: \c "header", \c "chunked body trailer" or \c "chunk size line"
+    */
+    DLLLOCAL void setLimit(size_t max_size, const char* what, size_t total_max = 0) {
+        this->max_size = max_size;
+        limit_what = what;
+        limit_total = total_max ? total_max : max_size;
+        line_limit = false;
+        message_limit = false;
+    }
+
+    //! Limits the size of the data received for a reader of a message that can be large, such as the end of a POP3
+    //! message (qore#6914)
+    /** A SOCKET-RESPONSE-TOO-LARGE exception is raised, and no more data is read or kept, when the data received is
+        larger than the limit.
+
+        @param max_size the maximum size in bytes; 0 = no limit
+    */
+    DLLLOCAL void setMessageLimit(size_t max_size) {
+        this->max_size = max_size;
+        limit_total = max_size;
+        line_limit = false;
+        message_limit = true;
+    }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
+
+    //! the limit of the size of the data received (0 = none)
+    size_t max_size = 0;
+    //! what is read, for the exception raised when the limit is exceeded
+    const char* limit_what = nullptr;
+    //! the limit of the whole section, for the exception, when the data is a part of a section
+    size_t limit_total = 0;
+    //! true if the limit is the maximum line size of the socket (a read until a line terminator; qore#6914)
+    bool line_limit = false;
+    //! true if the limit is that of a message (qore#6914)
+    bool message_limit = false;
 
     qore_socket_private* sock;
     // we are using QoreStringNode as it has a much better append / concat implementation than BinaryNode
     SimpleRefHolder<QoreStringNode> bin;
     const char* bytes;
     size_t size;
+    bool retry_tls_read = false;
     size_t matched = 0;
     //! The KMP failure table of the pattern, or nullptr when it is all 0 (issue #6325)
     /** fail[i] is the length of the longest proper prefix of bytes[0..i] that is also a suffix of it: after a
@@ -2209,6 +2322,31 @@ public:
     */
     std::atomic<int64> max_chunked_body_size{0};
 
+    //! Maximum size in bytes of an HTTP/1.x header section, of a chunked body trailer section and of a chunk size line
+    //! (0 = QORE_MAX_HEADER_SIZE)
+    /** The readers of these sections raise an HTTP-HEADER-TOO-LARGE exception when a peer sends more, instead of
+        keeping the data in memory.  The value is read when the section is read, so that it can change at any time.
+    */
+    std::atomic<size_t> max_header_size{0};
+
+    //! Returns the maximum size in bytes of an HTTP/1.x header or trailer section
+    DLLLOCAL size_t getMaxHeaderSize() const {
+        size_t rv = max_header_size.load(std::memory_order_relaxed);
+        return rv ? rv : QORE_MAX_HEADER_SIZE;
+    }
+
+    //! Maximum size in bytes of a line read until a line terminator (0 = QORE_MAX_LINE_SIZE)
+    /** The readers of a line raise a SOCKET-LINE-TOO-LARGE exception when a peer sends more, instead of keeping the
+        data in memory.  The value is read when the line is read, so that it can change at any time.
+    */
+    std::atomic<size_t> max_line_size{0};
+
+    //! Returns the maximum size in bytes of a line read until a line terminator
+    DLLLOCAL size_t getMaxLineSize() const {
+        size_t rv = max_line_size.load(std::memory_order_relaxed);
+        return rv ? rv : QORE_MAX_LINE_SIZE;
+    }
+
     //! Maximum request body size for HTTP/2 streams (0 = unlimited)
     /** Propagated to Http2Session when created; DATA frame accumulation exceeding
         this limit causes the stream to be reset with REFUSED_STREAM.
@@ -2441,6 +2579,10 @@ public:
             delete this;
         }
     }
+
+    //! Close during teardown of the owning object; a pending pollable holds its own reference to this state.
+    DLLLOCAL void closeForTeardown(bool sole_owner);
+    DLLLOCAL void cleanup(ExceptionSink* xsink, bool sole_owner);
 
     DLLLOCAL bool isOpen() {
         return sock != QORE_INVALID_SOCKET;
@@ -3828,6 +3970,11 @@ public:
 #else
         close();
 
+        // a path that does not fit the socket address is refused before it is copied (issue #6910)
+        if (qore_socket_check_unix_path(name, "SOCKET-BIND-ERROR", xsink)) {
+            return -1;
+        }
+
         // try to open socket if necessary
         if (openUNIX(socktype, protocol)) {
             xsink->raiseErrnoException("SOCKET-BIND-ERROR", errno, "error opening UNIX socket ('%s') for bind", name);
@@ -4074,6 +4221,41 @@ public:
             --buflen;
             ++bufoffset;
         }
+        return 0;
+    }
+
+    //! raises the exception for HTTP data over the limit (qore#6867)
+    /** @param xsink for the exception
+        @param max_size the limit in bytes
+        @param what what is read: \c "header", \c "chunked body trailer" or \c "chunk size line"
+    */
+    DLLLOCAL static void raiseHttpHeaderTooLarge(ExceptionSink* xsink, size_t max_size, const char* what) {
+        xsink->raiseException("HTTP-HEADER-TOO-LARGE", "the HTTP %s received exceeds the maximum size of %zu bytes; "
+            "the limit can be changed with Socket::setMaxHeaderSize()", what, max_size);
+    }
+
+    //! limits the size of what a receive until a pattern state reads, for the reader of an HTTP header or trailer
+    //! section or of a chunk size line (qore#6867)
+    /** @param xsink for the exception
+        @param state the state, which must be a SocketRecvUntilBytesPollState
+        @param max_size the limit of the whole section in bytes
+        @param used the size of the part of the section that was read before this state, which is counted in the
+            limit
+        @param what what is read: \c "header", \c "chunked body trailer" or \c "chunk size line"
+
+        @return 0 if the state was limited, -1 if the part of the section read already leaves no room for the data of
+        the state, and an exception was raised
+    */
+    DLLLOCAL static int limitHttpRead(ExceptionSink* xsink, AbstractPollState* state, size_t max_size, size_t used,
+            const char* what) {
+        assert(state);
+        assert(dynamic_cast<SocketRecvUntilBytesPollState*>(state));
+        // a state limit of 0 means no limit: nothing is left, and the data to come cannot be empty
+        if (used >= max_size) {
+            raiseHttpHeaderTooLarge(xsink, max_size, what);
+            return -1;
+        }
+        static_cast<SocketRecvUntilBytesPollState*>(state)->setLimit(max_size - used, what, max_size);
         return 0;
     }
 

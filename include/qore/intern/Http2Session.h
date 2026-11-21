@@ -60,6 +60,7 @@ class QoreIoUring;
 #include "qore/intern/WebSocketCloseRecord.h"
 
 // Forward declarations
+class SocketRecvSomePollState;
 struct qore_socket_private;
 
 //! HTTP/2 stream state
@@ -103,6 +104,13 @@ struct Http2StreamInfo {
 
     //! True when receiving trailer headers (after initial headers + body)
     bool receiving_trailers = false;
+
+    //! The size of the header list received so far in the current header block (RFC 9113 section 6.5.2: the length
+    //! of each name and value plus 32 bytes) (qore#6867)
+    size_t header_list_size = 0;
+
+    //! True if the header list received exceeded the maximum header size of the socket and the stream was rejected
+    bool header_list_too_large = false;
 
     // Body data
     std::vector<char> body;
@@ -637,9 +645,10 @@ public:
     //! Receive and process data
     /** @param timeout_ms Timeout in milliseconds (-1 for infinite)
         @param xsink Exception sink for error reporting
+        @param poll_events returns the transport readiness mask on a wait, zero on progress
         @return 0 on success/timeout (data may have been received), 1 if connection was closed by peer, -1 on error
     */
-    DLLLOCAL int receiveData(int timeout_ms, ExceptionSink* xsink);
+    DLLLOCAL int receiveData(int timeout_ms, ExceptionSink* xsink, int* poll_events = nullptr);
 
     //! Returns true if there is pending request/response body data for stream_id
     DLLLOCAL bool hasPendingBodyData(int32_t stream_id) const;
@@ -1097,6 +1106,10 @@ public:
     //! Get remote peer settings
     DLLLOCAL Http2Settings getRemoteSettings() const { return remote_settings; }
 
+    //! Returns the maximum size of the header list of a received header block: the maximum header size of the socket
+    //! (see Socket::setMaxHeaderSize(); qore#6867)
+    DLLLOCAL uint32_t getMaxHeaderListSize() const;
+
     //! Get the underlying nghttp2 session handle
     DLLLOCAL nghttp2_session* getSession() const { return session; }
 
@@ -1187,6 +1200,10 @@ private:
     // Send buffer
     std::vector<char> send_buffer;
     size_t send_offset = 0;
+    //! An incomplete SSL write is retried with its original data and length.
+    size_t tls_awaiting_drain = 0;
+    // The I/O thread owns this read across retries, including its TLS buffer.
+    std::unique_ptr<SocketRecvSomePollState> io_read;
     //! The absolute position in the outgoing byte stream of send_buffer[0]; advanced when consumed data is removed
     uint64_t send_buffer_base = 0;
 
@@ -1250,6 +1267,9 @@ private:
     //! the length of the data that a stream's own limit refused last (none once data was taken again): the stream is
     //! drained when that data fits (waitForStreamDrain(); issue #6907)
     std::unordered_map<int32_t, size_t> stream_refused_len;
+    //! the bytes of each stream's buffered data that nghttp2 has taken so far (never decreases; erased with the
+    //! stream): the progress that a sender waiting for the buffer to drain measures (issue #6968)
+    std::unordered_map<int32_t, uint64_t> stream_taken_total;
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int32_t, size_t> deferred_stream_credit;
 
@@ -1444,6 +1464,11 @@ public:
     //! Returns 0 if the stream has no data buffered to be sent (all of it was handed to the transport, or the stream
     //! is gone), 1 otherwise; waiters are woken by notifyStreamDrain() when data is handed over or the stream closes
     DLLLOCAL int streamSendFlushed(int32_t stream_id);
+
+    //! Returns the bytes of the stream's buffered data that nghttp2 has taken so far (never decreases)
+    /** @return the byte count, or -1 if the session is closed or nghttp2 no longer has the stream
+    */
+    DLLLOCAL int64_t streamTakenBytes(int32_t stream_id);
 
     //! Wake controller poll operations waiting for stream drain
     /** Called by dataProviderReadCallback, onStreamCloseCallback and sendPendingData with the session mutex m held,

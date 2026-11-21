@@ -9,6 +9,7 @@
 %requires SqlUtil
 %requires MysqlSqlUtil
 %requires ./MysqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module mysql
 %define NoMysql
@@ -106,8 +107,14 @@ class MysqlIdentifierQuotingTest inherits QUnit::Test {
         addTestCase("live: functions are listed", \liveFunctions());
 
         # the run's own database: tests that run at the same time do not share the tables of this one
-        connstr = MysqlRunDatabase::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL,
-            "MysqlIdentifierQuoting");
+        # a database that cannot be connected to fails a test case of its own, and the live cases skip (qore#6934)
+        *string precondition = TestRun::guardSetup(sub () {
+            connstr = MysqlRunDatabase::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL,
+                "MysqlIdentifierQuoting");
+        });
+        if (precondition) {
+            addTestCase("the database can be connected to", sub () { fail(precondition); });
+        }
         set_return_value(main());
     }
 

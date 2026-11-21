@@ -55,8 +55,9 @@ public:
    DLLLOCAL IconvHelper(const QoreEncoding *to, const QoreEncoding *from, ExceptionSink *xsink,
          bool validate_utf8 = false) : to(to), from(from),
          validateUtf8(from == QCS_UTF8 && (validate_utf8 || !rejectsMalformedUtf8() || holdsNonScalarValues(to))),
-         validateForm(isUnicodeForm(from)
-            && (!rejectsInvalidUnicodeForms() || qore_encoding_private::get(*from)->iconv_accepts_invalid)),
+         validateForm((isUnicodeForm(from)
+            && (!rejectsInvalidUnicodeForms() || qore_encoding_private::get(*from)->iconv_accepts_invalid))
+            || isStructuredMultiByte(from)),
          splitFinalDash(qore_encoding_private::get(*from)->utf7_final_dash_literal) {
       // conversions are opened without "//TRANSLIT": with it, glibc and GNU libiconv replace a character the target
       // cannot hold with an approximation and report it only in the count of non-reversible conversions, while
@@ -86,7 +87,12 @@ public:
        the end of the input with \c EINVAL, exactly as a strict iconv does.  Input in a Unicode encoding form (UTF-16,
        UTF-32, UCS-2, UCS-4) is validated the same way where the platform's iconv accepts values above U+10FFFF or
        unpaired surrogates in it (see rejectsInvalidUnicodeForms()), or where the conversion of an encoding created on
-       the fly accepts them (qore_encoding_private::iconv_accepts_invalid, ex: glibc's \c "UCS-4").
+       the fly accepts them (qore_encoding_private::iconv_accepts_invalid, ex: glibc's \c "UCS-4").  Input in a
+       multi-byte encoding that %Qore recognizes by the byte ranges of its characters (Shift_JIS, Big5, GBK, EUC-JP
+       and the other families of \c charset.cpp; see isStructuredMultiByte()) is validated the same way on every
+       platform, as the iconv of some platforms decodes an invalid sequence (musl's before 1.2.6 decodes the Shift_JIS
+       lead byte 0x81 followed by 0x20 as U+301C), so that its conversions refuse the input that
+       <tt><string>::isEncodingValid()</tt> refuses (qore#6796).
 
        @param xsink if given, the validation is a cancellation point; when it is cancelled, the exception is raised
        here, and -1 is returned with \c errno set to \c ECANCELED
@@ -128,12 +134,15 @@ public:
       return (size_t)-1;
    }
 
-   //! Returns the length of the longest prefix of the input that is made of complete, valid characters of a Unicode form
+   //! Returns the length of the longest prefix of the input that is made of complete, valid characters of a Unicode form or of a multi-byte encoding
    /** A value above U+10FFFF, a surrogate code point in UTF-32 or UCS-2, and an unpaired surrogate in UTF-16 are
        invalid; the character functions of the encoding (QoreEncoding::getCharLen()) decode the input, so that each
-       form has one definition of a valid character: for UTF-16, q_utf16_char_len() (qore#6604).
+       form has one definition of a valid character: for UTF-16, q_utf16_char_len() (qore#6604); in a multi-byte
+       encoding (see isStructuredMultiByte()), a byte sequence that is not a character of the encoding by its byte
+       ranges (qore#6796).
 
-       @param enc the encoding of the input; a Unicode encoding form (see isUnicodeForm())
+       @param enc the encoding of the input; a Unicode encoding form (see isUnicodeForm()) or a multi-byte encoding
+       (see isStructuredMultiByte())
        @param p the input
        @param len the byte length of the input
        @param incomplete set to true if the input after the prefix is a character truncated by the end of the input,
@@ -177,6 +186,24 @@ public:
    DLLLOCAL static bool isUnicodeForm(const QoreEncoding* enc) {
       return enc == QCS_UTF16 || enc == QCS_UTF16BE || enc == QCS_UTF16LE
          || !qore_encoding_private::get(*enc)->bom.empty();
+   }
+
+   //! Returns true if the encoding is a multi-byte encoding whose characters %Qore checks by their byte ranges
+   /** An encoding of the multi-byte families that %Qore recognizes (Shift_JIS, Big5, GBK, EUC-JP and the others of
+       \c charset.cpp), whose character function (QoreEncoding::getCharLen()) is the check of
+       <tt><string>::isEncodingValid()</tt> (q_string_invalid_offset()); not UTF-8, a Unicode encoding form or a
+       stateful encoding, which are checked otherwise; not an encoding whose family was found by probing its
+       conversions, whose character functions are an approximation of its characters (ex: glibc's \c "T.61"), and
+       whose input is left to iconv (see qore_encoding_private::defined_multibyte) (qore#6796)
+   */
+   DLLLOCAL static bool isStructuredMultiByte(const QoreEncoding* enc) {
+      // the flag is read first, inline: it is set only for the encodings of the defined multi-byte families, so a
+      // conversion from any other encoding (a single-byte one, for example) pays no more than this check
+      if (!qore_encoding_private::get(*enc)->defined_multibyte) {
+         return false;
+      }
+      assert(enc != QCS_UTF8 && enc->isMultiByte() && !isUnicodeForm(enc) && !qore_encoding_private::isStateful(enc));
+      return true;
    }
 
    //! Returns true if the platform's iconv rejects values above U+10FFFF and unpaired surrogates in Unicode forms

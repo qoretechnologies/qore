@@ -140,19 +140,19 @@ public class GroundingRule inherits AbstractGuardrailRule {
     }
 
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
-        date start = now_us();
+        int start_us = clock_get_monotonic_us();
         list<hash<QoreLlmUtils::LlmSourceRef>> sources =
             extractSources(ctx);
         if (!sources && require_sources) {
             hash<GuardrailResult> result = makeFailResult(
                 "no authorized sources supplied for grounding check",
                 NOTHING, {"reason_code": "source-required"});
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
         if (!sources) {
             hash<GuardrailResult> result = makePassResult();
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
 
@@ -161,11 +161,11 @@ public class GroundingRule inherits AbstractGuardrailRule {
                 hash<GuardrailResult> result = makeFailResult(
                     "grounding verifier unavailable without LLM",
                     NOTHING, {"reason_code": "verifier-unavailable"});
-                result.duration_ms = getElapsedMs(start);
+                result.duration_ms = getElapsedMs(start_us);
                 return result;
             }
             hash<GuardrailResult> result = makePassResult();
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
 
@@ -186,7 +186,7 @@ public class GroundingRule inherits AbstractGuardrailRule {
                         checked.citation_coverage * 100,
                         checked.reason ?? "unsupported claims detected"),
                     NOTHING, makeMetadata(checked));
-                result.duration_ms = getElapsedMs(start);
+                result.duration_ms = getElapsedMs(start_us);
                 return result;
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -195,13 +195,13 @@ public class GroundingRule inherits AbstractGuardrailRule {
                     sprintf("grounding verifier unavailable: %s", ex.desc),
                     NOTHING, {"reason_code": "verifier-error",
                         "error_type": ex.err});
-                result.duration_ms = getElapsedMs(start);
+                result.duration_ms = getElapsedMs(start_us);
                 return result;
             }
         }
 
         hash<GuardrailResult> result = makePassResult();
-        result.duration_ms = getElapsedMs(start);
+        result.duration_ms = getElapsedMs(start_us);
         return result;
     }
 

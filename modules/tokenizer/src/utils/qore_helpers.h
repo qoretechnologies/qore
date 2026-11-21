@@ -82,7 +82,9 @@ inline int safeGetUtf8StdString(QoreValue v, std::string& out, const char* where
         out.clear();
         return 0;
     }
-    return qoreUtf8StdString(v.get<const QoreStringNode>(), out, where, what, xsink);
+    // a value of a hash or list can be an inline short string
+    QoreStringValueHelper str(v);
+    return qoreUtf8StdString(*str, out, where, what, xsink);
 }
 
 //! The method named in the exception for configuration text that is not valid: the configuration of the model and
