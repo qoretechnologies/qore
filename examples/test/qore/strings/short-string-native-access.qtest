@@ -21,12 +21,15 @@
     debug hooks that take a string.  They
     run in each execution mode in a child process and as qcc-compiled executables (-O0, -O3), which hold the strings
     of a constant hash inline; in a debug build, dbg_make_short_string() makes the strings inline in every mode.
+
+    @note dbg_make_short_string() exists only in debug builds: in a release build, only the qcc runs pass inline
+    strings to the native code; the other runs check the results with heap strings.
 */
 class ShortStringNativeAccessTest inherits QUnit::Test {
     public {
         const ExecModes = ("ast", "ir", "jit", "tiered");
 
-        const Expected = "background: ended\n"
+        const Expected = "background: EXCEPTION E2/d2\n"
             "FastResponseSlot::setDefaults: ok\n"
             "Socket::setHttpFastExtraHeaders: ok\n"
             "HTTPClient ssl_ca_file: ok\n"

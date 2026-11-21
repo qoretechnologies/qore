@@ -34,10 +34,15 @@ string sub throw_short() {
     throw ss("E1"), ss("d1");
 }
 
+#! raises an exception with an inline error code and description in a background thread
+sub throw_short_bg() {
+    throw ss("E2"), ss("d2");
+}
+
 #! the probes in the order that they run
 const Probes = (
     # a background thread that ends with an exception with an inline error code: the thread's outcome is taken from
-    # the error code (ProgramThreadHub)
+    # the error code (ProgramThreadHub) and reported in its FINISHED event
     "background",
     # header values in hashes
     "FastResponseSlot::setDefaults",
@@ -58,17 +63,20 @@ const Probes = (
 string sub run_probe(string name) {
     switch (name) {
         case "background": {
-            Counter c(1);
-            background sub () {
-                on_exit c.dec();
-                throw ss("E2"), ss("d2");
-            }();
-            c.waitForZero();
-            # the thread's outcome is taken after its code has returned: wait until the thread is gone
-            while (num_threads() > 1) {
-                usleep(1ms);
+            # the thread runs in a Program of its own, whose thread events can be subscribed to: its FINISHED event
+            # is published after the outcome of the thread has been taken from its exception
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            p.importFunction("throw_short_bg");
+            p.parse("int sub run() { return background throw_short_bg(); }", "background-probe");
+            Queue events();
+            p.subscribeThreadEvents(events);
+            p.callFunction("run");
+            while (True) {
+                hash<ProgramThreadEvent> ev = events.get(60s);
+                if (ev.event == "FINISHED") {
+                    return sprintf("%s %s/%s", ev.outcome, ev.error.err, ev.error.desc);
+                }
             }
-            return "ended";
         }
         case "FastResponseSlot::setDefaults": {
             FastResponseSlot slot();
