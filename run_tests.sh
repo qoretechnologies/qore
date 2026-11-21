@@ -668,9 +668,8 @@ fi
 #   it, see .gitattributes), and it must be the build's;
 # - the qcc that the tests use (QCC, QORE_QCC, QORE_QCC_EXECUTABLE, the qcc next to qore, or the one in the PATH; see
 #   examples/test/TestInterpreter.qm) and the .qmod files that they load (the build's qlib-qmod or QORE_TEST_QMOD_DIR,
-#   and the build that each qlib/*.qmod symlink points into, unless it is another build of this tree, whose modules the
-#   loader does not take: qore#7030) must come from the same build: the qore next to each of them must be the qore
-#   used or name the same commit.
+#   and the build that each qlib/*.qmod symlink points into) must come from the same build: the qore next to each of
+#   them must be the qore used or name the same commit.
 # A mismatch ends the run with a MISMATCH error naming both commits and the first paths that differ, unless
 # QORE_TEST_ALLOW_BUILD_MISMATCH=1, with which the run goes on and says so.  Each program and git command it runs is
 # limited to BUILD_CHECK_WAIT seconds by the timeout command (a libqore that hangs in its initialization cannot hold up
@@ -1197,7 +1196,8 @@ BUILD_CHANGES_EOF
     fi
 }
 
-# Checks the qcc and the .qmod files that the tests use (see above)
+# Checks the qcc and the .qmod files that the tests use (see above); a qlib/*.qmod link into another build of this tree
+# is not checked, as the module loader does not take its module (qore#7030)
 check_build_parts() {
     if [ -z "$BUILD_HASH" ]; then
         return
